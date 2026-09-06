@@ -133,9 +133,17 @@ class Subject:
     #: Object paths (relative to the tree) that are not worth substituting,
     #: for example a unit the subject compiles twice under different flags.
     skip_objects: tuple[str, ...] = ()
+    #: Where the relink and test commands work, when that is not the mounted
+    #: tree. A subject whose suite cannot run on the shared mount copies the
+    #: tree into the container first, and the relink log then names its
+    #: objects relative to that copy.
+    workspace: str = ""
     #: Every departure from the subject's documented build, in words, so the
     #: receipt says what was changed and why rather than only what was run.
     notes: tuple[str, ...] = ()
+    #: Reductions of this subject's failures: the unit, what the suite did,
+    #: and the smallest program that shows the same thing.
+    defects: tuple[dict, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -272,6 +280,16 @@ FRONT_END_GAPS = [
         ),
         "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are"
         " nothing but an include_next",
+    },
+    {
+        "code": "E0102",
+        "construct": "a null directive swallows the line after it",
+        "repro": "#\n#if 0\nint compiled_anyway;\n#endif\n",
+        "effect": "the `#` line is legal and does nothing; here it consumes"
+        " the next line, so a false conditional is entered and its #endif is"
+        " then unmatched. A `#` followed by `#define X 1` leaves X undefined"
+        " with no diagnostic at all.",
+        "reachedFrom": "zstd's lib/common/compiler.h, and so 37 of its units",
     },
     {
         "code": "E1001",
@@ -684,7 +702,11 @@ def emit(
     )
     rows: list[dict] = []
     for unit in units:
-        row: dict = {"unit": unit.obj, "source": unit.source}
+        row: dict = {
+            "unit": unit.obj,
+            "source": unit.source,
+            "assemblerFlags": [flag for flag in unit.argv[1:] if flag.startswith("-Wa,")],
+        }
         argv, omitted = evocc_argv(unit, evocc, subject, tree, include, unsupported)
         row["omittedFlags"] = omitted
         try:
@@ -728,9 +750,13 @@ def assemble(rows: list[dict], asm_root: Path) -> None:
     for row in emitted:
         unit = row["unit"]
         assembly = unit[:-2] + ".s"
+        # An assembly input reaches only the assembler, so what survives of
+        # the unit's command is what was addressed to the assembler by name.
+        flags = " ".join(quote(flag) for flag in row.get("assemblerFlags", []))
         lines.append(f"mkdir -p {quote(os.path.dirname(unit) or '.')}")
         lines.append(
-            f"if gcc -c -x assembler {quote(assembly)} -o {quote(unit)} 2>{quote(unit + '.err')};"
+            f"if gcc {flags} -c -x assembler {quote(assembly)} -o {quote(unit)}"
+            f" 2>{quote(unit + '.err')};"
             f" then echo 'OK {unit}'; else echo 'FAIL {unit}'; fi"
         )
     (asm_root / "assemble.sh").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -849,6 +875,17 @@ def without_collisions(rows: list[dict]) -> tuple[list[str], list[dict]]:
             claimed[symbol] = row["unit"]
     order = [row["unit"] for row in assembled]
     return sorted(keep, key=order.index), excluded
+
+
+def recompiled(log: str, tree: str, units: list[str]) -> list[str]:
+    """Substituted units the relink compiled again, read out of its own log.
+
+    A subject whose suite runs on a copy of the tree can recompile an object
+    where this side cannot see the bytes change, so the relink's own record
+    of what it compiled is checked as well.
+    """
+    wanted = set(units)
+    return sorted({unit.obj for unit in parse_build_log(log, tree) if unit.obj in wanted})
 
 
 def rebuilt_by_make(tree: Path, units: list[str], asm_root: Path) -> list[str]:
@@ -1043,7 +1080,11 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
     restore(tree, candidates, pristine)
     install(tree, substituted, asm_root)
     final_relink = relink(subject, evidence, "final")
-    rebuilt = rebuilt_by_make(tree, substituted, asm_root)
+    workspace = subject.workspace or f"/work/{subject.name}/{subject.tree}"
+    rebuilt = sorted(
+        set(rebuilt_by_make(tree, substituted, asm_root))
+        | set(recompiled(final_relink["log"], workspace, substituted))
+    )
     substituted = [unit for unit in substituted if unit not in rebuilt]
     final_tests = run_tests(subject, evidence, "final")
 
@@ -1098,6 +1139,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
             ),
         },
         "frontEndGaps": FRONT_END_GAPS,
+        "defects": list(subject.defects),
         "evidence": str(evidence.relative_to(ROOT)),
     }
     summary["summaryLine"] = summarise(subject, rows, substituted, final_tests)

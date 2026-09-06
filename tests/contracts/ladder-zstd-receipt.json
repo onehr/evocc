@@ -1,0 +1,467 @@
+{
+ "schemaVersion": 1,
+ "rung": "E2",
+ "subject": "zstd",
+ "authority": "docs/roadmap.md, milestone ladder",
+ "run": "20260906T131844Z",
+ "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
+ "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
+ "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
+ "tarball": "zstd-1.5.7.tar.gz",
+ "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+ "target": "aarch64-unknown-linux-gnu",
+ "unitsTotal": 44,
+ "unitsEvoccCompiled": 2,
+ "unitsSubstituted": 1,
+ "unitsRebuiltByMake": [],
+ "substitutedUnits": [
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o"
+ ],
+ "unitsExcluded": 0,
+ "unitsInPassingBuild": 1,
+ "outcomes": {
+  "assembled": 2,
+  "refused": 42
+ },
+ "refusalsByCode": {
+  "E0105": 37,
+  "E2921": 4,
+  "E1001": 1
+ },
+ "refusals": [
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
+   "code": "E1001",
+   "message": "expected-declaration"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+   "code": "E2921",
+   "message": "pretty-function-unsupported"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+   "code": "E2921",
+   "message": "pretty-function-unsupported"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
+   "code": "E2921",
+   "message": "pretty-function-unsupported"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
+   "code": "E2921",
+   "message": "pretty-function-unsupported"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  },
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
+   "code": "E0105",
+   "message": "include-not-found: immintrin.h"
+  }
+ ],
+ "excludedUnits": [],
+ "failingUnits": [
+  {
+   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
+   "stage": "test",
+   "signature": "Segmentation fault | make[1]: *** [Makefile:356: test-zstd] Error 139 | make[1]: Leaving directory '/tmp/zstd-check/tests' | make: *** [Makefile:91: check] Error 2"
+  }
+ ],
+ "baselineTest": {
+  "passed": true,
+  "status": 0
+ },
+ "test": {
+  "passed": true,
+  "status": 0,
+  "relinkStatus": 0,
+  "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check"
+ },
+ "attempts": [
+  {
+   "passed": false,
+   "stage": "test",
+   "signature": "Segmentation fault | make[1]: *** [Makefile:356: test-zstd] Error 139 | make[1]: Leaving directory '/tmp/zstd-check/tests' | make: *** [Makefile:91: check] Error 2",
+   "unitCount": 2
+  }
+ ],
+ "adjustments": {
+  "sysroot": {
+   "extensionKeyword": 11379,
+   "includeNext": 3,
+   "filesRewritten": 83,
+   "formFeed": 19
+  },
+  "sysrootAdjustmentMeaning": {
+   "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+   "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+   "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+  },
+  "includeOrder": [
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include"
+  ],
+  "configure": "",
+  "subject": [
+   "built the way `make check` builds: zstd names its object directory after a hash of the flags, so the default build's objects are not the ones the suite links",
+   "built serially: the top level runs two sub-makes at once and their output cannot be attributed to a directory afterwards",
+   "relinked and tested on a copy of the tree inside the container: playTests.sh checks the permission bits of a file it creates and the shared mount does not preserve them",
+   "a shim stands in for file(1), which the sealed container does not carry and which `make check` runs once for decoration"
+  ],
+  "buildCommand": "make -C tests zstd datagen V=1",
+  "optionsTheDriverRejects": [],
+  "omittedFlags": [
+   "-MF",
+   "-MMD",
+   "-MP",
+   "-MT",
+   "-O3",
+   "-Wall",
+   "-Wc++-compat",
+   "-Wcast-align",
+   "-Wcast-qual",
+   "-Wdeclaration-after-statement",
+   "-Wextra",
+   "-Wfloat-equal",
+   "-Wformat=2",
+   "-Winit-self",
+   "-Wmissing-prototypes",
+   "-Wno-c++-compat",
+   "-Wpointer-arith",
+   "-Wredundant-decls",
+   "-Wshadow",
+   "-Wstrict-aliasing=1",
+   "-Wstrict-prototypes",
+   "-Wswitch-enum",
+   "-Wundef",
+   "-Wvla",
+   "-Wwrite-strings",
+   "-g",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.d",
+   "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o"
+  ]
+ },
+ "frontEndGaps": [
+  {
+   "code": "E1001",
+   "construct": "__extension__ before a member declaration",
+   "repro": "struct s { __extension__ int a; };",
+   "reachedFrom": "bits/atomic_wide_counter.h, and so every <stdlib.h>"
+  },
+  {
+   "code": "E1003",
+   "construct": "__extension__ before an expression",
+   "repro": "int main(void){ return __extension__ 0; }"
+  },
+  {
+   "code": "E0112",
+   "construct": "a form feed or vertical tab between declarations is whitespace",
+   "repro": "int a;\n\f\nint b;\n",
+   "reachedFrom": "sys/stat.h, which pages its sections with form feeds"
+  },
+  {
+   "code": "silent",
+   "construct": "#include_next is ignored without a diagnostic",
+   "repro": "a/h.h: #include_next <h.h>\nb/h.h: int from_b;\nmain.c: #include <h.h>  # -Ia -Ib yields nothing at all",
+   "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are nothing but an include_next"
+  },
+  {
+   "code": "E0102",
+   "construct": "a null directive swallows the line after it",
+   "repro": "#\n#if 0\nint compiled_anyway;\n#endif\n",
+   "effect": "the `#` line is legal and does nothing; here it consumes the next line, so a false conditional is entered and its #endif is then unmatched. A `#` followed by `#define X 1` leaves X undefined with no diagnostic at all.",
+   "reachedFrom": "zstd's lib/common/compiler.h, and so 37 of its units"
+  },
+  {
+   "code": "E1001",
+   "construct": "the built-in vector types a GCC 14 front end promises",
+   "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
+   "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver defines __GNUC__ 14, so glibc takes the branches that use GCC 14's own vector types"
+  },
+  {
+   "code": "linkage",
+   "construct": "a static function is defined with external linkage",
+   "repro": "static int helper(void){ return 0; } int use(void){ return helper(); }",
+   "effect": "two objects that saw the same static collide at link time"
+  }
+ ],
+ "defects": [
+  {
+   "unit": "programs/obj/*/timefn.o",
+   "failure": "playTests.sh dies with a segmentation fault as soon as the CLI takes a timestamp",
+   "cause": "an aggregate of sixteen bytes or fewer is passed and returned indirectly, through a hidden pointer in x0, where AAPCS64 passes and returns it in general registers. A GCC caller therefore hands the callee the struct's value where the callee expects the address to write through.",
+   "repro": "typedef struct { unsigned long long t; } T;\nT get(void) { T r; r.t = 42; return r; }\nunsigned long long span(T a, T b) { return b.t - a.t; }\n",
+   "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
+  }
+ ],
+ "evidence": ".evidence/ladder/zstd/20260906T131844Z",
+ "summaryLine": "zstd: 1 of 44 units by EvoCC in a passing build; refused by code {'E0105': 37, 'E2921': 4, 'E1001': 1}"
+}
