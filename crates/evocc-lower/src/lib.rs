@@ -3101,9 +3101,15 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 self.terminate(state, Inst::Ret(returned))?;
             } else {
-                let value = self.fresh_value(self.info.return_type.as_ref().unwrap().ir.clone());
-                self.emit(state, Inst::Uninitialized(value.clone()))?;
-                let mut returned = vec![value];
+                let value_type = self.info.return_type.as_ref().unwrap();
+                let mut returned = Vec::new();
+                // Aggregates return through caller-owned uninitialized storage;
+                // falling off does not initialize it or add a scalar result.
+                if !self.is_aggregate_type(value_type.source) {
+                    let value = self.fresh_value(value_type.ir.clone());
+                    self.emit(state, Inst::Uninitialized(value.clone()))?;
+                    returned.push(value);
+                }
                 if self.info.participant {
                     returned.push(self.token(state, EnvKey::Memory)?.value);
                     returned.push(self.token(state, EnvKey::World)?.value);
