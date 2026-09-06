@@ -19,3 +19,6 @@ Each entry is one check by the architect session while the user sleeps.
 - The survey's face after return_address is E3021 (inline asm), 2,734 units; the constraint or feature named is being classified for the next rule.
 - Codex re-ran E0 (torture 1,055 of 1,692, was 740) and Csmith (396 agree); status refreshed (590f1d3). toybox 164/201.
 - Ruled: EvoIR 1.9.74, `always_inline` substitution in C-HIR (the `alternative_has_cap_likely` face, 2,727 units). For Codex in the morning: this is the single item between the front end and nearly every kernel unit; after it, the survey's face will be whatever remains under it (expect the 16-unit fdt/ctype duplicates to be a lane scoping issue, not a compiler one).
+
+## tick 4 (03:38, B11 finished)
+- Landed backend-b11: zero data to .bss, zero runs as .zero; sieve's assembly 1,000,289 lines to 287, static image 1.71 MB to 705 KB (GCC: 705 KB). Spec 0.20 records it and a Darwin variadic gap the window found (anonymous arguments go on the stack on Darwin; the Darwin lane judges exit status only).
