@@ -2,15 +2,178 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "6bbe4813f40d59f7772151720f5e52f679143e4c4a017eefed1cf707ff4b73d6"
+    "sha256": "62f88051e4146b7ce8bc106129372f87e45705359d2d2d4ce53e7e00b042d701"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.66",
-    "sha256": "2b3103794a6a4a75025809700f9c5b20e051b3ca3591864fe0c305fc085d837f"
+    "revision": "1.9.71",
+    "sha256": "399685a64b7c33fa31fc55441d7290c68c57c3f2488ffd8037368f1affcc3f2b"
   },
-  "cutLine": "AD and AF are closed at their declared boundaries. AE2 is reopened by the signed exact-width conflict recorded in Appendix D. Final lowering: 19 clean, 2779 diagnosed; parse: 2798 clean; both workspace and isolated replay: 1626 passed, 0 failed, 4 ignored. All six remaining lowering classes fall outside the terminal whitelist, so the overall finish criterion remains unmet. Historical sections retain their original measurements, not current authority.",
+  "cutLine": "Latest sealed kernel lowering at 4310938: 42 clean, 2756 diagnosed, no timeout or panic. Subsequent execution fixes at 82f2cbc improve GCC torture from 725 to 740 passing programs without a passed-program regression. These are separate measurements, not whole-kernel completion. Historical sections retain their original subjects and outcomes; only latestExecution describes this follow-up.",
   "latestExecution": {
+    "subjectCommit": "82f2cbc",
+    "status": "PARTIAL_EXECUTION_FRONTIER",
+    "scopeClaim": "Label addresses and the two execution corrections are implemented and measured. Whole-kernel lowering is not closed; function visibility is waiting for the backend merge, and the new memory cases are diagnoses only.",
+    "commits": [
+      "1ce4c39",
+      "4310938",
+      "8c3183b",
+      "501c144",
+      "8f988f6",
+      "9b6368c",
+      "0e40054",
+      "f1b31ea",
+      "82f2cbc"
+    ],
+    "loweringSurvey": {
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc target/release/evocc --action lower --jobs 8 --timeout 60",
+      "workingDirectory": ".build/label-addresses",
+      "runId": "20260906T065036Z-92978",
+      "subjectCommit": "4310938fe3abc26daea5a772c242e92138bbf952",
+      "capture": ".evidence/full-config-lowering-survey/20260906T065036Z-92978",
+      "sealSha256": "09817c3d994dd7695d863d06b323b3b138485d292bc067e872f199ef01eafdaf",
+      "classifications": {
+        "clean": 42,
+        "diagnosed": 2756,
+        "unavailable": 0,
+        "timeout": 0,
+        "panic": 0
+      },
+      "firstDiagnosticCounts": {
+        "E3025": 2713,
+        "E3021": 36,
+        "E3101": 7
+      },
+      "note": "This survey predates the poison and compiler-hint commits; its subject is not the current HEAD."
+    },
+    "executionLadder": {
+      "command": "python3 tools/ladder/e0.py --suite torture --evocc target/frontend/release/evocc",
+      "buildCommand": "CARGO_TARGET_DIR=target/frontend cargo build --release -p evocc --offline -j 2",
+      "baseline": {
+        "runId": "20260906T070921Z",
+        "subjectCommit": "8c3183b",
+        "programs": 1692,
+        "pass": 725,
+        "fail": 59,
+        "linkFail": 10,
+        "asmFail": 0,
+        "refused": 898
+      },
+      "poison": {
+        "runId": "20260906T072906Z",
+        "subjectCommit": "0e40054",
+        "programs": 1692,
+        "pass": 735,
+        "fail": 50,
+        "linkFail": 10,
+        "asmFail": 1,
+        "refused": 896,
+        "falloffDiagnosticCount": 0
+      },
+      "compilerHints": {
+        "runId": "20260906T073553Z",
+        "subjectCommit": "82f2cbc",
+        "programs": 1692,
+        "pass": 740,
+        "fail": 50,
+        "linkFail": 1,
+        "asmFail": 1,
+        "refused": 900,
+        "allocaRefusalCount": 4
+      },
+      "passedRegressions": 0,
+      "limitations": [
+        "c-testsuite was not rerun in these two invocations.",
+        "The existing runner adjusts 957 empty-parameter-list definitions; this is not native K&R support.",
+        "E3039 interpreter classifications remain limited by external library models.",
+        "20260906T072812Z was a sandboxed execution non-result with 796 not-run programs, not a passing replay."
+      ]
+    },
+    "hns3": {
+      "source": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+      "historicalTimeout": {
+        "runId": "20260906T043425Z-75915",
+        "subjectCommit": "bec07bc",
+        "classification": "timeout",
+        "limitSeconds": 60
+      },
+      "current": {
+        "runId": "20260906T065036Z-92978",
+        "classification": "diagnosed",
+        "code": "E3025",
+        "wallMilliseconds": 27264.84,
+        "limitSeconds": 60,
+        "parallelism": 8
+      },
+      "profile": ".evidence/builtin-probes/20260906-code-addresses/hns3.sample.txt",
+      "profileCommand": "/usr/bin/sample 94059 10 1 -file .evidence/builtin-probes/20260906-code-addresses/hns3.sample.txt",
+      "observation": "A ten-second sample near launch of the projected --emit=evoir invocation placed 8220 of 8221 main-thread samples under parse_translation_unit_in, with parse_type_specifier_inner dominant. This is an early-window parser profile, not a whole-run phase timing.",
+      "load": "Eight concurrent lowering survey workers and other teams' compiler gates. No timeout limit was raised."
+    },
+    "memoryDiagnoses": {
+      "status": "MEASURED_NOT_FIXED",
+      "evidence": ".evidence/builtin-probes/20260906-memory-residue/",
+      "command": "target/frontend/release/evocc --interpret-evoir <source>; --interpret-c-hir <source>; --emit=evoir <source>",
+      "oracleCommand": "container run --rm --platform linux/arm64 --network none -v <probe-directory>:/work/probes evo-flight-lab:sealed; gcc-14 and clang-19 -std=gnu11 -O0, then execute each program",
+      "cases": [
+        {
+          "code": "E3011",
+          "origin": "GCC torture 20040629-1 / 20040705-1",
+          "source": "struct { unsigned int i:6,j:11,k:15; } b; int main(void){b.k=31278;return b.k!=31278;}",
+          "finding": "A full 4-byte store/load at offset 2 in a 4-byte bit-field container; missing bit insertion/extraction.",
+          "chir": "E3007 unsupported typed memory place",
+          "gccExit": 0,
+          "clangExit": 0
+        },
+        {
+          "code": "E3012",
+          "origin": "GCC torture 960117-1 packed access family (baseline interpreter diagnosis; the original machine program passes after the falloff fix)",
+          "source": "struct __attribute__((packed)) S{char pad;int value;}s; int main(void){s.value=7;return s.value!=7;}",
+          "finding": "A member at offset 1 retains align=4 although its containing record has align=1.",
+          "chir": "E3012",
+          "gccExit": 0,
+          "clangExit": 0
+        },
+        {
+          "code": "E3001",
+          "origin": "GCC torture pr19687",
+          "source": "union U{int i,j[4];}; int main(void){union U t={};return t.j[3];}",
+          "finding": "Only 4 of the 16 object bytes are initialized; j[3] reads at offset 12. The empty-initializer/padding rule needs review before repair.",
+          "chir": "E3001",
+          "gccExit": 0,
+          "clangExit": 0
+        }
+      ]
+    },
+    "gate": {
+      "status": "FAIL_DECLARED_VISIBILITY_RED",
+      "passed": 1344,
+      "failed": 1,
+      "ignored": 4,
+      "failure": "evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header",
+      "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh dcab352 --offline -j 2 --quiet",
+      "note": "The function_linkage RED is still open pending backend-b8; no test was disabled. These are affected-crate counts, not a full-workspace test count. The four ignored tests predate this follow-up. Clippy, fmt and Ruff were also run separately because the test failure stops gate-changed before those steps."
+    },
+    "clippy": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend cargo clippy --workspace --all-targets --offline -j 2 -- -D warnings"
+    },
+    "formatting": {
+      "status": "PASS",
+      "command": "cargo fmt --all -- --check; ruff check tools tests/acceptance; git diff --check"
+    },
+    "offlineReplay": {
+      "status": "NOT_RUN_FOR_THIS_FOLLOWUP"
+    },
+    "open": [
+      "Function visibility: backend-b8 owns the shared field/parser/renderer; only the lowering RED has landed.",
+      "E3025 return-address is the dominant new whole-kernel frontier and remains explicitly refused by the specification.",
+      "Address-only unreachable labels conflict with terminator-edge reachability; the existing Appendix D entry retains E3101 rather than relaxing validation.",
+      "The bit-field, packed-access and union-initialization diagnoses are not repairs.",
+      "Cheap builtin/K&R coverage remains queued after the requested correctness work."
+    ]
+  },
+  "historicalExecutionBeforeCodeAddresses": {
     "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
     "status": "PARTIAL_BODY_CONFLICT",
     "scopes": {

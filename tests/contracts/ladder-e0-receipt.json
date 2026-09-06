@@ -3,41 +3,11 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260906T070921Z",
-  "subject": "8c3183b",
-  "driverSha256": "4f761522ca37f99b2052cc43fc1247831bde83153756a5de5177e29804913e3d",
+  "run": "20260906T073553Z",
+  "subject": "82f2cbc",
+  "driverSha256": "a58318568c95c40b6b9d232dd4a003c312cc7a9a255d97841e0ec93664517f0b",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
-   "ctest": {
-    "pin": {
-     "repo": "https://github.com/c-testsuite/c-testsuite.git",
-     "commit": "5c7275656d75",
-     "subdir": "tests/single-exec"
-    },
-    "programs": 220,
-    "adjustedEmptyParameterLists": 198,
-    "outcomes": {
-     "pass": 187,
-     "refused": 31,
-     "fail": 2
-    },
-    "refusalsByCode": {
-     "E3101": 16,
-     "E1001": 5,
-     "E2001": 2,
-     "E1003": 2,
-     "E3030": 1,
-     "E2102": 1,
-     "E0104": 1,
-     "E2203": 1,
-     "E0112": 1,
-     "E2202": 1
-    },
-    "failuresByInterpreterVerdict": {
-     "E3007 evoir-main-parameters-are-not-canonical": 1,
-     "E3039 external-call-not-executable": 1
-    }
-   },
    "torture": {
     "pin": {
      "repo": "https://github.com/gcc-mirror/gcc.git",
@@ -47,24 +17,26 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 957,
     "outcomes": {
-     "refused": 898,
-     "pass": 725,
-     "fail": 59,
-     "link-fail": 10
+     "refused": 900,
+     "pass": 740,
+     "fail": 50,
+     "link-fail": 1,
+     "asm-fail": 1
     },
     "refusalsByCode": {
      "E2001": 404,
      "E1001": 187,
-     "E3101": 161,
+     "E3101": 160,
      "E2201": 21,
      "E2203": 18,
      "E2102": 17,
      "E1205": 15,
      "E0112": 13,
-     "E3030": 12,
+     "E3030": 13,
      "E0105": 12,
-     "E3029": 9,
+     "E3029": 7,
      "E2913": 4,
+     "E3046": 4,
      "E2920": 4,
      "E3021": 3,
      "E2202": 3,
@@ -81,13 +53,12 @@
      "E2929": 1
     },
     "failuresByInterpreterVerdict": {
-     "E3039 external-call-not-executable": 26,
+     "E3039 external-call-not-executable": 18,
      "E3006 invalid-signed-left-shift": 10,
-     "E3007 scalar-function-fell-off-end": 7,
      "E3011 out-of-bounds-memory-access": 6,
      "E3004 signed-integer-overflow": 6,
-     "E3007 evoir-main-parameters-are-not-canonical": 5,
-     "E3012 misaligned-memory-access": 3,
+     "E3007 evoir-main-parameters-are-not-canonical": 4,
+     "E3012 misaligned-memory-access": 2,
      "E3001 read-of-uninitialized-object": 2,
      "E3008 interpreter-fuel-exhausted": 2,
      "no-diagnostic exit=0": 1,
@@ -96,5 +67,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260906T070921Z"
+ "evidence": ".evidence/ladder/e0/20260906T073553Z"
 }
