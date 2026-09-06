@@ -622,6 +622,18 @@ fn read_all(frame: &Frame, regs: &[VReg]) -> Result<Vec<MirValue>, MirError> {
     regs.iter().map(|reg| read(frame, *reg)).collect()
 }
 
+/// The target address one pointer-carrying register holds, recording the
+/// exposure (EvoIR Section 3.7: `ptr.to_int` "exposes the object whose address
+/// it takes: the interpreters record the exposure").
+fn expose(state: &mut State, pointer: PointerValue) -> Result<u64, MirError> {
+    let (memory, address) = state
+        .memory
+        .expose_pointer(pointer)
+        .map_err(|error| memory_error(&error))?;
+    state.memory = memory;
+    Ok(address)
+}
+
 fn read_bits(frame: &Frame, reg: VReg) -> Result<u64, MirError> {
     match read(frame, reg)? {
         MirValue::Int(raw) => Ok(raw),
@@ -983,8 +995,19 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                         detail: "invalid-pointer-representation".to_owned(),
                     });
                 }
-                (_, MirValue::Int(raw)) => {
-                    // `strb`/`strh`/`str` write the low bytes of the register.
+                // `strb`/`strh`/`str` write the low bytes of the register.
+                //
+                // Section 5 lowers `ptr.to_int` to "nothing: the value is the
+                // same 64-bit register", so a register a conversion made an
+                // integer still carries its provenance here. The machine writes
+                // the address bytes, which is what the conversion meant, and the
+                // model records the exposure the conversion is.
+                (_, value) => {
+                    let raw = match value {
+                        MirValue::Int(raw) => raw,
+                        MirValue::Ptr(pointer) => expose(state, PointerValue::object(pointer))?,
+                        MirValue::Fn(pointer) => expose(state, pointer)?,
+                    };
                     let bits = kind.size_bytes() * 8;
                     let masked = if bits >= 64 {
                         raw
@@ -1009,11 +1032,6 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                             .store_integer(address, access, u128::from(masked))
                             .map_err(|error| memory_error(&error))?;
                     }
-                }
-                (_, MirValue::Ptr(_) | MirValue::Fn(_)) => {
-                    return Err(MirError::Invalid {
-                        detail: "an integer store of a pointer-carrying register".to_owned(),
-                    });
                 }
             }
         }
