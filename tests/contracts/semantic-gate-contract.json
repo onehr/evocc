@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.68",
+    "revision": "1.9.70",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -24,7 +24,7 @@
       "evocc-lower",
       "tests/contracts/day9-acceptance-contract.json"
     ],
-    "evomirSpec": "docs/evomir-spec.md revision 0.15"
+    "evomirSpec": "docs/evomir-spec.md revision 0.16"
   },
   "scope": [
     "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
@@ -707,6 +707,41 @@
         "clippy": 0,
         "fmt": "clean",
         "workspaceTotal": "not taken: the branch touched six crates and the script tests those plus their dependents; unchanged crates keep their last green run"
+      }
+    },
+    "b8": {
+      "branchHead": "4f0fbd7",
+      "commits": [
+        "52801e2 Give an EvoIR function a visibility field",
+        "fc2d983 Emit no global symbol for an internal function or object, and drop the unreferenced",
+        "7bb3f92 Link two objects that define the same helper, on both targets",
+        "c33922b Merge branch 'main' into backend-b8",
+        "4f0fbd7 Give the field to the three probe clients a test compiles at run time"
+      ],
+      "functionLinkage": {
+        "evoir": "a Function carries a GlobalVisibility, written ` visibility=internal` after `cc = target_default` and omitted for an external function (EvoIR 1.9.70, Section 2.1 and the Section 9 grammar). The parser admits that one spelling and nothing else: `visibility=external`, a different case, spaces around the equals sign and any trailing text are all refused. Absence means external, so every module text written before the revision parses and renders unchanged.",
+        "interpreters": "indifferent: a module is executed whole, and the field only decides what a link sees. The same function returns the same value called by name whether it is internal or external.",
+        "evomir": "emission writes no `.globl` for a function or global whose visibility is internal, and nothing else changes; the blank line, the `.p2align 2` and the label are where they were, so a unit with no internal function emits the bytes it emitted before. Internal globals were previously emitted with `.globl` and are now local, which is the half the specification already required.",
+        "dropping": "crates/evocc-mir/src/linkage.rs computes the emitted set before anything is lowered: every external function is a root, so is every internal function a global relocation names (the block form `@f^block` of EvoIR 1.9.69 counts as naming `f`) or a module assembly entry spells, and the set then grows through `call` and `func_addr` until it stops. A function reached only from a function that is itself dropped is dropped too.",
+        "beforeLowering": "deliberate. An unreferenced `static inline` stub from a shared header calls functions the configuration does not build, so lowering one would either refuse or leave an undefined symbol in the object; dropping it first means it never reaches the assembler.",
+        "moduleAssembly": "emission copies an entry verbatim and never parses it, so an entry that spells an internal symbol counts as referencing it. The match is bounded by any non-alphanumeric character, which admits the platform prefix (`_helper` names `helper`) and over-approximates rather than dropping a function an entry calls."
+      },
+      "endToEnd": {
+        "program": "two units that each define an internal `bump` of their own -- one adding 1, one adding 2 -- and export `one` and `two` that call it, linked with a `main` the reference compiler builds from `int main(void){return one(10)+two(20);}`",
+        "darwin": "33, agreeing with Apple clang version 21.0.0 (clang-2100.1.1.101)'s build of the same three C sources",
+        "linux": "33, agreeing with gcc (Debian 14.2.0-19) 14.2.0 in evo-flight-lab:sealed",
+        "counterfactual": "reinstating `.globl _bump` on either object turns the link into `ld: 1 duplicate symbols`, which is the failure this revision answers",
+        "unreferencedStub": "a unit whose internal `stub` calls an undefined `@absent` and whose external `three` returns 7 assembles, links and runs to 7 on both targets: the stub never reaches the assembler, so the object carries no undefined reference",
+        "stubReference": "the C form spells the helper `static inline`, which both reference compilers drop. GCC at -O0 still emits a plain unreferenced `static` function, and its own build of that program does not link -- which is the same evidence, from the other side.",
+        "frontEnd": "not reached: evocc-lower does not yet write the marker, so both lanes' units are hand-written EvoIR. The front end's own RED test, crates/evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header, landed on main at 8c3183b and is red until that crate emits ` visibility=internal`; evocc-lower is outside this contract's scope."
+      },
+      "byteIdentity": "a module with no internal function emits exactly the text it emitted before the revision; the tests pin it as an equality between the two emissions of one unit, whose only difference is the one `.globl` line the internal spelling removes, on both targets.",
+      "scopeNote": "the new Function field reached two files in crates this contract lists as must-not-touch, both mechanically and neither changing front-end behaviour: evocc-lower/src/lib.rs, where LoweredFunction::finish now names GlobalVisibility::External -- what the field's absence already meant, since the front end does not yet carry a storage class this far -- and evocc-lower/tests/day6_g1_equivalence_red.rs, whose block-argument probe is a source string the test compiles at run time and so is invisible to the workspace build. Two more such run-time-compiled clients, in evocc-eqopt and evocc-proofcheck, needed the same line and are inside scope. Every other site the field reached -- about eighty struct literals -- is in evocc-eqopt, evocc-evoir, evocc-mir, evocc-proofcheck and evocc-randgate.",
+      "specGap": "none",
+      "architectGate": {
+        "script": "tools/gate-changed.sh main",
+        "crates": "PLACEHOLDER",
+        "result": "PLACEHOLDER"
       }
     }
   }
