@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="620" viewBox="0 0 1600 620"><defs><marker id="arr-1f2a37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f2a37"/></marker><marker id="arr-4f8cff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4f8cff"/></marker><marker id="arr-38bdf8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#38bdf8"/></marker><marker id="arr-34d399" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker><marker id="arr-55606e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#55606e"/></marker><linearGradient id="hair" x1="0" x2="1"><stop offset="0" stop-color="#4f8cff"/><stop offset="0.55" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4f8cff" stop-opacity="0.16"/><stop offset="1" stop-color="#4f8cff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="620" fill="#0a0e14"/>
+<text x="60" y="64" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">The evaluation ladder</text>
+<text x="60" y="96" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">every rung is a pinned release with its own test suite as the judge; the kernel is the top, not the only reading</text>
+<line x1="60" y1="330" x2="1540" y2="330" stroke="#1f2a37" stroke-width="2" opacity="1.0"/>
+<circle cx="97.77777777777777" cy="330" r="8" fill="#4f8cff" stroke="#4f8cff" stroke-width="2"/>
+<line x1="97.77777777777777" y1="320" x2="97.77777777777777" y2="300" stroke="#4f8cff" stroke-width="1" opacity="0.6"/>
+<text x="97.77777777777777" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0a</text>
+<text x="97.77777777777777" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC C torture</text>
+<text x="97.77777777777777" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC 16.2</text>
+<text x="97.77777777777777" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">637 / 1,692 pass</text>
+<circle cx="173.33333333333331" cy="330" r="8" fill="#4f8cff" stroke="#4f8cff" stroke-width="2"/>
+<line x1="173.33333333333331" y1="340" x2="173.33333333333331" y2="360" stroke="#4f8cff" stroke-width="1" opacity="0.6"/>
+<text x="173.33333333333331" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0b</text>
+<text x="173.33333333333331" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">c-testsuite</text>
+<text x="173.33333333333331" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">5c7275656d75</text>
+<text x="173.33333333333331" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">186 / 220 pass</text>
+<circle cx="248.88888888888886" cy="330" r="8" fill="#0a0e14" stroke="#4f8cff" stroke-width="2"/>
+<line x1="248.88888888888886" y1="320" x2="248.88888888888886" y2="300" stroke="#4f8cff" stroke-width="1" opacity="0.6"/>
+<text x="248.88888888888886" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0c</text>
+<text x="248.88888888888886" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">Csmith, no float</text>
+<text x="248.88888888888886" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">0cdc710315cf</text>
+<text x="248.88888888888886" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">differential</text>
+<line x1="66" y1="450" x2="280.66666666666663" y2="450" stroke="#4f8cff" stroke-width="1.2" opacity="0.8"/>
+<text x="173.33333333333331" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#4f8cff" text-anchor="middle" opacity="1" letter-spacing="1">compiler test suites</text>
+<circle cx="364.4444444444444" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="364.4444444444444" y1="340" x2="364.4444444444444" y2="360" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="364.4444444444444" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E1</text>
+<text x="364.4444444444444" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">zlib</text>
+<text x="364.4444444444444" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">1.3.2</text>
+<text x="364.4444444444444" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">make test</text>
+<circle cx="439.99999999999994" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="439.99999999999994" y1="320" x2="439.99999999999994" y2="300" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="439.99999999999994" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E2</text>
+<text x="439.99999999999994" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">zstd</text>
+<text x="439.99999999999994" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">1.5.7</text>
+<text x="439.99999999999994" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">make check</text>
+<circle cx="515.5555555555555" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="515.5555555555555" y1="340" x2="515.5555555555555" y2="360" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="515.5555555555555" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E4</text>
+<text x="515.5555555555555" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">Mbed TLS</text>
+<text x="515.5555555555555" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">4.2.0</text>
+<text x="515.5555555555555" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">selftest</text>
+<circle cx="591.1111111111111" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="591.1111111111111" y1="320" x2="591.1111111111111" y2="300" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="591.1111111111111" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E5</text>
+<text x="591.1111111111111" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">TinyCC</text>
+<text x="591.1111111111111" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">0.9.27</text>
+<text x="591.1111111111111" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">self-hosted tests</text>
+<circle cx="666.6666666666666" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="666.6666666666666" y1="340" x2="666.6666666666666" y2="360" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="666.6666666666666" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E6</text>
+<text x="666.6666666666666" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">toybox</text>
+<text x="666.6666666666666" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">0.8.14</text>
+<text x="666.6666666666666" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">make tests</text>
+<circle cx="742.2222222222222" cy="330" r="8" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<line x1="742.2222222222222" y1="320" x2="742.2222222222222" y2="300" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+<text x="742.2222222222222" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">E7</text>
+<text x="742.2222222222222" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">musl + libc-test</text>
+<text x="742.2222222222222" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">1.2.6</text>
+<text x="742.2222222222222" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">libc-test</text>
+<line x1="332.66666666666663" y1="450" x2="773.9999999999999" y2="450" stroke="#38bdf8" stroke-width="1.2" opacity="0.8"/>
+<text x="553.3333333333333" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#38bdf8" text-anchor="middle" opacity="1" letter-spacing="1">integer programs</text>
+<circle cx="857.7777777777777" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="857.7777777777777" y1="340" x2="857.7777777777777" y2="360" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="857.7777777777777" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E3</text>
+<text x="857.7777777777777" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">cJSON</text>
+<text x="857.7777777777777" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">1.7.19</text>
+<text x="857.7777777777777" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">Unity</text>
+<circle cx="933.3333333333333" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="933.3333333333333" y1="320" x2="933.3333333333333" y2="300" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="933.3333333333333" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E8</text>
+<text x="933.3333333333333" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">PolyBench/C</text>
+<text x="933.3333333333333" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">4.2.1-beta</text>
+<text x="933.3333333333333" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">reference outputs</text>
+<circle cx="1008.8888888888888" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1008.8888888888888" y1="340" x2="1008.8888888888888" y2="360" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="1008.8888888888888" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E9</text>
+<text x="1008.8888888888888" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">llvm-test-suite</text>
+<text x="1008.8888888888888" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">llvmorg-23.1.0</text>
+<text x="1008.8888888888888" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">SingleSource</text>
+<circle cx="1084.4444444444443" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1084.4444444444443" y1="320" x2="1084.4444444444443" y2="300" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="1084.4444444444443" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E10</text>
+<text x="1084.4444444444443" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">jq</text>
+<text x="1084.4444444444443" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">1.8.2</text>
+<text x="1084.4444444444443" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">make check</text>
+<circle cx="1160.0" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1160.0" y1="340" x2="1160.0" y2="360" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="1160.0" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E11</text>
+<text x="1160.0" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">Lua</text>
+<text x="1160.0" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">5.5.1</text>
+<text x="1160.0" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">official suite</text>
+<circle cx="1235.5555555555557" cy="330" r="8" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1235.5555555555557" y1="320" x2="1235.5555555555557" y2="300" stroke="#55606e" stroke-width="1" opacity="0.6"/>
+<text x="1235.5555555555557" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#55606e" text-anchor="middle" opacity="1.0" letter-spacing="0">E12</text>
+<text x="1235.5555555555557" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">SQLite</text>
+<text x="1235.5555555555557" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">3.53.4</text>
+<text x="1235.5555555555557" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">TH3 / TCL</text>
+<line x1="825.9999999999999" y1="450" x2="1267.3333333333335" y2="450" stroke="#55606e" stroke-width="1.2" opacity="0.8"/>
+<text x="1046.6666666666667" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#55606e" text-anchor="middle" opacity="1" letter-spacing="1">after the floating-point rung F1</text>
+<circle cx="1351.1111111111113" cy="330" r="8" fill="#0a0e14" stroke="#34d399" stroke-width="2"/>
+<line x1="1351.1111111111113" y1="340" x2="1351.1111111111113" y2="360" stroke="#34d399" stroke-width="1" opacity="0.6"/>
+<text x="1351.1111111111113" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">K5</text>
+<text x="1351.1111111111113" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">lib/ + kernel/</text>
+<text x="1351.1111111111113" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">mixed link</text>
+<text x="1351.1111111111113" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">boots</text>
+<circle cx="1426.666666666667" cy="330" r="8" fill="#0a0e14" stroke="#34d399" stroke-width="2"/>
+<line x1="1426.666666666667" y1="320" x2="1426.666666666667" y2="300" stroke="#34d399" stroke-width="1" opacity="0.6"/>
+<text x="1426.666666666667" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">K6</text>
+<text x="1426.666666666667" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">full configuration</text>
+<text x="1426.666666666667" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoCC alone</text>
+<text x="1426.666666666667" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">boots to init</text>
+<circle cx="1502.2222222222226" cy="330" r="8" fill="#0a0e14" stroke="#34d399" stroke-width="2"/>
+<line x1="1502.2222222222226" y1="340" x2="1502.2222222222226" y2="360" stroke="#34d399" stroke-width="1" opacity="0.6"/>
+<text x="1502.2222222222226" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">K7</text>
+<text x="1502.2222222222226" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">kselftest</text>
+<text x="1502.2222222222226" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">in initramfs</text>
+<text x="1502.2222222222226" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">pass rate</text>
+<line x1="1319.3333333333335" y1="450" x2="1534.0000000000005" y2="450" stroke="#34d399" stroke-width="1.2" opacity="0.8"/>
+<text x="1426.666666666667" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="middle" opacity="1" letter-spacing="1">Linux 6.18.44</text>
+<text x="60" y="520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">filled rung: measured at least once.   ladder rules: pinned source with SHA-256, the subject&#x27;s own suite judges, mixed link is the ramp (units by EvoCC in a passing build, the rest by the reference compiler with the code that kept them out).</text>
+<text x="60" y="544" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">floating point is a backend rung of its own; subjects behind it are not evidence before it exists.</text>
+<text x="60" y="590" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc  ·  docs/roadmap.md</text>
+</svg>

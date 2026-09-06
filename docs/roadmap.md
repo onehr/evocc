@@ -1952,6 +1952,8 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 
 ## Milestone ladder for end-to-end evaluation (added 2026-09-06)
 
+![The evaluation ladder](images/evocc-ladder.png)
+
 The kernel is the launch target, but "the kernel boots" is a single bit that
 arrives late. The ladder below gives Q1 (correct on real code) a reading at
 every step, with the same method the kernel lane already uses: a reference
