@@ -48,11 +48,9 @@ fn far_branch(filler: usize) -> String {
     );
     let _ = writeln!(text, "^b1(%v4: bits<32>, %v5: mem<all>, %v6: world):");
     let mut last = 4_u32;
-    let mut next = 100_u32;
-    for _ in 0..filler {
+    for next in (100_u32..).take(filler) {
         let _ = writeln!(text, "    %v{next} = add.bits<32> %v{last}, %v{last}");
         last = next;
-        next += 1;
     }
     let _ = writeln!(text, "    br ^b2(%v{last}, %v5, %v6)\n");
     let _ = writeln!(

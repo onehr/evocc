@@ -934,7 +934,7 @@ fn parse_defining(
         scan.expect("[")?;
         let name =
             scan.take_while(|character| character.is_ascii_alphanumeric() || character == '_');
-        let place = FramePlace::from_mnemonic(&name)
+        let place = FramePlace::from_mnemonic(name)
             .ok_or_else(|| format!("unknown frame place '{name}'"))?;
         scan.expect("]")?;
         scan.finish()?;
