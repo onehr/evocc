@@ -8,6 +8,9 @@ use evocc_types::TargetDataLayout;
 fn short_circuit_assignments_reach_the_selected_successor() {
     for source in [
         "int main(void){int x;int y=0;if(y || (x=5)) return x!=5;return 1;}",
+        "int main(void){int x;int y=1;int b=y ? (x=5) : (x=7);return x!=5 || b!=5;}",
+        "int main(void){int x;int y=0;int b=y ?: (x=5);return x!=5 || b!=5;}",
+        "int y; int main(void){int x=0;if(y || (x=5)) return x!=5;return 1;}",
         "int f(int y){int x=0;if(y || (x=5)) return x;return -1;} int main(void){return f(0)!=5 || f(1)!=0;}",
         "int f(int y){int x=0;if(y && (x=5)) return x;return x;} int main(void){return f(1)!=5 || f(0)!=0;}",
         "int main(void){int x=0; int y=0; if (y || ((x=5) && (x+=2))) return x!=7; return 1;}",

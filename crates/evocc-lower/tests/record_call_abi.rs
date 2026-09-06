@@ -70,28 +70,44 @@ fn record_parameter_and_return_destination_have_the_frozen_signature() {
         identity.ret_tys,
         vec![EvoIRType::Mem(Region::All), EvoIRType::World]
     );
-    assert_eq!(identity.param_marks, vec![
-        ParamMark::ByVal(RecordShape { size: 16, align: 8 }),
-        ParamMark::Sret(RecordShape { size: 16, align: 8 }),
-        ParamMark::None,
-        ParamMark::None,
-    ]);
+    assert_eq!(
+        identity.param_marks,
+        vec![
+            ParamMark::ByVal(RecordShape { size: 16, align: 8 }),
+            ParamMark::Sret(RecordShape { size: 16, align: 8 }),
+            ParamMark::None,
+            ParamMark::None,
+        ]
+    );
 }
 
 #[test]
 fn record_marks_agree_across_declarations_definitions_and_indirect_calls() {
     let module = lower("struct S { int a; long b; }; extern struct S external(struct S); struct S local(struct S x){return x;} struct S invoke(struct S (*fp)(struct S),struct S x){return fp(x);} struct S caller(struct S x){return invoke(local,external(x));}");
     let local = module.functions.iter().find(|f| f.name == "local").unwrap();
-    let external = module.declares.iter().find(|f| f.name == "external").unwrap();
+    let external = module
+        .declares
+        .iter()
+        .find(|f| f.name == "external")
+        .unwrap();
     assert!(!local.param_marks.is_empty());
     assert_eq!(local.param_marks, external.param_marks);
-    let invoke = module.functions.iter().find(|f| f.name == "invoke").unwrap();
-    let EvoIRType::FnPtr { marks, .. } = &invoke.params[0].ty else {panic!("expected function pointer")};
+    let invoke = module
+        .functions
+        .iter()
+        .find(|f| f.name == "invoke")
+        .unwrap();
+    let EvoIRType::FnPtr { marks, .. } = &invoke.params[0].ty else {
+        panic!("expected function pointer")
+    };
     assert_eq!(marks, &local.param_marks);
     let text = render_module(&module);
     assert!(text.contains("byval(16, 8)"), "{text}");
     assert!(text.contains("sret(16, 8)"), "{text}");
-    assert_eq!(render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),text);
+    assert_eq!(
+        render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),
+        text
+    );
 }
 
 #[test]

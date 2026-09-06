@@ -2095,7 +2095,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             });
                             tasks.push(MachineTask::EvalExpression {
                                 expression: right,
-                                allow_root_mutation: false,
+                                allow_root_mutation: matches!(
+                                    operator,
+                                    BinaryOp::And | BinaryOp::Or
+                                ),
                             });
                         }
                     }
@@ -3622,7 +3625,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: left,
-                    allow_root_mutation: *operator == BinaryOp::Comma && allow_root_mutation,
+                    allow_root_mutation: matches!(operator, BinaryOp::And | BinaryOp::Or)
+                        || (*operator == BinaryOp::Comma && allow_root_mutation),
                 });
             }
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
@@ -3701,10 +3705,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::BuiltinUnreachable { .. } => {
                 return Err(InterpreterError::UnreachableReached { span });
             }
-            CHirExpr::BuiltinReturnAddress { .. } => {
-                return Err(InterpreterError::UnsupportedExpression {
-                    feature: "return-address builtin",
+            CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
+                let frame =
+                    self.memory_frame
+                        .as_ref()
+                        .ok_or(InterpreterError::UnsupportedExpression {
+                            feature: "activation address outside a call frame",
+                            span,
+                        })?;
+                // Function identities occupy the initial range. Frame IDs are
+                // monotonic across calls, including recursion and returned frames.
+                let identity = self.symbol_order().functions.len() as u64
+                    + frame.id.raw() * 2
+                    + u64::from(matches!(expression, CHirExpr::BuiltinFrameAddress { .. }));
+                let pointer = PointerValue::function(identity)
+                    .map_err(|error| self.memory_error(error, span))?;
+                let (memory, address) = self
+                    .memory
+                    .expose_pointer(pointer)
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.memory = memory;
+                let ty = PointerTypeDesc::from_expression(
+                    self.unit.symbols(),
+                    self.unit.types(),
+                    expression,
+                )
+                .map_err(|_| InterpreterError::UnsupportedExpression {
+                    feature: "activation address has no pointer type",
                     span,
+                })?;
+                values.push(CValue::Pointer {
+                    value: Pointer::from_address(address),
+                    ty,
                 });
             }
             CHirExpr::BuiltinFrameAddress { .. } => {
@@ -8155,22 +8188,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<CInteger, InterpreterError> {
         match operator {
             BinaryOp::And => {
-                let left = self.eval_expr(left, false)?;
+                let left = self.eval_expr(left, true)?;
                 if !left.truth() {
                     Ok(CInteger::int(0))
                 } else {
                     Ok(CInteger::int(i32::from(
-                        self.eval_expr(right, false)?.truth(),
+                        self.eval_expr(right, true)?.truth(),
                     )))
                 }
             }
             BinaryOp::Or => {
-                let left = self.eval_expr(left, false)?;
+                let left = self.eval_expr(left, true)?;
                 if left.truth() {
                     Ok(CInteger::int(1))
                 } else {
                     Ok(CInteger::int(i32::from(
-                        self.eval_expr(right, false)?.truth(),
+                        self.eval_expr(right, true)?.truth(),
                     )))
                 }
             }
@@ -8958,7 +8991,9 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
-        | CHirExpr::CompoundLit(_, _, _) => true,
+        | CHirExpr::CompoundLit(_, _, _)
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => true,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
@@ -9001,9 +9036,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
-        | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => false,
+        | CHirExpr::BuiltinUnreachable { .. } => false,
     }
 }
 

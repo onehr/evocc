@@ -10325,10 +10325,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
-        let valid_argument = self
-            .eval_integer_constant_expression(argument)
-            .is_ok_and(|value| frame_address || value.raw_bits() == 0);
-        if !valid_argument {
+        let depth = self.eval_integer_constant_expression(argument);
+        if !depth
+            .as_ref()
+            .is_ok_and(|value| frame_address || value.raw_bits() == 0)
+        {
             self.report("E2913", "builtin-operand-not-convertible", argument.span());
             return None;
         }
@@ -10337,7 +10338,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let facts = ExprFacts::value(pointer_ty);
         let span = self.merge_span(keyword.span, close.span);
         Some(self.alloc_node(if frame_address {
-            CHirExpr::BuiltinFrameAddress { facts, span }
+            CHirExpr::BuiltinFrameAddress {
+                depth: depth.expect("validated constant depth").raw_bits(),
+                facts,
+                span,
+            }
         } else {
             CHirExpr::BuiltinReturnAddress { facts, span }
         }))
@@ -11685,7 +11690,8 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             facts: *facts,
             span: paren_span,
         },
-        CHirExpr::BuiltinFrameAddress { facts, .. } => CHirExpr::BuiltinFrameAddress {
+        CHirExpr::BuiltinFrameAddress { depth, facts, .. } => CHirExpr::BuiltinFrameAddress {
+            depth: *depth,
             facts: *facts,
             span: paren_span,
         },

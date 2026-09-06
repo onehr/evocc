@@ -26,8 +26,9 @@ use evocc_evoir::{
     Inst, Module, OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
-    enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError,
-    Region, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    canonical_marks, enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters,
+    LayoutError, ParamMark, RecordShape, Region, TagDefinition, TagState, TargetDataLayout, TypeId,
+    TypeInterner, TypeKind,
 };
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
@@ -542,6 +543,18 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             .map(|value| value.ir.clone())
             .collect::<Vec<_>>();
         ret_tys.extend([EvoIRType::Mem(Region::All), EvoIRType::World]);
+        let param_marks = record_signature_marks(
+            unit.types(),
+            target,
+            &info
+                .parameter_types
+                .iter()
+                .map(|value| value.source)
+                .collect::<Vec<_>>(),
+            info.return_type.as_ref().map(|value| value.source),
+            params.len(),
+            info.span,
+        )?;
         declares.insert(
             info.name.clone(),
             FunctionDeclaration {
@@ -549,7 +562,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 variadic: info.variadic,
                 params,
                 ret_tys,
-                param_marks: Vec::new(),
+                param_marks,
             },
         );
     }
@@ -2046,8 +2059,8 @@ fn prevalidate_expr_for_lowering(
             }
             Ok(())
         }
-        CHirExpr::BuiltinReturnAddress { span, .. } => {
-            Err(LowerError::ReturnAddress { span: *span })
+        CHirExpr::BuiltinReturnAddress { .. } | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
+            Ok(())
         }
         CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
         CHirExpr::LabelAddress { .. } => Ok(()),
@@ -2571,6 +2584,14 @@ fn function_pointer_ir_type(
         .unwrap_or_default();
     results.push(EvoIRType::Mem(Region::All));
     results.push(EvoIRType::World);
+    let marks = record_signature_marks(
+        types,
+        target,
+        parameter_types,
+        Some(*return_type),
+        params.len(),
+        span,
+    )?;
     Ok(EvoIRType::FnPtr {
         params,
         results,
@@ -2578,8 +2599,41 @@ fn function_pointer_ir_type(
             parameters,
             FunctionParameters::Prototype { variadic: true, .. }
         ),
-        marks: Vec::new(),
+        marks,
     })
+}
+
+fn record_signature_marks(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    parameters: &[TypeId],
+    return_type: Option<TypeId>,
+    parameter_count: usize,
+    span: SourceSpan,
+) -> Result<Vec<ParamMark>, LowerError> {
+    let shape = |ty| {
+        let layout = target
+            .layout_of(types, ty)
+            .map_err(|source| LowerError::Layout { ty, span, source })?;
+        Ok(RecordShape {
+            size: layout.size_bytes,
+            align: layout.align_bytes,
+        })
+    };
+    let mut marks = parameters
+        .iter()
+        .map(|ty| {
+            if is_aggregate_type(types, *ty) {
+                shape(*ty).map(ParamMark::ByVal)
+            } else {
+                Ok(ParamMark::None)
+            }
+        })
+        .collect::<Result<Vec<_>, LowerError>>()?;
+    if let Some(ty) = return_type.filter(|ty| is_aggregate_type(types, *ty)) {
+        marks.push(ParamMark::Sret(shape(ty)?));
+    }
+    Ok(canonical_marks(marks, parameter_count))
 }
 
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
@@ -3167,6 +3221,19 @@ impl<'a> FunctionLowerer<'a> {
                 Ok((expression, format!("{}^b{position}", self.info.name)))
             })
             .collect::<Result<BTreeMap<_, _>, LowerError>>()?;
+        let param_marks = record_signature_marks(
+            self.unit.types(),
+            self.target,
+            &self
+                .info
+                .parameter_types
+                .iter()
+                .map(|value| value.source)
+                .collect::<Vec<_>>(),
+            self.info.return_type.as_ref().map(|value| value.source),
+            params.len(),
+            self.info.span,
+        )?;
         let mut function = Function {
             name: self.info.name.clone(),
             variadic: self.info.variadic,
@@ -3179,7 +3246,7 @@ impl<'a> FunctionLowerer<'a> {
                 evocc_evoir::GlobalVisibility::External
             },
             blocks: self.finish_blocks()?,
-            param_marks: Vec::new(),
+            param_marks,
         };
         renumber_function(&mut function)?;
         Ok((function, label_addresses))
@@ -3386,6 +3453,24 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         keys
+    }
+
+    fn expression_join_keys(&self, state: &State, arms: &[&CHirExpr<'_>]) -> Vec<EnvKey> {
+        let mut symbols = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect();
+        // An arm may assign a declared local for the first time. Retain that
+        // local even without a prior SSA binding; skipped arms carry poison.
+        // Do not thread unrelated, not-yet-initialized declarations.
+        for arm in arms {
+            collect_symbols_expr(arm, &mut symbols);
+        }
+        self.keys_for(state, &symbols, &[])
     }
 
     fn new_block_from(
@@ -6242,8 +6327,23 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void variadic operation used as a value",
                 }),
-            CHirExpr::BuiltinReturnAddress { span, .. } => {
-                Err(LowerError::ReturnAddress { span: *span })
+            CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
+                let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                let instruction = if matches!(expression, CHirExpr::BuiltinReturnAddress { .. }) {
+                    Inst::ReturnAddress {
+                        result: result.clone(),
+                    }
+                } else {
+                    Inst::FrameAddress {
+                        result: result.clone(),
+                    }
+                };
+                self.emit(state, instruction)?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                })
             }
             CHirExpr::BuiltinFrameAddress { span, .. } => {
                 Err(LowerError::FrameAddress { span: *span })
@@ -7169,15 +7269,7 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let left = self.lower_condition(left, state)?;
-        let symbols = state
-            .env
-            .keys()
-            .filter_map(|key| match key {
-                EnvKey::Local(symbol) => Some(*symbol),
-                _ => None,
-            })
-            .collect::<BTreeSet<_>>();
-        let keys = self.keys_for(state, &symbols, &[]);
+        let keys = self.expression_join_keys(state, &[right]);
         let mut right_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let skip_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let (true_target, true_args, false_target, false_args) = if operator == BinaryOp::And {
@@ -7484,15 +7576,7 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let predicate = self.lower_condition(condition, state)?;
-        let all_symbols = state
-            .env
-            .keys()
-            .filter_map(|key| match key {
-                EnvKey::Local(symbol) => Some(*symbol),
-                _ => None,
-            })
-            .collect::<BTreeSet<_>>();
-        let keys = self.keys_for(state, &all_symbols, &[]);
+        let keys = self.expression_join_keys(state, &[then_expression, else_expression]);
         let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let then_arguments = self.edge_values(state, &keys)?;
@@ -7569,15 +7653,7 @@ impl<'a> FunctionLowerer<'a> {
             },
         );
         let predicate = self.lower_condition_value(operand_value, state)?;
-        let all_symbols = state
-            .env
-            .keys()
-            .filter_map(|key| match key {
-                EnvKey::Local(symbol) => Some(*symbol),
-                _ => None,
-            })
-            .collect::<BTreeSet<_>>();
-        let mut keys = self.keys_for(state, &all_symbols, &[]);
+        let mut keys = self.expression_join_keys(state, &[else_expression]);
         // Normalize the retained value exactly where an explicit scalar local
         // initialized from the same SSA value would appear. `keys_for`
         // otherwise groups all temporaries after locals, which would make the

@@ -76,13 +76,17 @@ fn asm_goto_lowers_and_execution_fails_closed() {
 }
 
 #[test]
-fn return_address_fails_closed_with_only_e3025() {
-    assert_lowering_error(
-        "void *f(void) { return __builtin_return_address(0); }\n",
-        4,
-        "E3025",
-        "not-lowered: return-address",
-    );
+fn return_address_lowers_to_an_activation_address() {
+    let source = "void *f(void) { return __builtin_return_address(0); }\n";
+    let arena = Arena::default();
+    let file = FileId::new(9614);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    assert!(evocc_evoir::render_module(&module).contains(" = return_address : ptr<generic>"));
 }
 
 #[test]

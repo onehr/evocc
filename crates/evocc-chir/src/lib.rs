@@ -467,13 +467,14 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
-    /// The accepted but deliberately IR-deferred return-address builtin.
+    /// The current activation's return address.
     BuiltinReturnAddress {
         facts: ExprFacts,
         span: SourceSpan,
     },
-    /// The accepted but deliberately IR-deferred frame-address builtin.
+    /// The frame-address builtin; only depth zero has executable semantics.
     BuiltinFrameAddress {
+        depth: u128,
         facts: ExprFacts,
         span: SourceSpan,
     },
