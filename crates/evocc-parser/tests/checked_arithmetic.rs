@@ -90,6 +90,21 @@ fn the_kernel_overflow_line_parses() {
 }
 
 #[test]
+fn checked_arithmetic_keeps_the_explicit_wide_operand_boundary() {
+    for ty in ["__int128", "unsigned __int128"] {
+        for operation in ["add", "sub", "mul"] {
+            for source in [
+                format!("int f({ty} a){{long r;return __builtin_{operation}_overflow(a,1,&r);}}"),
+                format!("int f({ty} a){{long r;return __builtin_{operation}_overflow(1,a,&r);}}"),
+                format!("int f(void){{{ty} r;return __builtin_{operation}_overflow(1,2,&r);}}"),
+            ] {
+                rejects(&source, "E2913");
+            }
+        }
+    }
+}
+
+#[test]
 fn checked_arithmetic_is_visible_in_the_chir_summary() {
     let arena = Arena::default();
     let unit = parse(
