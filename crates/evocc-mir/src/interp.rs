@@ -164,9 +164,31 @@ struct State {
     /// and its own identifier, numbered past the function identities so a
     /// block address never equals a function address.
     blocks: HashMap<(usize, u32), u64>,
+    /// The next unused activation-address identity, numbered past the function
+    /// and block identities (EvoIR Section 3.7, revision 1.9.72).
+    next_activation: u64,
 }
 
 impl State {
+    /// Mint the pair of addresses one beginning activation holds for its life.
+    ///
+    /// EvoIR Section 3.7: "the interpreters give each activation a fresh value
+    /// for each". The interpreter models no linear stack, so both are the
+    /// memory model's opaque non-object provenance, which compares equal to
+    /// itself, exposes to its own address and denies every access.
+    fn begin_activation(&mut self) -> Result<(u64, u64), MirError> {
+        let saved_lr = self.next_activation;
+        let frame_pointer = saved_lr.checked_add(1).ok_or_else(|| MirError::Invalid {
+            detail: "activation address identity exhausted".to_owned(),
+        })?;
+        self.next_activation = frame_pointer
+            .checked_add(1)
+            .ok_or_else(|| MirError::Invalid {
+                detail: "activation address identity exhausted".to_owned(),
+            })?;
+        Ok((saved_lr, frame_pointer))
+    }
+
     fn block_identity(&self, function: usize, block: u32) -> Result<u64, MirError> {
         self.blocks
             .get(&(function, block))
@@ -187,6 +209,8 @@ struct Frame {
     memory_frame: Option<FrameId>,
     memory_scope: Option<ScopeId>,
     results: Vec<VReg>,
+    /// The saved link register and the frame pointer of this activation.
+    activation: (u64, u64),
 }
 
 /// Interpret a module's named entry function.
@@ -214,6 +238,7 @@ pub fn interpret_module(
         globals: HashMap::new(),
         identities: HashMap::new(),
         blocks: HashMap::new(),
+        next_activation: 1,
     };
     initialize_globals(module, &mut state)?;
     for (index, function) in module.functions.iter().enumerate() {
@@ -239,6 +264,7 @@ pub fn interpret_module(
             })?;
         }
     }
+    state.next_activation = next;
 
     let entry_index = module
         .functions
@@ -259,6 +285,7 @@ pub fn interpret_module(
     }
 
     let (memory_frame, memory_scope) = begin_frame(&mut state, &module.functions[entry_index])?;
+    let activation = state.begin_activation()?;
     let mut frames = vec![Frame {
         function: entry_index,
         block: 0,
@@ -269,6 +296,7 @@ pub fn interpret_module(
         memory_frame,
         memory_scope,
         results: Vec::new(),
+        activation,
     }];
     let mut steps = 0_u64;
 
@@ -474,6 +502,7 @@ fn push_call(
     results: Vec<VReg>,
 ) -> Result<(), MirError> {
     let (memory_frame, memory_scope) = begin_frame(state, &module.functions[index])?;
+    let activation = state.begin_activation()?;
     frames.push(Frame {
         function: index,
         block: 0,
@@ -484,6 +513,7 @@ fn push_call(
         memory_frame,
         memory_scope,
         results,
+        activation,
     });
     Ok(())
 }
@@ -1358,6 +1388,27 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             return Err(MirError::Invalid {
                 detail: "a stack argument exists only after allocation".to_owned(),
             });
+        }
+        // Section 5's activation-address rows (revision 0.17). The interpreter
+        // models no linear stack, so it answers them the way EvoIR Section 3.7
+        // requires instead: one fresh identity per activation for each, equal
+        // to itself for the activation's life and `E3013` through every access.
+        MInst::FrameAddress {
+            dst,
+            place: place @ (crate::FramePlace::SavedLinkRegister | crate::FramePlace::FramePointer),
+        } => {
+            let identity = if *place == crate::FramePlace::SavedLinkRegister {
+                frame.activation.0
+            } else {
+                frame.activation.1
+            };
+            write(
+                frame,
+                *dst,
+                MirValue::Fn(
+                    PointerValue::function(identity).map_err(|error| memory_error(&error))?,
+                ),
+            );
         }
         // Section 6's variadic places live above and inside the linear stack
         // the interpreter has no model of, exactly as the prologue does; the

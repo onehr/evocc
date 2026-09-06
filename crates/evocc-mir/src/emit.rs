@@ -1123,6 +1123,15 @@ fn emit_inst(
                     .map_or(0, |(_, base)| base + REGISTER_SAVE_BYTES);
                 emit_add_immediate(text, "add", &name(*dst), "sp", top);
             }
+            // Section 5's activation-address rows (revision 0.17). The
+            // prologue's `stp x29, x30, [sp, #-16]!` puts the saved link
+            // register at `x29 + 8`, and the frame pointer is `x29` itself.
+            crate::FramePlace::SavedLinkRegister => {
+                let _ = writeln!(text, "    ldr {}, [x29, #8]", name(*dst));
+            }
+            crate::FramePlace::FramePointer => {
+                let _ = writeln!(text, "    mov {}, x29", name(*dst));
+            }
         },
         // The area itself is reserved by the frame layout and filled by the
         // prologue, so the marker emits nothing of its own.
