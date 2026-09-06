@@ -6,10 +6,53 @@
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.71",
-    "sha256": "399685a64b7c33fa31fc55441d7290c68c57c3f2488ffd8037368f1affcc3f2b"
+    "revision": "1.9.73",
+    "sha256": "b343877cb36ea5140c831e2f98cc8223ad058ef4498dc6c6605491abf401a891"
   },
-  "cutLine": "Latest sealed kernel lowering at 4310938: 42 clean, 2756 diagnosed, no timeout or panic. Subsequent execution fixes at 82f2cbc improve GCC torture from 725 to 740 passing programs without a passed-program regression. These are separate measurements, not whole-kernel completion. Historical sections retain their original subjects and outcomes; only latestExecution describes this follow-up.",
+  "cutLine": "Latest sealed kernel lowering at 99a1bc4 remains 42 clean and 2756 diagnosed, with no timeout or panic; E3025 is zero and asm i is now the largest class. Internal linkage, activation addresses, expression joins and record ABI marks have landed. The subsequent preprocessing gate passed; the newer expression regression window remains open on bit-field initialization. frontendExecutionFollowup is current; latestExecution and older sections retain their historical subjects and outcomes. No whole-kernel or whole-backlog completion is claimed.",
+  "frontendExecutionFollowup": {
+    "status": "PARTIAL_WITH_DECLARED_RED",
+    "landed": {
+      "internalLinkage": "89d7443",
+      "activationAddressesExpressionJoinsRecordAbi": "99a1bc4",
+      "preprocessingBoundaries": "f298b87",
+      "expressionValueFlowRed": "ffee15c",
+      "functionDesignatorsIndexedJoinsOperandEffects": "3979ea5"
+    },
+    "loweringSurvey": {
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc ./evocc --action lower --jobs 6 --timeout 60 --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/full-config-lowering-survey",
+      "workingDirectory": ".build/frontend-execution",
+      "subjectCommit": "99a1bc4eaa06278e6af866d997e8b9addcaa29e4",
+      "runId": "20260906T170651Z-18334",
+      "capture": ".evidence/full-config-lowering-survey/20260906T170651Z-18334",
+      "sealSha256": "572c2b12bf407ea82bd2861bef61fde90a76449bf312a19dd5c4351105750bac",
+      "classifications": { "clean": 42, "diagnosed": 2756, "unavailable": 0, "timeout": 0, "panic": 0 },
+      "firstDiagnosticCounts": { "E3021": 2733, "E3101": 21, "E3029": 1, "E3031": 1 },
+      "constructCounts": { "asm-i": 2730, "asm-+rm": 3, "identifier-semantic-identity": 7, "object-declaration-semantic-identity": 7, "unsupported-expression-form": 7, "computed-goto": 1, "frame-address": 1 },
+      "timing": { "parallelism": 6, "medianWallMilliseconds": 4109.56, "maximumWallMilliseconds": 31682.198, "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c", "note": "Concurrent with four K1 compiler workers; coarse wall telemetry, not a throughput benchmark." },
+      "postprocessingRecovery": "Original command exited 1 after writing all 2798 results because capture.relative_to(PROJECT_ROOT) rejected the external capture path. Reused the unchanged runner's result_summary and seal_capture after checking every output digest, unique unit coverage, detached HEAD, binary, contract and runner identities. No unit was rerun; summary.json records the recovery."
+    },
+    "completedLadderRuns": {
+      "toybox": { "run": "20260906T164947Z", "receipt": "tests/contracts/ladder-toybox-receipt.json", "command": "python3 tools/ladder/toybox.py --evocc target/frontend/release/evocc --jobs 4", "unitsInPassingBuild": 161, "unitsTotal": 203, "subjectCommit": "89d7443" },
+      "zlib": { "run": "20260906T165420Z", "receipt": "tests/contracts/ladder-zlib-receipt.json", "command": "python3 tools/ladder/zlib.py --evocc target/frontend/release/evocc --jobs 4", "unitsInPassingBuild": 13, "unitsTotal": 19, "subjectCommit": "89d7443" },
+      "zstd": { "run": "20260906T170414Z", "receipt": "tests/contracts/ladder-zstd-receipt.json", "command": "python3 tools/ladder/zstd.py --evocc target/frontend/release/evocc --jobs 4", "unitsInPassingBuild": 2, "unitsTotal": 44, "subjectCommit": "99a1bc4", "limitation": "Measured before the preprocessing fix; does not close the record ABI mixed-link requirement." }
+    },
+    "incompleteMeasurements": {
+      "musl": { "run": "20260906T164951Z", "subjectCommit": "89d7443", "status": "STOPPED_INCOMPLETE_NOT_PASS", "reason": "libc-test runtest remained live for over 43 minutes despite its own five-second timeout; only the owned command and container were stopped. No final receipt was produced; the prior completed receipt is unchanged." },
+      "k1": { "run": "measure-20260906T170419Z", "subjectCommit": "99a1bc4", "status": "RUNNING_AT_RECORD_TIME", "command": "CARGO_TARGET_DIR=target/frontend tools/k1/measure.sh --jobs 4" }
+    },
+    "validation": {
+      "preprocessing": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 99a1bc4 --offline -j2 --quiet", "status": "PASS" },
+      "expressionWindow": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh f298b87 --offline -j2 --quiet", "status": "FAIL_DECLARED_RED", "remainingFailedTest": "a_local_bit_field_record_is_initialized_and_updated", "buildErrors": 0 },
+      "focusedExpressions": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j2 -- --nocapture", "redPassed": 1, "redFailed": 4, "currentPassed": 4, "currentFailed": 1 },
+      "lint": { "command": "CARGO_TARGET_DIR=target/frontend cargo clippy -p evocc-chir -p evocc-lower --all-targets --offline -- -D warnings && cargo fmt --all -- --check && ruff check tools tests/acceptance && git diff --check", "status": "PASS" }
+    },
+    "remaining": [
+      "Bit-field initialization, reads and masked updates: declared RED stays enabled; removing just the initializer refusal would not make execution correct.",
+      "Complete real-lane measurements for the new expression and preprocessing changes.",
+      "Remaining extension and noreturn spellings, __STDC_NO_VLA__, alias/weak preservation, noreturn library builtins and K&R definitions are not claimed complete."
+    ]
+  },
   "latestExecution": {
     "subjectCommit": "82f2cbc",
     "status": "PARTIAL_EXECUTION_FRONTIER",
