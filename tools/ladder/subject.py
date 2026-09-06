@@ -274,6 +274,14 @@ FRONT_END_GAPS = [
         " nothing but an include_next",
     },
     {
+        "code": "E1001",
+        "construct": "the built-in vector types a GCC 14 front end promises",
+        "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
+        "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver"
+        " defines __GNUC__ 14, so glibc takes the branches that use GCC 14's"
+        " own vector types",
+    },
+    {
         "code": "linkage",
         "construct": "a static function is defined with external linkage",
         "repro": "static int helper(void){ return 0; } int use(void){ return helper(); }",
@@ -488,10 +496,7 @@ def _unit_from_argv(argv: list[str], directory: str, relative) -> Unit | None:
     if os.path.basename(argv[index]) not in COMPILERS:
         return None
     argv = argv[index:]
-    if "-c" not in argv or "-o" not in argv:
-        return None
-    obj = argv[argv.index("-o") + 1]
-    if not obj.endswith(".o"):
+    if "-c" not in argv:
         return None
     sources = [
         token
@@ -500,6 +505,14 @@ def _unit_from_argv(argv: list[str], directory: str, relative) -> Unit | None:
     ]
     if len(sources) != 1:
         return None
+    if "-o" in argv:
+        obj = argv[argv.index("-o") + 1]
+        if not obj.endswith(".o"):
+            return None
+    else:
+        # ``gcc -c foo.c`` writes ``foo.o`` beside the command, not beside
+        # the source: a Makefile that leans on the implicit rule says so.
+        obj = os.path.basename(sources[0])[:-2] + ".o"
     return Unit(
         obj=relative(obj, directory),
         source=relative(sources[0], directory),
@@ -563,12 +576,33 @@ def relink(subject: Subject, evidence: Path, tag: str) -> dict:
 # the front-end pass
 
 
+def unsupported_options(evocc: Path, options: list[str], work: Path) -> list[str]:
+    """Which of ``options`` the driver refuses to accept at all.
+
+    A build's ``-std=`` is a flag the front end would otherwise be handed as
+    written. Whether this driver takes it is measured once, on an empty
+    translation unit, rather than assumed from a list kept in this file: an
+    option the driver rejects is then dropped by name like any other flag it
+    does not consume, and the receipt says so.
+    """
+    work.mkdir(parents=True, exist_ok=True)
+    empty = work / "empty.c"
+    empty.write_text("int evocc_probe;\n", encoding="utf-8")
+    rejected = []
+    for option in sorted(set(options)):
+        completed = run([str(evocc), f"--target={TARGET}", "--emit=asm", option, str(empty)])
+        if completed.returncode != 0 and "unsupported" in completed.stderr:
+            rejected.append(option)
+    return rejected
+
+
 def evocc_argv(
     unit: Unit,
     evocc: Path,
     subject: Subject,
     tree: Path,
     include: list[str],
+    unsupported: frozenset[str] = frozenset(),
 ) -> tuple[list[str], list[str]]:
     """The EvoCC command for one unit, and the flags it does not consume.
 
@@ -612,7 +646,7 @@ def evocc_argv(
             projected.append(value)
         elif value.startswith("-include") and len(value) > len("-include"):
             projected.append("-include" + path(value[len("-include") :]))
-        elif value in PASSED_THROUGH or value.startswith("-std="):
+        elif (value in PASSED_THROUGH or value.startswith("-std=")) and value not in unsupported:
             projected.append(value)
         else:
             omitted.append(value)
@@ -641,10 +675,17 @@ def emit(
     timeout: int = 300,
 ) -> list[dict]:
     """Run EvoCC over every unit and record what it did with each one."""
+    unsupported = frozenset(
+        unsupported_options(
+            evocc,
+            [flag for unit in units for flag in unit.argv if flag.startswith("-std=")],
+            asm_root / "probe",
+        )
+    )
     rows: list[dict] = []
     for unit in units:
         row: dict = {"unit": unit.obj, "source": unit.source}
-        argv, omitted = evocc_argv(unit, evocc, subject, tree, include)
+        argv, omitted = evocc_argv(unit, evocc, subject, tree, include, unsupported)
         row["omittedFlags"] = omitted
         try:
             completed = subprocess.run(
@@ -920,6 +961,8 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         shutil.rmtree(asm_root)
     asm_root.mkdir(parents=True)
     rows = emit(subject, units, evocc, tree, include, asm_root)
+    rejected_options = sorted({flag for row in rows for flag in row["omittedFlags"]
+                               if flag.startswith("-std=")})
     assemble(rows, asm_root)
 
     assembled = [row["unit"] for row in rows if row["outcome"] == "assembled"]
@@ -1049,6 +1092,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
             "configure": subject.configure,
             "subject": list(subject.notes),
             "buildCommand": subject.build,
+            "optionsTheDriverRejects": rejected_options,
             "omittedFlags": sorted(
                 {flag for row in rows for flag in row.get("omittedFlags", [])}
             ),

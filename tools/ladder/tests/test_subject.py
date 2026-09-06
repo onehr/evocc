@@ -73,8 +73,19 @@ class ParseBuildLogTest(unittest.TestCase):
         (unit,) = ladder.parse_build_log(log, TREE)
         self.assertIn("-DSECOND", unit.argv)
 
+    def test_an_implicit_output_names_the_object_the_way_make_does(self) -> None:
+        log = "gcc -std=c89 -c -fPIC -Wall cJSON.c\n"
+        (unit,) = ladder.parse_build_log(log, TREE)
+        self.assertEqual((unit.obj, unit.source), ("cJSON.o", "cJSON.c"))
+
+    def test_an_implicit_output_lands_where_the_command_ran(self) -> None:
+        log = "cd lib && gcc -c common/pool.c\n"
+        (unit,) = ladder.parse_build_log(log, TREE)
+        self.assertEqual((unit.obj, unit.source), ("lib/pool.o", "lib/common/pool.c"))
+
     def test_what_is_not_a_target_c_compilation_is_not_a_unit(self) -> None:
         log = (
+            "gcc -o cjson_test cJSON.c test.c -lm\n"       # two sources, no -c
             "gcc -c -o crt.o crt.S\n"                      # assembly
             "gcc -c -o tool.o tool.cpp\n"                  # not C
             "gcc -E -o pp.i pp.c\n"                        # not a compilation

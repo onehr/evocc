@@ -1,0 +1,147 @@
+{
+ "schemaVersion": 1,
+ "rung": "E3",
+ "subject": "cjson",
+ "authority": "docs/roadmap.md, milestone ladder",
+ "run": "20260906T130702Z",
+ "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
+ "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
+ "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
+ "tarball": "v1.7.19.tar.gz",
+ "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+ "target": "aarch64-unknown-linux-gnu",
+ "unitsTotal": 2,
+ "unitsEvoccCompiled": 0,
+ "unitsSubstituted": 0,
+ "unitsRebuiltByMake": [],
+ "substitutedUnits": [],
+ "unitsExcluded": 0,
+ "unitsInPassingBuild": 0,
+ "outcomes": {
+  "refused": 2
+ },
+ "refusalsByCode": {
+  "E1001": 2
+ },
+ "refusals": [
+  {
+   "unit": "cJSON.o",
+   "code": "E1001",
+   "message": "expected-declaration"
+  },
+  {
+   "unit": "cJSON_Utils.o",
+   "code": "E1001",
+   "message": "expected-declaration"
+  }
+ ],
+ "excludedUnits": [],
+ "failingUnits": [],
+ "baselineTest": {
+  "passed": true,
+  "status": 0
+ },
+ "test": {
+  "passed": true,
+  "status": 0,
+  "relinkStatus": 0,
+  "command": "make test"
+ },
+ "attempts": [
+  {
+   "passed": true,
+   "stage": "pass",
+   "signature": "",
+   "unitCount": 0
+  }
+ ],
+ "adjustments": {
+  "sysroot": {
+   "extensionKeyword": 11379,
+   "includeNext": 3,
+   "filesRewritten": 83,
+   "formFeed": 19
+  },
+  "sysrootAdjustmentMeaning": {
+   "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+   "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+   "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+  },
+  "includeOrder": [
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include"
+  ],
+  "configure": "",
+  "subject": [
+   "the Unity suite the roadmap names is built by CMake, which the sealed container does not have; the release's own Makefile runs instead",
+   "that Makefile's `make test` compiles cJSON.c and test.c together into one binary rather than linking cJSON.o, so the suite does not judge a substituted object; the units are measured, the suite result is the reference build's",
+   "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
+   "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
+  ],
+  "buildCommand": "make",
+  "optionsTheDriverRejects": [
+   "-std=c89"
+  ],
+  "omittedFlags": [
+   "-Wall",
+   "-Wc++-compat",
+   "-Wcast-align",
+   "-Wcast-qual",
+   "-Wconversion",
+   "-Werror",
+   "-Wformat=2",
+   "-Winit-self",
+   "-Wmissing-prototypes",
+   "-Wshadow",
+   "-Wstrict-overflow=2",
+   "-Wstrict-prototypes",
+   "-Wswitch-default",
+   "-Wundef",
+   "-Wwrite-strings",
+   "-fPIC",
+   "-fstack-protector",
+   "-pedantic",
+   "-std=c89"
+  ]
+ },
+ "frontEndGaps": [
+  {
+   "code": "E1001",
+   "construct": "__extension__ before a member declaration",
+   "repro": "struct s { __extension__ int a; };",
+   "reachedFrom": "bits/atomic_wide_counter.h, and so every <stdlib.h>"
+  },
+  {
+   "code": "E1003",
+   "construct": "__extension__ before an expression",
+   "repro": "int main(void){ return __extension__ 0; }"
+  },
+  {
+   "code": "E0112",
+   "construct": "a form feed or vertical tab between declarations is whitespace",
+   "repro": "int a;\n\f\nint b;\n",
+   "reachedFrom": "sys/stat.h, which pages its sections with form feeds"
+  },
+  {
+   "code": "silent",
+   "construct": "#include_next is ignored without a diagnostic",
+   "repro": "a/h.h: #include_next <h.h>\nb/h.h: int from_b;\nmain.c: #include <h.h>  # -Ia -Ib yields nothing at all",
+   "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are nothing but an include_next"
+  },
+  {
+   "code": "E1001",
+   "construct": "the built-in vector types a GCC 14 front end promises",
+   "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
+   "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver defines __GNUC__ 14, so glibc takes the branches that use GCC 14's own vector types"
+  },
+  {
+   "code": "linkage",
+   "construct": "a static function is defined with external linkage",
+   "repro": "static int helper(void){ return 0; } int use(void){ return helper(); }",
+   "effect": "two objects that saw the same static collide at link time"
+  }
+ ],
+ "evidence": ".evidence/ladder/cjson/20260906T130702Z",
+ "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E1001': 2}"
+}
