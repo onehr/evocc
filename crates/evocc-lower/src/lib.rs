@@ -88,6 +88,9 @@ pub enum LowerError {
     CheckedArithmeticWidth {
         span: SourceSpan,
     },
+    OrderedPointerComparison {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -131,6 +134,9 @@ impl fmt::Display for LowerError {
             Self::CheckedArithmeticWidth { .. } => {
                 formatter.write_str("not-lowered: checked-arithmetic-exceeds-128-bits")
             }
+            Self::OrderedPointerComparison { .. } => {
+                formatter.write_str("not-lowered: ordered-pointer-comparison")
+            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -162,6 +168,7 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::CheckedArithmeticWidth { .. } => "E3044",
+            Self::OrderedPointerComparison { .. } => "E3045",
             _ => "E3101",
         }
     }
@@ -188,6 +195,7 @@ impl LowerError {
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
             | Self::CheckedArithmeticWidth { span }
+            | Self::OrderedPointerComparison { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -6836,6 +6844,12 @@ impl<'a> FunctionLowerer<'a> {
                 value: result,
                 integer: CIntegerType::LONG,
             });
+        }
+        if matches!(
+            operator,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        ) {
+            return Err(LowerError::OrderedPointerComparison { span });
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {
