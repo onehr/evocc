@@ -68,6 +68,17 @@ impl CIntegerType {
         self.rank
     }
 
+    /// Integer promotion of an int-sized bit-field uses the field's range,
+    /// not the width of its allocation unit.
+    #[must_use]
+    pub const fn bit_field_promoted(self, width: u16) -> Self {
+        if self.rank <= Self::INT.rank && width < Self::INT.bits as u16 {
+            Self::INT
+        } else {
+            self
+        }
+    }
+
     #[must_use]
     pub const fn is_signed(self) -> bool {
         self.signed

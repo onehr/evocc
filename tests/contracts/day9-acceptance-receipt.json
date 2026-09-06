@@ -9,7 +9,42 @@
     "revision": "1.9.73",
     "sha256": "b343877cb36ea5140c831e2f98cc8223ad058ef4498dc6c6605491abf401a891"
   },
-  "cutLine": "Latest sealed kernel lowering at 99a1bc4 remains 42 clean and 2756 diagnosed, with no timeout or panic; E3025 is zero and asm i is now the largest class. Internal linkage, activation addresses, expression joins and record ABI marks have landed. The subsequent preprocessing gate passed; the newer expression regression window remains open on bit-field initialization. frontendExecutionFollowup is current; latestExecution and older sections retain their historical subjects and outcomes. No whole-kernel or whole-backlog completion is claimed.",
+  "cutLine": "Nonvolatile bit-field initialization, reads and masked updates now pass the expression regression suite and changed gate, with both interpreters, generated AArch64 code and sealed GCC/Clang agreeing on the boundary probe. The new full lowering survey and Csmith campaigns are still running. K1 boots with the explicitly authorized installed QEMU, with 21 units byte-proven and one symbol-proof mismatch retained. No whole-kernel or whole-backlog completion is claimed; executionContinuation is current and older sections retain their historical subjects.",
+  "executionContinuation": {
+    "baseline": "0bd4bfe",
+    "status": "IN_PROGRESS",
+    "bitFields": {
+      "red": "ffee15c: a_local_bit_field_record_is_initialized_and_updated failed with zero build errors; the added unsigned 3-bit promotion assertion also failed before its fix",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j2 -- --nocapture",
+      "focusedPassed": 6,
+      "focusedFailed": 0,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh fc86d34 --offline -j2 --quiet",
+      "gate": "PASS",
+      "lintCommand": "ruff check tools tests/acceptance && git diff --check",
+      "lint": "PASS",
+      "probe": ".evidence/builtin-probes/20260907-bit-fields/fields.c",
+      "oracleCommand": "in evo-flight-lab:sealed linux/arm64 --network none: gcc-14 and clang-19 -std=gnu11 -O0 fields.c, then execute each",
+      "executionCommand": ".build/bit-field-evocc --interpret-c-hir <probe>; .build/bit-field-evocc --interpret-evoir <probe>; --emit=asm <probe>, then gcc-14 -no-pie fields.s and execute in the sealed image",
+      "results": { "gcc14ExitCode": 0, "clang19ExitCode": 0, "chirReturnValue": 0, "evoirReturnValue": 0, "machineExitCode": 0 },
+      "limits": "Volatile bit-fields remain refused; this change does not invent their access width or trace. Partial-byte writes to uninitialized storage remain fail-closed rather than initializing neighboring fields silently."
+    },
+    "k1": {
+      "run": "measure-20260906T181708Z",
+      "subject": "99a1bc4 (reused survey and exact frozen compiler)",
+      "command": "K1_ALLOW_QEMU_DRIFT=1 CARGO_TARGET_DIR=.build/frontend-execution/target tools/k1/measure.sh --reuse-survey .evidence/k1/measure-20260906T170419Z/survey --jobs2",
+      "boot": "PASS",
+      "substituted": 26,
+      "linked": 24,
+      "byteProven": 21,
+      "proofMismatch": "drivers/video/screen_info_generic.o: screen_info_pixel_format; measure.sh exited 1, so its overall gate is not PASS",
+      "installedQemuSha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e",
+      "qemuDrift": "Explicitly authorized by the 2026-09-07 user ruling; not a compiler failure",
+      "receipt": "tests/contracts/k1-mixed-link-receipt.json"
+    },
+    "toybox": { "run": "20260906T181713Z", "evidence": ".evidence/ladder/toybox/20260906T181713Z/summary.json", "command": "python3 tools/ladder/toybox.py --evocc target/frontend/release/evocc --budget20 --jobs2", "passingBuildUnits": 163, "units": 201, "testResult": "no-regression", "comparison": "Earlier run was 161/203; denominator changed, so no same-cohort percentage improvement is claimed. A different concurrent run subsequently owns the shared toybox receipt." },
+    "musl": { "run": "20260906T181719Z", "command": "timeout --signal=TERM 3600 python3 tools/ladder/musl.py --evocc target/frontend/release/evocc --budget45 --jobs2", "status": "STOPPED_CONTAMINATED_NOT_PASS", "reason": "Another lane began rebuilding the same musl-work/libc-test-work while this run was in libc-test. Stopped only this run's parent and owned container; no final metric is accepted and the other run was left untouched." },
+    "pending": ["Full lowering survey on frozen 0bd4bfe", "Csmith --campaign all --programs500 on frozen bit-field compiler", "Remaining declaration/builtin work and its lane replay"]
+  },
   "frontendExecutionFollowup": {
     "status": "PARTIAL_WITH_DECLARED_RED",
     "landed": {

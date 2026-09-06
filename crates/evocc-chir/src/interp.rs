@@ -18,8 +18,8 @@ use evocc_memory::{
     ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
-    enum_integer_rank, ArrayBound, FunctionParameters, Qualifiers, TagDefinition, TagState,
-    TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    enum_integer_rank, ArrayBound, BitFieldLayout, FunctionParameters, Qualifiers, TagDefinition,
+    TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 use crate::{
@@ -600,6 +600,7 @@ enum MachineTask<'arena> {
     /// prefix or postfix form of the operator produces.
     ApplyIndirectUpdate {
         operator: UpdateOp,
+        bit_field: Option<BitFieldLayout>,
         value_type: TypeId,
         qualifiers: Qualifiers,
         target_span: SourceSpan,
@@ -773,6 +774,7 @@ enum MachineTask<'arena> {
     },
     ApplyIndirectAssignment {
         operator: AssignmentOp,
+        bit_field: Option<BitFieldLayout>,
         pointer_type: PointerTypeDesc,
         value_type: TypeId,
         qualifiers: Qualifiers,
@@ -1217,7 +1219,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<(), InterpreterError> {
         for action in initializer.plan().actions() {
             let span = action.span().unwrap_or(object_span);
-            let (address, actual_ty) = self.subobject_address(binding, action.path(), span)?;
+            let (address, actual_ty, bit_field) =
+                self.subobject_address(binding, action.path(), span)?;
             if actual_ty != action.destination_type() {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "static initializer path disagrees with its destination type",
@@ -1239,13 +1242,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.unit.types(),
                         &mut self.memory,
                     )?;
-                    self.store_static_scalar(address, *destination_type, value, span)?;
+                    if let Some(field) = bit_field {
+                        self.store_bit_field(address, *destination_type, field, value, span)?;
+                    } else {
+                        self.store_static_scalar(address, *destination_type, value, span)?;
+                    }
                 }
                 InitAction::ZeroScalar {
                     destination_type, ..
                 } => {
                     let value = self.zero_value(*destination_type, span)?;
-                    self.store_static_scalar(address, *destination_type, value, span)?;
+                    if let Some(field) = bit_field {
+                        self.store_bit_field(address, *destination_type, field, value, span)?;
+                    } else {
+                        self.store_static_scalar(address, *destination_type, value, span)?;
+                    }
                 }
                 InitAction::StoreString {
                     destination_type,
@@ -1950,7 +1961,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         }
                     };
                     let value = pop_machine_value(&mut values, *span)?;
-                    let (address, ty) = self.subobject_address(target.binding, path, *span)?;
+                    let (address, ty, bit_field) =
+                        self.subobject_address(target.binding, path, *span)?;
                     let value = cast_machine_value(
                         value,
                         self.value_type(ty, *span)?,
@@ -1958,7 +1970,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.unit.types(),
                         &mut self.memory,
                     )?;
-                    self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
+                    if let Some(field) = bit_field {
+                        self.store_bit_field(address, ty, field, value, *span)?;
+                    } else {
+                        self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
+                    }
                     None
                 }
                 MachineTask::YieldCompoundLiteral {
@@ -2274,6 +2290,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::ApplyIndirectUpdate {
                     operator,
+                    bit_field,
                     value_type,
                     qualifiers,
                     target_span,
@@ -2281,10 +2298,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let (address, _) =
                         expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
-                    let old =
-                        self.load_memory_value(address, value_type, qualifiers, target_span)?;
+                    let old = if let Some(field) = bit_field {
+                        self.load_bit_field(address, value_type, field, target_span)?
+                    } else {
+                        self.load_memory_value(address, value_type, qualifiers, target_span)?
+                    };
                     let stepped = self.step_update_value(old, operator, span)?;
-                    self.store_memory_value(address, value_type, qualifiers, stepped, span)?;
+                    let stepped = if let Some(field) = bit_field {
+                        self.store_bit_field(address, value_type, field, stepped, span)?
+                    } else {
+                        self.store_memory_value(address, value_type, qualifiers, stepped, span)?
+                    };
                     // A prefix form yields the updated object; a postfix form
                     // yields the value it held before the update.
                     values.push(match operator {
@@ -2315,12 +2339,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .count();
                     let address =
                         self.resolve_projected_address(place, subscripts, &mut values, span)?;
-                    let value = self.load_memory_value(
-                        address,
-                        place.value_ty(),
-                        place.access_qualifiers(),
-                        span,
-                    )?;
+                    let value = if let Some(field) = self.place_bit_field(place, span)? {
+                        self.load_bit_field(address, place.value_ty(), field, span)?
+                    } else {
+                        self.load_memory_value(
+                            address,
+                            place.value_ty(),
+                            place.access_qualifiers(),
+                            span,
+                        )?
+                    };
                     values.push(value);
                     None
                 }
@@ -2333,6 +2361,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::ApplyIndirectAssignment {
                     operator,
+                    bit_field,
                     pointer_type,
                     value_type,
                     qualifiers,
@@ -2348,15 +2377,41 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             span: target_span,
                         });
                     }
-                    values.push(self.apply_memory_assignment(
-                        operator,
-                        address,
-                        value_type,
-                        qualifiers,
-                        right,
-                        target_span,
-                        span,
-                    )?);
+                    if let Some(field) = bit_field {
+                        let right = expect_machine_integer(right, span)?;
+                        let result = if operator == AssignmentOp::Simple {
+                            right
+                        } else {
+                            let left = expect_machine_integer(
+                                self.load_bit_field(address, value_type, field, target_span)?,
+                                target_span,
+                            )?;
+                            let binary = assignment_binary(operator).ok_or(
+                                InterpreterError::UnsupportedExpression {
+                                    feature: "invalid bit-field assignment",
+                                    span,
+                                },
+                            )?;
+                            self.runtime_integer_binary(binary, left, right, span)?
+                        };
+                        values.push(self.store_bit_field(
+                            address,
+                            value_type,
+                            field,
+                            CValue::Integer(result),
+                            span,
+                        )?);
+                    } else {
+                        values.push(self.apply_memory_assignment(
+                            operator,
+                            address,
+                            value_type,
+                            qualifiers,
+                            right,
+                            target_span,
+                            span,
+                        )?);
+                    }
                     None
                 }
                 MachineTask::SelectSwitch { body, span } => {
@@ -2771,8 +2826,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         object_ty: TypeId,
         path: &SubobjectPath,
         span: SourceSpan,
-    ) -> Result<(i64, TypeId), InterpreterError> {
+    ) -> Result<(i64, TypeId, Option<BitFieldLayout>), InterpreterError> {
         let mut current = object_ty;
+        let mut bit_field = None;
         let mut offset: i64 = 0;
         for step in path.steps() {
             match step {
@@ -2790,12 +2846,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .iter()
                         .find(|field| field.field_index == *field_index)
                         .ok_or(InterpreterError::UnsupportedType { ty: current, span })?;
-                    if field.bit_field.is_some() {
-                        return Err(InterpreterError::UnsupportedExpression {
-                            feature: "bit-field initializer",
-                            span,
-                        });
-                    }
+                    bit_field = field.bit_field;
                     offset =
                         offset
                             .checked_add(i64::try_from(field.byte_offset).map_err(|_| {
@@ -2832,7 +2883,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             }
         }
-        Ok((offset, current))
+        Ok((offset, current, bit_field))
     }
 
     /// Address of one designated subobject of an already-bound object.
@@ -2841,13 +2892,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         binding: MemoryBinding,
         path: &SubobjectPath,
         span: SourceSpan,
-    ) -> Result<(Pointer, TypeId), InterpreterError> {
-        let (offset, ty) = self.subobject_offset(binding.ty, path, span)?;
+    ) -> Result<(Pointer, TypeId, Option<BitFieldLayout>), InterpreterError> {
+        let (offset, ty, bit_field) = self.subobject_offset(binding.ty, path, span)?;
         let address = binding
             .address
             .checked_offset(offset)
             .map_err(|error| self.memory_error(error, span))?;
-        Ok((address, ty))
+        Ok((address, ty, bit_field))
     }
 
     /// Schedule the next action of an initializer plan, if any remain.
@@ -2884,9 +2935,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             InitAction::ZeroScalar { path, .. } => {
                 let span = initializer.span();
-                let (address, ty) = self.subobject_address(target.binding, path, span)?;
+                let (address, ty, bit_field) =
+                    self.subobject_address(target.binding, path, span)?;
                 let value = self.zero_value(ty, span)?;
-                self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                if let Some(field) = bit_field {
+                    self.store_bit_field(address, ty, field, value, span)?;
+                } else {
+                    self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                }
                 tasks.push(MachineTask::ContinueMemoryInitializer {
                     target,
                     index: index + 1,
@@ -2899,7 +2955,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 literal,
                 span,
             } => {
-                let (address, actual_type) = self.subobject_address(target.binding, path, *span)?;
+                let (address, actual_type, _) =
+                    self.subobject_address(target.binding, path, *span)?;
                 if actual_type != *destination_type {
                     return Err(invalid_initializer_target(target, *span));
                 }
@@ -3858,6 +3915,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.validate_mutable_place(place, *facts, *target_span)?;
                 tasks.push(MachineTask::ApplyIndirectUpdate {
                     operator: *op,
+                    bit_field: self.place_bit_field(place, *target_span)?,
                     value_type: place.value_ty(),
                     qualifiers: place.access_qualifiers(),
                     target_span: *target_span,
@@ -3886,7 +3944,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if facts.ty() != place.value_ty()
                     || facts.category() != ExprCategory::Value
                     || !place.is_modifiable()
-                    || place.is_bit_field()
                 {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "unsupported typed memory place",
@@ -3896,6 +3953,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let pointer_type = PointerTypeDesc::from_addressed_place(place);
                 tasks.push(MachineTask::ApplyIndirectAssignment {
                     operator: *op,
+                    bit_field: self.place_bit_field(place, *target_span)?,
                     pointer_type,
                     value_type: place.value_ty(),
                     qualifiers: place.access_qualifiers(),
@@ -5416,11 +5474,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .iter()
                         .find(|layout| layout.field_index == field_index)
                         .ok_or(InterpreterError::UnsupportedType { ty, span })?;
-                    if field_layout.bit_field.is_some() {
-                        return Err(InterpreterError::UnsupportedExpression {
-                            feature: "bit-field zero initialization",
-                            span,
-                        });
+                    if let Some(field) = field_layout.bit_field {
+                        let count = (field.bit_offset % 8 + field.width_bits).div_ceil(8);
+                        for byte in 0..count {
+                            let at = address
+                                .checked_offset((field_layout.byte_offset + u64::from(byte)) as i64)
+                                .map_err(|error| self.memory_error(error, span))?;
+                            self.memory = self
+                                .memory
+                                .store_integer(at, AccessLayout::new(1, 1), 0)
+                                .map_err(|error| self.memory_error(error, span))?;
+                        }
+                        continue;
                     }
                     let offset = i64::try_from(field_layout.byte_offset)
                         .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
@@ -5743,7 +5808,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: target_span,
             });
         }
-        if place.is_bit_field() {
+        if place.is_bit_field() && place.access_qualifiers().is_volatile {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "bit-field memory access",
                 span: target_span,
@@ -6124,6 +6189,133 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             feature: "unknown aggregate member",
             span,
         })
+    }
+
+    fn place_bit_field(
+        &self,
+        place: &MemoryPlace<'_>,
+        span: SourceSpan,
+    ) -> Result<Option<BitFieldLayout>, InterpreterError> {
+        if !place.is_bit_field() {
+            return Ok(None);
+        }
+        if place.access_qualifiers().is_volatile {
+            return Err(InterpreterError::UnsupportedExpression {
+                span,
+                feature: "volatile bit-field access",
+            });
+        }
+        let Some(PlaceProjection::Field(field)) = place.projections().last() else {
+            return Err(InterpreterError::UnsupportedExpression {
+                span,
+                feature: "bit-field place has no final field",
+            });
+        };
+        let layout = self
+            .target
+            .record_layout(self.unit.types(), field.tag())
+            .map_err(|_| InterpreterError::UnsupportedType {
+                ty: place.value_ty(),
+                span,
+            })?;
+        layout
+            .fields
+            .iter()
+            .find(|entry| entry.field_index == field.field_index())
+            .and_then(|entry| entry.bit_field)
+            .map(Some)
+            .ok_or(InterpreterError::UnsupportedExpression {
+                span,
+                feature: "bit-field place has no target layout",
+            })
+    }
+
+    fn normalize_bit_field(
+        &self,
+        value: CInteger,
+        ty: TypeId,
+        field: BitFieldLayout,
+        span: SourceSpan,
+    ) -> Result<CInteger, InterpreterError> {
+        let ValueType::Integer(integer) = self.value_type(ty, span)? else {
+            return Err(InterpreterError::UnsupportedType { ty, span });
+        };
+        let mask = u128::MAX >> (128 - field.width_bits);
+        let mut raw = value.raw_bits() & mask;
+        if integer.is_signed() && raw & (1u128 << (field.width_bits - 1)) != 0 {
+            raw |= !mask;
+        }
+        Ok(CInteger::from_raw(raw, integer))
+    }
+
+    fn load_bit_field(
+        &self,
+        address: Pointer,
+        ty: TypeId,
+        field: BitFieldLayout,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let mut raw = 0u128;
+        let mut consumed = 0u16;
+        while consumed < field.width_bits {
+            let position = field.bit_offset % 8 + consumed;
+            let within = position % 8;
+            let count = (8 - within).min(field.width_bits - consumed);
+            let at = address
+                .checked_offset(i64::from(position / 8))
+                .map_err(|error| self.memory_error(error, span))?;
+            let byte = self
+                .memory
+                .load_integer(at, AccessLayout::new(1, 1))
+                .map_err(|error| self.memory_error(error, span))?;
+            raw |= ((byte >> within) & ((1u128 << count) - 1)) << consumed;
+            consumed += count;
+        }
+        let result = self.normalize_bit_field(
+            CInteger::from_raw(raw, CIntegerType::UINT128),
+            ty,
+            field,
+            span,
+        )?;
+        Ok(CValue::Integer(
+            result.cast(result.ty().bit_field_promoted(field.width_bits)),
+        ))
+    }
+
+    fn store_bit_field(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        field: BitFieldLayout,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let value =
+            self.normalize_bit_field(expect_machine_integer(value, span)?, ty, field, span)?;
+        let mut consumed = 0u16;
+        while consumed < field.width_bits {
+            let position = field.bit_offset % 8 + consumed;
+            let within = position % 8;
+            let count = (8 - within).min(field.width_bits - consumed);
+            let at = address
+                .checked_offset(i64::from(position / 8))
+                .map_err(|error| self.memory_error(error, span))?;
+            let mask = ((1u128 << count) - 1) << within;
+            let original = if count == 8 {
+                0
+            } else {
+                self.memory
+                    .load_integer(at, AccessLayout::new(1, 1))
+                    .map_err(|error| self.memory_error(error, span))?
+            };
+            let byte = (original & !mask) | (((value.raw_bits() >> consumed) << within) & mask);
+            self.memory = self
+                .memory
+                .store_integer(at, AccessLayout::new(1, 1), byte)
+                .map_err(|error| self.memory_error(error, span))?;
+            consumed += count;
+        }
+        Ok(CValue::Integer(value))
     }
 
     fn load_memory_value(
@@ -7387,7 +7579,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ..
             } => self
                 .subobject_offset(declaration.ty, path, *span)
-                .is_ok_and(|(_, ty)| ty == *destination_type),
+                .is_ok_and(|(_, ty, _)| ty == *destination_type),
             InitAction::CopyAggregate {
                 path,
                 destination_type,
@@ -7395,13 +7587,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ..
             } => self
                 .subobject_offset(declaration.ty, path, *span)
-                .is_ok_and(|(_, ty)| ty == *destination_type),
+                .is_ok_and(|(_, ty, _)| ty == *destination_type),
             InitAction::ZeroScalar {
                 path,
                 destination_type,
             } => self
                 .subobject_offset(declaration.ty, path, declaration.span)
-                .is_ok_and(|(_, ty)| ty == *destination_type),
+                .is_ok_and(|(_, ty, _)| ty == *destination_type),
             InitAction::StoreString {
                 path,
                 destination_type,
@@ -7411,7 +7603,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 literal.decoded_units().is_some()
                     && self
                         .subobject_offset(declaration.ty, path, *span)
-                        .is_ok_and(|(_, ty)| ty == *destination_type)
+                        .is_ok_and(|(_, ty, _)| ty == *destination_type)
             }
         });
         if !valid {

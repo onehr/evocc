@@ -26,9 +26,9 @@ use evocc_evoir::{
     Inst, Module, OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
-    canonical_marks, enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters,
-    LayoutError, ParamMark, RecordShape, Region, TagDefinition, TagState, TargetDataLayout, TypeId,
-    TypeInterner, TypeKind,
+    canonical_marks, enum_integer_rank, AddressSpace, ArrayBound, BitFieldLayout, EvoIRType,
+    FunctionParameters, LayoutError, ParamMark, RecordShape, Region, TagDefinition, TagState,
+    TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
@@ -1024,7 +1024,7 @@ fn lower_globals(
                 if initializer.plan().flexible_array_elements() != 0 {
                     for action in initializer.plan().actions() {
                         let action_span = action.span().unwrap_or(object.span);
-                        let (offset, actual_ty) =
+                        let (offset, actual_ty, _) =
                             subobject_offset(unit, target, object.ty, action.path(), action_span)?;
                         if actual_ty != action.destination_type() || offset < 0 {
                             return Err(LowerError::UnsupportedStatement {
@@ -1415,12 +1415,44 @@ fn apply_static_initializer(
     let span = action
         .span()
         .unwrap_or_else(|| SourceSpan::new(evocc_common::FileId::new(0), 0, 0, 1, 1));
-    let (offset, _) = subobject_offset(unit, target, object_ty, action.path(), span)?;
+    let (offset, _, bit_field) = subobject_offset(unit, target, object_ty, action.path(), span)?;
     let offset = usize::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
         span,
         feature: "negative static initializer offset",
     })?;
     let destination = action.destination_type();
+    if let Some(field) = bit_field {
+        let raw = match action {
+            InitAction::ZeroScalar { .. } => 0,
+            InitAction::StoreScalar { value, .. } => {
+                evocc_chir::interp::interpret_static_integer_expression(unit, value, target)
+                    .map_err(|_| LowerError::UnsupportedExpression {
+                        span,
+                        feature: "bit-field initializer is not constant",
+                    })?
+                    .raw_bits()
+            }
+            _ => {
+                return Err(LowerError::UnsupportedStatement {
+                    span,
+                    feature: "non-scalar bit-field initializer",
+                })
+            }
+        };
+        for bit in 0..field.width_bits {
+            let position = usize::from(field.bit_offset % 8 + bit);
+            let byte =
+                bytes
+                    .get_mut(offset + position / 8)
+                    .ok_or(LowerError::UnsupportedStatement {
+                        span,
+                        feature: "bit-field initializer outside object",
+                    })?;
+            let mask = 1u8 << (position % 8);
+            *byte = (*byte & !mask) | (u8::from(raw & (1u128 << bit) != 0) * mask);
+        }
+        return Ok(());
+    }
     let layout = target
         .layout_of(unit.types(), destination)
         .map_err(|source| LowerError::Layout {
@@ -1602,8 +1634,9 @@ fn subobject_offset(
     object_ty: TypeId,
     path: &SubobjectPath,
     span: SourceSpan,
-) -> Result<(i64, TypeId), LowerError> {
+) -> Result<(i64, TypeId, Option<BitFieldLayout>), LowerError> {
     let mut current = object_ty;
+    let mut bit_field = None;
     let mut offset = 0_i64;
     for step in path.steps() {
         match step {
@@ -1634,12 +1667,7 @@ fn subobject_offset(
                         span,
                         feature: "initializer field path has no target field",
                     })?;
-                if field.bit_field.is_some() {
-                    return Err(LowerError::UnsupportedExpression {
-                        span,
-                        feature: "bit-field initializer is outside Day 7",
-                    });
-                }
+                bit_field = field.bit_field;
                 offset = offset
                     .checked_add(i64::try_from(field.byte_offset).map_err(|_| {
                         LowerError::UnsupportedType {
@@ -1705,7 +1733,7 @@ fn subobject_offset(
             }
         }
     }
-    Ok((offset, current))
+    Ok((offset, current, bit_field))
 }
 
 fn prevalidate_unit_for_lowering(
@@ -4788,6 +4816,261 @@ impl<'a> FunctionLowerer<'a> {
         Ok(address)
     }
 
+    fn place_bit_field(
+        &self,
+        place: &MemoryPlace<'_>,
+        span: SourceSpan,
+    ) -> Result<Option<BitFieldLayout>, LowerError> {
+        if !place.is_bit_field() {
+            return Ok(None);
+        }
+        let Some(PlaceProjection::Field(field)) = place.projections().last() else {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "bit-field place has no final field",
+            });
+        };
+        if place.access_qualifiers().is_volatile {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "volatile bit-field access",
+            });
+        }
+        let layout = self
+            .target
+            .record_layout(self.unit.types(), field.tag())
+            .map_err(|source| LowerError::Layout {
+                ty: place.value_ty(),
+                span,
+                source,
+            })?;
+        layout
+            .fields
+            .iter()
+            .find(|entry| entry.field_index == field.field_index())
+            .and_then(|entry| entry.bit_field)
+            .map(Some)
+            .ok_or(LowerError::UnsupportedExpression {
+                span,
+                feature: "bit-field place has no target layout",
+            })
+    }
+
+    fn emit_byte_access(
+        &mut self,
+        address: Value,
+        stored: Option<Value>,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
+        self.emit(
+            state,
+            Inst::AccessInBounds {
+                mem_in,
+                pointer: address.clone(),
+                mem_out: guarded.clone(),
+                layout: AccessLayout {
+                    size_bytes: 1,
+                    align_bytes: 1,
+                },
+            },
+        )?;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        let result = if let Some(value) = stored {
+            self.emit(
+                state,
+                Inst::Store {
+                    address,
+                    value: value.clone(),
+                    mem_in: guarded,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    volatile: false,
+                },
+            )?;
+            value
+        } else {
+            let result = self.fresh_value(EvoIRType::Bits(8));
+            self.emit(
+                state,
+                Inst::Load {
+                    result: result.clone(),
+                    address,
+                    mem_in: guarded,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    volatile: false,
+                },
+            )?;
+            result
+        };
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(result)
+    }
+
+    fn normalize_bit_field(
+        &mut self,
+        value: ExprValue,
+        field: BitFieldLayout,
+        state: &State,
+    ) -> Result<ExprValue, LowerError> {
+        let integer = value.integer;
+        let width = u16::from(integer.bits());
+        if field.width_bits == width {
+            return Ok(value);
+        }
+        let mask = self
+            .wide_constant(state, integer, (1u128 << field.width_bits) - 1)?
+            .value;
+        let masked = self.fresh_value(bits(integer));
+        self.emit(state, Inst::And(masked.clone(), value.value, mask))?;
+        let result = if integer.is_signed() {
+            let shift = self
+                .constant(
+                    state,
+                    CIntegerType::UINT,
+                    u64::from(width - field.width_bits),
+                )?
+                .value;
+            let high = self.fresh_value(bits(integer));
+            let signed = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Shl(high.clone(), masked, shift.clone()))?;
+            self.emit(state, Inst::AShr(signed.clone(), high, shift))?;
+            signed
+        } else {
+            masked
+        };
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn emit_bit_field_load(
+        &mut self,
+        address: Value,
+        ty: TypeId,
+        field: BitFieldLayout,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+        let mut result = self.constant(state, integer, 0)?.value;
+        let mut consumed = 0u16;
+        while consumed < field.width_bits {
+            let position = field.bit_offset % 8 + consumed;
+            let within = position % 8;
+            let count = (8 - within).min(field.width_bits - consumed);
+            let byte_address =
+                self.constant_offset_address(address.clone(), u64::from(position / 8), state)?;
+            let byte = self.emit_byte_access(byte_address, None, state)?;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(within))?
+                .value;
+            let shifted = self.fresh_value(EvoIRType::Bits(8));
+            self.emit(state, Inst::LShr(shifted.clone(), byte, shift))?;
+            let mask = self
+                .constant(state, CIntegerType::UCHAR, (1u64 << count) - 1)?
+                .value;
+            let selected = self.fresh_value(EvoIRType::Bits(8));
+            self.emit(state, Inst::And(selected.clone(), shifted, mask))?;
+            let selected = self
+                .cast(
+                    ExprValue {
+                        value: selected,
+                        integer: CIntegerType::UCHAR,
+                    },
+                    integer,
+                    state,
+                )?
+                .value;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(consumed))?
+                .value;
+            let shifted = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Shl(shifted.clone(), selected, shift))?;
+            let joined = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Or(joined.clone(), result, shifted))?;
+            result = joined;
+            consumed += count;
+        }
+        let result = self.normalize_bit_field(
+            ExprValue {
+                value: result,
+                integer,
+            },
+            field,
+            state,
+        )?;
+        self.cast(result, integer.bit_field_promoted(field.width_bits), state)
+    }
+
+    fn emit_bit_field_store(
+        &mut self,
+        address: Value,
+        value: ExprValue,
+        field: BitFieldLayout,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let value = self.normalize_bit_field(value, field, state)?;
+        let mut consumed = 0u16;
+        while consumed < field.width_bits {
+            let position = field.bit_offset % 8 + consumed;
+            let within = position % 8;
+            let count = (8 - within).min(field.width_bits - consumed);
+            let byte_address =
+                self.constant_offset_address(address.clone(), u64::from(position / 8), state)?;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(consumed))?
+                .value;
+            let shifted = self.fresh_value(value.value.ty.clone());
+            self.emit(
+                state,
+                Inst::LShr(shifted.clone(), value.value.clone(), shift),
+            )?;
+            let low = self
+                .cast(
+                    ExprValue {
+                        value: shifted,
+                        integer: value.integer,
+                    },
+                    CIntegerType::UCHAR,
+                    state,
+                )?
+                .value;
+            let mask_bits = ((1u64 << count) - 1) << within;
+            let mask = self.constant(state, CIntegerType::UCHAR, mask_bits)?.value;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(within))?
+                .value;
+            let shifted = self.fresh_value(EvoIRType::Bits(8));
+            self.emit(state, Inst::Shl(shifted.clone(), low, shift))?;
+            let selected = self.fresh_value(EvoIRType::Bits(8));
+            self.emit(state, Inst::And(selected.clone(), shifted, mask))?;
+            let stored = if count == 8 {
+                selected
+            } else {
+                let original = self.emit_byte_access(byte_address.clone(), None, state)?;
+                let keep = self
+                    .constant(state, CIntegerType::UCHAR, !mask_bits & 255)?
+                    .value;
+                let kept = self.fresh_value(EvoIRType::Bits(8));
+                self.emit(state, Inst::And(kept.clone(), original, keep))?;
+                let merged = self.fresh_value(EvoIRType::Bits(8));
+                self.emit(state, Inst::Or(merged.clone(), kept, selected))?;
+                merged
+            };
+            self.emit_byte_access(byte_address, Some(stored), state)?;
+            consumed += count;
+        }
+        Ok(value)
+    }
+
     fn emit_memory_load(
         &mut self,
         address: Value,
@@ -5080,12 +5363,20 @@ impl<'a> FunctionLowerer<'a> {
                             feature: "zero initializer field has no layout",
                         });
                     };
-                    if layout.bit_field.is_some() {
-                        return Err(LowerError::UnsupportedType {
-                            ty: field.ty,
-                            span,
-                            feature: "bit-field zero initialization is outside lowering",
-                        });
+                    if let Some(bit_field) = layout.bit_field {
+                        // Only bytes intersecting the field are initialized;
+                        // a declared allocation unit may extend past a packed record.
+                        let count = (bit_field.bit_offset % 8 + bit_field.width_bits).div_ceil(8);
+                        for byte in 0..count {
+                            let at = self.constant_offset_address(
+                                address.clone(),
+                                layout.byte_offset + u64::from(byte),
+                                state,
+                            )?;
+                            let zero = self.constant(state, CIntegerType::UCHAR, 0)?.value;
+                            self.emit_byte_access(at, Some(zero), state)?;
+                        }
+                        continue;
                     }
                     let field_address =
                         self.constant_offset_address(address.clone(), layout.byte_offset, state)?;
@@ -5204,7 +5495,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         for action in initializer.plan().actions() {
             let action_span = action.span().unwrap_or(object_span);
-            let (offset, actual_ty) = subobject_offset(
+            let (offset, actual_ty, bit_field) = subobject_offset(
                 self.unit,
                 self.target,
                 object_ty,
@@ -5250,14 +5541,18 @@ impl<'a> FunctionLowerer<'a> {
                         .types()
                         .get(*destination_type)
                         .is_some_and(|ty| ty.qualifiers.is_volatile);
-                    self.emit_memory_store(
-                        action_address,
-                        lowered,
-                        *destination_type,
-                        volatile,
-                        action_span,
-                        state,
-                    )?;
+                    if let Some(field) = bit_field {
+                        self.emit_bit_field_store(action_address, lowered, field, state)?;
+                    } else {
+                        self.emit_memory_store(
+                            action_address,
+                            lowered,
+                            *destination_type,
+                            volatile,
+                            action_span,
+                            state,
+                        )?;
+                    }
                 }
                 InitAction::ZeroScalar {
                     destination_type, ..
@@ -5282,14 +5577,18 @@ impl<'a> FunctionLowerer<'a> {
                             self.constant(state, integer, 0)?
                         }
                     };
-                    self.emit_memory_store(
-                        action_address,
-                        zero,
-                        *destination_type,
-                        false,
-                        action_span,
-                        state,
-                    )?;
+                    if let Some(field) = bit_field {
+                        self.emit_bit_field_store(action_address, zero, field, state)?;
+                    } else {
+                        self.emit_memory_store(
+                            action_address,
+                            zero,
+                            *destination_type,
+                            false,
+                            action_span,
+                            state,
+                        )?;
+                    }
                 }
                 InitAction::StoreString {
                     destination_type,
@@ -6536,6 +6835,15 @@ impl<'a> FunctionLowerer<'a> {
                 place, target_span, ..
             } => {
                 let address = self.lower_place_address(place, *target_span, state)?;
+                if let Some(field) = self.place_bit_field(place, *target_span)? {
+                    return self.emit_bit_field_load(
+                        address,
+                        place.value_ty(),
+                        field,
+                        *target_span,
+                        state,
+                    );
+                }
                 if self.is_aggregate_type(place.value_ty())
                     || matches!(
                         self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
@@ -8532,6 +8840,7 @@ impl<'a> FunctionLowerer<'a> {
         if operator != AssignmentOp::Simple && self.is_function_pointer_type(place.value_ty()) {
             return Err(LowerError::FunctionPointerArithmetic { span });
         }
+        let bit_field = self.place_bit_field(place, target_span)?;
         let address = self.lower_place_address(place, target_span, state)?;
         let address_key = self.retain_temporary(address.clone(), state);
         let volatile = place.access_qualifiers().is_volatile;
@@ -8563,6 +8872,14 @@ impl<'a> FunctionLowerer<'a> {
         }
         let original = if operator == AssignmentOp::Simple {
             None
+        } else if let Some(field) = bit_field {
+            Some(self.emit_bit_field_load(
+                address.clone(),
+                place.value_ty(),
+                field,
+                target_span,
+                state,
+            )?)
         } else {
             Some(self.emit_memory_load(
                 address.clone(),
@@ -8612,6 +8929,9 @@ impl<'a> FunctionLowerer<'a> {
                 )?
             }
         };
+        if let Some(field) = bit_field {
+            return self.emit_bit_field_store(address, result, field, state);
+        }
         self.emit_memory_store(
             address,
             result,
@@ -8634,13 +8954,18 @@ impl<'a> FunctionLowerer<'a> {
             return Err(LowerError::FunctionPointerArithmetic { span });
         }
         let address = self.lower_place_address(place, target_span, state)?;
-        let original = self.emit_memory_load(
-            address.clone(),
-            place.value_ty(),
-            place.access_qualifiers().is_volatile,
-            target_span,
-            state,
-        )?;
+        let bit_field = self.place_bit_field(place, target_span)?;
+        let original = if let Some(field) = bit_field {
+            self.emit_bit_field_load(address.clone(), place.value_ty(), field, target_span, state)?
+        } else {
+            self.emit_memory_load(
+                address.clone(),
+                place.value_ty(),
+                place.access_qualifiers().is_volatile,
+                target_span,
+                state,
+            )?
+        };
         if matches!(original.value.ty, EvoIRType::Ptr(_)) {
             let one = self.constant(state, CIntegerType::INT, 1)?;
             let updated = self.compute_pointer_assignment(
@@ -8688,14 +9013,18 @@ impl<'a> FunctionLowerer<'a> {
         let destination =
             canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
         let updated = self.cast(computed, destination, state)?;
-        self.emit_memory_store(
-            address,
-            updated.clone(),
-            place.value_ty(),
-            place.access_qualifiers().is_volatile,
-            target_span,
-            state,
-        )?;
+        let updated = if let Some(field) = bit_field {
+            self.emit_bit_field_store(address, updated, field, state)?
+        } else {
+            self.emit_memory_store(
+                address,
+                updated.clone(),
+                place.value_ty(),
+                place.access_qualifiers().is_volatile,
+                target_span,
+                state,
+            )?
+        };
         Ok(
             if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
                 updated
