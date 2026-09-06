@@ -908,6 +908,15 @@ fn parse_defining(
         scan.finish()?;
         return Ok(MInst::Adrp { dst, symbol, kind });
     }
+    if mnemonic == "adr" {
+        scan.expect("^b")?;
+        let digits = scan.take_while(|character| character.is_ascii_digit());
+        let block: u32 = digits
+            .parse()
+            .map_err(|_| format!("not a block identifier: '{digits}'"))?;
+        scan.finish()?;
+        return Ok(MInst::Adr { dst, block });
+    }
     if mnemonic == "add" {
         let src = scan.use_of()?;
         scan.expect(", ")?;

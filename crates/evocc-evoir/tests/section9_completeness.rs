@@ -508,6 +508,10 @@ fn inst_schema(inst: &Inst) -> &'static str {
             let _ = (result, symbol);
             "Inst.FuncAddr(result,symbol)"
         }
+        Inst::BlockAddr { result, block } => {
+            let _ = (result, block);
+            "Inst.BlockAddr(result,block)"
+        }
         Inst::Alloca {
             result,
             mem_in,

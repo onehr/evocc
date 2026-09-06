@@ -651,6 +651,16 @@ pub enum MInst {
         symbol: String,
         kind: SymbolKind,
     },
+    /// `adr rd, <local symbol of block b>` (revision 0.15).
+    ///
+    /// Section 5's `block_addr` row. The operand is the block, not a spelled
+    /// label: emission owns the symbol, which it places at the block's first
+    /// instruction, and the block identifier survives the critical-edge split
+    /// because that pass only appends blocks.
+    Adr {
+        dst: VReg,
+        block: u32,
+    },
     /// `ldr rd, [rn, #off]` in all of its widths.
     Load {
         dst: VReg,
@@ -1386,6 +1396,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::MovImm { dst, .. }
         | MInst::Adrp { dst, .. }
         | MInst::AddPageOff { dst, .. }
+        | MInst::Adr { dst, .. }
         | MInst::Load { dst, .. }
         | MInst::Binary { dst, .. }
         | MInst::BinaryImm { dst, .. }
@@ -1431,6 +1442,7 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         }
         MInst::MovImm { .. }
         | MInst::Adrp { .. }
+        | MInst::Adr { .. }
         | MInst::FrameSlot { .. }
         | MInst::FrameAddress { .. }
         | MInst::VaSaveArea { .. } => Vec::new(),

@@ -925,6 +925,9 @@ fn render_inst(inst: &Inst) -> String {
         Inst::FuncAddr { result, symbol } => {
             format!("{} = func_addr @{symbol}", value(result))
         }
+        Inst::BlockAddr { result, block } => {
+            format!("{} = block_addr ^b{block}", value(result))
+        }
         Inst::Alloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }

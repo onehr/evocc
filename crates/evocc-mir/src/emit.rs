@@ -6,7 +6,7 @@
 //! globals as data ... with their EvoIR initial bytes; symbols get the
 //! platform prefix (`_` on Darwin)."
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use evocc_evoir::GlobalObject;
@@ -382,6 +382,16 @@ fn label(target: Target, function: &str, block: u32) -> String {
 /// more than one instruction, and the growth relaxation itself adds.
 const RELAXATION_THRESHOLD: usize = 4_096;
 
+/// The local symbol a `block_addr` names.
+///
+/// Section 5, revision 0.15: "a static relocation against a block uses a local
+/// symbol `.L<function>.<block>` the emitter places at the block's first
+/// instruction". The prefix is the platform's own local one, `L` on Darwin and
+/// `.L` on Linux, so the symbol stays out of the symbol table on both.
+fn block_symbol(target: Target, function: &str, block: u32) -> String {
+    format!("{}{function}.{block}", target.label_prefix())
+}
+
 /// The label the inverted short branch of a relaxed terminator jumps over.
 fn relax_label(target: Target, function: &str, index: u32) -> String {
     format!("{}{function}_relax{index}", target.label_prefix())
@@ -441,10 +451,26 @@ fn emit_blocks(
     relax: bool,
 ) {
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
+    // The blocks some `adr` in this function names. Their local symbol is
+    // placed at the first instruction; every other block keeps only the
+    // branch label, so the text of a function that takes no block address is
+    // exactly what it was.
+    let addressed: BTreeSet<u32> = allocated
+        .blocks
+        .iter()
+        .flat_map(|block| block.insts.iter())
+        .filter_map(|inst| match inst {
+            MInst::Adr { block, .. } => Some(*block),
+            _ => None,
+        })
+        .collect();
     let mut copies = 0_u32;
     let mut relaxations = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
+        if addressed.contains(&block.id) {
+            let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
+        }
         for inst in &block.insts {
             emit_inst(
                 text,
@@ -800,6 +826,14 @@ fn emit_inst(
             }
         }
         MInst::MovImm { dst, imm } => emit_immediate(text, &name(*dst), dst.class, *imm),
+        MInst::Adr { dst, block } => {
+            let _ = writeln!(
+                text,
+                "    adr {}, {}",
+                name(*dst),
+                block_symbol(target, function, *block)
+            );
+        }
         MInst::Adrp { dst, symbol, kind } => {
             let page = match kind {
                 SymbolKind::Global | SymbolKind::Function => "PAGE",

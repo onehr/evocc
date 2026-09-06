@@ -415,6 +415,7 @@ fn scan_inst(
         | Inst::PtrNull(_)
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. }
         | Inst::PtrOffset { .. }
         | Inst::Alloca { .. }
         | Inst::LifetimeEnd { .. }
@@ -1708,6 +1709,14 @@ fn lower_inst(
         }
         Inst::FuncAddr { result, symbol } => {
             address_of(lowerer, insts, result, symbol, SymbolKind::Function);
+        }
+        // Section 5 (revision 0.15): "`block_addr ^b` | `adr rd, <label of
+        // block b>`". One instruction, not a page pair: `adr` reaches a
+        // mebibyte either way, which covers any function this backend emits.
+        Inst::BlockAddr { result, block } => {
+            let dst = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::Adr { dst, block: *block });
+            lowerer.bind(result, dst);
         }
         Inst::PtrOffset {
             result,

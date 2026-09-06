@@ -243,7 +243,8 @@ fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
         | Inst::Trap(..)
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
-        | Inst::FuncAddr { .. } => {}
+        | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. } => {}
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)
         | Inst::Mul(_, left, right)
@@ -485,7 +486,10 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         Inst::SExt(result, source, _)
         | Inst::ZExt(result, source, _)
         | Inst::Trunc(result, source, _) => vec![result, source],
-        Inst::PtrNull(result) | Inst::GlobalAddr { result, .. } | Inst::FuncAddr { result, .. } => {
+        Inst::PtrNull(result)
+        | Inst::GlobalAddr { result, .. }
+        | Inst::FuncAddr { result, .. }
+        | Inst::BlockAddr { result, .. } => {
             vec![result]
         }
         Inst::PtrOffset {

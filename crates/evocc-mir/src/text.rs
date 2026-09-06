@@ -267,6 +267,10 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::Adrp { dst, symbol, kind } => {
             format!("{}adrp @{symbol}@{}PAGE", defined(*dst), page_prefix(*kind))
         }
+        // An instruction is rendered without its function, so the block is
+        // always spelled by its identifier; only a terminator, which is
+        // rendered with the function, can tell the entry block by name.
+        MInst::Adr { dst, block } => format!("{}adr ^b{block}", defined(*dst)),
         MInst::AddPageOff {
             dst,
             src,

@@ -928,6 +928,7 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
         }
         MInst::MovImm { dst, .. }
         | MInst::Adrp { dst, .. }
+        | MInst::Adr { dst, .. }
         | MInst::FrameSlot { dst, .. }
         | MInst::FrameAddress { dst, .. } => {
             if definitions {

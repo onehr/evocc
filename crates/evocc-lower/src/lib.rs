@@ -9979,7 +9979,10 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             index,
             ..
         } => vec![result, base, index],
-        Inst::PtrNull(result) | Inst::GlobalAddr { result, .. } | Inst::FuncAddr { result, .. } => {
+        Inst::PtrNull(result)
+        | Inst::GlobalAddr { result, .. }
+        | Inst::FuncAddr { result, .. }
+        | Inst::BlockAddr { result, .. } => {
             vec![result]
         }
         Inst::Alloca {

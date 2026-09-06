@@ -160,6 +160,21 @@ struct State {
     world: WorldState,
     globals: HashMap<String, Pointer>,
     identities: HashMap<String, u64>,
+    /// The code provenance of every block, keyed by its function's position
+    /// and its own identifier, numbered past the function identities so a
+    /// block address never equals a function address.
+    blocks: HashMap<(usize, u32), u64>,
+}
+
+impl State {
+    fn block_identity(&self, function: usize, block: u32) -> Result<u64, MirError> {
+        self.blocks
+            .get(&(function, block))
+            .copied()
+            .ok_or_else(|| MirError::Invalid {
+                detail: format!("address of block {block} outside its function"),
+            })
+    }
 }
 
 struct Frame {
@@ -198,6 +213,7 @@ pub fn interpret_module(
         }),
         globals: HashMap::new(),
         identities: HashMap::new(),
+        blocks: HashMap::new(),
     };
     initialize_globals(module, &mut state)?;
     for (index, function) in module.functions.iter().enumerate() {
@@ -208,6 +224,20 @@ pub fn interpret_module(
                 detail: "function provenance identity exhausted".to_owned(),
             })?;
         state.identities.insert(function.name.clone(), identity);
+    }
+    let mut next = u64::try_from(module.functions.len())
+        .ok()
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| MirError::Invalid {
+            detail: "block provenance identity exhausted".to_owned(),
+        })?;
+    for (index, function) in module.functions.iter().enumerate() {
+        for block in &function.blocks {
+            state.blocks.insert((index, block.id), next);
+            next = next.checked_add(1).ok_or_else(|| MirError::Invalid {
+                detail: "block provenance identity exhausted".to_owned(),
+            })?;
+        }
     }
 
     let entry_index = module
@@ -754,6 +784,19 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             write(frame, *dst, value);
         }
         MInst::MovImm { dst, imm } => write(frame, *dst, MirValue::Int(*imm)),
+        MInst::Adr { dst, block } => {
+            // The address of a block is code provenance, like a function's:
+            // it compares, it stores through `str.p`, and every attempt to
+            // read or write memory through it is E3013.
+            let identity = state.block_identity(frame.function, *block)?;
+            write(
+                frame,
+                *dst,
+                MirValue::Fn(
+                    PointerValue::function(identity).map_err(|error| memory_error(&error))?,
+                ),
+            );
+        }
         MInst::Adrp { dst, symbol, kind }
         | MInst::AddPageOff {
             dst, symbol, kind, ..

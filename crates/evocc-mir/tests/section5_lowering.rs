@@ -56,6 +56,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::Mov { .. } => "mov".to_owned(),
                     MInst::MovImm { .. } => "mov#".to_owned(),
                     MInst::Adrp { .. } => "adrp".to_owned(),
+                    MInst::Adr { .. } => "adr".to_owned(),
                     MInst::AddPageOff { .. } => "add@".to_owned(),
                     MInst::Load { kind, .. } => kind.mnemonic().to_owned(),
                     MInst::Store { kind, .. } => kind.mnemonic().to_owned(),

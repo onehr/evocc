@@ -722,6 +722,20 @@ fn parse_instruction(
             });
         }
     }
+    // `%p = block_addr ^label : ptr<generic>`. The label carries no argument
+    // list, so it is decoded here rather than by `parse_branch_target`.
+    if let Some(rest) = rhs.strip_prefix("block_addr ") {
+        let (label, ty) = rest
+            .split_once(" : ")
+            .ok_or_else(|| "malformed block address".to_owned())?;
+        return Ok(Inst::BlockAddr {
+            result: Value {
+                id: result_id,
+                ty: parse_type(ty)?,
+            },
+            block: parse_block_label(label)?,
+        });
+    }
     if let Some(rest) = rhs.strip_prefix("pointer_valid ") {
         let (memory, pointer) = parse_two_values(rest, values)?;
         return Ok(Inst::PointerValid {
@@ -1230,6 +1244,19 @@ fn is_terminator_body(body: &str) -> bool {
         || body.starts_with("trap.")
 }
 
+/// One block label with no argument list: `^entry` is canonically block zero.
+fn parse_block_label(label: &str) -> Result<BlockId, String> {
+    if label == "^entry" {
+        return Ok(0);
+    }
+    u32::try_from(parse_canonical_u64(
+        label
+            .strip_prefix("^b")
+            .ok_or_else(|| "unknown block label".to_owned())?,
+    )?)
+    .map_err(|_| "block id exceeds u32".to_owned())
+}
+
 fn parse_branch_target(
     text: &str,
     values: &HashMap<u32, EvoIRType>,
@@ -1241,17 +1268,7 @@ fn parse_branch_target(
     let args = text[open + 1..]
         .strip_suffix(')')
         .ok_or_else(|| "malformed branch target".to_owned())?;
-    let block = if label == "^entry" {
-        0
-    } else {
-        u32::try_from(parse_canonical_u64(
-            label
-                .strip_prefix("^b")
-                .ok_or_else(|| "unknown block label".to_owned())?,
-        )?)
-        .map_err(|_| "block id exceeds u32".to_owned())?
-    };
-    Ok((block, parse_values(args, values, true)?))
+    Ok((parse_block_label(label)?, parse_values(args, values, true)?))
 }
 
 fn find_target_separator(text: &str) -> Result<usize, String> {
