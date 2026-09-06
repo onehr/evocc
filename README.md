@@ -1,6 +1,6 @@
-<img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" align="right" width="180">
-
-# EvoCC
+<p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
+<h1 align="center">EvoCC</h1>
+<p align="center">a C compiler whose optimizer keeps every equivalent form</p>
 
 EvoCC is a C compiler written from scratch in Rust. It has its own preprocessor, parser, IRs, optimizer, register allocator and emitter; the platform assembler and linker are the only outside tools. The optimizer is an [e-graph](https://egraphs-good.github.io/): a rewrite adds an equivalent form instead of replacing code, a cost model picks one form at the end, and every union carries a certificate that a separate program checks. The target is AArch64 (Linux and macOS), and the program it is being brought up on is the Linux 6.18.44 `arm64 virtconfig` kernel.
 
