@@ -3,9 +3,11 @@
 # Gate zero of the mixed-link measurement: the untouched reference kernel must
 # boot on this machine before any substituted kernel means anything.
 #
-# The GCC-built reference tree is copied once to .build/k1/out and nothing is
-# rebuilt. The copy is what every later step mutates, so the reference tree at
-# .build/k1/pristine and .build/reference stay untouched evidence.
+# The GCC-built reference tree is copied once into two trees: .build/k1/out,
+# which every later step mutates, and .build/k1/pristine, which nothing writes
+# to. The gate boots the pristine Image, so it says the same thing whether or
+# not a substituted kernel is currently installed in the working tree, and
+# .build/reference stays untouched evidence either way.
 #
 # Usage: tools/k1/reproduce-reference.sh [--refresh]
 #   --refresh  re-copy the reference tree even if the copy already exists
@@ -53,10 +55,11 @@ else
 fi
 
 REF_IMAGE="$REFERENCE/arch/arm64/boot/Image"
-OUT_IMAGE="$OUT/arch/arm64/boot/Image"
+OUT_IMAGE="$PRISTINE/arch/arm64/boot/Image"
 ref_sha="$(k1_sha256 "$REF_IMAGE")"
 out_sha="$(k1_sha256 "$OUT_IMAGE")"
-[ "$ref_sha" = "$out_sha" ] || k1_die "the copied Image differs from the reference Image"
+[ "$ref_sha" = "$out_sha" ] || k1_die "the pristine copy's Image differs from the reference Image"
+[ -d "$OUT" ] || k1_die "the working copy is missing: $OUT"
 
 RUN_ID="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
 RUN_DIR="$EVIDENCE_ROOT/$RUN_ID"

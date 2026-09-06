@@ -16,6 +16,10 @@ import json
 from pathlib import Path
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import plan  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -59,6 +63,8 @@ def main() -> int:
     parser.add_argument("--boot", type=Path, required=True)
     parser.add_argument("--proof", type=Path, required=True)
     parser.add_argument("--bisection", type=Path, default=None)
+    parser.add_argument("--survey-units", type=Path, default=None,
+                        help="the survey's units.jsonl, for the per-code refusal table")
     parser.add_argument("--failing-units", type=Path, default=None)
     parser.add_argument(
         "--output", type=Path, default=REPO_ROOT / "tests/contracts/k1-mixed-link-receipt.json"
@@ -71,6 +77,11 @@ def main() -> int:
     boot = load(args.boot)
     proof = load(args.proof)
     bisection = load(args.bisection) if args.bisection else None
+    survey_rows = (
+        plan.load_rows(args.survey_units)
+        if args.survey_units and args.survey_units.is_file()
+        else []
+    )
     failing = (
         [line.strip() for line in args.failing_units.read_text(encoding="utf-8").splitlines()
          if line.strip()]
@@ -127,8 +138,16 @@ def main() -> int:
         "emulator": reference.get("qemu"),
         "survey": {
             "requestedUnits": survey["requestedUnits"],
+            "assemblingUnits": sum(
+                survey["counts"].get(outcome, 0) for outcome in plan.ASSEMBLING_OUTCOMES
+            ),
             "outcomeCounts": survey["counts"],
             "refusalCodeCounts": survey["refusalCodeCounts"],
+            # Which stage each refusal belongs to. A machine-side code is the
+            # backend's next piece of work, not the front end's.
+            "refusalsByCode": plan.refusal_table(survey_rows),
+            "refusalsByFirstCode": plan.first_code_table(survey_rows),
+            "refusalsByOwner": plan.owner_totals(survey_rows),
             "runDirectory": relative(str(args.survey.parent)),
         },
         "mixedLink": {
@@ -176,6 +195,11 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"receipt: {args.output}")
+    print(plan.summary_line(
+        receipt["unitsCompiledByEvoccInABootingKernel"],
+        receipt["survey"]["assemblingUnits"],
+        receipt["survey"]["requestedUnits"],
+    ))
     print(json.dumps(
         {
             "unitsCompiledByEvoccInABootingKernel":
