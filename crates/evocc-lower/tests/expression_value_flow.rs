@@ -76,6 +76,13 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
 }
 
 #[test]
+fn extension_prefix_on_record_members_preserves_layout_and_values() {
+    agrees(include_str!(
+        "../../../tests/fixtures/record-extension-prefix.c"
+    ));
+}
+
+#[test]
 fn identifier_list_parameters_keep_declared_objects_and_promoted_interface() {
     agrees(include_str!(
         "../../../tests/fixtures/identifier-list-functions.c"
