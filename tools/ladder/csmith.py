@@ -15,13 +15,12 @@ other outcome is recorded: a refusal by diagnostic code, an assembler or linker
 failure, a timeout, a run that trapped, or a checksum mismatch, which is the
 miscompile report.
 
-Agreeing oracles are not a proof that a program is defined. Csmith's safe-math
-macros build their overflow guard out of `((int64_t)1) << (sizeof(int64_t) *
-CHAR_BIT - 1)`, a signed left shift into the sign bit, which ISO C leaves
-undefined; GCC and Clang both fold it to INT64_MIN, EvoCC's undefined-behaviour
-obligation traps on it, and the run dies without printing anything. Those runs
-are counted separately from checksum mismatches, because the disagreement is
-about an undefined program, not about its value.
+Agreeing oracles are not a proof that a program is defined. The pinned runtime
+has a measured undefined signed shift in its 32/64-bit subtraction guards.
+The shared copy replaces only those two masks with ~INT_MAX, as the upstream
+function-based runtime already does. All compilers receive identical repaired
+headers; their before/after digests are recorded with the campaign. Old runs
+remain unchanged. A trap elsewhere still needs its own diagnosis.
 
 Csmith's runtime header needs a hosted libc that EvoCC does not yet parse
 (glibc's <math.h> declares vector types EvoCC has no model for), so the
@@ -357,9 +356,7 @@ def reduce_program(evocc: Path, source: Path, inc: list[str], budget: float) -> 
     """
     work = BUILD / "run-csmith-reduce"
     shutil.rmtree(work, ignore_errors=True)
-    (work / "runtime").mkdir(parents=True)
-    for header in sorted((BUILD / "csmith" / "runtime").glob("*.h")):
-        shutil.copy(header, work / "runtime" / header.name)
+    runtime = prepare_runtime(work)
     lines = source.read_text().splitlines(keepends=True)
     started = dt.datetime.now(dt.timezone.utc)
 
@@ -391,6 +388,7 @@ def reduce_program(evocc: Path, source: Path, inc: list[str], budget: float) -> 
     outcome, detail = measure(lines)
     return reduced, {
         "source": str(source),
+        "runtime": runtime,
         "reduced": str(reduced),
         "lines": len(lines),
         "bytes": reduced.stat().st_size,
@@ -400,9 +398,8 @@ def reduce_program(evocc: Path, source: Path, inc: list[str], budget: float) -> 
     }
 
 # A miscompile report is a program whose binaries all ran and whose checksums
-# disagree. A run that trapped is tracked apart from it: SIGTRAP means EvoCC's
-# generated code reached an undefined-behaviour check, which says the program
-# was undefined, not that the compiler computed the wrong value.
+# disagree. A trap is tracked separately: the check itself or its lowering
+# can be wrong, so the signal alone establishes neither UB nor correctness.
 MISCOMPILE = ("mismatch",)
 TRAP_EXIT = 133  # 128 + SIGTRAP
 # What reduction preserves: EvoCC's binary did not produce the checksum both
@@ -447,13 +444,38 @@ def summarise(name: str, rows: list[dict]) -> dict:
     }
 
 
+def repair_runtime_header(source: str) -> str:
+    """Replace the two measured UB masks, leaving the guard algorithm intact."""
+    for width in (32, 64):
+        old = f"(((int{width}_t)1) << (sizeof(int{width}_t)*CHAR_BIT-1))"
+        if source.count(old) != 1:
+            raise ValueError(f"unexpected Csmith int{width}_t subtraction guard")
+        source = source.replace(old, f"(~INT{width}_MAX)")
+    return source
+
+
+def prepare_runtime(work: Path) -> dict:
+    destination = work / "runtime"
+    destination.mkdir(parents=True)
+    for header in sorted((BUILD / "csmith" / "runtime").glob("*.h")):
+        shutil.copy(header, destination / header.name)
+    header = destination / "safe_math_macros_notmp.h"
+    before = e0.sha256(header)
+    header.write_text(repair_runtime_header(header.read_text()))
+    return {
+        "change": "subtraction-sign-masks",
+        "header": header.name,
+        "originalSha256": before,
+        "repairedSha256": e0.sha256(header),
+        "sharedBy": ["evocc", "gcc", "clang-19"],
+    }
+
+
 def campaign(evocc: Path, binary: Path, name: str, count: int, inc: list[str], out_dir: Path, results) -> dict:
     work = BUILD / f"run-csmith-{name}"
     if work.exists():
         shutil.rmtree(work)
-    (work / "runtime").mkdir(parents=True)
-    for header in sorted((BUILD / "csmith" / "runtime").glob("*.h")):
-        shutil.copy(header, work / "runtime" / header.name)
+    runtime = prepare_runtime(work)
     seeds = generate(binary, name, range(1, count + 1), work)
     emitted_rows = emit(evocc, work, seeds, inc)
     emitted = [f"s{seed}" for seed in seeds if emitted_rows[seed]["emit"] == "emitted"]
@@ -473,7 +495,7 @@ def campaign(evocc: Path, binary: Path, name: str, count: int, inc: list[str], o
             shutil.copy(work / "src" / f"{program}.c", out_dir / "mismatch" / f"{name}-{program}.c")
         rows.append(row)
         results.write(json.dumps(row) + "\n")
-    return {**summarise(name, rows), "work": str(work.relative_to(ROOT))}
+    return {**summarise(name, rows), "work": str(work.relative_to(ROOT)), "runtime": runtime}
 
 
 def seal(summary: dict, out_dir: Path) -> dict:
@@ -519,9 +541,12 @@ def reseal(out_dir: Path) -> dict:
         grouped[row["campaign"]].append(row)
     for name, group in grouped.items():
         work = summary["campaigns"].get(name, {}).get("work")
+        runtime = summary["campaigns"].get(name, {}).get("runtime")
         summary["campaigns"][name] = summarise(name, group)
         if work:
             summary["campaigns"][name]["work"] = work
+        if runtime:
+            summary["campaigns"][name]["runtime"] = runtime
     return seal(summary, out_dir)
 
 

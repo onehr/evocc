@@ -2,6 +2,23 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "csmithRuntimeRepair": {
+      "redCommit": "b52c85a",
+      "change": "Replace the two signed-left-shift sign masks in the pinned 32/64-bit subtraction guards with ~INT32_MAX/~INT64_MAX; no compiler obligation weakened",
+      "originalHeaderSha256": "d5157b023d2ee18744d6313216e3a7a19c45e96d977f0bb20c78e63ff56b443d",
+      "repairedHeaderSha256": "5b1ade44ce83979d684f7e823326610a3c8e87b990e75ed958f641e73505af72",
+      "fixture": "tests/fixtures/csmith-runtime-subtraction.c",
+      "cases": 128,
+      "sanitizerCommand": "sealed gcc -O0 -fsanitize=undefined -fno-sanitize-recover=all / clang-19 -O0 -fsanitize=undefined -fsanitize-trap=undefined; -DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP -DINT_MAX=2147483647; same fixture with original/repaired headers",
+      "sanitizerExits": {"gccOriginal": 1, "clangOriginal": 133, "gccRepaired": 0, "clangRepaired": 0},
+      "evoirCommand": "target/frontend/release/evocc -DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP -DINT_MAX=2147483647 -I.build/csmith-runtime-repaired/runtime --interpret-evoir tests/fixtures/csmith-runtime-subtraction.c",
+      "evoirResult": 0,
+      "pythonCommand": "python3 -m unittest discover -s tools/ladder/tests -p 'test_*.py'",
+      "pythonPassed": 79,
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "gate": "tools/gate-changed.sh b52c85a --offline -j 2: no crate changed; Rust retains the preceding green gate",
+      "lineage": "Same generator options and original seeds; all five native configurations share the patched runtime. Old runs and their failure counts are not rewritten. Full remeasurement pending"
+    },
     "variadicNamedStack": {
       "redCommit": "748e052",
       "red": "Existing sealed Linux native corpus: 6/7 agree; variadic-named-stack reference=0 evocc=7. Nine named slots, ten named slots and an aligned named 128-bit pair all fail; no build error",
