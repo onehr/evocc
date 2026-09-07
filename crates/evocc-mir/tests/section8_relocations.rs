@@ -101,3 +101,26 @@ fn a_pointer_integer_conversion_lowers_to_nothing() {
         "the two conversions of the address emit nothing at all:\n{text}"
     );
 }
+
+#[test]
+fn static_label_addresses_use_defined_platform_local_symbols() {
+    let source = UNIT.replacen(
+        "\n\nfunc",
+        "\nglobal @labels origin=2 kind=file visibility=external size=24 align=8 bytes=000000000000000000000000000000000000000000000000 initialized=111111111111111111111111 relocs=[(0, @twice^b0, 0), (8, @round_trip^b0, 4), (16, @round_trip^b0, -4)]\n\nfunc",
+        1,
+    );
+    let module = parse_section9_module(source.as_bytes()).expect("static block relocations parse");
+    for (target, prefix) in [(Target::Linux, ".L"), (Target::Darwin, "L")] {
+        let text = compile_module_for(target, &module, &|_| true).expect("the unit lowers");
+        for expected in [
+            format!("    .xword {prefix}twice.0\n"),
+            format!("    .xword {prefix}round_trip.0+4\n"),
+            format!("    .xword {prefix}round_trip.0-4\n"),
+            format!("{prefix}twice.0:\n"),
+            format!("{prefix}round_trip.0:\n"),
+        ] {
+            assert!(text.contains(&expected), "missing {expected:?}:\n{text}");
+        }
+        assert!(!text.contains("^b"), "IR block syntax is not assembler syntax");
+    }
+}
