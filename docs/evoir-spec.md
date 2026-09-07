@@ -5735,6 +5735,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Character constants in preprocessing conditions
+
+Admitted single-character constants in `#if` use the same decoded escape value as in C expressions, including wide prefixes, octal/hexadecimal escapes and GNU `\e`, with the existing integer controlling-expression arithmetic.
+Malformed character spellings are diagnosed as the existing `E1006 invalid-character-literal` before evaluation, never replaced with zero.
+Both sealed compilers at `-std=gnu11 -fshort-wchar -O0/-O2` execute `tests/fixtures/preprocessor-character-values.c` with exit zero and reject the malformed `\x` probe (`.evidence/builtin-probes/20260907-character-conditions/results.txt`).
+This identifies the wrong-value preprocessing cause of torture `widechar-1`, one failing unit in run `20260907T124739Z`; no new encoding or multi-character constant support is inferred.
+
 ### Identifier-list definitions and promoted call interfaces
 
 A definition with an identifier list retains those parameters in identifier order and their declared object types after array/function adjustment; its effective call interface uses default argument promotions unless a preceding prototype supplies types compatible with each declared type or its promotion.

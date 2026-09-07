@@ -11921,62 +11921,14 @@ fn concatenate_string_prefix(left: StringPrefix, right: StringPrefix) -> Option<
 }
 
 fn parse_char_literal(text: &str) -> Option<CharLit> {
-    let (quoted, prefix) = if let Some(quoted) = text.strip_prefix("u8") {
-        (quoted, CharPrefix::U8)
-    } else if let Some(quoted) = text.strip_prefix('u') {
-        (quoted, CharPrefix::U)
-    } else if let Some(quoted) = text.strip_prefix('U') {
-        (quoted, CharPrefix::U)
-    } else if let Some(quoted) = text.strip_prefix('L') {
-        (quoted, CharPrefix::L)
-    } else {
-        (text, CharPrefix::None)
+    let (value, prefix) = evocc_lex::decode_character_literal(text)?;
+    let prefix = match prefix {
+        "u8" => CharPrefix::U8,
+        "u" | "U" => CharPrefix::U,
+        "L" => CharPrefix::L,
+        "" => CharPrefix::None,
+        _ => return None,
     };
-    let contents = quoted.strip_prefix('\'')?.strip_suffix('\'')?;
-    let value = if let Some(escape) = contents.strip_prefix('\\') {
-        match escape {
-            "'" => u32::from(b'\''),
-            "\"" => u32::from(b'\"'),
-            "?" => u32::from(b'?'),
-            "\\" => u32::from(b'\\'),
-            "a" => 7,
-            "b" => 8,
-            "f" => 12,
-            "n" => 10,
-            "r" => 13,
-            "t" => 9,
-            "v" => 11,
-            "e" => 27,
-            _ if escape.starts_with('x') => {
-                let digits = &escape[1..];
-                if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    return None;
-                }
-                u32::from_str_radix(digits, 16).ok()?
-            }
-            _ if escape.starts_with('u') && escape.len() == 5 => {
-                u32::from_str_radix(&escape[1..], 16).ok()?
-            }
-            _ if escape.starts_with('U') && escape.len() == 9 => {
-                u32::from_str_radix(&escape[1..], 16).ok()?
-            }
-            _ if escape.len() <= 3 && escape.bytes().all(|byte| matches!(byte, b'0'..=b'7')) => {
-                u32::from_str_radix(escape, 8).ok()?
-            }
-            _ => return None,
-        }
-    } else {
-        let mut characters = contents.chars();
-        let value = u32::from(characters.next()?);
-        if characters.next().is_some() {
-            return None;
-        }
-        value
-    };
-    if matches!(prefix, CharPrefix::None | CharPrefix::U8) && value > u32::from(u8::MAX) {
-        return None;
-    }
-    char::from_u32(value)?;
     Some(CharLit { value, prefix })
 }
 

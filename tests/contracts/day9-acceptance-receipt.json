@@ -2,6 +2,29 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "preprocessorCharacterValues": {
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm <source>; sealed gcc -static assembly -o /tmp/probe && timeout 10 /tmp/probe",
+      "nativeExitZero": ["tests/fixtures/preprocessor-character-values.c", "gcc.c-torture/execute/widechar-1.c"],
+      "redCommit": "b75d4bb",
+      "red": "Two assertion failures, no build errors: L'\\400' incorrectly selected the false branch; malformed '\\x' was accepted without a diagnostic",
+      "implementation": "Move the existing C character decoder to evocc-lex and use it in both consumers; reject malformed controlling-expression literals as E1006 before evaluation",
+      "authority": "Appendix D: Character constants in preprocessing conditions",
+      "fixture": "tests/fixtures/preprocessor-character-values.c",
+      "oracles": "gcc14 and clang19 -std=gnu11 -fshort-wchar at O0/O2: exit0; both reject malformed hexadecimal escape during preprocessing",
+      "interpreterCommand": "target/frontend/debug/evocc --interpret-c-hir / --interpret-evoir tests/fixtures/preprocessor-character-values.c",
+      "chirResult": 0,
+      "evoirResult": 0,
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-cpp --test if_arithmetic --offline -j 2 -- --nocapture",
+      "focusedPassed": 6,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 6c4880c --offline -j 2 --quiet",
+      "gatePassed": 1186,
+      "gateFailed": 0,
+      "gateIgnored": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "limitation": "Full torture remeasurement pending; no complete nonfloating benchmark claim"
+    },
     "identifierListDefinitions": {
       "campaign": {
         "run": "20260907T124739Z",
@@ -42,6 +65,7 @@
       "limitation": "Full torture campaign above remains incomplete; no attribution of all 185 prior E1001 refusals to this construct"
     },
     "definedRuntimeCampaign": {
+      "countMeaning": "Mutually exclusive verdict categories, not raw process-status totals. The 68 oracle-unusable rows can also contain subject timeouts and are not evidence of a subject pass",
       "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
       "run": "20260907T115631Z",
       "subject": "689c76e",
@@ -56,6 +80,15 @@
       "base": {"programs": 500, "agreeing": 469, "oracleUnusable": 31},
       "bitfields": {"programs": 500, "agreeing": 463, "oracleUnusable": 37},
       "limitation": "All original seeds retained; 68 unavailable reference verdicts are not passes. This frozen binary predates the later goto-entry and deterministic-cleanup followups"
+    },
+    "remainingArithmeticDiagnosis": {
+      "sources": ["arith-rand.c", "arith-rand-ll.c", "pr79121.c"],
+      "gccCommand": "gcc -std=gnu11 -O1 -fsanitize=undefined -fno-sanitize-recover=all <original source> -o /tmp/probe; timeout 10 /tmp/probe",
+      "gcc": "All three exit1: arith-rand and arith-rand-ll line86 negate INT_MIN; pr79121 line28 shifts negative -268435456",
+      "clangInitial": "Sanitizer runtime linking unavailable in sealed image, NOT RUN; not counted as a source rejection",
+      "clangCommand": "clang-19 -std=gnu11 -O1 -fsanitize=undefined -fsanitize-trap=undefined <original source> -o /tmp/probe; timeout 10 /tmp/probe",
+      "clang": "All three compile successfully and exit133 in trap sanitizer mode",
+      "limitation": "Per-source UB diagnosis only; the raw torture failures remain recorded. Other arithmetic failures are not classified by analogy"
     },
     "latestTortureCampaign": {
       "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",

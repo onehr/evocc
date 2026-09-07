@@ -1869,6 +1869,17 @@ impl Preprocessor {
         );
         let expanded = expanded.into_vec();
         if let Some(token) = expanded.iter().find(|token| {
+            token.kind == TokenKind::CharLiteral
+                && evocc_lex::decode_character_literal(token_lexeme(token, source)).is_none()
+        }) {
+            self.errors.push(PreprocessError {
+                code: "E1006",
+                span: token.span,
+                message: "invalid-character-literal".into(),
+            });
+            return false;
+        }
+        if let Some(token) = expanded.iter().find(|token| {
             matches!(
                 token.kind,
                 TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::PpNumber
@@ -2830,19 +2841,8 @@ fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
 }
 
 fn parse_pp_character(spelling: &str) -> PpInteger {
-    let inner = spelling
-        .strip_prefix('\'')
-        .and_then(|value| value.strip_suffix('\''))
-        .unwrap_or(spelling);
-    let value = match inner.as_bytes() {
-        [b'\\', b'n'] => b'\n',
-        [b'\\', b'r'] => b'\r',
-        [b'\\', b't'] => b'\t',
-        [b'\\', b'0'] => 0,
-        [b'\\', escaped] => *escaped,
-        [single] => *single,
-        _ => 0,
-    };
+    let (value, _) = evocc_lex::decode_character_literal(spelling)
+        .expect("conditional character operands were validated before evaluation");
     PpInteger {
         bits: u64::from(value),
         unsigned: false,

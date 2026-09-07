@@ -300,6 +300,62 @@ pub fn try_keyword(lexeme: &str) -> Option<TokenKind> {
     KEYWORDS.iter().find(|(s, _)| *s == lexeme).map(|(_, k)| *k)
 }
 
+/// Decode one admitted character constant, returning its value and written
+/// prefix. The preprocessor and C parser share escape and validity rules.
+#[must_use]
+pub fn decode_character_literal(text: &str) -> Option<(u32, &str)> {
+    let (prefix, quoted) = text.split_once('\'')?;
+    if !matches!(prefix, "" | "u8" | "u" | "U" | "L") {
+        return None;
+    }
+    let contents = quoted.strip_suffix('\'')?;
+    let value = if let Some(escape) = contents.strip_prefix('\\') {
+        match escape {
+            "'" => u32::from(b'\''),
+            "\"" => u32::from(b'\"'),
+            "?" => u32::from(b'?'),
+            "\\" => u32::from(b'\\'),
+            "a" => 7,
+            "b" => 8,
+            "f" => 12,
+            "n" => 10,
+            "r" => 13,
+            "t" => 9,
+            "v" => 11,
+            "e" => 27,
+            _ if escape.starts_with('x') => {
+                let digits = &escape[1..];
+                if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return None;
+                }
+                u32::from_str_radix(digits, 16).ok()?
+            }
+            _ if escape.starts_with('u') && escape.len() == 5 => {
+                u32::from_str_radix(&escape[1..], 16).ok()?
+            }
+            _ if escape.starts_with('U') && escape.len() == 9 => {
+                u32::from_str_radix(&escape[1..], 16).ok()?
+            }
+            _ if escape.len() <= 3 && escape.bytes().all(|byte| matches!(byte, b'0'..=b'7')) => {
+                u32::from_str_radix(escape, 8).ok()?
+            }
+            _ => return None,
+        }
+    } else {
+        let mut characters = contents.chars();
+        let value = u32::from(characters.next()?);
+        if characters.next().is_some() {
+            return None;
+        }
+        value
+    };
+    if matches!(prefix, "" | "u8") && value > u32::from(u8::MAX) {
+        return None;
+    }
+    char::from_u32(value)?;
+    Some((value, prefix))
+}
+
 /// Return the byte length of a syntactically complete universal character
 /// name beginning at `pos`. Identifier and preprocessing-number recognition
 /// share this spelling-level predicate so the two token grammars cannot
