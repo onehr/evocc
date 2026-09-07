@@ -121,6 +121,9 @@ fn static_label_addresses_use_defined_platform_local_symbols() {
         ] {
             assert!(text.contains(&expected), "missing {expected:?}:\n{text}");
         }
-        assert!(!text.contains("^b"), "IR block syntax is not assembler syntax");
+        assert!(
+            !text.contains("^b"),
+            "IR block syntax is not assembler syntax"
+        );
     }
 }

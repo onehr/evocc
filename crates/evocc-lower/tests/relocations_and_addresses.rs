@@ -128,6 +128,16 @@ fn address_of_a_dereferenced_function_pointer_preserves_the_pointer() {
         Ok(8),
         &["func_addr @f", "call @get"],
     );
+    check(
+        "typedef int (*fn)(void); int calls; int f(void){return 7;} fn get(void){calls++;return f;} int main(void){fn p=*get(); return p()+calls;}",
+        Ok(8),
+        &["func_addr @f", "call @get"],
+    );
+    check(
+        "int main(void){int (*p)(void)=0; return &*p==p;}",
+        Ok(1),
+        &["fnptr"],
+    );
 }
 
 #[test]

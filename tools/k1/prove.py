@@ -12,9 +12,8 @@ Two independent witnesses, both read out of the linked image:
   the bytes at that symbol in the object and at the same symbol in vmlinux
   are extracted and compared. This is per unit, so it says which units are in
   the image rather than that some unit is. The window length comes from the
-  reference object, because the emitter writes no ``.size`` directive; the
-  same window is read on both sides, so an equal result means the image
-  carries the object's bytes from that symbol onward.
+  subject object's ELF symbol, and must match the linked symbol's size and
+  fit both sections. Another compiler's function size is never its extent.
 
 An object still carries unresolved relocations where the linker has yet to
 fill an address in; vmlinux carries the filled-in value. Those fields are
@@ -151,23 +150,17 @@ def parse_readelf(text: str) -> dict[str, dict]:
 def slice_symbol(
     path: Path, table: dict, name: str, relative_to_address: bool, size: int
 ) -> bytes | None:
-    """The first ``size`` bytes of one symbol, read straight out of the file.
-
-    The size is supplied rather than taken from the symbol because the
-    EvoCC emitter writes no ``.size`` directive, so its symbols measure zero.
-    The reference object built from the same source supplies the length, and
-    comparing that many bytes on both sides is exactly the question asked.
-    """
+    """Read a complete sized symbol, never an adjacent section or partial body."""
     symbol = table["symbols"].get(name)
-    if symbol is None or size == 0:
+    if symbol is None or size <= 0 or symbol["size"] != size:
         return None
     section = table["sections"].get(symbol["ndx"])
     if section is None or section["type"] == "NOBITS":
         return None
-    if relative_to_address:
-        offset = section["offset"] + (symbol["value"] - section["addr"])
-    else:
-        offset = section["offset"] + symbol["value"]
+    start = symbol["value"] - section["addr"] if relative_to_address else symbol["value"]
+    if start < 0 or start + size > section["size"]:
+        return None
+    offset = section["offset"] + start
     with path.open("rb") as handle:
         handle.seek(offset)
         data = handle.read(size)
@@ -249,7 +242,6 @@ def main() -> int:
     paths = (
         ["/work/out/vmlinux"]
         + [f"/work/asm/{unit}" for unit in units]
-        + [f"/work/ref/{unit}" for unit in units]
     )
     tables = parse_readelf(
         container_readelf(
@@ -270,7 +262,6 @@ def main() -> int:
         if not in_link:
             rows.append({"unit": unit, "verdict": "not-linked", "linkedIntoVmlinux": False})
             continue
-        reference = tables.get(f"/work/ref/{unit}", {"symbols": {}, "sections": {}})
         names = sorted(
             name
             for name, symbol in table["symbols"].items()
@@ -278,9 +269,16 @@ def main() -> int:
         )
         sizes = {
             name: table["symbols"][name]["size"]
-            or reference["symbols"].get(name, {}).get("size", 0)
             for name in names
         }
+        unsized = [name for name in names if sizes[name] == 0]
+        if unsized:
+            rows.append({
+                "unit": unit, "verdict": "unverifiable", "symbols": unsized,
+                "reason": "defined global symbol has no subject extent",
+                "linkedIntoVmlinux": True,
+            })
+            continue
         names = [name for name in names if sizes[name] > 0]
         if not names:
             rows.append({
@@ -339,7 +337,10 @@ def main() -> int:
         args.output.write_text(rendered, encoding="utf-8")
     print(rendered)
     ok = producer_note["identInMixedVmlinux"] and not producer_note["identInReferenceVmlinux"]
-    return 0 if ok and counts.get("mismatch", 0) == 0 else 1
+    return 0 if ok and all(
+        verdict in ("proven", "proven-modulo-relocations", "no-symbols", "not-linked")
+        for verdict in counts
+    ) else 1
 
 
 if __name__ == "__main__":

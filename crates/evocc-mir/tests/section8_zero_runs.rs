@@ -41,7 +41,7 @@ fn emitted(target: Target, unit: &str) -> String {
 }
 
 /// The lines of the global whose label is `label`, up to the next directive
-/// that starts another global or leaves the section.
+/// that ends its ELF extent, starts another global or leaves the section.
 fn body_of(text: &str, label: &str) -> Vec<String> {
     let wanted = format!("{label}:");
     let mut lines = text.lines().skip_while(|line| line.trim() != wanted);
@@ -50,6 +50,7 @@ fn body_of(text: &str, label: &str) -> Vec<String> {
         .take_while(|line| {
             let line = line.trim_start();
             !line.starts_with(".p2align")
+                && !line.starts_with(".size")
                 && !line.starts_with(".section")
                 && !line.starts_with(".bss")
                 && !line.starts_with(".data")
@@ -90,13 +91,18 @@ fn an_all_zero_initialized_global_is_emitted_in_the_zero_filled_section() {
             Target::Linux => (".bss", ""),
         };
         let label = format!("{prefix}blank");
+        let metadata = if target == Target::Linux {
+            format!(".type {label}, %object\n")
+        } else {
+            String::new()
+        };
         assert_eq!(
             section_of(&text, &label),
             bss,
             "an all-zero global holds no bytes to store:\n{text}"
         );
         assert!(
-            text.contains(&format!(".p2align 2\n.globl {label}\n{label}:\n")),
+            text.contains(&format!(".p2align 2\n.globl {label}\n{metadata}{label}:\n")),
             "the alignment, the external symbol and the label are unchanged:\n{text}"
         );
         assert_eq!(
@@ -129,8 +135,13 @@ fn an_internal_zero_filled_global_keeps_its_local_symbol() {
             Target::Darwin => "_hidden",
             Target::Linux => "hidden",
         };
+        let metadata = if target == Target::Linux {
+            format!(".type {label}, %object\n")
+        } else {
+            String::new()
+        };
         assert!(
-            text.contains(&format!(".p2align 3\n{label}:\n    .zero 64\n")),
+            text.contains(&format!(".p2align 3\n{metadata}{label}:\n    .zero 64\n")),
             "the alignment, label and fill are the whole global:\n{text}"
         );
     }

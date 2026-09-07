@@ -298,8 +298,19 @@ pub fn emit_module_unit(
     let mut text = String::new();
     text.push_str(target.text_section());
     text.push('\n');
+    let mut static_blocks: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
+    for relocation in globals.iter().flat_map(|global| &global.relocs) {
+        if let Some((function, block)) = relocation_block(&relocation.symbol) {
+            static_blocks.entry(function).or_default().insert(block);
+        }
+    }
     for function in functions {
-        emit_function(&mut text, target, function);
+        emit_function(
+            &mut text,
+            target,
+            function,
+            static_blocks.get(function.name.as_str()),
+        );
     }
     if !globals.is_empty() {
         let mut ordered: Vec<&GlobalObject> = globals.iter().collect();
@@ -328,8 +339,14 @@ pub fn emit_module_unit(
             if global.visibility == GlobalVisibility::External {
                 let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
             }
+            if target == Target::Linux {
+                let _ = writeln!(text, ".type {}, %object", global.symbol);
+            }
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
-            emit_initializer(&mut text, prefix, global, zero_filled);
+            emit_initializer(&mut text, target, global, zero_filled);
+            if target == Target::Linux {
+                let _ = writeln!(text, ".size {0}, .-{0}", global.symbol);
+            }
         }
         // Leave the assembler where it was before the globals: the trailing
         // output of Section 8 belongs to the text section, and a unit whose
@@ -370,7 +387,7 @@ pub fn emit_module_unit(
 /// clear is emitted as the zero EvoIR stores for it, as it was before: the
 /// object file has no way to spell an uninitialized byte, and the EvoIR
 /// interpreter, not the image, is what diagnoses a read of one.
-fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject, zero_filled: bool) {
+fn emit_initializer(text: &mut String, target: Target, global: &GlobalObject, zero_filled: bool) {
     if global.bytes.is_empty() {
         let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
         return;
@@ -389,14 +406,14 @@ fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject, zero
                 let addend = relocation.addend;
                 let sign = if addend < 0 { '-' } else { '+' };
                 let magnitude = addend.unsigned_abs();
+                let symbol = relocation_block(&relocation.symbol).map_or_else(
+                    || format!("{}{}", target.symbol_prefix(), relocation.symbol),
+                    |(function, block)| block_symbol(target, function, block),
+                );
                 if addend == 0 {
-                    let _ = writeln!(text, "    .xword {prefix}{}", relocation.symbol);
+                    let _ = writeln!(text, "    .xword {symbol}");
                 } else {
-                    let _ = writeln!(
-                        text,
-                        "    .xword {prefix}{}{sign}{magnitude}",
-                        relocation.symbol
-                    );
+                    let _ = writeln!(text, "    .xword {symbol}{sign}{magnitude}");
                 }
                 offset += 8;
                 relocations.next();
@@ -497,6 +514,12 @@ fn block_symbol(target: Target, function: &str, block: u32) -> String {
     format!("{}{function}.{block}", target.label_prefix())
 }
 
+/// The validator has already checked the canonical function/block target.
+fn relocation_block(symbol: &str) -> Option<(&str, u32)> {
+    let (function, block) = symbol.split_once("^b")?;
+    Some((function, block.parse().ok()?))
+}
+
 /// The label the inverted short branch of a relaxed terminator jumps over.
 fn relax_label(target: Target, function: &str, index: u32) -> String {
     format!("{}{function}_relax{index}", target.label_prefix())
@@ -510,7 +533,12 @@ fn instructions_in(body: &str) -> usize {
     body.lines().filter(|line| line.starts_with(' ')).count()
 }
 
-fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
+fn emit_function(
+    text: &mut String,
+    target: Target,
+    allocated: &Allocated,
+    static_blocks: Option<&BTreeSet<u32>>,
+) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
@@ -524,6 +552,9 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
         let _ = writeln!(text, "\n.globl {prefix}{}", allocated.name);
     }
     let _ = writeln!(text, ".p2align 2");
+    if target == Target::Linux {
+        let _ = writeln!(text, ".type {}, %function", allocated.name);
+    }
     let _ = writeln!(text, "{prefix}{}:", allocated.name);
     emit_prologue(text, &frame);
 
@@ -548,12 +579,31 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
     // decides whether they reach: a body at or above the threshold is emitted
     // again with every conditional terminator relaxed.
     let mut body = String::new();
-    emit_blocks(&mut body, target, allocated, &frame, &spell, false);
+    emit_blocks(
+        &mut body,
+        target,
+        allocated,
+        &frame,
+        &spell,
+        false,
+        static_blocks,
+    );
     if instructions_in(&body) >= RELAXATION_THRESHOLD {
         body.clear();
-        emit_blocks(&mut body, target, allocated, &frame, &spell, true);
+        emit_blocks(
+            &mut body,
+            target,
+            allocated,
+            &frame,
+            &spell,
+            true,
+            static_blocks,
+        );
     }
     text.push_str(&body);
+    if target == Target::Linux {
+        let _ = writeln!(text, ".size {0}, .-{0}", allocated.name);
+    }
 }
 
 fn emit_blocks(
@@ -563,12 +613,12 @@ fn emit_blocks(
     frame: &Frame,
     spell: &impl Fn(VReg, RegClass) -> String,
     relax: bool,
+    static_blocks: Option<&BTreeSet<u32>>,
 ) {
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
-    // The blocks some `adr` in this function names. Their local symbol is
-    // placed at the first instruction; every other block keeps only the
-    // branch label, so the text of a function that takes no block address is
-    // exactly what it was.
+    // An adr or static relocation can take a block's address. Both name the
+    // same local symbol at the first instruction; unaddressed blocks retain
+    // only their branch label.
     let addressed: BTreeSet<u32> = allocated
         .blocks
         .iter()
@@ -582,7 +632,9 @@ fn emit_blocks(
     let mut relaxations = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
-        if addressed.contains(&block.id) {
+        if addressed.contains(&block.id)
+            || static_blocks.is_some_and(|blocks| blocks.contains(&block.id))
+        {
             let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
         }
         for inst in &block.insts {

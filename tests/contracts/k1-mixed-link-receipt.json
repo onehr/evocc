@@ -11,33 +11,42 @@
     "multiple-definition": 0,
     "other": 0
   },
-  "generatedAt": "2026-09-06T18:37:33Z",
+  "generatedAt": "2026-09-07T17:45:54Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "20c8de708c786e3a4a0eb156f976b00568a087a87bcfecf619c5b3b81d647296",
-      "nonce": "k1-20260906T181835Z-6d9a83cc",
-      "runDirectory": ".evidence/k1/measure-20260906T181708Z/attempt-01/boot",
-      "serialLog": ".evidence/k1/measure-20260906T181708Z/attempt-01/boot/boot.log",
-      "serialLogSha256": "06d8201aea129c72954029c08f7eef19276b2140e24f78d9d252b6306eedecf9",
+      "imageSha256": "92e352cdfe71edd5530477fa6fd2dd5085d8178993244c0a5ae8827b5f0762fe",
+      "nonce": "k1-20260907T174548Z-30aa86b5",
+      "runDirectory": ".evidence/k1/measure-20260907T170640Z/attempt-01/boot",
+      "serialLog": ".evidence/k1/measure-20260907T170640Z/attempt-01/boot/boot.log",
+      "serialLogSha256": "f18671683a30c17b50f9ddce339d4d5b611b45e33e3cde92ac0b9e804a17a6fb",
       "verdict": "PASS"
     },
-    "imageSha256": "20c8de708c786e3a4a0eb156f976b00568a087a87bcfecf619c5b3b81d647296",
+    "imageSha256": "92e352cdfe71edd5530477fa6fd2dd5085d8178993244c0a5ae8827b5f0762fe",
     "outcomeCounts": {
-      "substituted": 26
+      "substituted": 52
     },
-    "provenVmlinuxSha256": "36314beea77f6e1a222c0fdc7ac208f4d26adbbba866d22eb9d5f5a93d49997e",
+    "provenVmlinuxSha256": "d9b2bbff9e84939b22dfac44e219bd2572c0deb8fc78cb80fb55ff238c4061ed",
     "relinkExitCode": 0,
-    "requestedUnits": 26,
-    "runDirectory": ".evidence/k1/measure-20260906T181708Z/attempt-01/substitution",
+    "requestedUnits": 52,
+    "runDirectory": ".evidence/k1/measure-20260907T170640Z/attempt-01/substitution",
     "substitutedUnits": [
+      "arch/arm64/kernel/pi/lib-fdt.o",
+      "arch/arm64/kernel/pi/lib-fdt_ro.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
       "crypto/jitterentropy.o",
       "crypto/rsaprivkey.asn1.o",
       "crypto/rsapubkey.asn1.o",
+      "drivers/firmware/efi/libstub/lib-ctype.o",
+      "drivers/firmware/efi/libstub/lib-fdt.o",
+      "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
+      "drivers/firmware/efi/libstub/lib-fdt_ro.o",
+      "drivers/firmware/efi/libstub/lib-fdt_rw.o",
+      "drivers/firmware/efi/libstub/lib-fdt_sw.o",
+      "drivers/firmware/efi/libstub/lib-fdt_wip.o",
       "drivers/firmware/efi/libstub/skip_spaces.o",
       "drivers/tty/vt/consolemap_deftbl.o",
       "drivers/tty/vt/ucs.o",
@@ -49,17 +58,34 @@
       "lib/bitrev.o",
       "lib/clz_tab.o",
       "lib/compat_audit.o",
+      "lib/ctype.o",
       "lib/decompress.o",
+      "lib/fdt.o",
       "lib/fdt_addresses.o",
+      "lib/fdt_empty_tree.o",
+      "lib/fdt_ro.o",
+      "lib/fdt_rw.o",
       "lib/fdt_strerror.o",
+      "lib/fdt_sw.o",
+      "lib/fdt_wip.o",
       "lib/fonts/font_8x8.o",
+      "lib/list_sort.o",
       "lib/math/int_pow.o",
+      "lib/math/lcm.o",
+      "lib/plist.o",
       "lib/union_find.o",
       "lib/zstd/common/debug.o",
+      "lib/zstd/common/entropy_common.o",
       "lib/zstd/common/error_private.o",
+      "lib/zstd/common/fse_decompress.o",
+      "lib/zstd/common/zstd_common.o",
+      "lib/zstd/decompress/huf_decompress.o",
+      "lib/zstd/decompress/zstd_ddict.o",
+      "lib/zstd/decompress/zstd_decompress.o",
+      "lib/zstd/decompress/zstd_decompress_block.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "36314beea77f6e1a222c0fdc7ac208f4d26adbbba866d22eb9d5f5a93d49997e"
+    "vmlinuxSha256": "d9b2bbff9e84939b22dfac44e219bd2572c0deb8fc78cb80fb55ff238c4061ed"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -89,16 +115,42 @@
       "lib/bitrev.o",
       "lib/clz_tab.o",
       "lib/compat_audit.o",
+      "lib/ctype.o",
       "lib/decompress.o",
+      "lib/fdt.o",
       "lib/fdt_addresses.o",
+      "lib/fdt_empty_tree.o",
+      "lib/fdt_ro.o",
+      "lib/fdt_rw.o",
       "lib/fdt_strerror.o",
+      "lib/fdt_sw.o",
+      "lib/fdt_wip.o",
       "lib/fonts/font_8x8.o",
+      "lib/list_sort.o",
       "lib/math/int_pow.o",
+      "lib/math/lcm.o",
+      "lib/plist.o",
       "lib/union_find.o",
       "lib/zstd/common/debug.o",
-      "lib/zstd/common/error_private.o"
+      "lib/zstd/common/entropy_common.o",
+      "lib/zstd/common/error_private.o",
+      "lib/zstd/common/fse_decompress.o",
+      "lib/zstd/common/zstd_common.o",
+      "lib/zstd/decompress/huf_decompress.o",
+      "lib/zstd/decompress/zstd_ddict.o",
+      "lib/zstd/decompress/zstd_decompress.o",
+      "lib/zstd/decompress/zstd_decompress_block.o"
     ],
     "unitsNotLinkedIntoVmlinux": [
+      "arch/arm64/kernel/pi/lib-fdt.o",
+      "arch/arm64/kernel/pi/lib-fdt_ro.o",
+      "drivers/firmware/efi/libstub/lib-ctype.o",
+      "drivers/firmware/efi/libstub/lib-fdt.o",
+      "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
+      "drivers/firmware/efi/libstub/lib-fdt_ro.o",
+      "drivers/firmware/efi/libstub/lib-fdt_rw.o",
+      "drivers/firmware/efi/libstub/lib-fdt_sw.o",
+      "drivers/firmware/efi/libstub/lib-fdt_wip.o",
       "drivers/firmware/efi/libstub/skip_spaces.o",
       "scripts/mod/empty.o"
     ],
@@ -112,25 +164,42 @@
       "drivers/tty/vt/consolemap_deftbl.o",
       "drivers/tty/vt/ucs.o",
       "drivers/video/logo/logo_linux_clut224.o",
+      "drivers/video/screen_info_generic.o",
       "kernel/range.o",
       "kernel/time/timecounter.o",
       "lib/bcd.o",
       "lib/clz_tab.o",
       "lib/compat_audit.o",
+      "lib/ctype.o",
       "lib/decompress.o",
+      "lib/fdt.o",
       "lib/fdt_addresses.o",
+      "lib/fdt_empty_tree.o",
+      "lib/fdt_ro.o",
+      "lib/fdt_rw.o",
       "lib/fdt_strerror.o",
+      "lib/fdt_sw.o",
+      "lib/fdt_wip.o",
       "lib/fonts/font_8x8.o",
+      "lib/list_sort.o",
       "lib/math/int_pow.o",
+      "lib/math/lcm.o",
+      "lib/plist.o",
       "lib/union_find.o",
-      "lib/zstd/common/error_private.o"
+      "lib/zstd/common/entropy_common.o",
+      "lib/zstd/common/error_private.o",
+      "lib/zstd/common/fse_decompress.o",
+      "lib/zstd/common/zstd_common.o",
+      "lib/zstd/decompress/huf_decompress.o",
+      "lib/zstd/decompress/zstd_ddict.o",
+      "lib/zstd/decompress/zstd_decompress.o",
+      "lib/zstd/decompress/zstd_decompress_block.o"
     ],
     "verdictCounts": {
-      "mismatch": 1,
       "no-symbols": 2,
-      "not-linked": 2,
-      "proven": 7,
-      "proven-modulo-relocations": 14
+      "not-linked": 11,
+      "proven": 9,
+      "proven-modulo-relocations": 30
     }
   },
   "reference": {
@@ -147,74 +216,25 @@
   },
   "schemaVersion": 1,
   "survey": {
-    "assemblingUnits": 42,
+    "assemblingUnits": 52,
     "linkCollisions": {
-      "groups": [
-        [
-          "arch/arm64/kernel/pi/lib-fdt.o",
-          "drivers/firmware/efi/libstub/lib-fdt.o",
-          "lib/fdt.o"
-        ],
-        [
-          "arch/arm64/kernel/pi/lib-fdt_ro.o",
-          "drivers/firmware/efi/libstub/lib-fdt_ro.o",
-          "lib/fdt_ro.o"
-        ],
-        [
-          "drivers/firmware/efi/libstub/lib-ctype.o",
-          "lib/ctype.o"
-        ],
-        [
-          "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
-          "lib/fdt_empty_tree.o"
-        ],
-        [
-          "drivers/firmware/efi/libstub/lib-fdt_rw.o",
-          "lib/fdt_rw.o"
-        ],
-        [
-          "drivers/firmware/efi/libstub/lib-fdt_sw.o",
-          "lib/fdt_sw.o"
-        ],
-        [
-          "drivers/firmware/efi/libstub/lib-fdt_wip.o",
-          "lib/fdt_wip.o"
-        ]
-      ],
-      "symbolsDefinedTwice": 78,
-      "units": [
-        "arch/arm64/kernel/pi/lib-fdt.o",
-        "arch/arm64/kernel/pi/lib-fdt_ro.o",
-        "drivers/firmware/efi/libstub/lib-ctype.o",
-        "drivers/firmware/efi/libstub/lib-fdt.o",
-        "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
-        "drivers/firmware/efi/libstub/lib-fdt_ro.o",
-        "drivers/firmware/efi/libstub/lib-fdt_rw.o",
-        "drivers/firmware/efi/libstub/lib-fdt_sw.o",
-        "drivers/firmware/efi/libstub/lib-fdt_wip.o",
-        "lib/ctype.o",
-        "lib/fdt.o",
-        "lib/fdt_empty_tree.o",
-        "lib/fdt_ro.o",
-        "lib/fdt_rw.o",
-        "lib/fdt_sw.o",
-        "lib/fdt_wip.o"
-      ]
+      "groups": [],
+      "symbolsDefinedTwice": 0,
+      "units": []
     },
     "outcomeCounts": {
-      "assembled": 42,
-      "refused": 2757
+      "assembled": 52,
+      "refused": 2747
     },
     "refusalCodeCounts": {
-      "E3021": 2734,
+      "E3021": 2745,
       "E3029": 1,
-      "E3031": 1,
-      "E3101": 21
+      "E3031": 1
     },
     "refusalsByCode": {
       "E3021": {
         "owner": "front-end",
-        "units": 2734
+        "units": 2745
       },
       "E3029": {
         "owner": "front-end",
@@ -223,26 +243,21 @@
       "E3031": {
         "owner": "front-end",
         "units": 1
-      },
-      "E3101": {
-        "owner": "front-end",
-        "units": 21
       }
     },
     "refusalsByFirstCode": {
-      "E3021": 2734,
+      "E3021": 2745,
       "E3029": 1,
-      "E3031": 1,
-      "E3101": 21
+      "E3031": 1
     },
     "refusalsByOwner": {
-      "front-end": 2757
+      "front-end": 2747
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/measure-20260906T170419Z/survey"
+    "runDirectory": ".evidence/k1/measure-20260907T170640Z/survey"
   },
-  "unitsCompiledByEvoccInABootingKernel": 24,
-  "unitsExcludedForMultipleDefinition": 16,
-  "unitsProvenPresentInVmlinux": 21,
-  "unitsSubstituted": 26
+  "unitsCompiledByEvoccInABootingKernel": 41,
+  "unitsExcludedForMultipleDefinition": 0,
+  "unitsProvenPresentInVmlinux": 39,
+  "unitsSubstituted": 52
 }

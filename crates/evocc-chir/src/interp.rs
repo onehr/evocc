@@ -3746,10 +3746,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             feature: "invalid addressed memory place",
                             span,
                         })?;
-                    tasks.push(MachineTask::FoldPlaceAddress {
-                        place,
-                        span: *target_span,
-                    });
+                    // A function designator is the pointer itself, not an
+                    // object address on which to perform a memory access.
+                    if !matches!(
+                        self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+                        Some(TypeKind::Function { .. })
+                    ) {
+                        tasks.push(MachineTask::FoldPlaceAddress {
+                            place,
+                            span: *target_span,
+                        });
+                    }
                     self.schedule_place_operands(place, *target_span, tasks, values)?;
                 } else if let CHirExpr::Unary(UnaryOp::Deref, pointer, _) = operand {
                     tasks.push(MachineTask::EvalExpression {
@@ -3992,10 +3999,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ..
             } if self.memory_mode => {
                 self.validate_readable_place(place, *facts, *target_span)?;
-                tasks.push(MachineTask::LoadProjectedPlace {
-                    place,
-                    span: *target_span,
-                });
+                if !matches!(
+                    self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) {
+                    tasks.push(MachineTask::LoadProjectedPlace {
+                        place,
+                        span: *target_span,
+                    });
+                }
                 self.schedule_place_operands(place, *target_span, tasks, values)?;
             }
             CHirExpr::Update {
@@ -5839,7 +5851,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn address_of_expression(
-        &self,
+        &mut self,
         expression: &CHirExpr<'arena>,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
@@ -5861,6 +5873,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: *operand_span,
             }
         })?;
+        if declaration.kind() == SymbolKind::Function {
+            return self.load_identifier(*symbol, spelling, *facts, *operand_span);
+        }
         if declaration.spelling() != spelling
             || declaration.ty() != facts.ty()
             || facts.category() != ExprCategory::LValue

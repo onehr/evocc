@@ -4464,6 +4464,67 @@ impl<'a> FunctionLowerer<'a> {
         function_pointer_ir_type(self.unit.types(), self.target, function_ty, span)
     }
 
+    fn function_address(
+        &mut self,
+        symbol: SymbolId,
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<ExprValue, LowerError> {
+        let function = self
+            .functions
+            .get(&symbol)
+            .ok_or(LowerError::UnknownSymbol { symbol, span })?;
+        // An identifier-list definition can supply a complete call interface
+        // even when the expression's source type still has no prototype.
+        let mut params = function
+            .parameter_types
+            .iter()
+            .map(|ty| ty.ir.clone())
+            .collect::<Vec<_>>();
+        let mut results = Vec::new();
+        if let Some(returned) = &function.return_type {
+            if self.is_aggregate_type(returned.source) {
+                params.push(EvoIRType::Ptr(AddressSpace::Generic));
+            } else {
+                results.push(returned.ir.clone());
+            }
+        }
+        if function.participant {
+            params.extend([EvoIRType::Mem(Region::All), EvoIRType::World]);
+            results.extend([EvoIRType::Mem(Region::All), EvoIRType::World]);
+        }
+        let param_marks = record_signature_marks(
+            self.unit.types(),
+            self.target,
+            &function
+                .parameter_types
+                .iter()
+                .map(|ty| ty.source)
+                .collect::<Vec<_>>(),
+            function.return_type.as_ref().map(|ty| ty.source),
+            params.len(),
+            span,
+        )?;
+        let name = function.name.clone();
+        let result = self.fresh_value(EvoIRType::FnPtr {
+            params,
+            results,
+            variadic: function.variadic,
+            marks: param_marks,
+        });
+        self.emit(
+            state,
+            Inst::FuncAddr {
+                result: result.clone(),
+                symbol: name,
+            },
+        )?;
+        Ok(ExprValue {
+            value: result,
+            integer: CIntegerType::ULONG,
+        })
+    }
+
     fn call_designator_function_type(&self, callee: &CHirExpr<'_>) -> Option<TypeId> {
         let candidate = evocc_chir::PointerTypeDesc::from_expression(
             self.unit.symbols(),
@@ -4946,7 +5007,13 @@ impl<'a> FunctionLowerer<'a> {
             PlaceRoot::Object { symbol } => self.object_address(*symbol, span, state)?,
             PlaceRoot::PointerExpression { pointer, .. } => {
                 let lowered = self.lower_expr(pointer, state)?;
-                if !matches!(lowered.value.ty, EvoIRType::Ptr(_)) {
+                let function_designator = place.projections().is_empty()
+                    && matches!(
+                        self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+                        Some(TypeKind::Function { .. })
+                    )
+                    && matches!(lowered.value.ty, EvoIRType::FnPtr { .. });
+                if !matches!(lowered.value.ty, EvoIRType::Ptr(_)) && !function_designator {
                     return Err(LowerError::UnsupportedExpression {
                         span,
                         feature: "memory place pointer root did not lower to a pointer",
@@ -6831,18 +6898,7 @@ impl<'a> FunctionLowerer<'a> {
                     )
                     && facts.category() == ExprCategory::FunctionDesignator
                 {
-                    let result = self.fresh_value(self.fnptr_type(facts.ty(), *span)?);
-                    self.emit(
-                        state,
-                        Inst::FuncAddr {
-                            result: result.clone(),
-                            symbol: spelling.clone(),
-                        },
-                    )?;
-                    return Ok(ExprValue {
-                        value: result,
-                        integer: CIntegerType::ULONG,
-                    });
+                    return self.function_address(*symbol, *span, state);
                 }
                 if !matches!(
                     declaration.kind(),
@@ -7192,7 +7248,7 @@ impl<'a> FunctionLowerer<'a> {
                 if self.is_aggregate_type(place.value_ty())
                     || matches!(
                         self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
-                        Some(TypeKind::Array { .. })
+                        Some(TypeKind::Array { .. } | TypeKind::Function { .. })
                     )
                 {
                     return Ok(ExprValue {
@@ -7346,13 +7402,25 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         if operator == UnaryOp::AddrOf {
             let address = match operand {
+                CHirExpr::Ident { symbol, .. }
+                    if self
+                        .unit
+                        .symbols()
+                        .symbol(*symbol)
+                        .is_ok_and(|symbol| symbol.kind() == SymbolKind::Function) =>
+                {
+                    return self.lower_expr(operand, state);
+                }
                 CHirExpr::Ident { symbol, .. } => self.object_address(*symbol, span, state)?,
                 CHirExpr::MemoryRead { place, .. } => {
                     self.lower_place_address(place, span, state)?
                 }
                 CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
                     let pointer = self.lower_expr(pointer, state)?;
-                    if !matches!(pointer.value.ty, EvoIRType::Ptr(_)) {
+                    if !matches!(
+                        pointer.value.ty,
+                        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                    ) {
                         return Err(LowerError::UnsupportedExpression {
                             span,
                             feature: "address-of dereference operand is not a pointer",
