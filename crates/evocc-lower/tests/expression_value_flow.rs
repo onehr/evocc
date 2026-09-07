@@ -76,6 +76,19 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
 }
 
 #[test]
+fn identifier_list_parameters_keep_declared_objects_and_promoted_interface() {
+    agrees(include_str!(
+        "../../../tests/fixtures/identifier-list-functions.c"
+    ));
+}
+
+#[test]
+fn identifier_list_declaration_order_does_not_change_argument_order() {
+    agrees("int f(a,b,c) long c; int a,b; {return a!=1||b!=2||c!=3;} int main(void){return f(1,2,3L);}");
+    agrees("int f(a) const int a; {return a!=7;} int main(void){return f(7);}");
+}
+
+#[test]
 fn compound_literal_identity_follows_its_block_activation() {
     agrees(include_str!(
         "../../../tests/fixtures/compound-literal-identity.c"
