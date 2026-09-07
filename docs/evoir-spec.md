@@ -5735,6 +5735,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Extension prefixes on record member declarations
+
+One or more `__extension__` prefixes on a record member declaration have no effect on its type, layout or execution, including a bit-field, anonymous record or comma-separated declarator list.
+Both sealed oracles return zero at O0/O2 for `tests/fixtures/record-extension-prefix.c`; results are in `.evidence/builtin-probes/20260907-record-extension/results.txt`.
+This uses the existing declaration-prefix rule and adds no diagnostic or execution instruction.
+The first error in multiple torture units is the same prefix on `bits/atomic_wide_counter.h:27`; the next full run determines the affected count.
+
 ### Character constants in preprocessing conditions
 
 Admitted single-character constants in `#if` use the same decoded escape value as in C expressions, including wide prefixes, octal/hexadecimal escapes and GNU `\e`, with the existing integer controlling-expression arithmetic.

@@ -2,6 +2,25 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "recordMemberExtensionPrefix": {
+      "redCommit": "afd773a",
+      "red": "One assertion failure, zero build errors: E1001 expected-declaration at the first record-member __extension__",
+      "fixture": "tests/fixtures/record-extension-prefix.c",
+      "implementation": "Share ordinary declarations' prefix reader with record members; preserve the complete member span and leave layout and execution unchanged",
+      "oracles": "Sealed gcc and clang-19 -std=gnu11 at O0/O2 all return zero",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow extension_prefix_on_record --offline -j 2 --quiet",
+      "focusedPassed": 1,
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm tests/fixtures/record-extension-prefix.c; sealed gcc -static assembly -o /tmp/probe && timeout 10 /tmp/probe",
+      "nativeExit": 0,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 2e5e01d --offline -j 2 --quiet",
+      "gatePassed": 927,
+      "gateFailed": 0,
+      "gateIgnored": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "campaign": "PENDING, no predicted gain"
+    },
     "originalSeedEmissionReplay": {
       "subject": "962b1bc",
       "driverSha256": "d4eead07471fe3badbbe2d008fb16912f4392d9487bb58b26538050b01bc3c07",

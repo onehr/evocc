@@ -1412,14 +1412,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         side_start: usize,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
-        let mut gnu_extension_spans = Vec::new();
-        while self.peek_kind() == Some(TokenKind::GnuExtension) {
-            gnu_extension_spans.push(
-                self.advance()
-                    .expect("peeked GNU extension declaration prefix")
-                    .span,
-            );
-        }
+        let gnu_extension_spans = self.parse_extension_prefix();
         let mut storage = None;
         let mut inline_spans = Vec::new();
         let mut attributes = Vec::new();
@@ -5175,6 +5168,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn parse_extension_prefix(&mut self) -> Vec<SourceSpan> {
+        let mut spans = Vec::new();
+        while self.peek_kind() == Some(TokenKind::GnuExtension) {
+            spans.push(
+                self.advance()
+                    .expect("peeked GNU extension declaration prefix")
+                    .span,
+            );
+        }
+        spans
+    }
+
     fn parse_record_members(
         &mut self,
         kind: TagKind,
@@ -5191,6 +5196,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 continue;
             }
             let start = self.span();
+            self.parse_extension_prefix();
             let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
             let Some(specifier) =
