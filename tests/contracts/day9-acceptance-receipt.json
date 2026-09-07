@@ -9,7 +9,31 @@
     "revision": "1.9.75",
     "sha256": "c2bc32b981ba4f7d3b7d29a4f158b5ad17e2b023d5a773d96abef81395f5fd6f"
   },
-  "cutLine": "The last sealed lowering survey remains 42 clean, 2750 diagnosed, 6 timeout, zero panic. The completed aggregate-value Csmith replay has 761 agreeing of 1000, zero mismatches, 169 no-checksum, 69 oracle-unusable and one timeout. After it completed, serial torture replay passed 1074/1692, with 569 refused, 45 runtime failures, one assembler failure and three link failures. Always-inline substitution is under real-kernel validation; the backlog and whole-kernel lowering are not closed. Older sections retain historical subjects.",
+  "cutLine": "Sealed lowering survey 20260907T043340Z-13363 on 2cf2c78 measured 47 clean, 2751 diagnosed, zero timeout, panic or unavailable. All 42 previously clean units remain clean; five diagnosed units became clean and six prior timeouts now diagnose. The face is 2726 E3021 refusals for Ir, explicitly outside the current assembly vocabulary; 23 E3101 defects, one computed-goto and one frame-address refusal remain. Csmith is 761 agreeing of 1000 emitted, zero mismatches; serial torture passed 1074/1692. The inliner implementation and changed gate are complete, but its new-compiler K1 replay and residual-defect closure are not. Older sections retain historical subjects.",
+  "latestLoweringSurvey": {
+    "run": "20260907T043340Z-13363",
+    "subject": "2cf2c78ea79986206c1049742e627d2e05ffd43e",
+    "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/inline-substitution-evocc --action lower --jobs 4 --timeout 60",
+    "capture": ".evidence/full-config-lowering-survey/20260907T043340Z-13363",
+    "binarySha256": "eb33df195195f8d260851fcbf0560205025df60247c49d4b3a076572f98bd67b",
+    "sealSha256": "6fe16382b585396b0636082369d027a8d27c5d2890535775d5c35d07a7899ae6",
+    "resultsSha256": "7ba991861bf38d00e06e66bbeba59707d70d3e26defde022b3d98da7108fd9be",
+    "classifications": { "clean": 47, "diagnosed": 2751, "unavailable": 0, "timeout": 0, "panic": 0 },
+    "firstDiagnosticCounts": { "E3021": 2726, "E3101": 23, "E3029": 1, "E3031": 1 },
+    "comparison": { "previousRun": "20260906T181928Z-82375", "cleanToClean": 42, "diagnosedToClean": 5, "diagnosedToDiagnosed": 2745, "timeoutToDiagnosed": 6, "cleanRegressions": 0 },
+    "timing": { "parallelism": 4, "perUnitTimeoutSeconds": 60, "medianMilliseconds": 2747.962, "maximumMilliseconds": 19399.803, "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c", "limitation": "Concurrent host load; coarse telemetry, not an isolated performance benchmark." },
+    "diagnosticSubclasses": [
+      { "code": "E3021", "message": "unsupported assembly input constraint Ir or operand type", "units": 2726, "example": "arch/arm64/include/asm/barrier.h:96", "authority": "Section 3.11 explicitly refuses unlisted combinations; admitting Ir requires a body-specification amendment." },
+      { "code": "E3101", "message": "identifier disagrees with its semantic identity", "units": 7, "example": "arch/arm64/kernel/cpufeature.c" },
+      { "code": "E3101", "message": "object declaration disagrees with its semantic identity", "units": 7, "example": "fs/9p/v9fs.c" },
+      { "code": "E3101", "message": "StatementExpressionOutsideFunction", "units": 6, "example": "block/blk-mq-debugfs.c" },
+      { "code": "E3101", "message": "effect or temporary edge uses an unavailable environment value", "units": 2, "example": "lib/zstd/common/entropy_common.c" },
+      { "code": "E3101", "message": "expression requires the Day-7 object or non-integer model", "units": 1, "example": "lib/zstd/decompress/huf_decompress.c" },
+      { "code": "E3029", "message": "computed-goto", "units": 1, "example": "kernel/bpf/core.c" },
+      { "code": "E3031", "message": "frame-address", "units": 1, "example": "arch/arm64/kernel/stacktrace.c" }
+    ],
+    "completion": "SURVEY_COMPLETE; F4 and the overall compiler milestone remain OPEN. Successful lowering is not successful assembly, linking or execution."
+  },
   "completedSerialReplays": {
     "csmith": { "run": "20260907T012857Z", "command": "python3 tools/ladder/csmith.py --campaign all --programs 500 --evocc .build/aggregate-value-evocc", "programs": 1000, "agreeing": 761, "mismatches": 0, "noChecksum": 169, "oracleUnusable": 69, "timeout": 1, "receipt": "tests/contracts/ladder-csmith-receipt.json", "limitation": "This frozen compiler predates always-inline substitution. Non-agree outcomes are not passes." },
     "torture": { "run": "20260907T035311Z", "command": "python3 tools/ladder/e0.py --suite torture --evocc .build/empty-definition-evocc", "programs": 1692, "pass": 1074, "refused": 569, "fail": 45, "asmFail": 1, "linkFail": 3, "receipt": "tests/contracts/ladder-e0-receipt.json", "limitation": "Started after Csmith completed. Uses the frozen empty-definition compiler, not the current inliner. The lane still adjusts 957 empty parameter lists; native K&R support is not claimed." },
@@ -20,7 +44,7 @@
     "baseline": "d1202a4",
     "status": "IN_PROGRESS_NOT_CLOSED",
     "redCommit": "9396ce6",
-    "inline": "The tests-only 9396ce6 regression failed E3021 with zero build errors. Revision 1.9.75 authorizes omitting fully substituted, non-address-taken static bodies. C-HIR substitution now creates fresh parameter/result objects and labels, shares function-static objects, and uses the existing integer constant evaluator. Dynamic immediates and address-taken bodies retain E3021; cycles report E2932. Real-kernel survey validation is pending.",
+    "inline": "Implemented in 2cf2c78 after tests-only 9396ce6 failed E3021 with zero build errors. Revision 1.9.75 authorizes omitting fully substituted, non-address-taken static bodies. C-HIR substitution creates fresh parameter/result objects and labels, shares function-static objects, and uses the existing integer constant evaluator. Dynamic immediates and address-taken bodies retain E3021; cycles report E2932. The sealed full survey is complete (latestLoweringSurvey); remaining semantic-identity/CFG cases need minimized reproducers before this continuation closes.",
     "shortCircuit": "The exact f(0) reproducer returns 5 in both interpreters and its main assertion returns 0. An initialized x control also preserves the untaken assignment path.",
     "redGate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh d1202a4 --offline -j 2", "result": "RED: only the declared inline_assembly_lowering target failed; no build errors" },
     "changedGate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 91a0692 --offline -j 2 --quiet", "result": "PASS", "passed": 899, "failed": 0, "crates": ["evocc", "evocc-chir", "evocc-lower", "evocc-parser", "evocc-proofcheck"], "clippy": "PASS -D warnings", "fmt": "PASS", "limitation": "Changed crates and their reverse dependencies, not a new full-workspace count." },
@@ -34,7 +58,15 @@
     "collisionRecount": { "command": "python3 tools/k1/plan.py collisions .evidence/k1/measure-20260906T170419Z/survey/units.jsonl", "excludedBefore": 16, "excludedAfter": 0, "assemblingUnits": 42, "note": "Reclassification of the same frozen survey, not a new compiler coverage measurement or proof of boot." },
     "k1Replay": { "run": "measure-20260907T025031Z", "command": "CARGO_TARGET_DIR=.build/frontend-execution/target K1_ALLOW_QEMU_DRIFT=1 tools/k1/measure.sh --reuse-survey .evidence/k1/measure-20260906T170419Z/survey --jobs 4 --max-bisections 0", "status": "BOOT_PASS_PROOF_FAIL", "installedCandidates": 42, "proofMismatches": 2 },
     "toyboxReplay": { "command": "python3 tools/ladder/toybox.py --evocc .build/empty-definition-evocc --jobs 2 --budget 20", "status": "COMPLETE", "passingBuildUnits": 172, "units": 201, "testResult": "no-regression" },
-    "remaining": "Inlining corpus validation, applied alias/weak, K&R definitions and declaration-only target vector/extended floating types remain open. Final lowering survey is not yet run. Existing benchmark runs remain separate measured subjects."
+    "newCompilerK1Replay": { "status": "NOT_RUN", "reason": "Previous replay used the old frozen compiler. First reduce the two existing byte-proof mismatches and the new lowering frontier, then rerun without overlapping heavy lanes." },
+    "remaining": "Close the 23 E3101 residuals without weakening validators; obtain a Section 3.11 ruling for Ir; rerun the new compiler through K1. Applied alias/weak, K&R definitions and declaration-only target vector/extended floating types remain open. Existing benchmark runs remain separate measured subjects.",
+    "nextWork": [
+      "Minimize the five E3101 subclasses; compare each with the pre-inlining binary, then RED/GREEN at the shared identity, initializer or CFG boundary.",
+      "Resolve the Ir vocabulary conflict with measured immediate/register forms and a body-specification ruling before admitting it; do not predict how many units become clean.",
+      "Run one small cross-subsystem canary set after each semantic repair; run changed gate and one full sealed survey after the frontier batch.",
+      "Investigate K1 byte mismatches at screen_info_pixel_format and fdt_nop_node, then replay K1 with the frozen new compiler; boot alone does not close it.",
+      "Triage remaining torture runtime failures, then address zstd declaration-only types and native K&R support. Rerun only the affected lane; serialize heavyweight campaigns."
+    ]
   },
   "executionContinuation": {
     "baseline": "0bd4bfe",
@@ -115,7 +147,7 @@
       "driverSha256": "0142c5941de8b61d6193a2111cf890f7f6452969c715532abcff9ee3a08fa46b",
       "sourceState": "e7aea46 plus the frontend changes in this receipt's commit, before the separate native empty-definition change; the frozen binary hash is authoritative for this replay",
       "pointerEqualityMachineCheck": "Generated AArch64 assembled with sealed gcc-14 -no-pie and executed: exit 0",
-      "csmithRun": "20260907T012857Z", "csmithStatus": "RUNNING_NOT_PASS"
+      "csmithRun": "20260907T012857Z", "csmithStatus": "COMPLETE: 1000 emitted, 761 agreeing, zero mismatches; see completedSerialReplays"
     },
     "nativeEmptyDefinitions": {
       "red": "MalformedFunction: function definition requires a prototype parameter list; zero build errors",
@@ -128,9 +160,9 @@
       "machineCheck": "Generated AArch64 assembled with sealed gcc-14 -no-pie and executed: exit 0",
       "tortureCommand": "python3 tools/ladder/e0.py --suite torture --evocc .build/empty-definition-evocc",
       "tortureRun": "20260907T013532Z",
-      "tortureStatus": "RUNNING_NOT_PASS"
+      "tortureStatus": "INTERRUPTED; replaced by completed serial replay 20260907T035311Z, not counted as a passing run"
     },
-    "pending": ["Aggregate-element and pointer-equality lane replay", "Alias/weak application conflicts with the body's preserved-only rule; Appendix D records the conflict", "K&R parameter declarations require default-promoted call types plus separate body parameter types; not implemented", "The newly specified always_inline substitution is not implemented", "Musl measurement remains blocked by shared-workdir ownership; do not count the contaminated run"]
+    "pending": ["Alias/weak application conflicts with the body's preserved-only rule; Appendix D records the conflict", "K&R parameter declarations require default-promoted call types plus separate body parameter types; not implemented", "Always-inline implementation and sealed survey are complete; residual E3101 defects and a new-compiler K1 replay remain", "Musl needs a fresh exclusively owned replay after its compiler blockers are addressed; the stopped contaminated run is not evidence"]
   },
   "frontendExecutionFollowup": {
     "status": "PARTIAL_WITH_DECLARED_RED",

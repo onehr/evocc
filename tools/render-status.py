@@ -111,7 +111,10 @@ def main() -> int:
     gate = contract("semantic-gate-contract.json")
     front = contract("day9-acceptance-contract.json")
     receipts = gate.get("receipt", {})
-    closed_mid = sum(1 for key in gate.get("rulings", {}) if key.endswith("Closed"))
+    closed_mid = sum(
+        1 for key in gate.get("rulings", {})
+        if key.startswith("stageS") and key.endswith("Closed")
+    )
     closed_front = sum(1 for key in front.get("rulings", {}) if key.endswith("Closed"))
     closed_scopes = [name for name, state in front.get("scopeClosures", {}).items()
                      if state.get("status") == "CLOSED"]
@@ -176,6 +179,13 @@ def main() -> int:
     k1_survey = k1.get("survey", {}).get("outcomeCounts", {})
     k1_asm = k1_survey.get("assembled", 0)
     k1_total = k1_asm + k1_survey.get("refused", 0)
+    continuation = contract("day9-acceptance-receipt.json")
+    latest_k1 = continuation.get("completedSerialReplays", {}).get("k1", {})
+    latest_k1_note = (
+        f" {latest_k1.get('run', '?')}: {latest_k1.get('boot', '?')};"
+        f" {latest_k1.get('proofCounts', {}).get('mismatch', 0)};"
+        f" {latest_k1.get('overall', '')}"
+    ) if latest_k1 else ""
     e0 = contract("ladder-e0-receipt.json").get("latest", {}).get("suites", {})
     e0c = e0.get("ctest", {}).get("outcomes", {})
     e0t = e0.get("torture", {}).get("outcomes", {})
@@ -191,7 +201,8 @@ def main() -> int:
         " ── ",
         [
             f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
-            f" EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
+            f" K1 receipt: EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
+            latest_k1_note,
             f"fail-closed {len(debts)} :{' '.join(debts)}",
             f" E0 c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
             f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {len(cs.get('miscompiles') or [])};"
