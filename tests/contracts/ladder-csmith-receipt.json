@@ -3,9 +3,9 @@
  "rung": "E0c",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260907T112843Z",
-  "subject": "b87a88b",
-  "driverSha256": "577631d2bfab2c74260ad375a92a46c2e889027b8a03808a38d87392d95aa0b9",
+  "run": "20260907T115631Z",
+  "subject": "689c76e",
+  "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
   "csmith": {
    "repo": "https://github.com/csmith-project/csmith.git",
    "commit": "0cdc710315cfee9035e22ef4363ca479270d1934",
@@ -40,46 +40,21 @@
      "-DINT_MAX=2147483647"
     ],
     "programs": 500,
-    "agreeing": 446,
+    "agreeing": 469,
     "outcomes": {
-     "agree": 446,
-     "oracle-unusable": 31,
-     "run-fail": 23
+     "agree": 469,
+     "oracle-unusable": 31
     },
     "refusalsByCode": {},
     "refusalsByMessage": {},
     "miscompiles": [],
-    "trapExit133Programs": [
-     "s3",
-     "s7",
-     "s24",
-     "s72",
-     "s73",
-     "s80",
-     "s86",
-     "s189",
-     "s209",
-     "s222",
-     "s245",
-     "s254",
-     "s284",
-     "s286",
-     "s363",
-     "s364",
-     "s413",
-     "s453",
-     "s461",
-     "s462",
-     "s467",
-     "s475",
-     "s480"
-    ],
+    "trapExit133Programs": [],
     "work": ".build/ladder/run-csmith-base",
     "runtime": {
-     "change": "subtraction-sign-masks",
+     "change": "subtraction-sign-masks-and-defined-signed-shifts",
      "header": "safe_math_macros_notmp.h",
      "originalSha256": "d5157b023d2ee18744d6313216e3a7a19c45e96d977f0bb20c78e63ff56b443d",
-     "repairedSha256": "5b1ade44ce83979d684f7e823326610a3c8e87b990e75ed958f641e73505af72",
+     "repairedSha256": "a32f42ae14479abc268df2f53b2512140e9ee5b6701dd3394a5d658c9c4bd3ef",
      "sharedBy": [
       "evocc",
       "gcc",
@@ -112,49 +87,21 @@
      "-DINT_MAX=2147483647"
     ],
     "programs": 500,
-    "agreeing": 437,
+    "agreeing": 463,
     "outcomes": {
-     "agree": 437,
-     "oracle-unusable": 37,
-     "run-fail": 26
+     "agree": 463,
+     "oracle-unusable": 37
     },
     "refusalsByCode": {},
     "refusalsByMessage": {},
     "miscompiles": [],
-    "trapExit133Programs": [
-     "s35",
-     "s80",
-     "s156",
-     "s158",
-     "s231",
-     "s256",
-     "s286",
-     "s313",
-     "s342",
-     "s345",
-     "s346",
-     "s348",
-     "s349",
-     "s358",
-     "s400",
-     "s405",
-     "s409",
-     "s436",
-     "s441",
-     "s453",
-     "s461",
-     "s462",
-     "s467",
-     "s475",
-     "s477",
-     "s488"
-    ],
+    "trapExit133Programs": [],
     "work": ".build/ladder/run-csmith-bitfields",
     "runtime": {
-     "change": "subtraction-sign-masks",
+     "change": "subtraction-sign-masks-and-defined-signed-shifts",
      "header": "safe_math_macros_notmp.h",
      "originalSha256": "d5157b023d2ee18744d6313216e3a7a19c45e96d977f0bb20c78e63ff56b443d",
-     "repairedSha256": "5b1ade44ce83979d684f7e823326610a3c8e87b990e75ed958f641e73505af72",
+     "repairedSha256": "a32f42ae14479abc268df2f53b2512140e9ee5b6701dd3394a5d658c9c4bd3ef",
      "sharedBy": [
       "evocc",
       "gcc",
@@ -164,10 +111,10 @@
    }
   },
   "programs": 1000,
-  "agreeing": 883,
+  "agreeing": 932,
   "refusalsByCode": {},
   "miscompiles": 0,
-  "trapExit133Programs": 49,
+  "trapExit133Programs": 0,
   "trapClassification": "Exit 133 alone does not establish undefined behavior; each cause needs a reduced diagnostic or sanitizer reproduction.",
   "reductions": [
    "tests/fixtures/csmith-reductions/seed-92-reduced.c",
@@ -175,5 +122,5 @@
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260907T112843Z"
+ "evidence": ".evidence/ladder/csmith/20260907T115631Z"
 }

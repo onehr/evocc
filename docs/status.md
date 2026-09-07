@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-07,EvoIR 1.9.76 / EvoMIR 0.21,main 5bcc45f)
+EvoCC ── (2026-09-07,EvoIR 1.9.76 / EvoMIR 0.21,main 73ad1ca)
 ═════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ───────────────┐
@@ -25,7 +25,7 @@ EvoCC ── (2026-09-07,EvoIR 1.9.76 / EvoMIR 0.21,main 5bcc45f)
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
 │ E0 c-testsuite ░░░░░░░░ torture 1111/1692 █████░░░ │
-│ Csmith 883/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 1/11 toybox 172/201 musl 178/1339 │
+│ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 1/11 toybox 172/201 musl 178/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 

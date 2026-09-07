@@ -2,6 +2,22 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "definedRuntimeCampaign": {
+      "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+      "run": "20260907T115631Z",
+      "subject": "689c76e",
+      "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
+      "runtimeSha256": "a32f42ae14479abc268df2f53b2512140e9ee5b6701dd3394a5d658c9c4bd3ef",
+      "programs": 1000,
+      "agreeing": 932,
+      "runtimeFailed": 0,
+      "refused": 0,
+      "checksumMismatches": 0,
+      "oracleUnusable": 68,
+      "base": {"programs": 500, "agreeing": 469, "oracleUnusable": 31},
+      "bitfields": {"programs": 500, "agreeing": 463, "oracleUnusable": 37},
+      "limitation": "All original seeds retained; 68 unavailable reference verdicts are not passes. This frozen binary predates the later goto-entry and deterministic-cleanup followups"
+    },
     "latestTortureCampaign": {
       "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
       "run": "20260907T115411Z",
@@ -56,6 +72,18 @@
       "scope": "Fresh isolated target, focused semantic replay; not a full workspace replay"
     },
     "compoundLiteralIdentity": {
+      "cleanupOrderingFollowup": {
+        "redCommit": "73ad1ca",
+        "red": "Nested compound literals ended in host-address order [15,18] instead of stable reverse IR allocation order [18,15]; assertion failure, no build error",
+        "implementation": "Sort cleanup by IR value identity; retain the original branch fast path when neither edge carries compound storage",
+        "focusedPassed": 30,
+        "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 710df1a --offline -j 2 --quiet",
+        "gatePassed": 285,
+        "gateFailed": 0,
+        "gateIgnored": 0,
+        "clippy": "PASS -D warnings",
+        "fmt": "PASS"
+      },
       "gotoEntryFollowup": {
         "redCommit": "33af938",
         "red": "A goto entering below a block's ordinary entry lacked the literal's address on its edge; InvalidControlFlow, no build error",

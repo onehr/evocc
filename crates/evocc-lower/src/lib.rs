@@ -3441,6 +3441,15 @@ impl<'a> FunctionLowerer<'a> {
         target: BlockId,
         keys: &[EnvKey],
     ) -> Result<(), LowerError> {
+        if !state
+            .env
+            .keys()
+            .chain(keys.iter())
+            .any(|key| matches!(key, EnvKey::Compound(_)))
+        {
+            let arguments = self.edge_values(state, keys)?;
+            return self.terminate(state, Inst::Br(target, arguments));
+        }
         let mut state = state.clone();
         let leaving = state
             .env
@@ -5944,6 +5953,10 @@ impl<'a> FunctionLowerer<'a> {
         keys: &[EnvKey],
         state: &mut State,
     ) -> Result<(), LowerError> {
+        let mut keys = keys.to_vec();
+        // EnvKey includes a host AST address only as an internal lookup key.
+        // Observable IR ordering must depend on stable IR value identities.
+        keys.sort_by_key(|key| state.env.get(key).map(|binding| binding.value.id));
         for key in keys.iter().rev() {
             if let Some(binding) = state.env.remove(key) {
                 self.end_pointer_lifetime(binding.value, state)?;
