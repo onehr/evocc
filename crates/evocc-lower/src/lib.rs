@@ -3449,6 +3449,23 @@ impl<'a> FunctionLowerer<'a> {
             .filter(|key| matches!(key, EnvKey::Compound(_)) && !keys.contains(key))
             .collect::<Vec<_>>();
         self.end_compound_storage(&leaving, &mut state)?;
+        for key in keys {
+            if let EnvKey::Compound(identity) = key {
+                if !state.env.contains_key(key) {
+                    // A goto may enter below the lexical block's ordinary
+                    // entry. Allocate on that edge, without its initializer.
+                    let (ty, span) = self
+                        .compound_scopes
+                        .values()
+                        .find_map(|sites| sites.get(identity))
+                        .copied()
+                        .ok_or(LowerError::InvalidGeneratedSsa {
+                            message: "compound literal edge has no lexical storage site".to_owned(),
+                        })?;
+                    self.allocate_compound_storage(*identity, ty, span, &mut state)?;
+                }
+            }
+        }
         let arguments = self.edge_values(&state, keys)?;
         self.terminate(&state, Inst::Br(target, arguments))
     }
@@ -5877,38 +5894,49 @@ impl<'a> FunctionLowerer<'a> {
                 .map(|(origin, _)| *origin)
         });
         for (identity, (ty, span)) in sites {
-            let Some(&(origin, false)) = self.compound_origins.get(&identity) else {
+            let Some(&(_, false)) = self.compound_origins.get(&identity) else {
                 continue;
             };
-            let key = EnvKey::Compound(identity);
-            let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
-            let mem_in = self.token(state, EnvKey::Memory)?.value;
-            let world_in = self.token(state, EnvKey::World)?.value;
-            let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
-            let world_out = self.fresh_value(EvoIRType::World);
-            self.emit(
-                state,
-                Inst::Alloca {
-                    result: address.clone(),
-                    mem_in,
-                    world_in,
-                    mem_out: mem_out.clone(),
-                    world_out: world_out.clone(),
-                    origin,
-                    layout: self.access_layout(ty, span)?,
-                },
-            )?;
-            self.replace_effect_tokens(state, mem_out, Some(world_out));
-            state.env.insert(
-                key,
-                BoundValue {
-                    value: address,
-                    integer: None,
-                },
-            );
-            keys.push(key);
+            self.allocate_compound_storage(identity, ty, span, state)?;
+            keys.push(EnvKey::Compound(identity));
         }
         Ok(keys)
+    }
+
+    fn allocate_compound_storage(
+        &mut self,
+        identity: usize,
+        ty: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let (origin, _) = self.compound_origins[&identity];
+        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Alloca {
+                result: address.clone(),
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                origin,
+                layout: self.access_layout(ty, span)?,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        state.env.insert(
+            EnvKey::Compound(identity),
+            BoundValue {
+                value: address,
+                integer: None,
+            },
+        );
+        Ok(())
     }
 
     fn end_compound_storage(

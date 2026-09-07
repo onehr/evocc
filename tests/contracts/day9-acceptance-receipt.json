@@ -26,6 +26,20 @@
       "scope": "Fresh isolated target, focused semantic replay; not a full workspace replay"
     },
     "compoundLiteralIdentity": {
+      "gotoEntryFollowup": {
+        "redCommit": "33af938",
+        "red": "A goto entering below a block's ordinary entry lacked the literal's address on its edge; InvalidControlFlow, no build error",
+        "implementation": "Allocate missing compound-literal storage on the entering goto edge, using the same allocator as normal scope entry; do not execute its initializer on that edge",
+        "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2 --quiet",
+        "focusedPassed": 28,
+        "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 05fc9c2 --offline -j 2 --quiet",
+        "gatePassed": 283,
+        "gateFailed": 0,
+        "gateIgnored": 0,
+        "clippy": "PASS -D warnings",
+        "fmt": "PASS",
+        "limitation": "This additional boundary fix follows the frozen 689c76e benchmark binary"
+      },
       "redCommit": "8d29abe",
       "red": "EvoIR returns 1 for same-block object identity and accepts a dangling compound-literal pointer with value 7; two failed tests, zero build errors",
       "implementation": "One literal object per lexical block activation, initializer reevaluated on each execution. C-HIR caches by frame/scope/node; lowering hoists allocation only and threads the address until normal exit or a jump leaving the scope. Statement-expression integer results use the existing C conversion",
