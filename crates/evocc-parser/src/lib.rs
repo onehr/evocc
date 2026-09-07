@@ -351,6 +351,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_alloca"
                         | "__builtin_memmove"
                         | "__builtin_printf"
+                        | "__builtin_sprintf"
+                        | "__builtin_snprintf"
+                        | "__builtin_puts"
+                        | "__builtin_strchr"
+                        | "__builtin_strncpy"
                         | "__builtin_malloc"
                         | "__builtin_strcpy"
                         | "__builtin_abort"
@@ -9801,7 +9806,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let (external_name, return_ty, parameter_types) =
             self.builtin_library_prototype(&builtin, keyword.span)?;
         let variable_prefetch_arity = builtin == "__builtin_prefetch";
-        let variadic_library = builtin == "__builtin_printf";
+        let variadic_library = matches!(
+            builtin.as_str(),
+            "__builtin_printf" | "__builtin_sprintf" | "__builtin_snprintf"
+        );
         let valid_arity = if variable_prefetch_arity {
             (1..=3).contains(&arguments.len())
         } else if variadic_library {
@@ -9898,6 +9906,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let prototype = match builtin {
             "__builtin_abort" => ("abort", void_ty, Vec::new()),
             "__builtin_printf" => ("printf", int_ty, vec![const_char_pointer]),
+            "__builtin_sprintf" => ("sprintf", int_ty, vec![char_pointer, const_char_pointer]),
+            "__builtin_snprintf" => (
+                "snprintf",
+                int_ty,
+                vec![char_pointer, size_ty, const_char_pointer],
+            ),
+            "__builtin_puts" => {
+                self.report("E2935", "unsupported-library-builtin", span);
+                return None;
+            }
+            "__builtin_strchr" => ("strchr", char_pointer, vec![const_char_pointer, int_ty]),
+            "__builtin_strncpy" => (
+                "strncpy",
+                char_pointer,
+                vec![char_pointer, const_char_pointer, size_ty],
+            ),
             "__builtin_malloc" => ("malloc", void_pointer, vec![size_ty]),
             "__builtin_strcpy" => (
                 "strcpy",

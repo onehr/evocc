@@ -2,10 +2,11 @@
  "schemaVersion": 1,
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
+ "executionLineageNote": "For 20260907T101055Z, subject 4a9268c is checkout HEAD at launch; the fixed release binary was built from a089bb9 and is byte-identical to Csmith run 20260907T094729Z (driverSha256 below). It does not include the goto repair. Sealed summary retained unchanged.",
  "latest": {
-  "run": "20260907T093504Z",
-  "subject": "376eefe",
-  "driverSha256": "d5c258698942198c268b87a0bd2ed2369285db79b831bac989a332252d329572",
+  "run": "20260907T101055Z",
+  "subject": "4a9268c",
+  "driverSha256": "89b7bfeec96172f782a9145fc9a343a5d2e7a915c3858f3d4852868fcc07a206",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,16 +19,16 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "refused": 561,
-     "pass": 1086,
+     "refused": 548,
+     "pass": 1099,
      "fail": 41,
      "asm-fail": 1,
      "link-fail": 3
     },
     "refusalsByCode": {
      "E1001": 185,
-     "E3101": 134,
-     "E2001": 69,
+     "E3101": 141,
+     "E2001": 48,
      "E2201": 23,
      "E2102": 19,
      "E2203": 18,
@@ -37,7 +38,7 @@
      "E0105": 12,
      "E0112": 11,
      "E3029": 7,
-     "E3046": 5,
+     "E3046": 6,
      "E4003": 5,
      "E2913": 4,
      "E2920": 4,
@@ -67,5 +68,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260907T093504Z"
+ "evidence": ".evidence/ladder/e0/20260907T101055Z"
 }

@@ -3,9 +3,9 @@
  "rung": "E0c",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260907T091017Z",
-  "subject": "9b91f27",
-  "driverSha256": "498fa006856c2509efb6531be03c5f06aba9cc27b655a5b3470f113346173078",
+  "run": "20260907T094729Z",
+  "subject": "a089bb9",
+  "driverSha256": "89b7bfeec96172f782a9145fc9a343a5d2e7a915c3858f3d4852868fcc07a206",
   "csmith": {
    "repo": "https://github.com/csmith-project/csmith.git",
    "commit": "0cdc710315cfee9035e22ef4363ca479270d1934",
@@ -43,14 +43,14 @@
     "agreeing": 384,
     "outcomes": {
      "agree": 384,
-     "no-checksum": 84,
+     "run-fail": 84,
      "oracle-unusable": 31,
      "timeout": 1
     },
     "refusalsByCode": {},
     "refusalsByMessage": {},
     "miscompiles": [],
-    "trappedOnUndefinedBehaviour": [
+    "trapExit133Programs": [
      "s3",
      "s4",
      "s7",
@@ -165,14 +165,14 @@
     "agreeing": 377,
     "outcomes": {
      "agree": 377,
-     "no-checksum": 85,
+     "run-fail": 85,
      "oracle-unusable": 37,
      "timeout": 1
     },
     "refusalsByCode": {},
     "refusalsByMessage": {},
     "miscompiles": [],
-    "trappedOnUndefinedBehaviour": [
+    "trapExit133Programs": [
      "s12",
      "s22",
      "s33",
@@ -266,12 +266,13 @@
   "agreeing": 761,
   "refusalsByCode": {},
   "miscompiles": 0,
-  "trappedOnUndefinedBehaviour": 168,
+  "trapExit133Programs": 168,
+  "trapClassification": "Exit 133 alone does not establish undefined behavior; each cause needs a reduced diagnostic or sanitizer reproduction.",
   "reductions": [
    "tests/fixtures/csmith-reductions/seed-92-reduced.c",
    "tests/fixtures/csmith-reductions/signed-shift-trap-control.c",
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260907T091017Z"
+ "evidence": ".evidence/ladder/csmith/20260907T094729Z"
 }

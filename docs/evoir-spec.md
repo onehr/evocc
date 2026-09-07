@@ -6002,3 +6002,10 @@ Both sealed oracles execute `tests/fixtures/hosted-library-builtins.c` at
 `.evidence/builtin-probes/20260907-library-builtins/oracle.txt`.
 Torture run `20260907T093504Z` has respectively 11, 7, and 5 first-error
 refusals at these spellings; this entry does not predict how many become clean.
+
+### Formatted and bounded string library builtins
+
+`__builtin_sprintf`, `__builtin_snprintf`, `__builtin_strchr`, and `__builtin_strncpy` use their ordinary external C library prototypes through the existing builtin namespace, including default promotions for anonymous formatting arguments, with no new intrinsic or interpreter model.
+Both sealed oracles execute `tests/fixtures/formatted-string-builtins.c` at `-O0` and `-O2` with exit zero; `.evidence/builtin-probes/20260907-formatted-builtins/results.txt` records the measured return values, truncation and zero padding asserted by that fixture.
+The separate `puts.c` probe in that directory is accepted by GCC-14 but rejected by Clang-19, so the existing conflict policy refuses `__builtin_puts` with E2935 (`unsupported-library-builtin`), while ordinary declared `puts` remains unchanged.
+Torture run `20260907T093504Z` has 3, 1, 1, 1, and 1 first-error units for `sprintf`, `snprintf`, `strchr`, `strncpy`, and `puts` respectively; the next run, not these counts, determines end-to-end impact.

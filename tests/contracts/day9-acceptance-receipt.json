@@ -1,6 +1,6 @@
 {
   "integerBenchmarkRepairs": {
-    "status": "OPEN_FULL_CAMPAIGNS_PENDING",
+    "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
     "gotoIntoBlocks": {
       "redCommit": "919dab4",
@@ -15,7 +15,7 @@
       "fmt": "PASS",
       "native": "target/frontend/debug/evocc --emit=asm tests/fixtures/goto-into-block.c; sealed gcc -static link/run: exit 0",
       "oracles": "gcc-14 and clang-19 -std=gnu11 -O0: fixture exits 0",
-      "originalSeed": "Original Csmith base seed190 previously exited 139; repaired debug compiler assembly exits 133, not a pass. The diagnostic entry wrapper hits the CLI EvoIR fuel limit; the remaining trap is not classified as UB from its exit code alone"
+      "originalSeed": "Original Csmith base seed190 previously exited 139; repaired debug compiler assembly exits 133, not a pass. A diagnostic-only SIGTRAP handler reads BRK immediate 3006 (signed-left-shift). Both CLI interpreter entry wrappers hit their fuel limits, so a source-level attribution for this seed is not claimed"
     },
     "focusedOfflineReplay": {
       "subject": "a089bb9",
@@ -69,15 +69,15 @@
     },
     "csmithRemeasurement": {
       "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-      "run": "20260907T091017Z",
-      "subject": "9b91f27",
+      "run": "20260907T094729Z",
+      "subject": "a089bb9",
       "programs": 1000,
       "agreeing": 761,
-      "noChecksum": 169,
+      "runtimeFailed": 169,
       "oracleUnusable": 68,
       "timeout": 2,
       "checksumMismatches": 0,
-      "limitation": "This fixed-binary run includes the narrow bitfield repair but predates compound-assignment and enum repairs; it is not final acceptance. Its legacy trap counter is an exit-code observation, not proof of UB for each program. Native oracle jobs ran at parallelism 4 while host focused/changed tests also ran."
+      "limitation": "This fixed-binary run includes narrow bitfield, compound-assignment, enum and initial hosted builtin repairs but predates goto and formatting builtin repairs; it is not final acceptance. Nonzero exits cannot count as matching checksums. Native oracle jobs ran at parallelism 4 while host focused/changed tests also ran."
     },
     "hostedLibraryBuiltins": {
       "redCommit": "7a63cec",
@@ -94,21 +94,47 @@
       "proofOfLowering": "All three builtin call forms render byte-identical modules to manually declared ordinary library calls; printf promotes anonymous narrow integer operands",
       "negativeChecks": "E2909 arity, E2913 argument type, E2927 incompatible visible declaration remain enforced"
     },
+    "formattedLibraryBuiltins": {
+      "redCommit": "a04fee0",
+      "red": "E2001 undeclared-identifier: __builtin_sprintf; no build error. GCC-only puts positive expectation corrected after the sealed Clang refusal",
+      "accepted": ["__builtin_sprintf", "__builtin_snprintf", "__builtin_strchr", "__builtin_strncpy"],
+      "refused": "__builtin_puts: E2935 unsupported-library-builtin, per measured oracle conflict",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test front_end_resolved_forms --offline -j 2",
+      "focusedPassed": 16,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 4a9268c --offline -j 2 --quiet",
+      "gatePassed": 918,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm <source>; container run --rm --platform linux/arm64 --network none ... evo-flight-lab:sealed sh -c 'gcc -static <assembly> -o /tmp/probe && timeout 10 /tmp/probe'",
+      "nativeExitZero": ["tests/fixtures/formatted-string-builtins.c", "20021120-3", "pr78586", "pr78622", "pr79327", "pr69691", "pr93249"],
+      "oracles": "Fixture gcc-14 and clang-19 at O0/O2 exit 0; evidence .evidence/builtin-probes/20260907-formatted-builtins/results.txt",
+      "qualification": "Seven targeted native executions, not an updated full-suite pass count; the latest full run predates this repair"
+    },
     "tortureRemeasurement": {
       "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-      "run": "20260907T093504Z",
-      "subject": "376eefe",
+      "run": "20260907T101055Z",
+      "recordedCheckoutSubject": "4a9268c",
+      "binarySourceSubject": "a089bb9",
+      "binarySha256": "89b7bfeec96172f782a9145fc9a343a5d2e7a915c3858f3d4852868fcc07a206",
+      "lineageNote": "Torture started after Csmith in the same serial shell; the checkout advanced but the release binary was deliberately not rebuilt. Its digest is identical to Csmith run 20260907T094729Z. The sealed summary's subject is checkout HEAD at launch, not the executable source; this correction leaves the sealed evidence untouched",
       "programs": 1692,
-      "passed": 1086,
-      "refused": 561,
+      "passed": 1099,
+      "refused": 548,
       "runtimeFailed": 41,
       "assemblyFailed": 1,
       "linkFailed": 3,
-      "previousRun": "20260907T035311Z",
-      "previousPassed": 1074,
+      "previousRun": "20260907T093504Z",
+      "previousPassed": 1086,
       "passRegressions": 0,
       "directRepairs": ["bf-sign-2", "pr58943", "20030714-1"],
-      "qualification": "The full torture suite contains floating and non-floating programs; this is not a separately measured non-floating denominator. This run predates the hosted builtin additions. Input preparation now preserves original bytes instead of rewriting 957 empty parameter lists or replacing invalid UTF-8; 20000227-1 moves from corrupted-input failure to the intentional E0002 refusal."
+      "qualification": "The full torture suite contains floating and non-floating programs; this is not a separately measured non-floating denominator. This run includes the initial hosted builtin additions, but not goto or formatting builtin repairs. Both compared runs preserve original source bytes; compared with the older 1074-pass run, source preparation changed from regex/encoding rewriting to byte-preserving copies."
+    },
+    "nonfloatingBenchmarkBoundaries": {
+      "runtimeUndefinedBehavior": ".evidence/builtin-probes/20260907-csmith-runtime/results.txt: both sealed sanitizers reject the Csmith signed-subtraction guard's signed 1<<63; no claim that all exit-133 runs share that cause",
+      "oracleConflict": ".evidence/builtin-probes/20260907-bitfield-promotions/wide-oracle.txt: original bitfld-3 and pr32244-1 exit 0 with GCC and abort with Clang; these are not common-profile positive programs",
+      "remainingValidProgramDefects": ["Named stack parameters before variadic arguments: body-rule conflict recorded below", "Compound literal identity on a backward goto: original torture 20071029-1 remains failing", "Old-style named parameter definitions remain unimplemented; E1001 has 185 first-error units but not all have been individually reduced"],
+      "completionPolicy": "No denominator silently excludes diagnosed, trapped, conflicting-oracle or unsupported nonfloating cases; there is no all-passed claim"
     },
     "variadicStackBlocker": {
       "fixture": ".evidence/builtin-probes/20260907-variadic-stack/probe.c",
