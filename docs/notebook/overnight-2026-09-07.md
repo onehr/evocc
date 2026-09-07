@@ -36,3 +36,63 @@ Each entry is one check by the architect session while the user sleeps.
 
 ## tick 8 (07:45)
 - Quiet: no new front-end commits since f727f39, no Codex process running; their working tree still holds 10 modified files. Inlining not landed. Load 14, free memory 0.3 GB (Docker VM resident).
+
+## tick 9 (08:46)
+- Quiet again. The front end has not landed anything since f727f39 (bit-fields); the Codex process on this machine is attached to another project. Inlining (1.9.74) not started. Load 12, free memory 0.3 GB.
+- Morning to-do list: (1) hand Codex the 1.9.74 rule and the rest of the queue; (2) quit Docker Desktop and re-run musl (musl: reference build and libc-test baseline
+musl: baseline has 17 failing libc-test cases
+musl: 1339 units
+  emitted 25/1339
+  emitted 50/1339
+  emitted 75/1339
+  emitted 100/1339
+  emitted 125/1339
+  emitted 150/1339
+  emitted 175/1339
+  emitted 200/1339
+  emitted 225/1339
+  emitted 250/1339
+  emitted 275/1339
+  emitted 300/1339
+  emitted 325/1339
+  emitted 350/1339
+  emitted 375/1339
+  emitted 400/1339
+  emitted 425/1339
+  emitted 450/1339
+  emitted 475/1339
+  emitted 500/1339
+  emitted 525/1339
+  emitted 550/1339
+  emitted 575/1339
+  emitted 600/1339
+  emitted 625/1339
+  emitted 650/1339
+  emitted 675/1339
+  emitted 700/1339
+  emitted 725/1339
+  emitted 750/1339
+  emitted 775/1339
+  emitted 800/1339
+  emitted 825/1339
+  emitted 850/1339
+  emitted 875/1339
+  emitted 900/1339
+  emitted 925/1339
+  emitted 950/1339
+  emitted 975/1339
+  emitted 1000/1339
+  emitted 1025/1339
+  emitted 1050/1339
+  emitted 1075/1339
+  emitted 1100/1339
+  emitted 1125/1339
+  emitted 1150/1339
+  emitted 1175/1339
+  emitted 1200/1339
+  emitted 1225/1339
+  emitted 1250/1339
+  emitted 1275/1339
+  emitted 1300/1339
+  emitted 1325/1339
+musl: 772 units assembled, 664 can link together); (3) after inlining lands, re-run tools/k1/measure.sh and the survey.
