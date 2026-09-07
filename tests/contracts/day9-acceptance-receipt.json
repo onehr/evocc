@@ -2,7 +2,32 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "originalSeedEmissionReplay": {
+      "subject": "962b1bc",
+      "driverSha256": "d4eead07471fe3badbbe2d008fb16912f4392d9487bb58b26538050b01bc3c07",
+      "nativeReferenceRun": "20260907T115631Z",
+      "command": "Reinvoke evocc with the exact csmith.py target, macros, runtime include and sysroot arguments on each original source; compare SHA-256 of stdout assembly against the existing native-tested assembly",
+      "programs": 1000,
+      "byteIdentical": 1000,
+      "changed": 0,
+      "refused": 0,
+      "limitation": "Emission-only replay, not a new native campaign. The reference run still has 932 agreeing and 68 oracle-unusable programs; the latter are not passes"
+    },
     "preprocessorCharacterValues": {
+      "campaign": {
+        "run": "20260907T130201Z",
+        "subject": "962b1bc",
+        "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "programs": 1692,
+        "passed": 1139,
+        "refused": 514,
+        "runtimeFailed": 35,
+        "assemblyFailed": 1,
+        "linkFailed": 3,
+        "previousRun": "20260907T124739Z",
+        "newPasses": ["widechar-1"],
+        "previousPassRegressions": 0
+      },
       "nativeCommand": "target/frontend/debug/evocc --emit=asm <source>; sealed gcc -static assembly -o /tmp/probe && timeout 10 /tmp/probe",
       "nativeExitZero": ["tests/fixtures/preprocessor-character-values.c", "gcc.c-torture/execute/widechar-1.c"],
       "redCommit": "b75d4bb",
@@ -23,7 +48,7 @@
       "clippy": "PASS -D warnings",
       "fmt": "PASS",
       "ruff": "PASS: ruff check tools tests/acceptance",
-      "limitation": "Full torture remeasurement pending; no complete nonfloating benchmark claim"
+      "limitation": "Full mixed torture campaign above remains incomplete; no complete nonfloating benchmark claim"
     },
     "identifierListDefinitions": {
       "campaign": {
@@ -137,11 +162,12 @@
       "limitation": "Subtraction masks only; predates compound-literal and signed-shift repairs. The fully repaired runtime needs its own campaign"
     },
     "latestFocusedOfflineReplay": {
-      "subject": "832c4b5",
-      "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-nonfloat-replay.1TyynO; CARGO_TARGET_DIR=/private/tmp/evocc-nonfloat-replay.1TyynO/target cargo test --manifest-path /private/tmp/evocc-nonfloat-replay.1TyynO/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2 --quiet",
-      "passed": 43,
+      "subject": "962b1bc",
+      "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-semantic-replay.UDgW8E; CARGO_TARGET_DIR=/private/tmp/evocc-semantic-replay.UDgW8E/target cargo test --manifest-path /private/tmp/evocc-semantic-replay.UDgW8E/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms -p evocc-cpp --test if_arithmetic --locked --offline -j 2 --quiet",
+      "passed": 55,
       "failed": 0,
-      "scope": "Fresh isolated target, focused semantic replay; not a full workspace replay"
+      "scope": "Fresh isolated target: 33 expression semantics, 16 frontend-erasure, 6 preprocessing tests; not a full workspace replay",
+      "cleanup": "Removed the verified clean scratch clone and its 435 MiB fresh target after the replay; source and results remain recorded here"
     },
     "compoundLiteralIdentity": {
       "cleanupOrderingFollowup": {
