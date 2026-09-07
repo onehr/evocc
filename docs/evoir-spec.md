@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.74** | **Authoritative reference** | **2026-09-07**
+**Revision 1.9.75** | **Authoritative reference** | **2026-09-07**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3550,8 +3550,13 @@ failed"). After substitution the front end folds constants again, so an
 whose expression was a parameter now bound to an integer constant
 expression is a constant, and 3.11 admits it; the operand that is still
 not constant stays `E3021`. The out-of-line body of a `static` `always_inline`
-function is still lowered, internal, and dropped when unreferenced (EvoMIR
-0.16), so the machine sees nothing new. The kernel needs this in 2,727 of
+function is **not lowered** when every call to it was substituted and the
+unit takes no address of it (revision 1.9.75): the reference compilers
+never emit such a body, and lowering it would report `E3021` for an
+immediate operand that is only constant after substitution, which is the
+kernel's normal case. A body that keeps a use (an address taken, a call the
+rules above did not substitute) is lowered as before, internal, and any
+immediate operand still not constant there is `E3021` as before. The kernel needs this in 2,727 of
 2,799 units: `alternative_has_cap_likely` is `static __always_inline` and
 feeds its `cpucap` parameter to `asm goto` under `"i"`, and every caller
 passes a constant; the reference compilers see the constant only because
@@ -5629,6 +5634,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.75 | 2026-09-07 | The out-of-line body of a `static always_inline` function is not lowered when every call was substituted and no address is taken; otherwise it is lowered as before. The executor found the retained body reporting `E3021` before the machine could drop it. |
 | 1.9.74 | 2026-09-07 | `always_inline` definitions are substituted at their calls in C-HIR (parameters as fresh objects, returns as a result object, statics shared, callee-first, cycles `E2932`), and constants are folded again afterwards so immediate `asm` operands fed through a parameter become constant. The tenth kernel survey put that construct first in 2,727 units. |
 | 1.9.73 | 2026-09-06 | Record parameters and the record return destination carry `byval(size, align)` and `sret(size, align)` on their pointer, so the machine can apply the platform's composite convention; found by the zstd rung, where an 8-byte record crossed to GCC-built code through a hidden pointer. |
 | 1.9.72 | 2026-09-06 | `__builtin_return_address(0)` and `__builtin_frame_address(0)` lower to `return_address` and `frame_address`, code- and stack-provenance values the interpreters refresh per activation; the kernel's `_RET_IP_` became the face of 2,714 units once label addresses lowered. Levels above zero stay refused. |
