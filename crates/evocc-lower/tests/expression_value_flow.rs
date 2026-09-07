@@ -67,6 +67,13 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn compound_assignment_observes_rhs_call_effects() {
+    agrees(include_str!(
+        "../../../tests/fixtures/compound-assignment-call-effects.c"
+    ));
+}
+
+#[test]
 fn narrow_bitfields_promote_by_range_not_declared_rank() {
     agrees(include_str!(
         "../../../tests/fixtures/bitfield-integer-promotions.c"
