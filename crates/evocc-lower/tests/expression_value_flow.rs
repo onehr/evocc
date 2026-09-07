@@ -80,6 +80,8 @@ fn compound_literal_identity_follows_its_block_activation() {
     agrees(include_str!(
         "../../../tests/fixtures/compound-literal-identity.c"
     ));
+    agrees("int main(void){int n=0;int v=({int *p=0,*q=0;again:q=p;p=&(int){++n};if(n<2)goto again; p==q && *q==2;});return !v;}");
+    agrees("int main(void){int n=0,sum=0;for(int *p=&(int){3};n<3;++n)sum+=*p;switch(n){case 3:{int *p=&(int){7};sum+=*p;break;}default:return 2;}return sum!=16;}");
 }
 
 #[test]
@@ -89,6 +91,8 @@ fn compound_literal_lifetime_ends_on_each_scope_exit() {
         "int main(void){int *p;for(int i=0;i<2;++i){if(i)return *p;p=&(int){7};}return 0;}",
         "int main(void){int *p;while(1){p=&(int){7};break;}return *p;}",
         "int main(void){int *p;for(int i=0;i<1;++i){p=&(int){7};continue;}return *p;}",
+        "int main(void){int *p=({&(int){7};});return *p;}",
+        "int main(void){int *p;switch(1){case 1:p=&(int){7};break;}return *p;}",
     ] {
         evaluates(source, Some("E3010"));
     }

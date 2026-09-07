@@ -2,6 +2,25 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "compoundLiteralIdentity": {
+      "redCommit": "8d29abe",
+      "red": "EvoIR returns 1 for same-block object identity and accepts a dangling compound-literal pointer with value 7; two failed tests, zero build errors",
+      "implementation": "One literal object per lexical block activation, initializer reevaluated on each execution. C-HIR caches by frame/scope/node; lowering hoists allocation only and threads the address until normal exit or a jump leaving the scope. Statement-expression integer results use the existing C conversion",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2 --quiet",
+      "focusedPassed": 27,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh b87a88b --offline -j 2 --quiet",
+      "gatePassed": 920,
+      "gateFailed": 0,
+      "gateIgnored": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "oracles": "gcc-14 and clang-19 -std=gnu11 -O0: tests/fixtures/compound-literal-identity.c exits 0",
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm <source>; sealed gcc -static <assembly> -o /tmp/probe && timeout 10 /tmp/probe",
+      "nativeExitZero": ["tests/fixtures/compound-literal-identity.c", "gcc.c-torture/execute/20071029-1.c"],
+      "negativeCoverage": "Both interpreters report E3010 after ordinary block exit, loop reentry, break, continue, statement-expression exit and switch exit",
+      "limitation": "Current in-flight Csmith run intentionally uses the earlier fixed release binary; this repair will enter the subsequent torture run"
+    },
     "csmithRuntimeRepair": {
       "redCommit": "b52c85a",
       "change": "Replace the two signed-left-shift sign masks in the pinned 32/64-bit subtraction guards with ~INT32_MAX/~INT64_MAX; no compiler obligation weakened",

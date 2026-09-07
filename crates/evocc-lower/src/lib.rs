@@ -242,6 +242,7 @@ struct FunctionValueType {
 enum EnvKey {
     Local(SymbolId),
     Address(SymbolId),
+    Compound(usize),
     ReturnDestination,
     Temporary(u32),
     Memory,
@@ -311,6 +312,7 @@ struct FunctionLowerer<'a> {
     global_registers: &'a BTreeMap<SymbolId, String>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
     compound_origins: BTreeMap<usize, (u64, bool)>,
+    compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
     string_origins: BTreeMap<usize, u64>,
     blocks: Vec<DraftBlock>,
     next_value: u32,
@@ -3009,6 +3011,7 @@ impl<'a> FunctionLowerer<'a> {
             global_registers,
             allocation_origins,
             compound_origins: compound_origins.clone(),
+            compound_scopes: BTreeMap::new(),
             string_origins: string_origins.clone(),
             blocks: Vec::new(),
             next_value: 0,
@@ -3038,6 +3041,7 @@ impl<'a> FunctionLowerer<'a> {
         collect_goto_names(body, &mut self.goto_names);
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        self.compound_scopes = std::mem::take(&mut references.compound_scopes);
         for name in references.labels.values().collect::<BTreeSet<_>>() {
             let id = self.fresh_placeholder();
             self.address_labels.insert(name.clone(), id);
@@ -3437,8 +3441,16 @@ impl<'a> FunctionLowerer<'a> {
         target: BlockId,
         keys: &[EnvKey],
     ) -> Result<(), LowerError> {
-        let arguments = self.edge_values(state, keys)?;
-        self.terminate(state, Inst::Br(target, arguments))
+        let mut state = state.clone();
+        let leaving = state
+            .env
+            .keys()
+            .copied()
+            .filter(|key| matches!(key, EnvKey::Compound(_)) && !keys.contains(key))
+            .collect::<Vec<_>>();
+        self.end_compound_storage(&leaving, &mut state)?;
+        let arguments = self.edge_values(&state, keys)?;
+        self.terminate(&state, Inst::Br(target, arguments))
     }
 
     fn keys_for(
@@ -3510,7 +3522,7 @@ impl<'a> FunctionLowerer<'a> {
             .env
             .iter()
             .filter_map(|(key, bound)| match key {
-                EnvKey::Temporary(_) => Some((bound.value.id, *key)),
+                EnvKey::Temporary(_) | EnvKey::Compound(_) => Some((bound.value.id, *key)),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -3927,12 +3939,24 @@ impl<'a> FunctionLowerer<'a> {
     fn lower_stmt(
         &mut self,
         statement: &'a CHirStmt<'a>,
-        state: State,
+        mut state: State,
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
         let previous = std::mem::replace(&mut self.active_control, control.clone());
-        let result = self.lower_stmt_active(statement, state, live_after, control);
+        let scope = match statement {
+            CHirStmt::Switch(_, body, _) => *body as *const CHirStmt<'a> as usize,
+            _ => statement as *const CHirStmt<'a> as usize,
+        };
+        let storage = self.begin_compound_storage(scope, &mut state)?;
+        let mut result = self.lower_stmt_active(statement, state, live_after, control);
+        if let Ok(flow) = &mut result {
+            let mut pending = std::mem::take(&mut self.pending_gotos);
+            for state in flow.normal.iter_mut().chain(pending.values_mut().flatten()) {
+                self.end_compound_storage(&storage, state)?;
+            }
+            self.pending_gotos = pending;
+        }
         self.active_control = previous;
         result
     }
@@ -5817,8 +5841,8 @@ impl<'a> FunctionLowerer<'a> {
                 message: "compound literal has no allocation origin".to_owned(),
             },
         )?;
-        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
         if static_storage {
+            let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
             self.emit(
                 state,
                 Inst::GlobalAddr {
@@ -5828,24 +5852,76 @@ impl<'a> FunctionLowerer<'a> {
             )?;
             return Ok(address);
         }
-        let mem_in = self.token(state, EnvKey::Memory)?.value;
-        let world_in = self.token(state, EnvKey::World)?.value;
-        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
-        let world_out = self.fresh_value(EvoIRType::World);
-        self.emit(
-            state,
-            Inst::Alloca {
-                result: address.clone(),
-                mem_in,
-                world_in,
-                mem_out: mem_out.clone(),
-                world_out: world_out.clone(),
-                origin,
-                layout: self.access_layout(*ty, *span)?,
-            },
-        )?;
-        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        let address = self.token(state, EnvKey::Compound(identity))?.value;
         self.lower_initializer_at(address, *ty, initializer, *span, state)
+    }
+
+    /// Storage belongs to the block activation, while the initializer runs
+    /// on every evaluation. Hoist only allocation, never initializer effects.
+    fn begin_compound_storage(
+        &mut self,
+        scope: usize,
+        state: &mut State,
+    ) -> Result<Vec<EnvKey>, LowerError> {
+        let sites = self
+            .compound_scopes
+            .get(&scope)
+            .cloned()
+            .unwrap_or_default();
+        let mut keys = Vec::new();
+        // Allocation order follows manifest ordinals, not host AST addresses.
+        let mut sites = sites.into_iter().collect::<Vec<_>>();
+        sites.sort_by_key(|(identity, _)| {
+            self.compound_origins
+                .get(identity)
+                .map(|(origin, _)| *origin)
+        });
+        for (identity, (ty, span)) in sites {
+            let Some(&(origin, false)) = self.compound_origins.get(&identity) else {
+                continue;
+            };
+            let key = EnvKey::Compound(identity);
+            let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+            let mem_in = self.token(state, EnvKey::Memory)?.value;
+            let world_in = self.token(state, EnvKey::World)?.value;
+            let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+            let world_out = self.fresh_value(EvoIRType::World);
+            self.emit(
+                state,
+                Inst::Alloca {
+                    result: address.clone(),
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    origin,
+                    layout: self.access_layout(ty, span)?,
+                },
+            )?;
+            self.replace_effect_tokens(state, mem_out, Some(world_out));
+            state.env.insert(
+                key,
+                BoundValue {
+                    value: address,
+                    integer: None,
+                },
+            );
+            keys.push(key);
+        }
+        Ok(keys)
+    }
+
+    fn end_compound_storage(
+        &mut self,
+        keys: &[EnvKey],
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        for key in keys.iter().rev() {
+            if let Some(binding) = state.env.remove(key) {
+                self.end_pointer_lifetime(binding.value, state)?;
+            }
+        }
+        Ok(())
     }
 
     fn end_object_lifetime(
@@ -5869,6 +5945,14 @@ impl<'a> FunctionLowerer<'a> {
             .ok_or(LowerError::InvalidGeneratedSsa {
                 message: format!("lifetime end has no address for object {}", symbol.raw()),
             })?;
+        self.end_pointer_lifetime(pointer, state)
+    }
+
+    fn end_pointer_lifetime(
+        &mut self,
+        pointer: Value,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
@@ -5900,7 +5984,15 @@ impl<'a> FunctionLowerer<'a> {
         let mut then_symbols = live_after.clone();
         collect_symbols_stmt(then_branch, &mut then_symbols);
         let then_keys = self.keys_for(&state, &then_symbols, &[]);
-        let direct_then = self.direct_jump(then_branch, control);
+        let can_jump_directly = |target: &&JumpTarget| {
+            !state
+                .env
+                .keys()
+                .any(|key| matches!(key, EnvKey::Compound(_)) && !target.keys.contains(key))
+        };
+        let direct_then = self
+            .direct_jump(then_branch, control)
+            .filter(can_jump_directly);
         let then_state = if direct_then.is_none() {
             Some(self.new_block_from(&state, &then_keys, BlockRole::Ordinary)?)
         } else {
@@ -5912,7 +6004,9 @@ impl<'a> FunctionLowerer<'a> {
             collect_symbols_stmt(branch, &mut else_symbols);
         }
         let else_keys = self.keys_for(&state, &else_symbols, &[]);
-        let direct_else = else_branch.and_then(|branch| self.direct_jump(branch, control));
+        let direct_else = else_branch
+            .and_then(|branch| self.direct_jump(branch, control))
+            .filter(can_jump_directly);
         let else_state = if direct_else.is_none() {
             Some(self.new_block_from(&state, &else_keys, BlockRole::Ordinary)?)
         } else {
@@ -7087,6 +7181,7 @@ impl<'a> FunctionLowerer<'a> {
             collect_symbols_expr(value, &mut live);
         }
         let control = self.active_control.clone();
+        let storage = self.begin_compound_storage(body as *const CHirStmt<'a> as usize, state)?;
         let flow = self.lower_compound_items(prefix, state.clone(), &live, &control, false)?;
         let Some(mut continued) = self.merge_states(flow.normal, &live)? else {
             return Err(LowerError::InvalidControlFlow {
@@ -7111,15 +7206,26 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        let result = value
+        let mut result = value
             .map(|value| self.lower_expr(value, &mut continued))
             .transpose()?;
-        if let Some(result) = &result {
+        if let Some(result) = &mut result {
             let expected = if self.is_aggregate_type(facts.ty()) {
                 EvoIRType::Ptr(AddressSpace::Generic)
             } else {
                 self.c_value_type(facts.ty(), span)?.0
             };
+            if matches!(expected, EvoIRType::Bits(_))
+                && matches!(result.value.ty, EvoIRType::Bits(_))
+            {
+                // Truth values are internally bits<1>, but the block
+                // expression still exposes its declared C integer type.
+                *result = self.cast(
+                    result.clone(),
+                    canonical_integer(self.unit.types(), self.target, facts.ty(), span)?,
+                    &continued,
+                )?;
+            }
             if result.value.ty != expected {
                 return Err(LowerError::UnsupportedExpression {
                     span,
@@ -7142,6 +7248,7 @@ impl<'a> FunctionLowerer<'a> {
             continued.env.remove(&EnvKey::Address(object.symbol));
             continued.locals.remove(&object.symbol);
         }
+        self.end_compound_storage(&storage, &mut continued)?;
         *state = continued;
         Ok(result)
     }
@@ -10008,9 +10115,18 @@ struct FunctionReferences {
     direct: BTreeSet<SymbolId>,
     any: bool,
     labels: BTreeMap<usize, String>,
+    scope: usize,
+    compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
 }
 
 fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferences) {
+    let parent = calls.scope;
+    if matches!(
+        statement,
+        CHirStmt::Compound(..) | CHirStmt::For(CHirForInit::Declaration(_), ..)
+    ) {
+        calls.scope = statement as *const CHirStmt<'_> as usize;
+    }
     match statement {
         CHirStmt::Asm(assembly) => {
             calls.any = true;
@@ -10084,6 +10200,7 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
         | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
+    calls.scope = parent;
 }
 
 fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionReferences) {
@@ -10174,7 +10291,12 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
                 collect_references_expr(source, calls);
             }
         }
-        CHirExpr::CompoundLit(_, initializer, _) => {
+        CHirExpr::CompoundLit(ty, initializer, span) => {
+            calls
+                .compound_scopes
+                .entry(calls.scope)
+                .or_default()
+                .insert(expression as *const CHirExpr<'_> as usize, (*ty, *span));
             for action in initializer.plan().actions() {
                 if let InitAction::StoreScalar { value, .. }
                 | InitAction::CopyAggregate { value, .. } = action

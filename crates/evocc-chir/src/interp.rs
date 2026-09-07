@@ -538,6 +538,7 @@ struct MemoryFrame {
     root_scope: MemoryScopeId,
     current_scope: MemoryScopeId,
     bindings: HashMap<SymbolId, MemoryBinding>,
+    compound_bindings: HashMap<(MemoryScopeId, usize), MemoryBinding>,
 }
 
 #[derive(Debug)]
@@ -4564,6 +4565,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 root_scope,
                 current_scope: root_scope,
                 bindings: HashMap::new(),
+                compound_bindings: HashMap::new(),
             });
             for (symbol, _, value) in parameter_bindings {
                 let ty = self
@@ -5310,6 +5312,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .expect("memory frame checked immediately before scope exit");
         frame.current_scope = exit.parent;
         frame.bindings = exit.bindings;
+        frame
+            .compound_bindings
+            .retain(|(scope, _), _| *scope != exit.scope);
         Ok(())
     }
 
@@ -6010,12 +6015,27 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     feature: "automatic compound literal has no active scope",
                     span: *span,
                 })?;
-            let (memory, address) = self
-                .memory
-                .allocate_automatic(frame, scope, site.ordinal().raw(), layout)
-                .map_err(|error| self.memory_error(error, *span))?;
-            self.memory = memory;
-            MemoryBinding { address, ty: *ty }
+            if let Some(binding) = self
+                .memory_frame
+                .as_ref()
+                .and_then(|frame| frame.compound_bindings.get(&(scope, identity)))
+                .copied()
+            {
+                binding
+            } else {
+                let (memory, address) = self
+                    .memory
+                    .allocate_automatic(frame, scope, site.ordinal().raw(), layout)
+                    .map_err(|error| self.memory_error(error, *span))?;
+                self.memory = memory;
+                let binding = MemoryBinding { address, ty: *ty };
+                self.memory_frame
+                    .as_mut()
+                    .expect("active compound scope")
+                    .compound_bindings
+                    .insert((scope, identity), binding);
+                binding
+            }
         };
         if !static_storage && initializer.plan().zero_fills_unwritten() {
             self.zero_initialize_subobjects(
