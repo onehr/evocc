@@ -17,6 +17,87 @@ fn run(source: &str, mode: &str) -> Output {
     output
 }
 
+const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alternative.c");
+
+#[test]
+fn register_alternative_selects_the_existing_ir_and_machine_path() {
+    let selected = REGISTER_ALTERNATIVE.replace("\"Ir\"", "\"r\"");
+    {
+        for mode in ["--emit=evoir", "--emit=asm"] {
+            let actual = run(REGISTER_ALTERNATIVE, mode);
+            let expected = run(&selected, mode);
+            assert!(
+                actual.status.success(),
+                "{mode}: {}",
+                String::from_utf8_lossy(&actual.stderr)
+            );
+            assert!(
+                expected.status.success(),
+                "{}",
+                String::from_utf8_lossy(&expected.stderr)
+            );
+            assert_eq!(actual.stdout, expected.stdout, "{mode}");
+            if mode == "--emit=evoir" {
+                let module = evocc_evoir::parse_section9_module(&actual.stdout).unwrap();
+                assert_eq!(
+                    evocc_evoir::render_module(&module).as_bytes(),
+                    actual.stdout
+                );
+                for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+                    evocc_mir::compile_module_for(target, &module, &|_| true).expect(
+                        "selected constraint reaches allocation, verification and emission",
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn register_alternative_executes_after_native_assembly_and_linking() {
+    let target = if cfg!(target_os = "macos") {
+        evocc_mir::Target::Darwin
+    } else {
+        evocc_mir::Target::Linux
+    };
+    let output = run(REGISTER_ALTERNATIVE, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let directory =
+        std::env::temp_dir().join(format!("evocc-register-alternative-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let source = directory.join("program.s");
+    let program = directory.join("program");
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+    fs::write(&source, assembly).unwrap();
+    let assembled = Command::new("clang")
+        .arg(&source)
+        .arg("-o")
+        .arg(&program)
+        .output()
+        .unwrap();
+    assert!(
+        assembled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&assembled.stderr)
+    );
+    let execution = Command::new(&program).output().unwrap();
+    assert_eq!(
+        execution.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&execution.stderr)
+    );
+    fs::remove_file(program).unwrap();
+    fs::remove_file(source).unwrap();
+    fs::remove_dir(directory).unwrap();
+}
+
 fn emits(source: &str) -> String {
     let output = run(source, "--emit=evoir");
     assert!(
@@ -167,7 +248,37 @@ fn assembly_constraints_and_refusals() {
         ),
         (
             "unlisted_constraint_combination",
-            r#"asm("" : : "Ir"(1));"#,
+            r#"asm("" : : "Jr"(1));"#,
+            Some("Jr"),
+        ),
+        (
+            "register_alternative_constant",
+            r#"asm("cmp %0, %1" : : "r"(x), "Ir"(4097UL) : "cc");"#,
+            None,
+        ),
+        (
+            "register_alternative_dynamic",
+            r#"asm("cmp %0, %1" : : "r"(x), "Ir"(y) : "cc");"#,
+            None,
+        ),
+        (
+            "register_alternative_output",
+            r#"asm("" : "=Ir"(x));"#,
+            Some("=Ir"),
+        ),
+        (
+            "register_alternative_readwrite",
+            r#"asm("" : "+Ir"(x));"#,
+            Some("+Ir"),
+        ),
+        (
+            "reversed_unlisted_combination",
+            r#"asm("" : : "rI"(x));"#,
+            Some("rI"),
+        ),
+        (
+            "register_alternative_wide_input",
+            r#"__uint128_t wide=1;asm("" : : "Ir"(wide));"#,
             Some("Ir"),
         ),
         (
