@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 PATH = Path(__file__).resolve().parents[2] / "bench.py"
 bench = None
@@ -82,6 +83,40 @@ class BenchmarkEntryTest(unittest.TestCase):
                 bench.metrics("torture", {"suites": {"torture": {
                     "programs": total, "outcomes": {"pass": passed}
                 }}})
+
+    def test_kernel_boot_does_not_hide_failed_substitution_proof(self):
+        row = bench.metrics("kernel", {
+            "survey": {"requestedUnits": 2, "outcomeCounts": {"assembled": 2}},
+            "unitsCompiledByEvoccInABootingKernel": 2,
+            "mixedLink": {"boot": {"verdict": "PASS"}},
+            "proofOfSubstitution": {"verdictCounts": {"different": 1}},
+        })
+        self.assertEqual(row["status"], "FAIL")
+
+    def test_failed_lane_does_not_prevent_later_measurement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tests/contracts").mkdir(parents=True)
+            binary = root / "compiler"
+            binary.write_bytes(b"compiler")
+            measured = []
+
+            def execute(command, env):
+                name = command[command.index("--suite") + 1]
+                measured.append(name)
+                receipt = {"latest": {"run": name, "driverSha256": bench.sha256(binary),
+                                      "suites": {name: {"programs": 1, "outcomes": {"pass": 1}}}}}
+                (root / "tests/contracts/ladder-e0-receipt.json").write_text(json.dumps(receipt))
+                return (7 if name == "ctest" else 0), ["failure detail"]
+
+            with patch.object(bench, "ROOT", root), patch.object(bench, "execute", execute), \
+                 patch.object(bench.subprocess, "check_output", return_value="commit"), \
+                 patch.object(bench.subprocess, "run", return_value=SimpleNamespace(returncode=0)):
+                self.assertEqual(bench.main(["ctest", "torture", "--evocc", str(binary)]), 2)
+            self.assertEqual(measured, ["ctest", "torture"])
+            report = json.loads((root / bench.RECEIPT).read_text())
+            self.assertEqual(report["benchmarks"]["ctest"]["status"], "ERROR")
+            self.assertEqual(report["benchmarks"]["torture"]["status"], "PASS")
 
 
 if __name__ == "__main__":

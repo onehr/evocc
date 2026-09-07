@@ -239,6 +239,26 @@ def main() -> int:
         "═" * span,
     ]
     text = "```text\n" + "\n".join(lines) + "\n```\n"
+    bench = contract("bench-receipt.json")
+    if bench:
+        text += (
+            "\n## Unified benchmark evaluation\n\n"
+            f"Run `{bench['run']}`; compiler `{bench['subject'][:7]}`; "
+            f"overall `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
+            "Program counts and translation-unit counts are different measures; "
+            "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
+            "are not remeasured by this run.\n\n"
+            "| Benchmark | Rung | Status | Validated / total | Main blockers |\n"
+            "|---|---|---|---|---|\n"
+        )
+        for name, row in bench["benchmarks"].items():
+            blockers = sorted(row.get("refusals", {}).items(), key=lambda item: -item[1])[:3]
+            detail = ", ".join(f"{code}: {count}" for code, count in blockers)
+            if not detail:
+                detail = row.get("error", row.get("note", ""))
+            number = f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row else "NOT RUN"
+            text += f"| {name} | {row['rung']} | {row['status']} | {number} | {detail.replace('|', '/')} |\n"
+        text += "\nDetails and commands: [bench receipt](../tests/contracts/bench-receipt.json).\n"
 
     if "--check" in sys.argv:
         print(text, end="")

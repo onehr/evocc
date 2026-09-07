@@ -1969,6 +1969,18 @@ roadmap change, never by "whatever is newest today".
 
 Rules that hold for every rung:
 
+- **One evaluation entry point.** All subsequent milestone checks are run
+  through `python3 tools/bench.py <benchmark> [...]` (for example `csmith`,
+  `cjson`, `torture`, `musl`, or `kernel`); `--list` shows every available
+  adapter and the roadmap rungs that still have none. `all` measures the
+  available lanes sequentially and explicitly records the unavailable ones.
+  Existing `tools/ladder/` and `tools/k1/` scripts remain implementation
+  details, not separate acceptance entry points. The command builds one
+  release driver, records its digest, checks fresh lane receipts and updates
+  `tests/contracts/bench-receipt.json` and `docs/status.md`; exit 0 requires
+  all selected benchmark gates to pass, exit 1 reports measured gaps, and
+  exit 2 reports an execution/evidence error. No program watchdog is relaxed.
+
 - **Pinned source.** The tarball or tag and its date are recorded here and in
   the milestone's receipt with a SHA-256 of what was actually built.
 - **The subject's own oracle judges.** A rung passes when the subject's test

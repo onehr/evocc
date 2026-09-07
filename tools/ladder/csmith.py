@@ -103,6 +103,7 @@ RUNTIME_DEFINES = [
     "-DUSE_MATH_MACROS_NOTMP",
     "-DINT_MAX=2147483647",
 ]
+WORKERS = 4
 
 ORACLES = [("gcc", "O0"), ("gcc", "O2"), ("clang-19", "O0"), ("clang-19", "O2")]
 
@@ -206,7 +207,7 @@ def emit_by_stem(evocc: Path, work: Path, names: list[str], inc: list[str]) -> d
         return name, {"emit": "refused", "code": code, "message": message}
 
     rows: dict[str, dict] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for name, row in pool.map(one, names):
             rows[name] = row
     return rows
@@ -245,7 +246,7 @@ done
 DRIVER = r"""#!/bin/sh
 cd /work/run
 mkdir -p bin out
-xargs -a names.txt -n 1 -P 4 sh /work/run/one.sh
+xargs -a names.txt -n 1 -P "$1" sh /work/run/one.sh
 """
 
 
@@ -257,7 +258,7 @@ def run_in_container(work: Path, names: list[str], timeout: int = 7200) -> dict[
     p = e0.sh(
         [
             "container", "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-            "-v", f"{work}:/work/run", IMAGE, "sh", "/work/run/drive.sh",
+            "-v", f"{work}:/work/run", IMAGE, "sh", "/work/run/drive.sh", str(WORKERS),
         ],
         timeout=timeout,
     )
@@ -579,14 +580,19 @@ def report_line(summary: dict) -> str:
 
 
 def main() -> int:
+    global WORKERS
     ap = argparse.ArgumentParser()
     ap.add_argument("--campaign", default="all", choices=["all", *CAMPAIGNS])
     ap.add_argument("--programs", type=int, default=300)
+    ap.add_argument("--jobs", type=int, default=4, help="host emission and native batch workers")
     ap.add_argument("--evocc", default=str(ROOT / "target" / "release" / "evocc"))
     ap.add_argument("--reduce", help="shrink one disagreeing program instead of running a campaign")
     ap.add_argument("--reduce-seconds", type=float, default=1800.0)
     ap.add_argument("--reseal", help="re-derive an existing run's summary and receipt from its rows")
     args = ap.parse_args()
+    if args.jobs < 1:
+        ap.error("--jobs must be positive")
+    WORKERS = args.jobs
     evocc = Path(args.evocc)
     if args.reseal:
         print(report_line(reseal(Path(args.reseal))))
@@ -612,6 +618,7 @@ def main() -> int:
         "csmith": {**PIN, "sha256": e0.sha256(binary), "builtOn": "host"},
         "target": TARGET,
         "campaigns": {},
+        "workers": WORKERS,
     }
     names = list(CAMPAIGNS) if args.campaign == "all" else [args.campaign]
     with open(out_dir / "results.jsonl", "w") as results:

@@ -77,6 +77,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def default_evocc() -> Path:
     """The release driver, honoring a shared CARGO_TARGET_DIR."""
+    if os.environ.get("K1_EVOCC"):
+        return Path(os.environ["K1_EVOCC"])
     target = os.environ.get("CARGO_TARGET_DIR")
     if target:
         return Path(target) / "release/evocc"

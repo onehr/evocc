@@ -10,7 +10,7 @@ The compiler is written by AI agents. What keeps that honest:
 
 - **The specification decides.** Every language rule lives in [docs/evoir-spec.md](docs/evoir-spec.md) and [docs/evomir-spec.md](docs/evomir-spec.md). Before a rule is written, the behaviour is checked against GCC 14.2 and Clang 19.1 in a sealed container. Where the two disagree, the rule refuses the construct. Anything unspecified is refused with a numbered diagnostic.
 - **Tests first, receipts after.** Each change starts with a commit whose failing tests are listed in advance, and ends with a receipt in `tests/contracts/` holding the numbers. An agent that finds a gap in the specification stops and reports it.
-- **Numbers are produced, not typed.** [docs/status.md](docs/status.md) is rendered from the receipts by `tools/render-status.py`; `--check` fails if it drifts.
+- **Numbers are produced, not typed.** Run milestones through `python3 tools/bench.py csmith cjson` (or `--list`, or `all`). One release compiler is measured across the selected lanes; failures, unavailable oracles and missing adapters remain visible. [docs/status.md](docs/status.md) is rendered from the receipts by `tools/render-status.py`; `--check` fails if it drifts.
 
 ## Where it is
 
