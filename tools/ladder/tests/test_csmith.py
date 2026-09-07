@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 _spec = importlib.util.spec_from_file_location(
@@ -53,6 +55,19 @@ class OptionTest(unittest.TestCase):
 
 
 class ChecksumTest(unittest.TestCase):
+    def test_printing_a_checksum_does_not_hide_failed_execution(self):
+        report = "report()" + csmith.RUNNER.split("report()", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output.txt"
+            output.write_text("checksum = ab\n")
+            for status, expected in ((0, "ran ab"), (1, "run-fail 1"), (133, "run-fail 133"), (124, "timeout 124")):
+                with self.subTest(status=status):
+                    result = subprocess.run(
+                        ["sh", "-c", 'b=probe\n' + report + '\nreport evocc "$1" "$2"', "sh", str(status), str(output)],
+                        capture_output=True, text=True, check=True,
+                    )
+                    self.assertEqual(result.stdout.strip(), f"probe evocc {expected}")
+
     def test_the_checksum_line_is_read(self):
         self.assertEqual(csmith.parse_checksum("checksum = 4A1BF2C\n"), "4a1bf2c")
 
