@@ -107,6 +107,11 @@ def contract(name: str) -> dict:
     return json.loads(path.read_text()) if path.exists() else {}
 
 
+def record_count(value) -> int:
+    """Receipts may carry either records or their already-computed count."""
+    return value if isinstance(value, int) else len(value or [])
+
+
 def main() -> int:
     gate = contract("semantic-gate-contract.json")
     front = contract("day9-acceptance-contract.json")
@@ -189,6 +194,12 @@ def main() -> int:
     e0 = contract("ladder-e0-receipt.json").get("latest", {}).get("suites", {})
     e0c = e0.get("ctest", {}).get("outcomes", {})
     e0t = e0.get("torture", {}).get("outcomes", {})
+    bench = contract("bench-receipt.json")
+    measured = bench.get("benchmarks", {})
+    # The native E0 receipt holds one selected suite; the common run retains
+    # both, so running torture must not erase an earlier c-testsuite reading.
+    e0c = e0c or measured.get("ctest", {}).get("outcomes", {})
+    e0t = e0t or measured.get("torture", {}).get("outcomes", {})
     cs = contract("ladder-csmith-receipt.json").get("latest", {})
     subjects = [
         (name, contract(f"ladder-{name}-receipt.json"))
@@ -205,7 +216,7 @@ def main() -> int:
             latest_k1_note,
             f"fail-closed {len(debts)} :{' '.join(debts)}",
             f" E0 c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
-            f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {len(cs.get('miscompiles') or [])};"
+            f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {record_count(cs.get('miscompiles'))};"
             + " ".join(f"{name} {r.get('unitsInPassingBuild', 0)}/{r.get('unitsTotal', r.get('units', 0))}" for name, r in subjects),
             "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
         ],
@@ -239,17 +250,16 @@ def main() -> int:
         "═" * span,
     ]
     text = "```text\n" + "\n".join(lines) + "\n```\n"
-    bench = contract("bench-receipt.json")
     if bench:
         text += (
             "\n## Unified benchmark evaluation\n\n"
             f"Run `{bench['run']}`; compiler `{bench['subject'][:7]}`; "
-            f"overall `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
+            f"selected gates `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
             "Program counts and translation-unit counts are different measures; "
             "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
-            "are not remeasured by this run.\n\n"
-            "| Benchmark | Rung | Status | Validated / total | Main blockers |\n"
-            "|---|---|---|---|---|\n"
+            "retain their previous reading and compiler identity; they are not remeasured by this run.\n\n"
+            "| Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |\n"
+            "|---|---|---|---|---|---|\n"
         )
         for name, row in bench["benchmarks"].items():
             blockers = sorted(row.get("refusals", {}).items(), key=lambda item: -item[1])[:3]
@@ -257,7 +267,11 @@ def main() -> int:
             if not detail:
                 detail = row.get("error", row.get("note", ""))
             number = f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row else "NOT RUN"
-            text += f"| {name} | {row['rung']} | {row['status']} | {number} | {detail.replace('|', '/')} |\n"
+            measurement = row.get("measurement", {"run": bench["run"]})
+            stamp = measurement.get("run", "unknown")
+            if name not in bench.get("selected", bench["benchmarks"]):
+                stamp += " (previous)"
+            text += f"| {name} | {row['rung']} | {row['status']} | {number} | {stamp} | {detail.replace('|', '/')} |\n"
         text += "\nDetails and commands: [bench receipt](../tests/contracts/bench-receipt.json).\n"
 
     if "--check" in sys.argv:

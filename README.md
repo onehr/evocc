@@ -20,6 +20,33 @@ As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lo
 
 ## Try it
 
+### Evaluate the roadmap
+
+```sh
+python3 tools/bench.py --list
+python3 tools/bench.py csmith cjson
+python3 tools/bench.py torture zlib toybox --jobs 4
+python3 tools/bench.py all --programs 500 --jobs 4 --budget 20 --allow-qemu-drift
+```
+
+`all` runs every available lane sequentially and lists missing adapters explicitly.
+It is a long native evaluation, not a unit-test shortcut. Csmith's default is
+500 programs **per campaign** (1,000 total); `--budget` limits toybox/musl
+bisection probes, not corpus size. `--allow-qemu-drift` explicitly acknowledges
+the installed QEMU digest for the kernel lane. `--dry-run` prints commands;
+`--evocc PATH` measures an existing compiler without rebuilding it.
+
+The script streams lane output, keeps only a small summary under `.evidence/bench/`,
+updates `tests/contracts/bench-receipt.json`, and renders `docs/status.md`.
+Single-lane runs retain older readings for other milestones, explicitly marked
+as previous measurements with their original compiler identity.
+Existing lane evidence is reused, not copied into another archive. Exit 0 means
+all selected gates pass; 1 means measured gaps or failures; 2 means a runner or
+evidence error. Do not run the legacy lane scripts concurrently against the same
+build directories. Partial mixed-link coverage is not a fully compiled milestone.
+
+### Compile a program
+
 ```sh
 cargo build --release
 ```

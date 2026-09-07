@@ -93,6 +93,16 @@ class BenchmarkEntryTest(unittest.TestCase):
         })
         self.assertEqual(row["status"], "FAIL")
 
+    def test_status_renderer_accepts_nonzero_mismatch_counts(self):
+        path = PATH.parent / "render-status.py"
+        spec = importlib.util.spec_from_file_location("benchmark_status", path)
+        renderer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(renderer)
+        self.assertTrue(hasattr(renderer, "record_count"), "integer mismatch counts must not crash status rendering")
+        self.assertEqual(renderer.record_count(2), 2)
+        self.assertEqual(renderer.record_count([{"program": "a"}]), 1)
+        self.assertEqual(renderer.record_count(None), 0)
+
     def test_failed_lane_does_not_prevent_later_measurement(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -103,8 +113,10 @@ class BenchmarkEntryTest(unittest.TestCase):
 
             def execute(command, env):
                 name = command[command.index("--suite") + 1]
+                live = json.loads((root / bench.RECEIPT).read_text())
+                self.assertEqual(live["benchmarks"][name]["status"], "RUNNING")
                 measured.append(name)
-                receipt = {"latest": {"run": name, "driverSha256": bench.sha256(binary),
+                receipt = {"latest": {"run": f"{name}-{len(measured)}", "driverSha256": bench.sha256(binary),
                                       "suites": {name: {"programs": 1, "outcomes": {"pass": 1}}}}}
                 (root / "tests/contracts/ladder-e0-receipt.json").write_text(json.dumps(receipt))
                 return (7 if name == "ctest" else 0), ["failure detail"]
@@ -117,6 +129,15 @@ class BenchmarkEntryTest(unittest.TestCase):
             report = json.loads((root / bench.RECEIPT).read_text())
             self.assertEqual(report["benchmarks"]["ctest"]["status"], "ERROR")
             self.assertEqual(report["benchmarks"]["torture"]["status"], "PASS")
+            with patch.object(bench, "ROOT", root), patch.object(bench, "execute", execute), \
+                 patch.object(bench.subprocess, "check_output", return_value="new-commit"), \
+                 patch.object(bench.subprocess, "run", return_value=SimpleNamespace(returncode=0)):
+                self.assertEqual(bench.main(["torture", "--evocc", str(binary)]), 0)
+            latest = json.loads((root / bench.RECEIPT).read_text())
+            self.assertIn("ctest", latest["benchmarks"], "a single-lane run must retain older milestone readings")
+            self.assertEqual(latest["selected"], ["torture"])
+            self.assertEqual(latest["benchmarks"]["ctest"]["measurement"]["run"], report["run"])
+            self.assertEqual(latest["benchmarks"]["ctest"]["measurement"]["subject"], "commit")
 
 
 if __name__ == "__main__":

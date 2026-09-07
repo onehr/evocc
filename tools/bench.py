@@ -55,7 +55,7 @@ def parser():
     p.add_argument("--dry-run", action="store_true", help="print commands without building or measuring")
     p.add_argument("--evocc", type=Path, help="measure this existing binary; do not build another one")
     p.add_argument("--no-build", action="store_true", help="reuse the default release binary")
-    p.add_argument("--jobs", type=positive, default=4, help="build / mixed-lane worker limit")
+    p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
     p.add_argument("--budget", type=positive, default=40, help="toybox/musl bisection probes")
@@ -261,16 +261,19 @@ def main(argv=None):
         run = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         directory = ROOT / ".evidence/bench" / run
         directory.mkdir(parents=True)
+        prior = json.loads((ROOT / RECEIPT).read_text()) if (ROOT / RECEIPT).exists() else {}
+        known = prior.get("benchmarks", {})
+        for row in known.values():
+            row.setdefault("measurement", {key: prior.get(key) for key in ("run", "subject", "driverSha256")})
+        known.update({name: {"rung": CATALOG[name][0], "status": "NOT_RUN", "note": CATALOG[name][2]}
+                      for name in selected})
         summary = {"schemaVersion": 1, "run": run,
                    "subject": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                    "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
                    "driver": str(binary), "driverSha256": driver,
                    "invocation": [sys.executable, "tools/bench.py", *(sys.argv[1:] if argv is None else argv)],
                    "execution": "sequential lanes; original per-program watchdogs unchanged",
-                   "status": "RUNNING", "benchmarks": {
-                       name: {"rung": CATALOG[name][0], "status": "NOT_RUN", "note": CATALOG[name][2]}
-                       for name in selected
-                   }}
+                   "selected": selected, "status": "RUNNING", "benchmarks": known}
         save(summary, directory)
         overall = 0
         try:
@@ -291,6 +294,8 @@ def main(argv=None):
                         pass
                 started = time.monotonic()
                 cmd, env = command(name, args, binary)
+                summary["benchmarks"][name].update(status="RUNNING", command=cmd)
+                save(summary, directory)
                 code, tail = None, []
                 try:
                     code, tail = execute(cmd, env)
@@ -302,6 +307,7 @@ def main(argv=None):
                 except (OSError, KeyError, TypeError, ValueError) as error:
                     row = {"rung": CATALOG[name][0], "status": "ERROR", "error": str(error), "errorTail": tail}
                 row.update(command=cmd, exitCode=code, seconds=round(time.monotonic() - started, 1), previous=previous)
+                row["measurement"] = {key: summary[key] for key in ("run", "subject", "driverSha256")}
                 summary["benchmarks"][name] = row
                 overall = max(overall, 2 if row["status"] == "ERROR" else int(row["status"] != "PASS"))
                 print(f"bench {name}: {row['status']} {row.get('passed', '?')}/{row.get('total', '?')}", flush=True)

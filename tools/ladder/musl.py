@@ -20,6 +20,10 @@ of ``.o`` files rather than ``.o`` and ``.lo`` built from the same sources,
 and libc-test is linked ``-static`` for the same reason: what is measured
 should be the objects that were substituted.
 
+The timeout supervisor is retained from the reference build. Relinking it
+against the libc under test makes a broken fork/wait/signal implementation
+disable the watchdog that is supposed to report that very failure.
+
 Usage:
   python3 tools/ladder/musl.py [--evocc PATH] [--jobs N] [--budget N]
 """
@@ -81,6 +85,7 @@ export EVO_CMDLOG=/dev/null
 cd /work/{TEST_MOUNT}
 cp {CONTAINER_ROOT}/libc-test-config.mak config.mak
 make -j4 > build.log 2>&1 || true
+cp src/common/runtest.exe reference-runtest
 echo reference-build-ok
 """
 
@@ -91,8 +96,9 @@ make -j4 > relink.log 2>&1
 if [ ! -f lib/libc.a ]; then echo relink-failed; tail -30 relink.log; exit 0; fi
 make install > install.log 2>&1
 cd /work/{TEST_MOUNT}
+test -x /work/{TEST_MOUNT}/reference-runtest || exit 2
 rm -f src/*/*.exe src/*/*.err src/*/*.ld.err src/REPORT src/*/REPORT
-make -j4 > relink.log 2>&1 || true
+make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w ''" > relink.log 2>&1 || true
 echo tests-done
 """
 
@@ -278,6 +284,7 @@ def main() -> int:
             "sysroot": "none: musl is built -nostdinc against its own headers",
             "configure": "--disable-shared, so the library is one set of objects",
             "libcTestConfig": CONFIG_MAK,
+            "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged",
         },
         "unconsumedGccOptions": mixed.omitted_table(rows),
         "evidence": str(evidence),
