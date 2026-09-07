@@ -14,10 +14,9 @@ failure). Every program that does not pass is classified by the first
 diagnostic the EvoIR interpreter reports for it, so the failures rank by
 construct the way the kernel surveys rank units.
 
-Two adjustments are applied to the sources and counted in the summary:
-  * an empty parameter list in a function definition is rewritten to (void),
-    because the profile refuses unprototyped definitions (rule pending);
-  * system headers come from the container's sysroot (rule pending).
+Source files are copied byte for byte. In particular, invalid UTF-8 must
+reach the compiler unchanged, and empty parameter lists are the compiler's
+responsibility. System headers come from the container's sysroot.
 
 Usage:
   python3 tools/ladder/e0.py [--suite ctest|torture|all] [--limit N]
@@ -56,7 +55,6 @@ PINS = {
         "subdir": "gcc/testsuite/gcc.c-torture/execute",
     },
 }
-EMPTY_PARAMS = re.compile(r"\b(\w+)\s*\(\s*\)(\s*\{)|\b(\w+)\s*\(\s*\)(\s*\n\s*\{)")
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -144,23 +142,15 @@ def prepare(
 ) -> tuple[list[str], int]:
     (work / "src").mkdir(parents=True, exist_ok=True)
     (work / "asm").mkdir(exist_ok=True)
-    names, adjusted = [], 0
+    names = []
     for path in sorted(src_dir.glob("*.c"))[:limit]:
-        text = path.read_text(errors="replace")
-        new, n = EMPTY_PARAMS.subn(
-            lambda m: (m.group(1) or m.group(3))
-            + "(void)"
-            + (m.group(2) or m.group(4)),
-            text,
-        )
-        adjusted += 1 if n else 0
-        (work / "src" / path.name).write_text(new)
+        shutil.copyfile(path, work / "src" / path.name)
         expected = path.with_suffix(".c.expected")
-        (work / "src" / (path.stem + ".expected")).write_text(
-            expected.read_text() if expected.exists() else ""
+        (work / "src" / (path.stem + ".expected")).write_bytes(
+            expected.read_bytes() if expected.exists() else b""
         )
         names.append(path.stem)
-    return names, adjusted
+    return names, 0
 
 
 def emit(evocc: Path, work: Path, names: list[str], inc: list[str]) -> dict[str, dict]:
@@ -279,6 +269,7 @@ def main() -> int:
         "run": run_id,
         "subject": head,
         "driverSha256": sha256(evocc),
+        "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
         "target": TARGET,
         "suites": {},
     }
