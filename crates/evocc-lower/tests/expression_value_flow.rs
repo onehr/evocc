@@ -67,6 +67,16 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn narrow_bitfields_promote_by_range_not_declared_rank() {
+    agrees(include_str!("../../../tests/fixtures/bitfield-integer-promotions.c"));
+}
+
+#[test]
+fn bitfield_promotion_is_visible_in_unevaluated_arithmetic() {
+    agrees("struct S { unsigned long x:3; signed long y:32; unsigned long z:32; }; struct S s; _Static_assert(sizeof(+s.x)==4, \"narrow unsigned\"); _Static_assert(sizeof(+s.y)==4, \"signed int range\"); _Static_assert(sizeof(+s.z)==4, \"unsigned int range\"); int main(void){return 0;}");
+}
+
+#[test]
 fn a_pointer_return_value_can_be_stored_through_another_pointer() {
     agrees("int n=7; int *get(void){return &n;} int main(void){int *p=0;int **q=&p;*q=get();return *p!=7;}");
 }
