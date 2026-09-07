@@ -2,11 +2,10 @@
  "schemaVersion": 1,
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
- "executionLineageNote": "For 20260907T101055Z, subject 4a9268c is checkout HEAD at launch; the fixed release binary was built from a089bb9 and is byte-identical to Csmith run 20260907T094729Z (driverSha256 below). It does not include the goto repair. Sealed summary retained unchanged.",
  "latest": {
-  "run": "20260907T101055Z",
-  "subject": "4a9268c",
-  "driverSha256": "89b7bfeec96172f782a9145fc9a343a5d2e7a915c3858f3d4852868fcc07a206",
+  "run": "20260907T115411Z",
+  "subject": "689c76e",
+  "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -19,16 +18,16 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "refused": 548,
-     "pass": 1099,
-     "fail": 41,
+     "refused": 542,
+     "pass": 1111,
+     "fail": 35,
      "asm-fail": 1,
      "link-fail": 3
     },
     "refusalsByCode": {
      "E1001": 185,
      "E3101": 141,
-     "E2001": 48,
+     "E2001": 41,
      "E2201": 23,
      "E2102": 19,
      "E2203": 18,
@@ -48,6 +47,7 @@
      "E1007": 2,
      "E1003": 2,
      "E0002": 1,
+     "E2935": 1,
      "E1002": 1,
      "E2101": 1,
      "E2208": 1,
@@ -57,16 +57,16 @@
     },
     "failuresByInterpreterVerdict": {
      "E3006 invalid-signed-left-shift": 13,
-     "E3039 external-call-not-executable": 13,
+     "E3039 external-call-not-executable": 8,
      "E3004 signed-integer-overflow": 6,
      "E3021 not-lowered": 4,
      "E3007 evoir-main-parameters-are-not-canonical": 3,
-     "E3001 read-of-uninitialized-object": 2,
      "E3040 external-object-not-executable": 2,
-     "E3008 interpreter-fuel-exhausted": 2
+     "E3008 interpreter-fuel-exhausted": 2,
+     "E3001 read-of-uninitialized-object": 1
     }
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260907T101055Z"
+ "evidence": ".evidence/ladder/e0/20260907T115411Z"
 }

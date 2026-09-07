@@ -2,6 +2,36 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "latestTortureCampaign": {
+      "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+      "run": "20260907T115411Z",
+      "subject": "689c76e",
+      "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
+      "programs": 1692,
+      "passed": 1111,
+      "runtimeFailed": 35,
+      "refused": 542,
+      "assemblyFailed": 1,
+      "linkFailed": 3,
+      "previousRun": "20260907T101055Z",
+      "previousPassed": 1099,
+      "previousPassRegressions": 0,
+      "newPasses": ["20021120-3", "20071029-1", "pr69691", "pr78586", "pr78622", "pr79327", "pr93249", "va-arg-1", "va-arg-10", "va-arg-2", "va-arg-8", "va-arg-9"],
+      "limitation": "Full mixed suite includes floating-point programs. These numbers are not a frozen nonfloating-only denominator and do not establish completion. Goto-entry followup 5bcc45f postdates the binary"
+    },
+    "emptyUnionOracleConflict": {
+      "fixture": "tests/fixtures/empty-union-initialization.c",
+      "evidence": ".evidence/builtin-probes/20260907-union-tail/results.txt",
+      "originalTorture": "pr19687.c",
+      "oracles": "Both sources: GCC14 O0/O2 exit0; Clang19 O0 exit0 and O2 exit1",
+      "resolution": "Initial all-zero positive expectation discarded after the optimized Clang counterexample; preserve E3001 on inactive uninitialized tail reads. No production initialization behavior changed, no benchmark failure relabeled as pass",
+      "appendixD": "Empty union initialization and inactive tail bytes",
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 5bcc45f --offline -j 2 --quiet",
+      "gatePassed": 284,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS"
+    },
     "subtractionRuntimeCampaign": {
       "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
       "run": "20260907T112843Z",

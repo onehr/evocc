@@ -85,6 +85,14 @@ fn compound_literal_identity_follows_its_block_activation() {
 }
 
 #[test]
+fn empty_union_initialization_does_not_define_inactive_tail_bytes() {
+    evaluates(
+        include_str!("../../../tests/fixtures/empty-union-initialization.c"),
+        Some("E3001"),
+    );
+}
+
+#[test]
 fn entering_a_compound_literal_scope_by_goto_creates_its_storage() {
     agrees("int main(void){goto inside;{inside:return (int){7}!=7;}}");
     agrees("int main(void){int *p=0,n=0;goto inside;{inside:p=&(int){++n};if(n<2)goto inside;return *p!=2;}}");

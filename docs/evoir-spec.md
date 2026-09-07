@@ -5987,6 +5987,13 @@ a valid scalar variadic call.
 One minimized case reproduces torture `va-arg-1.c`; additional affected
 unit counts await the next full run.
 
+### Empty union initialization and inactive tail bytes
+
+In this checked profile, empty union initialization initializes the first member, not the inactive tail bytes; reading the latter retains `E3001` rather than acquiring a new all-zero guarantee.
+The sealed GCC-14 and Clang-19 both return zero at `-O0` for `tests/fixtures/empty-union-initialization.c` and original torture `pr19687.c`, but at `-O2` GCC returns zero and Clang returns one (`.evidence/builtin-probes/20260907-union-tail/results.txt`).
+This oracle conflict is kept outside common positive compatibility evidence; no implementation or diagnostic code changes.
+One currently failing torture unit is identified by this probe, not reclassified as a pass.
+
 ### Hosted library builtin prototypes
 
 `__builtin_printf`, `__builtin_malloc`, and `__builtin_strcpy` use the
