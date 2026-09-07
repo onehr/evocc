@@ -9,53 +9,145 @@
     "revision": "1.9.76",
     "sha256": "d62ef30f0983236548cd2314fbd948e1beab42c24831cb5f8baa28c3dfa5916c"
   },
-  "cutLine": "The latest sealed full lowering survey remains 20260907T043340Z-13363 on 2cf2c78: 47 clean, 2751 diagnosed, no timeout/panic/unavailable. Revision 1.9.76 now admits source Ir through register selection. The authorized backend conversion and successor output handling execute ordinary asm and asm.goto on Darwin and Linux, including native spill-pressure coverage. The new full gate and survey must finish before closure; older Csmith/torture and K1 evidence is unchanged.",
+  "cutLine": "Ir admission and its native consumer path are complete on 2055f26: changed gate 796 passed, zero failed, isolated offline replay green, Darwin/Linux execution green. Sealed survey 20260907T074335Z-32186 measures 52 clean and 2746 diagnosed, no timeout/panic/unavailable, zero clean regressions. Ir and E3101 first errors are gone; the new frontier is Kr in 2744 units, computed goto in one and frame-address in one. This is not whole-kernel assembly/link/boot success; older benchmark and K1 evidence is unchanged.",
   "registerAlternativeProgress": {
-    "status": "LOCAL_GATE_PASS_REPLAY_AND_SURVEY_PENDING",
+    "status": "COMPLETE_NATIVE_GATE_REPLAY_AND_SURVEY",
     "authorityCommit": "8ffc1dc",
     "redCommit": "e41a181",
-    "changedGate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 51bf7a3 --offline -j 2 --quiet", "passed": 796, "failed": 0, "ignored": 4, "ignoredNote": "Existing ignored tests unchanged; no new test is disabled.", "clippy": "PASS -D warnings", "fmt": "PASS", "exitCode": 0 },
-    "ruff": { "command": "ruff check tools tests/acceptance", "exitCode": 0 },
+    "changedGate": {
+      "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 51bf7a3 --offline -j 2 --quiet",
+      "passed": 796,
+      "failed": 0,
+      "ignored": 4,
+      "ignoredNote": "Existing ignored tests unchanged; no new test is disabled.",
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "exitCode": 0
+    },
+    "ruff": {
+      "command": "ruff check tools tests/acceptance",
+      "exitCode": 0
+    },
     "layout": [
-      { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "passed": 128, "mismatches": 0, "exitCode": 0 },
-      { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "passed": 22, "mismatches": 0, "exitCode": 0 }
+      {
+        "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "passed": 128,
+        "mismatches": 0,
+        "exitCode": 0
+      },
+      {
+        "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "passed": 22,
+        "mismatches": 0,
+        "exitCode": 0
+      }
     ],
     "implementation": "Ir-to-r selection preserves C-HIR spelling and evaluates operands once. Authorized EvoIR-to-EvoMIR asm.goto conversion maps named labels to declared positions and threads scalar results through every edge; existing effect tokens have no machine registers. Coalescing renames terminator operands, liveness and independent allocation verification account for its definitions, and spilled outputs are stored after assembly on private successor edges.",
-    "focused": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc --test inline_assembly_lowering --offline -j 2", "passed": 9, "failed": 0, "buildErrors": 0 },
-    "pressure": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-mir --test section4_inline_assembly assembly_goto_outputs_survive --offline -j 2", "before": "Native exit 46 instead of 78 despite allocation verification accepting it; terminator output spill slots were never written.", "after": "Native exit 78; regression exercises fallthrough and taken edges with twelve outputs live across a call." },
+    "focused": {
+      "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc --test inline_assembly_lowering --offline -j 2",
+      "passed": 9,
+      "failed": 0,
+      "buildErrors": 0
+    },
+    "pressure": {
+      "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-mir --test section4_inline_assembly assembly_goto_outputs_survive --offline -j 2",
+      "before": "Native exit 46 instead of 78 despite allocation verification accepting it; terminator output spill slots were never written.",
+      "after": "Native exit 78; regression exercises fallthrough and taken edges with twelve outputs live across a call."
+    },
     "machineExecution": {
       "fixture": "crates/evocc/tests/fixtures/assembly_register_alternative.c",
       "darwin": "Both ordinary-only and full asm.goto fixture PASS: emitted assembly, clang link, executable exit 0. Read-write and early-clobber write-only outputs are checked on both edges.",
       "sealedOracles": "gcc-14 and clang-19 -std=gnu11 -O2 compile and execute the full fixture including asm.goto: both exit 0.",
       "sealedSubject": "The full fixture emitted by target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm assembles, links and exits 0 with gcc-14 and with clang-19 -fno-integrated-as.",
       "assemblerLimit": "Clang's integrated assembler rejects the existing :pg_hi21: spelling. Clang plus GNU as succeeds; integrated-assembler compatibility is not claimed.",
-      "fixtureCorrection": "The first asm.goto template put an Ir operand in cmp's register-only first position; the sealed GCC assembler rejected it. Corrected it to cmp register, Ir and reran both oracles. The full subject test remains active and now passes."
+      "fixtureCorrection": "The first asm.goto template put an Ir operand in cmp's register-only first position; the sealed GCC assembler rejected it. Corrected it to cmp register, Ir and reran both oracles. The full subject test remains active and now passes.",
+      "fixtureSha256": "30d798f9da37aa13438d2403939bdb76ec5afc2bafb32e1f5f67f8f50b6a745e",
+      "releaseAssembly": {
+        "command": ".build/register-alternative-evocc --target=aarch64-unknown-linux-gnu --emit=asm crates/evocc/tests/fixtures/assembly_register_alternative.c; cmp against the executed debug-produced assembly",
+        "comparisonExitCode": 0,
+        "sha256": "5185e76e7dc8ca01353370999ed01f980c95b608ecafa7217470e25398ed8205"
+      }
     },
-    "next": "Finish the changed-crate gate, isolated offline replay and a new frozen-subject full lowering survey. Backend changes are covered by the user's explicit approval; no whole-kernel execution claim follows from this fixture."
+    "next": "The measured frontier is Kr in 2744 units. Inventory and obtain authority for further register-alternative combinations before admission; this completed Ir change does not admit them or claim whole-kernel native execution.",
+    "implementationCommit": "2055f267bf4e877cdc68ea7c0061279cdd0ab337",
+    "offlineReplay": {
+      "cloneCommand": "git clone --no-local /Users/onehrxn/dev/30days/c30 /Users/onehrxn/dev/30days/c30/.build/register-alternative-replay.97WjQT",
+      "directory": ".build/register-alternative-replay.97WjQT",
+      "subject": "2055f267bf4e877cdc68ea7c0061279cdd0ab337",
+      "command": "CARGO_TARGET_DIR=target/replay tools/gate-changed.sh 51bf7a3 --offline -j 2 --quiet",
+      "exitCode": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "countNote": "Replay passed; no separately summed count is claimed because an early terminal chunk was truncated. The complete local gate count is recorded separately.",
+      "cacheCleanup": "Removed only the completed replay target/replay cache (2.3 GB); clone and Git history retained."
+    }
   },
   "latestLoweringSurvey": {
-    "run": "20260907T043340Z-13363",
-    "subject": "2cf2c78ea79986206c1049742e627d2e05ffd43e",
-    "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/inline-substitution-evocc --action lower --jobs 4 --timeout 60",
-    "capture": ".evidence/full-config-lowering-survey/20260907T043340Z-13363",
-    "binarySha256": "eb33df195195f8d260851fcbf0560205025df60247c49d4b3a076572f98bd67b",
-    "sealSha256": "6fe16382b585396b0636082369d027a8d27c5d2890535775d5c35d07a7899ae6",
-    "resultsSha256": "7ba991861bf38d00e06e66bbeba59707d70d3e26defde022b3d98da7108fd9be",
-    "classifications": { "clean": 47, "diagnosed": 2751, "unavailable": 0, "timeout": 0, "panic": 0 },
-    "firstDiagnosticCounts": { "E3021": 2726, "E3101": 23, "E3029": 1, "E3031": 1 },
-    "comparison": { "previousRun": "20260906T181928Z-82375", "cleanToClean": 42, "diagnosedToClean": 5, "diagnosedToDiagnosed": 2745, "timeoutToDiagnosed": 6, "cleanRegressions": 0 },
-    "timing": { "parallelism": 4, "perUnitTimeoutSeconds": 60, "medianMilliseconds": 2747.962, "maximumMilliseconds": 19399.803, "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c", "limitation": "Concurrent host load; coarse telemetry, not an isolated performance benchmark." },
+    "run": "20260907T074335Z-32186",
+    "subject": "2055f267bf4e877cdc68ea7c0061279cdd0ab337",
+    "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/register-alternative-evocc --action lower --jobs 8 --timeout 60",
+    "capture": ".evidence/full-config-lowering-survey/20260907T074335Z-32186",
+    "binarySha256": "4b998722225b1fcd606b3a33ac0dd3ffbad7c04b4988fec2afb408251f7405b6",
+    "sealSha256": "0f45445415ebd7b2be782b751c9d665c1ba706c5be82ae59c43d18ce49555446",
+    "resultsSha256": "016f5152bc25593bafbfa4b17c38d7c3ca5df201e61753b010e0fa7744bd6e36",
+    "verifiedCaptureFiles": 5603,
+    "classifications": {
+      "clean": 52,
+      "diagnosed": 2746,
+      "panic": 0,
+      "timeout": 0,
+      "unavailable": 0
+    },
+    "firstDiagnosticCounts": {
+      "E3021": 2744,
+      "E3029": 1,
+      "E3031": 1
+    },
+    "comparison": {
+      "previousRun": "20260907T043340Z-13363",
+      "previousClean": 47,
+      "attribution": "Three newly clean zstd units were already clean in the prior targeted identity/CFG replay. list_sort.c and plist.c are the additional clean units after Ir admission; do not attribute all five to Ir alone.",
+      "cleanToClean": 47,
+      "diagnosedToClean": 5,
+      "diagnosedToDiagnosed": 2746,
+      "cleanRegressions": 0,
+      "newClean": [
+        "lib/list_sort.c",
+        "lib/plist.c",
+        "lib/zstd/common/entropy_common.c",
+        "lib/zstd/decompress/huf_decompress.c",
+        "lib/zstd/decompress/zstd_decompress_block.c"
+      ]
+    },
+    "timing": {
+      "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+      "maximumWallMilliseconds": 24084.976,
+      "medianWallMilliseconds": 3274.92,
+      "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+      "parallelism": 8,
+      "perUnitTimeoutSeconds": 60
+    },
     "diagnosticSubclasses": [
-      { "code": "E3021", "message": "unsupported assembly input constraint Ir or operand type", "units": 2726, "example": "arch/arm64/include/asm/barrier.h:96", "authority": "Section 3.11 explicitly refuses unlisted combinations; admitting Ir requires a body-specification amendment." },
-      { "code": "E3101", "message": "identifier disagrees with its semantic identity", "units": 7, "example": "arch/arm64/kernel/cpufeature.c" },
-      { "code": "E3101", "message": "object declaration disagrees with its semantic identity", "units": 7, "example": "fs/9p/v9fs.c" },
-      { "code": "E3101", "message": "StatementExpressionOutsideFunction", "units": 6, "example": "block/blk-mq-debugfs.c" },
-      { "code": "E3101", "message": "effect or temporary edge uses an unavailable environment value", "units": 2, "example": "lib/zstd/common/entropy_common.c" },
-      { "code": "E3101", "message": "expression requires the Day-7 object or non-integer model", "units": 1, "example": "lib/zstd/decompress/huf_decompress.c" },
-      { "code": "E3029", "message": "computed-goto", "units": 1, "example": "kernel/bpf/core.c" },
-      { "code": "E3031", "message": "frame-address", "units": 1, "example": "arch/arm64/kernel/stacktrace.c" }
+      {
+        "code": "E3021",
+        "message": "unsupported assembly input constraint Kr or operand type",
+        "units": 2744,
+        "example": "arch/arm64/include/asm/atomic_ll_sc.h:278"
+      },
+      {
+        "code": "E3029",
+        "message": "computed-goto",
+        "units": 1,
+        "example": "kernel/bpf/core.c"
+      },
+      {
+        "code": "E3031",
+        "message": "frame-address",
+        "units": 1,
+        "example": "arch/arm64/kernel/stacktrace.c"
+      }
     ],
-    "completion": "SURVEY_COMPLETE; F4 and the overall compiler milestone remain OPEN. Successful lowering is not successful assembly, linking or execution."
+    "completion": "SURVEY_COMPLETE. Ir and E3101 first errors are zero. F4 and the overall compiler milestone remain OPEN; successful lowering is not successful assembly, linking or execution."
   },
   "completedSerialReplays": {
     "csmith": { "run": "20260907T012857Z", "command": "python3 tools/ladder/csmith.py --campaign all --programs 500 --evocc .build/aggregate-value-evocc", "programs": 1000, "agreeing": 761, "mismatches": 0, "noChecksum": 169, "oracleUnusable": 69, "timeout": 1, "receipt": "tests/contracts/ladder-csmith-receipt.json", "limitation": "This frozen compiler predates always-inline substitution. Non-agree outcomes are not passes." },
@@ -111,12 +203,12 @@
         "currentLowering": "All six minimal probes pass."
       },
       "irRuling": {
-        "status": "AUTHORIZED_IMPLEMENTATION_IN_PROGRESS",
+        "status": "AUTHORIZED_IMPLEMENTED_NATIVE_VERIFIED",
         "probe": ".evidence/builtin-probes/20260907-inline-residue/ir-constraint.c",
         "output": ".evidence/builtin-probes/20260907-inline-residue/oracles.out",
         "command": "container run --rm --platform linux/arm64 --network none -v PROBE_DIRECTORY:/work/probes evo-flight-lab:sealed; gcc-14 and clang-19 -std=gnu11 -O2 ir-constraint.c, then execute",
         "result": "Both compilers exit 0; Ir and r agree for dynamic 0, 1, 4095, 4096, 4097, 0x12345678 and ULONG_MAX and constant 0, 4095 and 4097.",
-        "reason": "The subsequent explicit user ruling is recorded by revision 1.9.76: source Ir selects r. Current machine validation and remaining asm.goto blocker are recorded in registerAlternativeProgress."
+        "reason": "The subsequent explicit user ruling is recorded by revision 1.9.76: source Ir selects r. Completed native validation and the new measured Kr frontier are recorded in registerAlternativeProgress and latestLoweringSurvey."
       },
       "k1ProofDiagnosis": {
         "run": "measure-20260907T025031Z",
@@ -136,10 +228,10 @@
         "countMethod": "Sum actual test-result passed/failed fields from this invocation; shell pipefail preserves gate failure status. No full log file retained."
       }
     },
-    "remaining": "Ir is authorized and implemented with native assembly validation; full survey and new-compiler K1 still need fresh measurements. K1 needs actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
+    "remaining": "Ir native validation and the full survey are complete; Kr now blocks 2744 units. New-compiler K1 still needs fresh measurement and actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
     "nextWork": [
       "Completed: minimize and repair the old E3101 subclasses, compare six minimal forms with the pre-inlining binary, replay all 23 affected units and all 47 clean controls; 906-test isolated changed gate passes.",
-      "Complete the Ir native-validation gate and frozen-subject full survey; do not predict how many units become clean.",
+      "Inventory the remaining register-alternative constraint family and obtain authority before expanding it; Kr is the measured next frontier, not a prediction of newly clean units.",
       "Run one small cross-subsystem canary set after each semantic repair; run changed gate and one full sealed survey after the frontier batch.",
       "K1 mismatch diagnosis complete: GCC-derived lengths cross emitted text boundaries. Obtain actual emitted symbol extents before a new proof/replay; do not call the existing mismatches a compiler miscompilation or silently mask them.",
       "Triage remaining torture runtime failures, then address zstd declaration-only types and native K&R support. Rerun only the affected lane; serialize heavyweight campaigns."
