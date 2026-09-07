@@ -50,6 +50,31 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn formatted_and_string_builtins_use_external_function_prototypes() {
+    assert_pairs(
+        &[
+            (
+                "int f(char *d,const char *fmt,unsigned char x){return __builtin_sprintf(d,fmt,x);}",
+                "int sprintf(char *,const char *,...); int f(char *d,const char *fmt,unsigned char x){return sprintf(d,fmt,x);}",
+            ),
+            (
+                "int f(char *d,unsigned long n,const char *fmt,short x){return __builtin_snprintf(d,n,fmt,x);}",
+                "int snprintf(char *,unsigned long,const char *,...); int f(char *d,unsigned long n,const char *fmt,short x){return snprintf(d,n,fmt,x);}",
+            ),
+            (
+                "char *f(const char *s,int c){return __builtin_strchr(s,c);}",
+                "char *strchr(const char *,int); char *f(const char *s,int c){return strchr(s,c);}",
+            ),
+            (
+                "char *f(char *d,const char *s,unsigned long n){return __builtin_strncpy(d,s,n);}",
+                "char *strncpy(char *,const char *,unsigned long); char *f(char *d,const char *s,unsigned long n){return strncpy(d,s,n);}",
+            ),
+        ],
+        1500,
+    );
+}
+
+#[test]
 fn hosted_library_builtins_use_external_function_prototypes() {
     assert_pairs(
         &[
@@ -76,6 +101,7 @@ fn hosted_library_builtins_keep_argument_and_declaration_checks() {
         ("int f(void){return __builtin_printf();}", "E2909"),
         ("void *f(void){return __builtin_malloc(1,2);}", "E2909"),
         ("char *f(void){return __builtin_strcpy(1,2);}", "E2913"),
+        ("int f(void){return __builtin_puts(\"x\");}", "E2935"),
         (
             "long printf(const char *,...); int f(void){return __builtin_printf(\"x\");}",
             "E2927",
