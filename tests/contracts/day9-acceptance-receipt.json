@@ -3,6 +3,25 @@
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
     "identifierListDefinitions": {
+      "campaign": {
+        "run": "20260907T124739Z",
+        "subject": "6c4880c",
+        "driverSha256": "fe42d8902800b7f7723dbd2fbb663090487cb293cb9469d443e41b0e1dd52b06",
+        "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "programs": 1692,
+        "passed": 1138,
+        "refused": 514,
+        "runtimeFailed": 36,
+        "assemblyFailed": 1,
+        "linkFailed": 3,
+        "previousRun": "20260907T115411Z",
+        "newPasses": 27,
+        "previousPassRegressions": 0,
+        "e1001Before": 185,
+        "e1001After": 149,
+        "newlyExecutedFailure": "920612-1: exit133, E3004 signed-integer-overflow; previously refused, not a prior-pass regression",
+        "limitation": "Mixed suite includes floating point and incompatible dialect/options; not a claimed complete nonfloating-only cohort"
+      },
       "redCommit": "cbb256c",
       "red": "Two execution tests failed with E1001 expected-declaration, zero build errors",
       "implementation": "Retain identifier-list order and declared parameter object types; promote the call interface and honor a compatible preceding prototype. Convert incoming scalar values before addressed parameter allocation; reuse the existing array/function adjustment and integer kernel",
@@ -20,7 +39,7 @@
       "clippy": "PASS -D warnings",
       "fmt": "PASS",
       "ruff": "PASS: ruff check tools tests/acceptance",
-      "limitation": "Full torture remeasurement pending; no attribution of all 185 prior E1001 refusals to this construct"
+      "limitation": "Full torture campaign above remains incomplete; no attribution of all 185 prior E1001 refusals to this construct"
     },
     "definedRuntimeCampaign": {
       "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",

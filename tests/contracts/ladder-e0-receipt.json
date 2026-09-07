@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260907T115411Z",
-  "subject": "689c76e",
-  "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
+  "run": "20260907T124739Z",
+  "subject": "6c4880c",
+  "driverSha256": "fe42d8902800b7f7723dbd2fbb663090487cb293cb9469d443e41b0e1dd52b06",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,16 +18,16 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "refused": 542,
-     "pass": 1111,
-     "fail": 35,
+     "pass": 1138,
+     "refused": 514,
+     "fail": 36,
      "asm-fail": 1,
      "link-fail": 3
     },
     "refusalsByCode": {
-     "E1001": 185,
-     "E3101": 141,
-     "E2001": 41,
+     "E1001": 149,
+     "E3101": 146,
+     "E2001": 42,
      "E2201": 23,
      "E2102": 19,
      "E2203": 18,
@@ -36,7 +36,7 @@
      "E3030": 15,
      "E0105": 12,
      "E0112": 11,
-     "E3029": 7,
+     "E3029": 9,
      "E3046": 6,
      "E4003": 5,
      "E2913": 4,
@@ -58,7 +58,7 @@
     "failuresByInterpreterVerdict": {
      "E3006 invalid-signed-left-shift": 13,
      "E3039 external-call-not-executable": 8,
-     "E3004 signed-integer-overflow": 6,
+     "E3004 signed-integer-overflow": 7,
      "E3021 not-lowered": 4,
      "E3007 evoir-main-parameters-are-not-canonical": 3,
      "E3040 external-object-not-executable": 2,
@@ -68,5 +68,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260907T115411Z"
+ "evidence": ".evidence/ladder/e0/20260907T124739Z"
 }
