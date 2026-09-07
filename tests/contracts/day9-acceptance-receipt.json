@@ -2,6 +2,22 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "subtractionRuntimeCampaign": {
+      "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+      "run": "20260907T112843Z",
+      "subject": "b87a88b",
+      "driverSha256": "577631d2bfab2c74260ad375a92a46c2e889027b8a03808a38d87392d95aa0b9",
+      "programs": 1000,
+      "agreeing": 883,
+      "runtimeFailed": 49,
+      "oracleUnusable": 68,
+      "timeout": 0,
+      "checksumMismatches": 0,
+      "base": {"programs": 500, "agreeing": 446, "runtimeFailed": 23, "oracleUnusable": 31},
+      "bitfields": {"programs": 500, "agreeing": 437, "runtimeFailed": 26, "oracleUnusable": 37},
+      "comparison": "Previous original-seed run 20260907T094729Z had 761 agreeing. Both compiler version and shared runtime changed; this is not an isolated attribution of all 122 additional agreements to one edit",
+      "limitation": "Subtraction masks only; predates compound-literal and signed-shift repairs. The fully repaired runtime needs its own campaign"
+    },
     "latestFocusedOfflineReplay": {
       "subject": "832c4b5",
       "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-nonfloat-replay.1TyynO; CARGO_TARGET_DIR=/private/tmp/evocc-nonfloat-replay.1TyynO/target cargo test --manifest-path /private/tmp/evocc-nonfloat-replay.1TyynO/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2 --quiet",
@@ -69,6 +85,7 @@
       "authority": "User-approved correction; EvoMIR 0.21 Section 6",
       "nativeCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-mir --test section9_lowering_frontier_corpus the_frontier_corpus_agrees_with_gcc_in_the_sealed_container --offline -j 2 -- --nocapture",
       "nativePrograms": 7,
+      "originalTortureNativeExitZero": ["va-arg-1.c", "va-arg-2.c", "va-arg-8.c", "va-arg-9.c", "va-arg-10.c"],
       "nativeAgreeing": 7,
       "oracles": "gcc-14 and clang-19 -O0 both execute tests/fixtures/variadic-named-stack.c with exit 0 in evo-flight-lab:sealed",
       "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh cd0e525 --offline -j 2 --quiet",
