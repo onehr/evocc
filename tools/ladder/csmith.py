@@ -10,7 +10,7 @@ checksum.
 
 A program counts as agreeing when EvoCC's checksum equals the checksum every
 oracle prints. When the two oracles disagree with each other the program is
-undefined, is recorded as an oracle split and is excluded from the count. Every
+recorded as an oracle split, not as a pass or proof of undefined behavior. Every
 other outcome is recorded: a refusal by diagnostic code, an assembler or linker
 failure, a timeout, a run that trapped, or a checksum mismatch, which is the
 miscompile report.
@@ -443,7 +443,7 @@ def summarise(name: str, rows: list[dict]) -> dict:
         "refusalsByCode": dict(refusals.most_common()),
         "refusalsByMessage": dict(messages.most_common()),
         "miscompiles": miscompiles,
-        "trappedOnUndefinedBehaviour": trapped,
+        "trapExit133Programs": trapped,
     }
 
 
@@ -486,9 +486,10 @@ def seal(summary: dict, out_dir: Path) -> dict:
     summary["agreeing"] = sum(one["agreeing"] for one in campaigns)
     summary["refusalsByCode"] = dict(refused.most_common())
     summary["miscompiles"] = sum(len(one["miscompiles"]) for one in campaigns)
-    summary["trappedOnUndefinedBehaviour"] = sum(
-        len(one["trappedOnUndefinedBehaviour"]) for one in campaigns
+    summary["trapExit133Programs"] = sum(
+        len(one["trapExit133Programs"]) for one in campaigns
     )
+    summary["trapClassification"] = "Exit 133 alone does not establish undefined behavior; each cause needs a reduced diagnostic or sanitizer reproduction."
     summary["reductions"] = sorted(
         str(path.relative_to(ROOT)) for path in REDUCTIONS.glob("*.c")
     )

@@ -175,17 +175,18 @@ class SummaryTest(unittest.TestCase):
 
     def test_a_run_that_trapped_is_tracked_apart_from_a_miscompile(self):
         summary = csmith.summarise("base", self.ROWS)
-        self.assertEqual(summary["trappedOnUndefinedBehaviour"], ["s7"])
+        self.assertEqual(summary["trapExit133Programs"], ["s7"])
+        self.assertNotIn("trappedOnUndefinedBehaviour", summary)
 
     def test_a_run_that_printed_nothing_without_trapping_is_neither(self):
         rows = self.ROWS + [
             {"program": "s9", "outcome": "no-checksum", "runs": {"evocc": {"exit": 0}}}
         ]
         summary = csmith.summarise("base", rows)
-        self.assertNotIn("s9", summary["trappedOnUndefinedBehaviour"])
+        self.assertNotIn("s9", summary["trapExit133Programs"])
         self.assertNotIn("s9", [m["program"] for m in summary["miscompiles"]])
 
-    def test_an_undefined_program_is_neither_agreement_nor_miscompile(self):
+    def test_an_oracle_split_is_neither_agreement_nor_miscompile(self):
         summary = csmith.summarise("base", self.ROWS)
         self.assertEqual(summary["outcomes"]["oracle-split"], 1)
         self.assertNotIn("s8", [m["program"] for m in summary["miscompiles"]])
