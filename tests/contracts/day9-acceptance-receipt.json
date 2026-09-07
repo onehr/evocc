@@ -100,16 +100,25 @@
         "command": "tools/k1/prove.py container_readelf, parse_readelf, slice_symbol and relocated_ranges on the existing object files and linked vmlinux",
         "screen_info_pixel_format": "The first differing word is at +204 and contains mda string bytes from outside emitted text; GCC's borrowed window is 304 bytes.",
         "fdt_nop_node": "After its call relocation at +36, the first differing word is at +172 and contains the EvoCC producer note; GCC's borrowed window is 216 bytes.",
+        "sectionBoundedDiagnostic": "readelf confirms exactly 204 and 172 bytes respectively from the symbol to .text end. Every byte within those extents matches vmlinux modulo the recorded relocation. This diagnostic does not relabel the old proof or repair general zero-size symbol handling.",
         "conclusion": "The checker uses unrelated reference-code lengths for zero-sized emitted symbols and permits cross-section reads. Require emitted symbol extents and section bounds; do not mask these bytes or relabel the old proof PASS. Backend emission has not been changed."
       },
-      "offlineReplay": { "status": "PENDING" }
+      "offlineReplay": {
+        "status": "PASS",
+        "subject": "d3bf6356221f82e9eb40b1acbe513b62c0dbf809",
+        "clone": ".build/frontier-replay-8mji7k",
+        "isolation": "git clone --no-local into a new directory; fresh target/replay; no dependency network access",
+        "command": "CARGO_TARGET_DIR=target/replay tools/gate-changed.sh 48c8e59 --offline -j 2 --quiet",
+        "passed": 906, "failed": 0, "clippy": "PASS -D warnings", "fmt": "PASS",
+        "countMethod": "Sum actual test-result passed/failed fields from this invocation; shell pipefail preserves gate failure status. No full log file retained."
+      }
     },
     "remaining": "The 23 old E3101 units pass their former blocker in targeted replay: three clean, twenty Ir. Obtain a Section 3.11 ruling for Ir before admission, then run the full survey and new-compiler K1. K1 needs actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
     "nextWork": [
-      "Minimize the five E3101 subclasses; compare each with the pre-inlining binary, then RED/GREEN at the shared identity, initializer or CFG boundary.",
+      "Completed: minimize and repair the old E3101 subclasses, compare six minimal forms with the pre-inlining binary, replay all 23 affected units and all 47 clean controls; 906-test isolated changed gate passes.",
       "Resolve the Ir vocabulary conflict with measured immediate/register forms and a body-specification ruling before admitting it; do not predict how many units become clean.",
       "Run one small cross-subsystem canary set after each semantic repair; run changed gate and one full sealed survey after the frontier batch.",
-      "Investigate K1 byte mismatches at screen_info_pixel_format and fdt_nop_node, then replay K1 with the frozen new compiler; boot alone does not close it.",
+      "K1 mismatch diagnosis complete: GCC-derived lengths cross emitted text boundaries. Obtain actual emitted symbol extents before a new proof/replay; do not call the existing mismatches a compiler miscompilation or silently mask them.",
       "Triage remaining torture runtime failures, then address zstd declaration-only types and native K&R support. Rerun only the affected lane; serialize heavyweight campaigns."
     ]
   },
