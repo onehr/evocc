@@ -3,12 +3,12 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T185946Z",
+ "run": "20260907T144316Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "70d749ec923e636bda100b6d76bbf72b35489113dc94b9cedcf85df0a179e262",
+ "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
  "unitsEvoccCompiled": 2,
@@ -498,6 +498,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260906T185946Z",
+ "evidence": ".evidence/ladder/zstd/20260907T144316Z",
  "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 38, 'E2921': 4}"
 }

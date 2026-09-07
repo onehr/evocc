@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T144702Z",
+ "run": "20260907T153648Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+ "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 17,
@@ -42,10 +42,10 @@
   ]
  },
  "units": 1339,
- "unitsCompiledByEvocc": 771,
- "unitsInPassingBuild": 178,
+ "unitsCompiledByEvocc": 985,
+ "unitsInPassingBuild": 817,
  "refusalsByCode": {
-  "E3101": 456,
+  "E3101": 242,
   "E1006": 83,
   "E2001": 14,
   "E2203": 8,
@@ -53,16 +53,12 @@
   "E1005": 1,
   "E3030": 1
  },
- "testResult": "bisection-budget-exhausted",
+ "testResult": "libc-test-clean-after-exclusions",
  "failingUnits": [
-  "obj/src/env/setenv.lo",
-  "obj/src/network/inet_ntoa.lo",
-  "obj/src/stdio/fprintf.lo"
+  "obj/src/signal/sigsetjmp_tail.lo"
  ],
  "excludedForSymbolParity": {
   "obj/src/crypt/crypt_r.lo": "does not define crypt_r",
-  "obj/src/crypt/crypt_sha256.lo": "pad also defined by obj/src/crypt/crypt_md5.lo",
-  "obj/src/crypt/crypt_sha512.lo": "pad also defined by obj/src/crypt/crypt_md5.lo",
   "obj/src/ctype/isalnum.lo": "does not define isalnum_l",
   "obj/src/ctype/isalpha.lo": "does not define isalpha_l",
   "obj/src/ctype/isblank.lo": "does not define isblank_l",
@@ -88,300 +84,103 @@
   "obj/src/ctype/iswupper.lo": "does not define iswupper_l",
   "obj/src/ctype/iswxdigit.lo": "does not define iswxdigit_l",
   "obj/src/ctype/isxdigit.lo": "does not define isxdigit_l",
-  "obj/src/ctype/toascii.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
   "obj/src/ctype/tolower.lo": "does not define tolower_l",
   "obj/src/ctype/toupper.lo": "does not define toupper_l",
   "obj/src/ctype/towctrans.lo": "does not define towlower_l",
   "obj/src/ctype/wctrans.lo": "does not define towctrans_l",
-  "obj/src/dirent/opendir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/dirent/posix_getdents.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/dirent/readdir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/env/__environ.lo": "does not define ___environ",
+  "obj/src/env/__init_tls.lo": "does not define __init_tls",
+  "obj/src/env/__stack_chk_fail.lo": "does not define __stack_chk_fail_local",
+  "obj/src/env/clearenv.lo": "does not define __env_rm_add",
   "obj/src/env/putenv.lo": "does not define __env_rm_add",
   "obj/src/env/unsetenv.lo": "does not define __env_rm_add",
-  "obj/src/exit/_Exit.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/fcntl/fcntl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/fcntl/open.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/fcntl/openat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/fcntl/posix_fadvise.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/fcntl/posix_fallocate.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/internal/emulate_wait4.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/errno/__errno_location.lo": "does not define ___errno_location",
+  "obj/src/errno/strerror.lo": "does not define strerror_l",
   "obj/src/internal/libc.lo": "does not define program_invocation_name",
-  "obj/src/internal/procfdname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/internal/shgetc.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/internal/syscall_ret.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/internal/vdso.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/msgctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/msgget.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/msgrcv.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/msgsnd.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/semget.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/semop.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/semtimedop.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/shmat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/shmctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/shmdt.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/ipc/shmget.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/ldso/__dlsym.lo": "does not define __dlsym",
+  "obj/src/ldso/dl_iterate_phdr.lo": "does not define dl_iterate_phdr",
   "obj/src/ldso/dladdr.lo": "does not define dladdr",
+  "obj/src/ldso/dlerror.lo": "does not define __dl_invalid_handle",
   "obj/src/ldso/dlopen.lo": "does not define dlopen",
   "obj/src/legacy/euidaccess.lo": "does not define eaccess",
   "obj/src/legacy/utmpx.lo": "does not define endutent",
-  "obj/src/linux/adjtime.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/arch_prctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/brk.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/cap.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/chroot.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/clock_adjtime.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/copy_file_range.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/epoll.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/eventfd.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/fallocate.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/fanotify.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/flock.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/getdents.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/getrandom.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/ioperm.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/iopl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/klogctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/memfd_create.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/mlock2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/module.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/mount.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/name_to_handle_at.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/open_by_handle_at.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/personality.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/pivot_root.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/prctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/preadv2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/prlimit.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/process_vm.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/ptrace.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/pwritev2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/quotactl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/readahead.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/reboot.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/remap_file_pages.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/renameat2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/sbrk.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/sendfile.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/setfsgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/setfsuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/setgroups.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/sethostname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/setns.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/settimeofday.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/signalfd.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/splice.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/statx.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/swap.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/sync_file_range.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/syncfs.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/linux/membarrier.lo": "does not define __tl_lock",
   "obj/src/linux/sysinfo.lo": "does not define sysinfo",
-  "obj/src/linux/tee.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/timerfd.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/unshare.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/utimes.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/vhangup.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/vmsplice.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/wait3.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/wait4.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/linux/xattr.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/locale/catclose.lo": "__bswap16 also defined by obj/src/ctype/__ctype_b_loc.lo",
-  "obj/src/locale/catgets.lo": "__bswap16 also defined by obj/src/ctype/__ctype_b_loc.lo",
-  "obj/src/locale/catopen.lo": "__bswap16 also defined by obj/src/ctype/__ctype_b_loc.lo",
-  "obj/src/locale/pleval.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
+  "obj/src/locale/__lctrans.lo": "does not define __lctrans_impl",
+  "obj/src/locale/duplocale.lo": "does not define duplocale",
+  "obj/src/locale/freelocale.lo": "does not define __freelocale",
+  "obj/src/locale/langinfo.lo": "does not define nl_langinfo",
+  "obj/src/locale/newlocale.lo": "does not define newlocale",
+  "obj/src/locale/strcoll.lo": "does not define strcoll_l",
+  "obj/src/locale/strxfrm.lo": "does not define strxfrm_l",
+  "obj/src/locale/uselocale.lo": "does not define uselocale",
+  "obj/src/locale/wcscoll.lo": "does not define wcscoll_l",
+  "obj/src/locale/wcsxfrm.lo": "does not define wcsxfrm_l",
   "obj/src/malloc/calloc.lo": "does not define __malloc_allzerop",
   "obj/src/malloc/libc_calloc.lo": "does not define __malloc_allzerop",
   "obj/src/malloc/lite_malloc.lo": "does not define __libc_malloc_impl",
   "obj/src/misc/basename.lo": "does not define __xpg_basename",
   "obj/src/misc/getauxval.lo": "does not define getauxval",
-  "obj/src/misc/getpriority.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/getresgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/getresuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/getrlimit.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/getrusage.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/ioctl.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/misc/getopt.lo": "does not define __posix_getopt",
   "obj/src/misc/pty.lo": "does not define ptsname_r",
-  "obj/src/misc/setdomainname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/setpriority.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/setrlimit.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/syscall.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/misc/uname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/misc/syslog.lo": "does not define vsyslog",
   "obj/src/mman/madvise.lo": "does not define madvise",
-  "obj/src/mman/mincore.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mman/mlock.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mman/mlockall.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/mman/mmap.lo": "does not define __vm_wait",
   "obj/src/mman/mprotect.lo": "does not define mprotect",
   "obj/src/mman/mremap.lo": "does not define __vm_wait",
-  "obj/src/mman/msync.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mman/munlock.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mman/munlockall.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/mman/munmap.lo": "does not define __vm_wait",
-  "obj/src/mman/posix_madvise.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_close.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_getattr.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_open.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_setattr.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_timedreceive.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_timedsend.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/mq/mq_unlink.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/accept.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/accept4.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/bind.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/connect.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/network/dn_expand.lo": "does not define dn_expand",
-  "obj/src/network/getaddrinfo.lo": "__bswap16 also defined by obj/src/ctype/__ctype_b_loc.lo",
-  "obj/src/network/getnameinfo.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/getpeername.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/getsockname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/getsockopt.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/htons.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/network/if_indextoname.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/if_nametoindex.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/network/ent.lo": "does not define endnetent",
   "obj/src/network/inet_aton.lo": "does not define inet_aton",
-  "obj/src/network/inet_pton.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/network/listen.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/lookup_ipliteral.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/network/lookup_serv.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/netlink.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/ntohl.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/network/ntohs.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/network/recvfrom.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/recvmmsg.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/recvmsg.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/network/res_mkquery.lo": "does not define res_mkquery",
   "obj/src/network/res_query.lo": "does not define res_search",
   "obj/src/network/res_send.lo": "does not define res_send",
-  "obj/src/network/resolvconf.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/sendmmsg.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/sendmsg.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/sendto.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/setsockopt.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/shutdown.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/socket.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/network/socketpair.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/passwd/getgr_a.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/passwd/getgrouplist.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/passwd/getpw_a.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/passwd/getpwent_a.lo": "atou also defined by obj/src/passwd/getgrent_a.lo",
-  "obj/src/passwd/getspnam_r.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/passwd/nscd_query.lo": "__bswap_16 also defined by obj/src/network/htonl.lo",
-  "obj/src/process/execve.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/process/fexecve.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/process/waitid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/process/waitpid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/regex/regcomp.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/sched/sched_get_priority_max.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/sched/sched_getparam.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/sched/sched_getscheduler.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/sched/sched_rr_get_interval.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/sched/sched_setparam.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/sched/sched_setscheduler.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/passwd/getgrent.lo": "does not define endgrent",
+  "obj/src/passwd/getpwent.lo": "does not define endpwent",
+  "obj/src/process/_Fork.lo": "does not define __aio_atfork",
+  "obj/src/process/fork.lo": "does not define __aio_atfork",
   "obj/src/search/hsearch.lo": "does not define hcreate_r",
-  "obj/src/select/poll.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/select/ppoll.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/select/pselect.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/select/select.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/getitimer.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/kill.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/psignal.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/setitimer.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/sigaltstack.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/signal/signal.lo": "does not define __sysv_signal",
-  "obj/src/signal/sigpending.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/sigsetjmp_tail.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/sigsuspend.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/signal/sigtimedwait.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/chmod.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/fchmod.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/fchmodat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stat/fstat.lo": "does not define fstat",
   "obj/src/stat/fstatat.lo": "does not define fstatat",
   "obj/src/stat/futimesat.lo": "does not define futimesat",
-  "obj/src/stat/mkdir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/mkdirat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/mknod.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/mknodat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stat/statvfs.lo": "does not define fstatfs",
-  "obj/src/stat/umask.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stat/utimensat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__fclose_ca.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/__fdopen.lo": "does not define fdopen",
-  "obj/src/stdio/__fopen_rb_ca.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__overflow.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/__stdio_close.lo": "does not define __aio_close",
   "obj/src/stdio/__stdio_exit.lo": "does not define __stderr_used",
-  "obj/src/stdio/__stdio_read.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__stdio_seek.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__stdio_write.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__stdout_write.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/__uflow.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/clearerr.lo": "does not define clearerr_unlocked",
   "obj/src/stdio/ext.lo": "does not define fpurge",
-  "obj/src/stdio/ext2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/fclose.lo": "does not define __unlist_locked_file",
   "obj/src/stdio/feof.lo": "does not define _IO_feof_unlocked",
   "obj/src/stdio/ferror.lo": "does not define _IO_ferror_unlocked",
   "obj/src/stdio/fflush.lo": "does not define __stderr_used",
-  "obj/src/stdio/fgetln.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/fgetpos.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/fgets.lo": "does not define fgets_unlocked",
+  "obj/src/stdio/fgetwc.lo": "does not define fgetwc_unlocked",
   "obj/src/stdio/fgetws.lo": "does not define fgetws_unlocked",
   "obj/src/stdio/fileno.lo": "does not define fileno_unlocked",
-  "obj/src/stdio/fmemopen.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/fopen.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/fopencookie.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/fputs.lo": "does not define fputs_unlocked",
+  "obj/src/stdio/fputwc.lo": "does not define fputwc_unlocked",
+  "obj/src/stdio/fputws.lo": "does not define fputws_unlocked",
   "obj/src/stdio/fread.lo": "does not define fread_unlocked",
-  "obj/src/stdio/freopen.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/fscanf.lo": "does not define __isoc99_fscanf",
   "obj/src/stdio/fseek.lo": "does not define fseeko",
-  "obj/src/stdio/fsetpos.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/ftell.lo": "does not define ftello",
   "obj/src/stdio/fwrite.lo": "does not define fwrite_unlocked",
   "obj/src/stdio/fwscanf.lo": "does not define __isoc99_fwscanf",
+  "obj/src/stdio/getc.lo": "does not define _IO_getc",
   "obj/src/stdio/getc_unlocked.lo": "does not define _IO_getc_unlocked",
-  "obj/src/stdio/getchar_unlocked.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/getdelim.lo": "does not define __getdelim",
-  "obj/src/stdio/gets.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/getwc.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/getwchar.lo": "does not define getwchar_unlocked",
-  "obj/src/stdio/ofl_add.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/open_memstream.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/open_wmemstream.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/pclose.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/perror.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/popen.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/stdio/putc.lo": "does not define _IO_putc",
   "obj/src/stdio/putc_unlocked.lo": "does not define _IO_putc_unlocked",
-  "obj/src/stdio/putchar_unlocked.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/puts.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/putwc.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/putwchar.lo": "does not define putwchar_unlocked",
-  "obj/src/stdio/remove.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/rename.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/rewind.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/scanf.lo": "does not define __isoc99_scanf",
-  "obj/src/stdio/setvbuf.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/sscanf.lo": "does not define __isoc99_sscanf",
-  "obj/src/stdio/stderr.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/stdin.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/stdout.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/swscanf.lo": "does not define __isoc99_swscanf",
-  "obj/src/stdio/tempnam.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/tmpfile.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/tmpnam.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/ungetc.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/vdprintf.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/stdio/vsnprintf.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/vsscanf.lo": "does not define __isoc99_vsscanf",
-  "obj/src/stdio/vswprintf.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/stdio/vswscanf.lo": "does not define __isoc99_vswscanf",
   "obj/src/stdio/wscanf.lo": "does not define __isoc99_wscanf",
-  "obj/src/stdlib/atoi.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/stdlib/atol.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
-  "obj/src/stdlib/atoll.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
+  "obj/src/stdlib/qsort.lo": "does not define qsort_r",
   "obj/src/stdlib/strtol.lo": "does not define __strtoimax_internal",
   "obj/src/string/memrchr.lo": "does not define memrchr",
   "obj/src/string/stpcpy.lo": "does not define stpcpy",
@@ -390,272 +189,112 @@
   "obj/src/string/strchrnul.lo": "does not define strchrnul",
   "obj/src/string/strerror_r.lo": "does not define __xpg_strerror_r",
   "obj/src/string/strncasecmp.lo": "does not define strncasecmp_l",
-  "obj/src/string/strverscmp.lo": "__isspace also defined by obj/src/ctype/isascii.lo",
   "obj/src/temp/mkostemps.lo": "does not define mkostemps",
-  "obj/src/termios/tcdrain.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/termios/tcgetwinsize.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/termios/tcsetwinsize.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/thread/__timedwait.lo": "does not define __eintr_valid_flag",
+  "obj/src/thread/pthread_cleanup_push.lo": "does not define __do_cleanup_pop",
+  "obj/src/thread/pthread_cond_timedwait.lo": "does not define pthread_cond_timedwait",
+  "obj/src/thread/pthread_detach.lo": "does not define pthread_detach",
   "obj/src/thread/pthread_equal.lo": "does not define pthread_equal",
-  "obj/src/thread/pthread_sigmask.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/thread/thrd_sleep.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/__map_file.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/clock_getcpuclockid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/clock_getres.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/thread/pthread_getspecific.lo": "does not define pthread_getspecific",
+  "obj/src/thread/pthread_join.lo": "does not define __tl_sync",
+  "obj/src/thread/pthread_key_create.lo": "does not define __tl_lock",
+  "obj/src/thread/pthread_mutex_lock.lo": "does not define pthread_mutex_lock",
+  "obj/src/thread/pthread_mutex_timedlock.lo": "does not define pthread_mutex_timedlock",
+  "obj/src/thread/pthread_mutex_trylock.lo": "does not define pthread_mutex_trylock",
+  "obj/src/thread/pthread_mutex_unlock.lo": "does not define pthread_mutex_unlock",
+  "obj/src/thread/pthread_once.lo": "does not define pthread_once",
+  "obj/src/thread/pthread_rwlock_rdlock.lo": "does not define pthread_rwlock_rdlock",
+  "obj/src/thread/pthread_rwlock_timedrdlock.lo": "does not define pthread_rwlock_timedrdlock",
+  "obj/src/thread/pthread_rwlock_timedwrlock.lo": "does not define pthread_rwlock_timedwrlock",
+  "obj/src/thread/pthread_rwlock_tryrdlock.lo": "does not define pthread_rwlock_tryrdlock",
+  "obj/src/thread/pthread_rwlock_trywrlock.lo": "does not define pthread_rwlock_trywrlock",
+  "obj/src/thread/pthread_rwlock_unlock.lo": "does not define pthread_rwlock_unlock",
+  "obj/src/thread/pthread_rwlock_wrlock.lo": "does not define pthread_rwlock_wrlock",
+  "obj/src/thread/pthread_self.lo": "does not define pthread_self",
+  "obj/src/thread/pthread_setcancelstate.lo": "does not define pthread_setcancelstate",
+  "obj/src/thread/pthread_testcancel.lo": "does not define __testcancel",
+  "obj/src/thread/synccall.lo": "does not define __tl_lock",
+  "obj/src/time/__tz.lo": "does not define daylight",
+  "obj/src/time/asctime_r.lo": "does not define asctime_r",
+  "obj/src/time/clock_gettime.lo": "does not define clock_gettime",
   "obj/src/time/clock_nanosleep.lo": "does not define clock_nanosleep",
-  "obj/src/time/clock_settime.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/gettimeofday.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/time/gmtime_r.lo": "does not define gmtime_r",
   "obj/src/time/localtime_r.lo": "does not define localtime_r",
-  "obj/src/time/nanosleep.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/time.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/time/times.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/access.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/acct.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/alarm.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/chdir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/chown.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
+  "obj/src/time/timer_create.lo": "does not define __pthread_tsd_run_dtors",
+  "obj/src/time/wcsftime.lo": "does not define wcsftime_l",
   "obj/src/unistd/close.lo": "does not define __aio_close",
-  "obj/src/unistd/dup.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/dup2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
   "obj/src/unistd/dup3.lo": "does not define dup3",
-  "obj/src/unistd/fchdir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/fchown.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/fchownat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/fdatasync.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/fsync.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/ftruncate.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getegid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/geteuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getgroups.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getpgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getpgrp.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getpid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getppid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getsid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/getuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/isatty.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/lchown.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/link.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/linkat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/lseek.lo": "does not define lseek",
-  "obj/src/unistd/nice.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pause.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pipe.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pipe2.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pread.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/preadv.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pwrite.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/pwritev.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/read.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/readlink.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/readlinkat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/readv.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/renameat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/rmdir.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setegid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/seteuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setpgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setregid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setresgid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setresuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setreuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setsid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setuid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/setxid.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/symlink.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/symlinkat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/sync.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/truncate.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/ttyname_r.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/unlink.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/unlinkat.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/write.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo",
-  "obj/src/unistd/writev.lo": "__alt_socketcall also defined by obj/src/conf/sysconf.lo"
+  "obj/src/unistd/lseek.lo": "does not define lseek"
  },
  "symbolParity": {
-  "obj/src/conf/sysconf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/crypt/crypt_blowfish.lo": {
-   "added": [
-    "BF_crypt",
-    "BF_decode",
-    "BF_encode",
-    "BF_encrypt",
-    "BF_set_key",
-    "BF_swap"
-   ],
-   "missing": []
-  },
-  "obj/src/crypt/crypt_des.lo": {
-   "added": [
-    "_crypt_extended_r_uut",
-    "ascii_is_unsafe",
-    "ascii_to_bin",
-    "des_cipher",
-    "setup_salt"
-   ],
-   "missing": []
-  },
-  "obj/src/crypt/crypt_md5.lo": {
-   "added": [
-    "md5_init",
-    "md5_sum",
-    "md5_update",
-    "md5crypt",
-    "pad",
-    "processblock",
-    "rol",
-    "to64"
-   ],
-   "missing": []
-  },
   "obj/src/crypt/crypt_r.lo": {
    "added": [],
    "missing": [
     "crypt_r"
    ]
   },
-  "obj/src/crypt/crypt_sha256.lo": {
-   "added": [
-    "__isspace",
-    "hashmd",
-    "pad",
-    "processblock",
-    "ror",
-    "sha256_init",
-    "sha256_sum",
-    "sha256_update",
-    "sha256crypt",
-    "to64"
-   ],
-   "missing": []
-  },
-  "obj/src/crypt/crypt_sha512.lo": {
-   "added": [
-    "__isspace",
-    "hashmd",
-    "pad",
-    "processblock",
-    "ror",
-    "sha512_init",
-    "sha512_sum",
-    "sha512_update",
-    "sha512crypt",
-    "to64"
-   ],
-   "missing": []
-  },
-  "obj/src/ctype/__ctype_b_loc.lo": {
-   "added": [
-    "__bswap16",
-    "__bswap32",
-    "__bswap64"
-   ],
-   "missing": []
-  },
   "obj/src/ctype/isalnum.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isalnum_l"
    ]
   },
   "obj/src/ctype/isalpha.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isalpha_l"
    ]
   },
-  "obj/src/ctype/isascii.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
   "obj/src/ctype/isblank.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isblank_l"
    ]
   },
   "obj/src/ctype/iscntrl.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "iscntrl_l"
    ]
   },
   "obj/src/ctype/isdigit.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isdigit_l"
    ]
   },
   "obj/src/ctype/isgraph.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isgraph_l"
    ]
   },
   "obj/src/ctype/islower.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "islower_l"
    ]
   },
   "obj/src/ctype/isprint.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isprint_l"
    ]
   },
   "obj/src/ctype/ispunct.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "ispunct_l"
    ]
   },
   "obj/src/ctype/isspace.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isspace_l"
    ]
   },
   "obj/src/ctype/isupper.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isupper_l"
    ]
@@ -673,9 +312,7 @@
    ]
   },
   "obj/src/ctype/iswblank.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "iswblank_l"
    ]
@@ -742,39 +379,25 @@
    ]
   },
   "obj/src/ctype/isxdigit.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "isxdigit_l"
    ]
   },
-  "obj/src/ctype/toascii.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
   "obj/src/ctype/tolower.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "tolower_l"
    ]
   },
   "obj/src/ctype/toupper.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "toupper_l"
    ]
   },
   "obj/src/ctype/towctrans.lo": {
-   "added": [
-    "casemap"
-   ],
+   "added": [],
    "missing": [
     "towlower_l",
     "towupper_l"
@@ -787,45 +410,6 @@
     "wctrans_l"
    ]
   },
-  "obj/src/dirent/opendir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/dirent/posix_getdents.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/dirent/readdir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/env/__environ.lo": {
    "added": [],
    "missing": [
@@ -834,112 +418,47 @@
     "environ"
    ]
   },
+  "obj/src/env/__init_tls.lo": {
+   "added": [],
+   "missing": [
+    "__init_tls"
+   ]
+  },
+  "obj/src/env/__stack_chk_fail.lo": {
+   "added": [],
+   "missing": [
+    "__stack_chk_fail_local"
+   ]
+  },
+  "obj/src/env/clearenv.lo": {
+   "added": [],
+   "missing": [
+    "__env_rm_add"
+   ]
+  },
   "obj/src/env/putenv.lo": {
-   "added": [
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__env_rm_add"
    ]
   },
   "obj/src/env/unsetenv.lo": {
-   "added": [
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__env_rm_add"
    ]
   },
-  "obj/src/exit/_Exit.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/errno/__errno_location.lo": {
+   "added": [],
+   "missing": [
+    "___errno_location"
+   ]
   },
-  "obj/src/fcntl/fcntl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/fcntl/open.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/fcntl/openat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/fcntl/posix_fadvise.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/fcntl/posix_fallocate.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/internal/emulate_wait4.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/errno/strerror.lo": {
+   "added": [],
+   "missing": [
+    "strerror_l"
+   ]
   },
   "obj/src/internal/libc.lo": {
    "added": [],
@@ -948,229 +467,32 @@
     "program_invocation_short_name"
    ]
   },
-  "obj/src/internal/procfdname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/internal/shgetc.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/internal/syscall_ret.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/internal/vdso.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "checkver",
-    "count_syms_gnu"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/msgctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__bswap16",
-    "__bswap32",
-    "__bswap64",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/msgget.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/msgrcv.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/msgsnd.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/semget.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/semop.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/semtimedop.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/shmat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/shmctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__bswap16",
-    "__bswap32",
-    "__bswap64",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/shmdt.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/ipc/shmget.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/ldso/__dlsym.lo": {
-   "added": [
-    "stub_dlsym"
-   ],
+   "added": [],
    "missing": [
     "__dlsym"
    ]
   },
+  "obj/src/ldso/dl_iterate_phdr.lo": {
+   "added": [],
+   "missing": [
+    "dl_iterate_phdr"
+   ]
+  },
   "obj/src/ldso/dladdr.lo": {
-   "added": [
-    "stub_dladdr"
-   ],
+   "added": [],
    "missing": [
     "dladdr"
    ]
   },
+  "obj/src/ldso/dlerror.lo": {
+   "added": [],
+   "missing": [
+    "__dl_invalid_handle"
+   ]
+  },
   "obj/src/ldso/dlopen.lo": {
-   "added": [
-    "stub_dlopen"
-   ],
+   "added": [],
    "missing": [
     "dlopen"
    ]
@@ -1182,9 +504,7 @@
    ]
   },
   "obj/src/legacy/utmpx.lo": {
-   "added": [
-    "__utmpxname"
-   ],
+   "added": [],
    "missing": [
     "endutent",
     "getutent",
@@ -1197,871 +517,95 @@
     "utmpxname"
    ]
   },
-  "obj/src/linux/adjtime.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/arch_prctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/brk.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/cap.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/chroot.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/clock_adjtime.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/copy_file_range.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/epoll.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/eventfd.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/fallocate.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/fanotify.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/flock.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/getdents.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/getrandom.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/ioperm.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/iopl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/klogctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/memfd_create.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/mlock2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/module.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/mount.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/name_to_handle_at.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/open_by_handle_at.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/personality.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/pivot_root.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/prctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/preadv2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/prlimit.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/process_vm.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/ptrace.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/pwritev2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/quotactl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/readahead.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/reboot.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/remap_file_pages.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/renameat2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/sbrk.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/sendfile.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/setfsgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/setfsuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/setgroups.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "do_setgroups"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/sethostname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/setns.lo": {
-   "added": [
-    "__CPU_AND_S",
-    "__CPU_OR_S",
-    "__CPU_XOR_S",
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/settimeofday.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/signalfd.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/splice.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/statx.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/swap.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/sync_file_range.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/linux/syncfs.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/linux/membarrier.lo": {
+   "added": [],
+   "missing": [
+    "__tl_lock",
+    "__tl_unlock",
+    "membarrier"
+   ]
   },
   "obj/src/linux/sysinfo.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "sysinfo"
    ]
   },
-  "obj/src/linux/tee.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/__lctrans.lo": {
+   "added": [],
+   "missing": [
+    "__lctrans_impl"
+   ]
   },
-  "obj/src/linux/timerfd.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/duplocale.lo": {
+   "added": [],
+   "missing": [
+    "duplocale"
+   ]
   },
-  "obj/src/linux/unshare.lo": {
-   "added": [
-    "__CPU_AND_S",
-    "__CPU_OR_S",
-    "__CPU_XOR_S",
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/freelocale.lo": {
+   "added": [],
+   "missing": [
+    "__freelocale"
+   ]
   },
-  "obj/src/linux/utimes.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/langinfo.lo": {
+   "added": [],
+   "missing": [
+    "nl_langinfo",
+    "nl_langinfo_l"
+   ]
   },
-  "obj/src/linux/vhangup.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/newlocale.lo": {
+   "added": [],
+   "missing": [
+    "newlocale"
+   ]
   },
-  "obj/src/linux/vmsplice.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/strcoll.lo": {
+   "added": [],
+   "missing": [
+    "strcoll_l"
+   ]
   },
-  "obj/src/linux/wait3.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/strxfrm.lo": {
+   "added": [],
+   "missing": [
+    "strxfrm_l"
+   ]
   },
-  "obj/src/linux/wait4.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/uselocale.lo": {
+   "added": [],
+   "missing": [
+    "uselocale"
+   ]
   },
-  "obj/src/linux/xattr.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/locale/wcscoll.lo": {
+   "added": [],
+   "missing": [
+    "wcscoll_l"
+   ]
   },
-  "obj/src/locale/__mo_lookup.lo": {
-   "added": [
-    "swapc"
-   ],
-   "missing": []
-  },
-  "obj/src/locale/catclose.lo": {
-   "added": [
-    "__bswap16",
-    "__bswap32",
-    "__bswap64"
-   ],
-   "missing": []
-  },
-  "obj/src/locale/catgets.lo": {
-   "added": [
-    "__bswap16",
-    "__bswap32",
-    "__bswap64",
-    "cmp"
-   ],
-   "missing": []
-  },
-  "obj/src/locale/catopen.lo": {
-   "added": [
-    "__bswap16",
-    "__bswap32",
-    "__bswap64",
-    "do_catopen"
-   ],
-   "missing": []
-  },
-  "obj/src/locale/pleval.lo": {
-   "added": [
-    "__isspace",
-    "binop",
-    "evalbinop",
-    "evalexpr",
-    "evalprim",
-    "parseop",
-    "skipspace"
-   ],
-   "missing": []
+  "obj/src/locale/wcsxfrm.lo": {
+   "added": [],
+   "missing": [
+    "wcsxfrm_l"
+   ]
   },
   "obj/src/malloc/calloc.lo": {
-   "added": [
-    "allzerop",
-    "mal0_clear"
-   ],
+   "added": [],
    "missing": [
     "__malloc_allzerop"
    ]
   },
   "obj/src/malloc/libc_calloc.lo": {
-   "added": [
-    "allzerop",
-    "mal0_clear"
-   ],
+   "added": [],
    "missing": [
     "__malloc_allzerop"
    ]
   },
   "obj/src/malloc/lite_malloc.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__simple_malloc",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "default_malloc",
-    "traverses_stack_p"
-   ],
+   "added": [],
    "missing": [
     "__libc_malloc_impl",
     "malloc"
@@ -2073,521 +617,63 @@
     "__xpg_basename"
    ]
   },
-  "obj/src/misc/fmtmsg.lo": {
-   "added": [
-    "_strcolcmp"
-   ],
-   "missing": []
-  },
   "obj/src/misc/getauxval.lo": {
    "added": [],
    "missing": [
     "getauxval"
    ]
   },
-  "obj/src/misc/getpriority.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/getresgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/getresuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/getrlimit.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/getrusage.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/ioctl.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__bswap16",
-    "__bswap32",
-    "__bswap64",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "convert_ioctl_struct"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/mntent.lo": {
-   "added": [
-    "unescape_ent"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/nftw.lo": {
-   "added": [
-    "do_nftw"
-   ],
-   "missing": []
+  "obj/src/misc/getopt.lo": {
+   "added": [],
+   "missing": [
+    "__posix_getopt",
+    "optreset"
+   ]
   },
   "obj/src/misc/pty.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "ptsname_r"
    ]
   },
-  "obj/src/misc/realpath.lo": {
-   "added": [
-    "slash_len"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/setdomainname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/setpriority.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/setrlimit.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "do_setrlimit"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/syscall.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/misc/uname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/misc/syslog.lo": {
+   "added": [],
+   "missing": [
+    "vsyslog"
+   ]
   },
   "obj/src/mman/madvise.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "madvise"
    ]
   },
-  "obj/src/mman/mincore.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mman/mlock.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mman/mlockall.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/mman/mmap.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__vm_wait",
     "mmap"
    ]
   },
   "obj/src/mman/mprotect.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "mprotect"
    ]
   },
   "obj/src/mman/mremap.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__vm_wait",
     "mremap"
    ]
   },
-  "obj/src/mman/msync.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mman/munlock.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mman/munlockall.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/mman/munmap.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__vm_wait",
     "munmap"
    ]
-  },
-  "obj/src/mman/posix_madvise.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_close.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_getattr.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_open.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_setattr.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_timedreceive.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_timedsend.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/mq/mq_unlink.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/accept.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/accept4.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/bind.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/connect.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/dn_comp.lo": {
-   "added": [
-    "getlens",
-    "getoffs",
-    "match"
-   ],
-   "missing": []
   },
   "obj/src/network/dn_expand.lo": {
    "added": [],
@@ -2595,231 +681,18 @@
     "dn_expand"
    ]
   },
-  "obj/src/network/getaddrinfo.lo": {
-   "added": [
-    "__bswap16",
-    "__bswap32",
-    "__bswap64"
-   ],
-   "missing": []
-  },
-  "obj/src/network/getnameinfo.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__isspace",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dns_parse_callback",
-    "itoa",
-    "mkptr4",
-    "mkptr6",
-    "reverse_hosts",
-    "reverse_services"
-   ],
-   "missing": []
-  },
-  "obj/src/network/getpeername.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/getsockname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/getsockopt.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/htonl.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/network/htons.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/network/if_indextoname.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/if_nametoindex.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/network/ent.lo": {
+   "added": [],
+   "missing": [
+    "endnetent",
+    "setnetent"
+   ]
   },
   "obj/src/network/inet_aton.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "inet_aton"
    ]
-  },
-  "obj/src/network/inet_pton.lo": {
-   "added": [
-    "__isspace",
-    "hexval"
-   ],
-   "missing": []
-  },
-  "obj/src/network/listen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/lookup_ipliteral.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
-  "obj/src/network/lookup_serv.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__isspace",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/netlink.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__netlink_enumerate",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/ntohl.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/network/ntohs.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/network/recvfrom.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/recvmmsg.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/recvmsg.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   },
   "obj/src/network/res_mkquery.lo": {
    "added": [],
@@ -2839,854 +712,101 @@
     "res_send"
    ]
   },
-  "obj/src/network/resolvconf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__isspace",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/passwd/getgrent.lo": {
+   "added": [],
+   "missing": [
+    "endgrent"
+   ]
   },
-  "obj/src/network/sendmmsg.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/passwd/getpwent.lo": {
+   "added": [],
+   "missing": [
+    "endpwent"
+   ]
   },
-  "obj/src/network/sendmsg.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/process/_Fork.lo": {
+   "added": [],
+   "missing": [
+    "__aio_atfork"
+   ]
   },
-  "obj/src/network/sendto.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/setsockopt.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/shutdown.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/socket.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/network/socketpair.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getgr_a.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64",
-    "itoa"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getgr_r.lo": {
-   "added": [
-    "getgr_r"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getgrent_a.lo": {
-   "added": [
-    "atou"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getgrouplist.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getpw_a.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64",
-    "itoa"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getpw_r.lo": {
-   "added": [
-    "getpw_r"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getpwent_a.lo": {
-   "added": [
-    "atou"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/getspnam_r.lo": {
-   "added": [
-    "__isspace",
-    "cleanup",
-    "xatol"
-   ],
-   "missing": []
-  },
-  "obj/src/passwd/nscd_query.lo": {
-   "added": [
-    "__bswap_16",
-    "__bswap_32",
-    "__bswap_64"
-   ],
-   "missing": []
-  },
-  "obj/src/prng/rand_r.lo": {
-   "added": [
-    "temper"
-   ],
-   "missing": []
-  },
-  "obj/src/process/execve.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/process/fexecve.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/process/waitid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/process/waitpid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/regex/regcomp.lo": {
-   "added": [
-    "__isspace",
-    "add_icase_literals",
-    "hexval",
-    "marksub",
-    "parse_atom",
-    "parse_bracket",
-    "parse_bracket_terms",
-    "parse_dup",
-    "parse_dup_count",
-    "tre_add_tag_left",
-    "tre_add_tag_right",
-    "tre_add_tags",
-    "tre_ast_new_catenation",
-    "tre_ast_new_iter",
-    "tre_ast_new_literal",
-    "tre_ast_new_node",
-    "tre_ast_new_union",
-    "tre_ast_to_tnfa",
-    "tre_compare_lit",
-    "tre_compute_nfl",
-    "tre_copy_ast",
-    "tre_expand_ast",
-    "tre_expand_macro",
-    "tre_make_trans",
-    "tre_match_empty",
-    "tre_new_lit",
-    "tre_parse",
-    "tre_purge_regset",
-    "tre_set_empty",
-    "tre_set_one",
-    "tre_set_union",
-    "tre_stack_destroy",
-    "tre_stack_new",
-    "tre_stack_num_objects",
-    "tre_stack_pop_int",
-    "tre_stack_pop_voidptr",
-    "tre_stack_push",
-    "tre_stack_push_int",
-    "tre_stack_push_voidptr"
-   ],
-   "missing": []
-  },
-  "obj/src/regex/regexec.lo": {
-   "added": [
-    "tre_fill_pmatch",
-    "tre_neg_char_classes_match",
-    "tre_tag_order",
-    "tre_tnfa_run_backtrack",
-    "tre_tnfa_run_parallel"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_cpucount.lo": {
-   "added": [
-    "__CPU_AND_S",
-    "__CPU_OR_S",
-    "__CPU_XOR_S"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_get_priority_max.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_getparam.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_getscheduler.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_rr_get_interval.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_setparam.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/sched/sched_setscheduler.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/process/fork.lo": {
+   "added": [],
+   "missing": [
+    "__aio_atfork",
+    "__at_quick_exit_lockptr",
+    "__atexit_lockptr",
+    "__bump_lockptr",
+    "__fork_handler",
+    "__gettext_lockptr",
+    "__ldso_atfork",
+    "__locale_lockptr",
+    "__malloc_atfork",
+    "__pthread_key_atfork",
+    "__random_lockptr",
+    "__sem_open_lockptr",
+    "__stdio_ofl_lockptr",
+    "__syslog_lockptr",
+    "__timezone_lockptr",
+    "__tl_lock",
+    "__tl_unlock",
+    "__vmlock_lockptr"
+   ]
   },
   "obj/src/search/hsearch.lo": {
-   "added": [
-    "__hcreate_r",
-    "__hdestroy_r",
-    "__hsearch_r",
-    "keyhash",
-    "lookup",
-    "resize"
-   ],
+   "added": [],
    "missing": [
     "hcreate_r",
     "hdestroy_r",
     "hsearch_r"
    ]
   },
-  "obj/src/search/tsearch.lo": {
-   "added": [
-    "height",
-    "rot"
-   ],
-   "missing": []
-  },
-  "obj/src/search/twalk.lo": {
-   "added": [
-    "walk"
-   ],
-   "missing": []
-  },
-  "obj/src/select/poll.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/select/ppoll.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/select/pselect.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/select/select.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/getitimer.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/kill.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/psignal.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/setitimer.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/sigaltstack.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/signal/signal.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "__sysv_signal",
     "bsd_signal"
    ]
   },
-  "obj/src/signal/sigpending.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/sigsetjmp_tail.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/sigsuspend.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/signal/sigtimedwait.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "do_sigtimedwait"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/chmod.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/fchmod.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/fchmodat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stat/fstat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fstat"
    ]
   },
   "obj/src/stat/fstatat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "fstatat_kstat",
-    "fstatat_statx"
-   ],
+   "added": [],
    "missing": [
     "fstatat"
    ]
   },
   "obj/src/stat/futimesat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "futimesat"
    ]
   },
-  "obj/src/stat/mkdir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/mkdirat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/mknod.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/mknodat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stat/statvfs.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__fstatfs",
-    "__statfs",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "fixup"
-   ],
+   "added": [],
    "missing": [
     "fstatfs",
     "statfs"
    ]
   },
-  "obj/src/stat/umask.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stat/utimensat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__fclose_ca.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/__fdopen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fdopen"
    ]
   },
-  "obj/src/stdio/__fopen_rb_ca.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__overflow.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/__stdio_close.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__aio_close"
    ]
   },
   "obj/src/stdio/__stdio_exit.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "close_file"
-   ],
+   "added": [],
    "missing": [
     "__stderr_used",
     "__stdin_used",
@@ -3694,339 +814,95 @@
     "__stdout_used"
    ]
   },
-  "obj/src/stdio/__stdio_read.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__stdio_seek.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__stdio_write.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__stdout_write.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/__uflow.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/clearerr.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "clearerr_unlocked"
    ]
   },
   "obj/src/stdio/ext.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fpurge"
    ]
   },
-  "obj/src/stdio/ext2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/fclose.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__unlist_locked_file"
    ]
   },
   "obj/src/stdio/feof.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "_IO_feof_unlocked",
     "feof_unlocked"
    ]
   },
   "obj/src/stdio/ferror.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "_IO_ferror_unlocked",
     "ferror_unlocked"
    ]
   },
   "obj/src/stdio/fflush.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "__stderr_used",
     "__stdout_used",
     "fflush_unlocked"
    ]
   },
-  "obj/src/stdio/fgetln.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/fgetpos.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/fgets.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fgets_unlocked"
    ]
   },
+  "obj/src/stdio/fgetwc.lo": {
+   "added": [],
+   "missing": [
+    "fgetwc_unlocked",
+    "getwc_unlocked"
+   ]
+  },
   "obj/src/stdio/fgetws.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fgetws_unlocked"
    ]
   },
   "obj/src/stdio/fileno.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fileno_unlocked"
    ]
   },
-  "obj/src/stdio/fmemopen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "mclose",
-    "mread",
-    "mseek",
-    "mwrite"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/fopen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/fopencookie.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "cookieclose",
-    "cookieread",
-    "cookieseek",
-    "cookiewrite"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/fputs.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fputs_unlocked"
    ]
   },
+  "obj/src/stdio/fputwc.lo": {
+   "added": [],
+   "missing": [
+    "fputwc_unlocked",
+    "putwc_unlocked"
+   ]
+  },
+  "obj/src/stdio/fputws.lo": {
+   "added": [],
+   "missing": [
+    "fputws_unlocked"
+   ]
+  },
   "obj/src/stdio/fread.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fread_unlocked"
    ]
-  },
-  "obj/src/stdio/freopen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   },
   "obj/src/stdio/fscanf.lo": {
    "added": [],
@@ -4035,59 +911,19 @@
    ]
   },
   "obj/src/stdio/fseek.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fseeko"
    ]
   },
-  "obj/src/stdio/fsetpos.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/ftell.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "ftello"
    ]
   },
   "obj/src/stdio/fwrite.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "fwrite_unlocked"
    ]
@@ -4098,283 +934,49 @@
     "__isoc99_fwscanf"
    ]
   },
+  "obj/src/stdio/getc.lo": {
+   "added": [],
+   "missing": [
+    "_IO_getc"
+   ]
+  },
   "obj/src/stdio/getc_unlocked.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "_IO_getc_unlocked",
     "fgetc_unlocked"
    ]
   },
-  "obj/src/stdio/getchar_unlocked.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/getdelim.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "__getdelim"
    ]
   },
-  "obj/src/stdio/gets.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/getwc.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/getwchar.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "getwchar_unlocked"
    ]
   },
-  "obj/src/stdio/ofl_add.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/open_memstream.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "ms_close",
-    "ms_seek",
-    "ms_write"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/open_wmemstream.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "wms_close",
-    "wms_seek",
-    "wms_write"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/pclose.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/perror.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/popen.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/stdio/putc.lo": {
+   "added": [],
+   "missing": [
+    "_IO_putc"
+   ]
   },
   "obj/src/stdio/putc_unlocked.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "_IO_putc_unlocked",
     "fputc_unlocked"
    ]
   },
-  "obj/src/stdio/putchar_unlocked.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/puts.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/putwc.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/putwchar.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "putwchar_unlocked"
    ]
-  },
-  "obj/src/stdio/remove.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/rename.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/rewind.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   },
   "obj/src/stdio/scanf.lo": {
    "added": [],
@@ -4382,63 +984,11 @@
     "__isoc99_scanf"
    ]
   },
-  "obj/src/stdio/setvbuf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/sscanf.lo": {
    "added": [],
    "missing": [
     "__isoc99_sscanf"
    ]
-  },
-  "obj/src/stdio/stderr.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/stdin.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/stdout.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   },
   "obj/src/stdio/swscanf.lo": {
    "added": [],
@@ -4446,127 +996,14 @@
     "__isoc99_swscanf"
    ]
   },
-  "obj/src/stdio/tempnam.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/tmpfile.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/tmpnam.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/ungetc.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/vdprintf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/stdio/vsnprintf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "sn_write"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/vsscanf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "string_read"
-   ],
+   "added": [],
    "missing": [
     "__isoc99_vsscanf"
    ]
   },
-  "obj/src/stdio/vswprintf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "sw_write"
-   ],
-   "missing": []
-  },
   "obj/src/stdio/vswscanf.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "wstring_read"
-   ],
+   "added": [],
    "missing": [
     "__isoc99_vswscanf"
    ]
@@ -4577,43 +1014,14 @@
     "__isoc99_wscanf"
    ]
   },
-  "obj/src/stdlib/atoi.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
-  "obj/src/stdlib/atol.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
-  "obj/src/stdlib/atoll.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
-  "obj/src/stdlib/qsort_nr.lo": {
-   "added": [
-    "wrapper_cmp"
-   ],
-   "missing": []
+  "obj/src/stdlib/qsort.lo": {
+   "added": [],
+   "missing": [
+    "qsort_r"
+   ]
   },
   "obj/src/stdlib/strtol.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__isspace",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "strtox"
-   ],
+   "added": [],
    "missing": [
     "__strtoimax_internal",
     "__strtol_internal",
@@ -4622,15 +1030,6 @@
     "__strtoull_internal",
     "__strtoumax_internal"
    ]
-  },
-  "obj/src/string/memmem.lo": {
-   "added": [
-    "fourbyte_memmem",
-    "threebyte_memmem",
-    "twobyte_memmem",
-    "twoway_memmem"
-   ],
-   "missing": []
   },
   "obj/src/string/memrchr.lo": {
    "added": [],
@@ -4651,9 +1050,7 @@
    ]
   },
   "obj/src/string/strcasecmp.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "strcasecmp_l"
    ]
@@ -4671,33 +1068,10 @@
    ]
   },
   "obj/src/string/strncasecmp.lo": {
-   "added": [
-    "__isspace"
-   ],
+   "added": [],
    "missing": [
     "strncasecmp_l"
    ]
-  },
-  "obj/src/string/strstr.lo": {
-   "added": [
-    "fourbyte_strstr",
-    "threebyte_strstr",
-    "twobyte_strstr",
-    "twoway_strstr"
-   ],
-   "missing": []
-  },
-  "obj/src/string/strverscmp.lo": {
-   "added": [
-    "__isspace"
-   ],
-   "missing": []
-  },
-  "obj/src/string/wcsstr.lo": {
-   "added": [
-    "twoway_wcsstr"
-   ],
-   "missing": []
   },
   "obj/src/temp/mkostemps.lo": {
    "added": [],
@@ -4705,159 +1079,189 @@
     "mkostemps"
    ]
   },
-  "obj/src/termios/tcdrain.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/__timedwait.lo": {
+   "added": [],
+   "missing": [
+    "__eintr_valid_flag"
+   ]
   },
-  "obj/src/termios/tcgetwinsize.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_cleanup_push.lo": {
+   "added": [],
+   "missing": [
+    "__do_cleanup_pop",
+    "__do_cleanup_push"
+   ]
   },
-  "obj/src/termios/tcsetwinsize.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_cond_timedwait.lo": {
+   "added": [],
+   "missing": [
+    "pthread_cond_timedwait"
+   ]
+  },
+  "obj/src/thread/pthread_detach.lo": {
+   "added": [],
+   "missing": [
+    "pthread_detach",
+    "thrd_detach"
+   ]
   },
   "obj/src/thread/pthread_equal.lo": {
-   "added": [
-    "__pthread_equal"
-   ],
+   "added": [],
    "missing": [
     "pthread_equal",
     "thrd_equal"
    ]
   },
-  "obj/src/thread/pthread_sigmask.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_getspecific.lo": {
+   "added": [],
+   "missing": [
+    "pthread_getspecific",
+    "tss_get"
+   ]
   },
-  "obj/src/thread/thrd_sleep.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_join.lo": {
+   "added": [],
+   "missing": [
+    "__tl_sync",
+    "pthread_join",
+    "pthread_timedjoin_np",
+    "pthread_tryjoin_np"
+   ]
   },
-  "obj/src/time/__map_file.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_key_create.lo": {
+   "added": [],
+   "missing": [
+    "__tl_lock",
+    "__tl_unlock",
+    "pthread_key_create",
+    "pthread_key_delete"
+   ]
   },
-  "obj/src/time/clock_getcpuclockid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_mutex_lock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_mutex_lock"
+   ]
   },
-  "obj/src/time/clock_getres.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/thread/pthread_mutex_timedlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_mutex_timedlock"
+   ]
+  },
+  "obj/src/thread/pthread_mutex_trylock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_mutex_trylock"
+   ]
+  },
+  "obj/src/thread/pthread_mutex_unlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_mutex_unlock"
+   ]
+  },
+  "obj/src/thread/pthread_once.lo": {
+   "added": [],
+   "missing": [
+    "pthread_once"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_rdlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_rdlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_timedrdlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_timedrdlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_timedwrlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_timedwrlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_tryrdlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_tryrdlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_trywrlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_trywrlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_unlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_unlock"
+   ]
+  },
+  "obj/src/thread/pthread_rwlock_wrlock.lo": {
+   "added": [],
+   "missing": [
+    "pthread_rwlock_wrlock"
+   ]
+  },
+  "obj/src/thread/pthread_self.lo": {
+   "added": [],
+   "missing": [
+    "pthread_self",
+    "thrd_current"
+   ]
+  },
+  "obj/src/thread/pthread_setcancelstate.lo": {
+   "added": [],
+   "missing": [
+    "pthread_setcancelstate"
+   ]
+  },
+  "obj/src/thread/pthread_testcancel.lo": {
+   "added": [],
+   "missing": [
+    "__testcancel",
+    "pthread_testcancel"
+   ]
+  },
+  "obj/src/thread/synccall.lo": {
+   "added": [],
+   "missing": [
+    "__tl_lock",
+    "__tl_unlock"
+   ]
+  },
+  "obj/src/time/__tz.lo": {
+   "added": [],
+   "missing": [
+    "daylight",
+    "timezone",
+    "tzname",
+    "tzset"
+   ]
+  },
+  "obj/src/time/asctime_r.lo": {
+   "added": [],
+   "missing": [
+    "asctime_r"
+   ]
+  },
+  "obj/src/time/clock_gettime.lo": {
+   "added": [],
+   "missing": [
+    "clock_gettime"
+   ]
   },
   "obj/src/time/clock_nanosleep.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "clock_nanosleep"
    ]
-  },
-  "obj/src/time/clock_settime.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/time/gettimeofday.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   },
   "obj/src/time/gmtime_r.lo": {
    "added": [],
@@ -4871,890 +1275,64 @@
     "localtime_r"
    ]
   },
-  "obj/src/time/nanosleep.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/time/timer_create.lo": {
+   "added": [],
+   "missing": [
+    "__pthread_tsd_run_dtors"
+   ]
   },
-  "obj/src/time/time.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/time/times.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/access.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/acct.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/alarm.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/chdir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/chown.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
+  "obj/src/time/wcsftime.lo": {
+   "added": [],
+   "missing": [
+    "wcsftime_l"
+   ]
   },
   "obj/src/unistd/close.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "dummy"
-   ],
+   "added": [],
    "missing": [
     "__aio_close"
    ]
   },
-  "obj/src/unistd/dup.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/dup2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/unistd/dup3.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "dup3"
    ]
   },
-  "obj/src/unistd/fchdir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/fchown.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/fchownat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/fdatasync.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/fsync.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/ftruncate.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getegid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/geteuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getgroups.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getpgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getpgrp.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getpid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getppid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getsid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/getuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/isatty.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/lchown.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/link.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/linkat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
   "obj/src/unistd/lseek.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
+   "added": [],
    "missing": [
     "lseek"
    ]
-  },
-  "obj/src/unistd/nice.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pause.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pipe.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pipe2.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pread.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/preadv.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pwrite.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/pwritev.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/read.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/readlink.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/readlinkat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/readv.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/renameat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/rmdir.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setegid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/seteuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setpgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setregid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setresgid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setresuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setreuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setsid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setuid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/setxid.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6",
-    "do_setxid"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/symlink.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/symlinkat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/sync.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/truncate.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/ttyname_r.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/unlink.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/unlinkat.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/write.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
-  },
-  "obj/src/unistd/writev.lo": {
-   "added": [
-    "__alt_socketcall",
-    "__syscall0",
-    "__syscall1",
-    "__syscall2",
-    "__syscall3",
-    "__syscall4",
-    "__syscall5",
-    "__syscall6"
-   ],
-   "missing": []
   }
  },
  "adjustments": {
+  "sourcePageBreaksStripped": [],
+  "noreturnSpecifiersRemoved": [
+   "include/assert.h",
+   "include/err.h",
+   "include/pthread.h",
+   "include/setjmp.h",
+   "include/stdlib.h",
+   "include/threads.h",
+   "include/unistd.h",
+   "src/exit/_Exit.c",
+   "src/exit/abort.c",
+   "src/exit/assert.c",
+   "src/exit/exit.c",
+   "src/exit/quick_exit.c",
+   "src/include/pthread.h",
+   "src/legacy/err.c",
+   "src/signal/siglongjmp.c",
+   "src/thread/pthread_create.c",
+   "src/thread/thrd_exit.c",
+   "src/unistd/_exit.c"
+  ],
+  "highBytesReEscaped": [],
   "sysroot": "none: musl is built -nostdinc against its own headers",
   "configure": "--disable-shared, so the library is one set of objects",
-  "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n"
+  "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
+  "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
  },
  "unconsumedGccOptions": {
   "-O2": 1339,
@@ -5805,5 +1383,5 @@
   "-fno-stack-protector": 7,
   "-fno-tree-loop-distribute-patterns": 2
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260906T144702Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260907T153648Z"
 }

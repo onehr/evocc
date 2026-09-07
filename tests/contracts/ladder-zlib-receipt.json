@@ -3,12 +3,12 @@
  "rung": "E1",
  "subject": "zlib",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260907T012912Z",
+ "run": "20260907T144305Z",
  "pin": "1.3.2 (2026-02-17, zlib.net)",
  "url": "https://zlib.net/zlib-1.3.2.tar.gz",
  "tarballSha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
  "tarball": "zlib-1.3.2.tar.gz",
- "driverSha256": "0142c5941de8b61d6193a2111cf890f7f6452969c715532abcff9ee3a08fa46b",
+ "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 19,
  "unitsEvoccCompiled": 19,
@@ -156,6 +156,6 @@
    "repro": "int g(int *a, int e) { return a[e ? 1 : 0]; }\n"
   }
  ],
- "evidence": ".evidence/ladder/zlib/20260907T012912Z",
+ "evidence": ".evidence/ladder/zlib/20260907T144305Z",
  "summaryLine": "zlib: 19 of 19 units by EvoCC in a passing build; refused by code {}"
 }

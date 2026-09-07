@@ -235,9 +235,11 @@ def main() -> int:
         for name, level, note in QUESTIONS
     ]
 
-    head = git("rev-parse", "--short", "HEAD")
+    head = bench["subject"][:7] if bench else git("rev-parse", "--short", "HEAD")
+    observed = (f"{bench['run'][:4]}-{bench['run'][4:6]}-{bench['run'][6:8]} UTC"
+                if bench else date.today().isoformat())
     lines = [
-        f"EvoCC ── ({date.today().isoformat()},EvoIR {evoir} / EvoMIR {evomir},main {head})",
+        f"EvoCC ── ({observed},EvoIR {evoir} / EvoMIR {evomir}, checkout {head})",
         "═" * span,
         "",
         *top,
@@ -253,7 +255,7 @@ def main() -> int:
     if bench:
         text += (
             "\n## Unified benchmark evaluation\n\n"
-            f"Run `{bench['run']}`; compiler `{bench['subject'][:7]}`; "
+            f"Run `{bench['run']}`; checkout `{bench['subject'][:7]}`; "
             f"selected gates `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
             "Program counts and translation-unit counts are different measures; "
             "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
@@ -266,13 +268,16 @@ def main() -> int:
             detail = ", ".join(f"{code}: {count}" for code, count in blockers)
             if not detail:
                 detail = row.get("error", row.get("note", ""))
-            number = f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row else "NOT RUN"
+            number = (f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row
+                      else "unavailable" if row["status"] == "ERROR" else "not measured")
             measurement = row.get("measurement", {"run": bench["run"]})
             stamp = measurement.get("run", "unknown")
             if name not in bench.get("selected", bench["benchmarks"]):
                 stamp += " (previous)"
             text += f"| {name} | {row['rung']} | {row['status']} | {number} | {stamp} | {detail.replace('|', '/')} |\n"
-        text += "\nDetails and commands: [bench receipt](../tests/contracts/bench-receipt.json).\n"
+        text += ("\nDetails and commands: [bench receipt](../tests/contracts/bench-receipt.json). "
+                 "Partial failed runs and source-level blockers: "
+                 "[benchmark review](notebook/benchmark-evaluation.md).\n")
 
     if "--check" in sys.argv:
         print(text, end="")

@@ -3,9 +3,9 @@
  "rung": "E0c",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260907T115631Z",
-  "subject": "689c76e",
-  "driverSha256": "96a3fef73faa070eb69946539327cfd7658c2cf43aab25a8ded9517dbf9d8025",
+  "run": "20260907T141825Z",
+  "subject": "4e86995",
+  "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
   "csmith": {
    "repo": "https://github.com/csmith-project/csmith.git",
    "commit": "0cdc710315cfee9035e22ef4363ca479270d1934",
@@ -110,6 +110,7 @@
     }
    }
   },
+  "workers": 4,
   "programs": 1000,
   "agreeing": 932,
   "refusalsByCode": {},
@@ -122,5 +123,5 @@
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260907T115631Z"
+ "evidence": ".evidence/ladder/csmith/20260907T141825Z"
 }

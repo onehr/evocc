@@ -3,12 +3,12 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T132400Z",
+ "run": "20260907T144430Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+ "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 2,
  "unitsEvoccCompiled": 0,
@@ -70,9 +70,9 @@
    "includeNext": "`#include_next <x>` resolved to the next header in the search order"
   },
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -152,6 +152,6 @@
   }
  ],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260906T132400Z",
+ "evidence": ".evidence/ladder/cjson/20260907T144430Z",
  "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E1001': 2}"
 }

@@ -16,7 +16,13 @@ The compiler is written by AI agents. What keeps that honest:
 
 ![Milestones](docs/images/evocc-milestones.png)
 
-As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lower to EvoIR with no diagnostic, and the rest stop at constructs that now have rules and are being implemented. 384 C programs compile to native code and agree with clang on macOS and with GCC 14 on Linux. Five EvoCC-compiled units run inside a Linux kernel that boots, with GCC compiling the rest. Of the outside test suites, 187 of 220 c-testsuite programs and 725 of 1,692 GCC torture programs pass; every failure is classified by the construct that caused it and filed as a compiler defect. The plan, the evaluation ladder and the pinned versions are in [docs/roadmap.md](docs/roadmap.md).
+The frozen front-end gate covers 2,798 kernel translation units. End-to-end
+native coverage is still partial: a passing interpreter corpus or a mixed-link
+boot does not establish a fully EvoCC-built kernel. Current, command-produced
+figures are in [docs/status.md](docs/status.md), with configurations, limitations
+and blocking constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
+The illustration above is not a live counter. The evaluation ladder and pinned
+subjects are in [docs/roadmap.md](docs/roadmap.md).
 
 ## Try it
 
@@ -44,6 +50,10 @@ Existing lane evidence is reused, not copied into another archive. Exit 0 means
 all selected gates pass; 1 means measured gaps or failures; 2 means a runner or
 evidence error. Do not run the legacy lane scripts concurrently against the same
 build directories. Partial mixed-link coverage is not a fully compiled milestone.
+A PASS is bounded by the displayed configuration and population; a smaller
+`--programs` experiment does not replace the full campaign's acceptance gate.
+Native lanes require the existing sealed flight-lab image and their pinned
+source/build inputs. Missing prerequisites are reported as errors, never skips.
 
 ### Compile a program
 

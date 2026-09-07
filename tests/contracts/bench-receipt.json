@@ -1,0 +1,1391 @@
+{
+  "schemaVersion": 1,
+  "run": "20260907T153648.272156Z",
+  "subject": "a7779e0518a6267e87797fc9ddd5ea7d6408394a",
+  "dirty": true,
+  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+  "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
+  "invocation": [
+    "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+    "tools/bench.py",
+    "musl",
+    "--no-build",
+    "--jobs",
+    "4",
+    "--budget",
+    "20"
+  ],
+  "execution": "sequential lanes; original per-program watchdogs unchanged",
+  "selected": [
+    "musl"
+  ],
+  "status": "INCOMPLETE",
+  "benchmarks": {
+    "ctest": {
+      "rung": "E0b",
+      "note": "self-checking programs and expected stdout",
+      "outcomes": {
+        "pass": 194,
+        "refused": 24,
+        "fail": 2
+      },
+      "refusals": {
+        "E3101": 15,
+        "E1003": 2,
+        "E2202": 2,
+        "E3030": 1,
+        "E2102": 1,
+        "E0104": 1,
+        "E1001": 1,
+        "E2203": 1
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 220,
+      "passed": 194,
+      "kind": "programs",
+      "runtimeDiagnostics": {
+        "E3007 evoir-main-parameters-are-not-canonical": 1,
+        "E3039 external-call-not-executable": 1
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T141450Z",
+      "evidence": ".evidence/ladder/e0/20260907T141450Z",
+      "receipt": "tests/contracts/ladder-e0-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--suite",
+        "ctest"
+      ],
+      "exitCode": 0,
+      "seconds": 24.3,
+      "previous": null,
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "torture": {
+      "rung": "E0a",
+      "note": "mixed integer/FP suite; dg-options are not consumed",
+      "outcomes": {
+        "pass": 1175,
+        "refused": 478,
+        "fail": 35,
+        "asm-fail": 1,
+        "link-fail": 3
+      },
+      "refusals": {
+        "E3101": 149,
+        "E1001": 108,
+        "E2001": 42,
+        "E2201": 23,
+        "E2203": 19,
+        "E2102": 19,
+        "E1205": 16,
+        "E3021": 16,
+        "E3030": 15,
+        "E0105": 12,
+        "E0112": 11,
+        "E3029": 9,
+        "E3046": 6,
+        "E4003": 5,
+        "E2913": 4,
+        "E2920": 4,
+        "E2202": 3,
+        "E2933": 2,
+        "E1006": 2,
+        "E1007": 2,
+        "E1003": 2,
+        "E0002": 1,
+        "E3026": 1,
+        "E2935": 1,
+        "E1002": 1,
+        "E2101": 1,
+        "E2208": 1,
+        "E3033": 1,
+        "E2204": 1,
+        "E2929": 1
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 1692,
+      "passed": 1175,
+      "kind": "programs",
+      "runtimeDiagnostics": {
+        "E3006 invalid-signed-left-shift": 13,
+        "E3039 external-call-not-executable": 7,
+        "E3004 signed-integer-overflow": 7,
+        "E3021 not-lowered": 4,
+        "E3007 evoir-main-parameters-are-not-canonical": 3,
+        "E3040 external-object-not-executable": 2,
+        "E3008 interpreter-fuel-exhausted": 2,
+        "E3001 read-of-uninitialized-object": 1
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T141514Z",
+      "evidence": ".evidence/ladder/e0/20260907T141514Z",
+      "receipt": "tests/contracts/ladder-e0-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--suite",
+        "torture"
+      ],
+      "exitCode": 0,
+      "seconds": 191.1,
+      "previous": null,
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "csmith": {
+      "rung": "E0c",
+      "note": "original seeds; unavailable oracles are not passes",
+      "outcomes": {
+        "agree": 932,
+        "oracle-unusable": 68
+      },
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 1000,
+      "passed": 932,
+      "kind": "programs",
+      "status": "INCOMPLETE",
+      "run": "20260907T141825Z",
+      "evidence": ".evidence/ladder/csmith/20260907T141825Z",
+      "receipt": "tests/contracts/ladder-csmith-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/csmith.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--campaign",
+        "all",
+        "--programs",
+        "500",
+        "--jobs",
+        "4"
+      ],
+      "exitCode": 0,
+      "seconds": 1479.2,
+      "previous": {
+        "rung": "E0c",
+        "note": "original seeds; unavailable oracles are not passes",
+        "outcomes": {
+          "agree": 932,
+          "oracle-unusable": 68
+        },
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 1000,
+        "passed": 932,
+        "kind": "programs",
+        "status": "INCOMPLETE",
+        "run": "20260907T115631Z",
+        "evidence": ".evidence/ladder/csmith/20260907T115631Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "zlib": {
+      "rung": "E1",
+      "note": "mixed-link program tests",
+      "outcomes": {},
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 19,
+      "passed": 19,
+      "kind": "units",
+      "compiled": 19,
+      "excluded": 0,
+      "testVerdict": {
+        "passed": true,
+        "status": 0,
+        "relinkStatus": 0,
+        "command": "make test CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'"
+      },
+      "adjustments": {
+        "sysroot": {
+          "extensionKeyword": 11379,
+          "includeNext": 3,
+          "filesRewritten": 83,
+          "formFeed": 19
+        },
+        "sysrootAdjustmentMeaning": {
+          "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+          "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+          "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+        },
+        "includeOrder": [
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+        ],
+        "configure": "CC=gcc ./configure --static",
+        "subject": [
+          "configured --static: the shared library wants position-independent code, which is a back end rung of its own",
+          "CFLAGS replaced to drop -fPIC and link -no-pie: EvoCC emits position-dependent code, and Debian's default PIE link refuses an ADRP against an interposable data symbol such as stderr"
+        ],
+        "buildCommand": "make -j4 CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'",
+        "optionsTheDriverRejects": [],
+        "omittedFlags": [
+          "-O3",
+          "-no-pie"
+        ]
+      },
+      "status": "PASS",
+      "run": "20260907T144305Z",
+      "evidence": ".evidence/ladder/zlib/20260907T144305Z",
+      "receipt": "tests/contracts/ladder-zlib-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/zlib.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+      ],
+      "exitCode": 0,
+      "seconds": 11.6,
+      "previous": {
+        "rung": "E1",
+        "note": "mixed-link program tests",
+        "outcomes": {},
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 19,
+        "passed": 19,
+        "kind": "units",
+        "compiled": 19,
+        "excluded": 0,
+        "testVerdict": {
+          "passed": true,
+          "status": 0,
+          "relinkStatus": 0,
+          "command": "make test CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'"
+        },
+        "adjustments": {
+          "sysroot": {
+            "extensionKeyword": 11379,
+            "includeNext": 3,
+            "filesRewritten": 83,
+            "formFeed": 19
+          },
+          "sysrootAdjustmentMeaning": {
+            "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+            "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+            "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+          },
+          "includeOrder": [
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+          ],
+          "configure": "CC=gcc ./configure --static",
+          "subject": [
+            "configured --static: the shared library wants position-independent code, which is a back end rung of its own",
+            "CFLAGS replaced to drop -fPIC and link -no-pie: EvoCC emits position-dependent code, and Debian's default PIE link refuses an ADRP against an interposable data symbol such as stderr"
+          ],
+          "buildCommand": "make -j4 CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'",
+          "optionsTheDriverRejects": [],
+          "omittedFlags": [
+            "-O3",
+            "-no-pie"
+          ]
+        },
+        "status": "PASS",
+        "run": "20260907T012912Z",
+        "evidence": ".evidence/ladder/zlib/20260907T012912Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "zstd": {
+      "rung": "E2",
+      "note": "mixed-link program tests; see recorded source/build adjustments",
+      "outcomes": {},
+      "refusals": {
+        "E1001": 38,
+        "E2921": 4
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 44,
+      "passed": 2,
+      "kind": "units",
+      "compiled": 2,
+      "excluded": 0,
+      "testVerdict": {
+        "passed": true,
+        "status": 0,
+        "relinkStatus": 0,
+        "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check"
+      },
+      "adjustments": {
+        "sysroot": {
+          "extensionKeyword": 11379,
+          "includeNext": 3,
+          "filesRewritten": 83,
+          "formFeed": 19
+        },
+        "sysrootAdjustmentMeaning": {
+          "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+          "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+          "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+        },
+        "includeOrder": [
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+        ],
+        "configure": "",
+        "subject": [
+          "built the way `make check` builds: zstd names its object directory after a hash of the flags, so the default build's objects are not the ones the suite links",
+          "built serially: the top level runs two sub-makes at once and their output cannot be attributed to a directory afterwards",
+          "relinked and tested on a copy of the tree inside the container: playTests.sh checks the permission bits of a file it creates and the shared mount does not preserve them",
+          "a shim stands in for file(1), which the sealed container does not carry and which `make check` runs once for decoration"
+        ],
+        "buildCommand": "make -C tests zstd datagen V=1",
+        "optionsTheDriverRejects": [],
+        "omittedFlags": [
+          "-MF",
+          "-MMD",
+          "-MP",
+          "-MT",
+          "-O3",
+          "-Wall",
+          "-Wc++-compat",
+          "-Wcast-align",
+          "-Wcast-qual",
+          "-Wdeclaration-after-statement",
+          "-Wextra",
+          "-Wfloat-equal",
+          "-Wformat=2",
+          "-Winit-self",
+          "-Wmissing-prototypes",
+          "-Wno-c++-compat",
+          "-Wpointer-arith",
+          "-Wredundant-decls",
+          "-Wshadow",
+          "-Wstrict-aliasing=1",
+          "-Wstrict-prototypes",
+          "-Wswitch-enum",
+          "-Wundef",
+          "-Wvla",
+          "-Wwrite-strings",
+          "-g",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.d",
+          "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o"
+        ]
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T144316Z",
+      "evidence": ".evidence/ladder/zstd/20260907T144316Z",
+      "receipt": "tests/contracts/ladder-zstd-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/zstd.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+      ],
+      "exitCode": 0,
+      "seconds": 73.7,
+      "previous": {
+        "rung": "E2",
+        "note": "mixed-link program tests; see recorded source/build adjustments",
+        "outcomes": {},
+        "refusals": {
+          "E1001": 38,
+          "E2921": 4
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 44,
+        "passed": 2,
+        "kind": "units",
+        "compiled": 2,
+        "excluded": 0,
+        "testVerdict": {
+          "passed": true,
+          "status": 0,
+          "relinkStatus": 0,
+          "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check"
+        },
+        "adjustments": {
+          "sysroot": {
+            "extensionKeyword": 11379,
+            "includeNext": 3,
+            "filesRewritten": 83,
+            "formFeed": 19
+          },
+          "sysrootAdjustmentMeaning": {
+            "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+            "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+            "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+          },
+          "includeOrder": [
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+          ],
+          "configure": "",
+          "subject": [
+            "built the way `make check` builds: zstd names its object directory after a hash of the flags, so the default build's objects are not the ones the suite links",
+            "built serially: the top level runs two sub-makes at once and their output cannot be attributed to a directory afterwards",
+            "relinked and tested on a copy of the tree inside the container: playTests.sh checks the permission bits of a file it creates and the shared mount does not preserve them",
+            "a shim stands in for file(1), which the sealed container does not carry and which `make check` runs once for decoration"
+          ],
+          "buildCommand": "make -C tests zstd datagen V=1",
+          "optionsTheDriverRejects": [],
+          "omittedFlags": [
+            "-MF",
+            "-MMD",
+            "-MP",
+            "-MT",
+            "-O3",
+            "-Wall",
+            "-Wc++-compat",
+            "-Wcast-align",
+            "-Wcast-qual",
+            "-Wdeclaration-after-statement",
+            "-Wextra",
+            "-Wfloat-equal",
+            "-Wformat=2",
+            "-Winit-self",
+            "-Wmissing-prototypes",
+            "-Wno-c++-compat",
+            "-Wpointer-arith",
+            "-Wredundant-decls",
+            "-Wshadow",
+            "-Wstrict-aliasing=1",
+            "-Wstrict-prototypes",
+            "-Wswitch-enum",
+            "-Wundef",
+            "-Wvla",
+            "-Wwrite-strings",
+            "-g",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.d",
+            "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o"
+          ]
+        },
+        "status": "INCOMPLETE",
+        "run": "20260906T185946Z",
+        "evidence": ".evidence/ladder/zstd/20260906T185946Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "cjson": {
+      "rung": "E3",
+      "note": "validation gap: make test rebuilds C sources, not substituted objects; FP deferred",
+      "outcomes": {},
+      "refusals": {
+        "E1001": 2
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 2,
+      "passed": 0,
+      "kind": "units",
+      "compiled": 0,
+      "excluded": 0,
+      "testVerdict": {
+        "passed": true,
+        "status": 0,
+        "relinkStatus": 0,
+        "command": "make test"
+      },
+      "adjustments": {
+        "sysroot": {
+          "extensionKeyword": 11379,
+          "includeNext": 3,
+          "filesRewritten": 83,
+          "formFeed": 19
+        },
+        "sysrootAdjustmentMeaning": {
+          "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+          "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+          "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+        },
+        "includeOrder": [
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+        ],
+        "configure": "",
+        "subject": [
+          "the Unity suite the roadmap names is built by CMake, which the sealed container does not have; the release's own Makefile runs instead",
+          "that Makefile's `make test` compiles cJSON.c and test.c together into one binary rather than linking cJSON.o, so the suite does not judge a substituted object; the units are measured, the suite result is the reference build's",
+          "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
+          "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
+        ],
+        "buildCommand": "make",
+        "optionsTheDriverRejects": [
+          "-std=c89"
+        ],
+        "omittedFlags": [
+          "-Wall",
+          "-Wc++-compat",
+          "-Wcast-align",
+          "-Wcast-qual",
+          "-Wconversion",
+          "-Werror",
+          "-Wformat=2",
+          "-Winit-self",
+          "-Wmissing-prototypes",
+          "-Wshadow",
+          "-Wstrict-overflow=2",
+          "-Wstrict-prototypes",
+          "-Wswitch-default",
+          "-Wundef",
+          "-Wwrite-strings",
+          "-fPIC",
+          "-fstack-protector",
+          "-pedantic",
+          "-std=c89"
+        ]
+      },
+      "status": "VALIDATION_GAP",
+      "run": "20260907T144430Z",
+      "evidence": ".evidence/ladder/cjson/20260907T144430Z",
+      "receipt": "tests/contracts/ladder-cjson-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/cjson.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+      ],
+      "exitCode": 0,
+      "seconds": 8.6,
+      "previous": {
+        "rung": "E3",
+        "note": "validation gap: make test rebuilds C sources, not substituted objects; FP deferred",
+        "outcomes": {},
+        "refusals": {
+          "E1001": 2
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 2,
+        "passed": 0,
+        "kind": "units",
+        "compiled": 0,
+        "excluded": 0,
+        "testVerdict": {
+          "passed": true,
+          "status": 0,
+          "relinkStatus": 0,
+          "command": "make test"
+        },
+        "adjustments": {
+          "sysroot": {
+            "extensionKeyword": 11379,
+            "includeNext": 3,
+            "filesRewritten": 83,
+            "formFeed": 19
+          },
+          "sysrootAdjustmentMeaning": {
+            "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
+            "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
+            "includeNext": "`#include_next <x>` resolved to the next header in the search order"
+          },
+          "includeOrder": [
+            "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include"
+          ],
+          "configure": "",
+          "subject": [
+            "the Unity suite the roadmap names is built by CMake, which the sealed container does not have; the release's own Makefile runs instead",
+            "that Makefile's `make test` compiles cJSON.c and test.c together into one binary rather than linking cJSON.o, so the suite does not judge a substituted object; the units are measured, the suite result is the reference build's",
+            "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
+            "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
+          ],
+          "buildCommand": "make",
+          "optionsTheDriverRejects": [
+            "-std=c89"
+          ],
+          "omittedFlags": [
+            "-Wall",
+            "-Wc++-compat",
+            "-Wcast-align",
+            "-Wcast-qual",
+            "-Wconversion",
+            "-Werror",
+            "-Wformat=2",
+            "-Winit-self",
+            "-Wmissing-prototypes",
+            "-Wshadow",
+            "-Wstrict-overflow=2",
+            "-Wstrict-prototypes",
+            "-Wswitch-default",
+            "-Wundef",
+            "-Wwrite-strings",
+            "-fPIC",
+            "-fstack-protector",
+            "-pedantic",
+            "-std=c89"
+          ]
+        },
+        "status": "VALIDATION_GAP",
+        "run": "20260906T132400Z",
+        "evidence": ".evidence/ladder/cjson/20260906T132400Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "tinycc": {
+      "rung": "E5",
+      "note": "mixed-link compiler tests",
+      "outcomes": {},
+      "refusals": {
+        "E3101": 3,
+        "E2102": 2,
+        "E0113": 1,
+        "E2921": 1
+      },
+      "baselineFailures": 0,
+      "failingUnits": [
+        "arm64-link.o",
+        "tcc.o"
+      ],
+      "total": 11,
+      "passed": 2,
+      "kind": "units",
+      "compiled": 4,
+      "excluded": 0,
+      "testVerdict": "tests-passed-after-exclusions",
+      "adjustments": {
+        "sourcePageBreaksStripped": [
+          "coff.h",
+          "stab.def",
+          "tests/tcctest.c",
+          "tests/tests2/90_struct-init.c"
+        ],
+        "noreturnSpecifiersRemoved": [],
+        "highBytesReEscaped": [],
+        "sysroot": [
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
+            "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
+            "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
+          },
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
+            "change": "__HAVE_FLOAT128 set to 0",
+            "why": "same, for _Float128"
+          },
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
+            "change": "the AdvSIMD and SVE guards are forced closed",
+            "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
+          },
+          {
+            "file": "every exported header",
+            "change": "form feeds and vertical tabs are deleted",
+            "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
+          },
+          {
+            "file": "gccinc/stdint.h",
+            "change": "renamed out of the search path",
+            "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
+          }
+        ],
+        "defines": [
+          "-D__extension__=",
+          "-D__STDC_NO_VLA__=1"
+        ]
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T144438Z",
+      "evidence": ".evidence/ladder/tinycc/20260907T144438Z",
+      "receipt": "tests/contracts/ladder-tinycc-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/tinycc.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--jobs",
+        "4"
+      ],
+      "exitCode": 0,
+      "seconds": 46.7,
+      "previous": {
+        "rung": "E5",
+        "note": "mixed-link compiler tests",
+        "outcomes": {},
+        "refusals": {
+          "E2001": 2,
+          "E2102": 2,
+          "E3101": 2,
+          "E0113": 1,
+          "E2921": 1
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 11,
+        "passed": 1,
+        "kind": "units",
+        "compiled": 3,
+        "excluded": 2,
+        "testVerdict": "tests-passed",
+        "adjustments": {
+          "sourcePageBreaksStripped": [
+            "coff.h",
+            "stab.def",
+            "tests/tcctest.c",
+            "tests/tests2/90_struct-init.c"
+          ],
+          "noreturnSpecifiersRemoved": [],
+          "highBytesReEscaped": [],
+          "sysroot": [
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
+              "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
+              "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
+            },
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
+              "change": "__HAVE_FLOAT128 set to 0",
+              "why": "same, for _Float128"
+            },
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
+              "change": "the AdvSIMD and SVE guards are forced closed",
+              "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
+            },
+            {
+              "file": "every exported header",
+              "change": "form feeds and vertical tabs are deleted",
+              "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
+            },
+            {
+              "file": "gccinc/stdint.h",
+              "change": "renamed out of the search path",
+              "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
+            }
+          ],
+          "defines": [
+            "-D__extension__=",
+            "-D__STDC_NO_VLA__=1"
+          ]
+        },
+        "status": "INCOMPLETE",
+        "run": "20260906T144534Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/tinycc/20260906T144534Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "toybox": {
+      "rung": "E6",
+      "note": "mixed-link tests relative to baseline failures",
+      "outcomes": {},
+      "refusals": {
+        "E3101": 26
+      },
+      "baselineFailures": 1,
+      "failingUnits": [],
+      "total": 203,
+      "passed": 177,
+      "kind": "units",
+      "compiled": 177,
+      "excluded": 0,
+      "testVerdict": "no-regression",
+      "adjustments": {
+        "sourcePageBreaksStripped": [],
+        "noreturnSpecifiersRemoved": [
+          "lib/lib.h",
+          "toys/pending/csplit.c"
+        ],
+        "highBytesReEscaped": [
+          "generated/flags.h",
+          "scripts/prereq/generated/flags.h",
+          "toys/other/pwgen.c"
+        ],
+        "sysroot": [
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
+            "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
+            "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
+          },
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
+            "change": "__HAVE_FLOAT128 set to 0",
+            "why": "same, for _Float128"
+          },
+          {
+            "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
+            "change": "the AdvSIMD and SVE guards are forced closed",
+            "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
+          },
+          {
+            "file": "every exported header",
+            "change": "form feeds and vertical tabs are deleted",
+            "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
+          },
+          {
+            "file": "gccinc/stdint.h",
+            "change": "renamed out of the search path",
+            "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
+          }
+        ],
+        "defines": [
+          "-D__extension__=",
+          "-D__STDC_NO_VLA__=1"
+        ],
+        "unitsNotSubstitutable": [
+          "the object built from main.c"
+        ]
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T144525Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T144525Z",
+      "receipt": "tests/contracts/ladder-toybox-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/toybox.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--jobs",
+        "4",
+        "--budget",
+        "20"
+      ],
+      "exitCode": 0,
+      "seconds": 58.2,
+      "previous": {
+        "rung": "E6",
+        "note": "mixed-link tests relative to baseline failures",
+        "outcomes": {},
+        "refusals": {
+          "E3101": 25,
+          "E1001": 4
+        },
+        "baselineFailures": 1,
+        "failingUnits": [],
+        "total": 201,
+        "passed": 172,
+        "kind": "units",
+        "compiled": 172,
+        "excluded": 0,
+        "testVerdict": "no-regression",
+        "adjustments": {
+          "sourcePageBreaksStripped": [],
+          "noreturnSpecifiersRemoved": [
+            "lib/lib.h",
+            "toys/pending/csplit.c"
+          ],
+          "highBytesReEscaped": [
+            "generated/flags.h",
+            "scripts/prereq/generated/flags.h",
+            "toys/other/pwgen.c"
+          ],
+          "sysroot": [
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
+              "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
+              "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
+            },
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
+              "change": "__HAVE_FLOAT128 set to 0",
+              "why": "same, for _Float128"
+            },
+            {
+              "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
+              "change": "the AdvSIMD and SVE guards are forced closed",
+              "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
+            },
+            {
+              "file": "every exported header",
+              "change": "form feeds and vertical tabs are deleted",
+              "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
+            },
+            {
+              "file": "gccinc/stdint.h",
+              "change": "renamed out of the search path",
+              "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
+            }
+          ],
+          "defines": [
+            "-D__extension__=",
+            "-D__STDC_NO_VLA__=1"
+          ],
+          "unitsNotSubstitutable": [
+            "the object built from main.c"
+          ]
+        },
+        "status": "INCOMPLETE",
+        "run": "20260907T030222Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T030222Z"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "musl": {
+      "rung": "E7",
+      "note": "libc-test relative to baseline failures",
+      "outcomes": {},
+      "refusals": {
+        "E3101": 242,
+        "E1006": 83,
+        "E2001": 14,
+        "E2203": 8,
+        "E2102": 5,
+        "E1005": 1,
+        "E3030": 1
+      },
+      "baselineFailures": 17,
+      "failingUnits": [
+        "obj/src/signal/sigsetjmp_tail.lo"
+      ],
+      "total": 1339,
+      "passed": 817,
+      "kind": "units",
+      "compiled": 985,
+      "excluded": 167,
+      "testVerdict": "libc-test-clean-after-exclusions",
+      "adjustments": {
+        "sourcePageBreaksStripped": [],
+        "noreturnSpecifiersRemoved": [
+          "include/assert.h",
+          "include/err.h",
+          "include/pthread.h",
+          "include/setjmp.h",
+          "include/stdlib.h",
+          "include/threads.h",
+          "include/unistd.h",
+          "src/exit/_Exit.c",
+          "src/exit/abort.c",
+          "src/exit/assert.c",
+          "src/exit/exit.c",
+          "src/exit/quick_exit.c",
+          "src/include/pthread.h",
+          "src/legacy/err.c",
+          "src/signal/siglongjmp.c",
+          "src/thread/pthread_create.c",
+          "src/thread/thrd_exit.c",
+          "src/unistd/_exit.c"
+        ],
+        "highBytesReEscaped": [],
+        "sysroot": "none: musl is built -nostdinc against its own headers",
+        "configure": "--disable-shared, so the library is one set of objects",
+        "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
+        "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
+      },
+      "status": "INCOMPLETE",
+      "run": "20260907T153648Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260907T153648Z",
+      "receipt": "tests/contracts/ladder-musl-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/musl.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "--jobs",
+        "4",
+        "--budget",
+        "20"
+      ],
+      "exitCode": 0,
+      "seconds": 1011.0,
+      "previous": {
+        "rung": "E7",
+        "note": "libc-test relative to baseline failures",
+        "outcomes": {},
+        "refusals": {
+          "E3101": 456,
+          "E1006": 83,
+          "E2001": 14,
+          "E2203": 8,
+          "E2102": 5,
+          "E1005": 1,
+          "E3030": 1
+        },
+        "baselineFailures": 17,
+        "failingUnits": [
+          "obj/src/env/setenv.lo",
+          "obj/src/network/inet_ntoa.lo",
+          "obj/src/stdio/fprintf.lo"
+        ],
+        "total": 1339,
+        "passed": 178,
+        "kind": "units",
+        "compiled": 771,
+        "excluded": 413,
+        "testVerdict": "bisection-budget-exhausted",
+        "adjustments": {
+          "sysroot": "none: musl is built -nostdinc against its own headers",
+          "configure": "--disable-shared, so the library is one set of objects",
+          "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n"
+        },
+        "status": "INCOMPLETE",
+        "run": "20260906T144702Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260906T144702Z"
+      },
+      "measurement": {
+        "run": "20260907T153648.272156Z",
+        "subject": "a7779e0518a6267e87797fc9ddd5ea7d6408394a",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "kernel": {
+      "rung": "K1/K5-K7 ramp",
+      "status": "ERROR",
+      "error": "receipt unchanged; previous evidence is not a new measurement",
+      "errorTail": [
+        "  \"cacheHits\": 52,",
+        "  \"counts\": {",
+        "    \"substituted\": 52",
+        "  },",
+        "  \"refusalCodeCounts\": {},",
+        "  \"relinkExitCode\": 0,",
+        "  \"installed\": true,",
+        "  \"allowSymbolDrift\": true,",
+        "  \"imageSha256\": \"0f45cb1f942b6c022d59afccae8dde7fd033f8c09d572e18022593fe67ca8d95\",",
+        "  \"vmlinuxSha256\": \"1a0bfbb1624195ba6f20aa9b84a90d430b3112e91984b870c16ff7474e5119a1\"",
+        "}",
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260907T145629Z/attempt-01/substitution",
+        "",
+        "== attempt 1: boot ==",
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260907T145629Z/attempt-01/boot",
+        "image sha256: 0f45cb1f942b6c022d59afccae8dde7fd033f8c09d572e18022593fe67ca8d95",
+        "serial log sha256: fc790176c392eea3e45b2bb23929a0bdad681e2f551115e576a933073e2a5db0",
+        "PASS",
+        "",
+        "== proof of substitution =="
+      ],
+      "command": [
+        "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
+        "--jobs",
+        "4"
+      ],
+      "exitCode": 1,
+      "seconds": 2389.8,
+      "previous": {
+        "rung": "K1/K5-K7 ramp",
+        "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
+        "outcomes": {},
+        "refusals": {
+          "E3021": 2734,
+          "E3029": 1,
+          "E3031": 1,
+          "E3101": 21
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 2799,
+        "passed": 24,
+        "kind": "units",
+        "compiled": 42,
+        "testVerdict": "PASS",
+        "proof": {
+          "mismatch": 1,
+          "no-symbols": 2,
+          "not-linked": 2,
+          "proven": 7,
+          "proven-modulo-relocations": 14
+        },
+        "status": "FAIL",
+        "run": "2026-09-06T18:37:33Z",
+        "evidence": ".evidence/k1/measure-20260906T170419Z/survey"
+      },
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "mbedtls": {
+      "rung": "E4",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no benchmark adapter yet",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "polybench": {
+      "rung": "E8",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no adapter; floating-point rung deferred",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "llvm-test-suite": {
+      "rung": "E9",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no adapter; mixed integer/FP suite",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "jq": {
+      "rung": "E10",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no adapter; floating-point rung deferred",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "lua": {
+      "rung": "E11",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no adapter; floating-point rung deferred",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "sqlite": {
+      "rung": "E12",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no adapter; floating-point rung deferred",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "kernel-full": {
+      "rung": "K6",
+      "status": "NOT_IMPLEMENTED",
+      "note": "K1 measures mixed link, not a fully EvoCC-built kernel",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    },
+    "kernel-selftest": {
+      "rung": "K7",
+      "status": "NOT_IMPLEMENTED",
+      "note": "no kselftest adapter yet",
+      "measurement": {
+        "run": "20260907T141450.311159Z",
+        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+      }
+    }
+  }
+}
