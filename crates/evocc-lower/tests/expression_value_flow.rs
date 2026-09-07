@@ -67,6 +67,13 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn enum_bitfields_preserve_the_enumerator_range() {
+    agrees(include_str!(
+        "../../../tests/fixtures/enum-bitfield-signedness.c"
+    ));
+}
+
+#[test]
 fn compound_assignment_observes_rhs_call_effects() {
     agrees(include_str!(
         "../../../tests/fixtures/compound-assignment-call-effects.c"
