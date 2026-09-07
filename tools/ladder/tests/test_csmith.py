@@ -90,6 +90,24 @@ class ChecksumTest(unittest.TestCase):
         self.assertIsNone(csmith.parse_checksum(None))
 
 
+class RuntimeTest(unittest.TestCase):
+    def test_subtraction_guard_uses_a_defined_sign_mask(self):
+        self.assertTrue(
+            callable(getattr(csmith, "repair_runtime_header", None)),
+            "The shared Csmith runtime still shifts signed one into the sign bit",
+        )
+        source = "\n".join(
+            f"#define mask{width} (((int{width}_t)1) << (sizeof(int{width}_t)*CHAR_BIT-1))"
+            for width in (32, 64)
+        ) + "\n/* untouched */\n"
+        repaired = csmith.repair_runtime_header(source)
+        self.assertIn("#define mask32 (~INT32_MAX)", repaired)
+        self.assertIn("#define mask64 (~INT64_MAX)", repaired)
+        self.assertTrue(repaired.endswith("/* untouched */\n"))
+        with self.assertRaises(ValueError):
+            csmith.repair_runtime_header(source + source)
+
+
 class VerdictTest(unittest.TestCase):
     @staticmethod
     def runs(evocc: str | None, oracle: str, split: str | None = None) -> dict:
