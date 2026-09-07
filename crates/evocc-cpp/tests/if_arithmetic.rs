@@ -48,6 +48,28 @@ fn selected(source: &str) -> String {
 }
 
 #[test]
+fn character_constants_use_their_decoded_value_in_conditions() {
+    for expression in [
+        r"L'\400' == 256",
+        r"'\101' == 65",
+        r"'\x41' == 'A'",
+        r"'\e' == 27",
+        r"L'\u0100' == 256",
+        r"'\v' == 11 && '\a' == 7 && '\b' == 8 && '\f' == 12",
+    ] {
+        let source = format!("#if {expression}\ny\n#else\nn\n#endif\n");
+        assert_eq!(selected(&source), "y", "{expression}");
+    }
+    let source = "#define C L'\\400'\n#if C\n#define zero (!C)\n#else\n#define zero C\n#endif\n#if zero == 0\ny\n#else\nn\n#endif\n";
+    assert_eq!(selected(source), "y");
+}
+
+#[test]
+fn malformed_character_constants_are_not_placeholder_zero() {
+    assert!(preprocess("#if '\\x'\ny\n#endif\n").is_err());
+}
+
+#[test]
 fn direct_pp_numbers_keep_their_integer_values_and_suffixes() {
     for (expression, expected) in [
         ("300 > 100", "y"),
