@@ -350,6 +350,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_strncmp"
                         | "__builtin_alloca"
                         | "__builtin_memmove"
+                        | "__builtin_abort"
+                        | "__builtin_exit"
+                        | "__builtin__Exit"
                         | "__builtin_prefetch"
                         | "__builtin_extract_return_addr",
                     ) => TokenKind::BuiltinLibrary,
@@ -1428,6 +1431,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi = self.advance().expect("peeked semicolon");
+            if let Some(attribute) = attributes.iter().find(|a| a.written == "_Noreturn") {
+                self.report(
+                    "E2934",
+                    "function-specifier-on-non-function",
+                    attribute.span,
+                );
+                return None;
+            }
             if auto_type_span.is_some() {
                 self.report("E2915", "auto-type-misuse", semi.span);
                 return None;
@@ -1557,6 +1568,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             if storage == StorageClass::Typedef {
+                if let Some(attribute) = attributes.iter().find(|a| a.written == "_Noreturn") {
+                    self.report(
+                        "E2934",
+                        "function-specifier-on-non-function",
+                        attribute.span,
+                    );
+                    return None;
+                }
                 if let Some(span) = inline_spans.first().copied() {
                     self.report("E1401", "inline-specifier-on-non-function", span);
                     return None;
@@ -1789,6 +1808,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .expect("at least one declarator was parsed");
         let end_span = self.declaration_end(last_name_span);
         let declaration_span = self.merge_span(start_span, end_span);
+        if storage == StorageClass::Typedef
+            || pending
+                .iter()
+                .any(|entry| entry.function_parameters.is_none())
+        {
+            if let Some(attribute) = pending
+                .iter()
+                .flat_map(|entry| &entry.attributes)
+                .find(|a| a.written == "_Noreturn")
+            {
+                self.report(
+                    "E2934",
+                    "function-specifier-on-non-function",
+                    attribute.span,
+                );
+                return None;
+            }
+        }
         if context == DeclarationContext::ForInitializer {
             if let Some(entry) = pending
                 .iter()
@@ -4459,6 +4496,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         attributes: &mut Vec<Attribute>,
     ) {
         loop {
+            if let Some(attribute) = self.parse_noreturn_specifier() {
+                attributes.push(attribute);
+                continue;
+            }
             if self.peek_kind() == Some(TokenKind::Attribute) {
                 attributes.extend(
                     self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers),
@@ -4768,7 +4809,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         attributes: &mut Option<&mut Vec<Attribute>>,
     ) -> bool {
-        if attributes.is_none() || self.peek_kind() != Some(TokenKind::Attribute) {
+        if attributes.is_none() {
+            return false;
+        }
+        if let Some(attribute) = self.parse_noreturn_specifier() {
+            attributes
+                .as_mut()
+                .expect("attribute capture enabled")
+                .push(attribute);
+            return true;
+        }
+        if self.peek_kind() != Some(TokenKind::Attribute) {
             return false;
         }
         let parsed = self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
@@ -4777,6 +4828,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .expect("specifier attribute capture was enabled")
             .extend(parsed);
         true
+    }
+
+    fn parse_noreturn_specifier(&mut self) -> Option<Attribute> {
+        if self.peek_kind() != Some(TokenKind::Noreturn) {
+            return None;
+        }
+        let token = self.advance().expect("peeked function specifier");
+        Some(Attribute {
+            name: "noreturn".into(),
+            written: "_Noreturn".into(),
+            arguments: Vec::new(),
+            placement: AttributePlacement::DeclarationSpecifiers,
+            span: token.span,
+            applied: None,
+        })
     }
 
     fn parse_qualifiers(&mut self) -> Qualifiers {
@@ -6943,6 +7009,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         matches!(
             token.kind,
             TokenKind::Attribute
+                | TokenKind::Noreturn
                 | TokenKind::Auto
                 | TokenKind::Extern
                 | TokenKind::GnuExtension
@@ -6993,7 +7060,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(token) = self.tokens.get(position) else {
             return false;
         };
-        matches!(token.kind, TokenKind::Inline)
+        matches!(token.kind, TokenKind::Inline | TokenKind::Noreturn)
             || matches!(
                 token.kind,
                 TokenKind::Auto
@@ -7537,7 +7604,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ///
     /// Scalar loads and array decay both retain the checked place. Further
     /// projections extend that place rather than recovering discarded syntax.
-    /// Record values retain their value-producing expression below.
+    /// Record temporaries retain their value-producing expression below;
+    /// record lvalues retain their checked place just like scalar loads.
     fn convert_projected_lvalue(
         &mut self,
         expression: &'arena CHirExpr<'arena>,
@@ -7549,9 +7617,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // interpreter and lowering evaluate the copy exactly once before
         // selecting the member.
         if let CHirExpr::Member(base, _, _) = expression {
-            if self
-                .expression_type(base)
-                .is_some_and(|inferred| inferred.category == ExprCategory::Value)
+            if !matches!(base, CHirExpr::MemoryRead { .. })
+                && self
+                    .expression_type(base)
+                    .is_some_and(|inferred| inferred.category == ExprCategory::Value)
             {
                 return expression;
             }
@@ -7576,7 +7645,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if !self.is_loadable_scalar(value_ty)
             && !matches!(
                 self.types.get(value_ty).map(|ty| &ty.kind),
-                Some(TypeKind::Array { .. })
+                Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
             )
         {
             return expression;
@@ -8264,7 +8333,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | BinaryOp::Ne => {
                 let compatible_pointers = match (left_class, right_class) {
                     (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right)) => {
-                        self.pointer_types_compatible(left, right)
+                        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+                            self.pointer_conversion_types_compatible(left, right)
+                        } else {
+                            self.pointer_types_compatible(left, right)
+                        }
                     }
                     (
                         OperandTypeClass::Pointer(pointee),
@@ -9770,6 +9843,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
 
         let prototype = match builtin {
+            "__builtin_abort" => ("abort", void_ty, Vec::new()),
+            "__builtin_exit" | "__builtin__Exit" => {
+                self.report("E2933", "unsupported-termination-builtin", span);
+                return None;
+            }
             "__builtin_memset" => ("memset", void_pointer, vec![void_pointer, int_ty, size_ty]),
             "__builtin_memcpy" => (
                 "memcpy",

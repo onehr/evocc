@@ -973,8 +973,9 @@ pub enum AppliedAttribute {
     Packed,
 }
 
-/// A GNU `__attribute__` entry, preserved losslessly whether or not it was
-/// understood. `name` is canonical (`__unused__` and `unused` both give
+/// An attribute entry (or the equivalent C11 `_Noreturn` function specifier),
+/// preserved losslessly whether or not it was understood.
+/// `name` is canonical (`__unused__` and `unused` both give
 /// `unused`); `written` is the spelling in the source.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {

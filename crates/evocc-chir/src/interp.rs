@@ -7100,7 +7100,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: right_ty,
                 },
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne)
-                && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
+                && PointerTypeDesc::equality_compatible(self.unit.types(), left_ty, right_ty) =>
             {
                 let left = self
                     .memory

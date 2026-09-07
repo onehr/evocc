@@ -671,6 +671,13 @@ impl Preprocessor {
             current_file: String::new(),
         };
         preprocessor.install_predefined_profile(profile)?;
+        // Target capability, separate from the immutable oracle macro snapshot.
+        // Command-line -D/-U still run after construction.
+        preprocessor.macros.define(
+            "__STDC_NO_VLA__".into(),
+            vec![make_int_token(1)],
+            Vec::new(),
+        );
         preprocessor.install_feature_query_macros();
         preprocessor
             .macros

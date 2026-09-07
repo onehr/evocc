@@ -3,9 +3,9 @@
  "rung": "E0c",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260906T125031Z",
-  "subject": "16e27fc",
-  "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+  "run": "20260906T184351Z",
+  "subject": "f727f39",
+  "driverSha256": "ec94cb856399d78356ae5b179dac5087fb92d6b9a2db6e23b5344de18f5ddbd2",
   "csmith": {
    "repo": "https://github.com/csmith-project/csmith.git",
    "commit": "0cdc710315cfee9035e22ef4363ca479270d1934",
@@ -114,30 +114,29 @@
      "-DINT_MAX=2147483647"
     ],
     "programs": 500,
-    "agreeing": 169,
+    "agreeing": 190,
     "outcomes": {
-     "refused": 292,
-     "agree": 169,
-     "no-checksum": 31,
-     "oracle-unusable": 7,
-     "timeout": 1
+     "refused": 264,
+     "agree": 190,
+     "no-checksum": 37,
+     "oracle-unusable": 9
     },
     "refusalsByCode": {
-     "E3101": 211,
+     "E3101": 183,
      "E2102": 81
     },
     "refusalsByMessage": {
-     "E3101 evoir-lowering-failed: bit-field zero initialization is outside lowering": 124,
-     "E3101 evoir-lowering-failed: expression requires the Day-7 object or non-integer model": 84,
-     "E2102 invalid-update-operands": 81,
-     "E3101 evoir-lowering-failed: bit-field initializer is outside Day 7": 3
+     "E3101 evoir-lowering-failed: expression requires the Day-7 object or non-integer model": 183,
+     "E2102 invalid-update-operands": 81
     },
     "miscompiles": [],
     "trappedOnUndefinedBehaviour": [
      "s22",
      "s33",
      "s45",
+     "s85",
      "s92",
+     "s135",
      "s149",
      "s157",
      "s158",
@@ -159,30 +158,33 @@
      "s402",
      "s410",
      "s418",
+     "s433",
      "s437",
+     "s441",
      "s453",
      "s461",
      "s467",
+     "s468",
      "s475",
-     "s484"
+     "s484",
+     "s488"
     ],
     "work": ".build/ladder/run-csmith-bitfields"
    }
   },
   "programs": 1000,
-  "agreeing": 375,
+  "agreeing": 396,
   "refusalsByCode": {
-   "E3101": 382,
+   "E3101": 354,
    "E2102": 164
   },
-  "mismatches": 0,
   "miscompiles": 0,
-  "trappedOnUndefinedBehaviour": 59,
+  "trappedOnUndefinedBehaviour": 65,
   "reductions": [
    "tests/fixtures/csmith-reductions/seed-92-reduced.c",
    "tests/fixtures/csmith-reductions/signed-shift-trap-control.c",
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260906T125031Z"
+ "evidence": ".evidence/ladder/csmith/20260906T184351Z"
 }

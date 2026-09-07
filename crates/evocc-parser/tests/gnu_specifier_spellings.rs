@@ -65,3 +65,32 @@ fn attributes_may_separate_declaration_specifiers() {
         "static __attribute__((unused)) int flag;\n",
     ));
 }
+
+#[test]
+fn noreturn_function_specifiers_preserve_their_written_form() {
+    let arena = Arena::default();
+    let unit = parse(
+        "_Noreturn void stop(void); void _Noreturn again(void);",
+        &arena,
+    )
+    .expect("C11 function specifier must parse");
+    for declaration in unit.iter() {
+        let evocc_chir::CHirDecl::Function(function) = declaration else {
+            panic!("function declaration");
+        };
+        assert!(function
+            .attributes
+            .iter()
+            .any(|a| a.name == "noreturn" && a.written == "_Noreturn"));
+    }
+    accepts("_Noreturn void stop(void){for(;;){}} int main(void){return 0;}");
+    accepts("void f(void){_Noreturn void stop(void);}");
+}
+
+#[test]
+fn noreturn_does_not_apply_to_objects_or_typedefs() {
+    for source in ["_Noreturn int object;", "typedef _Noreturn void fn(void);"] {
+        let arena = Arena::default();
+        assert_eq!(parse(source, &arena).unwrap_err().code, "E2934", "{source}");
+    }
+}

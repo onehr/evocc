@@ -53,6 +53,16 @@ fn a_pointer_return_value_can_be_stored_through_another_pointer() {
 }
 
 #[test]
+fn aggregate_array_elements_can_be_passed_and_copied() {
+    agrees("struct S{int n;};struct S a[2]={{3},{7}};int f(struct S s){return s.n;}int main(void){struct S b=a[1];return f(a[0])!=3 || b.n!=7;}");
+}
+
+#[test]
+fn pointer_equality_accepts_integer_signedness_counterparts() {
+    agrees("int main(void){short x=0;short *p=&x;unsigned short *q=(unsigned short *)&x;int r=p!=q;return r || !(p==q);}");
+}
+
+#[test]
 fn assignment_values_are_operands_with_their_effects_preserved() {
     agrees("int main(void){int a=0;int b=0;int r=(a=3)+(b=4);return r!=7 || a!=3 || b!=4;}");
     agrees("int a;int main(void){int b=2;int r=(a=3)*(b+=4);return r!=18 || a!=3 || b!=6;}");
@@ -61,6 +71,12 @@ fn assignment_values_are_operands_with_their_effects_preserved() {
 #[test]
 fn dereferenced_function_pointers_remain_function_designators() {
     agrees("int f(int n){return n+1;} int main(void){int (*p)(int)=f;return (*p)(6)!=7;}");
+}
+
+#[test]
+fn empty_parameter_lists_in_definitions_have_no_parameters() {
+    agrees("int f(){return 7;} int main(){return f()!=7;}");
+    agrees("int count;void f(){++count;}int main(){f();return count!=1;}");
 }
 
 #[test]

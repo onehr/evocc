@@ -50,6 +50,17 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn termination_builtins_are_typed_ordinary_library_calls() {
+    assert_pairs(
+        &[(
+            "void f(void){__builtin_abort();}",
+            "void abort(void);void f(void){abort();}",
+        )],
+        1300,
+    );
+}
+
+#[test]
 fn front_end_resolved_forms_leave_byte_identical_evoir() {
     let pairs = [
         (

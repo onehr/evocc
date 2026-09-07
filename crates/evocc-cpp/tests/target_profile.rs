@@ -139,6 +139,11 @@ fn preprocess(source: &str) -> String {
     run.output
 }
 
+#[test]
+fn the_profile_advertises_its_variable_length_array_refusal() {
+    assert_eq!(preprocess("__STDC_NO_VLA__\n"), "1");
+}
+
 fn first_error_code(source: &str) -> &'static str {
     run_with(source, |_| {})
         .errors

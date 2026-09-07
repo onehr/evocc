@@ -3,23 +3,25 @@
  "rung": "E1",
  "subject": "zlib",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T182007Z",
+ "run": "20260907T012912Z",
  "pin": "1.3.2 (2026-02-17, zlib.net)",
  "url": "https://zlib.net/zlib-1.3.2.tar.gz",
  "tarballSha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
  "tarball": "zlib-1.3.2.tar.gz",
- "driverSha256": "1191943bc455d4d0c089b419e887766efbb1fe8c38095b3ae7b17ce452f873f6",
+ "driverSha256": "0142c5941de8b61d6193a2111cf890f7f6452969c715532abcff9ee3a08fa46b",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 19,
- "unitsEvoccCompiled": 17,
- "unitsSubstituted": 17,
+ "unitsEvoccCompiled": 19,
+ "unitsSubstituted": 19,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
   "example.o",
   "adler32.o",
   "crc32.o",
   "deflate.o",
+  "infback.o",
   "inffast.o",
+  "inflate.o",
   "inftrees.o",
   "trees.o",
   "zutil.o",
@@ -34,28 +36,12 @@
   "minigzip64.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 17,
+ "unitsInPassingBuild": 19,
  "outcomes": {
-  "assembled": 17,
-  "refused": 2
+  "assembled": 19
  },
- "refusalsByCode": {
-  "E3101": 2
- },
- "refusals": [
-  {
-   "unit": "infback.o",
-   "code": "E3101",
-   "message": "evoir-lowering-failed: expression requires the Day-7 object or non-integer model",
-   "at": "zlib-1.3.2/infback.c:338:28"
-  },
-  {
-   "unit": "inflate.o",
-   "code": "E3101",
-   "message": "evoir-lowering-failed: expression requires the Day-7 object or non-integer model",
-   "at": "zlib-1.3.2/inflate.c:827:28"
-  }
- ],
+ "refusalsByCode": {},
+ "refusals": [],
  "excludedUnits": [],
  "failingUnits": [],
  "baselineTest": {
@@ -73,7 +59,7 @@
    "passed": true,
    "stage": "pass",
    "signature": "",
-   "unitCount": 17
+   "unitCount": 19
   }
  ],
  "adjustments": {
@@ -170,6 +156,6 @@
    "repro": "int g(int *a, int e) { return a[e ? 1 : 0]; }\n"
   }
  ],
- "evidence": ".evidence/ladder/zlib/20260906T182007Z",
- "summaryLine": "zlib: 17 of 19 units by EvoCC in a passing build; refused by code {'E3101': 2}"
+ "evidence": ".evidence/ladder/zlib/20260907T012912Z",
+ "summaryLine": "zlib: 19 of 19 units by EvoCC in a passing build; refused by code {}"
 }

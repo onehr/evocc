@@ -5735,9 +5735,23 @@ The supplied musl inventory identifies 108 affected symbols, not a measured firs
 ### C11 function specifiers and the variable-length-array capability
 
 `_Noreturn` is accepted on function declarations and definitions, retained as a `noreturn` attribute with written spelling `_Noreturn`, and supplies no new dead-code or control-flow licence.
-Both sealed oracles accept the valid forms in `.evidence/builtin-probes/20260907-function-specifiers/valid.c`; GCC warns but accepts the object/typedef probes while Clang rejects them, so the profile refuses those placements with E2932 (`function-specifier-on-non-function`), as recorded in `results.out`.
+Both sealed oracles accept the valid forms in `.evidence/builtin-probes/20260907-function-specifiers/valid.c`; GCC warns but accepts the object/typedef probes while Clang rejects them, so the profile refuses those placements with E2934 (`function-specifier-on-non-function`), as recorded in `results.out`; revision 1.9.74 reserves the previously proposed E2932 for `always-inline-cycle`, and that body allocation takes precedence.
 The 2026-09-07 execution request adds the truthful profile capability `__STDC_NO_VLA__=1` after the unchanged sealed predefined baseline and before command-line overrides; this is an EvoCC profile declaration, not a claim that the VLA-supporting oracles define it.
 No full-configuration first-error count is yet measured; the toybox lane currently strips this specifier from two files, so an adjusted lane alone cannot prove native acceptance.
+
+### Empty parameter lists in function definitions
+
+A function definition written with an empty parameter list has zero parameters; its preserved C declarator remains distinct from a prototype, while the lowered definition has zero data arguments.
+Both sealed compilers accept and execute `.evidence/builtin-probes/20260907-function-specifiers/empty-definition.c` with exit zero, recorded in `empty-definition.out`.
+Declarations without a definition keep the existing observed-call signature rule, and named old-style parameter declarations are not enabled by this change.
+No diagnostic is added; the torture lane rewrites 957 empty lists, so its existing adjusted pass count does not measure this native acceptance.
+
+### Equality of integer pointers with differing signedness
+
+Equality and inequality accept pointers to integer types that differ only in signedness, using the existing pointer-conversion compatibility relation; ordered comparisons retain their existing rules.
+Both sealed GCC-14 and Clang-19 accept and return zero for `.evidence/builtin-probes/20260907-function-specifiers/pointer-equality.c`, with distinct-pointer-type warnings recorded in `pointer-equality.out`.
+No diagnostic is added and no memory or validator rule is relaxed.
+This reproduces Csmith base seed 5 from run `20260906T184351Z`; that run has 164 E2102 refusals across both campaigns, but their individual construct attribution is not yet established.
 
 ### Address-only blocks versus terminator-edge reachability
 

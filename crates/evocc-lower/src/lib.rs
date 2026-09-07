@@ -2384,6 +2384,11 @@ fn function_info(
         FunctionParameters::Unspecified if function.body.is_none() => {
             unit.unprototyped_parameters(function.symbol).unwrap_or(&[])
         }
+        FunctionParameters::Unspecified
+            if matches!(function.parameters, ParameterSyntax::Unspecified) =>
+        {
+            &[]
+        }
         FunctionParameters::Unspecified => {
             return Err(LowerError::MalformedFunction {
                 function: function.name.spelling.clone(),
@@ -2397,6 +2402,7 @@ fn function_info(
         .map(|ty| function_value_type(unit.types(), target, *ty, function.span))
         .collect::<Result<Vec<_>, _>>()?;
     let parameter_symbols = match &function.parameters {
+        ParameterSyntax::Unspecified if parameter_types.is_empty() => Vec::new(),
         ParameterSyntax::Prototype { parameters, .. }
             if function.body.is_some() && parameters.len() == parameter_types.len() =>
         {

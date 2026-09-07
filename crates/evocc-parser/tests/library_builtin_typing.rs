@@ -32,6 +32,19 @@ fn accepts(source: &str) {
 const SIZE_T: &str = "typedef unsigned long size_t; ";
 
 #[test]
+fn conflicting_termination_spellings_fail_closed() {
+    for name in ["__builtin_exit", "__builtin__Exit"] {
+        let arena = Arena::default();
+        assert_eq!(
+            parse(&format!("void f(void){{{name}(0);}}"), &arena)
+                .unwrap_err()
+                .code,
+            "E2933"
+        );
+    }
+}
+
+#[test]
 fn memory_builtins_carry_their_library_prototypes() {
     accepts(&format!(
         "{SIZE_T} void *copy(void *d, const void *s, size_t n) {{ __builtin_memset(d, 0, n); return __builtin_memcpy(d, s, n); }} int compare(const void *a, const void *b, size_t n) {{ return __builtin_memcmp(a, b, n); }}\n"

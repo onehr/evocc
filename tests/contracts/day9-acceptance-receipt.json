@@ -6,10 +6,10 @@
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.73",
-    "sha256": "b343877cb36ea5140c831e2f98cc8223ad058ef4498dc6c6605491abf401a891"
+    "revision": "1.9.74",
+    "sha256": "160b9d779d869f9f1c7bcb8679107aea1ce92665e10165237b04c65c9a7994a5"
   },
-  "cutLine": "Nonvolatile bit-field initialization, reads and masked updates now pass the expression regression suite and changed gate, with both interpreters, generated AArch64 code and sealed GCC/Clang agreeing on the boundary probe. The new full lowering survey and Csmith campaigns are still running. K1 boots with the explicitly authorized installed QEMU, with 21 units byte-proven and one symbol-proof mismatch retained. No whole-kernel or whole-backlog completion is claimed; executionContinuation is current and older sections retain their historical subjects.",
+  "cutLine": "The frozen lowering survey completed: 42 clean, 2750 diagnosed, 6 timeout, zero panic. Bit-field Csmith replay emitted 482/1000 with 396 agreeing and zero mismatches; the declaration/abort compiler passed 1055/1692 torture programs. Aggregate-element values and pointer-equality signedness remove zlib's last refusals: 19/19 units in the passing make-test build. Native empty-list definitions also execute in both interpreters; current changed gate is 985/0. The newest Csmith and torture replays are pending, and neither the seven-item backlog nor whole-kernel lowering is closed; older sections retain historical subjects.",
   "executionContinuation": {
     "baseline": "0bd4bfe",
     "status": "IN_PROGRESS",
@@ -43,7 +43,68 @@
     },
     "toybox": { "run": "20260906T181713Z", "evidence": ".evidence/ladder/toybox/20260906T181713Z/summary.json", "command": "python3 tools/ladder/toybox.py --evocc target/frontend/release/evocc --budget20 --jobs2", "passingBuildUnits": 163, "units": 201, "testResult": "no-regression", "comparison": "Earlier run was 161/203; denominator changed, so no same-cohort percentage improvement is claimed. A different concurrent run subsequently owns the shared toybox receipt." },
     "musl": { "run": "20260906T181719Z", "command": "timeout --signal=TERM 3600 python3 tools/ladder/musl.py --evocc target/frontend/release/evocc --budget45 --jobs2", "status": "STOPPED_CONTAMINATED_NOT_PASS", "reason": "Another lane began rebuilding the same musl-work/libc-test-work while this run was in libc-test. Stopped only this run's parent and owned container; no final metric is accepted and the other run was left untouched." },
-    "pending": ["Full lowering survey on frozen 0bd4bfe", "Csmith --campaign all --programs500 on frozen bit-field compiler", "Remaining declaration/builtin work and its lane replay"]
+    "loweringSurvey": {
+      "run": "20260906T181928Z-82375",
+      "subject": "0bd4bfe4e301ef1a8f9ec9c7da12919bae1db5e2",
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc ./evocc --action lower --jobs 4 --timeout 60",
+      "workingDirectory": ".build/frontend-execution",
+      "capture": ".evidence/full-config-lowering-survey/20260906T181928Z-82375",
+      "sealSha256": "a9d35a941e98a036abe89ec297f4b539eca5f5e50c1d522008cfa26538a28a03",
+      "classifications": { "clean": 42, "diagnosed": 2750, "timeout": 6, "panic": 0, "unavailable": 0 },
+      "firstDiagnosticCounts": { "E3021": 2727, "E3101": 21, "E3029": 1, "E3031": 1 },
+      "timeouts": ["drivers/net/ethernet/hisilicon/hns3/hns3_ethtool.c", "drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_debugfs.c", "drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_mdio.c", "drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_ptp.c", "drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_tm.c", "drivers/net/ethernet/intel/igb/igb_main.c"],
+      "timing": { "parallelism": 4, "medianMilliseconds": 5046.685, "maximumMilliseconds": 60042.662, "note": "Concurrent host load; coarse telemetry only. The six timeouts are not passes or waived regressions." }
+    },
+    "csmithBitFields": {
+      "run": "20260906T184351Z",
+      "command": "python3 tools/ladder/csmith.py --campaign all --programs 500 --evocc .build/bit-field-evocc",
+      "driverSha256": "ec94cb856399d78356ae5b179dac5087fb92d6b9a2db6e23b5344de18f5ddbd2",
+      "programs": 1000, "emitted": 482, "agreeing": 396, "mismatches": 0,
+      "previous": { "emitted": 454, "agreeing": 375, "mismatches": 0 },
+      "receipt": "tests/contracts/ladder-csmith-receipt.json"
+    },
+    "declarationsAndTermination": {
+      "red": "_Noreturn declarations, __STDC_NO_VLA__ and __builtin_abort failed focused acceptance before implementation, with zero build errors. Exit builtin spellings were separately probed and remain rejected because Clang-19 rejects them.",
+      "tortureRun": "20260906T185940Z",
+      "command": "python3 tools/ladder/e0.py --suite torture --evocc .build/function-specifier-evocc",
+      "driverSha256": "70d749ec923e636bda100b6d76bbf72b35489113dc94b9cedcf85df0a179e262",
+      "outcomes": { "programs": 1692, "pass": 1055, "refused": 588, "fail": 45, "asmFail": 1, "linkFail": 3 },
+      "previous": { "pass": 740, "refused": 900, "fail": 50, "asmFail": 1, "linkFail": 1 },
+      "limitation": "The lane adjusts 957 empty parameter lists; this is not evidence of native old-style definition support. The measured gain belongs to the compiler bundle, not solely abort.",
+      "zstdRun": "20260906T185946Z",
+      "zstdCommand": "python3 tools/ladder/zstd.py --evocc .build/function-specifier-evocc",
+      "zstdPassingBuild": "2/44, including timefn.o; unchanged",
+      "gate": "PASS_CURRENT_TREE",
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh e7aea46 --offline -j 2 --quiet",
+      "gateCounts": { "passed": 985, "failed": 0, "ignored": 0 },
+      "clippy": "PASS -D warnings", "fmt": "PASS"
+    },
+    "aggregatePlacesAndEquality": {
+      "red": "Aggregate array-element argument/copy: E3101. Integer signedness pointer equality: E2202, then C-HIR UnsupportedExpression after parser-only repair. Zero build errors.",
+      "regressionRepair": "The first aggregate fix broke nested-member writes in three existing targets; retaining the intermediate MemoryRead's checked place restored all three, without disabling tests.",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2",
+      "zlibCommand": "python3 tools/ladder/zlib.py --evocc .build/aggregate-value-evocc",
+      "zlibRun": "20260907T012912Z", "zlibBefore": "17/19", "zlibAfter": "19/19",
+      "zlibTest": "make test CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie': exit 0",
+      "driverSha256": "0142c5941de8b61d6193a2111cf890f7f6452969c715532abcff9ee3a08fa46b",
+      "sourceState": "e7aea46 plus the frontend changes in this receipt's commit, before the separate native empty-definition change; the frozen binary hash is authoritative for this replay",
+      "pointerEqualityMachineCheck": "Generated AArch64 assembled with sealed gcc-14 -no-pie and executed: exit 0",
+      "csmithRun": "20260907T012857Z", "csmithStatus": "RUNNING_NOT_PASS"
+    },
+    "nativeEmptyDefinitions": {
+      "red": "MalformedFunction: function definition requires a prototype parameter list; zero build errors",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow empty_parameter_lists_in_definitions --offline -j 2 -- --nocapture",
+      "result": "PASS: integer-returning and void definitions, both interpreters",
+      "probe": ".evidence/builtin-probes/20260907-function-specifiers/empty-definition.c",
+      "oracleResults": "gcc-14 and clang-19 -std=gnu11: compile 0, execute 0",
+      "driverSha256": "2644a08b33a550f597af50a017aeb6d15c7aee9742e58ccf65b440f0bdd869ed",
+      "sourceState": "e7aea46 plus this receipt's commit's frontend changes",
+      "machineCheck": "Generated AArch64 assembled with sealed gcc-14 -no-pie and executed: exit 0",
+      "tortureCommand": "python3 tools/ladder/e0.py --suite torture --evocc .build/empty-definition-evocc",
+      "tortureRun": "20260907T013532Z",
+      "tortureStatus": "RUNNING_NOT_PASS"
+    },
+    "pending": ["Aggregate-element and pointer-equality lane replay", "Alias/weak application conflicts with the body's preserved-only rule; Appendix D records the conflict", "K&R parameter declarations require default-promoted call types plus separate body parameter types; not implemented", "The newly specified always_inline substitution is not implemented", "Musl measurement remains blocked by shared-workdir ownership; do not count the contaminated run"]
   },
   "frontendExecutionFollowup": {
     "status": "PARTIAL_WITH_DECLARED_RED",

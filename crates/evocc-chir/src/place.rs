@@ -120,6 +120,24 @@ impl PointerTypeDesc {
         self.pointee
     }
 
+    /// Equality also admits integer pointees differing only in signedness.
+    /// This does not form a composite type or authorize pointer ordering.
+    pub fn equality_compatible(types: &TypeInterner, left: Self, right: Self) -> bool {
+        if Self::composite(types, left, right).is_ok() {
+            return true;
+        }
+        match (
+            types.get(left.pointee).map(|ty| &ty.kind),
+            types.get(right.pointee).map(|ty| &ty.kind),
+        ) {
+            (Some(TypeKind::Int(left)), Some(TypeKind::Int(right))) => {
+                crate::integer::integer_type_for_rank(*left).unsigned_version()
+                    == crate::integer::integer_type_for_rank(*right).unsigned_version()
+            }
+            _ => false,
+        }
+    }
+
     #[must_use]
     pub const fn pointee_qualifiers(self) -> Qualifiers {
         self.pointee_qualifiers
