@@ -423,6 +423,15 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
     assert!(darwin.contains("\nLmain_block0:"), "{darwin}");
     assert!(linux.contains("\n.Lmain_block0:"), "{linux}");
 
+    // ELF consumers need the subject's symbol extents, not a reference
+    // compiler's different function length. Mach-O has no such directives.
+    assert!(linux.contains(".type main, %function\n"), "{linux}");
+    assert!(linux.contains(".size main, .-main\n"), "{linux}");
+    assert!(linux.contains(".type counter, %object\n"), "{linux}");
+    assert!(linux.contains(".size counter, .-counter\n"), "{linux}");
+    assert!(!darwin.contains(".type "), "{darwin}");
+    assert!(!darwin.contains(".size "), "{darwin}");
+
     println!("darwinBytes={}", darwin.len());
     println!("linuxBytes={}", linux.len());
 }
