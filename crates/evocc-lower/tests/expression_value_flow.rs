@@ -85,6 +85,12 @@ fn compound_literal_identity_follows_its_block_activation() {
 }
 
 #[test]
+fn entering_a_compound_literal_scope_by_goto_creates_its_storage() {
+    agrees("int main(void){goto inside;{inside:return (int){7}!=7;}}");
+    agrees("int main(void){int *p=0,n=0;goto inside;{inside:p=&(int){++n};if(n<2)goto inside;return *p!=2;}}");
+}
+
+#[test]
 fn compound_literal_lifetime_ends_on_each_scope_exit() {
     for source in [
         "int main(void){int *p;{p=&(int){7};}return *p;}",
