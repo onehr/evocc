@@ -31,6 +31,23 @@ fn emits(source: &str) -> String {
 }
 
 #[test]
+fn always_inline_substitutes_constant_arguments_before_assembly_validation() {
+    let text = emits(
+        r#"static __attribute__((always_inline)) inline int check(int n) {
+            asm goto("" : : "i"(n) : : hit);
+            return 0;
+        hit:
+            return 1;
+        }
+        int entry(void) { return check(3); }"#,
+    );
+    assert!(
+        !text.contains("call @check"),
+        "callee must be substituted: {text}"
+    );
+}
+
+#[test]
 fn assembly_constraints_and_refusals() {
     let cases: &[(&str, &str, Option<&str>)] = &[
         (

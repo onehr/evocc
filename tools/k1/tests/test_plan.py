@@ -114,6 +114,32 @@ class LinkCollisionTest(unittest.TestCase):
         self.assertEqual(found["groups"], [])
         self.assertEqual(found["symbolsDefinedTwice"], 0)
 
+    def test_independent_kernel_link_targets_do_not_collide(self) -> None:
+        rows = self.rows({
+            "lib/fdt.o": ["fdt_check_header"],
+            "arch/arm64/kernel/pi/lib-fdt.o": ["fdt_check_header"],
+            "drivers/firmware/efi/libstub/fdt.o": ["fdt_check_header"],
+            "lib/ctype.o": ["_ctype"],
+            "arch/arm64/kernel/pi/lib-ctype.o": ["_ctype"],
+            "drivers/firmware/efi/libstub/ctype.o": ["_ctype"],
+        })
+        self.assertEqual(plan.link_collisions(rows)["units"], [])
+        self.assertEqual(plan.linkable_units(rows), [row["unit"] for row in rows])
+
+    def test_genuine_collisions_within_a_link_target_still_exclude_both(self) -> None:
+        rows = self.rows({
+            "lib/a.o": ["dup"],
+            "lib/b.o": ["dup"],
+            "arch/arm64/kernel/pi/a.o": ["dup"],
+            "drivers/firmware/efi/libstub/a.o": ["dup"],
+            "drivers/firmware/efi/libstub/b.o": ["dup"],
+        })
+        self.assertEqual(plan.link_collisions(rows)["groups"], [
+            ["drivers/firmware/efi/libstub/a.o", "drivers/firmware/efi/libstub/b.o"],
+            ["lib/a.o", "lib/b.o"],
+        ])
+        self.assertEqual(plan.link_collisions(rows)["symbolsDefinedTwice"], 2)
+
     def test_a_symbol_defined_twice_names_both_objects(self) -> None:
         found = plan.link_collisions(self.rows({"a.o": ["dup"], "b.o": ["dup"]}))
         self.assertEqual(found["units"], ["a.o", "b.o"])

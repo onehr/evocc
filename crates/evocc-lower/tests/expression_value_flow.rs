@@ -69,6 +69,12 @@ fn assignment_values_are_operands_with_their_effects_preserved() {
 }
 
 #[test]
+fn a_selected_short_circuit_operand_defines_a_previously_uninitialized_local() {
+    agrees("int f(int y){int x;if(y||(x=5))return x;return 0;}int main(void){return f(0)!=5;}");
+    agrees("int f(int y){int x=9;if(y||(x=5))return x;return 0;}int main(void){return f(1)!=9 || f(0)!=5;}");
+}
+
+#[test]
 fn dereferenced_function_pointers_remain_function_designators() {
     agrees("int f(int n){return n+1;} int main(void){int (*p)(int)=f;return (*p)(6)!=7;}");
 }
