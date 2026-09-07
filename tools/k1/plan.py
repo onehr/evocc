@@ -97,11 +97,26 @@ def owner_totals(rows: list[dict]) -> dict[str, int]:
     return dict(sorted(totals.items()))
 
 
+def link_target(unit: str) -> str:
+    """The symbol namespace of an object in the pinned ARM64 build.
+
+    Kbuild prefixes PI symbols with __pi_ and EFI-stub symbols with
+    __efistub_ before combining them with vmlinux.a. The survey observes
+    their unprefixed compile outputs, not those later objcopy outputs.
+    """
+    if unit.startswith("arch/arm64/kernel/pi/"):
+        return "pi"
+    if unit.startswith("drivers/firmware/efi/libstub/"):
+        return "efi-stub"
+    return "vmlinux.a"
+
+
 def link_collisions(rows: list[dict]) -> dict:
     """The candidate objects that cannot share a link with each other.
 
-    A symbol defined by two objects is a multiple definition, and the linker
-    refuses the whole vmlinux over it. The survey already records what each
+    A symbol defined by two objects in one link target is a multiple
+    definition, and the linker refuses the whole vmlinux over it. The survey
+    already records what each
     object defines, so the objects that can never be substituted together are
     named here, before any link is attempted, rather than discovered one
     reduction at a time. Units are grouped into the sets that conflict, so a
@@ -112,10 +127,10 @@ def link_collisions(rows: list[dict]) -> dict:
         for row in rows
         if row.get("outcome") in ASSEMBLING_OUTCOMES and row.get("definedSymbols")
     }
-    owners: dict[str, list[str]] = {}
+    owners: dict[tuple[str, str], list[str]] = {}
     for unit, symbols in defined.items():
         for symbol in symbols:
-            owners.setdefault(symbol, []).append(unit)
+            owners.setdefault((link_target(unit), symbol), []).append(unit)
     shared = {symbol: units for symbol, units in owners.items() if len(units) > 1}
 
     parent: dict[str, str] = {}

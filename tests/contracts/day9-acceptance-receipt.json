@@ -10,6 +10,21 @@
     "sha256": "160b9d779d869f9f1c7bcb8679107aea1ce92665e10165237b04c65c9a7994a5"
   },
   "cutLine": "The frozen lowering survey completed: 42 clean, 2750 diagnosed, 6 timeout, zero panic. Bit-field Csmith replay emitted 482/1000 with 396 agreeing and zero mismatches; the declaration/abort compiler passed 1055/1692 torture programs. Aggregate-element values and pointer-equality signedness remove zlib's last refusals: 19/19 units in the passing make-test build. Native empty-list definitions also execute in both interpreters; current changed gate is 985/0. The newest Csmith and torture replays are pending, and neither the seven-item backlog nor whole-kernel lowering is closed; older sections retain historical subjects.",
+  "inlineAndLinkageContinuation": {
+    "baseline": "d1202a4",
+    "status": "IN_PROGRESS_NOT_CLOSED",
+    "redCommit": "9396ce6",
+    "inline": "The new always_inline CLI regression compiles and fails with E3021 not-lowered: asm:i. Section 10.1.9 requires the unspecialized static body to lower before backend removal, which encounters the same dynamic immediate refusal; no validator or refusal was weakened.",
+    "shortCircuit": "The exact f(0) reproducer returns 5 in both interpreters and its main assertion returns 0. An initialized x control also preserves the untaken assignment path.",
+    "changedGate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh d1202a4 --offline -j 2", "result": "RED: only the declared inline_assembly_lowering target failed; no build errors" },
+    "clippy": { "command": "CARGO_TARGET_DIR=target/frontend cargo clippy -p evocc -p evocc-lower -p evocc-proofcheck --all-targets -- -D warnings", "result": "PASS" },
+    "preprocessorRegression": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-cpp --test day4_multifile_origins --test macro_profile_closure --offline -j 2", "passed": 19, "failed": 0 },
+    "linkTargetRegression": { "command": "python3 -m unittest discover -s tools/k1/tests", "passed": 80, "failed": 0 },
+    "collisionRecount": { "command": "python3 tools/k1/plan.py collisions .evidence/k1/measure-20260906T170419Z/survey/units.jsonl", "excludedBefore": 16, "excludedAfter": 0, "assemblingUnits": 42, "note": "Reclassification of the same frozen survey, not a new compiler coverage measurement or proof of boot." },
+    "k1Replay": { "run": "measure-20260907T025031Z", "command": "CARGO_TARGET_DIR=.build/frontend-execution/target K1_ALLOW_QEMU_DRIFT=1 tools/k1/measure.sh --reuse-survey .evidence/k1/measure-20260906T170419Z/survey --jobs 4 --max-bisections 0", "status": "RUNNING_NOT_PASS", "installedCandidates": 42 },
+    "toyboxReplay": { "command": "python3 tools/ladder/toybox.py --evocc .build/empty-definition-evocc --jobs 2 --budget 20", "status": "RUNNING_NOT_PASS" },
+    "remaining": "Inlining, applied alias/weak, K&R definitions and declaration-only target vector/extended floating types are not implemented. Final lowering survey is not yet run. Existing benchmark runs remain separate measured subjects."
+  },
   "executionContinuation": {
     "baseline": "0bd4bfe",
     "status": "IN_PROGRESS",
