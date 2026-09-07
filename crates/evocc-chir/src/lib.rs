@@ -16,6 +16,39 @@ pub mod allocation;
 pub mod constant;
 pub mod initializer;
 pub mod inline;
+
+/// A use recorded before an incomplete array's later declaration retains its
+/// source type. Completion changes only the outer bound, never the element or
+/// qualifiers. Function redeclarations use C compatibility, which ignores only
+/// top-level parameter qualifiers. Other object types require exact identity.
+#[must_use]
+pub fn type_at_use_matches_binding(
+    types: &evocc_types::TypeInterner,
+    observed: evocc_types::TypeId,
+    binding: evocc_types::TypeId,
+) -> bool {
+    if observed == binding {
+        return true;
+    }
+    if matches!(
+        types.get(observed).map(|t| &t.kind),
+        Some(evocc_types::TypeKind::Function { .. })
+    ) && matches!(
+        types.get(binding).map(|t| &t.kind),
+        Some(evocc_types::TypeKind::Function { .. })
+    ) {
+        return types.compatible(observed, binding);
+    }
+    let (Some(observed), Some(binding)) = (types.get(observed), types.get(binding)) else {
+        return false;
+    };
+    observed.qualifiers == binding.qualifiers
+        && matches!(
+            (&observed.kind, &binding.kind),
+            (evocc_types::TypeKind::Array { element: a, bound: evocc_types::ArrayBound::Unbounded },
+             evocc_types::TypeKind::Array { element: b, bound: evocc_types::ArrayBound::Fixed(_) }) if a == b
+        )
+}
 pub mod integer;
 pub mod interp;
 pub mod place;

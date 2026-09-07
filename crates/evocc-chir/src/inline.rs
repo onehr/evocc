@@ -312,7 +312,7 @@ pub fn substitute<'a>(
         object.initializer = o
             .initializer
             .as_ref()
-            .map(|i| pass.initializer(i, &mut context))
+            .map(|i| pass.initializer(i, &mut context, false))
             .transpose()?;
         declarations.push(pass.alloc(CHirDecl::Object(object)));
     }
@@ -361,7 +361,8 @@ struct Context<'a> {
     scope: ScopeId,
     replacements: BTreeMap<SymbolId, SymbolId>,
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
-    memo: HashMap<usize, &'a CHirExpr<'a>>,
+    memo: HashMap<(usize, bool), &'a CHirExpr<'a>>,
+    expand_calls: bool,
     prefix: Option<u64>,
     result: Option<SymbolId>,
     end: Option<SpannedName>,
@@ -374,6 +375,7 @@ impl Context<'_> {
             replacements: BTreeMap::new(),
             constants: BTreeMap::new(),
             memo: HashMap::new(),
+            expand_calls: true,
             prefix: None,
             result: None,
             end: None,
@@ -549,7 +551,10 @@ impl<'a> Substitution<'a, '_> {
         &mut self,
         i: &ObjectInitializer<'a>,
         c: &mut Context<'a>,
+        expand_calls: bool,
     ) -> Result<ObjectInitializer<'a>, InlineError> {
+        let previous = c.expand_calls;
+        c.expand_calls &= expand_calls;
         let mut actions = i.plan.actions().to_vec();
         for a in &mut actions {
             if let InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } =
@@ -565,7 +570,9 @@ impl<'a> Substitution<'a, '_> {
         }
         // The manifest visits the written form too. Preserve the shared
         // expression identities between that form and its normalized plan.
-        Ok(ObjectInitializer::new(self.written(&i.written, c)?, plan))
+        let written = self.written(&i.written, c)?;
+        c.expand_calls = previous;
+        Ok(ObjectInitializer::new(written, plan))
     }
     fn written(
         &mut self,
@@ -583,6 +590,10 @@ impl<'a> Substitution<'a, '_> {
                 for element in elements {
                     *element = self.written(element, c)?;
                 }
+                // Designators are already checked integer constant expressions.
+                // A call in an unselected arm is syntax, not an execution site.
+                let previous = c.expand_calls;
+                c.expand_calls = false;
                 for designation in designations.iter_mut().flatten() {
                     for designator in &mut designation.designators {
                         match designator {
@@ -597,6 +608,7 @@ impl<'a> Substitution<'a, '_> {
                         }
                     }
                 }
+                c.expand_calls = previous;
             }
         }
         Ok(written)
@@ -636,7 +648,9 @@ impl<'a> Substitution<'a, '_> {
             o.name.spelling = self.unit.symbols.symbol(s).unwrap().spelling().to_owned();
         }
         if let Some(i) = &o.initializer {
-            o.initializer = Some(self.initializer(i, c)?);
+            let runtime =
+                o.storage != StorageClass::Static && c.scope != self.unit.symbols.file_scope();
+            o.initializer = Some(self.initializer(i, c, runtime)?);
         }
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
@@ -645,7 +659,7 @@ impl<'a> Substitution<'a, '_> {
         e: &'a CHirExpr<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
-        let key = e as *const _ as usize;
+        let key = (e as *const _ as usize, c.expand_calls);
         if let Some(e) = c.memo.get(&key) {
             return Ok(e);
         }
@@ -692,7 +706,12 @@ impl<'a> Substitution<'a, '_> {
                     *a = self.expr(a, c)?;
                 }
                 if let CHirExpr::Ident { symbol, .. } = f {
-                    if let Some(callee) = self.eligible.get(symbol).copied() {
+                    if let Some(callee) = self
+                        .eligible
+                        .get(symbol)
+                        .copied()
+                        .filter(|_| c.expand_calls)
+                    {
                         let result = self.call(callee, args, *span, c.scope)?;
                         c.memo.insert(key, result);
                         return Ok(result);
@@ -754,7 +773,7 @@ impl<'a> Substitution<'a, '_> {
                     _ => None,
                 };
             }
-            CHirExpr::CompoundLit(_, i, _) => *i = self.initializer(i, c)?,
+            CHirExpr::CompoundLit(_, i, _) => *i = self.initializer(i, c, c.expand_calls)?,
             CHirExpr::Lit(..)
             | CHirExpr::FloatLit(..)
             | CHirExpr::CharLit(..)

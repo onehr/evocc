@@ -928,7 +928,10 @@ fn pointer_expression_type(
                 }
                 SymbolKind::Enumerator | SymbolKind::Typedef => false,
             };
-            if declaration.spelling() != spelling || facts.ty() != ty || !category_matches {
+            if declaration.spelling() != spelling
+                || !crate::type_at_use_matches_binding(types, facts.ty(), ty)
+                || !category_matches
+            {
                 return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
             }
             converted_pointer_type(types, ty)
@@ -1157,7 +1160,7 @@ fn addressed_expression_type(
                 .symbol(*symbol)
                 .map_err(|_| MemoryPlaceError::UnknownSymbol(*symbol))?
                 .ty();
-            if facts.ty() != ty {
+            if !crate::type_at_use_matches_binding(types, facts.ty(), ty) {
                 return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
             }
             ty

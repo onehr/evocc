@@ -1967,7 +1967,11 @@ fn prevalidate_expr_for_lowering(
                 SymbolKind::Typedef => false,
             };
             if declaration.spelling() != spelling
-                || declaration.ty() != facts.ty()
+                || !evocc_chir::type_at_use_matches_binding(
+                    unit.types(),
+                    facts.ty(),
+                    declaration.ty(),
+                )
                 || !category_matches
             {
                 return Err(LowerError::UnsupportedExpression {
@@ -2916,6 +2920,9 @@ fn written_declarator_matches(
         };
     }
     current == terminal
+        || (initialized_object
+            && written.layers.is_empty()
+            && evocc_chir::type_at_use_matches_binding(types, terminal, current))
         || (adjusted_parameter
             && written.layers.is_empty()
             && matches!(
@@ -4156,7 +4163,15 @@ impl<'a> FunctionLowerer<'a> {
             };
         }
         if leave_scope {
-            for state in &mut normal {
+            // Unresolved forward gotos leave this compound too. Its internal
+            // labels have already consumed their incoming states; retaining a
+            // local address on an outgoing edge would both extend its lifetime
+            // and demand that address from predecessors which never declared it.
+            let mut pending_gotos = std::mem::take(&mut self.pending_gotos);
+            for state in normal
+                .iter_mut()
+                .chain(pending_gotos.values_mut().flatten())
+            {
                 for symbol in declared.iter().rev() {
                     if self.memory_symbols.contains(symbol)
                         && state.env.contains_key(&EnvKey::Address(*symbol))
@@ -4173,6 +4188,7 @@ impl<'a> FunctionLowerer<'a> {
                     state.locals.remove(symbol);
                 }
             }
+            self.pending_gotos = pending_gotos;
         }
         Ok(Flow { normal })
     }
@@ -4444,6 +4460,39 @@ impl<'a> FunctionLowerer<'a> {
 
     fn is_aggregate_type(&self, ty: TypeId) -> bool {
         is_aggregate_type(self.unit.types(), ty)
+    }
+
+    fn record_value_type(&self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+        let ty = match expression {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::StatementExpr { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. } => facts.ty(),
+            CHirExpr::MemoryRead { place, .. } => place.value_ty(),
+            CHirExpr::CompoundLit(ty, ..) => *ty,
+            CHirExpr::Call(callee, ..) => {
+                let ty = self.call_designator_function_type(callee)?;
+                let TypeKind::Function { return_type, .. } = &self.unit.types().get(ty)?.kind
+                else {
+                    return None;
+                };
+                *return_type
+            }
+            CHirExpr::Member(base, name, _) => {
+                let base = self.record_value_type(base)?;
+                evocc_chir::record_member_path(self.unit.types(), base, name)?
+                    .last()?
+                    .field_ty()
+            }
+            CHirExpr::Comma(_, right, _) | CHirExpr::EvaluateOnce(right, _) => {
+                self.record_value_type(right)?
+            }
+            CHirExpr::Ternary(_, left, right, _) => {
+                let ty = self.record_value_type(left)?;
+                (self.record_value_type(right)? == ty).then_some(ty)?
+            }
+            _ => return None,
+        };
+        self.is_aggregate_type(ty).then_some(ty)
     }
 
     fn is_function_pointer_type(&self, ty: TypeId) -> bool {
@@ -6590,7 +6639,11 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 if declaration.kind() == SymbolKind::Function
                     && declaration.spelling() == spelling
-                    && declaration.ty() == facts.ty()
+                    && evocc_chir::type_at_use_matches_binding(
+                        self.unit.types(),
+                        facts.ty(),
+                        declaration.ty(),
+                    )
                     && facts.category() == ExprCategory::FunctionDesignator
                 {
                     let result = self.fresh_value(self.fnptr_type(facts.ty(), *span)?);
@@ -6610,7 +6663,11 @@ impl<'a> FunctionLowerer<'a> {
                     declaration.kind(),
                     SymbolKind::Object | SymbolKind::Parameter
                 ) || declaration.spelling() != spelling
-                    || declaration.ty() != facts.ty()
+                    || !evocc_chir::type_at_use_matches_binding(
+                        self.unit.types(),
+                        facts.ty(),
+                        declaration.ty(),
+                    )
                     || facts.category() != ExprCategory::LValue
                 {
                     return Err(LowerError::UnsupportedExpression {
@@ -6875,8 +6932,60 @@ impl<'a> FunctionLowerer<'a> {
                     integer: CIntegerType::ULONG,
                 })
             }
+            CHirExpr::Member(base, name, span) => {
+                let record =
+                    self.record_value_type(base)
+                        .ok_or(LowerError::UnsupportedExpression {
+                            span: *span,
+                            feature: "member base has no record value type",
+                        })?;
+                let path = evocc_chir::record_member_path(self.unit.types(), record, name).ok_or(
+                    LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "record value has no unambiguous member",
+                    },
+                )?;
+                let mut address = self.lower_expr(base, state)?.value;
+                let mut field_type = record;
+                let mut bit_field = None;
+                for projection in path {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), projection.tag())
+                        .map_err(|source| LowerError::Layout {
+                            ty: record,
+                            span: *span,
+                            source,
+                        })?;
+                    let field = layout
+                        .fields
+                        .iter()
+                        .find(|f| f.field_index == projection.field_index())
+                        .ok_or(LowerError::UnsupportedExpression {
+                            span: *span,
+                            feature: "record value member has no layout",
+                        })?;
+                    address = self.constant_offset_address(address, field.byte_offset, state)?;
+                    field_type = projection.field_ty();
+                    bit_field = field.bit_field;
+                }
+                if let Some(field) = bit_field {
+                    self.emit_bit_field_load(address, field_type, field, *span, state)
+                } else if self.is_aggregate_type(field_type)
+                    || matches!(
+                        self.unit.types().get(field_type).map(|t| &t.kind),
+                        Some(TypeKind::Array { .. })
+                    )
+                {
+                    Ok(ExprValue {
+                        value: address,
+                        integer: CIntegerType::ULONG,
+                    })
+                } else {
+                    self.emit_memory_load(address, field_type, false, *span, state)
+                }
+            }
             CHirExpr::FloatLit(_, span)
-            | CHirExpr::Member(_, _, span)
             | CHirExpr::PtrMember(_, _, span)
             | CHirExpr::Index(_, _, span) => Err(LowerError::UnsupportedExpression {
                 span: *span,
@@ -8146,7 +8255,11 @@ impl<'a> FunctionLowerer<'a> {
                     })?;
                     if designator.kind() != SymbolKind::Function
                         || designator.spelling() != spelling
-                        || designator.ty() != facts.ty()
+                        || !evocc_chir::type_at_use_matches_binding(
+                            self.unit.types(),
+                            facts.ty(),
+                            designator.ty(),
+                        )
                     {
                         return Err(LowerError::UnsupportedExpression {
                             span: *designator_span,

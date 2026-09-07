@@ -125,6 +125,72 @@ fn inline_rewriting_preserves_existing_statement_expression_values() {
 }
 
 #[test]
+fn inline_calls_in_unevaluated_static_syntax_are_not_executed() {
+    agrees("static __attribute__((always_inline)) int f(int n){return n;} int a[2]={[1 ? 1 : f(0)]=7};int main(void){return a[1]!=7;}");
+    agrees("static __attribute__((always_inline)) int f(int n){return n;} static int x=1 ? 7 : f(0);int main(void){return x!=7;}");
+    agrees("static __attribute__((always_inline)) int f(int n){static int x=1 ? 7 : f(0);return x+n;} int main(void){return f(1)!=8;}");
+}
+
+#[test]
+fn members_of_returned_records_keep_their_value() {
+    agrees("struct S{int n;};static __attribute__((always_inline)) struct S f(int n){struct S s={n};return s;}int main(void){return f(7).n!=7;}");
+    agrees("struct S{int n;};struct S f(int n){struct S s={n};return s;}int main(void){return f(7).n!=7;}");
+}
+
+#[test]
+fn inline_returns_from_nested_object_scopes_join_without_dead_addresses() {
+    agrees("static __attribute__((always_inline)) int f(int n){if(n){int a[2]={3,7};return a[1];}return 5;}int main(void){return f(1)!=7 || f(0)!=5;}");
+    agrees("static __attribute__((always_inline)) int f(int n){if(n){int a[2]={3,7};if(n>1)return a[0];return a[1];}return 5;}int main(void){return 2+f(2)!=5 || 2+f(1)!=9 || 2+f(0)!=7;}");
+}
+
+#[test]
+fn completed_array_declarations_keep_existing_uses_valid() {
+    agrees("extern int a[];int f(void){return a[0];} int a[4]={7};int main(void){return f()!=7;}");
+    agrees("typedef int A[];static const A a={7};int main(void){return a[0]!=7;}");
+    agrees("struct S{int n;};typedef struct S A[];static const A a={{7}};int main(void){return a[0].n!=7;}");
+    agrees("int a[4] __attribute__((aligned(64)))={7};int f(int *p){return *p;} int main(void){return f(a)!=7;}");
+}
+
+#[test]
+fn array_decay_before_later_completion_keeps_its_element_type() {
+    agrees("static const int a[];int f(const int *p){return *p;}int g(void){return f(a);}static const int a[]={7};int main(void){return g()!=7;}");
+}
+
+#[test]
+fn function_uses_before_compatible_parameter_redeclarations_remain_valid() {
+    agrees("int f(const int n);int g(void){return f(7);}int f(int n){return n;}int main(void){return g()!=7;}");
+    agrees(
+        "int f(int n);int (*p)(int)=f;int f(const int n){return n;}int main(void){return p(7)!=7;}",
+    );
+}
+
+#[test]
+fn completion_does_not_hide_different_bounds_elements_or_qualifiers() {
+    let source = "extern int a[]; int b[4]; int c[5]; const int d[4]; long e[4];";
+    let arena = Arena::default();
+    let file = FileId::new(45024);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error());
+    let ty = |name| {
+        unit.iter()
+            .find_map(|d| match d {
+                CHirDecl::Object(o) if o.name.spelling == name => Some(o.ty),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let matches = |a, b| evocc_chir::type_at_use_matches_binding(unit.types(), ty(a), ty(b));
+    assert!(matches("a", "b"));
+    assert!(!matches("b", "a"));
+    assert!(!matches("b", "c"));
+    assert!(!matches("a", "d"));
+    assert!(!matches("a", "e"));
+}
+
+#[test]
 fn a_conditional_array_index_is_evaluated_once() {
     agrees("int main(void){int a[2]={3,7};int n=0;return a[n++ ? 0 : 1]!=7 || n!=1;}");
 }

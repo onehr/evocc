@@ -3082,7 +3082,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             match task {
                 MachineTask::FunctionEnd(end) => return Ok(end),
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
-                MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
+                // Return copies an aggregate while its source is still alive.
+                // finish_function ends the entire frame after that copy, so
+                // individual lexical exits must not destroy it first.
+                MachineTask::ExitMemoryScope(_) => {}
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
                 MachineTask::RestoreNestedMutationDepth(previous) => {
                     self.nested_mutation_depth = previous;
@@ -4145,7 +4148,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         })?;
         if declaration.kind() != SymbolKind::Function
             || declaration.spelling() != spelling
-            || declaration.ty() != facts.ty()
+            || !crate::type_at_use_matches_binding(self.unit.types(), facts.ty(), declaration.ty())
             || facts.category() != ExprCategory::FunctionDesignator
         {
             return Err(InterpreterError::UnsupportedExpression {
@@ -5660,7 +5663,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             }
         })?;
-        if declaration.spelling() != spelling || declaration.ty() != facts.ty() {
+        if declaration.spelling() != spelling
+            || !crate::type_at_use_matches_binding(self.unit.types(), facts.ty(), declaration.ty())
+        {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "inconsistent identifier facts",
                 span,
@@ -9893,7 +9898,14 @@ fn function_parameters_compatible(
                 types: right_types,
                 variadic: right_variadic,
             },
-        ) => left_variadic == right_variadic && left_types == right_types,
+        ) => {
+            left_variadic == right_variadic
+                && left_types.len() == right_types.len()
+                && left_types
+                    .iter()
+                    .zip(right_types)
+                    .all(|(left, right)| types.compatible_ignoring_top_qualifiers(*left, *right))
+        }
         (
             FunctionParameters::Unspecified,
             FunctionParameters::Prototype {

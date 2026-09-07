@@ -9,7 +9,7 @@
     "revision": "1.9.75",
     "sha256": "c2bc32b981ba4f7d3b7d29a4f158b5ad17e2b023d5a773d96abef81395f5fd6f"
   },
-  "cutLine": "Sealed lowering survey 20260907T043340Z-13363 on 2cf2c78 measured 47 clean, 2751 diagnosed, zero timeout, panic or unavailable. All 42 previously clean units remain clean; five diagnosed units became clean and six prior timeouts now diagnose. The face is 2726 E3021 refusals for Ir, explicitly outside the current assembly vocabulary; 23 E3101 defects, one computed-goto and one frame-address refusal remain. Csmith is 761 agreeing of 1000 emitted, zero mismatches; serial torture passed 1074/1692. The inliner implementation and changed gate are complete, but its new-compiler K1 replay and residual-defect closure are not. Older sections retain historical subjects.",
+  "cutLine": "The latest sealed full lowering survey remains 20260907T043340Z-13363 on 2cf2c78: 47 clean, 2751 diagnosed, no timeout/panic/unavailable. A subsequent targeted replay of all 47 clean and 23 E3101 units measured 50 clean and 20 E3021 Ir, zero regressions or remaining E3101 in that selected set; it is not a replacement full survey. The Ir rule still requires a Section 3.11 amendment. Csmith remains 761 agreeing of 1000 emitted with zero mismatches; serial torture remains 1074/1692, both older subjects. The two K1 proof mismatches were localized to the checker reading beyond emitted .text using GCC function lengths; the old proof remains non-passing. Overall closure and new-compiler K1 remain outstanding.",
   "latestLoweringSurvey": {
     "run": "20260907T043340Z-13363",
     "subject": "2cf2c78ea79986206c1049742e627d2e05ffd43e",
@@ -59,7 +59,52 @@
     "k1Replay": { "run": "measure-20260907T025031Z", "command": "CARGO_TARGET_DIR=.build/frontend-execution/target K1_ALLOW_QEMU_DRIFT=1 tools/k1/measure.sh --reuse-survey .evidence/k1/measure-20260906T170419Z/survey --jobs 4 --max-bisections 0", "status": "BOOT_PASS_PROOF_FAIL", "installedCandidates": 42, "proofMismatches": 2 },
     "toyboxReplay": { "command": "python3 tools/ladder/toybox.py --evocc .build/empty-definition-evocc --jobs 2 --budget 20", "status": "COMPLETE", "passingBuildUnits": 172, "units": 201, "testResult": "no-regression" },
     "newCompilerK1Replay": { "status": "NOT_RUN", "reason": "Previous replay used the old frozen compiler. First reduce the two existing byte-proof mismatches and the new lowering frontier, then rerun without overlapping heavy lanes." },
-    "remaining": "Close the 23 E3101 residuals without weakening validators; obtain a Section 3.11 ruling for Ir; rerun the new compiler through K1. Applied alias/weak, K&R definitions and declaration-only target vector/extended floating types remain open. Existing benchmark runs remain separate measured subjects.",
+    "residualRepair": {
+      "subjectParent": "48c8e59",
+      "binarySha256": "e58d6abefe5bcdbf421693df60dd25dbe22e308518cba21033929d6132c46dc5",
+      "status": "FOCUSED_AND_ORIGINAL_UNIT_REPLAY_PASS; NOT_A_FULL_SURVEY",
+      "red": "Added execution tests failed E3101 for static unevaluated inline syntax, typedef-hidden array completion, earlier array decay, compatible function redeclaration, member of a returned record, and a scoped-array early return. Zero build errors. After fixing lowering, aggregate return execution exposed a C-HIR lifetime error, also repaired before GREEN.",
+      "focused": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2", "passed": 19, "failed": 0 },
+      "gate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 48c8e59 --offline -j 2 --quiet", "result": "PASS", "clippy": "PASS -D warnings", "fmt": "PASS", "limitation": "Changed crates and reverse dependencies, not a full-workspace recount." },
+      "lint": { "command": "ruff check tools tests/acceptance; git diff --check", "result": "PASS" },
+      "layout": {
+        "base": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "run": "20260907T061758Z-56849", "passed": 128, "mismatches": 0 },
+        "attributed": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "run": "20260907T061807Z-56848", "passed": 22, "mismatches": 0 }
+      },
+      "kernelReplay": {
+        "argvManifest": ".evidence/full-config-lowering-survey/20260907T043340Z-13363/argv.jsonl",
+        "selection": "Every results.jsonl row classified clean or whose firstDiagnostic.code is E3101; match argv rows by unitId.",
+        "invocation": "Python subprocess.run(projectedArgv with only argv[0] replaced by target/frontend/release/evocc, timeout=60); ThreadPoolExecutor(max_workers=2), stdout discarded, stderr classified.",
+        "units": 70, "previousClean": 47, "cleanRegressions": 0,
+        "oldE3101": 23, "oldE3101NowClean": 3, "oldE3101NowIr": 20,
+        "clean": 50, "diagnosed": 20, "timeout": 0, "panic": 0,
+        "newCleanUnits": ["lib/zstd/common/entropy_common.c", "lib/zstd/decompress/huf_decompress.c", "lib/zstd/decompress/zstd_decompress_block.c"]
+      },
+      "beforeInliningComparison": {
+        "command": "For each named probe, invoke .build/empty-definition-evocc, .build/inline-substitution-evocc and target/frontend/release/evocc with --emit=evoir PROBE.c.",
+        "probeDirectory": ".evidence/builtin-probes/20260907-inline-residue",
+        "introducedByInlining": ["static-syntax", "nested-return"],
+        "alreadyFailedBeforeInlining": ["typedef-array", "array-completion", "record-member", "function-redeclaration"],
+        "currentLowering": "All six minimal probes pass."
+      },
+      "irRuling": {
+        "status": "AUTHORITY_REQUIRED_NOT_IMPLEMENTED",
+        "probe": ".evidence/builtin-probes/20260907-inline-residue/ir-constraint.c",
+        "output": ".evidence/builtin-probes/20260907-inline-residue/oracles.out",
+        "command": "container run --rm --platform linux/arm64 --network none -v PROBE_DIRECTORY:/work/probes evo-flight-lab:sealed; gcc-14 and clang-19 -std=gnu11 -O2 ir-constraint.c, then execute",
+        "result": "Both compilers exit 0; Ir and r agree for dynamic 0, 1, 4095, 4096, 4097, 0x12345678 and ULONG_MAX and constant 0, 4095 and 4097.",
+        "reason": "Section 3.11 explicitly refuses unlisted combinations. Probe consensus cannot override that body rule. Proposed amendment admits Ir with conservative r selection."
+      },
+      "k1ProofDiagnosis": {
+        "run": "measure-20260907T025031Z",
+        "command": "tools/k1/prove.py container_readelf, parse_readelf, slice_symbol and relocated_ranges on the existing object files and linked vmlinux",
+        "screen_info_pixel_format": "The first differing word is at +204 and contains mda string bytes from outside emitted text; GCC's borrowed window is 304 bytes.",
+        "fdt_nop_node": "After its call relocation at +36, the first differing word is at +172 and contains the EvoCC producer note; GCC's borrowed window is 216 bytes.",
+        "conclusion": "The checker uses unrelated reference-code lengths for zero-sized emitted symbols and permits cross-section reads. Require emitted symbol extents and section bounds; do not mask these bytes or relabel the old proof PASS. Backend emission has not been changed."
+      },
+      "offlineReplay": { "status": "PENDING" }
+    },
+    "remaining": "The 23 old E3101 units pass their former blocker in targeted replay: three clean, twenty Ir. Obtain a Section 3.11 ruling for Ir before admission, then run the full survey and new-compiler K1. K1 needs actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
     "nextWork": [
       "Minimize the five E3101 subclasses; compare each with the pre-inlining binary, then RED/GREEN at the shared identity, initializer or CFG boundary.",
       "Resolve the Ir vocabulary conflict with measured immediate/register forms and a body-specification ruling before admitting it; do not predict how many units become clean.",
