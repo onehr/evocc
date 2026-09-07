@@ -57,6 +57,37 @@
       "checksumMismatches": 0,
       "limitation": "This fixed-binary run includes the narrow bitfield repair but predates compound-assignment and enum repairs; it is not final acceptance. Its legacy trap counter is an exit-code observation, not proof of UB for each program. Native oracle jobs ran at parallelism 4 while host focused/changed tests also ran."
     },
+    "hostedLibraryBuiltins": {
+      "redCommit": "7a63cec",
+      "spellings": ["__builtin_printf", "__builtin_malloc", "__builtin_strcpy"],
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test front_end_resolved_forms --offline -j 2",
+      "focusedPassed": 15,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 376eefe --offline -j 2 --quiet",
+      "gatePassed": 916,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "native": "target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm tests/fixtures/hosted-library-builtins.c; sealed gcc -static link and execution: stdout abc 7 followed by newline, exit 0",
+      "oracles": "gcc-14 and clang-19 at -O0 and -O2 print identical output and exit 0",
+      "proofOfLowering": "All three builtin call forms render byte-identical modules to manually declared ordinary library calls; printf promotes anonymous narrow integer operands",
+      "negativeChecks": "E2909 arity, E2913 argument type, E2927 incompatible visible declaration remain enforced"
+    },
+    "tortureRemeasurement": {
+      "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+      "run": "20260907T093504Z",
+      "subject": "376eefe",
+      "programs": 1692,
+      "passed": 1086,
+      "refused": 561,
+      "runtimeFailed": 41,
+      "assemblyFailed": 1,
+      "linkFailed": 3,
+      "previousRun": "20260907T035311Z",
+      "previousPassed": 1074,
+      "passRegressions": 0,
+      "directRepairs": ["bf-sign-2", "pr58943", "20030714-1"],
+      "qualification": "The full torture suite contains floating and non-floating programs; this is not a separately measured non-floating denominator. This run predates the hosted builtin additions. Input preparation now preserves original bytes instead of rewriting 957 empty parameter lists or replacing invalid UTF-8; 20000227-1 moves from corrupted-input failure to the intentional E0002 refusal."
+    },
     "variadicStackBlocker": {
       "fixture": ".evidence/builtin-probes/20260907-variadic-stack/probe.c",
       "measured": "Nine named long parameters then two anonymous longs: C-HIR 0, EvoIR 0, gcc-14 0, clang-19 0, EvoCC native 1",

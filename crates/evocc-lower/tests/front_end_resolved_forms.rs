@@ -71,6 +71,31 @@ fn hosted_library_builtins_use_external_function_prototypes() {
 }
 
 #[test]
+fn hosted_library_builtins_keep_argument_and_declaration_checks() {
+    for (source, code) in [
+        ("int f(void){return __builtin_printf();}", "E2909"),
+        ("void *f(void){return __builtin_malloc(1,2);}", "E2909"),
+        ("char *f(void){return __builtin_strcpy(1,2);}", "E2913"),
+        (
+            "long printf(const char *,...); int f(void){return __builtin_printf(\"x\");}",
+            "E2927",
+        ),
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(10899);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let _ = parser.parse_translation_unit_in(&arena);
+        assert_eq!(
+            parser.diagnostic().map(|diagnostic| diagnostic.code),
+            Some(code),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn termination_builtins_are_typed_ordinary_library_calls() {
     assert_pairs(
         &[(

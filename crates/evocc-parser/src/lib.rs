@@ -350,6 +350,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_strncmp"
                         | "__builtin_alloca"
                         | "__builtin_memmove"
+                        | "__builtin_printf"
+                        | "__builtin_malloc"
+                        | "__builtin_strcpy"
                         | "__builtin_abort"
                         | "__builtin_exit"
                         | "__builtin__Exit"
@@ -9798,8 +9801,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let (external_name, return_ty, parameter_types) =
             self.builtin_library_prototype(&builtin, keyword.span)?;
         let variable_prefetch_arity = builtin == "__builtin_prefetch";
+        let variadic_library = builtin == "__builtin_printf";
         let valid_arity = if variable_prefetch_arity {
             (1..=3).contains(&arguments.len())
+        } else if variadic_library {
+            arguments.len() >= parameter_types.len()
         } else {
             arguments.len() == parameter_types.len()
         };
@@ -9827,6 +9833,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if variable_prefetch_arity {
             self.promote_call_arguments(&mut arguments[1..])?;
+        } else if variadic_library {
+            self.promote_call_arguments(&mut arguments[parameter_types.len()..])?;
         }
         let function_ty = self.intern(
             TypeKind::Function {
@@ -9837,7 +9845,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     } else {
                         parameter_types
                     },
-                    variadic: variable_prefetch_arity,
+                    variadic: variable_prefetch_arity || variadic_library,
                 },
             },
             Qualifiers::default(),
@@ -9882,11 +9890,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let const_void_pointer =
             self.intern(TypeKind::Pointer(const_void_ty), Qualifiers::default());
         let const_char_pointer = self.intern(TypeKind::Pointer(const_char), Qualifiers::default());
+        let char_ty = self.intern(TypeKind::Int(IntRank::Char), Qualifiers::default());
+        let char_pointer = self.intern(TypeKind::Pointer(char_ty), Qualifiers::default());
         let size_ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
         let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
 
         let prototype = match builtin {
             "__builtin_abort" => ("abort", void_ty, Vec::new()),
+            "__builtin_printf" => ("printf", int_ty, vec![const_char_pointer]),
+            "__builtin_malloc" => ("malloc", void_pointer, vec![size_ty]),
+            "__builtin_strcpy" => (
+                "strcpy",
+                char_pointer,
+                vec![char_pointer, const_char_pointer],
+            ),
             "__builtin_exit" | "__builtin__Exit" => {
                 self.report("E2933", "unsupported-termination-builtin", span);
                 return None;

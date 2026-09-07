@@ -5986,3 +5986,19 @@ correction without silently overriding Section 6 or allocating a refusal
 code for a valid scalar variadic call.
 One minimized case reproduces torture `va-arg-1.c`; additional affected
 unit counts await the next full run.
+
+### Hosted library builtin prototypes
+
+`__builtin_printf`, `__builtin_malloc`, and `__builtin_strcpy` use the
+ordinary external prototypes `int printf(const char *, ...)`,
+`void *malloc(size_t)`, and `char *strcpy(char *, const char *)` through
+the existing unit-local builtin symbol mechanism, with default promotions
+for `printf`'s anonymous arguments and no new intrinsic or library executor.
+Existing checks remain `E2909` for arity, `E2913` for incompatible arguments,
+and `E2927` for an incompatible visible function declaration; unsupported
+external execution still follows Sections 3.10 and 5 rather than fabricating a result.
+Both sealed oracles execute `tests/fixtures/hosted-library-builtins.c` at
+`-O0` and `-O2`, print `abc 7\n` and exit zero, recorded in
+`.evidence/builtin-probes/20260907-library-builtins/oracle.txt`.
+Torture run `20260907T093504Z` has respectively 11, 7, and 5 first-error
+refusals at these spellings; this entry does not predict how many become clean.
