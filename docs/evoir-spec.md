@@ -5735,6 +5735,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Alternate qualifier spellings
+
+`__const` and `__const__` denote `const`, `__volatile` and `__volatile__` denote `volatile`, and `__signed` and `__signed__` denote `signed` after macro expansion, preserving the ordinary type rules rather than ignoring the words.
+Both sealed oracles execute `tests/fixtures/qualifier-spellings.c` at O0/O2 with exit zero and reject its const-assignment negative probe (`.evidence/builtin-probes/20260907-declaration-spellings/results.txt`).
+No diagnostic is added: assigning to the resulting const object remains E2101.
+The original torture `ffs-1` stops at `__volatile`, and `20111208-1` at `__const`; separate `const static` refusals follow the already normative free-specifier-order rule of 10.1.18.
+
 ### Extension prefixes on record member declarations
 
 One or more `__extension__` prefixes on a record member declaration have no effect on its type, layout or execution, including a bit-field, anonymous record or comma-separated declarator list.

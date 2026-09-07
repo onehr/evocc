@@ -2,6 +2,25 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "declarationSpecifierClosure": {
+      "redCommit": "6253268",
+      "red": "34 pass, two E1001 assertion failures at static following const and at __volatile; zero build errors",
+      "fixtures": ["tests/fixtures/declaration-specifier-order.c", "tests/fixtures/qualifier-spellings.c"],
+      "implementation": "Capture storage through the same type-specifier stream used for qualifiers, attributes and inline, only in declaration contexts. Normalize alternate qualifier spellings at the existing post-preprocessing boundary",
+      "oracles": "Sealed gcc and clang-19 at O0/O2 return zero for both fixtures; both reject assignment to the const alias type",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2 --quiet",
+      "focusedPassed": 36,
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm <fixture>; sealed gcc -static assembly -o /tmp/probe && timeout 10 /tmp/probe",
+      "nativeExitZero": 2,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 240e83a --offline -j 2 --quiet",
+      "gatePassed": 929,
+      "gateFailed": 0,
+      "gateIgnored": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "campaign": "PENDING, no predicted gain"
+    },
     "recordMemberExtensionPrefix": {
       "redCommit": "afd773a",
       "red": "One assertion failure, zero build errors: E1001 expected-declaration at the first record-member __extension__",

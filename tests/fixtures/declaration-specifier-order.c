@@ -4,9 +4,11 @@ typedef struct item { int value; } item_t;
 struct item const static tag_value = { 5 };
 item_t const static alias_value = { 9 };
 int static inline read_value(void) { return values[1]; }
+int next(void) { unsigned static int value = 5; return ++value; }
 
 int main(void) {
     const static int local[] = { 11, 13 };
     return values[0] != 3 || count != 2 || tag_value.value != 5 ||
-           alias_value.value != 9 || read_value() != 7 || local[1] != 13;
+           alias_value.value != 9 || read_value() != 7 || local[1] != 13 ||
+           next() != 6 || next() != 7;
 }
