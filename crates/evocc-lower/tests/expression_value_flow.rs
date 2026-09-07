@@ -85,6 +85,49 @@ fn compound_literal_identity_follows_its_block_activation() {
 }
 
 #[test]
+fn compound_cleanup_order_uses_ir_identity_not_host_ast_addresses() {
+    let source = "struct S{int *p;};int main(void){int n=0;again:if(n)return 0;{struct S *p=&(struct S){&(int){7}};n=*p->p;goto again;}}";
+    let arena = Arena::default();
+    let file = FileId::new(45024);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let mut checked = false;
+    for block in &module.functions[0].blocks {
+        let mut allocated = block
+            .insts
+            .iter()
+            .filter_map(|inst| match inst {
+                evocc_evoir::Inst::Alloca { result, .. } => Some(result.id),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if allocated.len() != 2 {
+            continue;
+        }
+        let ended = block
+            .insts
+            .iter()
+            .filter_map(|inst| match inst {
+                evocc_evoir::Inst::LifetimeEnd { pointer, .. }
+                    if allocated.contains(&pointer.id) =>
+                {
+                    Some(pointer.id)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        allocated.reverse();
+        assert_eq!(ended, allocated);
+        checked = true;
+    }
+    assert!(checked, "missing nested compound storage block");
+}
+
+#[test]
 fn empty_union_initialization_does_not_define_inactive_tail_bytes() {
     evaluates(
         include_str!("../../../tests/fixtures/empty-union-initialization.c"),
