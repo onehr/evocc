@@ -5,6 +5,10 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 fn agrees(source: &str) {
+    evaluates(source, None);
+}
+
+fn evaluates(source: &str, diagnostic: Option<&str>) {
     let arena = Arena::default();
     let file = FileId::new(45023);
     let mut lexer = Lexer::new(file, source);
@@ -34,12 +38,17 @@ fn agrees(source: &str) {
         "main",
         &arguments,
         evocc_evoir::InterpreterLimits::new(10000),
-    )
-    .unwrap();
+    );
+    let chir =
+        interp::interpret_scalar_function(&unit, symbol, interp::InterpreterLimits::new(10000));
+    if let Some(code) = diagnostic {
+        assert_eq!(execution.unwrap_err().code(), code, "EvoIR: {source}");
+        assert_eq!(chir.unwrap_err().code(), code, "C-HIR: {source}");
+        return;
+    }
+    let execution = execution.unwrap();
     assert_eq!(execution.return_values[0].raw_bits, 0, "EvoIR: {source}");
-    let execution =
-        interp::interpret_scalar_function(&unit, symbol, interp::InterpreterLimits::new(10000))
-            .unwrap();
+    let execution = chir.unwrap();
     assert_eq!(
         execution.return_value.unwrap().raw_bits,
         0,
@@ -63,6 +72,25 @@ fn agrees(source: &str) {
             0,
             "substituted C-HIR: {source}"
         );
+    }
+}
+
+#[test]
+fn compound_literal_identity_follows_its_block_activation() {
+    agrees(include_str!(
+        "../../../tests/fixtures/compound-literal-identity.c"
+    ));
+}
+
+#[test]
+fn compound_literal_lifetime_ends_on_each_scope_exit() {
+    for source in [
+        "int main(void){int *p;{p=&(int){7};}return *p;}",
+        "int main(void){int *p;for(int i=0;i<2;++i){if(i)return *p;p=&(int){7};}return 0;}",
+        "int main(void){int *p;while(1){p=&(int){7};break;}return *p;}",
+        "int main(void){int *p;for(int i=0;i<1;++i){p=&(int){7};continue;}return *p;}",
+    ] {
+        evaluates(source, Some("E3010"));
     }
 }
 
