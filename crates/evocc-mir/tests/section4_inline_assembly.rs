@@ -8,9 +8,8 @@
 //! allocated, verified, emitted, assembled, linked and run, with its exit
 //! status compared against a host-compiled program computing the same thing.
 //!
-//! The tests are written against hand-written EvoMIR rather than hand-written
-//! EvoIR because `evocc-evoir` does not carry the `asm` instruction yet and is
-//! another stream's crate; this half of the work is complete without it.
+//! These tests exercise the machine forms directly; the compiler's
+//! inline_assembly_lowering tests additionally cover C through native execution.
 
 use std::process::Command;
 
@@ -26,6 +25,92 @@ fn w(id: u32) -> VReg {
 
 fn g(id: u32) -> VReg {
     VReg::new(id, RegClass::Gpr64)
+}
+
+#[test]
+fn assembly_goto_outputs_survive_spilling_on_both_edges() {
+    let outputs = (0..12)
+        .map(|id| AsmOperand {
+            constraint: AsmConstraint::Register(AsmDirection::Write),
+            name: Some(format!("out{id}")),
+            value: AsmValue::Reg(w(id)),
+        })
+        .collect();
+    let mut insts = vec![MInst::Bl {
+        symbol: "touch".into(),
+        args: vec![],
+        results: vec![],
+    }];
+    let mut sum = w(0);
+    for id in 1..12 {
+        let dst = w(12 + id);
+        insts.push(MInst::Binary {
+            op: BinOp::Add,
+            dst,
+            lhs: sum,
+            rhs: w(id),
+            width: Width::W,
+        });
+        sum = dst;
+    }
+    let function = MFunction {
+        name: "main".into(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![],
+                insts: vec![],
+                term: MTerm::AsmGoto {
+                    body: AsmBody {
+                        template: (0..12)
+                            .map(|id| format!("mov %w[out{id}], #{}", id + 1))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        volatile: true,
+                        outputs,
+                        inputs: vec![],
+                        clobbers: vec![],
+                    },
+                    labels: vec![(1, vec![])],
+                    fallthrough: 2,
+                    fallthrough_args: vec![],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![],
+                insts: insts.clone(),
+                term: MTerm::Ret { values: vec![sum] },
+            },
+            MBlock {
+                id: 2,
+                args: vec![],
+                insts,
+                term: MTerm::Ret { values: vec![sum] },
+            },
+        ],
+    };
+    for taken in [false, true] {
+        let mut function = function.clone();
+        if taken {
+            let MTerm::AsmGoto { body, .. } = &mut function.blocks[0].term else {
+                unreachable!()
+            };
+            body.template.push_str("\nb %l[0]");
+        }
+        let allocated =
+            allocate(&function).expect("assembly outputs can spill after the terminator");
+        assert!(allocated.spilled > 0);
+        verify_allocation(&allocated).expect("every edge receives initialized output spill slots");
+        let text = format!(
+            "{}\n.text\n.p2align 2\n_touch:\nret\n",
+            emit_module(&[allocated], &[])
+        );
+        assert_eq!(
+            run_native(&format!("goto-output-spills-{taken}"), &text).unwrap(),
+            78
+        );
+    }
 }
 
 /// The host toolchain, or the reason there is none.

@@ -44,6 +44,8 @@ fn register_alternative_selects_the_existing_ir_and_machine_path() {
                     actual.stdout
                 );
                 for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+                    evocc_mir::lower_module_for(target, &module, &|_| false)
+                        .expect("machine lowering diagnostics");
                     evocc_mir::compile_module_for(target, &module, &|_| true).expect(
                         "selected constraint reaches allocation, verification and emission",
                     );
@@ -56,19 +58,35 @@ fn register_alternative_selects_the_existing_ir_and_machine_path() {
 #[test]
 #[cfg(target_arch = "aarch64")]
 fn register_alternative_executes_after_native_assembly_and_linking() {
+    execute_native_assembly(REGISTER_ALTERNATIVE, "goto");
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn ordinary_register_alternative_executes_after_native_assembly_and_linking() {
+    execute_native_assembly(
+        &format!("#define ORDINARY_ASSEMBLY_ONLY\n{REGISTER_ALTERNATIVE}"),
+        "ordinary",
+    );
+}
+
+#[cfg(target_arch = "aarch64")]
+fn execute_native_assembly(source_text: &str, name: &str) {
     let target = if cfg!(target_os = "macos") {
         evocc_mir::Target::Darwin
     } else {
         evocc_mir::Target::Linux
     };
-    let output = run(REGISTER_ALTERNATIVE, "--emit=evoir");
+    let output = run(source_text, "--emit=evoir");
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let directory =
-        std::env::temp_dir().join(format!("evocc-register-alternative-{}", std::process::id()));
+    let directory = std::env::temp_dir().join(format!(
+        "evocc-register-alternative-{}-{name}",
+        std::process::id()
+    ));
     fs::create_dir_all(&directory).unwrap();
     let source = directory.join("program.s");
     let program = directory.join("program");

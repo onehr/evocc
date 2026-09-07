@@ -406,20 +406,12 @@ fn scan_inst(
                 }
             }
         }
-        // Section 4 carries an `asm` through unchanged. `asm.goto` is a
-        // terminator whose successors are its labels, and no unit of the
-        // cohort this revision serves reaches one, so it stays refused.
-        Inst::Asm(assembly) => {
+        // Section 4 carries both assembly forms through the same vocabulary.
+        Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => {
             if let Err(detail) = assembly_vocabulary(assembly) {
                 report(E4009, block, index, detail);
             }
         }
-        Inst::AsmGoto { .. } => report(
-            E4009,
-            block,
-            index,
-            "an `asm.goto` terminator has no row in Section 5".into(),
-        ),
         // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
         // nothing: the value is the same 64-bit register".
         Inst::PointerCast { .. }
@@ -1662,6 +1654,61 @@ fn lower_terminator(
     fused: Option<(VReg, Cond)>,
 ) -> Result<MTerm, String> {
     match &block.terminator {
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            let mut body = lower_assembly(lowerer, insts, assembly)?;
+            // EvoIR labels are named; EvoMIR templates use declaration-order
+            // positions. Convert only actual references, never escaped %%.
+            let mut template = String::new();
+            let mut rest = body.template.as_str();
+            while let Some(at) = rest.find('%') {
+                template.push_str(&rest[..at]);
+                rest = &rest[at..];
+                if rest.starts_with("%%") {
+                    template.push_str("%%");
+                    rest = &rest[2..];
+                } else if let Some(reference) = rest.strip_prefix("%l[") {
+                    let end = reference.find(']').ok_or("unterminated assembly label")?;
+                    let name = &reference[..end];
+                    let position = labels
+                        .iter()
+                        .position(|label| label.name == name)
+                        .ok_or_else(|| format!("unknown assembly label {name}"))?;
+                    template.push_str(&format!("%l[{position}]"));
+                    rest = &reference[end + 1..];
+                } else {
+                    template.push('%');
+                    rest = &rest[1..];
+                }
+            }
+            template.push_str(rest);
+            body.template = template;
+            let target = |id: &u32| {
+                ids.get(id)
+                    .copied()
+                    .ok_or_else(|| format!("assembly branch to missing block {id}"))
+            };
+            // Bind the assembly results before translating either edge.
+            // Like every machine edge, effect tokens have no registers.
+            let labels = labels
+                .iter()
+                .map(|label| {
+                    Ok((
+                        target(&label.edge.target)?,
+                        edge_args(lowerer, &label.edge.arguments)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(MTerm::AsmGoto {
+                body,
+                labels,
+                fallthrough: target(&fallthrough.target)?,
+                fallthrough_args: edge_args(lowerer, &fallthrough.arguments)?,
+            })
+        }
         Inst::Br(target, args) => Ok(MTerm::B {
             target: *ids
                 .get(target)

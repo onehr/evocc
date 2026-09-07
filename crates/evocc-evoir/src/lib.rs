@@ -21,8 +21,8 @@ mod variadic;
 pub use variadic::{VariadicAccess, VariadicOp};
 
 pub use assembly::{
-    assembly_clobber, assembly_memory_constraint, AssemblyEdge, AssemblyInput, AssemblyLabel,
-    AssemblyOutput, InlineAssembly,
+    assembly_clobber, assembly_memory_constraint, assembly_register_type, AssemblyEdge,
+    AssemblyInput, AssemblyLabel, AssemblyOutput, InlineAssembly,
 };
 pub use text::{render_module, validate_section9_bytes};
 pub use text_parse::parse_section9_module;

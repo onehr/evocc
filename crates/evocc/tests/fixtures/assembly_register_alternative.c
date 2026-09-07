@@ -16,15 +16,27 @@ static unsigned compare32(unsigned index, unsigned size) {
     return result;
 }
 
-static int branch(unsigned long size) {
+#ifndef ORDINARY_ASSEMBLY_ONLY
+static int branch(unsigned size) {
     int result = 3;
-    __asm__ goto volatile("cmp %x[bound], #0\n\tb.ne %l[taken]\n\tadd %w[out], %w[out], #2"
+    __asm__ goto volatile("cmp %w[out], %w[bound]\n\tb.ne %l[taken]\n\tadd %w[out], %w[out], #2"
                           : [out] "+r"(result) : [bound] "Ir"(size)
                           : "cc", "memory" : taken);
     return result != 5;
 taken:
     return result != 3;
 }
+
+static int output_branch(unsigned size) {
+    unsigned result;
+    __asm__ goto volatile("mov %w[out], #7\n\tcmp %w[out], %w[bound]\n\tb.ne %l[b0]\n\tadd %w[out], %w[out], #2"
+                          : [out] "=&r"(result) : [bound] "Ir"(size)
+                          : "cc" : b0);
+    return result != 9;
+b0:
+    return result != 7;
+}
+#endif
 
 int main(void) {
     if (mask(0, 0) != 0 || mask(0, 1) != ~0UL) return 1;
@@ -34,6 +46,9 @@ int main(void) {
     if (mask(3, next(9)) != ~0UL || calls != 1) return 5;
     if (compare32(3, 9) != 1 || compare32(9, 3) != 0) return 6;
     if (compare32(3, ~0U) != 1 || compare32(~0U, 3) != 0) return 7;
-    if (branch(0) || branch(1)) return 8;
+#ifndef ORDINARY_ASSEMBLY_ONLY
+    if (branch(3) || branch(1)) return 8;
+    if (output_branch(7) || output_branch(1)) return 9;
+#endif
     return 0;
 }

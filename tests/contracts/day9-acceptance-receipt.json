@@ -2,14 +2,37 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "62f88051e4146b7ce8bc106129372f87e45705359d2d2d4ce53e7e00b042d701"
+    "sha256": "071e29c08ec12c8030a15042b6742c2fb05366bfbd83a730a8781e8b0daface2"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.75",
-    "sha256": "c2bc32b981ba4f7d3b7d29a4f158b5ad17e2b023d5a773d96abef81395f5fd6f"
+    "revision": "1.9.76",
+    "sha256": "d62ef30f0983236548cd2314fbd948e1beab42c24831cb5f8baa28c3dfa5916c"
   },
-  "cutLine": "The latest sealed full lowering survey remains 20260907T043340Z-13363 on 2cf2c78: 47 clean, 2751 diagnosed, no timeout/panic/unavailable. A subsequent targeted replay of all 47 clean and 23 E3101 units measured 50 clean and 20 E3021 Ir, zero regressions or remaining E3101 in that selected set; it is not a replacement full survey. The Ir rule still requires a Section 3.11 amendment. Csmith remains 761 agreeing of 1000 emitted with zero mismatches; serial torture remains 1074/1692, both older subjects. The two K1 proof mismatches were localized to the checker reading beyond emitted .text using GCC function lengths; the old proof remains non-passing. Overall closure and new-compiler K1 remain outstanding.",
+  "cutLine": "The latest sealed full lowering survey remains 20260907T043340Z-13363 on 2cf2c78: 47 clean, 2751 diagnosed, no timeout/panic/unavailable. Revision 1.9.76 now admits source Ir through register selection. The authorized backend conversion and successor output handling execute ordinary asm and asm.goto on Darwin and Linux, including native spill-pressure coverage. The new full gate and survey must finish before closure; older Csmith/torture and K1 evidence is unchanged.",
+  "registerAlternativeProgress": {
+    "status": "LOCAL_GATE_PASS_REPLAY_AND_SURVEY_PENDING",
+    "authorityCommit": "8ffc1dc",
+    "redCommit": "e41a181",
+    "changedGate": { "command": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 51bf7a3 --offline -j 2 --quiet", "passed": 796, "failed": 0, "ignored": 4, "ignoredNote": "Existing ignored tests unchanged; no new test is disabled.", "clippy": "PASS -D warnings", "fmt": "PASS", "exitCode": 0 },
+    "ruff": { "command": "ruff check tools tests/acceptance", "exitCode": 0 },
+    "layout": [
+      { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "passed": 128, "mismatches": 0, "exitCode": 0 },
+      { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "passed": 22, "mismatches": 0, "exitCode": 0 }
+    ],
+    "implementation": "Ir-to-r selection preserves C-HIR spelling and evaluates operands once. Authorized EvoIR-to-EvoMIR asm.goto conversion maps named labels to declared positions and threads scalar results through every edge; existing effect tokens have no machine registers. Coalescing renames terminator operands, liveness and independent allocation verification account for its definitions, and spilled outputs are stored after assembly on private successor edges.",
+    "focused": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc --test inline_assembly_lowering --offline -j 2", "passed": 9, "failed": 0, "buildErrors": 0 },
+    "pressure": { "command": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-mir --test section4_inline_assembly assembly_goto_outputs_survive --offline -j 2", "before": "Native exit 46 instead of 78 despite allocation verification accepting it; terminator output spill slots were never written.", "after": "Native exit 78; regression exercises fallthrough and taken edges with twelve outputs live across a call." },
+    "machineExecution": {
+      "fixture": "crates/evocc/tests/fixtures/assembly_register_alternative.c",
+      "darwin": "Both ordinary-only and full asm.goto fixture PASS: emitted assembly, clang link, executable exit 0. Read-write and early-clobber write-only outputs are checked on both edges.",
+      "sealedOracles": "gcc-14 and clang-19 -std=gnu11 -O2 compile and execute the full fixture including asm.goto: both exit 0.",
+      "sealedSubject": "The full fixture emitted by target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm assembles, links and exits 0 with gcc-14 and with clang-19 -fno-integrated-as.",
+      "assemblerLimit": "Clang's integrated assembler rejects the existing :pg_hi21: spelling. Clang plus GNU as succeeds; integrated-assembler compatibility is not claimed.",
+      "fixtureCorrection": "The first asm.goto template put an Ir operand in cmp's register-only first position; the sealed GCC assembler rejected it. Corrected it to cmp register, Ir and reran both oracles. The full subject test remains active and now passes."
+    },
+    "next": "Finish the changed-crate gate, isolated offline replay and a new frozen-subject full lowering survey. Backend changes are covered by the user's explicit approval; no whole-kernel execution claim follows from this fixture."
+  },
   "latestLoweringSurvey": {
     "run": "20260907T043340Z-13363",
     "subject": "2cf2c78ea79986206c1049742e627d2e05ffd43e",
@@ -88,12 +111,12 @@
         "currentLowering": "All six minimal probes pass."
       },
       "irRuling": {
-        "status": "AUTHORITY_REQUIRED_NOT_IMPLEMENTED",
+        "status": "AUTHORIZED_IMPLEMENTATION_IN_PROGRESS",
         "probe": ".evidence/builtin-probes/20260907-inline-residue/ir-constraint.c",
         "output": ".evidence/builtin-probes/20260907-inline-residue/oracles.out",
         "command": "container run --rm --platform linux/arm64 --network none -v PROBE_DIRECTORY:/work/probes evo-flight-lab:sealed; gcc-14 and clang-19 -std=gnu11 -O2 ir-constraint.c, then execute",
         "result": "Both compilers exit 0; Ir and r agree for dynamic 0, 1, 4095, 4096, 4097, 0x12345678 and ULONG_MAX and constant 0, 4095 and 4097.",
-        "reason": "Section 3.11 explicitly refuses unlisted combinations. Probe consensus cannot override that body rule. Proposed amendment admits Ir with conservative r selection."
+        "reason": "The subsequent explicit user ruling is recorded by revision 1.9.76: source Ir selects r. Current machine validation and remaining asm.goto blocker are recorded in registerAlternativeProgress."
       },
       "k1ProofDiagnosis": {
         "run": "measure-20260907T025031Z",
@@ -113,10 +136,10 @@
         "countMethod": "Sum actual test-result passed/failed fields from this invocation; shell pipefail preserves gate failure status. No full log file retained."
       }
     },
-    "remaining": "The 23 old E3101 units pass their former blocker in targeted replay: three clean, twenty Ir. Obtain a Section 3.11 ruling for Ir before admission, then run the full survey and new-compiler K1. K1 needs actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
+    "remaining": "Ir is authorized and implemented with native assembly validation; full survey and new-compiler K1 still need fresh measurements. K1 needs actual emitted symbol extents, not GCC code lengths. Applied alias/weak, K&R and declaration-only vector/extended floating types remain open; older benchmark subjects are not relabeled.",
     "nextWork": [
       "Completed: minimize and repair the old E3101 subclasses, compare six minimal forms with the pre-inlining binary, replay all 23 affected units and all 47 clean controls; 906-test isolated changed gate passes.",
-      "Resolve the Ir vocabulary conflict with measured immediate/register forms and a body-specification ruling before admitting it; do not predict how many units become clean.",
+      "Complete the Ir native-validation gate and frozen-subject full survey; do not predict how many units become clean.",
       "Run one small cross-subsystem canary set after each semantic repair; run changed gate and one full sealed survey after the frontier batch.",
       "K1 mismatch diagnosis complete: GCC-derived lengths cross emitted text boundaries. Obtain actual emitted symbol extents before a new proof/replay; do not call the existing mismatches a compiler miscompilation or silently mask them.",
       "Triage remaining torture runtime failures, then address zstd declaration-only types and native K&R support. Rerun only the affected lane; serialize heavyweight campaigns."

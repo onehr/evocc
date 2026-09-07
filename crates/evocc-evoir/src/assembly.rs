@@ -129,7 +129,7 @@ impl InlineAssembly {
                     ));
                 }
             } else {
-                if !register_type(&output.ty)
+                if !assembly_register_type(&output.ty)
                     || results.next().map(|value| &value.ty) != Some(&output.ty)
                 {
                     return Err("assembly register result does not match output type/order".into());
@@ -152,7 +152,7 @@ impl InlineAssembly {
                 return Err(format!("duplicate assembly operand name {}", input.name));
             }
             let valid = match input.constraint.as_str() {
-                "r" | "rZ" => register_type(&input.value.ty),
+                "r" | "rZ" => assembly_register_type(&input.value.ty),
                 "Q" | "Qo" => matches!(input.value.ty, EvoIRType::Ptr(_)),
                 "p" => matches!(input.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }),
                 "I" | "J" | "K" | "L" | "i" | "n" => matches!(input.value.ty, EvoIRType::Bits(_)),
@@ -264,7 +264,9 @@ impl InlineAssembly {
     }
 }
 
-fn register_type(ty: &EvoIRType) -> bool {
+/// Values which the existing general-register assembly constraint can carry.
+#[must_use]
+pub fn assembly_register_type(ty: &EvoIRType) -> bool {
     matches!(
         ty,
         EvoIRType::Bits(1..=64) | EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }

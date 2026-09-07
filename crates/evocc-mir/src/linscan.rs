@@ -437,6 +437,9 @@ fn liveness(function: &MFunction) -> BTreeMap<u32, BTreeSet<u32>> {
                 read.insert(reg.id);
             }
         }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            written.extend(body.defined().iter().map(|reg| reg.id));
+        }
         uses.insert(block.id, read);
         defs.insert(block.id, written);
     }
@@ -875,9 +878,17 @@ fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
         MTerm::BCond { flags, .. } => vec![flags],
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => vec![src],
         MTerm::Ret { values } => values.iter_mut().collect(),
-        // An `asm.goto`'s operands are constrained, not boundary-pinned: the
-        // slots this pass rewrites are the ones a call or a return fixes.
-        MTerm::AsmGoto { .. } => Vec::new(),
+        // Coalescing must rename constrained operands too: their old virtual
+        // identities are removed from the assignment map after this pass.
+        MTerm::AsmGoto { body, .. } => body
+            .outputs
+            .iter_mut()
+            .chain(body.inputs.iter_mut())
+            .filter_map(|operand| match &mut operand.value {
+                AsmValue::Reg(reg) => Some(reg),
+                _ => None,
+            })
+            .collect(),
     }
 }
 
@@ -895,6 +906,13 @@ fn insert_spill_code(
 ) -> MFunction {
     let spilled: BTreeSet<u32> = victims.iter().copied().collect();
     let mut blocks = Vec::new();
+    let mut next_block = function
+        .blocks
+        .iter()
+        .map(|block| block.id)
+        .max()
+        .unwrap_or(0)
+        + 1;
     for block in &function.blocks {
         let mut insts = Vec::new();
         for inst in &block.insts {
@@ -926,14 +944,63 @@ fn insert_spill_code(
             insts.extend(after);
         }
         let mut term = block.term.clone();
+        let mut temporaries = BTreeMap::new();
         for reg in term_uses(&block.term) {
-            if spilled.contains(&reg.id) {
+            if spilled.contains(&reg.id) && !temporaries.contains_key(&reg.id) {
                 let temporary = fresh(next, reg.class);
+                temporaries.insert(reg.id, temporary);
                 insts.push(MInst::SpillReload {
                     dst: temporary,
                     slot: slots[&reg.id],
                 });
                 replace_term_use(&mut term, reg, temporary);
+            }
+        }
+        let mut stores = Vec::new();
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            for reg in body.defined() {
+                if spilled.contains(&reg.id) {
+                    let temporary = *temporaries
+                        .entry(reg.id)
+                        .or_insert_with(|| fresh(next, reg.class));
+                    replace_term_use(&mut term, reg, temporary);
+                    stores.push(MInst::SpillStore {
+                        src: temporary,
+                        slot: slots[&reg.id],
+                    });
+                }
+            }
+        }
+        // A terminator defines these values after the block's instructions.
+        // Save them on each outgoing edge, not before the assembly or in a
+        // shared successor that another predecessor can enter.
+        let mut bridges = Vec::new();
+        if !stores.is_empty() {
+            if let MTerm::AsmGoto {
+                labels,
+                fallthrough,
+                fallthrough_args,
+                ..
+            } = &mut term
+            {
+                for (target, args) in labels
+                    .iter_mut()
+                    .map(|(target, args)| (target, args))
+                    .chain(std::iter::once((fallthrough, fallthrough_args)))
+                {
+                    let id = next_block;
+                    next_block += 1;
+                    bridges.push(MBlock {
+                        id,
+                        args: Vec::new(),
+                        insts: stores.clone(),
+                        term: MTerm::B {
+                            target: *target,
+                            args: std::mem::take(args),
+                        },
+                    });
+                    *target = id;
+                }
             }
         }
         blocks.push(MBlock {
@@ -942,6 +1009,7 @@ fn insert_spill_code(
             insts,
             term,
         });
+        blocks.extend(bridges);
     }
     MFunction {
         name: function.name.clone(),

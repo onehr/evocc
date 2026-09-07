@@ -3786,8 +3786,19 @@ impl<'a> FunctionLowerer<'a> {
             let key = self.retain_temporary(value.clone(), &mut state);
             temporary_keys.push(key);
             input_keys.push(key);
+            // Source Ir permits either an immediate or a register. Commit to
+            // the existing register alternative here, after evaluating once,
+            // so every downstream consumer sees a fully selected constraint.
+            let constraint = if operand.constraint == "Ir" {
+                if !evocc_evoir::assembly_register_type(&value.ty) {
+                    return Err(refuse(operand.constraint.clone()));
+                }
+                "r".to_owned()
+            } else {
+                operand.constraint.clone()
+            };
             inputs.push(AssemblyInput {
-                constraint: operand.constraint.clone(),
+                constraint,
                 name: operand.symbolic.clone().unwrap_or_default(),
                 value,
             });

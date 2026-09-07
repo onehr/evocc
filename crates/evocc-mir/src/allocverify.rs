@@ -367,6 +367,16 @@ fn transfer(state: &State, block: &crate::MBlock, register: &impl Fn(VReg) -> Op
     for inst in &block.insts {
         apply(&mut state, inst, register);
     }
+    if let MTerm::AsmGoto { body, .. } = &block.term {
+        for number in body.clobbered_registers() {
+            state.remove(&number);
+        }
+        for reg in body.defined() {
+            if let Some(number) = register(reg) {
+                state.insert(number, Some(reg.id));
+            }
+        }
+    }
     state
 }
 
@@ -419,6 +429,9 @@ fn live_on_entry(allocated: &Allocated) -> Vec<u32> {
             if reg.class != RegClass::Flags && !written.contains(&reg.id) {
                 read.insert(reg.id);
             }
+        }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            written.extend(body.defined().iter().map(|reg| reg.id));
         }
         reads.insert(block.id, read);
         writes.insert(block.id, written);
