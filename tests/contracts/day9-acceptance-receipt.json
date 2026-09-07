@@ -18,11 +18,11 @@
       "originalSeed": "Original Csmith base seed190 previously exited 139; repaired debug compiler assembly exits 133, not a pass. A diagnostic-only SIGTRAP handler reads BRK immediate 3006 (signed-left-shift). Both CLI interpreter entry wrappers hit their fuel limits, so a source-level attribution for this seed is not claimed"
     },
     "focusedOfflineReplay": {
-      "subject": "a089bb9",
-      "command": "git clone --no-local <repository> /private/tmp/evocc-integer-replay.JI8pFr; CARGO_TARGET_DIR=/private/tmp/evocc-integer-replay.JI8pFr/target cargo test --manifest-path /private/tmp/evocc-integer-replay.JI8pFr/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2",
-      "passed": 39,
+      "subject": "3145102",
+      "command": "git clone --no-local <repository> /private/tmp/evocc-integer-final.NauKe1; CARGO_TARGET_DIR=/private/tmp/evocc-integer-final.NauKe1/target cargo test --manifest-path /private/tmp/evocc-integer-final.NauKe1/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2",
+      "passed": 41,
       "failed": 0,
-      "scope": "Fresh isolated target; four completed integer/frontend fixes, before the goto repair. Not a full workspace replay"
+      "scope": "Fresh isolated target; includes goto and formatting builtin repairs. Not a full workspace replay"
     },
     "narrowBitfields": {
       "redCommit": "bd00bec",
