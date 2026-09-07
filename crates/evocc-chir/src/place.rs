@@ -242,7 +242,7 @@ impl<'arena> IndexProjection<'arena> {
     }
 
     #[must_use]
-    pub const fn index(&self) -> &CHirExpr<'_> {
+    pub const fn index(&self) -> &'arena CHirExpr<'arena> {
         self.index
     }
 

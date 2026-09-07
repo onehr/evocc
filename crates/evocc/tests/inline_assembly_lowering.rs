@@ -45,6 +45,26 @@ fn always_inline_substitutes_constant_arguments_before_assembly_validation() {
         !text.contains("call @check"),
         "callee must be substituted: {text}"
     );
+    emits(
+        r#"static __attribute__((always_inline)) int f(int n){asm(""::"i"(n));return n;}int entry(void){(void)sizeof(f);return f(3);}"#,
+    );
+    emits(
+        r#"static __attribute__((always_inline)) int f(int n){asm goto("b %l[hit]"::"i"(n)::hit);return 0;hit:return 1;}int entry(void){return f(3)+f(4);}"#,
+    );
+}
+
+#[test]
+fn inline_refusals_keep_the_immediate_and_cycle_boundaries() {
+    for (source, code) in [
+        (r#"static __attribute__((always_inline)) int f(int n){asm("":"+r"(n));asm(""::"i"(n));return n;}int entry(void){return f(3);}"#, "E3021"),
+        (r#"static __attribute__((always_inline)) int f(int n){asm(""::"i"(n));return n;} int g(int n){return f(n);}"#, "E3021"),
+        (r#"static __attribute__((always_inline)) int f(int n){asm(""::"i"(n));return n;} int (*p)(int)=f; int g(void){return f(3);}"#, "E3021"),
+        ("static __attribute__((always_inline)) int f(int n){return n?f(n-1):0;} int main(void){return f(3);}", "E2932"),
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "unexpected acceptance: {source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains(code), "{}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 #[test]

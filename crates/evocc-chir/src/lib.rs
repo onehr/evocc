@@ -15,6 +15,7 @@
 pub mod allocation;
 pub mod constant;
 pub mod initializer;
+pub mod inline;
 pub mod integer;
 pub mod interp;
 pub mod place;

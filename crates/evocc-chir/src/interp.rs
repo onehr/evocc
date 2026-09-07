@@ -810,9 +810,13 @@ enum MachineTask<'arena> {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum MachineBlockMode {
+enum MachineBlockMode<'arena> {
     Compound,
     Switch,
+    StatementExpression {
+        value: Option<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3162,6 +3166,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<(), InterpreterError> {
         while let Some(task) = tasks.pop() {
             match task {
+                MachineTask::StatementExpressionContinue {
+                    items, value, span, ..
+                } => {
+                    if self.schedule_goto_in_active_items(
+                        items,
+                        spelling,
+                        MachineBlockMode::StatementExpression { value, span },
+                        tasks,
+                    )? {
+                        return Ok(());
+                    }
+                }
                 MachineTask::CompoundContinue { items, .. } => {
                     if self.schedule_goto_in_active_items(
                         items,
@@ -3214,7 +3230,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         items: &'arena [CHirBlockItem<'arena>],
         spelling: &str,
-        mode: MachineBlockMode,
+        mode: MachineBlockMode<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<bool, InterpreterError> {
         for (index, item) in items.iter().enumerate() {
@@ -3223,6 +3239,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
             if !statement_contains_label(statement, spelling) {
                 continue;
+            }
+            if let MachineBlockMode::StatementExpression { value, span } = mode {
+                // Re-enter a directly labelled item through the expression
+                // continuation so a labelled final expression still yields
+                // its value rather than being evaluated and discarded.
+                if matches!(statement, CHirStmt::Label(name, _, _) if name.spelling == spelling) {
+                    tasks.push(MachineTask::StatementExpressionContinue {
+                        items,
+                        index,
+                        value,
+                        span,
+                    });
+                    return Ok(true);
+                }
             }
             tasks.push(match mode {
                 MachineBlockMode::Compound => MachineTask::CompoundContinue {
@@ -3233,6 +3263,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     items,
                     index: index + 1,
                 },
+                MachineBlockMode::StatementExpression { value, span } => {
+                    MachineTask::StatementExpressionContinue {
+                        items,
+                        index: index + 1,
+                        value,
+                        span,
+                    }
+                }
             });
             return self.schedule_goto_in_statement(statement, spelling, tasks);
         }
@@ -5263,7 +5301,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if symbol.kind() != SymbolKind::Object
             || symbol.spelling() != declaration.name.spelling
             || symbol.ty() != declaration.ty
-            || symbol.storage_class() != Some(declaration.storage)
+            || !(symbol.storage_class() == Some(declaration.storage)
+                || (declaration.storage == StorageClass::Extern
+                    && matches!(
+                        symbol.storage_class(),
+                        Some(StorageClass::None | StorageClass::Static)
+                    )))
             || !matches!(
                 declaration.storage,
                 StorageClass::None

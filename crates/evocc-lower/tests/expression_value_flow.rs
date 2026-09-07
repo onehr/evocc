@@ -45,6 +45,25 @@ fn agrees(source: &str) {
         0,
         "C-HIR: {source}"
     );
+    if evocc_chir::inline::has_inline_definitions(&unit) {
+        let rewritten = evocc_chir::inline::substitute(
+            &unit,
+            &arena,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+        .unwrap();
+        let execution = interp::interpret_scalar_function(
+            &rewritten,
+            symbol,
+            interp::InterpreterLimits::new(10000),
+        )
+        .unwrap();
+        assert_eq!(
+            execution.return_value.unwrap().raw_bits,
+            0,
+            "substituted C-HIR: {source}"
+        );
+    }
 }
 
 #[test]
@@ -75,6 +94,19 @@ fn a_selected_short_circuit_operand_defines_a_previously_uninitialized_local() {
 }
 
 #[test]
+fn inline_calls_preserve_parameters_returns_labels_and_static_identity() {
+    agrees("static __attribute__((always_inline)) int f(int x){static int n=3; ++n; if(x) return n+x; return n;} int main(void){return f(2)!=6 || f(0)!=5;}");
+    agrees("static __attribute__((always_inline)) int f(int x){if(x)goto done;x=7;done:return x;} int main(void){int x=0;int a=f(x++);int b=f(x++);return a!=7 || b!=1 || x!=2;}");
+    agrees("static __attribute__((always_inline)) int g(int x){return x+1;} static __attribute__((always_inline)) int f(int x){return g(x)*2;} int main(void){return f(3)!=8;}");
+    agrees("static __attribute__((always_inline)) void f(int *p){*p+=3;return;} int main(void){int x=2;f(&x);return x!=5;}");
+    agrees("struct S{int n;};static __attribute__((always_inline)) struct S f(struct S s){s.n++;return s;}int main(void){struct S s={3};struct S b=f(s);return b.n!=4 || s.n!=3;}");
+    agrees("static __attribute__((always_inline)) int f(void){return __func__[0];}int main(void){return f()!='f';}");
+    agrees("static __attribute__((always_inline)) int f(void){static int n=2;return ++n;}int (*p)(void)=f;int main(void){return f()!=3 || p()!=4;}");
+    agrees("static __attribute__((always_inline)) int f(int n,...){return n;}int main(void){return f(3,4)!=3;}");
+    agrees("int n=3;int g(void){return n;}static __attribute__((always_inline)) int f(void){extern int n;extern int g(void);return n+g();}int main(void){int n=9;return f()!=6 || n!=9;}");
+}
+
+#[test]
 fn dereferenced_function_pointers_remain_function_designators() {
     agrees("int f(int n){return n+1;} int main(void){int (*p)(int)=f;return (*p)(6)!=7;}");
 }
@@ -83,6 +115,13 @@ fn dereferenced_function_pointers_remain_function_designators() {
 fn empty_parameter_lists_in_definitions_have_no_parameters() {
     agrees("int f(){return 7;} int main(){return f()!=7;}");
     agrees("int count;void f(){++count;}int main(){f();return count!=1;}");
+}
+
+#[test]
+fn inline_rewriting_preserves_existing_statement_expression_values() {
+    agrees("static __attribute__((always_inline)) int *get(int *p){return p;} int main(void){int x=7;return *({get(&x);})!=7;}");
+    agrees("static __attribute__((always_inline)) int f(int n){typedef int T;struct S{T x;};struct S s={n};return s.x;} int main(void){return f(3)+f(4)!=7;}");
+    agrees("static __attribute__((always_inline)) int f(int n){return n;} int main(void){int x=({int n=7;f(n);});return x!=7;}");
 }
 
 #[test]

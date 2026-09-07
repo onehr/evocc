@@ -37,6 +37,11 @@ const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LowerError {
+    Inline {
+        span: SourceSpan,
+        cycle: bool,
+        reason: String,
+    },
     UnknownSymbol {
         symbol: SymbolId,
         span: SourceSpan,
@@ -114,6 +119,7 @@ pub enum LowerError {
 impl fmt::Display for LowerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Inline { reason, .. } => formatter.write_str(reason),
             Self::UnknownSymbol { symbol, .. } => {
                 write!(formatter, "unknown C-HIR symbol {}", symbol.raw())
             }
@@ -159,6 +165,7 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Inline { cycle: true, .. } => "E2932",
             Self::Asm { .. } => "E3021",
             Self::AsmOperand { .. } => "E3021",
             Self::ReturnAddress { .. } => "E3025",
@@ -181,7 +188,8 @@ impl LowerError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::UnknownSymbol { span, .. }
+            Self::Inline { span, .. }
+            | Self::UnknownSymbol { span, .. }
             | Self::UnknownType { span, .. }
             | Self::UnsupportedType { span, .. }
             | Self::UnsupportedExpression { span, .. }
@@ -323,6 +331,29 @@ struct FunctionLowerer<'a> {
 /// explicit input and is consulted for every scalar type admitted by this
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
+    if evocc_chir::inline::has_inline_definitions(unit) {
+        // Validate the source representation before removing or rewriting
+        // anything, as well as validating the rewritten representation below.
+        AllocationSiteManifest::derive(unit).map_err(|e| LowerError::InvalidGeneratedSsa {
+            message: e.to_string(),
+        })?;
+        let arena = evocc_common::Arena::default();
+        let rewritten = evocc_chir::inline::substitute(unit, &arena, target).map_err(|e| {
+            LowerError::Inline {
+                span: e.span,
+                cycle: e.cycle,
+                reason: e.message,
+            }
+        })?;
+        return lower_resolved_unit(&rewritten, target);
+    }
+    lower_resolved_unit(unit, target)
+}
+
+fn lower_resolved_unit(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+) -> Result<Module, LowerError> {
     let global_register_symbols = collect_global_register_symbols(unit);
     let global_registers = unit
         .iter()
@@ -337,8 +368,8 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
     let mut memory_symbols = collect_memory_symbols(unit);
     memory_symbols.retain(|symbol| !global_register_symbols.contains(symbol));
     let manifest =
-        AllocationSiteManifest::derive(unit).map_err(|_| LowerError::InvalidGeneratedSsa {
-            message: "cannot derive the authoritative allocation-site manifest".to_owned(),
+        AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
+            message: format!("cannot derive the authoritative allocation-site manifest: {error:?}"),
         })?;
     let allocation_origins = manifest
         .sites()
@@ -4233,6 +4264,11 @@ impl<'a> FunctionLowerer<'a> {
             }
         };
         validate_object_declaration_for_lowering(self.unit, object)?;
+        if object.storage == StorageClass::Extern {
+            // A block declaration introduces a binding, not a new object or
+            // an allocation with the external object's existing origin.
+            return Ok(());
+        }
         if self.memory_symbols.contains(&object.symbol) {
             return self.lower_memory_declaration(object, state);
         }
@@ -5750,6 +5786,15 @@ impl<'a> FunctionLowerer<'a> {
         symbol: SymbolId,
         state: &mut State,
     ) -> Result<(), LowerError> {
+        if self.unit.symbols().symbol(symbol).is_ok_and(|entry| {
+            entry.scope() == self.unit.symbols().file_scope()
+                || matches!(
+                    entry.storage_class(),
+                    Some(StorageClass::Static | StorageClass::Extern)
+                )
+        }) {
+            return Ok(());
+        }
         let pointer = state
             .env
             .get(&EnvKey::Address(symbol))
