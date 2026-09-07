@@ -22,6 +22,23 @@
       "limitation": "Current in-flight Csmith run intentionally uses the earlier fixed release binary; this repair will enter the subsequent torture run"
     },
     "csmithRuntimeRepair": {
+      "signedShiftFollowup": {
+        "redCommit": "fbed936",
+        "diagnosis": "Original base seed3, line170, with subtraction-only runtime: GCC UBSan reports left shift of negative value -1; exit1. Clang UBSan trap exits133",
+        "change": "Guard negative signed operands at all four widths and signed overflow at 32/64 bits; retain defined promoted 8/16-bit shifts and operand evaluation count",
+        "headerSha256": "a32f42ae14479abc268df2f53b2512140e9ee5b6701dd3394a5d658c9c4bd3ef",
+        "fixture": "tests/fixtures/csmith-runtime-shifts.c",
+        "cases": 16,
+        "sanitizerCommand": "sealed gcc -O0 -fsanitize=undefined -fno-sanitize-recover=all / clang-19 -O0 -fsanitize=undefined -fsanitize-trap=undefined; fixture with subtraction-only and fully repaired runtime copies",
+        "sanitizerExits": {"gccPrevious": 1, "clangPrevious": 133, "gccRepaired": 0, "clangRepaired": 0},
+        "interpreterCommand": "target/frontend/debug/evocc -DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP -DINT_MAX=2147483647 -I.build/csmith-runtime-defined/runtime --interpret-evoir / --interpret-c-hir tests/fixtures/csmith-runtime-shifts.c",
+        "chirResult": 0,
+        "evoirResult": 0,
+        "pythonCommand": "python3 -m unittest discover -s tools/ladder/tests -p 'test_*.py'",
+        "pythonPassed": 80,
+        "ruff": "PASS: ruff check tools tests/acceptance",
+        "lineage": "The running 20260907T112843Z process retains its subtraction-only runtime. This followup requires a separate subsequent campaign; no in-flight or sealed input was modified"
+      },
       "redCommit": "b52c85a",
       "change": "Replace the two signed-left-shift sign masks in the pinned 32/64-bit subtraction guards with ~INT32_MAX/~INT64_MAX; no compiler obligation weakened",
       "originalHeaderSha256": "d5157b023d2ee18744d6313216e3a7a19c45e96d977f0bb20c78e63ff56b443d",

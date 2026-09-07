@@ -17,8 +17,9 @@ miscompile report.
 
 Agreeing oracles are not a proof that a program is defined. The pinned runtime
 has a measured undefined signed shift in its 32/64-bit subtraction guards.
-The shared copy replaces only those two masks with ~INT_MAX, as the upstream
-function-based runtime already does. All compilers receive identical repaired
+The shared copy replaces those masks with ~INT_MAX and guards signed left
+shifts against negative operands and overflow in the promoted type. All
+compilers receive identical repaired
 headers; their before/after digests are recorded with the campaign. Old runs
 remain unchanged. A trap elsewhere still needs its own diagnosis.
 
@@ -352,7 +353,7 @@ def reduce_program(evocc: Path, source: Path, inc: list[str], budget: float) -> 
     granularity tries every single-chunk deletion, and the granularity doubles
     until a pass finds nothing or the budget runs out. Candidates that stop
     compiling, that stop being emitted, or whose oracles stop agreeing are not
-    interesting, so the program stays well defined all the way down.
+    interesting. Oracle agreement is not itself proof of defined behavior.
     """
     work = BUILD / "run-csmith-reduce"
     shutil.rmtree(work, ignore_errors=True)
@@ -454,6 +455,26 @@ def repair_runtime_header(source: str) -> str:
     return source
 
 
+def repair_shift_guards(source: str) -> str:
+    """Reject UB before shifting, preserving defined promoted narrow shifts."""
+    for width in (8, 16, 32, 64):
+        for count in ("s", "u"):
+            name = f"#define safe_lshift_func_int{width}_t_s_{count}("
+            if source.count(name) != 1:
+                raise ValueError(f"unexpected Csmith shift helper: {name}")
+            start = source.index(name)
+            end = source.index("\n\n", start)
+            body = source[start:end]
+            marker = "   ) \\\n"
+            if body.count(marker) != 1:
+                raise ValueError(f"unexpected Csmith shift guard: {name}")
+            guard = f"  || ((int{width}_t)(left) < 0) \\\n"
+            if width >= 32:
+                guard += f"  || ((int{width}_t)(left) > (INT{width}_MAX >> (right))) \\\n"
+            source = source[:start] + body.replace(marker, guard + marker) + source[end:]
+    return source
+
+
 def prepare_runtime(work: Path) -> dict:
     destination = work / "runtime"
     destination.mkdir(parents=True)
@@ -461,9 +482,9 @@ def prepare_runtime(work: Path) -> dict:
         shutil.copy(header, destination / header.name)
     header = destination / "safe_math_macros_notmp.h"
     before = e0.sha256(header)
-    header.write_text(repair_runtime_header(header.read_text()))
+    header.write_text(repair_shift_guards(repair_runtime_header(header.read_text())))
     return {
-        "change": "subtraction-sign-masks",
+        "change": "subtraction-sign-masks-and-defined-signed-shifts",
         "header": header.name,
         "originalSha256": before,
         "repairedSha256": e0.sha256(header),
