@@ -222,6 +222,7 @@ cd /work/run
 D="-DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP -DINT_MAX=2147483647 -I/work/run/runtime"
 report() { # report <config> <exit status> <output file>
   if [ "$2" -eq 124 ]; then echo "$b $1 timeout $2"; return; fi
+  if [ "$2" -ne 0 ]; then echo "$b $1 run-fail $2"; return; fi
   s=$(grep -o 'checksum = [0-9a-fA-F]*' "$3" | tail -1 | awk '{print $3}')
   if [ -n "$s" ]; then echo "$b $1 ran $s"; else echo "$b $1 no-checksum $2"; fi
 }
@@ -271,7 +272,7 @@ def run_in_container(work: Path, names: list[str], timeout: int = 7200) -> dict[
             row["checksum"] = parse_checksum("checksum = " + parts[3]) if len(parts) > 3 else None
             if row["checksum"] is None:
                 row["status"] = "no-checksum"
-        elif status in ("no-checksum", "timeout") and len(parts) > 3:
+        elif status in ("no-checksum", "run-fail", "timeout") and len(parts) > 3:
             row["exit"] = int(parts[3])
         out[name][config] = row
     return dict(out)
@@ -406,7 +407,7 @@ MISCOMPILE = ("mismatch",)
 TRAP_EXIT = 133  # 128 + SIGTRAP
 # What reduction preserves: EvoCC's binary did not produce the checksum both
 # oracles agreed on, whether it printed a different one or none at all.
-DISAGREEMENT = ("mismatch", "no-checksum")
+DISAGREEMENT = ("mismatch", "no-checksum", "run-fail")
 
 
 def summarise(name: str, rows: list[dict]) -> dict:
@@ -430,7 +431,7 @@ def summarise(name: str, rows: list[dict]) -> dict:
     trapped = [
         row["program"]
         for row in rows
-        if row["outcome"] == "no-checksum"
+        if row["outcome"] in ("no-checksum", "run-fail")
         and row.get("runs", {}).get("evocc", {}).get("exit") == TRAP_EXIT
     ]
     return {
