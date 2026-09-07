@@ -2,6 +2,13 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "latestFocusedOfflineReplay": {
+      "subject": "832c4b5",
+      "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-nonfloat-replay.1TyynO; CARGO_TARGET_DIR=/private/tmp/evocc-nonfloat-replay.1TyynO/target cargo test --manifest-path /private/tmp/evocc-nonfloat-replay.1TyynO/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2 --quiet",
+      "passed": 43,
+      "failed": 0,
+      "scope": "Fresh isolated target, focused semantic replay; not a full workspace replay"
+    },
     "compoundLiteralIdentity": {
       "redCommit": "8d29abe",
       "red": "EvoIR returns 1 for same-block object identity and accepts a dangling compound-literal pointer with value 7; two failed tests, zero build errors",
