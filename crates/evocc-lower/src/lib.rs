@@ -8662,14 +8662,6 @@ impl<'a> FunctionLowerer<'a> {
                 .types()
                 .get(place.ty())
                 .is_some_and(|ty| ty.qualifiers.is_volatile);
-            let original = if operator == AssignmentOp::Simple {
-                None
-            } else {
-                Some(self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?)
-            };
-            let original_key = original
-                .as_ref()
-                .map(|value| self.retain_temporary(value.value.clone(), state));
             let right = self.lower_expr(assigned, state)?;
             let address = state
                 .env
@@ -8679,12 +8671,8 @@ impl<'a> FunctionLowerer<'a> {
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
             } else {
-                let mut original = original.expect("compound assignment loaded its object");
-                original.value = state
-                    .env
-                    .remove(&original_key.expect("loaded assignment value"))
-                    .expect("retained assignment value")
-                    .value;
+                let original =
+                    self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?;
                 if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                     self.compute_pointer_assignment(
                         operator,
@@ -9045,6 +9033,15 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             });
         }
+        // Match C-HIR: evaluate the destination once, finish the right
+        // operand (including calls), then read the value to be updated.
+        // A call can change that object; caching its old value loses effects.
+        let right = self.lower_expr(assigned, state)?;
+        let address = state
+            .env
+            .remove(&address_key)
+            .expect("retained assignment address")
+            .value;
         let original = if operator == AssignmentOp::Simple {
             None
         } else if let Some(field) = bit_field {
@@ -9064,24 +9061,10 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?)
         };
-        let original_key = original
-            .as_ref()
-            .map(|value| self.retain_temporary(value.value.clone(), state));
-        let right = self.lower_expr(assigned, state)?;
-        let address = state
-            .env
-            .remove(&address_key)
-            .expect("retained assignment address")
-            .value;
         let result = if operator == AssignmentOp::Simple {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
-            let mut original = original.expect("memory compound assignment loaded its left value");
-            original.value = state
-                .env
-                .remove(&original_key.expect("loaded assignment value"))
-                .expect("retained assignment value")
-                .value;
+            let original = original.expect("memory compound assignment loaded its left value");
             if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                 self.compute_pointer_assignment(
                     operator,

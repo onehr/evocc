@@ -16,6 +16,20 @@
       "oracles": "gcc-14 and clang-19 -std=gnu11 -O0 both compile and run the fixture with exit 0",
       "scope": "Promote <=32-bit fields by value range, including long/long long bases; runtime, arithmetic type inference and default argument promotions agree"
     },
+    "compoundAssignmentCalls": {
+      "redCommit": "e553754",
+      "red": "EvoIR returned 1 instead of 0 for pr58943-shaped RHS call; extending coverage to a volatile scalar exposed the second path returning 4",
+      "implementation": "Both memory assignment paths load the destination value after the RHS completes, matching the C-HIR interpreter; destination address is still evaluated once and retained across CFG edges",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2",
+      "focusedPassed": 23,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 9b91f27 --offline -j 2 --quiet",
+      "gatePassed": 275,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "native": "target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm; sealed gcc -static link/run: compound-assignment-call-effects.c and original torture pr58943.c both exit 0",
+      "oracles": "gcc-14 and clang-19, each -std=gnu11 -O0 and -O2: expanded fixture exits 0 in all four configurations"
+    },
     "completion": "Not all Csmith or torture programs pass; no refusal, timeout, absent checksum or unsupported feature is counted as a pass"
   },
   "receiptId": "c30.day9.v2",

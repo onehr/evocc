@@ -4,6 +4,8 @@ struct S { unsigned int value : 8; } s = {2};
 unsigned int change_field(void) { s.value |= 128; return 1; }
 int calls;
 unsigned int *destination(void) { calls++; return x; }
+volatile unsigned int scalar = 2;
+unsigned int change_scalar(void) { scalar |= 128; return 1; }
 int main(void) {
     x[0] |= change();
     if (x[0] != 131) return 1;
@@ -12,6 +14,8 @@ int main(void) {
     x[0] = 2;
     *destination() |= change();
     if (x[0] != 131 || calls != 1) return 3;
+    scalar |= change_scalar();
+    if (scalar != 131) return 4;
     x[0] = 2;
     x[0] += (1 ? change() : 0);
     return x[0] != 131;
