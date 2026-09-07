@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.75** | **Authoritative reference** | **2026-09-07**
+**Revision 1.9.76** | **Authoritative reference** | **2026-09-07**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1048,9 +1048,19 @@ units containing 24,735 `asm` statements:
 | `Q`, `=Q`, `+Q`, `Qo` | a memory operand whose address is a register with no offset | 8,113 |
 | a digit `0` to `9` | this operand occupies the same location as the output that digit names (a tied operand) | 3,528 |
 | `I`, `J` | an immediate the add or subtract forms accept, and its negation | 876 |
+| `Ir` (source input) | either an `I` immediate or a general register; lowering selects the legal `r` alternative | 2,726 first-error units in survey `20260907T043340Z-13363` |
 | `K`, `L` | an immediate the 32-bit and 64-bit logical forms accept | 1,104 |
 | `i`, `n` | an integer constant | 113 |
 | `p` | an address | 48 |
+
+For source input `Ir`, C-HIR preserves the written constraint and lowering
+evaluates the operand exactly once, then records the selected `r` constraint
+in the EvoIR `asm` or `asm.goto`. This applies to constants and dynamic values,
+with the same operand types and template modifiers as `r`; it does not admit
+`Ir` as an output constraint or as an unresolved EvoIR constraint. No new
+backend constraint is required. This choice is authorized on 2026-09-07 and
+measured with both GCC-14 and Clang-19 in
+`.evidence/builtin-probes/20260907-inline-residue/ir-constraint.c` and `oracles.out`.
 
 A constraint outside this table, or a constraint string combining letters
 this table does not combine, is `E3021` with the constraint named. Clobbers:
@@ -5634,6 +5644,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.76 | 2026-09-07 | Admit source input `Ir` under the user's ruling, selecting its existing `r` alternative before EvoIR construction. C-HIR retains the spelling; executable validation must cover the complete source-to-machine path. This specification change alone changes no production code. |
 | 1.9.75 | 2026-09-07 | The out-of-line body of a `static always_inline` function is not lowered when every call was substituted and no address is taken; otherwise it is lowered as before. The executor found the retained body reporting `E3021` before the machine could drop it. |
 | 1.9.74 | 2026-09-07 | `always_inline` definitions are substituted at their calls in C-HIR (parameters as fresh objects, returns as a result object, statics shared, callee-first, cycles `E2932`), and constants are folded again afterwards so immediate `asm` operands fed through a parameter become constant. The tenth kernel survey put that construct first in 2,727 units. |
 | 1.9.73 | 2026-09-06 | Record parameters and the record return destination carry `byval(size, align)` and `sret(size, align)` on their pointer, so the machine can apply the platform's composite convention; found by the zstd rung, where an 8-byte record crossed to GCC-built code through a hidden pointer. |
