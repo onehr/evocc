@@ -67,6 +67,11 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn jumps_into_blocks_keep_live_values_and_skip_initializers() {
+    agrees(include_str!("../../../tests/fixtures/goto-into-block.c"));
+}
+
+#[test]
 fn enum_bitfields_preserve_the_enumerator_range() {
     agrees(include_str!(
         "../../../tests/fixtures/enum-bitfield-signedness.c"
