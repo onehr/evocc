@@ -611,6 +611,45 @@ pub enum CHirExpr<'arena> {
     ),
 }
 
+/// Whether an expression produces effects but no C value. Calls are resolved
+/// through their function type, not through an assumption about the spelling.
+#[must_use]
+pub fn expression_is_void(
+    expression: &CHirExpr<'_>,
+    symbols: &SymbolTable,
+    types: &TypeInterner,
+) -> bool {
+    let is_void = |ty| {
+        types
+            .get(ty)
+            .is_some_and(|ty| matches!(ty.kind, evocc_types::TypeKind::Void))
+    };
+    match expression {
+        CHirExpr::Cast(ty, _, _) => is_void(*ty),
+        CHirExpr::Call(callee, _, _) => PointerTypeDesc::from_expression(symbols, types, callee)
+            .ok()
+            .and_then(|pointer| types.get(pointer.pointee()))
+            .is_some_and(|ty| match ty.kind {
+                evocc_types::TypeKind::Function { return_type, .. } => is_void(return_type),
+                _ => false,
+            }),
+        CHirExpr::Comma(_, right, _) | CHirExpr::EvaluateOnce(right, _) => {
+            expression_is_void(right, symbols, types)
+        }
+        CHirExpr::Ternary(_, left, right, _) => {
+            expression_is_void(left, symbols, types) && expression_is_void(right, symbols, types)
+        }
+        CHirExpr::StatementExpr { facts, value, .. } => {
+            is_void(facts.ty())
+                && value.is_none_or(|value| expression_is_void(value, symbols, types))
+        }
+        CHirExpr::BuiltinVarArgs { facts, .. } | CHirExpr::BuiltinUnreachable { facts, .. } => {
+            is_void(facts.ty())
+        }
+        _ => false,
+    }
+}
+
 impl CHirExpr<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {

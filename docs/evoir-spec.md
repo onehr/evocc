@@ -6044,3 +6044,10 @@ refusals at these spellings; this entry does not predict how many become clean.
 Both sealed oracles execute `tests/fixtures/formatted-string-builtins.c` at `-O0` and `-O2` with exit zero; `.evidence/builtin-probes/20260907-formatted-builtins/results.txt` records the measured return values, truncation and zero padding asserted by that fixture.
 The separate `puts.c` probe in that directory is accepted by GCC-14 but rejected by Clang-19, so the existing conflict policy refuses `__builtin_puts` with E2935 (`unsupported-library-builtin`), while ordinary declared `puts` remains unchanged.
 Torture run `20260907T093504Z` has 3, 1, 1, 1, and 1 first-error units for `sprintf`, `snprintf`, `strchr`, `strncpy`, and `puts` respectively; the next run, not these counts, determines end-to-end impact.
+
+### Effectful expressions returning void
+
+A `return expression;` in a void function accepts an expression of type void, executes its effects exactly once, and returns no data value; discarded void conditional, comma, and statement expressions preserve the selected and sequenced effects without inventing a scalar result.
+Both sealed oracles execute `tests/fixtures/void-return-effects.c` at `-O0` and `-O2` with exit zero, recorded in `.evidence/builtin-probes/20260908-void-return/results.txt`.
+No diagnostic code is added and a non-void value returned from a void function, or a void expression returned from a non-void function, retains the existing refusal.
+Toybox run `20260907T144525Z` has 16 first-error return mismatches, with `blkid.o`'s `return xputsn(str)` reduced to this rule; actual improvement requires the original-unit replay.

@@ -716,6 +716,11 @@ enum MachineTask<'arena> {
         span: SourceSpan,
     },
     FinishReturnValue(SourceSpan),
+    FinishVoidReturn(SourceSpan),
+    DiscardSelectedExpression {
+        then_expression: &'arena CHirExpr<'arena>,
+        else_expression: &'arena CHirExpr<'arena>,
+    },
     SelectIf {
         then_statement: &'arena CHirStmt<'arena>,
         else_statement: Option<&'arena CHirStmt<'arena>>,
@@ -1770,10 +1775,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             let expression = item_value.expect(
                                 "the statement-expression value predicate checked this shape",
                             );
-                            tasks.push(MachineTask::EvalExpression {
+                            if crate::expression_is_void(
                                 expression,
-                                allow_root_mutation: true,
-                            });
+                                self.unit.symbols(),
+                                self.unit.types(),
+                            ) {
+                                self.schedule_discarded_expression(expression, &mut tasks)?;
+                            } else {
+                                tasks.push(MachineTask::EvalExpression {
+                                    expression,
+                                    allow_root_mutation: true,
+                                });
+                            }
                         } else {
                             tasks.push(match item {
                                 CHirBlockItem::Declaration(declaration) => {
@@ -2040,6 +2053,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let value = pop_machine_value(&mut values, span)?;
                     let end = self.pop_function_end(&mut tasks, span)?;
                     self.finish_function(end, FunctionExit::Explicit(Some(value)), &mut values)?
+                }
+                MachineTask::FinishVoidReturn(span) => {
+                    let end = self.pop_function_end(&mut tasks, span)?;
+                    self.finish_function(end, FunctionExit::Explicit(None), &mut values)?
+                }
+                MachineTask::DiscardSelectedExpression {
+                    then_expression,
+                    else_expression,
+                } => {
+                    let selected = if machine_truth(
+                        pop_machine_value(&mut values, then_expression.span())?,
+                        then_expression.span(),
+                    )? {
+                        then_expression
+                    } else {
+                        else_expression
+                    };
+                    self.schedule_discarded_expression(selected, &mut tasks)?;
+                    None
                 }
                 MachineTask::SelectIf {
                     then_statement,
@@ -2561,11 +2593,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(None)
             }
             CHirStmt::Return(Some(expression), span) => {
-                tasks.push(MachineTask::FinishReturnValue(*span));
-                tasks.push(MachineTask::EvalExpression {
-                    expression,
-                    allow_root_mutation: true,
-                });
+                if crate::expression_is_void(expression, self.unit.symbols(), self.unit.types()) {
+                    tasks.push(MachineTask::FinishVoidReturn(*span));
+                    self.schedule_discarded_expression(expression, tasks)?;
+                } else {
+                    tasks.push(MachineTask::FinishReturnValue(*span));
+                    tasks.push(MachineTask::EvalExpression {
+                        expression,
+                        allow_root_mutation: true,
+                    });
+                }
                 Ok(None)
             }
             CHirStmt::Return(None, span) => {
@@ -3437,6 +3474,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
+        if let CHirExpr::Comma(left, right, _) = expression {
+            self.schedule_discarded_expression(right, tasks)?;
+            self.schedule_discarded_expression(left, tasks)?;
+            return Ok(());
+        }
+        if let CHirExpr::Ternary(condition, then_expression, else_expression, _) = expression {
+            tasks.push(MachineTask::DiscardSelectedExpression {
+                then_expression,
+                else_expression,
+            });
+            tasks.push(MachineTask::EvalExpression {
+                expression: condition,
+                allow_root_mutation: true,
+            });
+            return Ok(());
+        }
         if let CHirExpr::Cast(ty, operand, _) = expression {
             if self
                 .unit
@@ -3467,14 +3520,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         if let CHirExpr::StatementExpr {
-            body,
-            value: None,
-            span,
-            ..
+            body, value, span, ..
         } = expression
         {
-            self.schedule_statement_expression(body, None, *span, tasks)?;
-            return Ok(());
+            if crate::expression_is_void(expression, self.unit.symbols(), self.unit.types()) {
+                self.schedule_statement_expression(body, *value, *span, tasks)?;
+                return Ok(());
+            }
         }
         tasks.push(MachineTask::DiscardExpression(expression.span()));
         tasks.push(MachineTask::EvalExpression {

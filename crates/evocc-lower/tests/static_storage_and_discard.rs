@@ -85,6 +85,38 @@ fn discarded_void_conditionals_preserve_the_selected_effect() {
 }
 
 #[test]
+fn effect_only_returns_do_not_admit_mismatched_value_types() {
+    for source in [
+        "void f(void){return 1;} int main(void){f();return 0;}",
+        "int f(void){return (void)1;} int main(void){return f();}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45_010);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        assert!(
+            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).is_err()
+        );
+        let main = unit
+            .iter()
+            .find_map(|decl| match decl {
+                CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+                _ => None,
+            })
+            .unwrap();
+        assert!(interp::interpret_scalar_function(
+            &unit,
+            main,
+            interp::InterpreterLimits::new(10000)
+        )
+        .is_err());
+    }
+}
+
+#[test]
 fn conditional_updates_preserve_the_selected_side_effect() {
     check(
         "extern void abort(void); int main(void){ int x = 3, y = 2; if ((x < y ? x++ : y++) != 2) abort(); if (x != 3 || y != 3) abort(); return 0; }",

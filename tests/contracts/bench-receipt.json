@@ -1,15 +1,14 @@
 {
   "schemaVersion": 1,
-  "run": "20260907T153648.272156Z",
-  "subject": "a7779e0518a6267e87797fc9ddd5ea7d6408394a",
+  "run": "20260907T165020.113321Z",
+  "subject": "427951e8b00d1a243692baf1cd1cb36ea1386145",
   "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
+  "driverSha256": "92084dcb125b537b46d5b8e1c554b510a5edc6fd452961a9dfdde39aebbd0792",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "musl",
-    "--no-build",
+    "toybox",
     "--jobs",
     "4",
     "--budget",
@@ -17,7 +16,7 @@
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "musl"
+    "toybox"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -987,14 +986,14 @@
       "note": "mixed-link tests relative to baseline failures",
       "outcomes": {},
       "refusals": {
-        "E3101": 26
+        "E3101": 12
       },
       "baselineFailures": 1,
       "failingUnits": [],
       "total": 203,
-      "passed": 177,
+      "passed": 191,
       "kind": "units",
-      "compiled": 177,
+      "compiled": 191,
       "excluded": 0,
       "testVerdict": "no-regression",
       "adjustments": {
@@ -1044,8 +1043,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260907T144525Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T144525Z",
+      "run": "20260907T165020Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T165020Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1059,21 +1058,20 @@
         "20"
       ],
       "exitCode": 0,
-      "seconds": 58.2,
+      "seconds": 58.8,
       "previous": {
         "rung": "E6",
         "note": "mixed-link tests relative to baseline failures",
         "outcomes": {},
         "refusals": {
-          "E3101": 25,
-          "E1001": 4
+          "E3101": 26
         },
         "baselineFailures": 1,
         "failingUnits": [],
-        "total": 201,
-        "passed": 172,
+        "total": 203,
+        "passed": 177,
         "kind": "units",
-        "compiled": 172,
+        "compiled": 177,
         "excluded": 0,
         "testVerdict": "no-regression",
         "adjustments": {
@@ -1123,13 +1121,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260907T030222Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T030222Z"
+        "run": "20260907T144525Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T144525Z"
       },
       "measurement": {
-        "run": "20260907T141450.311159Z",
-        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
-        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+        "run": "20260907T165020.113321Z",
+        "subject": "427951e8b00d1a243692baf1cd1cb36ea1386145",
+        "driverSha256": "92084dcb125b537b46d5b8e1c554b510a5edc6fd452961a9dfdde39aebbd0792"
       }
     },
     "musl": {

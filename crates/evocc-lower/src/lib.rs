@@ -4064,6 +4064,15 @@ impl<'a> FunctionLowerer<'a> {
                         }
                     }
                     (None, None) => {}
+                    (None, Some(expression))
+                        if evocc_chir::expression_is_void(
+                            expression,
+                            self.unit.symbols(),
+                            self.unit.types(),
+                        ) =>
+                    {
+                        self.lower_discarded_expr(expression, &mut state)?;
+                    }
                     _ => {
                         return Err(LowerError::MalformedFunction {
                             function: self.info.name.clone(),
@@ -7270,9 +7279,20 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        let mut result = value
-            .map(|value| self.lower_expr(value, &mut continued))
-            .transpose()?;
+        let mut result = match value {
+            Some(value)
+                if evocc_chir::expression_is_void(
+                    value,
+                    self.unit.symbols(),
+                    self.unit.types(),
+                ) =>
+            {
+                self.lower_discarded_expr(value, &mut continued)?;
+                None
+            }
+            Some(value) => Some(self.lower_expr(value, &mut continued)?),
+            None => None,
+        };
         if let Some(result) = &mut result {
             let expected = if self.is_aggregate_type(facts.ty()) {
                 EvoIRType::Ptr(AddressSpace::Generic)
@@ -8703,6 +8723,29 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         match expression {
+            CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
+                let predicate = self.lower_condition(condition, state)?;
+                let keys = self.expression_join_keys(state, &[then_expression, else_expression]);
+                let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+                let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+                let arguments = self.edge_values(state, &keys)?;
+                self.terminate(
+                    state,
+                    Inst::CondBr(
+                        predicate,
+                        then_state.block,
+                        arguments.clone(),
+                        else_state.block,
+                        arguments,
+                    ),
+                )?;
+                self.lower_discarded_expr(then_expression, &mut then_state)?;
+                self.lower_discarded_expr(else_expression, &mut else_state)?;
+                let merge = self.new_block_from(&then_state, &keys, BlockRole::Ordinary)?;
+                self.branch(&then_state, merge.block, &keys)?;
+                self.branch(&else_state, merge.block, &keys)?;
+                *state = merge;
+            }
             CHirExpr::Cast(ty, operand, _)
                 if matches!(
                     self.unit.types().get(*ty).map(|ty| &ty.kind),
@@ -8730,11 +8773,16 @@ impl<'a> FunctionLowerer<'a> {
             }
             CHirExpr::StatementExpr {
                 body,
-                value: None,
+                value,
                 facts,
                 span,
-            } => {
-                let result = self.lower_statement_expression(body, None, *facts, *span, state)?;
+            } if evocc_chir::expression_is_void(
+                expression,
+                self.unit.symbols(),
+                self.unit.types(),
+            ) =>
+            {
+                let result = self.lower_statement_expression(body, *value, *facts, *span, state)?;
                 debug_assert!(result.is_none());
             }
             _ => {
