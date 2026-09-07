@@ -76,6 +76,35 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
 }
 
 #[test]
+fn declaration_specifier_order_preserves_storage_and_types() {
+    agrees(include_str!(
+        "../../../tests/fixtures/declaration-specifier-order.c"
+    ));
+}
+
+#[test]
+fn qualifier_spellings_preserve_the_qualified_type() {
+    agrees(include_str!(
+        "../../../tests/fixtures/qualifier-spellings.c"
+    ));
+    for source in [
+        "int main(void){__const int x=1;x=2;return x;}",
+        "int main(void){int x=1;int * __const__ p=&x;p=&x;return 0;}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45026);
+        let mut lexer = Lexer::new(file, source);
+        let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+        let _ = parser.parse_translation_unit_in(&arena);
+        assert_eq!(
+            parser.diagnostic().map(|d| d.code),
+            Some("E2101"),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn extension_prefix_on_record_members_preserves_layout_and_values() {
     agrees(include_str!(
         "../../../tests/fixtures/record-extension-prefix.c"
