@@ -19,7 +19,24 @@
       "clippy": "PASS -D warnings",
       "fmt": "PASS",
       "ruff": "PASS: ruff check tools tests/acceptance",
-      "campaign": "PENDING, no predicted gain"
+      "campaign": {
+        "run": "20260907T133625Z",
+        "subject": "7a0005c",
+        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
+        "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "programs": 1692,
+        "passed": 1175,
+        "refused": 478,
+        "runtimeFailed": 35,
+        "assemblyFailed": 1,
+        "linkFailed": 3,
+        "previousRun": "20260907T132553Z",
+        "newPasses": ["ffs-1", "pr31448-2", "pr31448"],
+        "previousPassRegressions": 0,
+        "e1001Before": 112,
+        "e1001After": 108,
+        "limitation": "Full mixed suite; this does not establish a complete nonfloating denominator"
+      }
     },
     "recordMemberExtensionPrefix": {
       "redCommit": "afd773a",
@@ -58,14 +75,16 @@
       }
     },
     "originalSeedEmissionReplay": {
-      "subject": "962b1bc",
-      "driverSha256": "d4eead07471fe3badbbe2d008fb16912f4392d9487bb58b26538050b01bc3c07",
+      "subject": "7a0005c",
+      "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
       "nativeReferenceRun": "20260907T115631Z",
       "command": "Reinvoke evocc with the exact csmith.py target, macros, runtime include and sysroot arguments on each original source; compare SHA-256 of stdout assembly against the existing native-tested assembly",
       "programs": 1000,
       "byteIdentical": 1000,
       "changed": 0,
       "refused": 0,
+      "timeout": 0,
+      "previousReplay": {"subject": "962b1bc", "driverSha256": "d4eead07471fe3badbbe2d008fb16912f4392d9487bb58b26538050b01bc3c07", "byteIdentical": 1000},
       "limitation": "Emission-only replay, not a new native campaign. The reference run still has 932 agreeing and 68 oracle-unusable programs; the latter are not passes"
     },
     "preprocessorCharacterValues": {
@@ -162,6 +181,15 @@
       "limitation": "All original seeds retained; 68 unavailable reference verdicts are not passes. This frozen binary predates the later goto-entry and deterministic-cleanup followups"
     },
     "remainingArithmeticDiagnosis": {
+      "wideBitfieldOriginal": {
+        "source": ".build/ladder/run-torture/src/bitfld-3.c",
+        "command": "Sealed gcc / clang-19 -std=gnu11 -O0/-O2 <original source> -o /tmp/probe; timeout 10 /tmp/probe",
+        "gccO0": 0,
+        "gccO2": 0,
+        "clangO0": 134,
+        "clangO2": 134,
+        "classification": "ORACLE_CONFLICT: GCC-specific wide bit-field arithmetic expectation; original failure retained, not a common-reference pass and no implementation changed"
+      },
       "sources": ["arith-rand.c", "arith-rand-ll.c", "pr79121.c"],
       "gccCommand": "gcc -std=gnu11 -O1 -fsanitize=undefined -fno-sanitize-recover=all <original source> -o /tmp/probe; timeout 10 /tmp/probe",
       "gcc": "All three exit1: arith-rand and arith-rand-ll line86 negate INT_MIN; pr79121 line28 shifts negative -268435456",
@@ -171,6 +199,17 @@
       "limitation": "Per-source UB diagnosis only; the raw torture failures remain recorded. Other arithmetic failures are not classified by analogy"
     },
     "latestTortureCampaign": {
+      "run": "20260907T133625Z",
+      "details": "integerBenchmarkRepairs.declarationSpecifierClosure.campaign",
+      "programs": 1692,
+      "passed": 1175,
+      "refused": 478,
+      "runtimeFailed": 35,
+      "assemblyFailed": 1,
+      "linkFailed": 3,
+      "limitation": "Mixed integer/floating suite, not completion of the nonfloating goal"
+    },
+    "compoundLiteralCampaign": {
       "command": "python3 -u tools/ladder/e0.py --suite torture --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
       "run": "20260907T115411Z",
       "subject": "689c76e",
@@ -217,11 +256,12 @@
       "limitation": "Subtraction masks only; predates compound-literal and signed-shift repairs. The fully repaired runtime needs its own campaign"
     },
     "latestFocusedOfflineReplay": {
-      "subject": "962b1bc",
-      "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-semantic-replay.UDgW8E; CARGO_TARGET_DIR=/private/tmp/evocc-semantic-replay.UDgW8E/target cargo test --manifest-path /private/tmp/evocc-semantic-replay.UDgW8E/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms -p evocc-cpp --test if_arithmetic --locked --offline -j 2 --quiet",
-      "passed": 55,
+      "subject": "7a0005c",
+      "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/evocc-semantic-replay.efLMqU; CARGO_TARGET_DIR=/private/tmp/evocc-semantic-replay.efLMqU/target cargo test --manifest-path /private/tmp/evocc-semantic-replay.efLMqU/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms -p evocc-cpp --test if_arithmetic --locked --offline -j 2 --quiet",
+      "passed": 58,
       "failed": 0,
-      "scope": "Fresh isolated target: 33 expression semantics, 16 frontend-erasure, 6 preprocessing tests; not a full workspace replay",
+      "scope": "Fresh isolated target: 36 expression semantics, 16 frontend-erasure, 6 preprocessing tests; not a full workspace replay",
+      "previousReplay": {"subject": "962b1bc", "passed": 55, "failed": 0, "scope": "same commands, 33 expression semantics before the declaration-prefix fixes"},
       "cleanup": "Removed the verified clean scratch clone and its 435 MiB fresh target after the replay; source and results remain recorded here"
     },
     "compoundLiteralIdentity": {
