@@ -5,7 +5,8 @@
 //! registers, same slots, no distinction ... A variadic **callee** reserves a
 //! 64-byte, 16-byte-aligned **register save area** in its frame and stores
 //! `x_k` to `x7` into it at offsets `8 * k` to `56` in the prologue ...
-//! `va_start` stores `stack = x29 + 16` ..., `gr_top = save area + 64`,
+//! With no named stack arguments, `va_start` stores `stack = x29 + 16`,
+//! `gr_top = save area + 64`,
 //! `vr_top = gr_top` ..., `gr_offs = -8 * (8 - k)` and `vr_offs = 0` ...
 //! `va_end` emits nothing."
 

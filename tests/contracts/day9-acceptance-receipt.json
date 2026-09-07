@@ -2,6 +2,25 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "variadicNamedStack": {
+      "redCommit": "748e052",
+      "red": "Existing sealed Linux native corpus: 6/7 agree; variadic-named-stack reference=0 evocc=7. Nine named slots, ten named slots and an aligned named 128-bit pair all fail; no build error",
+      "implementation": "Reuse the ABI placement plan for both named register count and named stack extent; va_start skips that extent, excluding final caller stack padding",
+      "authority": "User-approved correction; EvoMIR 0.21 Section 6",
+      "nativeCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-mir --test section9_lowering_frontier_corpus the_frontier_corpus_agrees_with_gcc_in_the_sealed_container --offline -j 2 -- --nocapture",
+      "nativePrograms": 7,
+      "nativeAgreeing": 7,
+      "oracles": "gcc-14 and clang-19 -O0 both execute tests/fixtures/variadic-named-stack.c with exit 0 in evo-flight-lab:sealed",
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh cd0e525 --offline -j 2 --quiet",
+      "gatePassed": 495,
+      "gateFailed": 0,
+      "gateIgnored": 4,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruffCommand": "ruff check tools tests/acceptance",
+      "ruff": "PASS",
+      "limitation": "Full torture/Csmith remeasurement remains pending; no new full-suite count claimed"
+    },
     "gotoIntoBlocks": {
       "redCommit": "919dab4",
       "red": "EvoIR InvalidPointerRepresentation at block 3; no build error",

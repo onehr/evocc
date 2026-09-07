@@ -581,9 +581,9 @@ struct Lowerer {
     high: HashMap<u32, VReg>,
     blocks: Vec<MBlock>,
     traps: Vec<(u16, u32)>,
-    /// Section 6's `k` for a variadic callee: "the number of argument
-    /// registers its named parameters consumed". `None` in a fixed function.
-    named_registers: Option<u8>,
+    /// Named argument register count and incoming stack extent in bytes.
+    /// `None` in a fixed function; both are from the call placement plan.
+    named_arguments: Option<(u8, u64)>,
     /// Every `const` this function has lowered, by value id.
     ///
     /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
@@ -1012,9 +1012,9 @@ fn lower_function(
         high: HashMap::new(),
         blocks: Vec::new(),
         traps: Vec::new(),
-        named_registers: function
+        named_arguments: function
             .variadic
-            .then(|| named_argument_registers(target, function)),
+            .then(|| named_argument_extent(target, function)),
         constants: HashMap::new(),
         destination: None,
         destination_readers: HashMap::new(),
@@ -1221,7 +1221,7 @@ fn lower_block(
     // anything writes an argument register. The marker is the first thing in
     // the entry block, which is where the frame layout finds it.
     if entry {
-        if let Some(named) = lowerer.named_registers {
+        if let Some((named, _)) = lowerer.named_arguments {
             insts.push(MInst::VaSaveArea { named });
         }
     }
@@ -2918,9 +2918,9 @@ fn lower_assembly(
 // Section 6: variadic functions (revision 0.10)
 // ---------------------------------------------------------------------------
 
-/// Section 6: "the number of argument registers its named parameters
-/// consumed (a `bits<128>` parameter consumes two and the rounding above)".
-fn named_argument_registers(target: Target, function: &Function) -> u8 {
+/// The same placement determines both saved registers and the first
+/// anonymous stack slot, including pair/record alignment padding.
+fn named_argument_extent(target: Target, function: &Function) -> (u8, u64) {
     // Revision 0.18: a record spends the registers its chunks take, so the
     // count is the convention's, which is what the plan already answers.
     let declared: Vec<EvoIRType> = function
@@ -2933,7 +2933,9 @@ fn named_argument_registers(target: Target, function: &Function) -> u8 {
         &marked_types(&declared, &function.param_marks),
         true,
     );
-    u8::try_from(plan.positions.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8)
+    let registers = u8::try_from(plan.positions.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8);
+    let stack_bytes = (plan.positions.saturating_sub(MAX_REGISTER_ARGUMENTS) as u64) * 8;
+    (registers, stack_bytes)
 }
 
 /// The size rounded up to eight (`S8`) and the alignment (`A`) of one
@@ -2954,7 +2956,7 @@ const VA_VR_TOP: i64 = 16;
 const VA_GR_OFFS: i64 = 24;
 const VA_VR_OFFS: i64 = 28;
 
-/// `va_start`: "stores `stack = x29 + 16` (the first incoming stack slot),
+/// `va_start`: skips named incoming stack slots, then stores
 /// `gr_top = save area + 64`, `vr_top = gr_top` (never read ...), `gr_offs =
 /// -8 * (8 - k)` and `vr_offs = 0`".
 fn lower_va_start(
@@ -2962,8 +2964,8 @@ fn lower_va_start(
     insts: &mut Vec<MInst>,
     list: &Value,
 ) -> Result<(), String> {
-    let named = lowerer
-        .named_registers
+    let (named, stack_bytes) = lowerer
+        .named_arguments
         .ok_or_else(|| "a va_start outside a variadic function".to_owned())?;
     let ap = lowerer.reg(list)?;
 
@@ -2972,6 +2974,11 @@ fn lower_va_start(
         dst: stack,
         place: FramePlace::IncomingStack,
     });
+    let stack = if stack_bytes == 0 {
+        stack
+    } else {
+        lowerer.binary_imm(insts, BinOp::Add, stack, stack_bytes, Width::X)
+    };
     insts.push(MInst::Store {
         src: stack,
         base: ap,

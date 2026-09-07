@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.20** | **Authoritative reference** | **2026-09-07**
+**Revision 0.21** | **Authoritative reference** | **2026-09-07**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -393,7 +393,13 @@ parameters consumed (a `bits<128>` parameter consumes two and the rounding
 above). The list object is 32 bytes: `stack` (a pointer, offset 0),
 `gr_top` (offset 8), `vr_top` (offset 16), `gr_offs` (a signed 32-bit
 integer, offset 24), `vr_offs` (offset 28). `va_start` stores
-`stack = x29 + 16` (the first incoming stack slot), `gr_top = save area +
+`stack = x29 + 16 + named_stack_bytes`, where `named_stack_bytes` is the
+extent of named incoming stack arguments, including argument-alignment
+padding and rounded up to 8 bytes, but excluding final caller stack-area
+padding. With no named stack arguments it is zero. This is the AAPCS64
+`va_start` rule, measured with both sealed oracles in
+`.evidence/builtin-probes/20260907-variadic-stack/results.txt` and covered by
+`tests/fixtures/variadic-named-stack.c`. The remaining fields are `gr_top = save area +
 64`, `vr_top = gr_top` (never read: the target is built with general
 registers only and both oracles leave `vr_offs = 0`), `gr_offs = -8 * (8 -
 k)` and `vr_offs = 0`; `k = 8` gives `gr_offs = 0` and every argument
@@ -489,6 +495,7 @@ measured by emitting one module both ways (revision 0.9):
 
 | | Darwin arm64 | Linux AArch64 |
 |---|---|---|
+| 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |
 | symbol prefix | `_main` | `main` |
 | page-relative pair | `_g@PAGE`, `_g@PAGEOFF` | `:pg_hi21:g`, `:lo12:g` |
 | sections | `.section __TEXT,__text,…`, `.section __DATA,__data` | `.text`, `.data` |

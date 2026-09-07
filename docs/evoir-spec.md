@@ -5973,7 +5973,7 @@ at `-O0` and `-O2` with exit 0, recorded in
 No diagnostic is added; the reduced field from torture `20030714-1.c`
 accounts for one known failure, with full-campaign impact still unmeasured.
 
-### Named stack parameters conflict with the variadic starting address
+### Named stack parameters precede the variadic starting address
 
 With nine named `long` parameters, the first anonymous argument follows a
 named stack slot, whereas EvoMIR Section 6 fixes `va_start.stack` at
@@ -5981,9 +5981,9 @@ named stack slot, whereas EvoMIR Section 6 fixes `va_start.stack` at
 Both sealed oracles and both IR interpreters return zero for
 `.evidence/builtin-probes/20260907-variadic-stack/probe.c`, but EvoCC's
 native code returns one (`results.txt` in that directory).
-The body rule takes precedence, so this entry records the required
-correction without silently overriding Section 6 or allocating a refusal
-code for a valid scalar variadic call.
+The authorized correction in EvoMIR revision 0.21 places the starting
+address after the named stack extent; no refusal code is allocated for
+a valid scalar variadic call.
 One minimized case reproduces torture `va-arg-1.c`; additional affected
 unit counts await the next full run.
 
