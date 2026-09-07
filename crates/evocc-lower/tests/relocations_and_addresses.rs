@@ -108,6 +108,29 @@ fn function_relocations_travel_through_object_pointer_storage() {
 }
 
 #[test]
+fn address_of_a_function_uses_its_call_signature_not_object_storage() {
+    check(
+        "int f(void){return 7;} int main(void){int (*p)(void)=&f; return p();}",
+        Ok(7),
+        &["func_addr @f"],
+    );
+    check(
+        "int f(); void *address(void){return &f;} int f(){return 7;} int main(void){return ((int (*)(void))address())();}",
+        Ok(7),
+        &["func_addr @f", "ptr.to_int"],
+    );
+}
+
+#[test]
+fn address_of_a_dereferenced_function_pointer_preserves_the_pointer() {
+    check(
+        "typedef int (*fn)(void); int calls; int f(void){return 7;} fn get(void){calls++;return f;} int main(void){fn p=&*get(); return p()+calls;}",
+        Ok(8),
+        &["func_addr @f", "call @get"],
+    );
+}
+
+#[test]
 fn pointer_integer_round_trip_retains_live_exposed_provenance() {
     check(
         "int main(void){int x=4; int *p=(int *)(unsigned long)&x; return p ? 1 : 0;}",
