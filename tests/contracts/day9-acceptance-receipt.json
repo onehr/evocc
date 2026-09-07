@@ -1,4 +1,23 @@
 {
+  "integerBenchmarkRepairs": {
+    "status": "OPEN_FULL_CAMPAIGNS_PENDING",
+    "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "narrowBitfields": {
+      "redCommit": "bd00bec",
+      "red": "Two tests failed without build errors: E2911 in sizeof arithmetic and EvoIR returned 4 instead of 0",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2",
+      "focusedPassed": 22,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh ad1def2 --offline -j 2 --quiet",
+      "gatePassed": 912,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "native": "EvoCC release assembly linked with sealed gcc-14 -static: bitfield-integer-promotions.c and torture bf-sign-2 both exit 0",
+      "oracles": "gcc-14 and clang-19 -std=gnu11 -O0 both compile and run the fixture with exit 0",
+      "scope": "Promote <=32-bit fields by value range, including long/long long bases; runtime, arithmetic type inference and default argument promotions agree"
+    },
+    "completion": "Not all Csmith or torture programs pass; no refusal, timeout, absent checksum or unsupported feature is counted as a pass"
+  },
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",

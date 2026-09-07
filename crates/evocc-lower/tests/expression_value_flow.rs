@@ -68,12 +68,19 @@ fn agrees(source: &str) {
 
 #[test]
 fn narrow_bitfields_promote_by_range_not_declared_rank() {
-    agrees(include_str!("../../../tests/fixtures/bitfield-integer-promotions.c"));
+    agrees(include_str!(
+        "../../../tests/fixtures/bitfield-integer-promotions.c"
+    ));
 }
 
 #[test]
 fn bitfield_promotion_is_visible_in_unevaluated_arithmetic() {
     agrees("struct S { unsigned long x:3; signed long y:32; unsigned long z:32; }; struct S s; _Static_assert(sizeof(+s.x)==4, \"narrow unsigned\"); _Static_assert(sizeof(+s.y)==4, \"signed int range\"); _Static_assert(sizeof(+s.z)==4, \"unsigned int range\"); int main(void){return 0;}");
+}
+
+#[test]
+fn bitfield_promotions_cover_pointer_anonymous_and_variadic_uses() {
+    agrees("struct S { struct { unsigned long x:3; }; }; struct S s={.x=7}; int take(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); int v=__builtin_va_arg(ap,int); __builtin_va_end(ap); return v;} int main(void){struct S *p=&s; _Static_assert(sizeof(+p->x)==4, \"pointer field\"); _Static_assert(sizeof(1 ? s.x : -1)==4, \"conditional\"); _Static_assert(sizeof(s.x ?: -1)==4, \"elvis\"); return take(0,s.x)!=7 || p->x-8!=-1;}");
 }
 
 #[test]

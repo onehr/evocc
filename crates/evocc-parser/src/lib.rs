@@ -8027,7 +8027,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let operand = match op {
                     UnaryOp::AddrOf => self.expression_type(operand)?,
                     UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Not | UnaryOp::BitNot => {
-                        self.converted_expression_type(operand)?
+                        self.arithmetic_operand_type(operand)?
                     }
                     UnaryOp::Deref => self.converted_expression_type(operand)?,
                 };
@@ -8087,8 +8087,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (inner.ty, inner.category)
             }
             CHirExpr::Binary(op, left, right, _) => {
-                let left = self.converted_expression_type(left)?;
-                let right = self.converted_expression_type(right)?;
+                let left = self.arithmetic_operand_type(left)?;
+                let right = self.arithmetic_operand_type(right)?;
                 let ty = self.binary_expression_type(*op, left, right)?;
                 (ty, ExprCategory::Value)
             }
@@ -8097,17 +8097,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 if !is_scalar_class(self.operand_type_class(condition.ty)) {
                     return None;
                 }
-                let when_true = self.converted_expression_type(when_true)?;
-                let when_false = self.converted_expression_type(when_false)?;
+                let when_true = self.arithmetic_operand_type(when_true)?;
+                let when_false = self.arithmetic_operand_type(when_false)?;
                 let ty = self.conditional_expression_type(when_true, when_false)?;
                 (ty, ExprCategory::Value)
             }
             CHirExpr::Elvis(operand, fallback, _) => {
-                let operand = self.converted_expression_type(operand)?;
+                let operand = self.arithmetic_operand_type(operand)?;
                 if !is_scalar_class(self.operand_type_class(operand.ty)) {
                     return None;
                 }
-                let fallback = self.converted_expression_type(fallback)?;
+                let fallback = self.arithmetic_operand_type(fallback)?;
                 let ty = self.conditional_expression_type(operand, fallback)?;
                 (ty, ExprCategory::Value)
             }
@@ -8241,6 +8241,50 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             inferred.category = ExprCategory::Value;
         }
         Some(inferred)
+    }
+
+    /// Preserve a bit-field's written type for typeof and generic selection;
+    /// only arithmetic contexts promote its range, not its allocation width.
+    fn arithmetic_operand_type(&self, expression: &CHirExpr<'_>) -> Option<InferredExpressionType> {
+        let mut inferred = self.converted_expression_type(expression)?;
+        if let (OperandTypeClass::Integer(integer), Some(width)) = (
+            self.operand_type_class(inferred.ty),
+            self.expression_bit_field_width(expression),
+        ) {
+            inferred.ty = InferredType::Integer(integer.bit_field_promoted(width));
+        }
+        Some(inferred)
+    }
+
+    fn expression_bit_field_width(&self, expression: &CHirExpr<'_>) -> Option<u16> {
+        let field = match expression {
+            CHirExpr::MemoryRead { place, .. } => match place.projections().last()? {
+                PlaceProjection::Field(field) => *field,
+                PlaceProjection::Index(_) => return None,
+            },
+            CHirExpr::Member(base, name, _) => {
+                let InferredType::Canonical(ty) = self.expression_type(base)?.ty else {
+                    return None;
+                };
+                *self.record_member_path(ty, name)?.last()?
+            }
+            CHirExpr::PtrMember(base, name, _) => {
+                let OperandTypeClass::Pointer(pointer) =
+                    self.operand_type_class(self.converted_expression_type(base)?.ty)
+                else {
+                    return None;
+                };
+                *self.record_member_path(pointer.pointee, name)?.last()?
+            }
+            CHirExpr::EvaluateOnce(operand, _) => return self.expression_bit_field_width(operand),
+            _ => return None,
+        };
+        let TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) =
+            &self.types.tag(field.tag())?.state
+        else {
+            return None;
+        };
+        Some(fields.get(field.field_index())?.bit_field?.width_bits)
     }
 
     fn promoted_arithmetic_type(&self, ty: InferredType) -> Option<InferredType> {
@@ -9700,7 +9744,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<Vec<TypeId>> {
         let mut parameters = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let inferred = self.converted_expression_type(argument)?.ty;
+            let inferred = self.arithmetic_operand_type(argument)?.ty;
             let promoted = match self.operand_type_class(inferred) {
                 OperandTypeClass::Integer(integer) => {
                     InferredType::Integer(CInteger::new(0, integer).promoted().ty())

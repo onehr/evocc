@@ -5948,3 +5948,14 @@ Both sealed oracles print `7 7 7` for the three spellings in
 `69d15060f5a52403979ee890fa0e7ccd967e5ae9dc5483cf000b14974df57588`).
 No diagnostic is added: this removes the E3101 refusal affecting 2,464 units
 at `blockdev_direct_IO` in sealed lowering run `20260905T175021Z-94287`.
+
+### Narrow bit-field integer promotions
+
+Integer promotions use a bit-field's range even when its declared base is
+`long` or `long long`: widths below 32 and signed width 32 promote to `int`,
+and unsigned width 32 promotes to `unsigned int`; this does not change the
+field's storage layout or introduce promotion in a non-arithmetic context.
+Both sealed oracles execute `tests/fixtures/bitfield-integer-promotions.c`
+with exit 0 (evidence `.evidence/builtin-probes/20260907-bitfield-promotions/oracle.txt`).
+No diagnostic is added; one known torture failure, `bf-sign-2`, exercises
+this rule, and no full-campaign improvement is claimed before replay.
