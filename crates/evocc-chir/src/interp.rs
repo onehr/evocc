@@ -3243,6 +3243,30 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             if !statement_contains_label(statement, spelling) {
                 continue;
             }
+            if self.memory_mode {
+                // A jump can enter a block after automatic declarations.
+                // Their storage exists, but their initializers did not run.
+                // Existing bindings belong to this active scope and must not
+                // be replaced on a backward jump.
+                for skipped in &items[..index] {
+                    let CHirBlockItem::Declaration(CHirDecl::Object(object)) = skipped else {
+                        continue;
+                    };
+                    if matches!(
+                        object.storage,
+                        StorageClass::None | StorageClass::Auto | StorageClass::Register
+                    ) && self.memory_binding(object.symbol).is_none()
+                    {
+                        self.validate_memory_object_declaration(object)?;
+                        self.allocate_automatic_object(
+                            object.symbol,
+                            object.ty,
+                            object.initializer.as_ref(),
+                            object.span,
+                        )?;
+                    }
+                }
+            }
             if let MachineBlockMode::StatementExpression { value, span } = mode {
                 // Re-enter a directly labelled item through the expression
                 // continuation so a labelled final expression still yields

@@ -2,6 +2,28 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_FULL_CAMPAIGNS_PENDING",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "gotoIntoBlocks": {
+      "redCommit": "919dab4",
+      "red": "EvoIR InvalidPointerRepresentation at block 3; no build error",
+      "implementation": "Preserve active scalar bindings across unstructured jumps; in C-HIR memory execution allocate skipped automatic declarations without running their initializers",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2",
+      "focusedPassed": 25,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh a089bb9 --offline -j 2 --quiet",
+      "gatePassed": 917,
+      "gateFailed": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "native": "target/frontend/debug/evocc --emit=asm tests/fixtures/goto-into-block.c; sealed gcc -static link/run: exit 0",
+      "oracles": "gcc-14 and clang-19 -std=gnu11 -O0: fixture exits 0",
+      "originalSeed": "Original Csmith base seed190 previously exited 139; repaired debug compiler assembly exits 133, not a pass. The diagnostic entry wrapper hits the CLI EvoIR fuel limit; the remaining trap is not classified as UB from its exit code alone"
+    },
+    "focusedOfflineReplay": {
+      "subject": "a089bb9",
+      "command": "git clone --no-local <repository> /private/tmp/evocc-integer-replay.JI8pFr; CARGO_TARGET_DIR=/private/tmp/evocc-integer-replay.JI8pFr/target cargo test --manifest-path /private/tmp/evocc-integer-replay.JI8pFr/Cargo.toml -p evocc-lower --test expression_value_flow --test front_end_resolved_forms --locked --offline -j 2",
+      "passed": 39,
+      "failed": 0,
+      "scope": "Fresh isolated target; four completed integer/frontend fixes, before the goto repair. Not a full workspace replay"
+    },
     "narrowBitfields": {
       "redCommit": "bd00bec",
       "red": "Two tests failed without build errors: E2911 in sizeof arithmetic and EvoIR returned 4 instead of 0",

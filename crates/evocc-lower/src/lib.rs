@@ -3479,7 +3479,14 @@ impl<'a> FunctionLowerer<'a> {
             .collect::<Vec<_>>();
         locals.sort_by_key(|(value, _, _)| *value);
         for (_, symbol, key) in locals {
-            if (symbols.contains(&symbol) || matches!(key, EnvKey::Address(_))) && seen.insert(key)
+            // Structured successors do not describe a forward goto's uses.
+            // Keep active scalar bindings until their lexical scope ends in
+            // functions with labels targeted by jumps; otherwise a branch
+            // containing only `goto` silently turns live values into poison.
+            if (!self.goto_names.is_empty()
+                || symbols.contains(&symbol)
+                || matches!(key, EnvKey::Address(_)))
+                && seen.insert(key)
             {
                 keys.push(key);
             }
