@@ -1074,10 +1074,64 @@ pub struct ParameterDecl {
 #[derive(Debug, Clone)]
 pub enum ParameterSyntax {
     Unspecified,
+    /// A definition's identifier list, in argument order. Each declaration
+    /// retains its object type; the call interface uses default promotions.
+    IdentifierList {
+        parameters: Vec<ParameterDecl>,
+    },
     Prototype {
         parameters: Vec<ParameterDecl>,
         variadic: bool,
     },
+}
+
+impl ParameterSyntax {
+    #[must_use]
+    pub fn parameters(&self) -> &[ParameterDecl] {
+        match self {
+            Self::Unspecified => &[],
+            Self::IdentifierList { parameters } | Self::Prototype { parameters, .. } => parameters,
+        }
+    }
+
+    #[must_use]
+    pub fn parameter_type_matches(
+        &self,
+        types: &evocc_types::TypeInterner,
+        canonical: TypeId,
+        declared: TypeId,
+    ) -> bool {
+        if matches!(self, Self::IdentifierList { .. }) {
+            types.compatible_ignoring_top_qualifiers(canonical, declared)
+                || types.get(canonical).is_some_and(|canonical| {
+                    default_promoted_parameter_kind(types, declared)
+                        .is_some_and(|promoted| canonical.kind == promoted)
+                })
+        } else {
+            types.compatible_ignoring_top_qualifiers(canonical, declared)
+        }
+    }
+}
+
+/// The type crossing a non-prototype call boundary, after declarator array
+/// and function adjustment. Kept separate from the callee's parameter object.
+#[must_use]
+pub fn default_promoted_parameter_kind(
+    types: &evocc_types::TypeInterner,
+    ty: TypeId,
+) -> Option<evocc_types::TypeKind> {
+    use evocc_types::{FloatKind, TypeKind};
+    if let Some(integer) = constant::canonical_integer_type(types, ty) {
+        if let Some(rank) =
+            integer::rank_for_integer_type(integer::CInteger::new(0, integer).promoted().ty())
+        {
+            return Some(TypeKind::Int(rank));
+        }
+    }
+    Some(match &types.get(ty)?.kind {
+        TypeKind::Float(FloatKind::F32) => TypeKind::Float(FloatKind::F64),
+        kind => kind.clone(),
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -1400,7 +1454,9 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
             for attribute in &function.attributes {
                 inventory.record(attribute);
             }
-            if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+            if let ParameterSyntax::Prototype { parameters, .. }
+            | ParameterSyntax::IdentifierList { parameters } = &function.parameters
+            {
                 for parameter in parameters {
                     inventory_of_written(&parameter.written, inventory);
                     for attribute in &parameter.attributes {
@@ -1994,7 +2050,9 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 }
                 written_attribute_lines(&mut out, &function.written);
                 render_attribute_lines(&mut out, &function.attributes);
-                if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+                if let ParameterSyntax::Prototype { parameters, .. }
+                | ParameterSyntax::IdentifierList { parameters } = &function.parameters
+                {
                     for parameter in parameters {
                         if let Some(name) = &parameter.name {
                             let _ = writeln!(out, "  parameter {}", name.spelling);

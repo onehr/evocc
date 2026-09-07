@@ -948,7 +948,8 @@ impl<'a> Substitution<'a, '_> {
             return Err(self.error(span, "callee is not a function"));
         };
         let parameters = match &f.parameters {
-            ParameterSyntax::Prototype { parameters, .. } => parameters.as_slice(),
+            ParameterSyntax::Prototype { parameters, .. }
+            | ParameterSyntax::IdentifierList { parameters } => parameters.as_slice(),
             ParameterSyntax::Unspecified => &[],
         };
         if parameters.len() != args.len() {

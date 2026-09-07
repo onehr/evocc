@@ -2,6 +2,26 @@
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
+    "identifierListDefinitions": {
+      "redCommit": "cbb256c",
+      "red": "Two execution tests failed with E1001 expected-declaration, zero build errors",
+      "implementation": "Retain identifier-list order and declared parameter object types; promote the call interface and honor a compatible preceding prototype. Convert incoming scalar values before addressed parameter allocation; reuse the existing array/function adjustment and integer kernel",
+      "authority": "Appendix D: Identifier-list definitions and promoted call interfaces",
+      "fixture": "tests/fixtures/identifier-list-functions.c",
+      "oracles": "Sealed GCC14 and Clang19 -std=gnu11 at O0/O2: build0 run0. Missing/duplicate/extraneous parameter declarations and implicit-int probes remain diagnosed",
+      "nativeCommand": "target/frontend/debug/evocc --emit=asm tests/fixtures/identifier-list-functions.c; sealed gcc -static assembly -o /tmp/probe && timeout 10 /tmp/probe",
+      "nativeExit": 0,
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow identifier_list --offline -j 2 -- --nocapture",
+      "focusedPassed": 3,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh 4c56f8b --offline -j 2 --quiet",
+      "gatePassed": 926,
+      "gateFailed": 0,
+      "gateIgnored": 0,
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "ruff": "PASS: ruff check tools tests/acceptance",
+      "limitation": "Full torture remeasurement pending; no attribution of all 185 prior E1001 refusals to this construct"
+    },
     "definedRuntimeCampaign": {
       "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
       "run": "20260907T115631Z",

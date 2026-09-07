@@ -86,6 +86,40 @@ fn identifier_list_parameters_keep_declared_objects_and_promoted_interface() {
 fn identifier_list_declaration_order_does_not_change_argument_order() {
     agrees("int f(a,b,c) long c; int a,b; {return a!=1||b!=2||c!=3;} int main(void){return f(1,2,3L);}");
     agrees("int f(a) const int a; {return a!=7;} int main(void){return f(7);}");
+    agrees("int f();int main(void){return f(255)!=-1;}int f(c) signed char c;{return c;}");
+    agrees(
+        "int f(c) signed char c;{return c;} extern typeof(f) f;int main(void){return f(255)!=-1;}",
+    );
+    agrees("static inline int f(c) signed char c;{return c;}int main(void){return f(255)!=-1;}");
+    agrees("int f(char);int f(a) char a;{return a;}int main(void){return f(255)!=255;}");
+}
+
+#[test]
+fn invalid_identifier_lists_remain_diagnosed() {
+    for source in [
+        "int f(a) int b; { return 0; }",
+        "int f(a,a) int a; { return a; }",
+        "int f(a) int a; int a; { return a; }",
+        "int f(a) int a=1; { return a; }",
+        "int f(a) static int a; { return a; }",
+        "int f(a) { return a; }",
+        "int f(a);",
+        "int (*p)(a);",
+        "int f(int (*p)(a));",
+        "int f(long); int f(a) char a; {return a;}",
+        "int f(signed char); int f(a) int a; {return a;}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45025);
+        let mut lexer = Lexer::new(file, source);
+        let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+        let _ = parser.parse_translation_unit_in(&arena);
+        assert!(parser.had_error(), "accepted {source}");
+        assert!(
+            parser.diagnostic().is_some(),
+            "missing diagnostic: {source}"
+        );
+    }
 }
 
 #[test]

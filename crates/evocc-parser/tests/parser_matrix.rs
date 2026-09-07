@@ -410,7 +410,8 @@ fn canonical_decl(decl: &CHirDecl<'_>, types: &TypeInterner) -> String {
         CHirDecl::Function(function) if function.body.is_none() => {
             let parameters = match &function.parameters {
                 ParameterSyntax::Unspecified => Vec::new(),
-                ParameterSyntax::Prototype { parameters, .. } => parameters
+                ParameterSyntax::Prototype { parameters, .. }
+                | ParameterSyntax::IdentifierList { parameters } => parameters
                     .iter()
                     .map(|parameter| {
                         format!(

@@ -978,7 +978,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         function: &crate::FunctionDecl<'arena>,
         authority: FunctionAuthority,
     ) -> Result<(), AllocationSiteManifestError> {
-        let ParameterSyntax::Prototype { parameters, .. } = &function.parameters else {
+        let (ParameterSyntax::Prototype { parameters, .. }
+        | ParameterSyntax::IdentifierList { parameters }) = &function.parameters
+        else {
             return Ok(());
         };
         let mut seen_symbols = HashSet::new();

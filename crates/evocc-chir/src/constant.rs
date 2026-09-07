@@ -231,7 +231,8 @@ fn declaration_has_attribute(
             (target == AttributeQueryTarget::Entity(function.symbol)
                 && has_attribute(&function.attributes, attribute))
                 || match &function.parameters {
-                    crate::ParameterSyntax::Prototype { parameters, .. } => {
+                    crate::ParameterSyntax::Prototype { parameters, .. }
+                    | crate::ParameterSyntax::IdentifierList { parameters } => {
                         parameters.iter().any(|parameter| {
                             parameter.symbol == entity_target(target)
                                 && has_attribute(&parameter.attributes, attribute)
@@ -565,7 +566,7 @@ pub(crate) fn eval_integer_constant(
     }
 }
 
-fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
+pub(crate) fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
     match types.get(ty)?.kind {
         TypeKind::Int(rank) => Some(integer_type_for_rank(rank)),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),

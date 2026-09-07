@@ -1469,11 +1469,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
-        let Some(declarator) = self.parse_declarator(true) else {
+        let Some(mut declarator) = self.parse_declarator(true) else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
         self.validate_array_parameter_modifiers(&declarator.derived, false);
+        if declarator.derived.iter().any(|layer| {
+            matches!(
+                layer,
+                DerivedDeclarator::Function {
+                    parameters: ParameterSyntax::IdentifierList { .. },
+                    ..
+                }
+            )
+        }) {
+            if context != DeclarationContext::File || storage == StorageClass::Typedef {
+                self.report("E1001", "expected-declaration", declarator.span);
+                return None;
+            }
+            self.complete_identifier_parameters(&mut declarator)?;
+        }
         if auto_type_span.is_some()
             && (storage == StorageClass::Typedef || !declarator.derived.is_empty())
         {
@@ -1497,6 +1512,45 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         attributes.extend(self.parse_attribute_specifiers(trailing_placement));
         let mut full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
+        if let Some(DerivedDeclarator::Function {
+            parameters: syntax @ ParameterSyntax::IdentifierList { .. },
+            ..
+        }) = declarator.derived.first()
+        {
+            // A prior prototype supplies the call interface when its types
+            // match the declared objects or their default promotions (GNU C).
+            if let Some(prior) = self
+                .symbol_in_current_scope(&declarator.name.spelling)
+                .and_then(|id| self.symbols.symbol(id).ok())
+            {
+                if let (
+                    Some(TypeKind::Function {
+                        return_type: prior_return,
+                        parameters:
+                            FunctionParameters::Prototype {
+                                types,
+                                variadic: false,
+                            },
+                    }),
+                    Some(TypeKind::Function { return_type, .. }),
+                ) = (
+                    self.types.get(prior.ty()).map(|ty| &ty.kind),
+                    self.types.get(full_type).map(|ty| &ty.kind),
+                ) {
+                    if self.types.compatible(*return_type, *prior_return)
+                        && types.len() == syntax.parameters().len()
+                        && types
+                            .iter()
+                            .zip(syntax.parameters())
+                            .all(|(ty, parameter)| {
+                                syntax.parameter_type_matches(&self.types, *ty, parameter.ty)
+                            })
+                    {
+                        full_type = prior.ty();
+                    }
+                }
+            }
+        }
         full_type = self.apply_declaration_attributes(
             full_type,
             &mut attributes,
@@ -1639,7 +1693,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .cloned()
             .collect();
         let mut pending: Vec<Pending<'arena>> = Vec::new();
-        let mut declarator = declarator;
         let mut written = written;
         let mut asm_label = asm_label;
         let mut asm_label_span = asm_label_span;
@@ -1936,6 +1989,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", declarator.name.span);
             return None;
         };
+        if matches!(inherited, ParameterSyntax::IdentifierList { .. }) {
+            inherited =
+                self.parameter_syntax_from_function_type(function_type, specifier.surface.span())?;
+        }
         if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
             for parameter in parameters {
                 parameter.symbol = None;
@@ -3816,8 +3873,88 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         )
     }
 
+    fn complete_identifier_parameters(&mut self, declarator: &mut ParsedDeclarator) -> Option<()> {
+        let Some(DerivedDeclarator::Function {
+            parameters: ParameterSyntax::IdentifierList { parameters },
+            scope,
+            ..
+        }) = declarator.derived.first_mut()
+        else {
+            self.report("E1001", "expected-declaration", declarator.span);
+            return None;
+        };
+        let outer_scope = self.current_scope;
+        self.current_scope = *scope;
+        let result = (|| {
+            let mut declared = std::collections::HashSet::new();
+            while self.peek_kind() != Some(TokenKind::LBrace) {
+                let storage = self.parse_storage_class();
+                if !matches!(storage, StorageClass::None | StorageClass::Register) {
+                    self.report("E1001", "expected-declaration", self.span());
+                    return None;
+                }
+                let mut attributes =
+                    self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
+                let Some(specifier) = self.parse_type_specifier_with_attributes(&mut attributes)
+                else {
+                    self.report("E1001", "expected-declaration", self.span());
+                    return None;
+                };
+                loop {
+                    let declaration = self.parse_declarator(false)?;
+                    let Some(parameter) = parameters.iter_mut().find(|parameter| {
+                        parameter
+                            .name
+                            .as_ref()
+                            .is_some_and(|name| name.spelling == declaration.name.spelling)
+                    }) else {
+                        self.report("E1001", "expected-declaration", declaration.name.span);
+                        return None;
+                    };
+                    if !declared.insert(declaration.name.spelling.clone()) {
+                        self.report("E2002", "incompatible-redeclaration", declaration.name.span);
+                        return None;
+                    }
+                    self.validate_variable_array_bounds(&declaration.derived);
+                    let unadjusted =
+                        self.apply_declarator(specifier.surface.type_id(), &declaration.derived);
+                    let ty = self.adjust_parameter_type(unadjusted, &declaration.derived);
+                    let mut parameter_attributes = attributes.clone();
+                    parameter_attributes
+                        .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
+                    let ty =
+                        self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
+                    parameter.ty = ty;
+                    parameter.storage = storage;
+                    parameter.specifier = specifier.surface.clone();
+                    parameter.written = self.written_declarator(&declaration);
+                    parameter.attributes = parameter_attributes;
+                    parameter.span = self.merge_span(specifier.surface.span(), declaration.span);
+                    if !self.match_kind(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::Semicolon)?;
+                if let Some(event) = specifier.tag_event {
+                    let declaration =
+                        self.finish_tag_event(event, specifier.surface.span(), Vec::new());
+                    self.side_declarations.push(declaration);
+                }
+            }
+            if declared.len() != parameters.len() {
+                self.report("E1001", "expected-declaration", self.span());
+                return None;
+            }
+            Some(())
+        })();
+        self.current_scope = outer_scope;
+        result
+    }
+
     fn bind_parameters(&mut self, syntax: &mut ParameterSyntax) {
-        let ParameterSyntax::Prototype { parameters, .. } = syntax else {
+        let (ParameterSyntax::Prototype { parameters, .. }
+        | ParameterSyntax::IdentifierList { parameters }) = syntax
+        else {
             return;
         };
         for parameter in parameters {
@@ -5922,7 +6059,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let parameter_scope =
                         self.create_scope(ScopeKind::FunctionPrototype, Some(open.span));
                     self.current_scope = parameter_scope;
-                    let parameters = self.parse_parameter_list();
+                    let parameters = self.parse_parameter_list(false);
                     self.current_scope = outer_scope;
                     let close = self.expect(TokenKind::RParen)?;
                     let layer_span = self.merge_span(open.span, close.span);
@@ -6033,7 +6170,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let outer_scope = self.current_scope;
                     let parameter_scope = self.create_scope(parameter_scope_kind, Some(open.span));
                     self.current_scope = parameter_scope;
-                    let parameters = self.parse_parameter_list();
+                    let parameters = self.parse_parameter_list(function_definition_possible);
                     self.current_scope = outer_scope;
                     let close = self.expect(TokenKind::RParen)?;
                     declarator.derived.push(DerivedDeclarator::Function {
@@ -6058,6 +6195,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn upcoming_function_scope_kind(&self) -> ScopeKind {
+        if self.peek().is_some_and(|token| {
+            token.kind == TokenKind::Identifier && !self.token_starts_type_name(token)
+        }) {
+            return ScopeKind::Function;
+        }
         let mut depth = 1_usize;
         let mut index = self.pos;
         while let Some(token) = self.tokens.get(index) {
@@ -6091,11 +6233,53 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ScopeKind::FunctionPrototype
     }
 
-    fn parse_parameter_list(&mut self) -> ParameterSyntax {
+    fn parse_parameter_list(&mut self, definition_possible: bool) -> ParameterSyntax {
         let mut params = Vec::new();
         let mut variadic = false;
         if self.peek_kind() == Some(TokenKind::RParen) {
             return ParameterSyntax::Unspecified;
+        }
+        if self.peek().is_some_and(|token| {
+            token.kind == TokenKind::Identifier && !self.token_starts_type_name(token)
+        }) {
+            if !definition_possible {
+                self.report("E1001", "expected-declaration", self.span());
+            }
+            let ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+            while let Some(token) = self.expect(TokenKind::Identifier) {
+                let name = SpannedName {
+                    spelling: self.token_text(&token).to_owned(),
+                    span: token.span,
+                };
+                if params.iter().any(|parameter: &ParameterDecl| {
+                    parameter
+                        .name
+                        .as_ref()
+                        .is_some_and(|prior| prior.spelling == name.spelling)
+                }) {
+                    self.report("E2002", "incompatible-redeclaration", name.span);
+                }
+                params.push(ParameterDecl {
+                    symbol: None,
+                    name: Some(name),
+                    ty,
+                    storage: StorageClass::None,
+                    specifier: TypeSpecifier::Builtin {
+                        ty,
+                        span: token.span,
+                    },
+                    written: WrittenDeclarator {
+                        layers: Vec::new(),
+                        span: token.span,
+                    },
+                    attributes: Vec::new(),
+                    span: token.span,
+                });
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
+            return ParameterSyntax::IdentifierList { parameters: params };
         }
         if self.peek_kind() == Some(TokenKind::Void)
             && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::RParen)
@@ -6317,6 +6501,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 DerivedDeclarator::Function { parameters, .. } => {
                     let parameters = match parameters {
                         ParameterSyntax::Unspecified => FunctionParameters::Unspecified,
+                        ParameterSyntax::IdentifierList { parameters } => {
+                            FunctionParameters::Prototype {
+                                types: parameters
+                                    .iter()
+                                    .map(|parameter| {
+                                        let kind = evocc_chir::default_promoted_parameter_kind(
+                                            &self.types,
+                                            parameter.ty,
+                                        )
+                                        .expect("parsed parameter type exists");
+                                        self.intern(kind, Qualifiers::default())
+                                    })
+                                    .collect(),
+                                variadic: false,
+                            }
+                        }
                         ParameterSyntax::Prototype {
                             parameters,
                             variadic,

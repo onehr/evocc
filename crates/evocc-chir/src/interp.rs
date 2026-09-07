@@ -4694,17 +4694,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             {
                 Vec::new()
             }
-            (
-                FunctionParameters::Prototype { types, variadic },
-                ParameterSyntax::Prototype {
-                    parameters,
-                    variadic: written_variadic,
-                },
-            ) if variadic == written_variadic
-                && types.len() == parameters.len()
-                && (types.len() == argument_count
-                    || (*variadic && types.len() <= argument_count)) =>
+            (FunctionParameters::Prototype { types, variadic }, syntax)
+                if !matches!(syntax, ParameterSyntax::Unspecified)
+                    && *variadic
+                        == matches!(syntax, ParameterSyntax::Prototype { variadic: true, .. })
+                    && types.len() == syntax.parameters().len()
+                    && (types.len() == argument_count
+                        || (*variadic && types.len() <= argument_count)) =>
             {
+                let parameters = syntax.parameters();
                 let mut validated = Vec::with_capacity(parameters.len());
                 let mut parameter_ids = BTreeSet::new();
                 let mut parameter_spellings = BTreeSet::new();
@@ -4733,15 +4731,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let scope_is_valid = scope.kind() == ScopeKind::Function
                         && scope.parent() == Some(self.unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
-                    if *canonical_type != parameter.ty
-                        || !self.written_declarator_matches(
-                            &parameter.written,
-                            parameter.ty,
-                            parameter.specifier.type_id(),
-                            None,
-                            true,
-                        )
-                        || symbol.kind() != SymbolKind::Parameter
+                    if !syntax.parameter_type_matches(
+                        self.unit.types(),
+                        *canonical_type,
+                        parameter.ty,
+                    ) || !self.written_declarator_matches(
+                        &parameter.written,
+                        parameter.ty,
+                        parameter.specifier.type_id(),
+                        None,
+                        true,
+                    ) || symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
                         || symbol.ty() != parameter.ty
                         || !matches!(
@@ -9909,17 +9909,14 @@ fn function_parameters_match(
 ) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
-        (
-            FunctionParameters::Prototype { types, variadic },
-            ParameterSyntax::Prototype {
-                parameters,
-                variadic: written_variadic,
-            },
-        ) => {
-            variadic == written_variadic
+        (FunctionParameters::Prototype { types, variadic }, syntax)
+            if !matches!(syntax, ParameterSyntax::Unspecified) =>
+        {
+            let parameters = syntax.parameters();
+            *variadic == matches!(syntax, ParameterSyntax::Prototype { variadic: true, .. })
                 && types.len() == parameters.len()
                 && types.iter().zip(parameters).all(|(canonical, parameter)| {
-                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                    syntax.parameter_type_matches(interner, *canonical, parameter.ty)
                 })
         }
         _ => false,

@@ -526,6 +526,20 @@ fn fingerprint(unit: &evocc_chir::CHirUnit<'_>) -> String {
             CHirDecl::Function(function) => {
                 let (parameters, form, variadic) = match &function.parameters {
                     ParameterSyntax::Unspecified => (Vec::new(), "unspecified", false),
+                    ParameterSyntax::IdentifierList { parameters } => (
+                        parameters
+                            .iter()
+                            .map(|parameter| {
+                                format!(
+                                    "{}:{}",
+                                    parameter.name.as_ref().unwrap().spelling,
+                                    type_fingerprint(unit, &ordinals, parameter.ty)
+                                )
+                            })
+                            .collect(),
+                        "identifier-list",
+                        false,
+                    ),
                     ParameterSyntax::Prototype {
                         parameters,
                         variadic,
@@ -869,7 +883,8 @@ fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
         } if types.len() == 1
     ));
     let names = |function: &evocc_chir::FunctionDecl<'_>| match &function.parameters {
-        ParameterSyntax::Prototype { parameters, .. } => parameters
+        ParameterSyntax::Prototype { parameters, .. }
+        | ParameterSyntax::IdentifierList { parameters } => parameters
             .iter()
             .map(|parameter| parameter.name.as_ref().map(|name| name.spelling.clone()))
             .collect::<Vec<_>>(),

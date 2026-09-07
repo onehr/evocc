@@ -503,10 +503,14 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
     ) -> (String, &'static str, bool, Option<String>) {
         match parameters {
             ParameterSyntax::Unspecified => (String::new(), "unspecified", false, None),
-            ParameterSyntax::Prototype {
-                parameters,
-                variadic,
-            } => {
+            syntax => {
+                let parameters = syntax.parameters();
+                let variadic = matches!(syntax, ParameterSyntax::Prototype { variadic: true, .. });
+                let form = if matches!(syntax, ParameterSyntax::IdentifierList { .. }) {
+                    "identifier-list"
+                } else {
+                    "prototype"
+                };
                 let mut written_array = None;
                 let parameters = parameters
                     .iter()
@@ -542,7 +546,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                     })
                     .collect::<Vec<_>>()
                     .join(",");
-                (parameters, "prototype", *variadic, written_array)
+                (parameters, form, variadic, written_array)
             }
         }
     }

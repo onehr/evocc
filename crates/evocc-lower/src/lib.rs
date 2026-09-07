@@ -741,7 +741,9 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 }
             }
         } else if let CHirDecl::Function(function) = declaration {
-            if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+            if let ParameterSyntax::Prototype { parameters, .. }
+            | ParameterSyntax::IdentifierList { parameters } = &function.parameters
+            {
                 for parameter in parameters {
                     if matches!(
                         unit.types().get(parameter.ty).map(|ty| &ty.kind),
@@ -2441,6 +2443,7 @@ fn function_info(
     let parameter_symbols = match &function.parameters {
         ParameterSyntax::Unspecified if parameter_types.is_empty() => Vec::new(),
         ParameterSyntax::Prototype { parameters, .. }
+        | ParameterSyntax::IdentifierList { parameters }
             if function.body.is_some() && parameters.len() == parameter_types.len() =>
         {
             let mut ids = BTreeSet::new();
@@ -2476,17 +2479,19 @@ fn function_info(
                     let scope_is_valid = scope.kind() == ScopeKind::Function
                         && scope.parent() == Some(unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
-                    if *canonical_type != parameter.ty
-                        || !written_declarator_matches(
-                            unit.types(),
-                            &parameter.written,
-                            parameter.ty,
-                            parameter.specifier.type_id(),
-                            None,
-                            false,
-                            true,
-                        )
-                        || symbol.kind() != SymbolKind::Parameter
+                    if !function.parameters.parameter_type_matches(
+                        unit.types(),
+                        *canonical_type,
+                        parameter.ty,
+                    ) || !written_declarator_matches(
+                        unit.types(),
+                        &parameter.written,
+                        parameter.ty,
+                        parameter.specifier.type_id(),
+                        None,
+                        false,
+                        true,
+                    ) || symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
                         || symbol.ty() != parameter.ty
                         || !matches!(
@@ -2803,17 +2808,14 @@ fn function_parameters_match(
 ) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
-        (
-            FunctionParameters::Prototype { types, variadic },
-            ParameterSyntax::Prototype {
-                parameters,
-                variadic: written_variadic,
-            },
-        ) => {
-            variadic == written_variadic
+        (FunctionParameters::Prototype { types, variadic }, syntax)
+            if !matches!(syntax, ParameterSyntax::Unspecified) =>
+        {
+            let parameters = syntax.parameters();
+            *variadic == matches!(syntax, ParameterSyntax::Prototype { variadic: true, .. })
                 && types.len() == parameters.len()
                 && types.iter().zip(parameters).all(|(canonical, parameter)| {
-                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                    syntax.parameter_type_matches(interner, *canonical, parameter.ty)
                 })
         }
         _ => false,
@@ -3173,13 +3175,34 @@ impl<'a> FunctionLowerer<'a> {
         };
         // The call interface supplies scalar values, but an addressed parameter
         // is an automatic object owned by this invocation, just like a local.
-        for (symbol, value_type) in self
-            .info
-            .parameter_symbols
-            .iter()
-            .copied()
-            .zip(self.info.parameter_types.iter())
-        {
+        for symbol in self.info.parameter_symbols.iter().copied() {
+            let declared = self
+                .unit
+                .symbols()
+                .symbol(symbol)
+                .expect("parameter identity was validated")
+                .ty();
+            let value_type =
+                function_value_type(self.unit.types(), self.target, declared, declaration.span)?;
+            if let Some(incoming) = entry.env.get(&EnvKey::Local(symbol)).cloned() {
+                if matches!(incoming.value.ty, EvoIRType::Bits(_)) {
+                    let converted = self.cast(
+                        ExprValue {
+                            value: incoming.value,
+                            integer: incoming.integer.expect("integer parameter"),
+                        },
+                        value_type.integer,
+                        &entry,
+                    )?;
+                    entry.env.insert(
+                        EnvKey::Local(symbol),
+                        BoundValue {
+                            value: converted.value,
+                            integer: Some(converted.integer),
+                        },
+                    );
+                }
+            }
             if !self.memory_symbols.contains(&symbol) || self.is_aggregate_type(value_type.source) {
                 continue;
             }

@@ -5735,6 +5735,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Identifier-list definitions and promoted call interfaces
+
+A definition with an identifier list retains those parameters in identifier order and their declared object types after array/function adjustment; its effective call interface uses default argument promotions unless a preceding prototype supplies types compatible with each declared type or its promotion.
+Every listed parameter must have exactly one declaration, with only no storage class or `register`; missing or extraneous declarations, initializers and implicit `int` remain `E1001`, while duplicate declarations and incompatible preceding prototypes retain `E2002`.
+Sealed GCC-14 and Clang-19 execute `tests/fixtures/identifier-list-functions.c` at `-O0` and `-O2` with exit zero, including narrow addressed objects, adjusted parameters and a preceding narrow prototype; the eight negative/admission probes and the rejected narrow-prototype/int-object variant are recorded in `.evidence/builtin-probes/20260907-identifier-functions/results.txt`.
+The preceding torture run has 185 first-error `E1001` refusals without an identifier-list/implicit-int split, so no number of newly passing programs is inferred from that count; floating execution remains deferred.
+
 ### Termination builtins and the existing external-call boundary
 
 `__builtin_abort()` has prototype `void (void)` and resolves to the ordinary external `abort` call, with the same compatible-declaration check and no invented interpreter library model.

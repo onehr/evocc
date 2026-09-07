@@ -28,9 +28,16 @@ int factorial(n)
     return n ? n * factorial(n - 1) : 1;
 }
 
+int prior_narrow(signed char);
+int prior_narrow(c)
+    signed char c;
+{
+    return sizeof(c) != 1 || c != -1;
+}
+
 int main(void)
 {
     int a[3] = {0, 7, 0};
     int (*p)(int, int, int *) = narrow;
-    return p(-1, 65535, &a[1]) || arrays(a, add) || known(255) != -1 || factorial(5) != 120;
+    return p(-1, 65535, &a[1]) || arrays(a, add) || known(255) != -1 || factorial(5) != 120 || prior_narrow(255);
 }
