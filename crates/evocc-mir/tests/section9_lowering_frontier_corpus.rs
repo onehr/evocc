@@ -226,6 +226,13 @@ const PROGRAMS: &[Program] = &[
         linux_only: true,
     },
     Program {
+        name: "variadic-named-stack",
+        unit: include_str!("../../../tests/fixtures/variadic-named-stack.c"),
+        darwin: None,
+        other: None,
+        linux_only: true,
+    },
+    Program {
         name: "register-variable",
         unit: REGISTER_VARIABLE_UNIT,
         darwin: None,
