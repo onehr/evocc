@@ -67,6 +67,24 @@ fn static_local_updates_persist_across_calls() {
 }
 
 #[test]
+fn void_return_expressions_execute_effects_without_a_data_result() {
+    check(
+        include_str!("../../../tests/fixtures/void-return-effects.c"),
+        0,
+    );
+}
+
+#[test]
+fn void_return_does_not_execute_the_following_statement() {
+    check("int n; void sink(void){n++;} void f(void){return sink();n=99;} int main(void){f();return n!=1;}", 0);
+}
+
+#[test]
+fn discarded_void_conditionals_preserve_the_selected_effect() {
+    check("int n; void sink(int x){n+=x;} int main(void){int c=0; c++ ? sink(99) : sink(3); c ? (void)(n+=5) : sink(99); return n!=8 || c!=1;}", 0);
+}
+
+#[test]
 fn conditional_updates_preserve_the_selected_side_effect() {
     check(
         "extern void abort(void); int main(void){ int x = 3, y = 2; if ((x < y ? x++ : y++) != 2) abort(); if (x != 3 || y != 3) abort(); return 0; }",
