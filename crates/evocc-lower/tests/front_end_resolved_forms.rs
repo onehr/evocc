@@ -50,6 +50,27 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn hosted_library_builtins_use_external_function_prototypes() {
+    assert_pairs(
+        &[
+            (
+                "int f(const char *fmt,unsigned char x){return __builtin_printf(fmt,x);}",
+                "int printf(const char *,...); int f(const char *fmt,unsigned char x){return printf(fmt,x);}",
+            ),
+            (
+                "void *f(unsigned long n){return __builtin_malloc(n);}",
+                "void *malloc(unsigned long); void *f(unsigned long n){return malloc(n);}",
+            ),
+            (
+                "char *f(char *d,const char *s){return __builtin_strcpy(d,s);}",
+                "char *strcpy(char *,const char *); char *f(char *d,const char *s){return strcpy(d,s);}",
+            ),
+        ],
+        1400,
+    );
+}
+
+#[test]
 fn termination_builtins_are_typed_ordinary_library_calls() {
     assert_pairs(
         &[(
