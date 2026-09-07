@@ -91,6 +91,24 @@ class ChecksumTest(unittest.TestCase):
 
 
 class RuntimeTest(unittest.TestCase):
+    def test_signed_shift_guards_preserve_defined_narrow_wraps(self):
+        self.assertTrue(callable(getattr(csmith, "repair_shift_guards", None)),
+                        "The shared runtime still shifts negative signed operands")
+        definitions = []
+        for width in (8, 16, 32, 64):
+            for count in ("s", "u"):
+                definitions.append(
+                    f"#define safe_lshift_func_int{width}_t_s_{count}(left,_left,right,_right) \\\n"
+                    "   (existing_count_guard \\\n   ) \\\n result\n\n"
+                )
+        fixed = csmith.repair_shift_guards("".join(definitions))
+        for width in (8, 16, 32, 64):
+            self.assertEqual(fixed.count(f"((int{width}_t)(left) < 0)"), 2)
+        self.assertNotIn("INT8_MAX", fixed)
+        self.assertNotIn("INT16_MAX", fixed)
+        self.assertEqual(fixed.count("INT32_MAX >> (right)"), 2)
+        self.assertEqual(fixed.count("INT64_MAX >> (right)"), 2)
+
     def test_subtraction_guard_uses_a_defined_sign_mask(self):
         self.assertTrue(
             callable(getattr(csmith, "repair_runtime_header", None)),
