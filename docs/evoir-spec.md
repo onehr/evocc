@@ -5959,3 +5959,30 @@ Both sealed oracles execute `tests/fixtures/bitfield-integer-promotions.c`
 with exit 0 (evidence `.evidence/builtin-probes/20260907-bitfield-promotions/oracle.txt`).
 No diagnostic is added; one known torture failure, `bf-sign-2`, exercises
 this rule, and no full-campaign improvement is claimed before replay.
+
+### Nonnegative enumeration objects and integer constants
+
+A non-packed enumeration whose values are all in `0..UINT_MAX` uses
+`unsigned int` as its object representation; a range including a negative
+value and fitting `int` uses `int`, including when either is a bit-field base.
+Enumeration constants whose entire range fits `int` retain type `int`, not
+the enum object's unsigned mode, and the existing wider-range rule is unchanged.
+Both sealed oracles compile and run `tests/fixtures/enum-bitfield-signedness.c`
+at `-O0` and `-O2` with exit 0, recorded in
+`.evidence/builtin-probes/20260907-bitfield-promotions/enum-oracle.txt`.
+No diagnostic is added; the reduced field from torture `20030714-1.c`
+accounts for one known failure, with full-campaign impact still unmeasured.
+
+### Named stack parameters conflict with the variadic starting address
+
+With nine named `long` parameters, the first anonymous argument follows a
+named stack slot, whereas EvoMIR Section 6 fixes `va_start.stack` at
+`x29 + 16` without that displacement.
+Both sealed oracles and both IR interpreters return zero for
+`.evidence/builtin-probes/20260907-variadic-stack/probe.c`, but EvoCC's
+native code returns one (`results.txt` in that directory).
+The body rule takes precedence, so this entry records the required
+correction without silently overriding Section 6 or allocating a refusal
+code for a valid scalar variadic call.
+One minimized case reproduces torture `va-arg-1.c`; additional affected
+unit counts await the next full run.

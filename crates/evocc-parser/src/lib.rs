@@ -5710,10 +5710,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 break;
             }
         }
-        let expression_ty = self.intern(
-            TypeKind::Int(enum_integer_rank(minimum, maximum, false)),
-            Qualifiers::default(),
-        );
+        // Enumerator constants fitting int have type int, independently of
+        // the unsigned representation selected for a nonnegative enum object.
+        let expression_ty = self.intern_c_integer_type(enum_integer_type(minimum, maximum));
         for member in &members {
             self.symbols
                 .update_symbol_type(member.symbol, expression_ty)

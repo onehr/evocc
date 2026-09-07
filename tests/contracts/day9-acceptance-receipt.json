@@ -30,6 +30,38 @@
       "native": "target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm; sealed gcc -static link/run: compound-assignment-call-effects.c and original torture pr58943.c both exit 0",
       "oracles": "gcc-14 and clang-19, each -std=gnu11 -O0 and -O2: expanded fixture exits 0 in all four configurations"
     },
+    "enumerationBitfields": {
+      "redCommit": "56c420c",
+      "red": "E2911 for the measured nonnegative enum signedness assertion; no build error",
+      "focusedCommand": "CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test expression_value_flow --offline -j 2",
+      "focusedPassed": 24,
+      "gateCommand": "CARGO_TARGET_DIR=target/frontend tools/gate-changed.sh ca8445b --offline -j 2 --quiet",
+      "gatePassed": 1490,
+      "gateFailed": 0,
+      "gateIgnored": 4,
+      "ignoredNote": "Existing ignored tests unchanged; no new test disabled",
+      "clippy": "PASS -D warnings",
+      "fmt": "PASS",
+      "native": "target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm; sealed gcc -static link/run: enum-bitfield-signedness.c and original torture 20030714-1.c both exit 0",
+      "oracles": "gcc-14 and clang-19 at -O0 and -O2 all exit 0; enumeration constants remain int, object representation reflects the value range"
+    },
+    "csmithRemeasurement": {
+      "command": "python3 -u tools/ladder/csmith.py --campaign all --programs 500 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+      "run": "20260907T091017Z",
+      "subject": "9b91f27",
+      "programs": 1000,
+      "agreeing": 761,
+      "noChecksum": 169,
+      "oracleUnusable": 68,
+      "timeout": 2,
+      "checksumMismatches": 0,
+      "limitation": "This fixed-binary run includes the narrow bitfield repair but predates compound-assignment and enum repairs; it is not final acceptance. Its legacy trap counter is an exit-code observation, not proof of UB for each program. Native oracle jobs ran at parallelism 4 while host focused/changed tests also ran."
+    },
+    "variadicStackBlocker": {
+      "fixture": ".evidence/builtin-probes/20260907-variadic-stack/probe.c",
+      "measured": "Nine named long parameters then two anonymous longs: C-HIR 0, EvoIR 0, gcc-14 0, clang-19 0, EvoCC native 1",
+      "conflict": "EvoMIR Section 6 requires stack=x29+16 even when named parameters consumed stack slots; implementation follows that body rule. Correct anonymous argument start must skip those slots. Appendix D records the conflict without overriding the authoritative body."
+    },
     "completion": "Not all Csmith or torture programs pass; no refusal, timeout, absent checksum or unsupported feature is counted as a pass"
   },
   "receiptId": "c30.day9.v2",

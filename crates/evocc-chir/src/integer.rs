@@ -442,10 +442,14 @@ pub const fn rank_for_integer_type(ty: CIntegerType) -> Option<IntRank> {
     }
 }
 
-/// GNU AArch64 enum mode selection for the parser's supported value range.
+/// Type of enumeration constants, distinct from the enum object's mode.
 #[must_use]
 pub fn enum_integer_type(minimum: i128, maximum: i128) -> CIntegerType {
-    integer_type_for_rank(enum_integer_rank(minimum, maximum, false))
+    if minimum >= i128::from(i32::MIN) && maximum <= i128::from(i32::MAX) {
+        CIntegerType::INT
+    } else {
+        integer_type_for_rank(enum_integer_rank(minimum, maximum, false))
+    }
 }
 
 /// Convert an already-rounded floating literal to a target integer type.

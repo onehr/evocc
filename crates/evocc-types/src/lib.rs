@@ -302,11 +302,11 @@ pub struct TagLayoutAttributes {
 #[must_use]
 pub fn enum_integer_rank(minimum: i128, maximum: i128, packed: bool) -> IntRank {
     if !packed {
-        if minimum >= i128::from(i32::MIN) && maximum <= i128::from(i32::MAX) {
-            return IntRank::Int;
-        }
         if minimum >= 0 && maximum <= i128::from(u32::MAX) {
             return IntRank::UInt;
+        }
+        if minimum >= i128::from(i32::MIN) && maximum <= i128::from(i32::MAX) {
+            return IntRank::Int;
         }
         return if minimum < 0 || maximum <= i128::from(i64::MAX) {
             IntRank::Long
