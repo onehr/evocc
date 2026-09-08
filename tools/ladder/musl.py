@@ -116,8 +116,7 @@ def report_failures(report: Path) -> set[str]:
     releases, its HEAD tests interfaces musl 1.2.6 does not have yet, and
     those cases fail for the reference build too.
     """
-    if not report.exists():
-        return set()
+    # An empty report is a result; an absent report means there is no result.
     return set(FAILED_CASE.findall(report.read_text(errors="replace")))
 
 
