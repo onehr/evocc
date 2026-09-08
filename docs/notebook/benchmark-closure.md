@@ -127,7 +127,14 @@ designators retain E2906. Both sealed compilers pass all four O0/O2 runs
 and reject the three malformed/multi-component omissions of `=`.
 The all-targets changed gate against `f6338a5` passes 1,261 tests, zero
 failures and three pre-existing standing-run ignores across eight crates;
-Clippy, fmt, Ruff and diff-check pass. Original-program replay is pending.
+Clippy, fmt, Ruff and diff-check pass. Original-program replay
+`20260908T191239.871250Z` (subject `e829ba8`, executable SHA-256
+`d2e1b1d72812e83057331d1b1a0cf2c37eec2acf755580f205efb49b195f74a9`)
+retains every identity and prior PASS. The three original non-FP designator
+programs change from REFUSED to PASS: torture is 1,276 passes, 390 refusals,
+25 runtime failures and one link failure out of 1,692; ctest stays 206/220.
+Captures: `.evidence/ladder/e0/20260908T191240Z` and `20260908T191304Z`.
+This spelling family is closed; the other initializer/alignment work is not.
 Evidence: `.evidence/builtin-probes/20260909-obsolete-designators/results.txt`.
 
 ### Block-local implicit calls, remaining bit counts and source dependencies
