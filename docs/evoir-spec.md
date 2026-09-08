@@ -6435,3 +6435,15 @@ An unbounded array declaration's alignment request is checked against its elemen
 `_Alignof(int[])` itself remains invalid and is refused by its requesting context, because GCC rejects the expression while Clang accepts it; the validation rule must not silently widen expression-query acceptance.
 Both compilers accept an explicitly aligned external incomplete record declaration followed by either a weaker or stronger record definition, so the later definition does not retroactively invalidate the earlier declaration.
 These boundaries are measured in `complete.c` and `results.txt` under `.evidence/builtin-probes/20260909-alignment-specifiers/`; they add no diagnostic beyond E2938 and are regression edges rather than additional counted original-program gains.
+
+### Deallocation builtin and the external-call boundary
+
+`__builtin_free` uses the ordinary external prototype `void free(void *)` through the existing unit-local builtin namespace, evaluates its argument once, and keeps the existing arity, conversion and compatible-declaration checks without adding an interpreter model.
+Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260909-library-and-assembly-spellings/forms.c` with exit zero (`results.txt`); an executed external `free` retains the existing E3039 interpreter boundary, while native execution uses the linked library.
+No new diagnostic is allocated; torture run `20260908T191304Z` has two first-error units at this spelling, and their original replay determines the actual gain.
+
+### Single-trailing GNU assembly spelling
+
+`__asm` is the same contextual spelling as `asm` and `__asm__` in every assembly position, promoted only after preprocessing and preserving its written spelling in C-HIR; constraints, effects and native assembly remain unchanged.
+Both sealed compilers at O0/O2 execute the integer inline-assembly assertion in `.evidence/builtin-probes/20260909-library-and-assembly-spellings/forms.c` with exit zero (`results.txt`).
+No diagnostic is allocated; two original torture first errors use this spelling, one of which additionally requires x86 floating-point assembly and is not thereby admitted on AArch64.
