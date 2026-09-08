@@ -37,6 +37,28 @@ class BenchmarkEntryTest(unittest.TestCase):
         _, env = bench.command("kernel", args, Path("/tmp/compiler"))
         self.assertEqual(env["K1_EVOCC"], "/tmp/compiler")
 
+    def test_kernel_replay_reuses_only_a_survey_of_the_selected_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / "compiler"
+            binary.write_bytes(b"one compiler")
+            survey = root / "survey"
+            survey.mkdir()
+            metadata = survey / "substitution.json"
+            import hashlib
+            metadata.write_text(json.dumps({
+                "evoccSha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+            }))
+            args = bench.parser().parse_args([
+                "kernel", "--reuse-kernel-survey", str(survey),
+            ])
+            command, env = bench.command("kernel", args, binary)
+            self.assertEqual(command[command.index("--reuse-survey") + 1], str(survey))
+            self.assertEqual(env["K1_EVOCC"], str(binary))
+            metadata.write_text(json.dumps({"evoccSha256": "another compiler"}))
+            with self.assertRaises(ValueError):
+                bench.command("kernel", args, binary)
+
     def test_program_failure_is_not_runner_success(self):
         receipt = {"suites": {"torture": {"programs": 4, "outcomes": {"pass": 2, "fail": 1, "refused": 1}}}}
         row = bench.metrics("torture", receipt)

@@ -7,6 +7,7 @@ import itertools
 from pathlib import Path
 import random
 import unittest
+from unittest.mock import patch
 
 # Loaded by path: the file is named for the job it does, and the standard
 # library already owns the name ``bisect``.
@@ -31,6 +32,13 @@ def failing_on(guilty: set[str]):
 
 
 class DdminTest(unittest.TestCase):
+    def test_reduction_uses_the_same_explicit_compiler_as_the_survey(self) -> None:
+        with patch.dict("os.environ", {
+            "K1_EVOCC": "/tmp/selected-compiler",
+            "CARGO_TARGET_DIR": "/tmp/other-target",
+        }, clear=True):
+            self.assertEqual(k1_bisect.default_evocc(), Path("/tmp/selected-compiler"))
+
     def test_a_single_guilty_unit_is_isolated(self) -> None:
         units = [f"u{index}.o" for index in range(16)]
         fails, calls = failing_on({"u11.o"})
