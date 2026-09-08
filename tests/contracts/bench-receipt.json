@@ -1,22 +1,32 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T070638.695281Z",
-  "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
+  "run": "20260908T080325.213428Z",
+  "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
   "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99",
+  "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
+    "toybox",
     "ctest",
     "torture",
+    "csmith",
+    "--campaign",
+    "all",
+    "--programs",
+    "500",
     "--jobs",
-    "4"
+    "4",
+    "--budget",
+    "40"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
+    "toybox",
     "ctest",
-    "torture"
+    "torture",
+    "csmith"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -47,8 +57,8 @@
         "E3007 evoir-main-parameters-are-not-canonical": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T070638Z",
-      "evidence": ".evidence/ladder/e0/20260908T070638Z",
+      "run": "20260908T080425Z",
+      "evidence": ".evidence/ladder/e0/20260908T080425Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -60,12 +70,12 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 24.1,
+      "seconds": 24.7,
       "previous": null,
       "measurement": {
-        "run": "20260908T070638.695281Z",
-        "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
-        "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99"
+        "run": "20260908T080325.213428Z",
+        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
+        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
       }
     },
     "torture": {
@@ -123,8 +133,8 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T070702Z",
-      "evidence": ".evidence/ladder/e0/20260908T070702Z",
+      "run": "20260908T080449Z",
+      "evidence": ".evidence/ladder/e0/20260908T080449Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -136,12 +146,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 138.3,
+      "seconds": 146.3,
       "previous": null,
       "measurement": {
-        "run": "20260908T070638.695281Z",
-        "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
-        "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99"
+        "run": "20260908T080325.213428Z",
+        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
+        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
       }
     },
     "csmith": {
@@ -158,8 +168,8 @@
       "passed": 932,
       "kind": "programs",
       "status": "INCOMPLETE",
-      "run": "20260908T061706Z",
-      "evidence": ".evidence/ladder/csmith/20260908T061706Z",
+      "run": "20260908T080716Z",
+      "evidence": ".evidence/ladder/csmith/20260908T080716Z",
       "receipt": "tests/contracts/ladder-csmith-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -175,7 +185,7 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 1387.2,
+      "seconds": 1384.6,
       "previous": {
         "rung": "E0c",
         "note": "original seeds; unavailable oracles are not passes",
@@ -190,13 +200,13 @@
         "passed": 932,
         "kind": "programs",
         "status": "INCOMPLETE",
-        "run": "20260908T051022Z",
-        "evidence": ".evidence/ladder/csmith/20260908T051022Z"
+        "run": "20260908T061706Z",
+        "evidence": ".evidence/ladder/csmith/20260908T061706Z"
       },
       "measurement": {
-        "run": "20260908T061410.809670Z",
-        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
-        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
+        "run": "20260908T080325.213428Z",
+        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
+        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
       }
     },
     "zlib": {
@@ -985,14 +995,14 @@
       "note": "mixed-link tests relative to baseline failures",
       "outcomes": {},
       "refusals": {
-        "E3101": 11
+        "E3101": 8
       },
       "baselineFailures": 1,
       "failingUnits": [],
       "total": 203,
-      "passed": 192,
+      "passed": 195,
       "kind": "units",
-      "compiled": 192,
+      "compiled": 195,
       "excluded": 0,
       "testVerdict": "no-regression",
       "adjustments": {
@@ -1042,8 +1052,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260908T064146Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T064146Z",
+      "run": "20260908T080325Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T080325Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1057,7 +1067,7 @@
         "40"
       ],
       "exitCode": 0,
-      "seconds": 58.8,
+      "seconds": 59.8,
       "previous": {
         "rung": "E6",
         "note": "mixed-link tests relative to baseline failures",
@@ -1120,13 +1130,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260908T054925Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T054925Z"
+        "run": "20260908T064146Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T064146Z"
       },
       "measurement": {
-        "run": "20260908T061410.809670Z",
-        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
-        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
+        "run": "20260908T080325.213428Z",
+        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
+        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
       }
     },
     "musl": {

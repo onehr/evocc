@@ -37,8 +37,8 @@ their remaining closure work without creating a second set of measurements.
 - [x] Restore nested macro push/pop state; replay the original failures (row 1).
 - [ ] Finish native wrong-result classification and repairs; preserve runtime
   obligations and consume required test options explicitly (rows 4, 17).
-- [ ] Repair goto-entered automatic storage, initialization and lifetime;
-  replay toybox cut/httpd/sed and control-flow regressions (rows 8, 12; next).
+- [x] Repair goto-entered automatic storage, initialization and lifetime;
+  replay toybox cut/httpd/sed and control-flow regressions (rows 8, 12).
 - [ ] Finish aliases/weak symbols and register-binding original-program
   validation, separating FP-dependent libc failures (rows 2, 3).
 - [ ] Correct strong external-data addressing for the original TinyCC PIE link,
@@ -87,17 +87,17 @@ not a claim that no unknown compiler bug can exist.
 | 5 | Kernel substitution mismatches | Original six extent defects fixed in `measure-20260907T170640Z`; new replay booted but retained overwritten cached assembly and could not verify zero-storage objects | `kernel` | REOPENED: cache-content guard fixed; original replay and zero-storage classification required |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
 | 7 | Remaining kernel refusals | Latest survey: 2,717 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; symbolic `%c` operands require a rule beyond integer-only `i` | `kernel` | OPEN |
-| 8 | Return and edge typing | toybox now 192/203, zero regressions; cut/httpd/sed retain three edge-value refusals involving goto entry and object storage | `toybox` | PARTIAL: return fix benched, edge storage OPEN |
+| 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight further refusals: seven function-value types and one object subvalue; classify FP dependence individually | `toybox` | OPEN |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
 | 11 | TinyCC compiler build | 7/11 assemble, 4/11 enter a passing build; three relink failures and four compile refusals remain; external-data PIE is independently reduced for tccrun | `tinycc` | PARTIAL: macro-rescan failures in tccdbg/tccelf CLOSED by original replay |
-| 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls and enum/integer pointer compatibility pass original native replay | `ctest torture` | PARTIAL: these repaired originals CLOSED; jump-entered storage OPEN |
+| 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
 | 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
 | 16 | Remaining diagnostic classes | Torture 461 total refusals and musl 352 remain listed in raw results; classify residual E3101/builtin/ABI/initializer classes after preceding fixes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | `dg-options`, target requirements and timeout factors are not consumed; define explicit applicability, preserve excluded outcomes, never claim ALL non-FP from a filtered success count | `torture` | OPEN |
-| 18 | Unavailable Csmith references | Fresh `20260908T061706Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
+| 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Existing `make test` recompiles reference sources; tests must consume substituted objects before a subject PASS is possible | `cjson` | OPEN |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
@@ -105,6 +105,25 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+`python3 tools/bench.py toybox ctest torture csmith --campaign all
+--programs 500 --jobs 4 --budget 40` completed run
+`20260908T080325.213428Z`: toybox 195/203, c-testsuite 203/220,
+torture 1,196/1,692 and Csmith 932/1,000 agreeing. All original identities
+remain present, with no outcome regressions; toybox cut/httpd/sed are the
+only changed outcomes, refused to assembled, and join the 195-unit
+no-regression mixed build. Its one reference-baseline failure remains visible.
+Csmith still has 68 oracle-unusable results and zero mismatches.
+
+The run correctly records dirty checkout `82e2cff`: the already-staged
+production patch was committed as `2f268ab` after the wrapper captured its
+checkout identity. The measured executable SHA-256 is
+`040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884`;
+it was not rebuilt during the campaign. This is not a clean-commit replay.
+The goto repair passed 981 tests, zero failed/ignored, through
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh 82e2cff --quiet`, plus Clippy, fmt, Ruff and diff-check.
+The following line-control change is not attributed to this executable.
 
 `python3 tools/bench.py ctest torture csmith tinycc toybox --campaign all
 --programs 500 --jobs 4 --budget 40` completed run

@@ -3,7 +3,7 @@
  "rung": "E6",
  "subject": "toybox",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T064146Z",
+ "run": "20260908T080325Z",
  "pin": {
   "subject": "toybox",
   "rung": "E6",
@@ -12,7 +12,7 @@
   "origin": "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
   "sha256": "082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1"
  },
- "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b",
+ "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "tests": 56,
@@ -21,10 +21,10 @@
   ]
  },
  "units": 203,
- "unitsCompiledByEvocc": 192,
- "unitsInPassingBuild": 192,
+ "unitsCompiledByEvocc": 195,
+ "unitsInPassingBuild": 195,
  "refusalsByCode": {
-  "E3101": 11
+  "E3101": 8
  },
  "testResult": "no-regression",
  "failingUnits": [],
@@ -92,5 +92,5 @@
   "-funsigned-char": 203,
   "-o": 203
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T064146Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T080325Z"
 }
