@@ -286,7 +286,9 @@ fn entity_target(target: AttributeQueryTarget) -> Option<SymbolId> {
 }
 
 fn has_attribute(attributes: &[crate::Attribute], name: &str) -> bool {
-    attributes.iter().any(|attribute| attribute.name == name)
+    attributes
+        .iter()
+        .any(|attribute| attribute.query_name() == Some(name))
 }
 
 fn statement_contains_declaration(
@@ -537,7 +539,7 @@ pub(crate) fn eval_integer_constant(
             CIntegerType::ULONG,
         )),
         CHirExpr::AlignOf(ty, _) => Some(CInteger::new(
-            u64::from(target.layout_of(types, *ty).ok()?.align_bytes),
+            u64::from(target.alignof_type(types, *ty).ok()?),
             CIntegerType::ULONG,
         )),
         CHirExpr::BitBuiltin { op, operand, .. } => {

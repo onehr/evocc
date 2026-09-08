@@ -1062,7 +1062,7 @@ pub enum AppliedAttribute {
     IntegerMode,
 }
 
-/// An attribute entry (or the equivalent C11 `_Noreturn` function specifier),
+/// An attribute entry (or an equivalent C11 `_Noreturn`/`_Alignas` specifier),
 /// preserved losslessly whether or not it was understood.
 /// `name` is canonical (`__unused__` and `unused` both give
 /// `unused`); `written` is the spelling in the source.
@@ -1077,6 +1077,22 @@ pub struct Attribute {
 }
 
 impl Attribute {
+    /// The zero C11 alignment specifier is preserved but contributes no
+    /// attribute to the declaration queried by `__builtin_has_attribute`.
+    #[must_use]
+    pub fn query_name(&self) -> Option<&str> {
+        if self.written == "_Alignas"
+            && self
+                .arguments
+                .first()
+                .is_some_and(|argument| argument.integer == Some(0))
+        {
+            None
+        } else {
+            Some(&self.name)
+        }
+    }
+
     /// Strip one leading and one trailing `__`, which GNU C treats as the
     /// same attribute name. Any other spelling is returned unchanged.
     #[must_use]

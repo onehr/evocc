@@ -7763,19 +7763,16 @@ impl<'a> FunctionLowerer<'a> {
                 })
             }
             CHirExpr::AlignOf(ty, span) => {
-                let layout = self
-                    .target
-                    .layout_of(self.unit.types(), *ty)
-                    .map_err(|source| LowerError::Layout {
-                        ty: *ty,
-                        span: *span,
-                        source,
-                    })?;
+                let alignment =
+                    self.target
+                        .alignof_type(self.unit.types(), *ty)
+                        .map_err(|source| LowerError::Layout {
+                            ty: *ty,
+                            span: *span,
+                            source,
+                        })?;
                 let result = self.fresh_value(bits(CIntegerType::ULONG));
-                self.emit(
-                    state,
-                    Inst::Const(result.clone(), u64::from(layout.align_bytes)),
-                )?;
+                self.emit(state, Inst::Const(result.clone(), u64::from(alignment)))?;
                 Ok(ExprValue {
                     value: result,
                     integer: CIntegerType::ULONG,

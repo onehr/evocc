@@ -1006,7 +1006,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let previous = self.entity_attributes.get(&symbol).cloned();
         let names = self.entity_attributes.entry(symbol).or_default();
-        names.extend(attributes.iter().map(|attribute| attribute.name.clone()));
+        names.extend(
+            attributes
+                .iter()
+                .filter_map(|attribute| attribute.query_name().map(str::to_owned)),
+        );
         if self.declaration_transaction_depth > 0 {
             self.entity_attribute_undo.push((symbol, previous));
         }
@@ -1019,7 +1023,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             key,
             attributes
                 .iter()
-                .map(|attribute| attribute.name.clone())
+                .filter_map(|attribute| attribute.query_name().map(str::to_owned))
                 .collect(),
         );
         if self.declaration_transaction_depth > 0 {
@@ -1502,6 +1506,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
+                self.detached_attributes.extend(attributes);
                 declarations.push(self.finish_tag_event(
                     event,
                     declaration_span,
@@ -1884,6 +1889,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 None
             };
             let current_declarator_span = declarator.span;
+            if !self.validate_alignment_specifiers(
+                full_type,
+                &attributes,
+                !matches!(storage, StorageClass::Typedef | StorageClass::Register) && !is_function,
+            ) {
+                return None;
+            }
             pending.push(Pending {
                 declarator,
                 full_type,
@@ -2447,7 +2459,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .sizeof_type(&self.types, *ty)
                 .is_ok(),
             CHirExpr::AlignOf(ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .layout_of(&self.types, *ty)
+                .alignof_type(&self.types, *ty)
                 .is_ok(),
             CHirExpr::SizeOfExpr(_, ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
                 .sizeof_type(&self.types, *ty)
@@ -4571,6 +4583,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         const LARGEST_FUNDAMENTAL_ALIGNMENT: u32 = 16;
         const GNU_MAXIMUM_ALIGNMENT: u64 = 1 << 28;
         match attribute.arguments.as_slice() {
+            [argument] if attribute.written == "_Alignas" && argument.integer == Some(0) => None,
             [] => Some(LARGEST_FUNDAMENTAL_ALIGNMENT),
             [argument] => match argument.integer {
                 Some(bytes)
@@ -4602,6 +4615,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(TypeKind::Function { .. })
             )
         {
+            self.validate_alignment_specifiers(ty, attributes, false);
             return self.apply_attributes_to_type(ty, attributes);
         }
         let mut ty = ty;
@@ -4806,14 +4820,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         attributes: &mut Vec<Attribute>,
     ) {
         loop {
-            if let Some(attribute) = self.parse_noreturn_specifier() {
-                attributes.push(attribute);
-                continue;
-            }
-            if self.peek_kind() == Some(TokenKind::Attribute) {
-                attributes.extend(
-                    self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers),
-                );
+            if self.capture_specifier_attribute(&mut Some(&mut *attributes)) {
                 continue;
             }
             if self.peek_kind() == Some(TokenKind::Inline) {
@@ -5168,6 +5175,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if attributes.is_none() {
             return false;
         }
+        if self.peek_kind() == Some(TokenKind::Alignas) {
+            if let Some(attribute) = self.parse_alignment_specifier() {
+                attributes
+                    .as_mut()
+                    .expect("attribute capture enabled")
+                    .push(attribute);
+            }
+            return true;
+        }
         if let Some(attribute) = self.parse_noreturn_specifier() {
             attributes
                 .as_mut()
@@ -5199,6 +5215,95 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             span: token.span,
             applied: None,
         })
+    }
+
+    fn parse_alignment_specifier(&mut self) -> Option<Attribute> {
+        let keyword = self.expect(TokenKind::Alignas)?;
+        self.expect(TokenKind::LParen)?;
+        let argument_start = self.pos;
+        let alignment = if self
+            .peek()
+            .is_some_and(|token| self.token_starts_type_name(token))
+        {
+            let (ty, tag_event) = self.parse_type_name()?;
+            if let Some(event) = tag_event {
+                let declaration = self.finish_tag_event(event, keyword.span, Vec::new());
+                self.side_declarations.push(declaration);
+            }
+            TargetDataLayout::aarch64_unknown_linux_gnu()
+                .alignof_type(&self.types, ty)
+                .ok()
+                .map(u64::from)
+        } else {
+            let expression = self.parse_conditional()?;
+            self.eval_integer_constant_expression(expression)
+                .ok()
+                .and_then(CInteger::try_mathematical_value)
+                .and_then(|value| u64::try_from(value).ok())
+        };
+        let argument_end = self.pos;
+        let close = self.expect(TokenKind::RParen)?;
+        let Some(alignment) =
+            alignment.filter(|value| *value == 0 || (value.is_power_of_two() && *value <= 1 << 28))
+        else {
+            self.report("E2938", "invalid-alignment-specifier", keyword.span);
+            return None;
+        };
+        let mut argument = self.attribute_argument(&self.tokens[argument_start..argument_end]);
+        argument.integer = Some(alignment);
+        Some(Attribute {
+            name: "aligned".into(),
+            written: "_Alignas".into(),
+            arguments: vec![argument],
+            placement: AttributePlacement::DeclarationSpecifiers,
+            span: self.merge_span(keyword.span, close.span),
+            applied: None,
+        })
+    }
+
+    fn validate_alignment_specifiers(
+        &mut self,
+        ty: TypeId,
+        attributes: &[Attribute],
+        allowed: bool,
+    ) -> bool {
+        let mut specifiers = attributes
+            .iter()
+            .filter(|attribute| attribute.written == "_Alignas");
+        let Some(first) = specifiers.next() else {
+            return true;
+        };
+        let requested = std::iter::once(first)
+            .chain(specifiers)
+            .filter_map(|attribute| attribute.arguments.first()?.integer)
+            .max()
+            .unwrap_or(0);
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let natural = match self.types.get(ty) {
+            Some(CanonicalType {
+                kind:
+                    TypeKind::Array {
+                        element,
+                        bound: ArrayBound::Unbounded,
+                    },
+                qualifiers,
+            }) => qualifiers.aligned.or_else(|| {
+                target
+                    .layout_of(&self.types, *element)
+                    .ok()
+                    .map(|layout| layout.align_bytes)
+            }),
+            _ => target
+                .layout_of(&self.types, ty)
+                .ok()
+                .map(|layout| layout.align_bytes),
+        }
+        .map(u64::from);
+        if !allowed || (requested != 0 && natural.is_some_and(|natural| requested < natural)) {
+            self.report("E2938", "invalid-alignment-specifier", first.span);
+            return false;
+        }
+        true
     }
 
     fn parse_qualifiers(&mut self) -> Qualifiers {
@@ -5487,6 +5592,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                 }
                 let member_layout = self.member_layout_attributes(&mut member_attributes);
+                self.validate_alignment_specifiers(ty, &member_attributes, bit_width.is_none());
                 let fallback = declarator
                     .as_ref()
                     .map_or(specifier.surface.span(), |decl| decl.span);
@@ -5863,13 +5969,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 CIntegerType::ULONG,
             )),
             CHirExpr::AlignOf(ty, _) => {
-                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(&self.types, *ty)
+                let alignment = TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .alignof_type(&self.types, *ty)
                     .map_err(|_| ())?;
-                Ok(CInteger::new(
-                    u64::from(layout.align_bytes),
-                    CIntegerType::ULONG,
-                ))
+                Ok(CInteger::new(u64::from(alignment), CIntegerType::ULONG))
             }
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
@@ -5987,7 +6090,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::AlignOf(ty, _) => {
                 TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(&self.types, *ty)
+                    .alignof_type(&self.types, *ty)
                     .map_err(|_| ())?;
                 Ok(CIntegerType::ULONG)
             }
@@ -6128,6 +6231,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             attribute.placement = AttributePlacement::TypeName;
         }
         let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
+        self.validate_alignment_specifiers(ty, &type_attributes, false);
         let ty = self.apply_attributes_to_type(ty, &mut type_attributes);
         // A type name has no declaration carrying its written pointer layers.
         // Preserve those attributes separately, without applying their layout.
@@ -6738,6 +6842,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let mut parameter_attributes = specifier_attributes;
             parameter_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
+            self.validate_alignment_specifiers(ty, &parameter_attributes, false);
             let ty = self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
             params.push(ParameterDecl {
                 attributes: parameter_attributes,
@@ -7552,6 +7657,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         matches!(
             token.kind,
             TokenKind::Attribute
+                | TokenKind::Alignas
                 | TokenKind::Noreturn
                 | TokenKind::Auto
                 | TokenKind::Extern
@@ -7673,6 +7779,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Restrict
                 | TokenKind::Atomic
                 | TokenKind::Attribute
+                | TokenKind::Alignas
         ) || self.is_type_specifier_kind(token.kind)
             || self.typedef_name(token).is_some()
     }

@@ -3956,14 +3956,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 values.push(CValue::Integer(CInteger::new(size, CIntegerType::ULONG)));
             }
             CHirExpr::AlignOf(ty, _) => {
-                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
-                    InterpreterError::UnsupportedExpression {
+                let alignment = self
+                    .target
+                    .alignof_type(self.unit.types(), *ty)
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
                         feature: "alignof incomplete or unsupported type",
                         span,
-                    }
-                })?;
+                    })?;
                 values.push(CValue::Integer(CInteger::new(
-                    u64::from(layout.align_bytes),
+                    u64::from(alignment),
                     CIntegerType::ULONG,
                 )));
             }
@@ -8033,16 +8034,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(CInteger::new(size, CIntegerType::ULONG))
             }
             CHirExpr::AlignOf(ty, _) => {
-                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
-                    InterpreterError::UnsupportedExpression {
+                let alignment = self
+                    .target
+                    .alignof_type(self.unit.types(), *ty)
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
                         feature: "alignof incomplete or unsupported type",
                         span,
-                    }
-                })?;
-                Ok(CInteger::new(
-                    u64::from(layout.align_bytes),
-                    CIntegerType::ULONG,
-                ))
+                    })?;
+                Ok(CInteger::new(u64::from(alignment), CIntegerType::ULONG))
             }
             CHirExpr::Assign {
                 op,

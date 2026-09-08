@@ -1441,6 +1441,18 @@ impl TargetDataLayout {
         }
     }
 
+    /// GNU alignment queries do not make non-object types allocatable.
+    pub fn alignof_type(&self, types: &TypeInterner, ty: TypeId) -> Result<u32, LayoutError> {
+        let canonical = types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
+        match &canonical.kind {
+            TypeKind::Void => Ok(1),
+            // Explicit function alignment still needs declaration metadata
+            // and emission support; never quietly answer the default for it.
+            TypeKind::Function { .. } if canonical.qualifiers.aligned.is_none() => Ok(4),
+            _ => self.layout_of(types, ty).map(|layout| layout.align_bytes),
+        }
+    }
+
     /// Compute source-order field placement and padding for a struct or union.
     pub fn record_layout(
         &self,
@@ -2194,6 +2206,8 @@ mod tests {
 
         assert_eq!(target.sizeof_type(&types, void), Ok(1));
         assert_eq!(target.sizeof_type(&types, function), Ok(1));
+        assert_eq!(target.alignof_type(&types, void), Ok(1));
+        assert_eq!(target.alignof_type(&types, function), Ok(4));
         assert_eq!(
             target.layout_of(&types, void),
             Err(LayoutError::NonObjectType(void))

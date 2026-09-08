@@ -116,6 +116,26 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Alignment specifiers and non-object queries
+
+`572a823` and `65430a9` are the compiled RED checkpoints: missing C11
+alignment syntax, the non-object query refusal, and the incorrectly accepted
+weak alignment on an incomplete array. The implementation uses one target
+alignment query across the parser, C-HIR constant/interpreter paths and
+lowering; neither void nor a function type becomes allocatable. `_Alignas`
+reuses object/member attributes while rejecting invalid placements and weak
+requests, preserving ignored zero requests without exposing them as a written
+`aligned` attribute. The 47-test integration target passes both interpreters
+and native fixtures. The 12-crate all-targets changed gate against `572a823`
+passes 1,664 tests, zero failures and four pre-existing ignores; Clippy,
+fmt, Ruff and diff-check pass. Fresh subject layout runs
+`20260908T195100Z-76026` and `20260908T195228Z-76488` pass 128/128 and 22/22,
+both with oracle consensus and zero mismatches. The intervening attributed
+invocation `20260908T195159Z-76384` omitted its case-set selector and failed
+manifest validation before measurement; it is not a passing run.
+This does not repair over-aligned native frames or explicitly
+aligned functions, and original-program replay remains required.
+
 ### Obsolete initializer designators
 
 `f6338a5` is the compiled tests-only RED: the field-colon fixture reports
