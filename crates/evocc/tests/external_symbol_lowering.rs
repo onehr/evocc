@@ -25,6 +25,99 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
+    let source = include_str!("../../../tests/fixtures/integer-absolute.c");
+    for options in [vec![], vec!["-fno-builtin"]] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &options);
+            assert!(
+                output.status.success(),
+                "{mode} {options:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, b"0\n");
+        }
+        #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+        assert_native_execution_with_options(source, "integer-absolute", &options);
+    }
+}
+
+#[test]
+fn ordinary_absolute_calls_respect_builtin_options_and_symbol_kind() {
+    let source = "int abs(int x){return x+100;} long labs(long x){return x+200;} long long llabs(long long x){return x+300;} int main(void){volatile int x=-7; return abs(x)+labs(x)+llabs(x);}";
+    for (options, expected) in [
+        (vec![], b"21\n".as_slice()),
+        (vec!["-fno-builtin"], b"579\n".as_slice()),
+        (vec!["-fno-builtin", "-fbuiltin"], b"21\n".as_slice()),
+        (vec!["-fbuiltin", "-fno-builtin"], b"579\n".as_slice()),
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &options);
+            assert!(
+                output.status.success(),
+                "{mode} {options:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, expected);
+        }
+    }
+    for source in [
+        "static int abs(int x){return x+100;} int main(void){return abs(7)-107;}",
+        "int f(int x){return x+100;} int main(void){int (*abs)(int)=f; return abs(7)-107;}",
+        "extern int abs(int) __asm__(\"other\"); int other(int x){return x+100;} int main(void){return abs(7)-107;}",
+        "long long a=-1;long long llabs(long long);void abort(void);int main(void){if(llabs(a)!=1)abort();return 0;}long long llabs(long long b){abort();}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n");
+        }
+        #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+        assert_native_execution(source, "absolute-call-boundary");
+    }
+}
+
+#[test]
+fn absolute_builtins_preserve_constant_expression_and_overflow_refusals() {
+    for (source, code) in [
+        ("_Static_assert(__builtin_abs(-9)==9,\"\");", "E2912"),
+        ("int f(void){return __builtin_abs();}", "E2909"),
+        ("int f(void){return __builtin_labs(1,2);}", "E2909"),
+        ("int f(void){return __builtin_abs((int *)0);}", "E2913"),
+        (
+            "long abs(long);int f(void){return __builtin_abs(-9);}",
+            "E2927",
+        ),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{code}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    for expression in [
+        "__builtin_abs(-2147483647-1)",
+        "__builtin_labs(-9223372036854775807L-1)",
+        "__builtin_llabs(-9223372036854775807LL-1)",
+    ] {
+        let source = format!("int main(void){{return {expression};}}");
+        for options in [vec![], vec!["-fwrapv"]] {
+            for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+                let output = run_with_options(&source, mode, &options);
+                assert!(!output.status.success());
+                assert!(
+                    String::from_utf8_lossy(&output.stderr).contains("E3004"),
+                    "{mode}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn signed_wrapping_is_explicit_and_shared_by_execution_paths() {
     let source = include_str!("../../../tests/fixtures/signed-wrapping.c");
     for options in [
