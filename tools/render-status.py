@@ -141,6 +141,12 @@ def main() -> int:
         if "withdrawn" not in rest
     )
 
+    lean = contract("lean-p0-receipt.json")
+    lean_rules = len(lean.get("segments", {}).get("A", {}).get("targets", []))
+    lean_rows = len(lean.get("segments", {}).get("B", {}).get("targets", []))
+    lean_total = lean.get("binding", {}).get("registry_rules", 0) or lean_rules
+    correspondence = contract("lean-correspondence-receipt.json").get("total", {})
+
     b1 = receipts.get("b1", {}).get("campaign", {})
     b3 = receipts.get("b3", {}).get("cCorpus", {})
     b4 = receipts.get("b4", {})
@@ -162,6 +168,8 @@ def main() -> int:
             f"evp2 :/epoch/premise {bar(1, 1)}",
             f", congruence, , {bar(1, 1)}",
             ":,",
+            f" Lean {lean_rules}/{lean_total} {lean_rows} {bar(lean_rules, lean_total)}",
+            f"Rust Lean {correspondence.get('compared', 0):,} {correspondence.get('differences', 0)} ",
         ],
     )
     top = beside(left, right)
