@@ -6040,6 +6040,13 @@ Every listed parameter must have exactly one declaration, with only no storage c
 Sealed GCC-14 and Clang-19 execute `tests/fixtures/identifier-list-functions.c` at `-O0` and `-O2` with exit zero, including narrow addressed objects, adjusted parameters and a preceding narrow prototype; the eight negative/admission probes and the rejected narrow-prototype/int-object variant are recorded in `.evidence/builtin-probes/20260907-identifier-functions/results.txt`.
 The preceding torture run has 185 first-error `E1001` refusals without an identifier-list/implicit-int split, so no number of newly passing programs is inferred from that count; floating execution remains deferred.
 
+### Explicit legacy integer declarations
+
+The explicit `-std=gnu89` compatibility mode admits omitted declaration types as `int`, undeclared identifier-list parameters as `int`, and an otherwise undeclared called name as an ordinary block-scope `extern int name()` declaration with linkage and default argument promotions; undeclared non-call names and incompatible redeclarations keep their existing diagnostics, and default/explicit GNU11 keeps the preceding strict rule.
+For this explicitly selected mode only, the default GNU11 predefined set is overlaid by removing `__STDC_VERSION__` and `__GNUC_STDC_INLINE__` and defining `__GNUC_GNU_INLINE__=1`, before user `-D`/`-U`; the last language-mode option wins and the sealed default set is unchanged.
+Both sealed compilers execute `functions.c`, `objects.c` and `calls.c` at O0/O2 in GNU89, reject them in GNU11, and agree on those mode macros (`.evidence/builtin-probes/20260908-legacy-declarations/results.txt`); no new diagnostic is allocated.
+The original run `20260908T163937Z` contains 72 E1001 programs explicitly requesting GNU89, not 72 predicted passes; this admission rule does not claim closure of other language-mode differences such as external inline emission.
+
 ### Termination builtins and the existing external-call boundary
 
 `__builtin_abort()` has prototype `void (void)` and resolves to the ordinary external `abort` call, with the same compatible-declaration check and no invented interpreter library model.
