@@ -327,6 +327,79 @@ fn obsolete_designators_use_the_existing_subobject_initializer_plan() {
 }
 
 #[test]
+fn alignment_specifiers_share_object_and_member_layout() {
+    let source = include_str!("../../../tests/fixtures/alignment-specifiers.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "alignment-specifiers");
+    let queries = "_Alignas(16) int raised; _Alignas(0) int unchanged; _Alignas(int) int natural; struct S { _Alignas(16) int member; } record; int main(void) { return !__builtin_has_attribute(raised, aligned) || __builtin_has_attribute(unchanged, aligned) || !__builtin_has_attribute(natural, aligned) || !__builtin_has_attribute(record.member, aligned); }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(queries, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+}
+
+#[test]
+fn non_object_alignment_queries_use_the_target_without_allocating_objects() {
+    let source = "int f(void) { return 7; } _Static_assert(_Alignof(void) == 1, \"void\"); _Static_assert(__alignof__(int(void)) == 4, \"function type\"); _Static_assert(__alignof__(f) == 4, \"function designator\"); _Static_assert(sizeof(void) == 1 && sizeof(f) == 1, \"distinct sizeof rule\"); int main(void) { int side = 0; if (__alignof__(side++) != 4 || side) return 1; return _Alignof(void) != 1 || _Alignof(int(void)) != 4; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "non-object-alignment");
+    let output = run("void object; int main(void) { return 0; }", "--emit=evoir");
+    assert!(
+        !output.status.success(),
+        "void is still not an allocatable object"
+    );
+}
+
+#[test]
+fn alignment_specifiers_reject_invalid_requests_and_placements() {
+    let mut failures = Vec::new();
+    for source in [
+        "_Alignas(3) int object;",
+        "_Alignas(1) int object;",
+        "int function(_Alignas(16) int parameter);",
+        "_Alignas(16) int function(void);",
+        "_Alignas(16) typedef int integer;",
+        "void function(void) { _Alignas(16) register int object; }",
+        "struct S { _Alignas(16) unsigned bit : 1; };",
+        "int alignment; _Alignas(alignment) int object;",
+        "_Alignas(-1) int object;",
+        "_Alignas(1) int object __attribute__((aligned(16)));",
+        "int main(void) { return sizeof(_Alignas(16) int); }",
+        "struct S { _Alignas(1) int field; };",
+    ] {
+        let output = run(source, "--parse-only");
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        if output.status.success() || !diagnostic.contains("E2938") {
+            failures.push(format!("{source}: {diagnostic}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {
