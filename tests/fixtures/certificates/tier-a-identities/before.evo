@@ -1,0 +1,62 @@
+func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
+    %v0 = const.bits<32> 37
+    %v1 = const.bits<32> 0
+    %v2 = signed_add_defined %v0, %v1
+    ub.assume.signed_overflow %v2
+    %v3 = add.bits<32> %v0, %v1
+    %v4 = const.bits<32> 1
+    %v5 = signed_mul_defined %v3, %v4
+    ub.assume.signed_overflow %v5
+    %v6 = mul.bits<32> %v3, %v4
+    %v7 = const.bits<32> 0
+    %v8 = or.bits<32> %v6, %v7
+    %v9 = const.bits<32> 0
+    %v10 = and.bits<32> %v6, %v9
+    %v11 = const.bits<32> 0
+    %v12 = signed_sub_defined %v11, %v0
+    ub.assume.signed_overflow %v12
+    %v13 = sub.bits<32> %v11, %v0
+    %v14 = const.bits<32> 0
+    %v15 = signed_sub_defined %v14, %v13
+    ub.assume.signed_overflow %v15
+    %v16 = sub.bits<32> %v14, %v13
+    %v17 = icmp.eq %v0, %v0
+    %v18 = zext.bits<32> %v17
+    %v19 = icmp.slt %v0, %v0
+    %v20 = zext.bits<32> %v19
+    %v21 = icmp.sle %v0, %v0
+    %v22 = zext.bits<32> %v21
+    %v23 = const.bits<32> 2
+    %v24 = const.bits<32> 3
+    %v25 = signed_add_defined %v23, %v24
+    ub.assume.signed_overflow %v25
+    %v26 = add.bits<32> %v23, %v24
+    %v27 = signed_add_defined %v8, %v10
+    ub.assume.signed_overflow %v27
+    %v28 = add.bits<32> %v8, %v10
+    %v29 = signed_add_defined %v28, %v16
+    ub.assume.signed_overflow %v29
+    %v30 = add.bits<32> %v28, %v16
+    %v31 = signed_add_defined %v30, %v18
+    ub.assume.signed_overflow %v31
+    %v32 = add.bits<32> %v30, %v18
+    %v33 = signed_add_defined %v32, %v20
+    ub.assume.signed_overflow %v33
+    %v34 = add.bits<32> %v32, %v20
+    %v35 = signed_add_defined %v34, %v22
+    ub.assume.signed_overflow %v35
+    %v36 = add.bits<32> %v34, %v22
+    %v37 = signed_add_defined %v36, %v26
+    ub.assume.signed_overflow %v37
+    %v38 = add.bits<32> %v36, %v26
+    %v39 = const.bits<32> 251
+    %v40 = divisor_nonzero %v39
+    ub.assume.remainder_by_zero %v40
+    %v41 = signed_div_rem_no_overflow %v38, %v39
+    ub.assume.signed_overflow %v41
+    %v42 = srem.bits<32> %v38, %v39
+    ret %v42
+}

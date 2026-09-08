@@ -1,0 +1,137 @@
+evp2
+registry p0.scalar.v3 aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15
+input ed464e841c4668aab8b00d5f80000ca59a247b2e179e38def2bf6d69fe0702d1
+budget nodes=40/100000 epochs=2/1024 fuel=2/256 n=8 stop=saturated
+region tier_b/entry/4 root %v8 witnesses 5 seeds 2
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/2
+witness 3 tier_b/entry/3
+witness 4 tier_b/entry/4
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=4294901760 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=and sort=bits<32> effect=pure attrs=- children=c3,c5
+node 5 n5 c7 source=derived op=const sort=bits<32> effect=pure attrs=value=0 children=-
+epoch 1
+rewrite 6 p1_200_known_and c6 c7 c6 node:n4 node:n5 bind ?a:c3,?b:c5 premises c6:ffffffff:00000000
+extract 0 c6 node:n5
+root c6
+endregion
+region tier_b/entry/6 root %v10 witnesses 4 seeds 1
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/5
+witness 3 tier_b/entry/6
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 3 n3 c4 source=before op=and sort=bits<32> effect=pure attrs=- children=c2,c3
+congruence 4 c1 c3 c1 n0 n2
+epoch 1
+rewrite 5 p1_220_and_cover_rhs c4 c2 c2 node:n3 class:c2 bind ?m:c1,?x:c2 premises c1:ffffffff:0000ffff,c2:ffff0000:00000000
+extract 0 c2 node:n1
+root c2
+endregion
+region tier_b/entry/8 root %v12 witnesses 5 seeds 1
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/5
+witness 3 tier_b/entry/7
+witness 4 tier_b/entry/8
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 4 n4 c5 source=before op=or sort=bits<32> effect=pure attrs=- children=c2,c4
+congruence 5 c1 c3 c1 n0 n2
+congruence 6 c1 c4 c1 n0 n3
+epoch 1
+rewrite 7 p1_201_known_or c5 c1 c1 node:n4 node:n0 bind ?a:c2,?b:c1 premises c5:ffffffff:0000ffff
+extract 0 c1 node:n0
+root c1
+endregion
+region tier_b/entry/9 root %v13 witnesses 8 seeds 2
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/2
+witness 3 tier_b/entry/3
+witness 4 tier_b/entry/4
+witness 5 tier_b/entry/5
+witness 6 tier_b/entry/7
+witness 7 tier_b/entry/9
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=4294901760 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=and sort=bits<32> effect=pure attrs=- children=c3,c5
+node 5 n5 c7 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 6 n6 c8 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 7 n7 c9 source=before op=xor sort=bits<32> effect=pure attrs=- children=c3,c6
+congruence 8 c2 c7 c2 n0 n5
+congruence 9 c2 c8 c2 n0 n6
+node 10 n8 c10 source=derived op=const sort=bits<32> effect=pure attrs=value=0 children=-
+epoch 1
+rewrite 11 p1_200_known_and c6 c10 c6 node:n4 node:n8 bind ?a:c3,?b:c5 premises c6:ffffffff:00000000
+epoch 2
+rewrite 12 p1_224_xor_known_zero_rhs c9 c3 c3 node:n7 class:c3 bind ?x:c3,?z:c6 premises c6:ffffffff:00000000
+extract 0 c3 node:n1
+root c3
+endregion
+region tier_b/entry/11 root %v15 witnesses 6 seeds 1
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/5
+witness 3 tier_b/entry/7
+witness 4 tier_b/entry/10
+witness 5 tier_b/entry/11
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 4 n4 c5 source=before op=const sort=bits<32> effect=pure attrs=value=65536 children=-
+node 5 n5 c6 source=before op=icmp.ult sort=bits<1> effect=pure attrs=- children=c2,c5
+congruence 6 c1 c3 c1 n0 n2
+congruence 7 c1 c4 c1 n0 n3
+node 8 n6 c7 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+epoch 1
+rewrite 9 p1_214_known_icmp_ult c6 c7 c6 node:n5 node:n6 bind ?a:c2,?b:c5 premises c6:1:1
+extract 0 c6 node:n6
+root c6
+endregion
+region tier_b/entry/12 root %v16 witnesses 7 seeds 1
+witness 0 tier_b/entry/0
+witness 1 tier_b/entry/1
+witness 2 tier_b/entry/5
+witness 3 tier_b/entry/7
+witness 4 tier_b/entry/10
+witness 5 tier_b/entry/11
+witness 6 tier_b/entry/12
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=65535 children=-
+node 4 n4 c5 source=before op=const sort=bits<32> effect=pure attrs=value=65536 children=-
+node 5 n5 c6 source=before op=icmp.ult sort=bits<1> effect=pure attrs=- children=c2,c5
+node 6 n6 c7 source=before op=zext sort=bits<32> effect=pure attrs=- children=c6
+congruence 7 c1 c3 c1 n0 n2
+congruence 8 c1 c4 c1 n0 n3
+node 9 n7 c8 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+epoch 1
+rewrite 10 p1_214_known_icmp_ult c6 c8 c6 node:n5 node:n7 bind ?a:c2,?b:c5 premises c6:1:1
+node 11 n8 c9 source=derived op=const sort=bits<32> effect=pure attrs=value=1 children=-
+epoch 2
+rewrite 12 p1_230_known_zext c7 c9 c7 node:n6 node:n8 bind ?a:c6 premises c7:ffffffff:00000001
+extract 0 c7 node:n8
+root c7
+endregion
+output 2f8a67f79751cd0a71543492cb26b25e1e009c9b5f309cb6248281c82a503e1d

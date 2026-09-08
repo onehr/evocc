@@ -1,0 +1,25 @@
+{
+  "input": "source.c",
+  "registryName": "p0.scalar.v3",
+  "registryDigest": "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15",
+  "regions": 6,
+  "witnesses": 35,
+  "seeds": 8,
+  "events": {
+    "node": 40,
+    "rewrite": 8,
+    "congruence": 9,
+    "epoch": 8,
+    "extract": 6
+  },
+  "premises": 9,
+  "entryExecuted": true,
+  "rules": {
+    "p1_200_known_and": 2,
+    "p1_201_known_or": 1,
+    "p1_214_known_icmp_ult": 2,
+    "p1_220_and_cover_rhs": 1,
+    "p1_224_xor_known_zero_rhs": 1,
+    "p1_230_known_zext": 1
+  }
+}

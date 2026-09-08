@@ -1,0 +1,55 @@
+func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
+    %v0 = const.bits<32> 37
+    %v1 = const.bits<32> 0
+    %v2 = signed_add_defined %v0, %v1
+    ub.assume.signed_overflow %v2
+    %v3 = const.bits<32> 1
+    %v4 = signed_mul_defined %v0, %v3
+    ub.assume.signed_overflow %v4
+    %v5 = const.bits<32> 0
+    %v6 = const.bits<32> 0
+    %v7 = const.bits<32> 0
+    %v8 = signed_sub_defined %v7, %v0
+    ub.assume.signed_overflow %v8
+    %v9 = const.bits<32> 4294967259
+    %v10 = const.bits<32> 0
+    %v11 = signed_sub_defined %v10, %v9
+    ub.assume.signed_overflow %v11
+    %v12 = const.bits<1> 1
+    %v13 = const.bits<32> 1
+    %v14 = const.bits<1> 0
+    %v15 = const.bits<32> 0
+    %v16 = const.bits<1> 1
+    %v17 = const.bits<32> 1
+    %v18 = const.bits<32> 2
+    %v19 = const.bits<32> 3
+    %v20 = signed_add_defined %v18, %v19
+    ub.assume.signed_overflow %v20
+    %v21 = const.bits<32> 5
+    %v22 = signed_add_defined %v0, %v1
+    ub.assume.signed_overflow %v22
+    %v23 = signed_add_defined %v0, %v0
+    ub.assume.signed_overflow %v23
+    %v24 = const.bits<32> 74
+    %v25 = signed_add_defined %v24, %v13
+    ub.assume.signed_overflow %v25
+    %v26 = const.bits<32> 75
+    %v27 = signed_add_defined %v26, %v15
+    ub.assume.signed_overflow %v27
+    %v28 = signed_add_defined %v26, %v17
+    ub.assume.signed_overflow %v28
+    %v29 = const.bits<32> 76
+    %v30 = signed_add_defined %v29, %v21
+    ub.assume.signed_overflow %v30
+    %v31 = const.bits<32> 81
+    %v32 = const.bits<32> 251
+    %v33 = divisor_nonzero %v32
+    ub.assume.remainder_by_zero %v33
+    %v34 = signed_div_rem_no_overflow %v31, %v32
+    ub.assume.signed_overflow %v34
+    %v35 = srem.bits<32> %v31, %v32
+    ret %v35
+}

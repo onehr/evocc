@@ -1,0 +1,517 @@
+evp2
+registry p0.scalar.v3 aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15
+input b3dc977e433ab965b61d732e9f80a362a2cced23aeaba62e9aa75cb71e50116d
+budget nodes=139/100000 epochs=7/1024 fuel=16/256 n=21 stop=saturated
+region widths/entry/1 root %v5 witnesses 2 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+epoch 1
+rewrite 2 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/3 root %v7 witnesses 3 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/2
+witness 2 widths/entry/3
+seed 0 %v1 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+congruence 3 c1 c2 c1 n0 n1
+epoch 1
+rewrite 4 p0_005_and_zero_rhs c3 c1 c1 node:n2 node:n0 bind ?x:c0
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/7 root %v10 witnesses 5 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/4
+witness 4 widths/entry/7
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 4 n4 c5 source=before op=shl sort=bits<32> effect=pure attrs=- children=c2,c4
+congruence 5 c1 c3 c1 n0 n2
+epoch 1
+rewrite 6 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 7 p1_206_known_shl c5 c1 c1 node:n4 node:n0 bind ?a:c1,?k:c4 premises c5:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/11 root %v13 witnesses 6 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/4
+witness 4 widths/entry/8
+witness 5 widths/entry/11
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 4 n4 c5 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c6 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c2,c5
+congruence 6 c1 c3 c1 n0 n2
+congruence 7 c4 c5 c4 n3 n4
+epoch 1
+rewrite 8 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 9 p1_207_known_lshr c6 c1 c1 node:n5 node:n0 bind ?a:c1,?k:c4 premises c6:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/15 root %v16 witnesses 7 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/2
+witness 2 widths/entry/3
+witness 3 widths/entry/4
+witness 4 widths/entry/8
+witness 5 widths/entry/12
+witness 6 widths/entry/15
+seed 0 %v1 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 4 n4 c5 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 6 n6 c7 source=before op=ashr sort=bits<32> effect=pure attrs=- children=c3,c6
+congruence 7 c1 c2 c1 n0 n1
+congruence 8 c4 c5 c4 n3 n4
+congruence 9 c4 c6 c4 n3 n5
+epoch 1
+rewrite 10 p0_005_and_zero_rhs c3 c1 c1 node:n2 node:n0 bind ?x:c0
+epoch 2
+rewrite 11 p1_208_known_ashr c7 c1 c1 node:n6 node:n0 bind ?a:c1,?k:c4 premises c7:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/16 root %v17 witnesses 4 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/16
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=zext sort=bits<64> effect=pure attrs=- children=c2
+congruence 4 c1 c3 c1 n0 n2
+epoch 1
+rewrite 5 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+node 6 n4 c5 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 7 p1_230_known_zext c4 c5 c4 node:n3 node:n4 bind ?a:c1 premises c4:ffffffffffffffff:0000000000000000
+extract 0 c4 node:n4
+root c4
+endregion
+region widths/entry/17 root %v18 witnesses 4 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/2
+witness 2 widths/entry/3
+witness 3 widths/entry/17
+seed 0 %v1 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 3 n3 c4 source=before op=sext sort=bits<64> effect=pure attrs=- children=c3
+congruence 4 c1 c2 c1 n0 n1
+epoch 1
+rewrite 5 p0_005_and_zero_rhs c3 c1 c1 node:n2 node:n0 bind ?x:c0
+node 6 n4 c5 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 7 p1_231_known_sext c4 c5 c4 node:n3 node:n4 bind ?a:c1 premises c4:ffffffffffffffff:0000000000000000
+extract 0 c4 node:n4
+root c4
+endregion
+region widths/entry/18 root %v19 witnesses 4 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/18
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=trunc sort=bits<8> effect=pure attrs=- children=c2
+congruence 4 c1 c3 c1 n0 n2
+epoch 1
+rewrite 5 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+node 6 n4 c5 source=derived op=const sort=bits<8> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 7 p1_232_known_trunc c4 c5 c4 node:n3 node:n4 bind ?a:c1 premises c4:ff:00
+extract 0 c4 node:n4
+root c4
+endregion
+region widths/entry/19 root %v20 witnesses 9 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/4
+witness 4 widths/entry/7
+witness 5 widths/entry/8
+witness 6 widths/entry/11
+witness 7 widths/entry/12
+witness 8 widths/entry/19
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 4 n4 c5 source=before op=shl sort=bits<32> effect=pure attrs=- children=c2,c4
+node 5 n5 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 6 n6 c7 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c2,c6
+node 7 n7 c8 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 8 n8 c9 source=before op=add sort=bits<32> effect=pure attrs=- children=c5,c7
+congruence 9 c1 c3 c1 n0 n2
+congruence 10 c4 c6 c4 n3 n5
+congruence 11 c4 c8 c4 n3 n7
+epoch 1
+rewrite 12 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 13 p1_206_known_shl c5 c1 c1 node:n4 node:n0 bind ?a:c1,?k:c4 premises c5:ffffffff:00000000
+epoch 3
+rewrite 14 p1_207_known_lshr c7 c1 c1 node:n6 node:n0 bind ?a:c1,?k:c4 premises c7:ffffffff:00000000
+epoch 4
+rewrite 15 p0_001_add_zero_rhs c9 c1 c1 node:n8 class:c1 bind ?x:c1
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/20 root %v21 witnesses 12 seeds 2
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/3
+witness 4 widths/entry/4
+witness 5 widths/entry/7
+witness 6 widths/entry/8
+witness 7 widths/entry/11
+witness 8 widths/entry/12
+witness 9 widths/entry/15
+witness 10 widths/entry/19
+witness 11 widths/entry/20
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c7 source=before op=shl sort=bits<32> effect=pure attrs=- children=c3,c6
+node 6 n6 c8 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 7 n7 c9 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c3,c8
+node 8 n8 c10 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 9 n9 c11 source=before op=ashr sort=bits<32> effect=pure attrs=- children=c5,c10
+node 10 n10 c12 source=before op=add sort=bits<32> effect=pure attrs=- children=c7,c9
+node 11 n11 c13 source=before op=add sort=bits<32> effect=pure attrs=- children=c12,c11
+congruence 12 c2 c4 c2 n0 n2
+congruence 13 c6 c8 c6 n4 n6
+congruence 14 c6 c10 c6 n4 n8
+epoch 1
+rewrite 15 p0_005_and_zero_rhs c3 c2 c2 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 16 p0_005_and_zero_rhs c5 c2 c2 node:n3 node:n0 bind ?x:c1
+epoch 3
+rewrite 17 p1_206_known_shl c7 c2 c2 node:n5 node:n0 bind ?a:c2,?k:c6 premises c7:ffffffff:00000000
+epoch 4
+rewrite 18 p1_207_known_lshr c9 c2 c2 node:n7 node:n0 bind ?a:c2,?k:c6 premises c9:ffffffff:00000000
+epoch 5
+rewrite 19 p1_208_known_ashr c11 c2 c2 node:n9 node:n0 bind ?a:c2,?k:c6 premises c11:ffffffff:00000000
+epoch 6
+rewrite 20 p0_001_add_zero_rhs c12 c2 c2 node:n10 class:c2 bind ?x:c2
+congruence 21 c2 c13 c2 n10 n11
+extract 0 c2 node:n0
+root c2
+endregion
+region widths/entry/21 root %v22 witnesses 5 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/16
+witness 4 widths/entry/21
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=zext sort=bits<64> effect=pure attrs=- children=c2
+node 4 n4 c5 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c4
+congruence 5 c1 c3 c1 n0 n2
+epoch 1
+rewrite 6 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+node 7 n5 c6 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 8 p1_230_known_zext c4 c6 c4 node:n3 node:n5 bind ?a:c1 premises c4:ffffffffffffffff:0000000000000000
+epoch 3
+rewrite 9 p1_232_known_trunc c5 c1 c1 node:n4 node:n0 bind ?a:c4 premises c5:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/22 root %v23 witnesses 15 seeds 2
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/3
+witness 4 widths/entry/4
+witness 5 widths/entry/7
+witness 6 widths/entry/8
+witness 7 widths/entry/11
+witness 8 widths/entry/12
+witness 9 widths/entry/15
+witness 10 widths/entry/16
+witness 11 widths/entry/19
+witness 12 widths/entry/20
+witness 13 widths/entry/21
+witness 14 widths/entry/22
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c7 source=before op=shl sort=bits<32> effect=pure attrs=- children=c3,c6
+node 6 n6 c8 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 7 n7 c9 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c3,c8
+node 8 n8 c10 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 9 n9 c11 source=before op=ashr sort=bits<32> effect=pure attrs=- children=c5,c10
+node 10 n10 c12 source=before op=zext sort=bits<64> effect=pure attrs=- children=c3
+node 11 n11 c13 source=before op=add sort=bits<32> effect=pure attrs=- children=c7,c9
+node 12 n12 c14 source=before op=add sort=bits<32> effect=pure attrs=- children=c13,c11
+node 13 n13 c15 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c12
+node 14 n14 c16 source=before op=add sort=bits<32> effect=pure attrs=- children=c14,c15
+congruence 15 c2 c4 c2 n0 n2
+congruence 16 c6 c8 c6 n4 n6
+congruence 17 c6 c10 c6 n4 n8
+epoch 1
+rewrite 18 p0_005_and_zero_rhs c3 c2 c2 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 19 p0_005_and_zero_rhs c5 c2 c2 node:n3 node:n0 bind ?x:c1
+epoch 3
+rewrite 20 p1_206_known_shl c7 c2 c2 node:n5 node:n0 bind ?a:c2,?k:c6 premises c7:ffffffff:00000000
+epoch 4
+rewrite 21 p1_207_known_lshr c9 c2 c2 node:n7 node:n0 bind ?a:c2,?k:c6 premises c9:ffffffff:00000000
+epoch 5
+rewrite 22 p1_208_known_ashr c11 c2 c2 node:n9 node:n0 bind ?a:c2,?k:c6 premises c11:ffffffff:00000000
+node 23 n15 c17 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 6
+rewrite 24 p1_230_known_zext c12 c17 c12 node:n10 node:n15 bind ?a:c2 premises c12:ffffffffffffffff:0000000000000000
+rewrite 25 p0_001_add_zero_rhs c13 c2 c2 node:n11 class:c2 bind ?x:c2
+congruence 26 c2 c14 c2 n11 n12
+epoch 7
+rewrite 27 p1_232_known_trunc c15 c2 c2 node:n13 node:n0 bind ?a:c12 premises c15:ffffffff:00000000
+congruence 28 c2 c16 c2 n11 n14
+extract 0 c2 node:n0
+root c2
+endregion
+region widths/entry/23 root %v24 witnesses 5 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/2
+witness 2 widths/entry/3
+witness 3 widths/entry/17
+witness 4 widths/entry/23
+seed 0 %v1 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 3 n3 c4 source=before op=sext sort=bits<64> effect=pure attrs=- children=c3
+node 4 n4 c5 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c4
+congruence 5 c1 c2 c1 n0 n1
+epoch 1
+rewrite 6 p0_005_and_zero_rhs c3 c1 c1 node:n2 node:n0 bind ?x:c0
+node 7 n5 c6 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 8 p1_231_known_sext c4 c6 c4 node:n3 node:n5 bind ?a:c1 premises c4:ffffffffffffffff:0000000000000000
+epoch 3
+rewrite 9 p1_232_known_trunc c5 c1 c1 node:n4 node:n0 bind ?a:c4 premises c5:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/24 root %v25 witnesses 18 seeds 2
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/3
+witness 4 widths/entry/4
+witness 5 widths/entry/7
+witness 6 widths/entry/8
+witness 7 widths/entry/11
+witness 8 widths/entry/12
+witness 9 widths/entry/15
+witness 10 widths/entry/16
+witness 11 widths/entry/17
+witness 12 widths/entry/19
+witness 13 widths/entry/20
+witness 14 widths/entry/21
+witness 15 widths/entry/22
+witness 16 widths/entry/23
+witness 17 widths/entry/24
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c7 source=before op=shl sort=bits<32> effect=pure attrs=- children=c3,c6
+node 6 n6 c8 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 7 n7 c9 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c3,c8
+node 8 n8 c10 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 9 n9 c11 source=before op=ashr sort=bits<32> effect=pure attrs=- children=c5,c10
+node 10 n10 c12 source=before op=zext sort=bits<64> effect=pure attrs=- children=c3
+node 11 n11 c13 source=before op=sext sort=bits<64> effect=pure attrs=- children=c5
+node 12 n12 c14 source=before op=add sort=bits<32> effect=pure attrs=- children=c7,c9
+node 13 n13 c15 source=before op=add sort=bits<32> effect=pure attrs=- children=c14,c11
+node 14 n14 c16 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c12
+node 15 n15 c17 source=before op=add sort=bits<32> effect=pure attrs=- children=c15,c16
+node 16 n16 c18 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c13
+node 17 n17 c19 source=before op=add sort=bits<32> effect=pure attrs=- children=c17,c18
+congruence 18 c2 c4 c2 n0 n2
+congruence 19 c6 c8 c6 n4 n6
+congruence 20 c6 c10 c6 n4 n8
+epoch 1
+rewrite 21 p0_005_and_zero_rhs c3 c2 c2 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 22 p0_005_and_zero_rhs c5 c2 c2 node:n3 node:n0 bind ?x:c1
+epoch 3
+rewrite 23 p1_206_known_shl c7 c2 c2 node:n5 node:n0 bind ?a:c2,?k:c6 premises c7:ffffffff:00000000
+epoch 4
+rewrite 24 p1_207_known_lshr c9 c2 c2 node:n7 node:n0 bind ?a:c2,?k:c6 premises c9:ffffffff:00000000
+epoch 5
+rewrite 25 p1_208_known_ashr c11 c2 c2 node:n9 node:n0 bind ?a:c2,?k:c6 premises c11:ffffffff:00000000
+node 26 n18 c20 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 6
+rewrite 27 p1_230_known_zext c12 c20 c12 node:n10 node:n18 bind ?a:c2 premises c12:ffffffffffffffff:0000000000000000
+rewrite 28 p1_231_known_sext c13 c12 c12 node:n11 node:n18 bind ?a:c2 premises c13:ffffffffffffffff:0000000000000000
+congruence 29 c16 c18 c16 n14 n16
+rewrite 30 p0_001_add_zero_rhs c14 c2 c2 node:n12 class:c2 bind ?x:c2
+congruence 31 c2 c15 c2 n12 n13
+epoch 7
+rewrite 32 p1_232_known_trunc c16 c2 c2 node:n14 node:n0 bind ?a:c12 premises c16:ffffffff:00000000
+congruence 33 c2 c17 c2 n12 n15
+congruence 34 c2 c19 c2 n12 n17
+extract 0 c2 node:n0
+root c2
+endregion
+region widths/entry/25 root %v26 witnesses 5 seeds 1
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/18
+witness 4 widths/entry/25
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c4 source=before op=trunc sort=bits<8> effect=pure attrs=- children=c2
+node 4 n4 c5 source=before op=zext sort=bits<32> effect=pure attrs=- children=c4
+congruence 5 c1 c3 c1 n0 n2
+epoch 1
+rewrite 6 p0_005_and_zero_rhs c2 c1 c1 node:n1 node:n0 bind ?x:c0
+node 7 n5 c6 source=derived op=const sort=bits<8> effect=pure attrs=value=0 children=-
+epoch 2
+rewrite 8 p1_232_known_trunc c4 c6 c4 node:n3 node:n5 bind ?a:c1 premises c4:ff:00
+epoch 3
+rewrite 9 p1_230_known_zext c5 c1 c1 node:n4 node:n0 bind ?a:c4 premises c5:ffffffff:00000000
+extract 0 c1 node:n0
+root c1
+endregion
+region widths/entry/26 root %v27 witnesses 21 seeds 2
+witness 0 widths/entry/0
+witness 1 widths/entry/1
+witness 2 widths/entry/2
+witness 3 widths/entry/3
+witness 4 widths/entry/4
+witness 5 widths/entry/7
+witness 6 widths/entry/8
+witness 7 widths/entry/11
+witness 8 widths/entry/12
+witness 9 widths/entry/15
+witness 10 widths/entry/16
+witness 11 widths/entry/17
+witness 12 widths/entry/18
+witness 13 widths/entry/19
+witness 14 widths/entry/20
+witness 15 widths/entry/21
+witness 16 widths/entry/22
+witness 17 widths/entry/23
+witness 18 widths/entry/24
+witness 19 widths/entry/25
+witness 20 widths/entry/26
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c3 source=before op=and sort=bits<32> effect=pure attrs=- children=c0,c2
+node 2 n2 c4 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 3 n3 c5 source=before op=and sort=bits<32> effect=pure attrs=- children=c1,c4
+node 4 n4 c6 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 5 n5 c7 source=before op=shl sort=bits<32> effect=pure attrs=- children=c3,c6
+node 6 n6 c8 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 7 n7 c9 source=before op=lshr sort=bits<32> effect=pure attrs=- children=c3,c8
+node 8 n8 c10 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 9 n9 c11 source=before op=ashr sort=bits<32> effect=pure attrs=- children=c5,c10
+node 10 n10 c12 source=before op=zext sort=bits<64> effect=pure attrs=- children=c3
+node 11 n11 c13 source=before op=sext sort=bits<64> effect=pure attrs=- children=c5
+node 12 n12 c14 source=before op=trunc sort=bits<8> effect=pure attrs=- children=c3
+node 13 n13 c15 source=before op=add sort=bits<32> effect=pure attrs=- children=c7,c9
+node 14 n14 c16 source=before op=add sort=bits<32> effect=pure attrs=- children=c15,c11
+node 15 n15 c17 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c12
+node 16 n16 c18 source=before op=add sort=bits<32> effect=pure attrs=- children=c16,c17
+node 17 n17 c19 source=before op=trunc sort=bits<32> effect=pure attrs=- children=c13
+node 18 n18 c20 source=before op=add sort=bits<32> effect=pure attrs=- children=c18,c19
+node 19 n19 c21 source=before op=zext sort=bits<32> effect=pure attrs=- children=c14
+node 20 n20 c22 source=before op=add sort=bits<32> effect=pure attrs=- children=c20,c21
+congruence 21 c2 c4 c2 n0 n2
+congruence 22 c6 c8 c6 n4 n6
+congruence 23 c6 c10 c6 n4 n8
+epoch 1
+rewrite 24 p0_005_and_zero_rhs c3 c2 c2 node:n1 node:n0 bind ?x:c0
+epoch 2
+rewrite 25 p0_005_and_zero_rhs c5 c2 c2 node:n3 node:n0 bind ?x:c1
+epoch 3
+rewrite 26 p1_206_known_shl c7 c2 c2 node:n5 node:n0 bind ?a:c2,?k:c6 premises c7:ffffffff:00000000
+epoch 4
+rewrite 27 p1_207_known_lshr c9 c2 c2 node:n7 node:n0 bind ?a:c2,?k:c6 premises c9:ffffffff:00000000
+epoch 5
+rewrite 28 p1_208_known_ashr c11 c2 c2 node:n9 node:n0 bind ?a:c2,?k:c6 premises c11:ffffffff:00000000
+node 29 n21 c23 source=derived op=const sort=bits<64> effect=pure attrs=value=0 children=-
+epoch 6
+rewrite 30 p1_230_known_zext c12 c23 c12 node:n10 node:n21 bind ?a:c2 premises c12:ffffffffffffffff:0000000000000000
+rewrite 31 p1_231_known_sext c13 c12 c12 node:n11 node:n21 bind ?a:c2 premises c13:ffffffffffffffff:0000000000000000
+congruence 32 c17 c19 c17 n15 n17
+node 33 n22 c24 source=derived op=const sort=bits<8> effect=pure attrs=value=0 children=-
+rewrite 34 p1_232_known_trunc c14 c24 c14 node:n12 node:n22 bind ?a:c2 premises c14:ff:00
+rewrite 35 p0_001_add_zero_rhs c15 c2 c2 node:n13 class:c2 bind ?x:c2
+congruence 36 c2 c16 c2 n13 n14
+epoch 7
+rewrite 37 p1_232_known_trunc c17 c2 c2 node:n15 node:n0 bind ?a:c12 premises c17:ffffffff:00000000
+congruence 38 c2 c18 c2 n13 n16
+congruence 39 c2 c20 c2 n13 n18
+rewrite 40 p1_230_known_zext c21 c2 c2 node:n19 node:n0 bind ?a:c14 premises c21:ffffffff:00000000
+congruence 41 c2 c22 c2 n13 n20
+extract 0 c2 node:n0
+root c2
+endregion
+region main/entry/5 root %v6 witnesses 3 seeds 0
+witness 0 main/entry/1
+witness 1 main/entry/2
+witness 2 main/entry/5
+node 0 n0 c0 source=before op=const sort=bits<32> effect=pure attrs=value=5 children=-
+node 1 n1 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c2 source=before op=sub sort=bits<32> effect=pure attrs=- children=c1,c0
+node 3 n3 c3 source=derived op=const sort=bits<32> effect=pure attrs=value=4294967291 children=-
+epoch 1
+rewrite 4 p0_101_fold_sub c2 c3 c2 node:n2 node:n3 bind ?a:c1,?b:c0
+extract 0 c2 node:n3
+root c2
+endregion
+output e9d3e9ee909a0f90ff1d54aa3b7b704139993ec6b8f6ee25ff594cffa89269ca

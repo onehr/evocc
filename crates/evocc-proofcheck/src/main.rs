@@ -75,6 +75,15 @@ fn main() -> ExitCode {
     // Section 8.10: what a block argument knows, recomputed here rather than
     // read off the certificate.
     let seed_facts = SeedFacts::of(&before_module);
+    // The table is the checker's own, so this is a self-check rather than a
+    // judgement on the certificate: entry arguments are top, each instruction's
+    // transfer is at least as precise as the fact recorded for its result, and
+    // each edge carries facts at least as precise as the destination's
+    // arguments. A table that failed would be one no premise should be
+    // confirmed against, so the answer is a refusal and not a repair.
+    if seed_facts.inductive(&before_module).is_err() {
+        return ExitCode::from(3);
+    }
     let reassembled_module = match claim(
         &certificate,
         &before_module,
