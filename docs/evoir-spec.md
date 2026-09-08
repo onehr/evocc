@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.81** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.82** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3974,6 +3974,12 @@ tables over 0..255 and the answers for -1 and 0x130 (both 0) are recorded in
 `p28-table.out` (digest `39c6154f...cb09`), and the implementation must
 reproduce that file. Measured defect at revision 1.9.33: these were `E2001`
 in 27 units.
+`__builtin_isdigit(arg)` specifically resolves to the ordinary integer
+expression `((unsigned int)(int)(arg) - 48u) <= 9u`, with one argument
+evaluation and an `int` result of zero or one, not an external call or a new
+EvoIR intrinsic. A compatible visible `isdigit` definition does not replace
+this builtin operation; ordinary calls to `isdigit` retain the external-call
+contract. The other four ctype builtin spellings retain that call contract.
 
 #### 10.1.15 Checked arithmetic builtins
 
@@ -4287,7 +4293,8 @@ and Clang-19 agree on every row.
   `strlen` is visible (evidence `p26-builtins.c`, which declares none and
   compiles under both oracles); a visible declaration of `strlen` with an
   incompatible type is `E2927` (`builtin-library-declaration-incompatible`).
-  The same holds for every library builtin of 10.1.14: the builtin's
+  Except for the explicitly resolved `__builtin_isdigit` operation, the same
+  holds for every library builtin of 10.1.14: the builtin's
   prototype is the call's type, and the call names the external function.
   No intrinsic reaches EvoIR. Measured: with a user-defined `strlen` both
   oracles call it for a non-literal operand. Revision 1.9.45 replaced the
@@ -5759,6 +5766,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.82 | 2026-09-08 | Define the already-admitted GCC digit builtin as its measured integer operation, distinct from an external ctype call; record source rN local-register aliases as the existing xN physical binding. This changes the contract, not compiler code. |
 | 1.9.81 | 2026-09-08 | Define integer mode attributes under the authorized non-floating-point closure, including their canonical ranks, qualifiers, declaration placements and the refused abstract-type-name oracle conflict. This changes the contract, not compiler code. |
 | 1.9.80 | 2026-09-08 | Define authorized symbolic `i` operands and the `%c` modifier, retaining numeric-only `n`, the existing address/SSA forms and assembly effects. The sealed non-PIC oracle probe agrees; the default PIE disagreement is explicit. This revision changes the contract, not compiler code. |
 | 1.9.79 | 2026-09-08 | Admits `weak` and `alias` as linkage marks on module records: `linkage=weak` on globals, functions, externs and declarations, and an `alias @name = @target` record that is a second symbol of a definition in this module and one provenance with it; `E3060`, `E3061`; both oracles agree on the linkage probe. Emission in EvoMIR 0.22. |
@@ -5854,6 +5862,13 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### The digit builtin does not introduce a libc dependency
+
+Section 10.1.14's already-admitted GCC-only `__builtin_isdigit` resolves to its one-evaluation unsigned-range expression, while ordinary `isdigit` calls retain the external execution boundary.
+Sealed GCC-14 O0/O2 executes `tests/fixtures/builtin-digit.c` with exit zero, including all 256 byte inputs and signed boundaries; Clang-19's missing builtin is explicitly recorded in `.evidence/builtin-probes/20260908-isdigit/results.txt`, not described as agreement.
+No diagnostic is added, and arity, conversion and incompatible visible-library-declaration checks remain in force.
+The original mixed-link measurement `measure-20260908T102907Z` isolates two EFI objects failing on the invented external `__efistub_isdigit` dependency; original-unit replay determines closure.
 
 ### Packed members retain their access alignment
 
@@ -6073,10 +6088,11 @@ Full-configuration impact has not yet been measured.
 
 ### External ctype execution boundary
 
-Revision 1.9.64's seven-function execution boundary takes precedence over
+Revision 1.9.64's seven-function external execution boundary takes precedence over
 the older Section 10.1.14 ctype execution-table requirement: without a
-definition, calls to the five ctype functions, including their builtin
-spellings, report the existing E3039 in both interpreters.
+definition, ordinary calls to the five ctype functions and the four unresolved
+builtin spellings report the existing E3039 in both interpreters. Revision
+1.9.82 resolves `__builtin_isdigit` before this external-call boundary.
 Evidence is the minimal calls in `crates/evocc/tests/external_symbol_lowering.rs`;
 the sealed `p26-builtins.c` and `p28-table.out` describe C behavior, not
 availability of an implementation in this executor.
@@ -6188,9 +6204,10 @@ Toybox run `20260907T144525Z` has 16 first-error return mismatches, with `blkid.
 
 ### Fixed local-register operands
 
-The authorized local-register binding is retained at an assembly operand as a canonical `@xN` suffix on its quoted constraint, with source `wN` bindings normalized to the same physical register; this is lowered metadata, not a new source constraint spelling.
+The authorized local-register binding is retained at an assembly operand as a canonical `@xN` suffix on its quoted constraint, with source `wN` and `rN` bindings normalized to the same physical register; this is lowered metadata, not a new source constraint spelling.
 The binding applies only at the assembly boundary, including tied and read-write operands, and register outputs are transferred on every outgoing edge of `asm.goto`; the existing reserved-register rule and clobber conflicts remain fail-closed with E3021 rather than silently dropping a binding.
 Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260908-local-register-operands/forms.c` with exit zero (`forms-results.txt`), while the original input-only reduction exits one with the pre-fix subject.
+The `r0/r1/r7/r8` aliases are independently measured at both optimization levels in `.evidence/builtin-probes/20260908-register-aliases/results.txt`; 2,260 first errors in `measure-20260908T102907Z` name `=r@r0` before normalization.
 No new diagnostic code is introduced; the one independently measured wrong-result reduction is not a count of affected musl units, which the original-unit replay must determine.
 
 ### Unnamed parameters in function definitions
