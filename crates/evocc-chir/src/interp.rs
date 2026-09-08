@@ -554,15 +554,6 @@ struct MemoryScopeExit {
 }
 
 #[derive(Debug)]
-enum Flow {
-    Normal,
-    Return(Option<CInteger>),
-    Break(SourceSpan),
-    Continue(SourceSpan),
-    Goto { spelling: String, span: SourceSpan },
-}
-
-#[derive(Debug)]
 struct FunctionEnd {
     symbol: SymbolId,
     return_type: TypeId,
@@ -639,7 +630,7 @@ enum MachineTask<'arena> {
     RestoreNestedMutationDepth(usize),
     ExecDeclaration(&'arena CHirDecl<'arena>),
     ExecStatement(&'arena CHirStmt<'arena>),
-    ExecSwitchStatement(&'arena CHirStmt<'arena>),
+    SwitchEnd,
     CompoundContinue {
         items: &'arena [CHirBlockItem<'arena>],
         index: usize,
@@ -649,10 +640,6 @@ enum MachineTask<'arena> {
         index: usize,
         value: Option<&'arena CHirExpr<'arena>>,
         span: SourceSpan,
-    },
-    SwitchContinue {
-        items: &'arena [CHirBlockItem<'arena>],
-        index: usize,
     },
     WhileCheck {
         condition: &'arena CHirExpr<'arena>,
@@ -822,11 +809,26 @@ enum MachineTask<'arena> {
 #[derive(Debug, Clone, Copy)]
 enum MachineBlockMode<'arena> {
     Compound,
-    Switch,
     StatementExpression {
         value: Option<&'arena CHirExpr<'arena>>,
         span: SourceSpan,
     },
+}
+
+#[derive(Clone, Copy)]
+enum StatementDestination<'a> {
+    Label(&'a str),
+    Case(usize),
+}
+
+impl StatementDestination<'_> {
+    fn matches(self, statement: &CHirStmt<'_>) -> bool {
+        match self {
+            Self::Label(spelling) => matches!(statement,
+                CHirStmt::Label(name, _, _) if name.spelling == spelling),
+            Self::Case(identity) => statement as *const CHirStmt<'_> as usize == identity,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -879,14 +881,7 @@ pub fn interpret_scalar_function_with_target(
         interpreter.derive_allocation_manifest()?;
         interpreter.initialize_static_objects(&requirements.static_objects)?;
     }
-    if interpreter.memory_mode
-        || function_has_call(unit, function)
-        || function_has_goto(unit, function)
-    {
-        interpreter.run_with_calls(function)
-    } else {
-        interpreter.run(function)
-    }
+    interpreter.run_with_calls(function)
 }
 
 /// Evaluate a static integer initializer through the C-HIR interpreter's
@@ -1547,148 +1542,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         })
     }
 
-    fn run(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
-        let function = self.linkage.target(function);
-        let symbol = self
-            .unit
-            .symbols()
-            .symbol(function)
-            .map_err(|_| InterpreterError::UnknownFunction { symbol: function })?;
-        if symbol.kind() != SymbolKind::Function {
-            return Err(InterpreterError::UnknownFunction { symbol: function });
-        }
-
-        let mut definition = None;
-        for declaration in self.unit.iter() {
-            let CHirDecl::Function(declaration) = declaration else {
-                continue;
-            };
-            if declaration.symbol != function {
-                continue;
-            }
-            if declaration.name.spelling != symbol.spelling() || declaration.ty != symbol.ty() {
-                return Err(InterpreterError::MalformedFunctionDeclaration {
-                    symbol: function,
-                    span: declaration.span,
-                });
-            }
-            if declaration.body.is_some() && definition.replace(declaration).is_some() {
-                return Err(InterpreterError::DuplicateFunctionBody {
-                    symbol: function,
-                    span: declaration.span,
-                });
-            }
-        }
-        let declaration = definition.ok_or(InterpreterError::FunctionHasNoBody {
-            symbol: function,
-            span: symbol.span(),
-        })?;
-
-        let canonical = self.unit.types().get(declaration.ty).ok_or(
-            InterpreterError::UnsupportedFunctionSignature {
-                symbol: function,
-                span: declaration.span,
-            },
-        )?;
-        let TypeKind::Function {
-            return_type,
-            parameters,
-        } = &canonical.kind
-        else {
-            return Err(InterpreterError::UnsupportedFunctionSignature {
-                symbol: function,
-                span: declaration.span,
-            });
-        };
-        if matches!(
-            parameters,
-            FunctionParameters::Prototype { variadic: true, .. }
-        ) {
-            return Err(InterpreterError::VarArgs {
-                span: declaration.span,
-            });
-        }
-        let zero_parameters = match parameters {
-            FunctionParameters::Unspecified => true,
-            FunctionParameters::Prototype { types, variadic } => types.is_empty() && !variadic,
-        };
-        if !zero_parameters {
-            return Err(InterpreterError::UnsupportedFunctionSignature {
-                symbol: function,
-                span: declaration.span,
-            });
-        }
-        let return_type = *return_type;
-        let returns_void = matches!(
-            self.unit.types().get(return_type).map(|ty| &ty.kind),
-            Some(TypeKind::Void)
-        );
-        let return_integer = if returns_void {
-            None
-        } else {
-            Some(self.integer_type(return_type, declaration.span)?)
-        };
-        let body = declaration
-            .body
-            .ok_or(InterpreterError::FunctionHasNoBody {
-                symbol: function,
-                span: declaration.span,
-            })?;
-        let is_main = symbol.spelling() == "main";
-
-        validate_function_control_flow(body)?;
-        self.predeclare_stmt(body)?;
-
-        let flow = self.exec_stmt(body)?;
-        let return_value = match (flow, return_integer) {
-            (Flow::Return(Some(value)), Some(return_integer)) => Some(ScalarValue {
-                ty: return_type,
-                raw_bits: value.cast(return_integer).raw_bits(),
-            }),
-            (Flow::Return(None), None) | (Flow::Normal, None) => None,
-            (Flow::Normal, Some(return_integer)) if is_main => Some(ScalarValue {
-                ty: return_type,
-                raw_bits: CInteger::int(0).cast(return_integer).raw_bits(),
-            }),
-            (Flow::Return(None), Some(_)) => {
-                return Err(InterpreterError::UnsupportedStatement {
-                    feature: "empty return in scalar function",
-                    span: body.span(),
-                });
-            }
-            (Flow::Return(Some(_)), None) => {
-                return Err(InterpreterError::UnsupportedStatement {
-                    feature: "value return in void function",
-                    span: body.span(),
-                });
-            }
-            (Flow::Normal, Some(_)) => {
-                return Err(InterpreterError::UninitializedValue { span: body.span() });
-            }
-            (Flow::Break(span), _) => {
-                return Err(InterpreterError::InvalidControlFlow {
-                    flow: "break outside loop or switch",
-                    span,
-                });
-            }
-            (Flow::Continue(span), _) => {
-                return Err(InterpreterError::InvalidControlFlow {
-                    flow: "continue outside loop",
-                    span,
-                });
-            }
-            (Flow::Goto { spelling, span }, _) => {
-                return Err(InterpreterError::UnknownLabel { spelling, span });
-            }
-        };
-        Ok(InterpretOutcome {
-            return_value,
-            steps: self.consumed,
-            memory: self.memory,
-            world: self.world,
-        })
-    }
-
     fn run_with_calls(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
         let mut tasks = Vec::new();
         let mut values = Vec::new();
@@ -1736,10 +1589,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::ExecStatement(statement) => {
                     self.exec_machine_statement(statement, &mut tasks, &mut values)?
                 }
-                MachineTask::ExecSwitchStatement(statement) => {
-                    self.schedule_switch_statement(statement, &mut tasks)?;
-                    None
-                }
+                MachineTask::SwitchEnd => None,
                 MachineTask::CompoundContinue { items, index } => {
                     if let Some(item) = items.get(index) {
                         tasks.push(MachineTask::CompoundContinue {
@@ -1809,23 +1659,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         return Err(InterpreterError::UnsupportedExpression {
                             feature: "statement expression result is not its final statement",
                             span,
-                        });
-                    }
-                    None
-                }
-                MachineTask::SwitchContinue { items, index } => {
-                    if let Some(item) = items.get(index) {
-                        tasks.push(MachineTask::SwitchContinue {
-                            items,
-                            index: index + 1,
-                        });
-                        tasks.push(match item {
-                            CHirBlockItem::Declaration(declaration) => {
-                                MachineTask::ExecDeclaration(declaration)
-                            }
-                            CHirBlockItem::Statement(statement) => {
-                                MachineTask::ExecSwitchStatement(statement)
-                            }
                         });
                     }
                     None
@@ -2704,16 +2537,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::ExecStatement(child));
                 Ok(None)
             }
-            CHirStmt::Case(_, _, _) | CHirStmt::CaseRange(_, _, _, _) => {
-                Err(InterpreterError::InvalidControlFlow {
-                    flow: "case outside switch",
-                    span: statement.span(),
-                })
+            CHirStmt::Case(_, child, _)
+            | CHirStmt::CaseRange(_, _, child, _)
+            | CHirStmt::Default(child, _) => {
+                if !tasks
+                    .iter()
+                    .rev()
+                    .take_while(|task| !matches!(task, MachineTask::FunctionEnd(_)))
+                    .any(|task| matches!(task, MachineTask::SwitchEnd))
+                {
+                    return Err(InterpreterError::InvalidControlFlow {
+                        flow: "case outside switch",
+                        span: statement.span(),
+                    });
+                }
+                tasks.push(MachineTask::ExecStatement(child));
+                Ok(None)
             }
-            CHirStmt::Default(_, _) => Err(InterpreterError::InvalidControlFlow {
-                flow: "default outside switch",
-                span: statement.span(),
-            }),
             CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => Ok(None),
         }
     }
@@ -3053,68 +2893,61 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
     }
 
-    fn schedule_switch_statement(
-        &mut self,
-        statement: &'arena CHirStmt<'arena>,
-        tasks: &mut Vec<MachineTask<'arena>>,
-    ) -> Result<(), InterpreterError> {
-        match statement {
-            CHirStmt::Case(_, child, span) | CHirStmt::Default(child, span) => {
-                self.tick(*span)?;
-                tasks.push(MachineTask::ExecSwitchStatement(child));
-            }
-            _ => tasks.push(MachineTask::ExecStatement(statement)),
-        }
-        Ok(())
-    }
-
     fn schedule_switch(
         &mut self,
         controlling: CInteger,
         body: &'arena CHirStmt<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
-        let CHirStmt::Compound(items, _) = body else {
-            return Err(InterpreterError::UnsupportedStatement {
-                feature: "switch body without a compound statement",
-                span: body.span(),
-            });
-        };
-        let saved = self.activate_block_items(items)?;
-        tasks.push(MachineTask::RestoreSlots(saved));
-        if let Some(exit) = self.enter_memory_scope(body.span())? {
-            tasks.push(MachineTask::ExitMemoryScope(exit));
-        }
         let controlling = controlling.promoted();
+        let mut labels = Vec::new();
+        collect_switch_labels(body, &mut labels);
         let mut selected = None;
         let mut default = None;
-        for (index, item) in items.iter().enumerate() {
-            let CHirBlockItem::Statement(statement) = item else {
-                continue;
+        for statement in labels {
+            let matches = match statement {
+                CHirStmt::Case(value, _, case_span) => {
+                    let value = self
+                        .eval_static_integer_expression(value)?
+                        .cast(controlling.ty());
+                    eval_binary_integer(BinaryOp::Eq, controlling, value)
+                        .map_err(|error| self.integer_error(error, *case_span))?
+                        .truth()
+                }
+                CHirStmt::CaseRange(first, last, _, _) => {
+                    let first = self
+                        .eval_static_integer_expression(first)?
+                        .cast(controlling.ty());
+                    let last = self
+                        .eval_static_integer_expression(last)?
+                        .cast(controlling.ty());
+                    eval_binary_integer(BinaryOp::Le, first, controlling)
+                        .map_err(|error| self.integer_error(error, statement.span()))?
+                        .truth()
+                        && eval_binary_integer(BinaryOp::Le, controlling, last)
+                            .map_err(|error| self.integer_error(error, statement.span()))?
+                            .truth()
+                }
+                CHirStmt::Default(_, _) => {
+                    default = Some(statement);
+                    false
+                }
+                _ => unreachable!("only labels of this switch are collected"),
             };
-            match statement {
-                CHirStmt::Case(value, _, case_span) if selected.is_none() => {
-                    let case_value = self.eval_expr(value, false)?.cast(controlling.ty());
-                    let equal = eval_binary_integer(BinaryOp::Eq, controlling, case_value)
-                        .map_err(|error| self.integer_error(error, *case_span))?;
-                    if equal.truth() {
-                        selected = Some(index);
-                    }
-                }
-                CHirStmt::CaseRange(first, last, _, _) if selected.is_none() => {
-                    let first = self.eval_expr(first, false)?.cast(controlling.ty());
-                    let last = self.eval_expr(last, false)?.cast(controlling.ty());
-                    let value = controlling.mathematical_value();
-                    if first.mathematical_value() <= value && value <= last.mathematical_value() {
-                        selected = Some(index);
-                    }
-                }
-                CHirStmt::Default(_, _) if default.is_none() => default = Some(index),
-                _ => {}
+            if matches {
+                selected = Some(statement);
+                break;
             }
         }
-        if let Some(index) = selected.or(default) {
-            tasks.push(MachineTask::SwitchContinue { items, index });
+        if let Some(statement) = selected.or(default) {
+            // Dispatch is a jump to the label, not execution from the body's
+            // first statement. Reuse goto's scope and loop continuations.
+            tasks.push(MachineTask::SwitchEnd);
+            self.schedule_goto_in_statement(
+                body,
+                StatementDestination::Case(statement as *const CHirStmt<'_> as usize),
+                tasks,
+            )?;
         }
         Ok(())
     }
@@ -3155,7 +2988,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::WhileCheck { .. }
                 | MachineTask::DoWhileCondition { .. }
                 | MachineTask::ForStep { .. }
-                | MachineTask::SwitchContinue { .. } => return Ok(()),
+                | MachineTask::SwitchEnd => return Ok(()),
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
@@ -3213,6 +3046,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         spelling: &str,
         span: SourceSpan,
     ) -> Result<(), InterpreterError> {
+        let destination = StatementDestination::Label(spelling);
         while let Some(task) = tasks.pop() {
             match task {
                 MachineTask::StatementExpressionContinue {
@@ -3220,7 +3054,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     if self.schedule_goto_in_active_items(
                         items,
-                        spelling,
+                        destination,
                         MachineBlockMode::StatementExpression { value, span },
                         tasks,
                     )? {
@@ -3230,18 +3064,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::CompoundContinue { items, .. } => {
                     if self.schedule_goto_in_active_items(
                         items,
-                        spelling,
+                        destination,
                         MachineBlockMode::Compound,
-                        tasks,
-                    )? {
-                        return Ok(());
-                    }
-                }
-                MachineTask::SwitchContinue { items, .. } => {
-                    if self.schedule_goto_in_active_items(
-                        items,
-                        spelling,
-                        MachineBlockMode::Switch,
                         tasks,
                     )? {
                         return Ok(());
@@ -3261,7 +3085,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         },
                     )?;
                     tasks.push(MachineTask::FunctionEnd(end));
-                    if self.schedule_goto_in_statement(body, spelling, tasks)? {
+                    if self.schedule_goto_in_statement(body, destination, tasks)? {
                         return Ok(());
                     }
                     break;
@@ -3278,7 +3102,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn schedule_goto_in_active_items(
         &mut self,
         items: &'arena [CHirBlockItem<'arena>],
-        spelling: &str,
+        destination: StatementDestination<'_>,
         mode: MachineBlockMode<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<bool, InterpreterError> {
@@ -3286,7 +3110,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let CHirBlockItem::Statement(statement) = item else {
                 continue;
             };
-            if !statement_contains_label(statement, spelling) {
+            if !statement_contains_destination(statement, destination) {
                 continue;
             }
             if self.memory_mode {
@@ -3317,7 +3141,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 // Re-enter a directly labelled item through the expression
                 // continuation so a labelled final expression still yields
                 // its value rather than being evaluated and discarded.
-                if matches!(statement, CHirStmt::Label(name, _, _) if name.spelling == spelling) {
+                if destination.matches(statement) {
                     tasks.push(MachineTask::StatementExpressionContinue {
                         items,
                         index,
@@ -3332,10 +3156,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     items,
                     index: index + 1,
                 },
-                MachineBlockMode::Switch => MachineTask::SwitchContinue {
-                    items,
-                    index: index + 1,
-                },
                 MachineBlockMode::StatementExpression { value, span } => {
                     MachineTask::StatementExpressionContinue {
                         items,
@@ -3345,7 +3165,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 }
             });
-            return self.schedule_goto_in_statement(statement, spelling, tasks);
+            return self.schedule_goto_in_statement(statement, destination, tasks);
         }
         Ok(false)
     }
@@ -3353,20 +3173,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn schedule_goto_in_statement(
         &mut self,
         statement: &'arena CHirStmt<'arena>,
-        spelling: &str,
+        destination: StatementDestination<'_>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<bool, InterpreterError> {
-        if !statement_contains_label(statement, spelling) {
+        if !statement_contains_destination(statement, destination) {
             return Ok(false);
         }
+        if destination.matches(statement) {
+            tasks.push(MachineTask::ExecStatement(statement));
+            return Ok(true);
+        }
         match statement {
-            CHirStmt::Label(name, child, _) => {
-                if name.spelling == spelling {
-                    tasks.push(MachineTask::ExecStatement(statement));
-                    Ok(true)
-                } else {
-                    self.schedule_goto_in_statement(child, spelling, tasks)
-                }
+            CHirStmt::Label(_, child, _) => {
+                self.schedule_goto_in_statement(child, destination, tasks)
             }
             CHirStmt::Compound(items, _) => {
                 let saved = self.activate_block_items(items)?;
@@ -3376,45 +3195,35 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 self.schedule_goto_in_active_items(
                     items,
-                    spelling,
+                    destination,
                     MachineBlockMode::Compound,
                     tasks,
                 )
             }
             CHirStmt::If(_, then_statement, else_statement, _) => {
-                if statement_contains_label(then_statement, spelling) {
-                    self.schedule_goto_in_statement(then_statement, spelling, tasks)
+                if statement_contains_destination(then_statement, destination) {
+                    self.schedule_goto_in_statement(then_statement, destination, tasks)
                 } else if let Some(else_statement) = else_statement {
-                    self.schedule_goto_in_statement(else_statement, spelling, tasks)
+                    self.schedule_goto_in_statement(else_statement, destination, tasks)
                 } else {
                     Ok(false)
                 }
             }
             CHirStmt::Switch(_, body, _) => {
-                let CHirStmt::Compound(items, _) = body else {
-                    return Err(InterpreterError::UnsupportedStatement {
-                        feature: "switch body without a compound statement",
-                        span: body.span(),
-                    });
-                };
-                let saved = self.activate_block_items(items)?;
-                tasks.push(MachineTask::RestoreSlots(saved));
-                if let Some(exit) = self.enter_memory_scope(body.span())? {
-                    tasks.push(MachineTask::ExitMemoryScope(exit));
-                }
-                self.schedule_goto_in_active_items(items, spelling, MachineBlockMode::Switch, tasks)
+                tasks.push(MachineTask::SwitchEnd);
+                self.schedule_goto_in_statement(body, destination, tasks)
             }
             CHirStmt::While(condition, body, loop_span) => {
                 let previous = self.fuel_anchor.replace(*loop_span);
                 tasks.push(MachineTask::RestoreFuelAnchor(previous));
                 tasks.push(MachineTask::WhileCheck { condition, body });
-                self.schedule_goto_in_statement(body, spelling, tasks)
+                self.schedule_goto_in_statement(body, destination, tasks)
             }
             CHirStmt::DoWhile(body, condition, loop_span) => {
                 let previous = self.fuel_anchor.replace(*loop_span);
                 tasks.push(MachineTask::RestoreFuelAnchor(previous));
                 tasks.push(MachineTask::DoWhileCondition { condition, body });
-                self.schedule_goto_in_statement(body, spelling, tasks)
+                self.schedule_goto_in_statement(body, destination, tasks)
             }
             CHirStmt::For(initializer, condition, step, body, loop_span) => {
                 let previous = self.fuel_anchor.replace(*loop_span);
@@ -3432,12 +3241,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span: *loop_span,
                 });
-                self.schedule_goto_in_statement(body, spelling, tasks)
+                self.schedule_goto_in_statement(body, destination, tasks)
             }
             CHirStmt::Case(_, child, _)
             | CHirStmt::CaseRange(_, _, child, _)
             | CHirStmt::Default(child, _) => {
-                self.schedule_goto_in_statement(child, spelling, tasks)
+                self.schedule_goto_in_statement(child, destination, tasks)
             }
             CHirStmt::Expr(_, _)
             | CHirStmt::Asm(_)
@@ -7953,356 +7762,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
     }
 
-    fn exec_decl(&mut self, declaration: &'arena CHirDecl<'arena>) -> Result<(), InterpreterError> {
-        self.tick(declaration.span())?;
-        match declaration {
-            CHirDecl::Object(declaration) => self.exec_object_decl(declaration),
-            CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
-            CHirDecl::Function(function) if function.body.is_none() => Ok(()),
-            CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
-                feature: "block function declaration",
-                span: declaration.span,
-            }),
-        }
-    }
-
-    fn exec_object_decl(
-        &mut self,
-        declaration: &ObjectDecl<'arena>,
-    ) -> Result<(), InterpreterError> {
-        let ty = self.validate_object_declaration(declaration)?;
-        self.validate_initializer_plan(declaration)?;
-        let Some(slot) = self.slots.get_mut(&declaration.symbol) else {
-            return Err(InterpreterError::MalformedObjectDeclaration {
-                symbol: declaration.symbol,
-                span: declaration.span,
-            });
-        };
-        if slot.ty != ty || !slot.active {
-            return Err(InterpreterError::MalformedObjectDeclaration {
-                symbol: declaration.symbol,
-                span: declaration.span,
-            });
-        }
-        slot.value = None;
-        let Some(initializer) = &declaration.initializer else {
-            return Ok(());
-        };
-        let plan = initializer.plan();
-        let value = match &plan.actions()[0] {
-            InitAction::StoreScalar {
-                path,
-                destination_type,
-                value,
-                span,
-            } if path.is_root() && *destination_type == declaration.ty => {
-                self.eval_expr(value, true)?.cast(ty)
-            }
-            InitAction::ZeroScalar {
-                path,
-                destination_type,
-            } if path.is_root() && *destination_type == declaration.ty => CInteger::new(0, ty),
-            InitAction::StoreScalar { span, .. }
-            | InitAction::StoreString { span, .. }
-            | InitAction::CopyAggregate { span, .. } => {
-                return Err(InterpreterError::InvalidInitializerPlan {
-                    symbol: declaration.symbol,
-                    span: *span,
-                });
-            }
-            InitAction::ZeroScalar { .. } => {
-                return Err(InterpreterError::InvalidInitializerPlan {
-                    symbol: declaration.symbol,
-                    span: initializer.span(),
-                });
-            }
-        };
-        self.slots
-            .get_mut(&declaration.symbol)
-            .expect("slot inserted immediately before initializer execution")
-            .value = Some(value);
-        Ok(())
-    }
-
-    fn exec_stmt(&mut self, statement: &'arena CHirStmt<'arena>) -> Result<Flow, InterpreterError> {
-        self.tick(statement.span())?;
-        match statement {
-            CHirStmt::Asm(assembly) => Err(InterpreterError::Asm {
-                span: assembly.span,
-            }),
-            CHirStmt::Expr(expression, _) => {
-                self.eval_expr(expression, true)?;
-                Ok(Flow::Normal)
-            }
-            CHirStmt::Return(expression, _) => expression
-                .map(|expression| self.eval_expr(expression, true))
-                .transpose()
-                .map(Flow::Return),
-            CHirStmt::Compound(items, _) => self.exec_compound(items),
-            CHirStmt::If(condition, then_statement, else_statement, _) => {
-                if self.eval_expr(condition, true)?.truth() {
-                    self.exec_stmt(then_statement)
-                } else if let Some(else_statement) = else_statement {
-                    self.exec_stmt(else_statement)
-                } else {
-                    Ok(Flow::Normal)
-                }
-            }
-            CHirStmt::Switch(expression, body, _) => self.exec_switch(expression, body),
-            CHirStmt::While(condition, body, span) => {
-                let previous_anchor = self.fuel_anchor.replace(*span);
-                let result = self.exec_while(condition, body);
-                self.fuel_anchor = previous_anchor;
-                result
-            }
-            CHirStmt::DoWhile(body, condition, span) => {
-                let previous_anchor = self.fuel_anchor.replace(*span);
-                let result = self.exec_do_while(body, condition);
-                self.fuel_anchor = previous_anchor;
-                result
-            }
-            CHirStmt::For(initializer, condition, step, body, span) => {
-                let previous_anchor = self.fuel_anchor.replace(*span);
-                let result = self.exec_for(initializer, *condition, *step, body);
-                self.fuel_anchor = previous_anchor;
-                result
-            }
-            CHirStmt::Break(span) => Ok(Flow::Break(*span)),
-            CHirStmt::Continue(span) => Ok(Flow::Continue(*span)),
-            CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => Ok(Flow::Normal),
-            CHirStmt::Goto(name, span) => Ok(Flow::Goto {
-                spelling: name.spelling.clone(),
-                span: *span,
-            }),
-            CHirStmt::ComputedGoto(_, span) => Err(InterpreterError::ComputedGoto { span: *span }),
-            CHirStmt::Label(_, child, _) => self.exec_stmt(child),
-            CHirStmt::Case(_, _, _) | CHirStmt::CaseRange(_, _, _, _) => {
-                Err(InterpreterError::InvalidControlFlow {
-                    flow: "case outside switch",
-                    span: statement.span(),
-                })
-            }
-            CHirStmt::Default(_, _) => Err(InterpreterError::InvalidControlFlow {
-                flow: "default outside switch",
-                span: statement.span(),
-            }),
-        }
-    }
-
-    fn exec_compound(&mut self, items: &[CHirBlockItem<'arena>]) -> Result<Flow, InterpreterError> {
-        let saved = self.activate_block_items(items)?;
-        let result = self.exec_compound_active(items);
-        self.restore_slots(saved);
-        result
-    }
-
-    fn exec_compound_active(
-        &mut self,
-        items: &[CHirBlockItem<'arena>],
-    ) -> Result<Flow, InterpreterError> {
-        let labels = collect_labels(items)?;
-        let mut program_counter = 0_usize;
-        while program_counter < items.len() {
-            let flow = match &items[program_counter] {
-                CHirBlockItem::Declaration(declaration) => {
-                    self.exec_decl(declaration)?;
-                    Flow::Normal
-                }
-                CHirBlockItem::Statement(statement) => self.exec_stmt(statement)?,
-            };
-            match flow {
-                Flow::Normal => program_counter += 1,
-                Flow::Goto { spelling, span } => {
-                    let Some(target) = labels.get(&spelling) else {
-                        return Ok(Flow::Goto { spelling, span });
-                    };
-                    program_counter = *target;
-                }
-                other => return Ok(other),
-            }
-        }
-        Ok(Flow::Normal)
-    }
-
-    fn exec_while(
-        &mut self,
-        condition: &'arena CHirExpr<'arena>,
-        body: &'arena CHirStmt<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        while self.eval_expr(condition, true)?.truth() {
-            match self.exec_stmt(body)? {
-                Flow::Normal | Flow::Continue(_) => {}
-                Flow::Break(_) => return Ok(Flow::Normal),
-                flow @ (Flow::Return(_) | Flow::Goto { .. }) => return Ok(flow),
-            }
-        }
-        Ok(Flow::Normal)
-    }
-
-    fn exec_do_while(
-        &mut self,
-        body: &'arena CHirStmt<'arena>,
-        condition: &'arena CHirExpr<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        loop {
-            match self.exec_stmt(body)? {
-                Flow::Normal | Flow::Continue(_) => {}
-                Flow::Break(_) => return Ok(Flow::Normal),
-                flow @ (Flow::Return(_) | Flow::Goto { .. }) => return Ok(flow),
-            }
-            if !self.eval_expr(condition, true)?.truth() {
-                return Ok(Flow::Normal);
-            }
-        }
-    }
-
-    fn exec_switch(
-        &mut self,
-        expression: &'arena CHirExpr<'arena>,
-        body: &'arena CHirStmt<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        let controlling = self.eval_expr(expression, true)?;
-        let CHirStmt::Compound(items, _) = body else {
-            return Err(InterpreterError::UnsupportedStatement {
-                feature: "switch body without a compound statement",
-                span: body.span(),
-            });
-        };
-
-        let saved = self.activate_block_items(items)?;
-        let result = self.exec_switch_active(controlling, items);
-        self.restore_slots(saved);
-        result
-    }
-
-    fn exec_switch_active(
-        &mut self,
-        controlling: CInteger,
-        items: &[CHirBlockItem<'arena>],
-    ) -> Result<Flow, InterpreterError> {
-        let controlling = controlling.promoted();
-        let mut selected = None;
-        let mut default = None;
-        for (index, item) in items.iter().enumerate() {
-            let CHirBlockItem::Statement(statement) = item else {
-                continue;
-            };
-            match statement {
-                CHirStmt::Case(value, _, case_span) if selected.is_none() => {
-                    let case_value = self.eval_expr(value, false)?.cast(controlling.ty());
-                    let equal = eval_binary_integer(BinaryOp::Eq, controlling, case_value)
-                        .map_err(|error| self.integer_error(error, *case_span))?;
-                    if equal.truth() {
-                        selected = Some(index);
-                    }
-                }
-                CHirStmt::CaseRange(first, last, _, _) if selected.is_none() => {
-                    let first = self.eval_expr(first, false)?.cast(controlling.ty());
-                    let last = self.eval_expr(last, false)?.cast(controlling.ty());
-                    let value = controlling.mathematical_value();
-                    if first.mathematical_value() <= value && value <= last.mathematical_value() {
-                        selected = Some(index);
-                    }
-                }
-                CHirStmt::Default(_, _) if default.is_none() => default = Some(index),
-                _ => {}
-            }
-        }
-        let Some(mut program_counter) = selected.or(default) else {
-            return Ok(Flow::Normal);
-        };
-        let labels = collect_labels(items)?;
-        while program_counter < items.len() {
-            let flow = match &items[program_counter] {
-                CHirBlockItem::Declaration(declaration) => {
-                    self.exec_decl(declaration)?;
-                    Flow::Normal
-                }
-                CHirBlockItem::Statement(statement) => self.exec_switch_item(statement)?,
-            };
-            match flow {
-                Flow::Normal => program_counter += 1,
-                Flow::Break(_) => return Ok(Flow::Normal),
-                Flow::Goto { spelling, span } => {
-                    let Some(target) = labels.get(&spelling) else {
-                        return Ok(Flow::Goto { spelling, span });
-                    };
-                    program_counter = *target;
-                }
-                other => return Ok(other),
-            }
-        }
-        Ok(Flow::Normal)
-    }
-
-    fn exec_switch_item(
-        &mut self,
-        statement: &'arena CHirStmt<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        match statement {
-            CHirStmt::Case(_, child, span)
-            | CHirStmt::CaseRange(_, _, child, span)
-            | CHirStmt::Default(child, span) => {
-                self.tick(*span)?;
-                self.exec_switch_item(child)
-            }
-            _ => self.exec_stmt(statement),
-        }
-    }
-
-    fn exec_for(
-        &mut self,
-        initializer: &CHirForInit<'arena>,
-        condition: Option<&'arena CHirExpr<'arena>>,
-        step: Option<&'arena CHirExpr<'arena>>,
-        body: &'arena CHirStmt<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        let saved = match initializer {
-            CHirForInit::Declaration(declarations) => {
-                self.activate_for_declarations(declarations)?
-            }
-            CHirForInit::Empty | CHirForInit::Expression(_) => Vec::new(),
-        };
-        let result = self.exec_for_active(initializer, condition, step, body);
-        self.restore_slots(saved);
-        result
-    }
-
-    fn exec_for_active(
-        &mut self,
-        initializer: &CHirForInit<'arena>,
-        condition: Option<&'arena CHirExpr<'arena>>,
-        step: Option<&'arena CHirExpr<'arena>>,
-        body: &'arena CHirStmt<'arena>,
-    ) -> Result<Flow, InterpreterError> {
-        match initializer {
-            CHirForInit::Empty => {}
-            CHirForInit::Expression(expression) => {
-                self.eval_expr(expression, true)?;
-            }
-            CHirForInit::Declaration(declarations) => {
-                for declaration in declarations {
-                    self.exec_decl(declaration)?;
-                }
-            }
-        }
-        loop {
-            if let Some(condition) = condition {
-                if !self.eval_expr(condition, true)?.truth() {
-                    return Ok(Flow::Normal);
-                }
-            }
-            match self.exec_stmt(body)? {
-                Flow::Normal | Flow::Continue(_) => {}
-                Flow::Break(_) => return Ok(Flow::Normal),
-                flow @ (Flow::Return(_) | Flow::Goto { .. }) => return Ok(flow),
-            }
-            if let Some(step) = step {
-                self.eval_expr(step, true)?;
-            }
-        }
-    }
-
     fn eval_expr(
         &mut self,
         expression: &'arena CHirExpr<'arena>,
@@ -9622,132 +9081,6 @@ fn collect_statement_object_declarations<'arena>(
     }
 }
 
-fn function_has_call(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
-    unit.iter().any(|declaration| {
-        matches!(
-            declaration,
-            CHirDecl::Function(FunctionDecl {
-                attributes: _,
-                symbol,
-                body: Some(body),
-                ..
-            }) if *symbol == function && statement_contains_call(body)
-        )
-    })
-}
-
-fn function_has_goto(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
-    unit.iter().any(|declaration| {
-        matches!(
-            declaration,
-            CHirDecl::Function(FunctionDecl {
-                attributes: _,
-                symbol,
-                body: Some(body),
-                ..
-            }) if *symbol == function && statement_contains_goto(body)
-        )
-    })
-}
-
-fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
-    match statement {
-        CHirStmt::Goto(_, _) | CHirStmt::ComputedGoto(_, _) => true,
-        CHirStmt::Asm(assembly) => assembly.is_goto,
-        CHirStmt::If(_, then_statement, else_statement, _) => {
-            statement_contains_goto(then_statement)
-                || else_statement.is_some_and(statement_contains_goto)
-        }
-        CHirStmt::Switch(_, body, _)
-        | CHirStmt::While(_, body, _)
-        | CHirStmt::DoWhile(body, _, _)
-        | CHirStmt::For(_, _, _, body, _) => statement_contains_goto(body),
-        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
-            CHirBlockItem::Declaration(_) => false,
-            CHirBlockItem::Statement(statement) => statement_contains_goto(statement),
-        }),
-        CHirStmt::Label(_, child, _)
-        | CHirStmt::Case(_, child, _)
-        | CHirStmt::CaseRange(_, _, child, _)
-        | CHirStmt::Default(child, _) => statement_contains_goto(child),
-        CHirStmt::Expr(_, _)
-        | CHirStmt::Return(_, _)
-        | CHirStmt::Break(_)
-        | CHirStmt::Continue(_)
-        | CHirStmt::AttributedNull(_, _)
-        | CHirStmt::Null(_) => false,
-    }
-}
-
-fn statement_contains_call(statement: &CHirStmt<'_>) -> bool {
-    match statement {
-        CHirStmt::Asm(assembly) => assembly
-            .outputs
-            .iter()
-            .chain(&assembly.inputs)
-            .any(|operand| expression_contains_call(operand.expression)),
-        CHirStmt::Expr(expression, _) | CHirStmt::ComputedGoto(expression, _) => {
-            expression_contains_call(expression)
-        }
-        CHirStmt::If(condition, then_statement, else_statement, _) => {
-            expression_contains_call(condition)
-                || statement_contains_call(then_statement)
-                || else_statement.is_some_and(statement_contains_call)
-        }
-        CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
-            expression_contains_call(expression) || statement_contains_call(body)
-        }
-        CHirStmt::DoWhile(body, expression, _) => {
-            statement_contains_call(body) || expression_contains_call(expression)
-        }
-        CHirStmt::For(initializer, condition, step, body, _) => {
-            let initializer_has_call = match initializer {
-                CHirForInit::Empty => false,
-                CHirForInit::Expression(expression) => expression_contains_call(expression),
-                CHirForInit::Declaration(declarations) => declarations
-                    .iter()
-                    .any(|declaration| declaration_contains_call(declaration)),
-            };
-            initializer_has_call
-                || condition.is_some_and(expression_contains_call)
-                || step.is_some_and(expression_contains_call)
-                || statement_contains_call(body)
-        }
-        CHirStmt::Return(expression, _) => expression.is_some_and(expression_contains_call),
-        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
-            CHirBlockItem::Declaration(declaration) => declaration_contains_call(declaration),
-            CHirBlockItem::Statement(statement) => statement_contains_call(statement),
-        }),
-        CHirStmt::Label(_, child, _)
-        | CHirStmt::Case(_, child, _)
-        | CHirStmt::CaseRange(_, _, child, _)
-        | CHirStmt::Default(child, _) => statement_contains_call(child),
-        CHirStmt::Break(_)
-        | CHirStmt::Continue(_)
-        | CHirStmt::Goto(_, _)
-        | CHirStmt::AttributedNull(_, _)
-        | CHirStmt::Null(_) => false,
-    }
-}
-
-fn declaration_contains_call(declaration: &CHirDecl<'_>) -> bool {
-    let CHirDecl::Object(declaration) = declaration else {
-        return false;
-    };
-    declaration.initializer.as_ref().is_some_and(|initializer| {
-        initializer
-            .plan()
-            .actions()
-            .iter()
-            .any(|action| match action {
-                InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } => {
-                    expression_contains_call(value)
-                }
-                InitAction::ZeroScalar { .. } | InitAction::StoreString { .. } => false,
-            })
-    })
-}
-
 fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
     match expression {
         CHirExpr::Call(_, _, _) => true,
@@ -10271,28 +9604,62 @@ fn unary_operator_span(outer: SourceSpan, operand: SourceSpan) -> SourceSpan {
     }
 }
 
-fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
+fn collect_switch_labels<'a>(statement: &'a CHirStmt<'a>, labels: &mut Vec<&'a CHirStmt<'a>>) {
     match statement {
-        CHirStmt::Label(name, child, _) => {
-            name.spelling == spelling || statement_contains_label(child, spelling)
+        CHirStmt::Case(_, child, _)
+        | CHirStmt::CaseRange(_, _, child, _)
+        | CHirStmt::Default(child, _) => {
+            labels.push(statement);
+            collect_switch_labels(child, labels);
         }
+        CHirStmt::If(_, then_branch, else_branch, _) => {
+            collect_switch_labels(then_branch, labels);
+            if let Some(branch) = else_branch {
+                collect_switch_labels(branch, labels);
+            }
+        }
+        CHirStmt::While(_, body, _)
+        | CHirStmt::DoWhile(body, _, _)
+        | CHirStmt::For(_, _, _, body, _)
+        | CHirStmt::Label(_, body, _) => collect_switch_labels(body, labels),
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                if let CHirBlockItem::Statement(statement) = item {
+                    collect_switch_labels(statement, labels);
+                }
+            }
+        }
+        // A nested switch owns its own case labels.
+        _ => {}
+    }
+}
+
+fn statement_contains_destination(
+    statement: &CHirStmt<'_>,
+    destination: StatementDestination<'_>,
+) -> bool {
+    if destination.matches(statement) {
+        return true;
+    }
+    match statement {
+        CHirStmt::Label(_, child, _) => statement_contains_destination(child, destination),
         CHirStmt::If(_, then_statement, else_statement, _) => {
-            statement_contains_label(then_statement, spelling)
+            statement_contains_destination(then_statement, destination)
                 || else_statement
-                    .is_some_and(|statement| statement_contains_label(statement, spelling))
+                    .is_some_and(|statement| statement_contains_destination(statement, destination))
         }
         CHirStmt::Switch(_, body, _)
         | CHirStmt::While(_, body, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Case(_, body, _)
         | CHirStmt::CaseRange(_, _, body, _)
-        | CHirStmt::Default(body, _) => statement_contains_label(body, spelling),
-        CHirStmt::DoWhile(body, _, _) => statement_contains_label(body, spelling),
+        | CHirStmt::Default(body, _) => statement_contains_destination(body, destination),
+        CHirStmt::DoWhile(body, _, _) => statement_contains_destination(body, destination),
         CHirStmt::Compound(items, _) => items.iter().any(|item| {
             matches!(
                 item,
                 CHirBlockItem::Statement(statement)
-                    if statement_contains_label(statement, spelling)
+                    if statement_contains_destination(statement, destination)
             )
         }),
         CHirStmt::Expr(_, _)
@@ -10305,27 +9672,6 @@ fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
         | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => false,
     }
-}
-
-fn collect_labels(
-    items: &[CHirBlockItem<'_>],
-) -> Result<BTreeMap<String, usize>, InterpreterError> {
-    let mut labels = BTreeMap::new();
-    for (index, item) in items.iter().enumerate() {
-        let CHirBlockItem::Statement(mut statement) = item else {
-            continue;
-        };
-        while let CHirStmt::Label(name, child, span) = statement {
-            if labels.insert(name.spelling.clone(), index).is_some() {
-                return Err(InterpreterError::DuplicateLabel {
-                    spelling: name.spelling.clone(),
-                    span: *span,
-                });
-            }
-            statement = child;
-        }
-    }
-    Ok(labels)
 }
 
 fn validate_function_labels(

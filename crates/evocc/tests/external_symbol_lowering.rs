@@ -142,6 +142,43 @@ fn unprototyped_calls_still_reject_a_mismatched_dynamic_interface() {
 }
 
 #[test]
+fn nested_switch_entry_executes_without_bypassed_conditions() {
+    let source = include_str!("../../../tests/fixtures/nested-switch-labels.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "nested-switch-entry");
+}
+
+#[test]
+fn constant_case_folding_does_not_waive_runtime_shift_checks() {
+    let source = "int main(void) { int x = -2147483647-1; switch (x) {
+        case 1 << 31: return 0; default: return 1; } }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+        let runtime = source.replace("case 1 << 31: return 0", "case 1 << 31: return 1 << 31");
+        let output = run(&runtime, mode);
+        assert!(!output.status.success(), "{mode} waived the executed shift");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3006"));
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "case-constant-folding");
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";
