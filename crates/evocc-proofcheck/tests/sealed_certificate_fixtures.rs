@@ -5,23 +5,22 @@
 //! regression in the format shows up only as a corpus that stopped replaying.
 //! `tests/fixtures/certificates/` keeps a handful of triples as bytes instead.
 //! Two properties are worth having and this file asserts both: the checker
-//! accepts every sealed triple, and every sealed byte is still what the current
-//! tree produces from the fixture's own `source.c`. Without the second, a sealed
-//! fixture would be a snapshot of a producer nobody runs any more, and a
-//! hand-repaired one would look exactly like a passing one.
+//! accepts every sealed triple, and every sealed `after.evo` and `proof.evp`
+//! is still what the current optimizer produces from the sealed `before.evo`.
+//! Without the second, a sealed fixture would be a snapshot of a producer
+//! nobody runs any more, and a hand-repaired one would look exactly like a
+//! passing one. `before.evo` itself is provenance: its README names the front
+//! end commit that lowered `source.c`, and the front end may lower the same C
+//! differently later without changing what the certificate is about, so the
+//! sealed module is parsed under Section 9 rather than lowered again.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use evocc_common::{Arena, FileId};
 use evocc_eqopt::{optimize_scalar_module_with_policy, ExtractionPolicy};
-use evocc_evoir::{render_module, validate_module, Module};
-use evocc_lex::{Lexer, TokenKind};
-use evocc_lower::lower_unit;
-use evocc_parser::Parser;
+use evocc_evoir::{parse_section9_module, render_module, validate_module};
 use evocc_proof::{render_evp1, EvpCertificate, EvpEvent};
-use evocc_types::TargetDataLayout;
 
 /// The smallest corpus the reviewed plan asks to be sealed. A run that found
 /// fewer directories has lost fixtures rather than passed.
@@ -65,28 +64,6 @@ fn run_checker(before: &Path, after: &Path, proof: &Path) -> Output {
         .args([before, after, proof])
         .output()
         .expect("run standalone proof checker")
-}
-
-/// The lowering path of the `certificate_triple` driver, repeated here so that
-/// the sealed bytes are compared against what the current tree produces.
-fn lower(source: &str) -> Module {
-    let arena = Arena::default();
-    let file = FileId::new(1);
-    let mut lexer = Lexer::new(file, source);
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next() {
-        assert_ne!(token.kind, TokenKind::Error, "the lexer refused a token");
-        tokens.push(token);
-    }
-    let mut parser = Parser::new(tokens, file, source);
-    let unit = parser.parse_translation_unit_in(&arena);
-    assert!(
-        !parser.had_error(),
-        "the parser refused the fixture: {:?}",
-        parser.diagnostic()
-    );
-    lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect("the fixture lowers to EvoIR")
 }
 
 fn read(path: &Path) -> String {
@@ -165,19 +142,20 @@ fn every_sealed_triple_replays_in_the_standalone_checker() {
 }
 
 #[test]
-fn every_sealed_triple_is_what_the_current_tree_produces() {
+fn every_sealed_triple_is_what_the_current_optimizer_produces() {
     for triple in triples() {
         let label = name(&triple);
-        let source = read(&triple.join("source.c"));
-        let before = lower(&source);
+        let sealed_before = read(&triple.join("before.evo"));
+        let before = parse_section9_module(sealed_before.as_bytes())
+            .expect("the sealed module parses under Section 9");
         validate_module(&before).expect("the fixture is valid EvoIR");
         let outcome = optimize_scalar_module_with_policy(&before, &ExtractionPolicy::default());
         validate_module(&outcome.module).expect("the optimized fixture is valid EvoIR");
 
         assert_eq!(
-            read(&triple.join("before.evo")),
+            sealed_before,
             render_module(&before),
-            "{label}: before.evo is not what the current front end lowers"
+            "{label}: before.evo is not in canonical form"
         );
         assert_eq!(
             read(&triple.join("after.evo")),
