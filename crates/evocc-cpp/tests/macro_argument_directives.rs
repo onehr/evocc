@@ -29,6 +29,7 @@ fn spelling(token: &Token, source: &str) -> String {
 
 fn run(source: &str) -> Run {
     let mut preprocessor = Preprocessor::new();
+    preprocessor.add_include_path(format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR")));
     let output = preprocessor
         .process(TokenStream::new(lex(FileId::new(93_020), source)), source)
         .into_vec();
@@ -48,6 +49,49 @@ fn expected(source: &str) -> Vec<String> {
         .filter(|token| token.kind != TokenKind::Eof)
         .map(|token| spelling(token, source))
         .collect()
+}
+
+#[test]
+fn ordinary_function_parentheses_do_not_open_macro_argument_contexts() {
+    for (source, output) in [
+        (
+            "ordinary(\n#line 40\n1);",
+            "ordinary(1);",
+        ),
+        (
+            "void function(int a,\n#line 40\nint b);",
+            "void function(int a, int b);",
+        ),
+        ("ordinary(\n#line 40\n__LINE__);", "ordinary(40);"),
+        (
+            "ordinary(\n#define ordinary(x) x + 5\n1); ordinary(2);",
+            "ordinary(1); 2 + 5;",
+        ),
+    ] {
+        let actual = run(source);
+        assert!(actual.errors.is_empty(), "{source}: {:?}", actual.errors);
+        assert_eq!(actual.spellings, expected(output), "{source}");
+    }
+}
+
+#[test]
+fn includes_between_ordinary_call_arguments_preserve_tokens() {
+    for prefix in ["", "#define cstr_cat function\n"] {
+        let source = format!(
+            "{prefix}cstr_cat(cs,\n#if 1\n#include \"call-strings.h\"\n#else\n\"unselected\"\n#endif\n, -1);"
+        );
+        let actual = run(&source);
+        assert!(actual.errors.is_empty(), "{source}: {:?}", actual.errors);
+        let callee = if prefix.is_empty() {
+            "cstr_cat"
+        } else {
+            "function"
+        };
+        assert_eq!(
+            actual.spellings,
+            expected(&format!("{callee}(cs, \"first\" \"second\", -1);"))
+        );
+    }
 }
 
 #[test]
