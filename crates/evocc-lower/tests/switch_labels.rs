@@ -138,3 +138,35 @@ fn dispatch_into_a_loop_preserves_backedges_and_break_targets() {
            } return 0; }",
     );
 }
+
+#[test]
+fn narrow_switch_selectors_keep_their_integer_promotion() {
+    assert_execution(
+        "int f(unsigned char x) { switch (x) {
+           case 256: return 1;
+           case 0: return 7;
+           default: return 9;
+         } }
+         int main(void) { return f(0) != 7 || f(1) != 9; }",
+    );
+}
+
+#[test]
+fn nested_switches_own_their_cases_and_continue_targets() {
+    assert_execution(
+        "int main(void) { int total = 0, guards = 0;
+           for (int i = 0; i < 3; i++) {
+             switch (i) {
+               if (++guards) {
+                 case 0: total += 1; continue;
+                 case 1: switch (i + 1) { case 2: total += 3; break; }
+                         break;
+                 default: total += 5;
+               }
+             }
+             total += 10;
+           }
+           return total != 29 || guards != 0;
+         }",
+    );
+}
