@@ -20,6 +20,71 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+fn undefined_weak_object_and_function_addresses_are_zero_natively() {
+    let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    let assembly =
+        evocc_mir::compile_module_for(evocc_mir::Target::Darwin, &module, &|_| true).unwrap();
+    let directory =
+        std::env::temp_dir().join(format!("evocc-weak-addresses-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let asm = directory.join("probe.s");
+    let binary = directory.join("probe");
+    let reference_source = directory.join("reference.c");
+    let reference = directory.join("reference");
+    fs::write(&reference_source, source).unwrap();
+    // Darwin's linker requires an explicit list of unresolved symbols even
+    // for Clang's weak references. Exercise identical policy for both objects;
+    // this does not turn a strong reference into a weak one.
+    let unresolved = ["-Wl,-U,_optional,-U,_value"];
+    let reference_link = Command::new("clang")
+        .arg(&reference_source)
+        .args(unresolved)
+        .arg("-o")
+        .arg(&reference)
+        .output()
+        .unwrap();
+    assert!(
+        reference_link.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reference_link.stderr)
+    );
+    assert_eq!(Command::new(&reference).status().unwrap().code(), Some(0));
+    fs::write(&asm, assembly).unwrap();
+    let linked = Command::new("clang")
+        .arg(&asm)
+        .args(unresolved)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        linked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&linked.stderr)
+    );
+    let executed = Command::new(&binary).output().unwrap();
+    assert_eq!(
+        executed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    fs::remove_file(binary).unwrap();
+    fs::remove_file(asm).unwrap();
+    fs::remove_file(reference).unwrap();
+    fs::remove_file(reference_source).unwrap();
+    fs::remove_dir(directory).unwrap();
+}
+
+#[test]
 fn referenced_external_symbols_lower_without_invented_bodies() {
     for (source, expected) in [
         (

@@ -324,6 +324,7 @@ fn emit_unit(
     text.push('\n');
     let mut aliases: BTreeMap<&str, Vec<&SymbolAlias>> = BTreeMap::new();
     let mut weak_functions = BTreeSet::new();
+    let mut weak_references = BTreeSet::new();
     if let Some(module) = module {
         for alias in &module.aliases {
             aliases.entry(&alias.target).or_default().push(alias);
@@ -355,6 +356,20 @@ fn emit_unit(
             };
             let _ = writeln!(text, "{directive} {prefix}{name}");
         }
+        weak_references.extend(
+            module
+                .extern_objects
+                .iter()
+                .filter(|g| g.linkage == Linkage::Weak)
+                .map(|g| (SymbolKind::Global, g.symbol.as_str()))
+                .chain(
+                    module
+                        .declares
+                        .iter()
+                        .filter(|f| f.linkage == Linkage::Weak)
+                        .map(|f| (SymbolKind::Function, f.name.as_str())),
+                ),
+        );
     }
     let mut static_blocks: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
     for relocation in globals.iter().flat_map(|global| &global.relocs) {
@@ -369,6 +384,7 @@ fn emit_unit(
             function,
             static_blocks.get(function.name.as_str()),
             weak_functions.contains(function.name.as_str()),
+            &weak_references,
         );
         emit_aliases(
             &mut text,
@@ -643,12 +659,21 @@ fn instructions_in(body: &str) -> usize {
     body.lines().filter(|line| line.starts_with(' ')).count()
 }
 
+/// Address recipes retain the symbol's table and linkage. Only an unresolved
+/// weak reference needs the GOT: a direct page pair can resolve to the image
+/// base instead of zero. No abstract C memory operation is introduced.
+struct SymbolEmission<'a> {
+    target: Target,
+    weak_references: &'a BTreeSet<(SymbolKind, &'a str)>,
+}
+
 fn emit_function(
     text: &mut String,
     target: Target,
     allocated: &Allocated,
     static_blocks: Option<&BTreeSet<u32>>,
     weak: bool,
+    weak_references: &BTreeSet<(SymbolKind, &str)>,
 ) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
@@ -693,7 +718,10 @@ fn emit_function(
     let mut body = String::new();
     emit_blocks(
         &mut body,
-        target,
+        &SymbolEmission {
+            target,
+            weak_references,
+        },
         allocated,
         &frame,
         &spell,
@@ -704,7 +732,10 @@ fn emit_function(
         body.clear();
         emit_blocks(
             &mut body,
-            target,
+            &SymbolEmission {
+                target,
+                weak_references,
+            },
             allocated,
             &frame,
             &spell,
@@ -720,13 +751,14 @@ fn emit_function(
 
 fn emit_blocks(
     text: &mut String,
-    target: Target,
+    symbols: &SymbolEmission<'_>,
     allocated: &Allocated,
     frame: &Frame,
     spell: &impl Fn(VReg, RegClass) -> String,
     relax: bool,
     static_blocks: Option<&BTreeSet<u32>>,
 ) {
+    let target = symbols.target;
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
     // An adr or static relocation can take a block's address. Both name the
     // same local symbol at the first instruction; unaddressed blocks retain
@@ -752,7 +784,7 @@ fn emit_blocks(
         for inst in &block.insts {
             emit_inst(
                 text,
-                target,
+                symbols,
                 inst,
                 frame,
                 spell,
@@ -1077,13 +1109,14 @@ const fn store_class(kind: StoreKind) -> RegClass {
 #[allow(clippy::too_many_lines)]
 fn emit_inst(
     text: &mut String,
-    target: Target,
+    symbols: &SymbolEmission<'_>,
     inst: &MInst,
     frame: &Frame,
     spell: &impl Fn(VReg, RegClass) -> String,
     function: &str,
     copies: &mut u32,
 ) {
+    let target = symbols.target;
     let name = |reg: VReg| spell(reg, reg.class);
     // Every operand of a two-width form takes the form's own width.
     let at = |reg: VReg, width: Width| spell(reg, width.class());
@@ -1113,6 +1146,14 @@ fn emit_inst(
             );
         }
         MInst::Adrp { dst, symbol, kind } => {
+            if symbols.weak_references.contains(&(*kind, symbol.as_str())) {
+                let operand = match target {
+                    Target::Linux => format!(":got:{symbol}"),
+                    Target::Darwin => format!("_{symbol}@GOTPAGE"),
+                };
+                let _ = writeln!(text, "    adrp {}, {operand}", name(*dst));
+                return;
+            }
             let page = match kind {
                 SymbolKind::Global | SymbolKind::Function => "PAGE",
             };
@@ -1124,8 +1165,19 @@ fn emit_inst(
             );
         }
         MInst::AddPageOff {
-            dst, src, symbol, ..
+            dst,
+            src,
+            symbol,
+            kind,
         } => {
+            if symbols.weak_references.contains(&(*kind, symbol.as_str())) {
+                let operand = match target {
+                    Target::Linux => format!("#:got_lo12:{symbol}"),
+                    Target::Darwin => format!("_{symbol}@GOTPAGEOFF"),
+                };
+                let _ = writeln!(text, "    ldr {}, [{}, {operand}]", name(*dst), name(*src));
+                return;
+            }
             let _ = writeln!(
                 text,
                 "    add {}, {}, {}",

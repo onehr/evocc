@@ -24,8 +24,8 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; unresolved weak address recipe fails natively | `torture musl` | OPEN: `20260908T014701.174683Z`; weak-address contract exception pending |
-| 3 | Explicit register operands | Earlier `sigsetjmp_tail.lo` regression is absent in the latest mixed run, but no register-binding fix was made; pin the specified register mapping and native execution independently | `musl` | OPEN |
+| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; authorized weak GOT repair passes native probes and changed gate | `torture musl` | OPEN: newly measured repeated-linkage-scan timeout needs repair |
+| 3 | Explicit register operands | Earlier `sigsetjmp_tail.lo` regression is absent in the latest mixed run; independent x8 input reduction passes four oracle runs but fails native subject execution | `musl` | OPEN: operand binding is lost; representation gap recorded below |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
@@ -46,6 +46,24 @@ Only one heavyweight benchmark invocation runs at once.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Explicit local-register operand binding
+
+`.evidence/builtin-probes/20260908-local-register-operands/{probe.c,results.txt}`
+pins a local `register long wanted asm("x8")` passed as an `r` input.
+GCC-14/Clang-19 at O0/O2 each exit zero; subject `25ab85d` emits assembly
+that links successfully but exits one: it reads the old x8 value rather
+than the argument. No original program or seed was replaced by this reduction.
+
+LOCAL-REGISTER-OPERAND-REPRESENTATION: Section 10.1.18 says a local
+register binding matters at an asm operand, but Section 3.11/9's operand
+records and admitted constraint vocabulary have no field or spelling for it.
+The binding must reach allocation and output edges, including tied/early-clobber
+and asm.goto operands; inserting moves outside that boundary is not an adequate
+substitute. This is separate from the immediate/register alternatives already
+authorized by revision 1.9.78. The user authorized carrying the binding through
+the IR and allocation boundary on 2026-09-08; implementation is next, not a
+pending authorization or a claimed fix.
 
 ### Immediate-register input alternatives
 
@@ -90,12 +108,47 @@ close weak external references: the explicit counterexample is
 Both sealed oracles at O0/O2 exit zero; the emitted subject links statically
 but exits one. Default PIE linking additionally refuses its direct relocations.
 
-SPEC_BODY_CONFLICT — WEAK-EXTERNAL-ADDRESS: EvoMIR Section 8's external-symbol
+WEAK-EXTERNAL-ADDRESS: EvoMIR Section 8's external-symbol
 rule prescribes direct `adrp`/`add`, while revision 0.22 requires undefined weak
 references to resolve to address zero; the measured linked address is 0x400000.
-The proposed exception is GOT-based address materialization only for weak
-extern/declare records, with no new EvoIR instruction; it is not implemented
-without authority. Alias/weak remains OPEN, irrespective of the green unit gate.
+The user authorized GOT-based address materialization only for weak
+extern/declare records on 2026-09-08, with no new EvoIR instruction. The
+implementation preserves the direct address recipe for strong references and
+definitions; its nine focused machine-linkage tests pass. Linux GCC-14 and
+Clang-19 static/PIE links execute the original counterexample successfully;
+the additional absent/present/call/read checks also pass in all four modes.
+Evidence: `.evidence/builtin-probes/20260908-weak-external-address/got-results.txt`.
+
+Darwin's default linker rejects unresolved weak references for both system
+Clang and the subject. With the same explicit `-U` symbol list, both execute
+the counterexample with exit zero; the native regression asserts both sides.
+This is a measured linker-policy requirement, not a lowered-language change.
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh d2d8295 --quiet`:
+501 passed, zero failed, four pre-existing ignored; Clippy and fmt PASS.
+Ruff and diff-check PASS. Alias/weak remains OPEN for the static-initializer
+performance regression below, not for an unimplemented GOT exception.
+
+The original `memclr` source again times out at 60 seconds. A two-second
+system stack sample has 178/178 samples below static integer interpretation's
+construction of a fresh linkage map; every initializer repeats a whole-unit
+declaration scan. This diagnostic run overlapped the tail of the kernel
+survey, so it is a hot-path observation, not an unloaded timing comparison.
+The immutable linkage result must be reused without changing error checks;
+the final original-program replay retains the 60-second limit.
+
+### Kernel reduction compiler mismatch
+
+Wrapper `20260908T022219.374623Z` finished its 2,799-unit survey at
+`measure-20260908T022219Z/survey`: 78 assembled, 2,721 refused, no timeout or
+panic. The initial mixed link reports missing `__efistub_isdigit`. Subsequent
+reductions used a different executable because `bisect.py` ignored `K1_EVOCC`:
+survey digest `d59b26ba...71d09`, reduction digest `4c39a20f...5f01`. Those
+reduction PASS outcomes are invalid and the owned subprocesses were terminated;
+the wrapper records ERROR, not completion. The valid per-unit survey is retained.
+Tests-only `f7fe61b` and fix `e5f71eb` pin the override through reduction and
+expose exact-binary survey reuse through `tools/bench.py`. K1 tests 87/87,
+benchmark tests 12/12, Ruff and diff-check PASS. A correct mixed-link replay
+is still required; no kernel closure is inferred from the broken reduction.
 
 `python3 tools/bench.py torture musl --no-build --jobs 4 --budget 40` finishes
 INCOMPLETE in wrapper `20260908T014701.174683Z`, subject `b504ee9`, compiler
