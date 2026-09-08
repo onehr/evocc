@@ -1,22 +1,25 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T093536.969536Z",
-  "subject": "9065012d1600f03751074fd4206e46ed15e01080",
-  "dirty": false,
+  "run": "20260908T102835.690828Z",
+  "subject": "7ac11d31f0a23659896ac81caaf2a87dcb4cad63",
+  "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc",
+  "driverSha256": "b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
     "tinycc",
+    "kernel",
     "--jobs",
-    "4"
+    "4",
+    "--allow-qemu-drift"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "tinycc"
+    "tinycc",
+    "kernel"
   ],
-  "status": "INCOMPLETE",
+  "status": "ERROR",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -836,15 +839,13 @@
         "E2921": 1
       },
       "baselineFailures": 0,
-      "failingUnits": [
-        "tccrun.o"
-      ],
+      "failingUnits": [],
       "total": 11,
-      "passed": 6,
+      "passed": 7,
       "kind": "units",
       "compiled": 7,
       "excluded": 0,
-      "testVerdict": "tests-passed-after-exclusions",
+      "testVerdict": "tests-passed",
       "adjustments": {
         "sourcePageBreaksStripped": [
           "coff.h",
@@ -887,8 +888,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260908T093537Z",
-      "evidence": ".evidence/ladder/tinycc/20260908T093537Z",
+      "run": "20260908T102835Z",
+      "evidence": ".evidence/ladder/tinycc/20260908T102835Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -900,7 +901,7 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 59.2,
+      "seconds": 31.8,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
@@ -912,12 +913,10 @@
         },
         "baselineFailures": 0,
         "failingUnits": [
-          "arm64-link.o",
-          "tcc.o",
           "tccrun.o"
         ],
         "total": 11,
-        "passed": 4,
+        "passed": 6,
         "kind": "units",
         "compiled": 7,
         "excluded": 0,
@@ -964,13 +963,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260908T064014Z",
-        "evidence": ".evidence/ladder/tinycc/20260908T064014Z"
+        "run": "20260908T093537Z",
+        "evidence": ".evidence/ladder/tinycc/20260908T093537Z"
       },
       "measurement": {
-        "run": "20260908T093536.969536Z",
-        "subject": "9065012d1600f03751074fd4206e46ed15e01080",
-        "driverSha256": "5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc"
+        "run": "20260908T102835.690828Z",
+        "subject": "7ac11d31f0a23659896ac81caaf2a87dcb4cad63",
+        "driverSha256": "b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b"
       }
     },
     "toybox": {
@@ -1211,15 +1210,15 @@
         "  \"relinkExitCode\": 0,",
         "  \"installed\": true,",
         "  \"allowSymbolDrift\": true,",
-        "  \"imageSha256\": \"b6ae43a36056cb0d4bab3b05af8a39c0e330ad7063a8485aae157b2dd241c28b\",",
-        "  \"vmlinuxSha256\": \"b7dcca8fc22cd4f4d932bf02deb941ef4079437533714074ac42e2e28732f3db\"",
+        "  \"imageSha256\": \"a5ff05bfbdfab0fb89807ff43f0f521b75a3ade4da1ec82fb3ebcaf13d623720\",",
+        "  \"vmlinuxSha256\": \"1684b06b8d4382dfe1159d62cdcd895741d50f708af6066ffffab00be8b11e50\"",
         "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T030624Z/attempt-03/substitution",
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T102907Z/attempt-03/substitution",
         "",
         "== attempt 3: boot ==",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T030624Z/attempt-03/boot",
-        "image sha256: b6ae43a36056cb0d4bab3b05af8a39c0e330ad7063a8485aae157b2dd241c28b",
-        "serial log sha256: 47984bd0000f2b86fa076228b69bfc27694a22950e7776fdca4757cb35ac5502",
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T102907Z/attempt-03/boot",
+        "image sha256: a5ff05bfbdfab0fb89807ff43f0f521b75a3ade4da1ec82fb3ebcaf13d623720",
+        "serial log sha256: 95f0afea78afa76528b08d69b0cc62e470995ee0b5b9d0fdc51604d09aa03026",
         "PASS",
         "",
         "== proof of substitution =="
@@ -1227,12 +1226,10 @@
       "command": [
         "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
         "--jobs",
-        "4",
-        "--reuse-survey",
-        "/Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T022219Z/survey"
+        "4"
       ],
       "exitCode": 1,
-      "seconds": 858.8,
+      "seconds": 3269.3,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
@@ -1260,9 +1257,9 @@
         "evidence": ".evidence/k1/measure-20260907T170640Z/survey"
       },
       "measurement": {
-        "run": "20260908T030624.773880Z",
-        "subject": "45d5fce9ebde80f84ec887b85a1a262311f1588c",
-        "driverSha256": "d59b26ba3656f811592b782e36a2ad0a1cf0a8fb61a1c9bf5efad783b3b71d09"
+        "run": "20260908T102835.690828Z",
+        "subject": "7ac11d31f0a23659896ac81caaf2a87dcb4cad63",
+        "driverSha256": "b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b"
       }
     },
     "mbedtls": {

@@ -3,7 +3,7 @@
  "rung": "E5",
  "subject": "tinycc",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T093537Z",
+ "run": "20260908T102835Z",
  "pin": {
   "subject": "tinycc",
   "rung": "E5",
@@ -16,21 +16,19 @@
  "tarballSha256": {
   "tcc-0.9.27.tar.bz2": "not-fetched: savannah answered 504 during this run"
  },
- "driverSha256": "5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc",
+ "driverSha256": "b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": "tests-passed",
  "units": 11,
  "unitsCompiledByEvocc": 7,
- "unitsInPassingBuild": 6,
+ "unitsInPassingBuild": 7,
  "refusalsByCode": {
   "E3101": 2,
   "E0113": 1,
   "E2921": 1
  },
- "testResult": "tests-passed-after-exclusions",
- "failingUnits": [
-  "tccrun.o"
- ],
+ "testResult": "tests-passed",
+ "failingUnits": [],
  "excludedForSymbolParity": {},
  "symbolParity": {},
  "adjustments": {
@@ -81,5 +79,5 @@
   "-Wno-unused-result": 11,
   "-o": 11
  },
- "evidence": ".evidence/ladder/tinycc/20260908T093537Z"
+ "evidence": ".evidence/ladder/tinycc/20260908T102835Z"
 }

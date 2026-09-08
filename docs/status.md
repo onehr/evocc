@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.24, checkout 9065012)
+EvoCC ── (2026-09-08 UTC,EvoIR 1.9.81 / EvoMIR 0.25, checkout 7ac11d3)
 ═════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ───────────────┐
@@ -25,12 +25,12 @@ EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.24, checkout 9065012)
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
 │ E0 c-testsuite 206/220 ███████░ torture 1196/1692 ██████░░ │
-│ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 6/11 toybox 195/203 musl 494/1339 │
+│ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 7/11 toybox 195/203 musl 494/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 (,)
-Q0 █████████░ 103 , 40 ,0
+Q0 █████████░ 106 , 40 ,0
 Q1 kernel ████░░░░░░ 2,798/2,798, 52/2,798, 384/384
 Q2 e-graph pipeline ███░░░░░░░ , GCC -O2
 Q3 ███░░░░░░░ ,(13 3 )
@@ -39,7 +39,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260908T093536.969536Z`; checkout `9065012`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260908T102835.690828Z`; checkout `7ac11d3`; selected gates `ERROR`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
@@ -51,10 +51,10 @@ Program counts and translation-unit counts are different measures; an incomplete
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 2/44 units | 20260907T141450.311159Z (previous) | E1001: 38, E2921: 4 |
 | cjson | E3 | VALIDATION_GAP | 0/2 units | 20260907T141450.311159Z (previous) | E1001: 2 |
-| tinycc | E5 | INCOMPLETE | 6/11 units | 20260908T093536.969536Z | E3101: 2, E0113: 1, E2921: 1 |
+| tinycc | E5 | INCOMPLETE | 7/11 units | 20260908T102835.690828Z | E3101: 2, E0113: 1, E2921: 1 |
 | toybox | E6 | INCOMPLETE | 195/203 units | 20260908T080325.213428Z (previous) | E3101: 8 |
 | musl | E7 | INCOMPLETE | 494/1339 units | 20260908T042040.192297Z (previous) | E3101: 240, E1006: 83, E2001: 14 |
-| kernel | K1/K5-K7 ramp | ERROR | unavailable | 20260908T030624.773880Z (previous) | receipt unchanged; previous evidence is not a new measurement |
+| kernel | K1/K5-K7 ramp | ERROR | unavailable | 20260908T102835.690828Z | receipt unchanged; previous evidence is not a new measurement |
 | mbedtls | E4 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no benchmark adapter yet |
 | polybench | E8 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | llvm-test-suite | E9 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; mixed integer/FP suite |

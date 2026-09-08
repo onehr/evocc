@@ -49,8 +49,8 @@ their remaining closure work without creating a second set of measurements.
   replay toybox cut/httpd/sed and control-flow regressions (rows 8, 12).
 - [ ] Finish aliases/weak symbols and register-binding original-program
   validation, separating FP-dependent libc failures (rows 2, 3).
-- [ ] Correct strong external-data addressing for the original TinyCC PIE link,
-  then classify the other isolated relink failures (row 11).
+- [x] Correct strong external-data and function addressing for the original
+  TinyCC PIE links; all seven assembled objects now pass together (row 11).
 - [ ] Replay assembly register alternatives and kernel substitution with the
   exact measured binary; close each substitution mismatch (rows 5, 6).
 - [ ] Resolve the remaining kernel assembly/symbol/control-flow constructs,
@@ -96,13 +96,13 @@ not a claim that no unknown compiler bug can exist.
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
 | 4 | Remaining native failures | ctest 1 runtime failure; torture 35 runtime failures, zero assembly/link failures; original `medce-1` now passes | `ctest torture` | PARTIAL: static label relocation and constant-branch pruning CLOSED; other failures OPEN |
-| 5 | Kernel substitution mismatches | Original six extent defects fixed in `measure-20260907T170640Z`; new replay booted but retained overwritten cached assembly and could not verify zero-storage objects | `kernel` | REOPENED: cache-content guard fixed; original replay and zero-storage classification required |
+| 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
-| 7 | Remaining kernel refusals | Latest survey: 2,717 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; symbolic `%c` operands require a rule beyond integer-only `i` | `kernel` | OPEN |
+| 7 | Remaining kernel refusals | Fresh survey: 2,260 `=r@r0` bindings, 457 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; two assembled EFI units still fail to link on `__efistub_isdigit` | `kernel` | OPEN: reduced register aliases and builtin digit classification; no predicted clean count |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
-| 11 | TinyCC compiler build | 7/11 assemble, 6/11 enter a passing build; tccrun retains a function-address PIE link failure and four compile refusals remain | `tinycc` | PARTIAL: macro rescanning and external-data PIE addressing benched; external function addresses remain |
+| 11 | TinyCC compiler build | 7/11 assemble and pass together; all original PIE link failures are repaired; four compile refusals remain | `tinycc` | PARTIAL: external object/function addresses CLOSED in `20260908T102835Z`; remaining source forms OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
 | 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
@@ -117,6 +117,54 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+Shared symbol addressing and link-time assembly operands `7ac11d3` are
+measured by `python3 tools/bench.py tinycc kernel --jobs 4 --allow-qemu-drift`,
+wrapper `20260908T102835.690828Z`, frozen executable SHA-256
+`b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b`.
+Its completed TinyCC lane `20260908T102835Z` rises from 6/11 to 7/11 in
+the passing mixed build: `tccrun.o` joins the original six, all eleven
+identities and assembly outcomes are unchanged, and no isolated relink
+failure remains. Four compilation refusals remain; this is not TinyCC PASS.
+The kernel lane completed with 78/2,799 assembled, of which 76 enter a booting
+mixed link after excluding two EFI units referencing `__efistub_isdigit`.
+The initial proof falsely reports two NOBITS objects as mismatches; the
+wrapper's original ERROR is retained. After `0e44fde`, replay on exactly the
+same linked image gives 13 proven, 48 proven modulo relocations, 3 no-symbol
+and 12 not-linked units, zero mismatches (`proof-zero-fill.json` and
+`reconciled-receipt.json` in `measure-20260908T102907Z`). NOBITS checks exact
+symbol extent and zero-filled memory, not nonexistent file bytes; malformed
+or missing extents still fail. This is 64 linked units, not a full kernel.
+The binary was not rebuilt while the lane consumed it; later C-preprocessor
+and test-linkage changes are not attributed to this measurement.
+
+Integer `mode` and packed-subobject execution landed in `5b3c87a`; original
+benchmark replay is pending, so these families are not closed.
+The exact memory fixture passes both sealed compilers at O0/O2 and the two
+interpreters plus native execution; the changed gate found an old wide-access
+test that required natural alignment even for packed storage. Its replacement
+pins both reduced power-of-two alignment and invalid alignment refusals.
+The successful serialized rerun is `CARGO_TARGET_DIR=target/frontend
+CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh f747dc5
+--quiet -- --test-threads=1`: 1,541 pass, zero fail, four pre-existing ignored,
+Clippy and fmt green; Ruff lint and diff-check also pass. `cargo test` with
+the same ten-package set and `-- --list` lists 1,545 including those four.
+The preceding 1,540-pass/one-failure attempt remains a failed gate.
+The enum-mode oracle conflict remains visible: original torture `20050107-1`
+previously passed with an ignored attribute, but the two oracles disagree on
+the resulting type compatibility. This is not a new PASS or a reason to drop
+the original program; `_Bool`, enum and abstract-type-name mode conflicts
+are explicitly refused under the existing conflict protocol.
+
+The final serialized gate against `c489ffa` passes 1,533 tests, zero
+failures, four pre-existing ignored tests, plus Clippy, fmt, Ruff lint and
+diff-check. An earlier invocation passed its native tests but failed a
+doctest after a concurrent Cargo rebuild replaced a dependency; that attempt
+is not green. The final replay uses one Cargo invocation through completion.
+Both sealed compilers link and run the final symbolic-immediate fixture and
+the undefined-symbol-only-in-a-comment control. The latter exposed and fixed
+spurious runtime address loads; pure asm-literal definitions need no runtime
+reference, while ordinary uses retain their allocation and address materialization.
 
 External-data GOT addressing `9065012` is measured in
 `20260908T093536.969536Z` (`python3 tools/bench.py tinycc --jobs 4`), native
@@ -222,6 +270,28 @@ failures. Unselected lanes keep their earlier compiler identities; this
 is not a new all-milestone PASS.
 
 ### Original-program replay and capture correction
+
+Native arithmetic classification was extended without changing any original
+program or benchmark outcome. Both instrumented compilers at O0/O2 report
+overflow/invalid shifts on twenty programs when their per-program options
+are omitted. Seven are **not** invalid-test exclusions: `20040409-1w`,
+`20040409-2w`, `20040409-3w`, `920612-1`, `930529-1`, `950704-1`
+require `-fwrapv`, and `pr57124` requires `-fno-strict-overflow`; all 28
+correct-option instrumented executions pass. The adapter and execution
+profile must implement those requested semantics explicitly. Clang uses the
+system UBSan runtime because its standalone runtime is absent. `pr7284-1`
+requests C89 and has a GCC/Clang sanitizer-dialect disagreement, retained
+separately. Per-program first faults and both command forms are in
+`.evidence/builtin-probes/20260908-torture-options/results.txt`.
+
+`memclr` and `misalign` also expose ignored integer `mode` attributes,
+not merely inline-assembly interpreter refusals: `mode(QI)` remains a
+four-byte unsigned int instead of the one-byte type both oracles use.
+The reduced sizeof assertion is RED E2911, and the sealed mode probe
+measures ranks, signedness, member layout and truncation. GCC/Clang disagree
+on applying `mode(QI)` in an abstract type name (sizeof 1 versus 4), so that
+placement must not silently choose a width. This shared type repair remains
+OPEN and precedes less consequential coverage work.
 
 The frozen `8a9f19d` executable was measured through
 `python3 tools/bench.py torture musl --jobs 4 --budget 40`.
