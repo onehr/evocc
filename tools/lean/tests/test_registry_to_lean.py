@@ -7,7 +7,9 @@ byte-for-byte round trip from decoded values back to the block -- plus the
 refusals that keep an operator outside Section 8.5 out of the data.
 """
 
+import contextlib
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
@@ -130,21 +132,27 @@ class DigestGuardTest(unittest.TestCase):
     """A block whose bytes were changed must stop the generator."""
 
     def run_generator(self, spec_text: str, out: Path) -> int:
+        """The generator prints its refusal, which is the point; the test log
+        should not read as if the refusal were the test failing."""
         with tempfile.TemporaryDirectory() as tmp:
             spec_path = Path(tmp) / "spec.md"
             spec_path.write_text(spec_text, encoding="utf-8")
-            return gen.main(
-                [
-                    "--spec",
-                    str(spec_path),
-                    "--registry",
-                    "p0.test",
-                    "--prefix-registry",
-                    "p0.test.prev",
-                    "--out",
-                    str(out),
-                ]
-            )
+            quiet = io.StringIO()
+            with contextlib.redirect_stderr(quiet), contextlib.redirect_stdout(quiet):
+                code = gen.main(
+                    [
+                        "--spec",
+                        str(spec_path),
+                        "--registry",
+                        "p0.test",
+                        "--prefix-registry",
+                        "p0.test.prev",
+                        "--out",
+                        str(out),
+                    ]
+                )
+            self.said = quiet.getvalue()
+            return code
 
     def test_a_changed_rule_stops_the_generator(self):
         later = FIRST + SECOND
@@ -154,6 +162,7 @@ class DigestGuardTest(unittest.TestCase):
             out = Path(tmp) / "Registry.lean"
             self.assertEqual(self.run_generator(text, out), 2)
             self.assertFalse(out.exists())
+            self.assertIn("digest mismatch", self.said)
 
     def test_an_earlier_registry_that_is_not_a_prefix_stops_the_generator(self):
         text = synthetic_spec(SECOND, FIRST + SECOND)
@@ -161,6 +170,7 @@ class DigestGuardTest(unittest.TestCase):
             out = Path(tmp) / "Registry.lean"
             self.assertEqual(self.run_generator(text, out), 2)
             self.assertFalse(out.exists())
+            self.assertIn("not a byte prefix", self.said)
 
     def test_a_matching_block_is_written(self):
         text = synthetic_spec(FIRST, FIRST + SECOND)
