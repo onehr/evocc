@@ -105,6 +105,25 @@ fn assert_native_execution(source: &str, case: &str) {
 }
 
 #[test]
+fn unprototyped_function_pointers_recover_the_promoted_call_interface() {
+    let source = include_str!("../../../tests/fixtures/unprototyped-function-pointers.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "unprototyped-function-pointers");
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";
