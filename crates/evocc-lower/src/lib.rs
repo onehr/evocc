@@ -4190,12 +4190,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
                 Ok(Flow::default())
             }
-            CHirStmt::Expr(expression, _) => {
-                self.lower_discarded_expr(expression, &mut state)?;
-                Ok(Flow {
-                    normal: vec![state],
-                })
-            }
+            CHirStmt::Expr(expression, _) => self.lower_discarded_flow(expression, state),
             CHirStmt::Return(expression, span) => {
                 let mut returned = Vec::new();
                 match (self.info.return_type.as_ref(), expression) {
@@ -4238,7 +4233,12 @@ impl<'a> FunctionLowerer<'a> {
                             self.unit.types(),
                         ) =>
                     {
-                        self.lower_discarded_expr(expression, &mut state)?;
+                        let live = state.locals.clone();
+                        let flow = self.lower_discarded_flow(expression, state)?;
+                        let Some(continued) = self.merge_states(flow.normal, &live)? else {
+                            return Ok(Flow::default());
+                        };
+                        state = continued;
                     }
                     _ => {
                         return Err(LowerError::MalformedFunction {
@@ -6501,7 +6501,12 @@ impl<'a> FunctionLowerer<'a> {
         match initializer {
             CHirForInit::Empty => {}
             CHirForInit::Expression(expression) => {
-                self.lower_discarded_expr(expression, &mut state)?;
+                let live = state.locals.clone();
+                let flow = self.lower_discarded_flow(expression, state)?;
+                let Some(continued) = self.merge_states(flow.normal, &live)? else {
+                    return Ok(Flow::default());
+                };
+                state = continued;
             }
             CHirForInit::Declaration(declarations) => {
                 for declaration in declarations {
@@ -6589,8 +6594,7 @@ impl<'a> FunctionLowerer<'a> {
             .first()
             .cloned()
             .unwrap_or_else(|| header.clone());
-        let mut step_state =
-            self.new_block_from(&step_template, &carried_keys, BlockRole::LoopStep)?;
+        let step_state = self.new_block_from(&step_template, &carried_keys, BlockRole::LoopStep)?;
         self.replace_target(continue_placeholder, step_state.block);
         for normal in &body_flow.normal {
             self.branch(normal, step_state.block, &carried_keys)?;
@@ -6604,12 +6608,19 @@ impl<'a> FunctionLowerer<'a> {
                     .position(|block| block.id == normal.block)
             })
             .collect::<Vec<_>>();
-        if let Some(step) = step {
-            self.lower_discarded_expr(step, &mut step_state)?;
+        let step_block = step_state.block;
+        let step_flow = if let Some(step) = step {
+            self.lower_discarded_flow(step, step_state)?
+        } else {
+            Flow {
+                normal: vec![step_state],
+            }
+        };
+        for continued in step_flow.normal {
+            self.branch(&continued, header.block, &carried_keys)?;
         }
-        self.branch(&step_state, header.block, &carried_keys)?;
         if let Some(position) = normal_predecessor_positions.into_iter().min() {
-            self.move_block_before(step_state.block, position)?;
+            self.move_block_before(step_block, position)?;
         }
         let exit = self.new_block_from(&header_condition, &break_keys, BlockRole::Ordinary)?;
         self.replace_target(break_placeholder, exit.block);
@@ -9162,15 +9173,34 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<(), LowerError> {
+        let live = state.locals.clone();
+        let flow = self.lower_discarded_flow(expression, state.clone())?;
+        *state = self
+            .merge_states(flow.normal, &live)?
+            .ok_or(LowerError::InvalidControlFlow {
+                span: expression.span(),
+                reason: "value expression has no normal continuation",
+            })?;
+        Ok(())
+    }
+
+    /// Discarding a value does not require that evaluating it falls through.
+    /// Keep abrupt exits out of the join, rather than fabricating a value or
+    /// an edge from a return, break, or goto back into expression evaluation.
+    fn lower_discarded_flow(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        mut state: State,
+    ) -> Result<Flow, LowerError> {
         match expression {
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-                let predicate = self.lower_condition(condition, state)?;
-                let keys = self.expression_join_keys(state, &[then_expression, else_expression]);
-                let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
-                let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
-                let arguments = self.edge_values(state, &keys)?;
+                let predicate = self.lower_condition(condition, &mut state)?;
+                let keys = self.expression_join_keys(&state, &[then_expression, else_expression]);
+                let then_state = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+                let else_state = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+                let arguments = self.edge_values(&state, &keys)?;
                 self.terminate(
-                    state,
+                    &state,
                     Inst::CondBr(
                         predicate,
                         then_state.block,
@@ -9179,12 +9209,21 @@ impl<'a> FunctionLowerer<'a> {
                         arguments,
                     ),
                 )?;
-                self.lower_discarded_expr(then_expression, &mut then_state)?;
-                self.lower_discarded_expr(else_expression, &mut else_state)?;
-                let merge = self.new_block_from(&then_state, &keys, BlockRole::Ordinary)?;
-                self.branch(&then_state, merge.block, &keys)?;
-                self.branch(&else_state, merge.block, &keys)?;
-                *state = merge;
+                let mut normal = self
+                    .lower_discarded_flow(then_expression, then_state)?
+                    .normal;
+                normal.extend(
+                    self.lower_discarded_flow(else_expression, else_state)?
+                        .normal,
+                );
+                if normal.len() <= 1 {
+                    return Ok(Flow { normal });
+                }
+                let merge = self.new_block_from(&normal[0], &keys, BlockRole::Ordinary)?;
+                for predecessor in normal {
+                    self.branch(&predecessor, merge.block, &keys)?;
+                }
+                state = merge;
             }
             CHirExpr::Cast(ty, operand, _)
                 if matches!(
@@ -9192,7 +9231,7 @@ impl<'a> FunctionLowerer<'a> {
                     Some(TypeKind::Void)
                 ) =>
             {
-                self.lower_discarded_expr(operand, state)?;
+                return self.lower_discarded_flow(operand, state);
             }
             CHirExpr::BuiltinVarArgs {
                 op,
@@ -9202,34 +9241,35 @@ impl<'a> FunctionLowerer<'a> {
                 span,
                 ..
             } => {
-                self.lower_varargs(*op, first, *second, *requested_ty, *span, state)?;
+                self.lower_varargs(*op, first, *second, *requested_ty, *span, &mut state)?;
             }
             CHirExpr::Call(callee, arguments, span) => {
-                let _ = self.emit_call(callee, arguments, *span, state)?;
+                let _ = self.emit_call(callee, arguments, *span, &mut state)?;
             }
-            CHirExpr::Comma(left, right, _) => {
-                self.lower_discarded_expr(left, state)?;
-                self.lower_discarded_expr(right, state)?;
+            CHirExpr::Comma(left, right, _) | CHirExpr::Binary(BinaryOp::Comma, left, right, _) => {
+                let flow = self.lower_discarded_flow(left, state)?;
+                let mut normal = Vec::new();
+                for continued in flow.normal {
+                    normal.extend(self.lower_discarded_flow(right, continued)?.normal);
+                }
+                return Ok(Flow { normal });
             }
-            CHirExpr::StatementExpr {
-                body,
-                value,
-                facts,
-                span,
-            } if evocc_chir::expression_is_void(
-                expression,
-                self.unit.symbols(),
-                self.unit.types(),
-            ) =>
-            {
-                let result = self.lower_statement_expression(body, *value, *facts, *span, state)?;
-                debug_assert!(result.is_none());
+            CHirExpr::StatementExpr { body, .. } => {
+                let live = state.locals.clone();
+                let control = self.active_control.clone();
+                return self.lower_stmt(body, state, &live, &control);
+            }
+            CHirExpr::BuiltinUnreachable { .. } => {
+                self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
+                return Ok(Flow::default());
             }
             _ => {
-                let _ = self.lower_expr(expression, state)?;
+                let _ = self.lower_expr(expression, &mut state)?;
             }
         }
-        Ok(())
+        Ok(Flow {
+            normal: vec![state],
+        })
     }
 
     fn lower_varargs(

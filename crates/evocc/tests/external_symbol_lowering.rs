@@ -158,6 +158,22 @@ fn nested_switch_entry_executes_without_bypassed_conditions() {
 }
 
 #[test]
+fn discarded_expression_exits_execute_without_invented_fallthrough() {
+    let source = include_str!("../../../tests/fixtures/discarded-expression-exits.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "discarded-expression-exits");
+}
+
+#[test]
 fn constant_case_folding_does_not_waive_runtime_shift_checks() {
     let source = "int main(void) { int x = -2147483647-1; switch (x) {
         case 1 << 31: return 0; default: return 1; } }";
