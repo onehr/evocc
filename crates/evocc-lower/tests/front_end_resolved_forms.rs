@@ -50,6 +50,23 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn ignored_type_name_attributes_do_not_change_lowered_function_pointer_calls() {
+    assert_pairs(
+        &[
+            (
+                "int f(void *p){return ((__attribute__((noinline)) int (*)(void))p)();}",
+                "int f(void *p){return ((int (*)(void))p)();}",
+            ),
+            (
+                "int f(void *p){return ((int (__attribute__((noinline)) *)(void))p)();}",
+                "int f(void *p){return ((int (*)(void))p)();}",
+            ),
+        ],
+        1600,
+    );
+}
+
+#[test]
 fn formatted_and_string_builtins_use_external_function_prototypes() {
     assert_pairs(
         &[

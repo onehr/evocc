@@ -92,3 +92,46 @@ fn malformed_pointer_attribute_reports_the_attribute_diagnostic() {
         .expect_err("invalid pointer alignment must be rejected");
     assert!(error.starts_with("E2903:"), "expected E2903, got {error}");
 }
+
+#[test]
+fn attributes_among_type_name_specifiers_are_preserved() {
+    let output = dump(concat!(
+        "_Static_assert(sizeof(__attribute__((unused)) int[2]) == 8, \"array\");",
+        "_Static_assert(sizeof(const __attribute__((unused)) int) == 4, \"order\");",
+    ));
+    assert_eq!(
+        output
+            .matches("attribute unused() placement=type-name preserved-not-applied")
+            .count(),
+        2,
+        "{output}"
+    );
+}
+
+#[test]
+fn attributes_before_a_grouped_abstract_pointer_do_not_change_the_function_type() {
+    let output = dump(concat!(
+        "int actual(void) { return 42; }",
+        "int f(void) { void *p = &actual;",
+        "return ((int (__attribute__((__noinline__)) *)(void))p)(); }",
+    ));
+    assert!(
+        output.contains("attribute noinline() placement=type-name preserved-not-applied"),
+        "{output}"
+    );
+}
+
+#[test]
+fn attributes_after_an_abstract_pointer_are_retained_without_layout_effect() {
+    let output = dump(concat!(
+        "_Static_assert(sizeof(int * __attribute__((aligned(64)))) == 8, \"size\");",
+        "_Static_assert(_Alignof(int * __attribute__((aligned(64)))) == 8, \"alignment\");",
+    ));
+    assert_eq!(
+        output
+            .matches("attribute aligned(64) placement=pointer-declarator preserved-not-applied")
+            .count(),
+        2,
+        "{output}"
+    );
+}
