@@ -370,6 +370,57 @@ fn obsolete_designators_use_the_existing_subobject_initializer_plan() {
 }
 
 #[test]
+fn nested_designator_continuation_does_not_skip_the_inner_sibling() {
+    let source = "struct Inner { int a, b; }; struct Outer { int head; struct Inner inner; int tail; }; int main(void) { struct Outer value = { .inner.a = 11, 22 }; return value.head || value.inner.a != 11 || value.inner.b != 22 || value.tail; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            output.stdout, b"0\n",
+            "{mode}: inner.b must be 22, tail must be zero"
+        );
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "nested-designator-continuation");
+}
+
+#[test]
+fn designator_continuation_tracks_nested_paths_and_inferred_bounds() {
+    let source = include_str!("../../../tests/fixtures/designator-continuation.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "designator-continuation");
+}
+
+#[test]
+fn designated_aggregates_follow_ordinary_brace_elision() {
+    let source = include_str!("../../../tests/fixtures/designator-brace-elision.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "designator-brace-elision");
+}
+
+#[test]
 fn alignment_specifiers_share_object_and_member_layout() {
     let source = include_str!("../../../tests/fixtures/alignment-specifiers.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
