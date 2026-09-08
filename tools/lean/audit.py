@@ -49,6 +49,14 @@ ALLOWED_IMPORT_PREFIXES = ("EvoIR", "Init", "Std", "Lean")
 
 NATIVE_AXIOM_RE = re.compile(r"^EvoIR\..*\._native\.bv_decide\.ax")
 
+# What a `bv_decide` reflection axiom asserts: that the recorded LRAT
+# certificate refutes the recorded bit-blasted expression.  A name is not
+# evidence -- an axiom of our own could be given the same one -- so the type
+# has to have this shape as well.
+NATIVE_AXIOM_TYPE_RE = re.compile(
+    r"^Std\.Tactic\.BVDecide\.Reflect\.verifyBVExpr\s+\S+\s+\S+\s*=\s*true$"
+)
+
 # The Section 8.10 transfer table, as the audit's own reading of it.  Each row
 # gives the Lean operator constructor, the parameters the theorem quantifies
 # over, and the theorem name.
@@ -296,6 +304,11 @@ def lean_name_list(names: list[str]) -> str:
 
 
 def run_dump(lean_dir: Path, targets: list[str]) -> dict:
+    # The dump reads the built environment, so a stale build would let the
+    # audit pass against olean files the sources no longer produce.
+    build = subprocess.run(["lake", "build"], cwd=lean_dir, capture_output=True, text=True)
+    if build.returncode != 0:
+        raise AuditFailure("lake build failed:\n" + build.stdout + build.stderr)
     source = DUMP_TEMPLATE % {
         "targets": lean_name_list(targets),
         "definitions": lean_name_list(RECORDED_DEFINITIONS),
@@ -364,6 +377,12 @@ def classify_axioms(dump: dict) -> list[dict]:
             if not module.startswith("EvoIR"):
                 raise AuditFailure(
                     f"axiom {name} looks like a reflection axiom but is declared in {module}"
+                )
+            flat = " ".join(entry["type"].split())
+            if not NATIVE_AXIOM_TYPE_RE.match(flat):
+                raise AuditFailure(
+                    f"axiom {name} is named like a bv_decide reflection axiom but its "
+                    f"type is not one: {flat}"
                 )
         elif module.startswith(CORE_MODULE_PREFIXES):
             kind = "lean-core-declared"

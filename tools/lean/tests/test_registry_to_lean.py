@@ -96,60 +96,85 @@ class RefusalTest(unittest.TestCase):
             gen.parse_rule("p9_005 add(?a) => ?a when true")
 
 
+FIRST = "p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true\n"
+SECOND = "p0_002_add_zero_lhs add(const_like(?x,0),?x) => ?x when true\n"
+
+
+def digest_of(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def synthetic_spec(prev: str, later: str, prev_digest=None, later_digest=None) -> str:
+    """A specification printing two reviewed registries, in the shape Section
+    11.6 uses."""
+
+    def block(name: str, body: str, stated: str) -> str:
+        return (
+            "**Reviewed registry `"
+            + name
+            + "`.** Its digest is `"
+            + stated
+            + "`, computed as for the earlier registries:\n\n```text\n"
+            + body
+            + "```\n\n"
+        )
+
+    return block("p0.test.prev", prev, prev_digest or digest_of(prev)) + block(
+        "p0.test", later, later_digest or digest_of(later)
+    )
+
+
 class DigestGuardTest(unittest.TestCase):
     """A block whose bytes were changed must stop the generator."""
 
-    def _spec_with(self, block: str, digest: str) -> str:
-        return (
-            "**Reviewed registry `p0.test`.** Its digest is `"
-            + digest
-            + "`, computed as for the earlier registries:\n\n```text\n"
-            + block
-            + "```\n"
-        )
-
-    def test_a_changed_rule_stops_the_generator(self):
-        import hashlib
-
-        block = "p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true\n"
-        digest = hashlib.sha256(block.encode("utf-8")).hexdigest()
-        tampered = block.replace("const_like(?x,0)", "const_like(?x,1)")
+    def run_generator(self, spec_text: str, out: Path) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             spec_path = Path(tmp) / "spec.md"
-            spec_path.write_text(self._spec_with(tampered, digest), encoding="utf-8")
-            out = Path(tmp) / "Registry.lean"
-            code = gen.main(
+            spec_path.write_text(spec_text, encoding="utf-8")
+            return gen.main(
                 [
                     "--spec",
                     str(spec_path),
                     "--registry",
                     "p0.test",
+                    "--prefix-registry",
+                    "p0.test.prev",
                     "--out",
                     str(out),
                 ]
             )
-        self.assertEqual(code, 2)
-        self.assertFalse(out.exists())
+
+    def test_a_changed_rule_stops_the_generator(self):
+        later = FIRST + SECOND
+        tampered = later.replace("const_like(?x,0)", "const_like(?x,1)")
+        text = synthetic_spec(FIRST, tampered, later_digest=digest_of(later))
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "Registry.lean"
+            self.assertEqual(self.run_generator(text, out), 2)
+            self.assertFalse(out.exists())
+
+    def test_an_earlier_registry_that_is_not_a_prefix_stops_the_generator(self):
+        text = synthetic_spec(SECOND, FIRST + SECOND)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "Registry.lean"
+            self.assertEqual(self.run_generator(text, out), 2)
+            self.assertFalse(out.exists())
 
     def test_a_matching_block_is_written(self):
-        import hashlib
-
-        block = "p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true\n"
-        digest = hashlib.sha256(block.encode("utf-8")).hexdigest()
+        text = synthetic_spec(FIRST, FIRST + SECOND)
         with tempfile.TemporaryDirectory() as tmp:
-            spec_path = Path(tmp) / "spec.md"
-            spec_path.write_text(self._spec_with(block, digest), encoding="utf-8")
             out = Path(tmp) / "Registry.lean"
-            code = gen.main(
-                ["--spec", str(spec_path), "--registry", "p0.test", "--out", str(out)]
-            )
-            self.assertEqual(code, 0)
-            text = out.read_text(encoding="utf-8")
-        self.assertIn("def rule_p0_001_add_zero_rhs : Rule :=", text)
-        self.assertIn('.bin .add false (.var "x") (.constLike "x" 0)', text)
-        self.assertIn("def registry : List Rule :=", text)
-        self.assertNotIn("theorem", text)
-        self.assertNotIn("Prop", text)
+            self.assertEqual(self.run_generator(text, out), 0)
+            written = out.read_text(encoding="utf-8")
+        self.assertIn("def rule_p0_001_add_zero_rhs : Rule :=", written)
+        self.assertIn('.bin .add false (.var "x") (.constLike "x" 0)', written)
+        self.assertIn("def registry : List Rule :=", written)
+        self.assertIn('def registryPrefixName : String := "p0.test.prev"', written)
+        self.assertIn("def registryPrefixCount : Nat := 1", written)
+        self.assertNotIn("theorem", written)
+        self.assertNotIn("Prop", written)
 
     def test_a_second_digest_beside_the_block_is_refused(self):
         block = "p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true\n"
