@@ -2448,7 +2448,7 @@ fn function_info(
             &function.written,
             function.ty,
             function.return_specifier.type_id(),
-            Some(&function.parameters),
+            Some(function),
             false,
             false,
         )
@@ -2908,10 +2908,20 @@ fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> b
 fn function_parameters_match(
     interner: &TypeInterner,
     canonical: &FunctionParameters,
-    written: &ParameterSyntax,
+    function: &FunctionDecl<'_>,
 ) -> bool {
-    match (canonical, written) {
+    match (canonical, &function.parameters) {
+        (_, ParameterSyntax::Unspecified) if function.body.is_none() => {
+            interner.compatible_parameters(canonical, &FunctionParameters::Unspecified)
+        }
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
+        (
+            FunctionParameters::Prototype {
+                types,
+                variadic: false,
+            },
+            ParameterSyntax::Unspecified,
+        ) => types.is_empty(),
         (FunctionParameters::Prototype { types, variadic }, syntax)
             if !matches!(syntax, ParameterSyntax::Unspecified) =>
         {
@@ -2931,7 +2941,7 @@ fn written_declarator_matches(
     written: &WrittenDeclarator,
     mut current: TypeId,
     terminal: TypeId,
-    function_syntax: Option<&ParameterSyntax>,
+    function_declaration: Option<&FunctionDecl<'_>>,
     initialized_object: bool,
     adjusted_parameter: bool,
 ) -> bool {
@@ -2957,18 +2967,19 @@ fn written_declarator_matches(
             }
         }
     }
-    if let Some(syntax) = function_syntax {
+    if let Some(function) = function_declaration {
         if !matches!(
             written.layers.first(),
             Some(WrittenDeclaratorLayer::Function { .. })
         ) {
             return written.layers.is_empty()
-                && current == terminal
+                && (current == terminal
+                    || (function.body.is_none() && types.compatible(current, terminal)))
                 && types.get(current).is_some_and(|canonical| {
                     matches!(
                         &canonical.kind,
                         TypeKind::Function { parameters, .. }
-                            if function_parameters_match(types, parameters, syntax)
+                            if function_parameters_match(types, parameters, function)
                     )
                 });
         }
@@ -2986,8 +2997,9 @@ fn written_declarator_matches(
                 },
             ) => {
                 if index == 0
-                    && function_syntax
-                        .is_some_and(|syntax| !function_parameters_match(types, parameters, syntax))
+                    && function_declaration.is_some_and(|function| {
+                        !function_parameters_match(types, parameters, function)
+                    })
                 {
                     return false;
                 }

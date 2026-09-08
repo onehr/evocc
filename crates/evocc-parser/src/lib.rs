@@ -1603,6 +1603,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             let (mut parameters, parameter_scope, inherited_from_specifier) =
                 self.function_declaration_parameters(&declarator, &specifier, full_type)?;
+            // An unspecified declaration can compose with a prototype, but
+            // an empty definition actually defines zero parameters.
+            if !inherited_from_specifier
+                && matches!(parameters, ParameterSyntax::Unspecified)
+                && self
+                    .symbol_in_current_scope(&declarator.name.spelling)
+                    .and_then(|id| self.symbols.symbol(id).ok())
+                    .and_then(|prior| self.types.get(prior.ty()))
+                    .is_some_and(|prior| {
+                        matches!(
+                            &prior.kind,
+                            TypeKind::Function {
+                                parameters: FunctionParameters::Prototype { types, variadic }, ..
+                            } if !types.is_empty() || *variadic
+                        )
+                    })
+            {
+                self.report_redefinition(&declarator.name);
+            }
             let symbol = self.declare_symbol(
                 &declarator.name,
                 SymbolData::Function { storage },

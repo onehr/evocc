@@ -799,7 +799,14 @@ impl TypeInterner {
         Some(enum_integer_rank(minimum, maximum, tag.layout.packed))
     }
 
-    fn compatible_parameters(&self, left: &FunctionParameters, right: &FunctionParameters) -> bool {
+    /// C function parameter compatibility, including an unspecified list's
+    /// compatibility only with prototypes that survive default promotions.
+    #[must_use]
+    pub fn compatible_parameters(
+        &self,
+        left: &FunctionParameters,
+        right: &FunctionParameters,
+    ) -> bool {
         match (left, right) {
             (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => true,
             (FunctionParameters::Unspecified, prototype)

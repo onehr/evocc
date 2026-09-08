@@ -116,6 +116,25 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Compatible function declarations and actual definition arity
+
+`0f0a6a5` is the tests-only RED for compatible unspecified declarations
+following prototypes, including typedef-based declarations and an empty
+definition following a zero-parameter prototype. Lowering now reuses the
+type interner's parameter-compatibility rule for declarations without
+weakening a definition's bindings or arity. The accompanying negative
+regression exposed an existing parser bug: an empty definition after a
+one-parameter prototype was accepted. It now retains E2002, as do conflicting
+return types and promotion-incompatible prototypes.
+Both interpreters and native Darwin execute the fixture successfully;
+GCC-14 and Clang-19 at O0/O2 agree, and both reject all three negative probes
+(`.evidence/builtin-probes/20260908-function-redeclarations/`).
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh 0f0a6a5 --all-targets --locked --offline --quiet`
+passes 1,630 tests across 12 affected crates, zero failures and four existing
+standing-run ignores; Clippy, fmt, Ruff and diff-check pass. Original
+benchmark replay is still pending; these focused results do not close row 13.
+
 ### Variadic record return placement
 
 `f065b94` is the tests-only RED for the original `920726-1` call mismatch.
