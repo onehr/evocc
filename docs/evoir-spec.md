@@ -6414,3 +6414,10 @@ This distinguishes the direct string in original torture `20010924-1` from the o
 `__builtin_parity`, `__builtin_parityl` and `__builtin_parityll` instead convert once to the corresponding unsigned type and return the population count modulo two as `int`; all six forms are total, fold on constant operands, and use the existing bit-builtin arity, callable-form and operand diagnostics.
 Both sealed compilers execute `tests/fixtures/integer-bit-counts.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260909-integer-bit-counts/results.txt`); one original torture program, `builtin-bitops-1`, reaches these missing families.
 No instruction or diagnostic is added: lowering uses the existing width-typed bit operations and `ctlz`/`ctpop`, with no zero-operand UB obligation for these total operations.
+
+### Obsolete GNU initializer designators
+
+Within an initializer list, `member: value` is an alternative spelling of `.member = value`, and a single `[index]` or `[first ... last]` designator may omit `=`; these forms use the same subobject resolution, inferred bounds and evaluation rules as their existing spellings.
+Both sealed compilers execute `tests/fixtures/obsolete-designators.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260909-obsolete-designators/results.txt`), including anonymous members and side effects.
+No diagnostic or representation is added: an unknown member or out-of-bounds designator retains E2906, and this rule does not admit a missing `=` after a multi-component designation.
+Three non-floating-point original torture refusals (`20030408-1`, `compndlit-1`, `struct-ini-4`) reach the field-colon form; their full executions, not the reduced fixture, determine passing counts.
