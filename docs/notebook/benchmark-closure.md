@@ -51,7 +51,7 @@ their remaining closure work without creating a second set of measurements.
   validation, separating FP-dependent libc failures (rows 2, 3).
 - [x] Correct strong external-data and function addressing for the original
   TinyCC PIE links; all seven assembled objects now pass together (row 11).
-- [ ] Replay assembly register alternatives and kernel substitution with the
+- [x] Replay assembly register alternatives and kernel substitution with the
   exact measured binary; close each substitution mismatch (rows 5, 6).
 - [ ] Resolve the remaining kernel assembly/symbol/control-flow constructs,
   retaining explicit specification conflicts rather than bypassing them (row 7).
@@ -97,8 +97,8 @@ not a claim that no unknown compiler bug can exist.
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
 | 4 | Remaining native failures | ctest 1 runtime failure; torture 33 runtime failures, zero assembly/link failures; original `memclr` and `misalign` now pass | `ctest torture` | PARTIAL: static labels, constant branches, integer modes and packed accesses benched; other failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
-| 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
-| 7 | Remaining kernel refusals | Fresh survey: 2,260 `=r@r0` bindings, 457 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; two assembled EFI units still fail to link on `__efistub_isdigit` | `kernel` | OPEN: reduced register aliases and builtin digit classification; no predicted clean count |
+| 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
+| 7 | Remaining kernel refusals | Fresh survey: 2,717 `asm:i` at the two jump_label.h sites, one `asm:+rm`, one computed goto and one frame address; `ghes_helpers` now assembles, and the two digit-builtin EFI link failures are gone | `kernel` | OPEN: 79 assemble, 79 substitute and boot, 65 linked, zero substitution mismatches; local-address assembly propagation is reduced but not fixed |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
@@ -117,6 +117,24 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+`python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
+`20260908T123730.141577Z`, captures clean subject `bc7cc9b` and executable
+SHA-256 `fc07b29798f1bc914a0064a3a7f90c2cb43cd253f6e29f0e830e9a64aa892a69`.
+All 2,799 original unit identities remain: 79 assemble and 2,720 refuse.
+Only `drivers/acpi/apei/ghes_helpers.o` changes assembly outcome (refused to
+assembled); the 2,260 prior register-alias errors now reach later assembly
+constraints. The exact new frontier is 2,716 `asm:i` at jump_label.h:54,
+one at jump_label.h:38, one `asm:+rm` at vdso/math64.h:13, one computed goto
+and one frame-address refusal. No count is inferred from a probe.
+All 79 assembled objects substitute and relink, including both formerly
+failing EFI objects; the mixed image boots. The substitution proof has
+13 proven, 49 proven modulo relocations, three no-symbol and 14 not-linked
+objects, zero mismatches: 65 linked objects, not a full EvoCC kernel.
+Capture is `.evidence/k1/measure-20260908T123730Z`, image digest
+`18aba753678cc7273f5e6edf4e1e4ecca6f1558ac66a474913c1a5027cfa5bc4`.
+The wrapper correctly exits INCOMPLETE. This run predates signed-wrapping
+and target-header-type changes and is not evidence for those changes.
 
 Signed-wrapping options now pass the CLI/native regression and
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true

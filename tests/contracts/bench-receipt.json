@@ -1,26 +1,21 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T120936.530123Z",
-  "subject": "a81c243d4412489d5907c4f5855d4c9278f8d2ec",
-  "dirty": true,
+  "run": "20260908T123730.141577Z",
+  "subject": "bc7cc9b3fb1dc933bec2e5d61fffd7dd3c68d665",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135",
+  "driverSha256": "fc07b29798f1bc914a0064a3a7f90c2cb43cd253f6e29f0e830e9a64aa892a69",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "ctest",
-    "torture",
-    "tinycc",
-    "cjson",
+    "kernel",
     "--jobs",
-    "4"
+    "4",
+    "--allow-qemu-drift"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
-    "torture",
-    "tinycc",
-    "cjson"
+    "kernel"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -1205,37 +1200,37 @@
     },
     "kernel": {
       "rung": "K1/K5-K7 ramp",
-      "status": "ERROR",
-      "error": "receipt unchanged; previous evidence is not a new measurement",
-      "errorTail": [
-        "  \"cacheHits\": 76,",
-        "  \"counts\": {",
-        "    \"substituted\": 76",
-        "  },",
-        "  \"refusalCodeCounts\": {},",
-        "  \"relinkExitCode\": 0,",
-        "  \"installed\": true,",
-        "  \"allowSymbolDrift\": true,",
-        "  \"imageSha256\": \"a5ff05bfbdfab0fb89807ff43f0f521b75a3ade4da1ec82fb3ebcaf13d623720\",",
-        "  \"vmlinuxSha256\": \"1684b06b8d4382dfe1159d62cdcd895741d50f708af6066ffffab00be8b11e50\"",
-        "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T102907Z/attempt-03/substitution",
-        "",
-        "== attempt 3: boot ==",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260908T102907Z/attempt-03/boot",
-        "image sha256: a5ff05bfbdfab0fb89807ff43f0f521b75a3ade4da1ec82fb3ebcaf13d623720",
-        "serial log sha256: 95f0afea78afa76528b08d69b0cc62e470995ee0b5b9d0fdc51604d09aa03026",
-        "PASS",
-        "",
-        "== proof of substitution =="
-      ],
+      "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
+      "outcomes": {},
+      "refusals": {
+        "E3021": 2718,
+        "E3029": 1,
+        "E3031": 1
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 2799,
+      "passed": 65,
+      "kind": "units",
+      "compiled": 79,
+      "testVerdict": "PASS",
+      "proof": {
+        "no-symbols": 3,
+        "not-linked": 14,
+        "proven": 13,
+        "proven-modulo-relocations": 49
+      },
+      "status": "INCOMPLETE",
+      "run": "2026-09-08T13:18:22Z",
+      "evidence": ".evidence/k1/measure-20260908T123730Z/survey",
+      "receipt": "tests/contracts/k1-mixed-link-receipt.json",
       "command": [
         "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
         "--jobs",
         "4"
       ],
-      "exitCode": 1,
-      "seconds": 3269.3,
+      "exitCode": 0,
+      "seconds": 2452.1,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
@@ -1263,9 +1258,9 @@
         "evidence": ".evidence/k1/measure-20260907T170640Z/survey"
       },
       "measurement": {
-        "run": "20260908T102835.690828Z",
-        "subject": "7ac11d31f0a23659896ac81caaf2a87dcb4cad63",
-        "driverSha256": "b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b"
+        "run": "20260908T123730.141577Z",
+        "subject": "bc7cc9b3fb1dc933bec2e5d61fffd7dd3c68d665",
+        "driverSha256": "fc07b29798f1bc914a0064a3a7f90c2cb43cd253f6e29f0e830e9a64aa892a69"
       }
     },
     "mbedtls": {
