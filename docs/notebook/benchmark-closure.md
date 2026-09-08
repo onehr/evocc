@@ -106,6 +106,19 @@ not a claim that no unknown compiler bug can exist.
 
 ### Latest completed incremental replay
 
+The line-control repair `2d063ef` is replayed in
+`20260908T084118.829770Z` (`python3 tools/bench.py ctest torture --jobs 4`):
+c-testsuite rises to 204/220 and torture remains 1,196/1,692. The only
+changed program is original `00152`, refused to native PASS; no identities
+or earlier passes are lost. Its changed gate runs 1,090 tests with no
+failures or ignored tests, Clippy, fmt, Ruff and diff-check green.
+The source identity is `0a914b7`, executable SHA-256
+`213abc7bd72465d157a2346d1bdff87f76b39b4043fb635028ce119dd26f4a92`;
+the dirty flag records pending test/receipt work, not the subsequent
+type-name implementation. Earlier attempt `20260908T084012.993329Z`
+could not start the sealed execution environment and remains NOT RUN,
+not evidence of a compiler regression or a passing replay.
+
 `python3 tools/bench.py toybox ctest torture csmith --campaign all
 --programs 500 --jobs 4 --budget 40` completed run
 `20260908T080325.213428Z`: toybox 195/203, c-testsuite 203/220,
@@ -636,7 +649,8 @@ A goto entering a scope past an array declaration is reduced to
 return zero and C-HIR agrees, while lowering requests an unavailable edge
 address. The missing value is a real allocation, not a scalar phi: substituting
 zero or cloning an ordinary allocation origin would violate the object model.
-This remains an implementation issue, not a permission to weaken validation.
+This was an implementation issue, not a permission to weaken validation;
+`2f268ab` and replay `20260908T080325.213428Z` close it as recorded above.
 
 The first unavailable Csmith input, base seed 11, has a concrete nonterminating
 induction cycle, not an EvoCC checksum disagreement. `func_25` returns `&g_37`,
