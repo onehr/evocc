@@ -156,3 +156,89 @@ fn macro_parameter_names_may_use_c_keyword_spellings() {
         "((base)[index] & (15)), \"register\"",
     );
 }
+
+#[test]
+fn macro_stacks_restore_nested_and_undefined_states() {
+    // The sealed pushpop.c prints 2 1 1 0 11. Retain those five observations,
+    // with the final function macro still expressed as preprocessing tokens.
+    assert_expands(
+        concat!(
+            "#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#define A 2\n",
+            "#pragma push_macro(\"A\")\n#undef A\n#pragma pop_macro(\"A\")\nA\n",
+            "#pragma pop_macro(\"A\")\nA\n#pragma pop_macro(\"A\")\nA\n",
+            "#pragma push_macro(\"U\")\n#define U 7\n#pragma pop_macro(\"U\")\n",
+            "#ifdef U\n1\n#else\n0\n#endif\n",
+            "#define F(x) (x+10)\n#pragma push_macro(\"F\")\n",
+            "#undef F\n#define F(x) (x+20)\n#pragma pop_macro(\"F\")\nF(1)\n",
+        ),
+        "2 1 1 0 (1+10)",
+    );
+}
+
+#[test]
+fn macro_stacks_preserve_definition_kind_parameters_and_pasting() {
+    assert_expands(
+        concat!(
+            "#define F() 4\n#pragma push_macro(\"F\")\n#undef F\n#define F 8\n",
+            "F\n#pragma pop_macro(\"F\")\nF()\n",
+            "#define V(name, args...) name##suffix #args args\n",
+            "#pragma push_macro(\"V\")\n#undef V\n#define V(x) x\n",
+            "#pragma pop_macro(\"V\")\nV(a, 1, 2)\n",
+            "#define E\n#pragma push_macro(\"E\")\n#undef E\n#define E 9\n",
+            "#pragma pop_macro(\"E\")\nE end\n",
+        ),
+        "8 4 asuffix \"1, 2\" 1, 2 end",
+    );
+}
+
+#[test]
+fn macro_stacks_are_per_name_and_do_not_restore_definition_dependencies() {
+    assert_expands(
+        concat!(
+            "#define A B\n#define B 1\n#pragma push_macro(\"A\")\n",
+            "#pragma push_macro(\"B\")\n#undef A\n#define A 3\n",
+            "#undef B\n#define B 2\n#pragma pop_macro(\"A\")\nA\n",
+            "#pragma pop_macro(\"B\")\nA\n",
+        ),
+        "2 1",
+    );
+}
+
+#[test]
+fn expanded_pragma_operators_change_macro_state_before_following_uses() {
+    for operator in ["_Pragma(TEXT)", "APPLY(pop_macro(\"A\"))", "P(TEXT)"] {
+        let source = format!(
+            concat!(
+                "#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#define A 2\n",
+                "#define TEXT \"pop_macro(\\\"A\\\")\"\n",
+                "#define APPLY(x) _Pragma(#x)\n#define P _Pragma\n",
+                "{operator} A\nA\n",
+            ),
+            operator = operator,
+        );
+        assert_expands(&source, "1 1");
+    }
+}
+
+#[test]
+fn restored_feature_query_keeps_its_builtin_implementation() {
+    assert_expands(
+        concat!(
+            "#pragma push_macro(\"__has_attribute\")\n#undef __has_attribute\n",
+            "#define __has_attribute(x) 0\n__has_attribute(aligned)\n",
+            "#pragma pop_macro(\"__has_attribute\")\n__has_attribute(aligned)\n",
+        ),
+        "0 1",
+    );
+}
+
+#[test]
+fn macro_pragmas_in_inactive_branches_have_no_effect() {
+    assert_expands(
+        concat!(
+            "#define A 1\n#if 0\n#pragma push_macro(\"A\")\n#endif\n",
+            "#undef A\n#define A 2\n#pragma pop_macro(\"A\")\nA\n",
+        ),
+        "2",
+    );
+}
