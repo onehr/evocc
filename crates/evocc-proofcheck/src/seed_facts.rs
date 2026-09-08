@@ -46,6 +46,177 @@ impl SeedFacts {
     pub(crate) fn of_value(&self, function: &str, value: u32) -> Option<Fact> {
         self.functions.get(function)?.get(&value).copied()
     }
+
+    /// Check the derived table against the inductive invariant of Section 8.10.
+    ///
+    /// The fixed point is an iteration, and an iteration's answer is only as
+    /// good as the code that ran it. The invariant is the property the answer
+    /// has to have whatever produced it, so checking it is evidence about the
+    /// table rather than about the loop: entry arguments promise nothing, every
+    /// instruction's transfer is at least as precise as the fact recorded for
+    /// its result, and every edge carries facts at least as precise as the ones
+    /// recorded for the arguments it binds.
+    pub(crate) fn inductive(&self, module: &Module) -> Result<(), Violation> {
+        for function in &module.functions {
+            let empty = HashMap::new();
+            let table = self.functions.get(&function.name).unwrap_or(&empty);
+            inductive_invariant(function, table)?;
+        }
+        Ok(())
+    }
+}
+
+/// Where a claimed table fails the inductive invariant, and on what.
+///
+/// The three arms are the three conditions, in the order Section 8.10 states
+/// them; each names the value whose recorded fact is stronger than what the
+/// program supports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Violation {
+    /// An entry argument carries a fact. A caller may pass anything.
+    EntryArgument { function: String, value: u32 },
+    /// `Transfer_op(I(operands))` is not at or below `I(result)`.
+    Instruction {
+        function: String,
+        block: BlockId,
+        value: u32,
+    },
+    /// What an edge carries is not at or below the destination's argument.
+    Edge {
+        function: String,
+        source: BlockId,
+        target: BlockId,
+        value: u32,
+    },
+}
+
+/// The three conditions, over every block and edge structurally reachable from
+/// the entry.
+///
+/// Reachability is read off the terminators and nothing else: a table that
+/// called a block unreachable would otherwise be believed about the one place
+/// the invariant could not then be checked. Back edges are ordinary edges here,
+/// which is the whole point -- a loop is where a table can claim a fact that
+/// holds on the way in and not on the way round. A value the table does not
+/// name is top, so an incomplete table is weak rather than rejected, and a table
+/// that names nothing passes.
+fn inductive_invariant(function: &Function, table: &HashMap<u32, Fact>) -> Result<(), Violation> {
+    let Some(entry) = function.blocks.first() else {
+        return Ok(());
+    };
+    for argument in &entry.args {
+        let Some(width) = width_of(&argument.value) else {
+            continue;
+        };
+        if table
+            .get(&argument.value.id)
+            .is_some_and(|fact| *fact != Fact::top(width))
+        {
+            return Err(Violation::EntryArgument {
+                function: function.name.clone(),
+                value: argument.value.id,
+            });
+        }
+    }
+
+    let admitted = admitted_values(function);
+    let indices = block_indices(function);
+    let mut seen = vec![false; function.blocks.len()];
+    let mut queue = VecDeque::from([0_usize]);
+    seen[0] = true;
+    while let Some(index) = queue.pop_front() {
+        let block = &function.blocks[index];
+        let environment = claimed_environment(function, block, table)?;
+        let mut failure = None;
+        edges_of(block, |target, passed| {
+            if failure.is_some() {
+                return;
+            }
+            let Some(target_index) = indices.get(&target).copied() else {
+                return;
+            };
+            if !seen[target_index] {
+                seen[target_index] = true;
+                queue.push_back(target_index);
+            }
+            for (value, parameter) in passed.iter().zip(&function.blocks[target_index].args) {
+                let Some(width) = width_of(&parameter.value) else {
+                    continue;
+                };
+                let carried = if admitted.contains(&value.id) {
+                    environment
+                        .get(&value.id)
+                        .copied()
+                        .unwrap_or_else(|| Fact::top(width))
+                } else {
+                    Fact::top(width)
+                };
+                let recorded = table
+                    .get(&parameter.value.id)
+                    .copied()
+                    .unwrap_or_else(|| Fact::top(width));
+                if !carried.is_at_or_below(recorded) {
+                    failure = Some(Violation::Edge {
+                        function: function.name.clone(),
+                        source: block.id,
+                        target,
+                        value: parameter.value.id,
+                    });
+                    return;
+                }
+            }
+        });
+        if let Some(violation) = failure {
+            return Err(violation);
+        }
+    }
+    Ok(())
+}
+
+/// The facts of one block's values under a claimed table.
+///
+/// A block argument takes what the table records for it, or top. An instruction
+/// result takes what the table records for it, after the second condition has
+/// confirmed that the transfer over its operands is at least that precise; a
+/// result the table does not name takes the transfer itself. Reading the claim
+/// back out is what lets a wrong claim reach the edge that refutes it, rather
+/// than being quietly recomputed away.
+fn claimed_environment(
+    function: &Function,
+    block: &Block,
+    table: &HashMap<u32, Fact>,
+) -> Result<HashMap<u32, Fact>, Violation> {
+    let mut environment: HashMap<u32, Fact> = block
+        .args
+        .iter()
+        .filter_map(|argument| Some((argument.value.id, *table.get(&argument.value.id)?)))
+        .collect();
+    for instruction in &block.insts {
+        let Some(result) = inst_results(instruction).first().copied() else {
+            continue;
+        };
+        let Some(width) = width_of(result) else {
+            continue;
+        };
+        let derived =
+            transfer(instruction, width, &environment).unwrap_or_else(|| Fact::top(width));
+        match table.get(&result.id).copied() {
+            Some(recorded) => {
+                if !derived.is_at_or_below(recorded) {
+                    return Err(Violation::Instruction {
+                        function: function.name.clone(),
+                        block: block.id,
+                        value: result.id,
+                    });
+                }
+                environment.insert(result.id, recorded);
+            }
+            None => {
+                environment.insert(result.id, derived);
+            }
+        }
+    }
+    Ok(environment)
 }
 
 fn width_of(value: &Value) -> Option<u16> {
@@ -377,14 +548,209 @@ fn carry(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
+    use evocc_evoir::{
+        validate_module, Block, BlockArg, CmpOp, EffectSummary, EvoIRType, Function,
+        GlobalVisibility, Inst, Linkage, Module, Value,
+    };
     use evocc_randgate::{generate_module, GeneratorConfig};
 
-    use super::agreement;
+    use super::{agreement, arguments_of, inductive_invariant, Fact, Violation};
+
+    const WIDTH: u16 = 8;
+
+    fn bits(id: u32) -> Value {
+        Value {
+            id,
+            ty: EvoIRType::Bits(WIDTH),
+        }
+    }
+
+    fn flag(id: u32) -> Value {
+        Value {
+            id,
+            ty: EvoIRType::Bits(1),
+        }
+    }
+
+    fn argument(value: &Value) -> BlockArg {
+        BlockArg {
+            name: format!("v{}", value.id),
+            value: value.clone(),
+        }
+    }
+
+    /// A counted loop: the parameter enters as zero and comes round as `x + 1`.
+    ///
+    /// This is the shape the inductive invariant exists for. The fact that holds
+    /// on the way in does not hold on the way round, so a table that recorded
+    /// only what the entering edge supports would be wrong about every later
+    /// iteration, and only the back edge shows it.
+    fn counted_loop() -> Module {
+        let zero = bits(1);
+        let parameter = bits(2);
+        let one = bits(3);
+        let next = bits(4);
+        let more = flag(5);
+        let result = bits(6);
+        let function = Function {
+            linkage: Linkage::Strong,
+            visibility: GlobalVisibility::External,
+            variadic: false,
+            name: "counted".to_owned(),
+            params: Vec::new(),
+            param_marks: Vec::new(),
+            ret_tys: vec![EvoIRType::Bits(WIDTH)],
+            effects: EffectSummary::default(),
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: Vec::new(),
+                    insts: vec![Inst::Const(zero.clone(), 0)],
+                    terminator: Inst::Br(1, vec![zero]),
+                },
+                Block {
+                    id: 1,
+                    args: vec![argument(&parameter)],
+                    insts: vec![
+                        Inst::Const(one.clone(), 1),
+                        Inst::Add(next.clone(), parameter.clone(), one.clone()),
+                        Inst::ICmp(more.clone(), CmpOp::ULt, next.clone(), one),
+                    ],
+                    terminator: Inst::CondBr(more, 1, vec![next], 2, vec![parameter]),
+                },
+                Block {
+                    id: 2,
+                    args: vec![argument(&result)],
+                    insts: Vec::new(),
+                    terminator: Inst::Ret(vec![result]),
+                },
+            ],
+        };
+        let mut module = Module {
+            aliases: Vec::new(),
+            assembly: Vec::new(),
+            globals: Vec::new(),
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
+            functions: vec![function],
+        };
+        module.recompute_effect_summaries();
+        validate_module(&module).expect("the counted loop is valid EvoIR");
+        module
+    }
+
+    /// The table the checker derives satisfies the invariant it is checked
+    /// against, which is what makes a refusal evidence rather than noise.
+    #[test]
+    fn the_derived_table_satisfies_the_inductive_invariant() {
+        let module = counted_loop();
+        let function = &module.functions[0];
+        let derived = arguments_of(function);
+        assert_eq!(
+            inductive_invariant(function, &derived),
+            Ok(()),
+            "the checker's own fixed point must pass its own invariant"
+        );
+        // And the loop parameter is top, because the two edges disagree about
+        // every bit once the increment has run.
+        assert_eq!(derived.get(&2), Some(&Fact::top(WIDTH)));
+    }
+
+    /// The plan's negative case: a table claiming the loop parameter is always
+    /// zero. The entering edge supports it and the back edge refutes it, so a
+    /// check that walked only the forward edges would accept.
+    #[test]
+    fn a_table_claiming_a_loop_parameter_is_always_zero_is_refused() {
+        let module = counted_loop();
+        let function = &module.functions[0];
+        let mut claimed: HashMap<u32, Fact> = HashMap::new();
+        claimed.insert(2, Fact::constant(WIDTH, 0));
+        claimed.insert(6, Fact::constant(WIDTH, 0));
+        assert_eq!(
+            inductive_invariant(function, &claimed),
+            Err(Violation::Edge {
+                function: "counted".to_owned(),
+                source: 1,
+                target: 1,
+                value: 2,
+            })
+        );
+    }
+
+    /// The first condition on its own: a caller may pass anything, so an entry
+    /// argument carrying a fact is refused whatever the body does with it.
+    #[test]
+    fn a_table_claiming_an_entry_argument_is_refused() {
+        let module = counted_loop();
+        let mut function = module.functions[0].clone();
+        let opaque = bits(7);
+        function.params.push(evocc_evoir::FunctionParam {
+            name: "x".to_owned(),
+            ty: EvoIRType::Bits(WIDTH),
+        });
+        function.blocks[0].args.push(argument(&opaque));
+        let mut claimed: HashMap<u32, Fact> = HashMap::new();
+        claimed.insert(7, Fact::constant(WIDTH, 3));
+        assert_eq!(
+            inductive_invariant(&function, &claimed),
+            Err(Violation::EntryArgument {
+                function: "counted".to_owned(),
+                value: 7,
+            })
+        );
+    }
+
+    /// The second condition on its own: a table may record an instruction's
+    /// result, and the transfer over its operands has to be at least that
+    /// precise.
+    #[test]
+    fn a_table_claiming_more_than_a_transfer_supports_is_refused() {
+        let module = counted_loop();
+        let function = &module.functions[0];
+        let mut claimed: HashMap<u32, Fact> = HashMap::new();
+        // `%v4 = add %v2, 1` with `%v2` top is top; claiming it is seven is
+        // claiming what the table's own operands do not support.
+        claimed.insert(4, Fact::constant(WIDTH, 7));
+        assert_eq!(
+            inductive_invariant(function, &claimed),
+            Err(Violation::Instruction {
+                function: "counted".to_owned(),
+                block: 1,
+                value: 4,
+            })
+        );
+    }
 
     /// The corpus every measurement here is taken over.
     const CORPUS: u64 = 256;
+
+    /// The invariant holds over the whole generated corpus.
+    ///
+    /// The check runs on the checking path, so a table it refused would be a
+    /// certificate refused: a single false positive here is a checker that
+    /// rejects sound work. Every function of the corpus is a case where the
+    /// answer must be "no violation".
+    #[test]
+    fn the_derived_table_satisfies_the_invariant_over_the_corpus() {
+        let mut functions = 0_usize;
+        for seed in 0..CORPUS {
+            let module = generate_module(seed, GeneratorConfig::default());
+            for function in &module.functions {
+                let derived = arguments_of(function);
+                assert_eq!(
+                    inductive_invariant(function, &derived),
+                    Ok(()),
+                    "seed {seed}, function {}",
+                    function.name
+                );
+                functions += 1;
+            }
+        }
+        println!("inductiveInvariantFunctions={functions}");
+        assert!(functions > 0, "the corpus must hold some function");
+    }
 
     /// Section 8.10: "the order of visits does not change the result".
     ///
