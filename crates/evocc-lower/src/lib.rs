@@ -4026,10 +4026,16 @@ impl<'a> FunctionLowerer<'a> {
         let mut incoming_keys = Vec::new();
         let mut pending_inputs = Vec::new();
         for operand in &source.outputs {
-            if !matches!(
-                operand.constraint.as_str(),
-                "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q"
-            ) {
+            // Select the register alternative before binding the place. The
+            // source keeps its written constraint; IR has no alternatives.
+            let constraint = match operand.constraint.as_str() {
+                "=rm" | "=mr" => "=r",
+                "+rm" | "+mr" => "+r",
+                "=&rm" | "=&mr" => "=&r",
+                "+&rm" | "+&mr" => "+&r",
+                constraint => constraint,
+            };
+            if !matches!(constraint, "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q") {
                 return Err(refuse(operand.constraint.clone()));
             }
             let address = self
@@ -4040,7 +4046,7 @@ impl<'a> FunctionLowerer<'a> {
                     &mut state,
                 )?
                 .value;
-            let incoming = if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+            let incoming = if evocc_evoir::assembly_memory_constraint(constraint) {
                 Some(address.clone())
             } else {
                 let ty = match operand.expression {
@@ -4062,7 +4068,7 @@ impl<'a> FunctionLowerer<'a> {
                 temporary_keys.push(address_key);
                 result_types.push(ir);
                 writebacks.push((address_key, ty, integer, volatile));
-                if operand.constraint.starts_with('+') {
+                if constraint.starts_with('+') {
                     Some(
                         self.emit_memory_load(address, ty, volatile, operand.span, &mut state)?
                             .value,
@@ -4071,7 +4077,7 @@ impl<'a> FunctionLowerer<'a> {
                     None
                 }
             };
-            let ty = if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+            let ty = if evocc_evoir::assembly_memory_constraint(constraint) {
                 incoming.as_ref().expect("memory address").ty.clone()
             } else {
                 result_types.last().expect("register output").clone()
@@ -4083,7 +4089,7 @@ impl<'a> FunctionLowerer<'a> {
             incoming_keys.push(key);
             outputs.push(AssemblyOutput {
                 constraint: self.bound_assembly_constraint(
-                    &operand.constraint,
+                    constraint,
                     operand.expression,
                     operand.span,
                 )?,
@@ -4135,8 +4141,8 @@ impl<'a> FunctionLowerer<'a> {
             // no alternatives for downstream consumers to resolve.
             let register_alternative = matches!(
                 operand.constraint.as_bytes(),
-                [b'I' | b'J' | b'K' | b'L' | b'i' | b'n', b'r']
-                    | [b'r', b'I' | b'J' | b'K' | b'L' | b'i' | b'n']
+                [b'I' | b'J' | b'K' | b'L' | b'i' | b'n' | b'm', b'r']
+                    | [b'r', b'I' | b'J' | b'K' | b'L' | b'i' | b'n' | b'm']
             );
             let constraint = if register_alternative {
                 if !evocc_evoir::assembly_register_type(&value.ty) {

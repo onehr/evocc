@@ -216,6 +216,16 @@ fn inspect_with_declarations<'a>(
                             uses.mutable.insert(*symbol);
                         }
                     }
+                    for o in &a.inputs {
+                        // Memory constraints implicitly take the operand's
+                        // address. Replacing its object with a value is invalid
+                        // even when the initializer or argument is constant.
+                        if matches!(o.constraint.as_str(), "Q" | "Qo") {
+                            if let CHirExpr::Ident { symbol, .. } = o.expression {
+                                uses.mutable.insert(*symbol);
+                            }
+                        }
+                    }
                     for o in a.inputs.iter().chain(&a.outputs) {
                         work.push(Node::Expr(o.expression, false));
                     }
@@ -461,6 +471,8 @@ struct Context<'a> {
     scope: ScopeId,
     replacements: BTreeMap<SymbolId, SymbolId>,
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    mutable: BTreeSet<SymbolId>,
+    declaration_prefix: bool,
     memo: HashMap<(usize, bool), &'a CHirExpr<'a>>,
     expand_calls: bool,
     prefix: Option<u64>,
@@ -474,6 +486,8 @@ impl Context<'_> {
             scope,
             replacements: BTreeMap::new(),
             constants: BTreeMap::new(),
+            mutable: BTreeSet::new(),
+            declaration_prefix: false,
             memo: HashMap::new(),
             expand_calls: true,
             prefix: None,
@@ -734,6 +748,7 @@ impl<'a> Substitution<'a, '_> {
         if self.globals.contains_key(&o.symbol) {
             return Ok(Vec::new());
         }
+        let original = o.symbol;
         let mut o = o.clone();
         if c.prefix.is_some() && o.storage == StorageClass::Extern {
             self.unit
@@ -751,6 +766,34 @@ impl<'a> Substitution<'a, '_> {
             let runtime =
                 o.storage != StorageClass::Static && c.scope != self.unit.symbols.file_scope();
             o.initializer = Some(self.initializer(i, c, runtime)?);
+        }
+        if c.declaration_prefix && o.storage != StorageClass::Extern {
+            if let Some(initializer) = &o.initializer {
+                let value = match initializer.plan.actions() {
+                    [InitAction::StoreScalar { path, value, .. }] if path.is_root() => {
+                        Some(self.alloc(CHirExpr::Cast(o.ty, value, o.span)))
+                    }
+                    _ => None,
+                };
+                let repeatable = value.is_some_and(|value| {
+                    repeatable_argument(value, &self.unit.types, &self.unit.symbols, self.target)
+                });
+                let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
+                if repeatable
+                    && !c.mutable.contains(&original)
+                    && !qualifiers.is_volatile
+                    && !qualifiers.is_atomic
+                    && o.asm_label.is_none()
+                {
+                    c.constants.insert(original, value.unwrap());
+                }
+                // Only a straight-line, repeatable declaration prefix is
+                // known to dominate every later use. A statement-expression
+                // initializer can jump past a subsequent declaration.
+                if !repeatable {
+                    c.declaration_prefix = false;
+                }
+            }
         }
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
@@ -903,6 +946,7 @@ impl<'a> Substitution<'a, '_> {
                         CHirBlockItem::Declaration(d) => result
                             .extend(self.decl(d, c)?.into_iter().map(CHirBlockItem::Declaration)),
                         CHirBlockItem::Statement(s) => {
+                            c.declaration_prefix = false;
                             result.push(CHirBlockItem::Statement(self.stmt(s, c)?))
                         }
                     }
@@ -1063,6 +1107,8 @@ impl<'a> Substitution<'a, '_> {
             .create_scope(scope, ScopeKind::Block, Some(span))
             .map_err(|e| self.error(span, e))?;
         let mut c = Context::new(inline_scope);
+        c.mutable = uses.mutable;
+        c.declaration_prefix = true;
         let serial = self.next();
         c.prefix = Some(serial);
         c.end = Some(SpannedName {
@@ -1106,7 +1152,7 @@ impl<'a> Substitution<'a, '_> {
             if let Some(original) = parameter.symbol {
                 c.replacements.insert(original, fresh);
                 let qualifiers = self.unit.types.get(parameter.ty).unwrap().qualifiers;
-                if !uses.mutable.contains(&original)
+                if !c.mutable.contains(&original)
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
                     && repeatable_argument(arg, &self.unit.types, &self.unit.symbols, self.target)

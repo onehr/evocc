@@ -114,13 +114,19 @@ fn inline_local_bindings_do_not_replay_mutable_or_effectful_values() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let output = run("static inline __attribute__((always_inline)) int f(void){goto done; int k=5; done:return k;} int main(void){return f();}", "--interpret-evoir");
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("E3001"),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for body in [
+        "goto done; int k=5; done:return k;",
+        "int first=({if(skip)goto done; 0;}); int k=5; done:return k;",
+    ] {
+        let source = format!("static inline __attribute__((always_inline)) int f(int skip){{{body}}} int main(void){{int flag=1; return f(flag);}}");
+        let output = run(&source, "--interpret-evoir");
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E3001"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]
