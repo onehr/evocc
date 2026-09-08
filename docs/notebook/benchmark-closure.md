@@ -95,7 +95,7 @@ not a claim that no unknown compiler bug can exist.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | ctest 1 runtime failure; torture 25 runtime failures and one alloca link failure after previously refused programs become executable | `ctest torture` | PARTIAL: identified storage and arithmetic repairs benched; remaining and newly exposed failures OPEN |
+| 4 | Remaining native failures | ctest 1 runtime failure; torture 26 runtime failures and one alloca link failure after previously refused programs become executable | `ctest torture` | PARTIAL: identified storage and arithmetic repairs benched; remaining and newly exposed failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | Fresh survey: 2,712 `%a` assembly references, one computed goto and one frame address; all prior `asm:i`/`+rm` first errors clear | `kernel` | OPEN: 85 assemble, 83 substitute and boot, 69 linked; kaslr missing-global and insn signed-shift failures isolated and retained; zero substitution mismatches in the passing combination |
@@ -104,10 +104,10 @@ not a claim that no unknown compiler bug can exist.
 | 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
 | 11 | TinyCC compiler build | 7/11 assemble and pass together; all original PIE link failures are repaired; four compile refusals remain | `tinycc` | PARTIAL: external object/function addresses CLOSED in `20260908T102835Z`; remaining source forms OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
-| 13 | Torture declaration coverage | 36 E1001 refusals after consuming GNU89; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
+| 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 393 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 387 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Wrapping options and 75 explicit GNU89 modes consumed; 262 programs retain unhandled requirements. All 12 missing support-file first errors are zero after restoring original dependencies | `torture` | PARTIAL: source dependency repair benched; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -133,8 +133,19 @@ fmt, Ruff and diff-check pass. Fresh subject layout runs
 both with oracle consensus and zero mismatches. The intervening attributed
 invocation `20260908T195159Z-76384` omitted its case-set selector and failed
 manifest validation before measurement; it is not a passing run.
-This does not repair over-aligned native frames or explicitly
-aligned functions, and original-program replay remains required.
+Original replay `20260908T195446.660965Z`, subject `0a25483`, executable
+SHA-256 `609f5a0cd382a051960b8f2a12b919b8f05907be6402c6c70787ec86d1981fed`,
+retains every identity and prior PASS: torture gains `20000223-1` and
+`pr68532`, reaching 1,278 passes, 387 refusals, 26 runtime failures and one
+link failure out of 1,692; ctest remains 206/220. Captures are
+`.evidence/ladder/e0/20260908T195446Z` and `20260908T195511Z`.
+The previously refused `align-3` now executes and fails: its function
+declaration's explicit alignment was lost across redeclaration, so the
+unattributed query default becomes visible. Its real code address also lacks
+the requested alignment; returning 256 from the query alone would not fix it.
+Function-header alignment metadata and actual emission have been submitted
+for authority. This remains OPEN beside the over-aligned native-frame defect;
+neither is counted as repaired by the two original-program gains.
 
 ### Obsolete initializer designators
 
