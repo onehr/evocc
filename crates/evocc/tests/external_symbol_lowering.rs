@@ -41,6 +41,49 @@ fn globals_first_declared_in_a_block_keep_their_external_storage() {
 }
 
 #[test]
+fn deallocation_builtin_keeps_the_ordinary_external_call_contract() {
+    let source = "static int calls; static void *argument(void) { ++calls; return (void *)0; } int main(void) { __builtin_free(argument()); return calls != 1; }";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert!(String::from_utf8_lossy(&output.stdout).contains("@free"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "deallocation-builtin");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3039"));
+    }
+    for (source, code) in [
+        ("void f(void) { __builtin_free(); }", "E2909"),
+        ("void f(void) { __builtin_free(0, 0); }", "E2909"),
+        ("void f(void) { __builtin_free(1); }", "E2913"),
+        (
+            "int free(void *); void f(void *p) { __builtin_free(p); }",
+            "E2927",
+        ),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = run("_Static_assert(__builtin_types_compatible_p(__typeof__(__builtin_free(0)), void), \"free returns void\");", "--parse-only");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn abrupt_value_expressions_preserve_only_executed_effects() {
     let source = include_str!("../../../tests/fixtures/abrupt-expression-values.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

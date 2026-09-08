@@ -31,6 +31,40 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn single_trailing_assembly_spelling_uses_the_existing_contextual_path() {
+    for source in [
+        "__asm(\".text\"); int value;",
+        "extern int value __asm(\"renamed_value\");",
+        "int f(void) { __asm volatile(\"\" : : : \"memory\"); return 0; }",
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let source = "int main(void) { int value; __asm __volatile__(\"mov %w0, #7\" : \"=r\"(value)); return value != 7; }";
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let output = run(source, mode);
+        let canonical = run(&source.replace("__asm ", "__asm__ "), mode);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            canonical.status.success(),
+            "{}",
+            String::from_utf8_lossy(&canonical.stderr)
+        );
+        assert_eq!(output.stdout, canonical.stdout, "{mode}");
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "single-trailing-spelling");
+}
+
+#[test]
 fn register_memory_alternatives_select_the_existing_register_representation() {
     for source in [
         MEMORY_ALTERNATIVES.to_owned(),
