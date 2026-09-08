@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T151818.777128Z",
-  "subject": "d160f3f0a21da82cdee1036de7f1995760770aa7",
-  "dirty": true,
+  "run": "20260908T154642.149536Z",
+  "subject": "33bd17c87b099ac5c27dc5889cdfed6e7ba81e95",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3",
+  "driverSha256": "c52a9d530825b65b1f288cd0daa4d8b3d93df8d6b27bfeac35a69c01c15f34f6",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
@@ -44,8 +44,8 @@
         "E3007 evoir-main-parameters-are-not-canonical": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T151818Z",
-      "evidence": ".evidence/ladder/e0/20260908T151818Z",
+      "run": "20260908T154642Z",
+      "evidence": ".evidence/ladder/e0/20260908T154642Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -57,12 +57,12 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 25.3,
+      "seconds": 25.9,
       "previous": null,
       "measurement": {
-        "run": "20260908T151818.777128Z",
-        "subject": "d160f3f0a21da82cdee1036de7f1995760770aa7",
-        "driverSha256": "1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3"
+        "run": "20260908T154642.149536Z",
+        "subject": "33bd17c87b099ac5c27dc5889cdfed6e7ba81e95",
+        "driverSha256": "c52a9d530825b65b1f288cd0daa4d8b3d93df8d6b27bfeac35a69c01c15f34f6"
       }
     },
     "torture": {
@@ -119,8 +119,8 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T151844Z",
-      "evidence": ".evidence/ladder/e0/20260908T151844Z",
+      "run": "20260908T154708Z",
+      "evidence": ".evidence/ladder/e0/20260908T154708Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -132,12 +132,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 147.9,
+      "seconds": 149.9,
       "previous": null,
       "measurement": {
-        "run": "20260908T151818.777128Z",
-        "subject": "d160f3f0a21da82cdee1036de7f1995760770aa7",
-        "driverSha256": "1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3"
+        "run": "20260908T154642.149536Z",
+        "subject": "33bd17c87b099ac5c27dc5889cdfed6e7ba81e95",
+        "driverSha256": "c52a9d530825b65b1f288cd0daa4d8b3d93df8d6b27bfeac35a69c01c15f34f6"
       }
     },
     "csmith": {

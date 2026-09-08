@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T151844Z",
-  "subject": "d160f3f",
-  "driverSha256": "1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3",
+  "run": "20260908T154708Z",
+  "subject": "33bd17c",
+  "driverSha256": "c52a9d530825b65b1f288cd0daa4d8b3d93df8d6b27bfeac35a69c01c15f34f6",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "supported unconditional signed-wrapping options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
   "target": "aarch64-unknown-linux-gnu",
@@ -71,5 +71,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T151844Z"
+ "evidence": ".evidence/ladder/e0/20260908T154708Z"
 }

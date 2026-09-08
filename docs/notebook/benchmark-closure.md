@@ -201,10 +201,16 @@ retains a predecessorless insertion point, not a fabricated value or an edge
 from the abrupt exit. The C-HIR task machine discards the comma's left operand
 without requiring a scalar result. Fifteen focused lowering tests and the
 native CLI regression pass; the affected all-targets gate against `12f9eb5`,
-Clippy, fmt, Ruff and diff-check pass. Original-program replay is pending.
+Clippy, fmt, Ruff and diff-check pass. The repair is `33bd17c`.
 The reduced `int f(void) { int first=({ goto done; 0; }); int k=5;
 done:return k; }` now lowers and both interpreters report E3001 for the
 reached uninitialized read. It must never be folded into a constant return.
+The original replay `20260908T154642.149536Z`, executable SHA-256
+`c52a9d530825b65b1f288cd0daa4d8b3d93df8d6b27bfeac35a69c01c15f34f6`,
+preserves every prior outcome: ctest 206/220, torture 1,207/1,692,
+zero regressions. The new regression fixes a diagnosed semantic hole;
+it is not an additional original-program pass. Captures:
+`.evidence/ladder/e0/20260908T154642Z` and `20260908T154708Z`.
 
 ### Latest completed incremental replay
 
