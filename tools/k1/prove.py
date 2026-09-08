@@ -8,12 +8,15 @@ Two independent witnesses, both read out of the linked image:
   containing that string was linked from at least one EvoCC object; the
   reference vmlinux must not contain it.
 
-* byte identity per symbol. For every symbol a substituted object defines,
+* memory-image identity per symbol. For every symbol a substituted object defines,
   the bytes at that symbol in the object and at the same symbol in vmlinux
   are extracted and compared. This is per unit, so it says which units are in
   the image rather than that some unit is. The window length comes from the
   subject object's ELF symbol, and must match the linked symbol's size and
   fit both sections. Another compiler's function size is never its extent.
+  A sized OBJECT within a NOBITS section represents zero-filled memory, not
+  missing evidence or bytes at that section's unused file offset. The report
+  records both storage kinds so this is not mistaken for file-payload identity.
 
 An object still carries unresolved relocations where the linker has yet to
 fill an address in; vmlinux carries the filled-in value. Those fields are
@@ -155,11 +158,13 @@ def slice_symbol(
     if symbol is None or size <= 0 or symbol["size"] != size:
         return None
     section = table["sections"].get(symbol["ndx"])
-    if section is None or section["type"] == "NOBITS":
+    if section is None:
         return None
     start = symbol["value"] - section["addr"] if relative_to_address else symbol["value"]
     if start < 0 or start + size > section["size"]:
         return None
+    if section["type"] == "NOBITS":
+        return bytes(size) if symbol.get("type") == "OBJECT" else None
     offset = section["offset"] + start
     with path.open("rb") as handle:
         handle.seek(offset)
@@ -301,6 +306,10 @@ def main() -> int:
             symbols.append({
                 "symbol": name,
                 "bytes": size,
+                "objectStorage": table["sections"][table["symbols"][name]["ndx"]]["type"],
+                "vmlinuxStorage": vmlinux_table["sections"].get(
+                    vmlinux_table["symbols"].get(name, {}).get("ndx"), {}
+                ).get("type"),
                 "objectSha256": hashlib.sha256(mine).hexdigest() if mine else None,
                 "vmlinuxSha256": hashlib.sha256(theirs).hexdigest() if theirs else None,
                 "relocatedBytes": sum(width for _, width in ranges),
