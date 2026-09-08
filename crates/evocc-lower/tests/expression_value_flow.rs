@@ -244,6 +244,55 @@ fn jumps_into_blocks_keep_live_values_and_skip_initializers() {
 }
 
 #[test]
+fn jumps_preserve_object_storage_and_only_execute_reached_initializers() {
+    agrees(include_str!(
+        "../../../tests/fixtures/goto-object-storage.c"
+    ));
+}
+
+#[test]
+fn a_backward_jump_across_a_declaration_keeps_the_same_object() {
+    agrees("int main(void){int n=0,*p=0;again:;int a[2]={5,6};if(n++==0){p=a;goto again;}return p!=a||*p!=5;}");
+}
+
+#[test]
+fn a_jump_into_a_block_allocates_an_address_taken_scalar_without_initializing_it() {
+    agrees("int calls;int main(void){goto target;{int x=++calls;target:;int *p=&x;*p=9;return x!=9||calls!=0;}}");
+}
+
+#[test]
+fn jumping_over_an_initializer_leaves_the_object_uninitialized() {
+    evaluates(
+        "int main(void){goto target;{int a[2]={7,8};target:return a[0];}}",
+        Some("E3001"),
+    );
+}
+
+#[test]
+fn automatic_objects_end_on_break_continue_and_outgoing_goto() {
+    for source in [
+        "int main(void){int *p;while(1){int a[1]={7};p=a;break;}return *p;}",
+        "int main(void){int *p;for(int i=0;i<1;i++){int a[1]={7};p=a;continue;}return *p;}",
+        "int main(void){int *p;{int a[1]={7};p=a;goto out;}out:return *p;}",
+    ] {
+        evaluates(source, Some("E3010"));
+    }
+}
+
+#[test]
+fn reentering_a_block_does_not_revive_an_escaped_pointer() {
+    evaluates(
+        "int main(void){int *p=0,n=0;again:{int a[1]={7};if(n++)return *p;p=a;}goto again;}",
+        Some("E3010"),
+    );
+}
+
+#[test]
+fn switch_dispatch_creates_skipped_object_storage() {
+    agrees("int f(int x){switch(x){int a[2]={7,8};case 1:a[0]=9;return a[0]!=9;case 2:a[1]=5;return a[1]!=5;}return 0;}int main(void){return f(1)||f(2);}");
+}
+
+#[test]
 fn enum_bitfields_preserve_the_enumerator_range() {
     agrees(include_str!(
         "../../../tests/fixtures/enum-bitfield-signedness.c"

@@ -38,6 +38,25 @@ fn unnamed_definition_parameters_preserve_call_positions_and_argument_effects() 
 }
 
 #[test]
+fn jumps_preserve_automatic_objects_and_skip_initializer_effects() {
+    let source = include_str!("../../../tests/fixtures/goto-object-storage.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "goto-object-storage");
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn unnamed_definition_parameters_execute_with_the_positional_abi() {
     assert_native_execution(
