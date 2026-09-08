@@ -41,6 +41,18 @@ fn globals_first_declared_in_a_block_keep_their_external_storage() {
 }
 
 #[test]
+fn abrupt_value_expressions_preserve_only_executed_effects() {
+    let source = include_str!("../../../tests/fixtures/abrupt-expression-values.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(output.status.success(), "{mode}: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "abrupt-expression-values");
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {
