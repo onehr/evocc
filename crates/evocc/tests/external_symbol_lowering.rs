@@ -73,6 +73,31 @@ fn variadic_record_results_preserve_promoted_arguments_on_the_machine() {
 }
 
 #[test]
+fn composite_function_declarations_preserve_calls_and_reject_conflicts() {
+    let source = include_str!("../../../tests/fixtures/composite-function-declarations.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "composite-function-declarations");
+    for invalid in [
+        "int f(int); long f(int);",
+        "int f(int); int f() { return 0; }",
+        "int f(float); int f();",
+    ] {
+        let output = run(invalid, "--parse-only");
+        assert!(!output.status.success(), "accepted {invalid}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2002"));
+    }
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {
