@@ -40,10 +40,34 @@ fn unnamed_definition_parameters_preserve_call_positions_and_argument_effects() 
 #[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn unnamed_definition_parameters_execute_with_the_positional_abi() {
-    let output = run(
+    assert_native_execution(
         include_str!("../../../tests/fixtures/unnamed-definition-parameters.c"),
-        "--emit=evoir",
+        "unnamed-parameters",
     );
+}
+
+#[test]
+fn function_and_void_pointer_equality_preserves_addresses_and_effects() {
+    let source = include_str!("../../../tests/fixtures/function-void-pointer-equality.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "mixed-pointer-equality");
+}
+
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+fn assert_native_execution(source: &str, case: &str) {
+    let output = run(source, "--emit=evoir");
     assert!(
         output.status.success(),
         "{}",
@@ -52,8 +76,7 @@ fn unnamed_definition_parameters_execute_with_the_positional_abi() {
     let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
     let assembly =
         evocc_mir::compile_module_for(evocc_mir::Target::Darwin, &module, &|_| true).unwrap();
-    let directory =
-        std::env::temp_dir().join(format!("evocc-unnamed-parameters-{}", std::process::id()));
+    let directory = std::env::temp_dir().join(format!("evocc-{case}-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();
     let asm = directory.join("probe.s");
     let binary = directory.join("probe");
