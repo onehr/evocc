@@ -51,6 +51,49 @@ fn multidimensional_array_parameter_returns_the_adjusted_pointer() {
 }
 
 #[test]
+fn prototype_star_array_parameters_match_named_pointer_declarations() {
+    accepts("void f(int values[*]); void f(int *values) { *values = 7; }\n");
+}
+
+#[test]
+fn abstract_qualified_star_parameters_match_pointer_declarations() {
+    accepts("void f(int [const *]); void f(int * const);\n");
+}
+
+#[test]
+fn callback_prototypes_adjust_star_arrays_before_comparing_types() {
+    accepts("void take(void callback(int values[*])); void take(void (*callback)(int *));\n");
+}
+
+#[test]
+fn star_arrays_do_not_admit_objects_definitions_or_invalid_bracket_modifiers() {
+    for source in [
+        "int values[*];",
+        "void f(int values[*]) { (void)values; }",
+        "void f(int values[*]) __attribute__((unused)) { (void)values; }",
+        "void f(int values[static *]);",
+        "void f(int values[3][const 4]);",
+    ] {
+        let arena = Arena::default();
+        let error = parse(source, &arena).expect_err("malformed array declarator must fail");
+        assert_eq!(error.code, "E1005", "{source}: {error:?}");
+    }
+}
+
+#[test]
+fn prototype_star_support_does_not_enable_actual_variable_length_objects() {
+    for source in [
+        "void f(int n) { int values[n]; }",
+        "extern int n; void f(int values[n]);",
+        "void f(int values[3][*]);",
+    ] {
+        let arena = Arena::default();
+        let error = parse(source, &arena).expect_err("VLA behavior is not implemented");
+        assert_eq!(error.code, "E2203", "{source}: {error:?}");
+    }
+}
+
+#[test]
 fn signedness_only_pointer_initialization_is_accepted() {
     accepts("void init(int *input) { unsigned int *output = input; (void)output; }\n");
 }
