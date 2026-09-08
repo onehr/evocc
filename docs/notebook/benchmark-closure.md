@@ -98,7 +98,7 @@ not a claim that no unknown compiler bug can exist.
 | 4 | Remaining native failures | ctest 1 runtime failure; torture 24 runtime failures, zero assembly/link failures; nine option-dependent originals now pass | `ctest torture` | PARTIAL: storage, packed access and wrapping repairs benched; other failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
-| 7 | Remaining kernel refusals | Fresh survey: 2,717 `asm:i` at the two jump_label.h sites, one `asm:+rm`, one computed goto and one frame address; `ghes_helpers` now assembles, and the two digit-builtin EFI link failures are gone | `kernel` | OPEN: 79 assemble, 79 substitute and boot, 65 linked, zero substitution mismatches; local-address assembly propagation is reduced but not fixed |
+| 7 | Remaining kernel refusals | Fresh survey: 2,712 `%a` assembly references, one computed goto and one frame address; all prior `asm:i`/`+rm` first errors clear | `kernel` | OPEN: 85 assemble, 83 substitute and boot, 69 linked; kaslr missing-global and insn signed-shift failures isolated and retained; zero substitution mismatches in the passing combination |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
@@ -115,6 +115,71 @@ not a claim that no unknown compiler bug can exist.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Kernel replay and linked object definitions
+
+`python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
+`20260908T141252.550489Z`, captures subject `be2349c` and executable
+SHA-256 `a29b0d83db55706c5e14041b6e4271330e3422ed4103c3d04af8e3dc75b588e8`.
+All 2,799 original identities remain: 85 assemble, 2,714 refuse. Six formerly
+refused units assemble; none moves in the other direction. All 2,712 E3021
+first errors now name `%a0` at processor.h:390, not `i` or `+rm`.
+The 85-object link fails on kaslr's missing `__kaslr_is_enabled`; removing
+only kaslr exposes a boot timeout, independently reduced to `insn.o`.
+The retained 83-object combination boots, with 69 linked objects: 15 proven,
+51 proven modulo relocations, three no-symbol and 14 not-linked, zero proof
+mismatches. These exclusions are failures, not successful substitutions.
+Capture: `.evidence/k1/measure-20260908T141252Z`; passing Image digest
+`90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e`.
+
+`ce08737` is the tests-only global-storage RED, `3f629ec` the repair:
+declarations bound in several scopes share one storage identity, irrespective
+of the first declaration's scope. Both interpreters and native execution now
+pass the int, bool, incomplete-array and static-address cases. The affected
+all-targets gate against `ce08737`, Clippy, fmt, Ruff and diff-check pass.
+A direct replay of the original kaslr command using that debug subject emits
+one exported `__kaslr_is_enabled` and its `strb`; the kernel measurement above
+predates the repair and is not its mixed-link closure.
+
+The exact pre-repair `insn.o` and reference object agree on basic immediate
+encoding, but the first negative branch-offset decoding traps in EvoCC
+(exit 133), versus reference result -16. The reduction is `(imm << 6) >> 4`.
+Both sealed compilers return `-2 -2147483648 -16` for the standalone signed
+shift probe at O0/O2; Clang's LLVM `shl` has no `nsw` flag. GCC explicitly
+documents this signed-shift extension even though UBSan diagnoses it:
+<https://gcc.gnu.org/onlinedocs/gcc/Integers-implementation.html>.
+Evidence: `.evidence/builtin-probes/20260908-instruction-encoding/`.
+The current body's strict shift rule conflicts with this GNU behavior;
+an amendment has been requested, not bypassed. The `%a` contract conflict
+is separately measured in `20260908-assembly-address/address.c` at both
+optimization levels and with both `p`/`r` inputs. Neither is an FP issue.
+
+### Integer absolute values and runtime-domain classification
+
+`d598bfd` implements the three explicit integer absolute builtins and the
+ordinary standard-name call selection, with options and same-unit assembler
+identities preserved. The original tests-only checkpoint is `a3884e3`.
+Both interpreter/native focused tests pass; the affected all-targets gate
+against that checkpoint passes 1,032 tests, zero failures or ignored tests,
+plus Clippy, fmt and Ruff. This is not yet original-program replay closure.
+`afabd27` separately records the missing benchmark builtin-option projection
+as a tests-only RED; `b01821d` implements it after the frozen kernel run
+finishes, with all 42 targeted Python tests passing.
+
+The original `arith-rand` and `arith-rand-ll` each pass ordinary sealed GCC-14
+and Clang-19 at O0/O2, but **both independent UBSan instrumentations** report
+signed-minimum negation at source line 86. Twelve other retained torture
+failures and ctest `00200` produce signed-left-shift diagnostics in both
+instrumentations. `pr7284-1`, with its required C89 mode, is a sanitizer
+disagreement: GCC exits zero, Clang reports signed shift overflow. These are
+not new compiler passes. In particular the signed-shift reports alone do not
+establish that these GNU programs are out of scope: GCC's documented extension
+above is diagnosed by UBSan too. Keep that contract issue open independently
+of ordinary C signed-overflow diagnostics.
+Evidence and exact instrumentation/link settings are
+`.evidence/builtin-probes/20260908-runtime-domains/results.txt`; Clang uses
+the installed GCC sanitizer runtime because its own standalone archive is
+absent. Every original program and headline outcome remains unchanged.
 
 ### Newly reduced control-flow case
 

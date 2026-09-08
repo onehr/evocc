@@ -1,37 +1,49 @@
 {
-  "bisection": null,
+  "bisection": {
+    "allowlistSize": 84,
+    "minimalFailingSet": [
+      "arch/arm64/lib/insn.o"
+    ],
+    "result": "minimal-failing-set",
+    "rounds": 8,
+    "runDirectory": ".evidence/k1/measure-20260908T141252Z/bisection-2"
+  },
   "emulator": {
     "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
     "matchesContract": false,
     "path": "/opt/homebrew/bin/qemu-system-aarch64",
     "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
   },
-  "failingUnits": [],
+  "failingUnits": [
+    "arch/arm64/kernel/kaslr.o",
+    "arch/arm64/lib/insn.o"
+  ],
   "failingUnitsByReason": {
     "multiple-definition": 0,
-    "other": 0
+    "other": 2
   },
-  "generatedAt": "2026-09-08T13:18:22Z",
+  "generatedAt": "2026-09-08T15:15:11Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "18aba753678cc7273f5e6edf4e1e4ecca6f1558ac66a474913c1a5027cfa5bc4",
-      "nonce": "k1-20260908T131809Z-dbaca72d",
-      "runDirectory": ".evidence/k1/measure-20260908T123730Z/attempt-01/boot",
-      "serialLog": ".evidence/k1/measure-20260908T123730Z/attempt-01/boot/boot.log",
-      "serialLogSha256": "640b58d737bbc9cf9508b7805d66d57e1a9ac266ced19773bfc0154c46b99c81",
+      "imageSha256": "90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e",
+      "nonce": "k1-20260908T151507Z-634d6fc1",
+      "runDirectory": ".evidence/k1/measure-20260908T141252Z/attempt-03/boot",
+      "serialLog": ".evidence/k1/measure-20260908T141252Z/attempt-03/boot/boot.log",
+      "serialLogSha256": "f889c830d4ba11a04cd4b5c2279662c4bc54e77682441c936c7043a9f5190a34",
       "verdict": "PASS"
     },
-    "imageSha256": "18aba753678cc7273f5e6edf4e1e4ecca6f1558ac66a474913c1a5027cfa5bc4",
+    "imageSha256": "90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e",
     "outcomeCounts": {
-      "substituted": 79
+      "substituted": 83
     },
-    "provenVmlinuxSha256": "ba1a11a34ba1e3eb78db11011f7d89c58e0e3c15db000c20f36ce2f5a7f7b86c",
+    "provenVmlinuxSha256": "1966057b830e146a6fdac53cb33124aa90c6746346b92cf8a758756451c318c6",
     "relinkExitCode": 0,
-    "requestedUnits": 79,
-    "runDirectory": ".evidence/k1/measure-20260908T123730Z/attempt-01/substitution",
+    "requestedUnits": 83,
+    "runDirectory": ".evidence/k1/measure-20260908T141252Z/attempt-03/substitution",
     "substitutedUnits": [
+      "arch/arm64/kernel/jump_label.o",
       "arch/arm64/kernel/pi/lib-fdt.o",
       "arch/arm64/kernel/pi/lib-fdt_ro.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
@@ -60,6 +72,7 @@
       "drivers/xen/features.o",
       "kernel/bpf/tnum.o",
       "kernel/range.o",
+      "kernel/sys_ni.o",
       "kernel/time/timecounter.o",
       "lib/base64.o",
       "lib/bcd.o",
@@ -88,6 +101,8 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/math/div64.o",
+      "lib/math/gcd.o",
       "lib/math/int_log.o",
       "lib/math/int_pow.o",
       "lib/math/int_sqrt.o",
@@ -112,7 +127,7 @@
       "lib/zstd/decompress/zstd_decompress_block.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "ba1a11a34ba1e3eb78db11011f7d89c58e0e3c15db000c20f36ce2f5a7f7b86c"
+    "vmlinuxSha256": "1966057b830e146a6fdac53cb33124aa90c6746346b92cf8a758756451c318c6"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -127,6 +142,7 @@
       "lib/zstd/common/debug.o"
     ],
     "unitsLinkedIntoVmlinux": [
+      "arch/arm64/kernel/jump_label.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -142,6 +158,7 @@
       "drivers/xen/features.o",
       "kernel/bpf/tnum.o",
       "kernel/range.o",
+      "kernel/sys_ni.o",
       "kernel/time/timecounter.o",
       "lib/base64.o",
       "lib/bcd.o",
@@ -170,6 +187,8 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/math/div64.o",
+      "lib/math/gcd.o",
       "lib/math/int_log.o",
       "lib/math/int_pow.o",
       "lib/math/int_sqrt.o",
@@ -210,6 +229,7 @@
       "scripts/mod/empty.o"
     ],
     "unitsProvenByteIdenticalInVmlinux": [
+      "arch/arm64/kernel/jump_label.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -225,6 +245,7 @@
       "drivers/xen/features.o",
       "kernel/bpf/tnum.o",
       "kernel/range.o",
+      "kernel/sys_ni.o",
       "kernel/time/timecounter.o",
       "lib/base64.o",
       "lib/bcd.o",
@@ -251,6 +272,8 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/math/div64.o",
+      "lib/math/gcd.o",
       "lib/math/int_log.o",
       "lib/math/int_pow.o",
       "lib/math/int_sqrt.o",
@@ -276,8 +299,8 @@
     "verdictCounts": {
       "no-symbols": 3,
       "not-linked": 14,
-      "proven": 13,
-      "proven-modulo-relocations": 49
+      "proven": 15,
+      "proven-modulo-relocations": 51
     }
   },
   "reference": {
@@ -294,25 +317,25 @@
   },
   "schemaVersion": 1,
   "survey": {
-    "assemblingUnits": 79,
+    "assemblingUnits": 85,
     "linkCollisions": {
       "groups": [],
       "symbolsDefinedTwice": 0,
       "units": []
     },
     "outcomeCounts": {
-      "assembled": 79,
-      "refused": 2720
+      "assembled": 85,
+      "refused": 2714
     },
     "refusalCodeCounts": {
-      "E3021": 2718,
+      "E3021": 2712,
       "E3029": 1,
       "E3031": 1
     },
     "refusalsByCode": {
       "E3021": {
         "owner": "front-end",
-        "units": 2718
+        "units": 2712
       },
       "E3029": {
         "owner": "front-end",
@@ -324,18 +347,18 @@
       }
     },
     "refusalsByFirstCode": {
-      "E3021": 2718,
+      "E3021": 2712,
       "E3029": 1,
       "E3031": 1
     },
     "refusalsByOwner": {
-      "front-end": 2720
+      "front-end": 2714
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/measure-20260908T123730Z/survey"
+    "runDirectory": ".evidence/k1/measure-20260908T141252Z/survey"
   },
-  "unitsCompiledByEvoccInABootingKernel": 65,
+  "unitsCompiledByEvoccInABootingKernel": 69,
   "unitsExcludedForMultipleDefinition": 0,
-  "unitsProvenPresentInVmlinux": 62,
-  "unitsSubstituted": 79
+  "unitsProvenPresentInVmlinux": 66,
+  "unitsSubstituted": 83
 }
