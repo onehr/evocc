@@ -7349,6 +7349,42 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value == PointerValue::Null,
                 ))
             }
+            (
+                CValue::FunctionPointer {
+                    value: function,
+                    ty: function_ty,
+                },
+                CValue::Pointer {
+                    value: object,
+                    ty: object_ty,
+                },
+            )
+            | (
+                CValue::Pointer {
+                    value: object,
+                    ty: object_ty,
+                },
+                CValue::FunctionPointer {
+                    value: function,
+                    ty: function_ty,
+                },
+            ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne)
+                && PointerTypeDesc::equality_compatible(
+                    self.unit.types(),
+                    function_ty,
+                    object_ty,
+                ) =>
+            {
+                let function = self
+                    .memory
+                    .pointer_address(function)
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
+                let object = self
+                    .memory
+                    .pointer_address(PointerValue::object(object))
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
+                Ok(machine_equality_result(operator, function == object))
+            }
             _ => Err(InterpreterError::UnsupportedExpression {
                 feature: "unsupported pointer binary operation",
                 span,

@@ -7968,6 +7968,35 @@ impl<'a> FunctionLowerer<'a> {
                     self.emit(state, Inst::PtrNull(null.clone()))?;
                     (null, right.value)
                 }
+                (true, true)
+                    if evocc_chir::PointerTypeDesc::from_expression(
+                        self.unit.symbols(),
+                        self.unit.types(),
+                        left_expression,
+                    )
+                    .ok()
+                    .zip(
+                        evocc_chir::PointerTypeDesc::from_expression(
+                            self.unit.symbols(),
+                            self.unit.types(),
+                            right_expression,
+                        )
+                        .ok(),
+                    )
+                    .is_some_and(|(left, right)| {
+                        evocc_chir::PointerTypeDesc::equality_compatible(
+                            self.unit.types(),
+                            left,
+                            right,
+                        )
+                    }) =>
+                {
+                    // The source comparison is valid even when its operands
+                    // use different object/function pointer representations.
+                    let left = self.cast(left, CIntegerType::ULONG, state)?;
+                    let right = self.cast(right, CIntegerType::ULONG, state)?;
+                    (left.value, right.value)
+                }
                 _ => {
                     return Err(LowerError::UnsupportedExpression {
                         span,
