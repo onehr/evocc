@@ -6155,3 +6155,10 @@ A complete enumeration is compatible with its existing target-selected underlyin
 Both sealed compilers execute `tests/fixtures/enum-compatible-pointers.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260908-enum-compatibility/results.txt`); for the separate qualified-pointer query GCC returns one and Clang zero, so the existing nested-qualifier distinction remains authoritative rather than adopting GCC's relaxation.
 No diagnostic or representation is added: pointer conditional expressions retain the compatible pointee's signedness and the normal union of pointee qualifiers.
 One original torture refusal, `enum-3`, reaches this rule; full-campaign impact must be remeasured.
+
+### Preprocessing line control
+
+`#line` macro-expands its operands and sets the next physical line's presumed decimal line number and optional filename for `__LINE__` and `__FILE__`; physical source identities, include lookup and token byte offsets do not change, and inactive directives have no effect.
+Both sealed oracles agree on the valid macro, filename, decimal-leading-zero and GNU zero-line assertions in `.evidence/builtin-probes/20260908-line-control/valid.c` (`results.txt`); a number-only reset retains the presumed filename and included files have their own line-control state.
+Malformed line numbers and filenames are E2936 (`invalid-line-directive`); the number exceeding u32 in `invalid-range.c` is accepted with a warning by GCC and rejected by Clang, so the profile rejects it with the same code.
+One original c-testsuite refusal, `00152`, is caused by silently skipping `#line`; its original native replay remains the closure test.
