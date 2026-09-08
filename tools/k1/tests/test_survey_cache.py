@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -58,7 +59,8 @@ class ReusableTest(unittest.TestCase):
         self.asm_root = Path(directory.name)
 
     def emitted_entry(self) -> dict:
-        return {"unit": "lib/bitrev.o", "outcome": "emitted", "assemblyBytes": 12}
+        return {"unit": "lib/bitrev.o", "outcome": "emitted", "assemblyBytes": 6,
+                "assemblySha256": hashlib.sha256(b".text\n").hexdigest()}
 
     def write_assembly(self, unit: str) -> None:
         path = substitute.assembly_path(self.asm_root, unit)
@@ -84,6 +86,16 @@ class ReusableTest(unittest.TestCase):
     def test_a_timeout_is_never_reused(self) -> None:
         entry = {"unit": "lib/x.o", "outcome": "timeout", "seconds": 180}
         self.assertIsNone(substitute.reusable(entry, "lib/x.o", self.asm_root))
+
+    def test_overwritten_or_unbound_assembly_is_not_a_cache_hit(self) -> None:
+        self.write_assembly("lib/bitrev.o")
+        entry = self.emitted_entry()
+        self.assertIsNotNone(substitute.reusable(entry, "lib/bitrev.o", self.asm_root))
+        substitute.assembly_path(self.asm_root, "lib/bitrev.o").write_text(".data\n")
+        self.assertIsNone(substitute.reusable(entry, "lib/bitrev.o", self.asm_root))
+        self.write_assembly("lib/bitrev.o")
+        entry.pop("assemblySha256")
+        self.assertIsNone(substitute.reusable(entry, "lib/bitrev.o", self.asm_root))
 
     def test_an_outcome_from_a_later_step_is_never_reused(self) -> None:
         for outcome in ("assembled", "substituted", "symbol-drift", "assembler-refused",
