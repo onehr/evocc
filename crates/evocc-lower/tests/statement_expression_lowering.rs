@@ -117,6 +117,20 @@ fn abrupt_value_expressions_have_no_synthetic_fallthrough() {
 }
 
 #[test]
+fn discarded_comma_operands_do_not_require_a_value() {
+    for (ordinal, source) in [
+        "int main(void) { int x = 0; return ((void)(x = 1), (x += 2), x); }",
+        "int x; int main(void) { return ((void)(x = 1), (x += 2), x); }",
+        "int main(void) { int x = 0; return (1 ? (void)(x = 3) : (void)(x = 9)), x; }",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(observe(source, 40 + ordinal as u32), (3, 3));
+    }
+}
+
+#[test]
 fn jumping_out_of_an_initializer_keeps_the_reached_read_uninitialized() {
     let source = "int main(void){ int first=({goto done; 0;}); int k=5; done: return k; }";
     let arena = Arena::default();

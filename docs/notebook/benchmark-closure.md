@@ -195,13 +195,16 @@ absent. Every original program and headline outcome remains unchanged.
 
 ### Newly reduced control-flow case
 
-`int f(void) { int first=({ goto done; 0; }); int k=5; done:return k; }`
-still reports E3101, `statement expression has no normal path to its value`,
-instead of lowering the abrupt initializer and diagnosing the reached
-uninitialized read. This is an OPEN non-FP lowering case in rows 4/16, not
-a reason to broaden inlining's constant propagation. Its conditional form
-has a normal alternative and tests that a skipped initializer is never
-turned into a constant value by the inliner.
+`12f9eb5` and `d80c546` pin abrupt exits in value expressions, including
+comma operands and conditionals with no normal continuation. Lowering now
+retains a predecessorless insertion point, not a fabricated value or an edge
+from the abrupt exit. The C-HIR task machine discards the comma's left operand
+without requiring a scalar result. Fifteen focused lowering tests and the
+native CLI regression pass; the affected all-targets gate against `12f9eb5`,
+Clippy, fmt, Ruff and diff-check pass. Original-program replay is pending.
+The reduced `int f(void) { int first=({ goto done; 0; }); int k=5;
+done:return k; }` now lowers and both interpreters report E3001 for the
+reached uninitialized read. It must never be folded into a constant return.
 
 ### Latest completed incremental replay
 

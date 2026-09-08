@@ -7901,12 +7901,7 @@ impl<'a> FunctionLowerer<'a> {
         let control = self.active_control.clone();
         let storage = self.begin_compound_storage(body as *const CHirStmt<'a> as usize, state)?;
         let flow = self.lower_compound_items(prefix, state.clone(), &live, &control, false)?;
-        let Some(mut continued) = self.merge_states(flow.normal, &live)? else {
-            return Err(LowerError::InvalidControlFlow {
-                span,
-                reason: "statement expression has no normal path to its value",
-            });
-        };
+        let mut continued = self.expression_continuation(flow, state, &live)?;
 
         // The final statement supplies the value, but its label prefixes
         // still establish distinct code identities before that value runs.
@@ -9479,13 +9474,25 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<(), LowerError> {
         let live = state.locals.clone();
         let flow = self.lower_discarded_flow(expression, state.clone())?;
-        *state = self
-            .merge_states(flow.normal, &live)?
-            .ok_or(LowerError::InvalidControlFlow {
-                span: expression.span(),
-                reason: "value expression has no normal continuation",
-            })?;
+        *state = self.expression_continuation(flow, state, &live)?;
         Ok(())
+    }
+
+    fn expression_continuation(
+        &mut self,
+        flow: Flow,
+        previous: &State,
+        live: &BTreeSet<SymbolId>,
+    ) -> Result<State, LowerError> {
+        if let Some(continued) = self.merge_states(flow.normal, live)? {
+            return Ok(continued);
+        }
+        // Keep an insertion point for the syntactic remainder without adding
+        // an edge from a return, goto, break or continue. Only label entries
+        // can make subsequent code reachable; ordinary reachability pruning
+        // removes this predecessorless continuation. No value is fabricated.
+        let keys = previous.env.keys().copied().collect::<Vec<_>>();
+        self.new_block_from(previous, &keys, BlockRole::Ordinary)
     }
 
     /// Discarding a value does not require that evaluating it falls through.

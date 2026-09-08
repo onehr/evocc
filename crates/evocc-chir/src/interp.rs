@@ -3644,6 +3644,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     allow_root_mutation: true,
                 });
             }
+            CHirExpr::Comma(left, right, _) | CHirExpr::Binary(BinaryOp::Comma, left, right, _) => {
+                tasks.push(MachineTask::EvalExpression {
+                    expression: right,
+                    allow_root_mutation,
+                });
+                self.schedule_discarded_expression(left, tasks)?;
+            }
             CHirExpr::Binary(operator, left, right, _) => {
                 tasks.push(MachineTask::ContinueBinary {
                     operator: *operator,
@@ -3785,18 +3792,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expression: value,
                     // A C cast converts the result; it is not an evaluation
                     // barrier for a side effect in its operand.
-                    allow_root_mutation,
-                });
-            }
-            CHirExpr::Comma(left, right, _) => {
-                tasks.push(MachineTask::ContinueBinary {
-                    operator: BinaryOp::Comma,
-                    right,
-                    span,
-                    allow_root_mutation,
-                });
-                tasks.push(MachineTask::EvalExpression {
-                    expression: left,
                     allow_root_mutation,
                 });
             }
@@ -9136,7 +9131,11 @@ fn find_storage_object_declaration<'arena>(
 
 fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
     match expression {
-        CHirExpr::Call(_, _, _) => true,
+        // Comma needs the discarded-expression path for its left operand,
+        // which need not produce a scalar value even without a function call.
+        CHirExpr::Call(_, _, _)
+        | CHirExpr::Comma(_, _, _)
+        | CHirExpr::Binary(BinaryOp::Comma, _, _, _) => true,
         CHirExpr::CheckedArithmetic {
             lhs, rhs, target, ..
         } => {
@@ -9154,7 +9153,6 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _) => {
             expression_contains_call(left) || expression_contains_call(right)
         }
