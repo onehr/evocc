@@ -57,6 +57,22 @@ fn abrupt_value_expressions_preserve_only_executed_effects() {
 }
 
 #[test]
+fn variadic_record_results_preserve_promoted_arguments_on_the_machine() {
+    let source = include_str!("../../../tests/fixtures/variadic-record-results.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "variadic-record-results");
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {

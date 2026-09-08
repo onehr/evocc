@@ -82,6 +82,41 @@ fn record_parameter_and_return_destination_have_the_frozen_signature() {
 }
 
 #[test]
+fn variadic_record_calls_keep_the_return_slot_before_anonymous_arguments() {
+    let module = lower(include_str!(
+        "../../../tests/fixtures/variadic-record-results.c"
+    ));
+    let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+    let calls = main
+        .blocks
+        .iter()
+        .flat_map(|block| &block.insts)
+        .filter_map(|inst| match inst {
+            Inst::Call { callee, args, .. } if callee == "small" => Some((32, args)),
+            Inst::IndirectCall { args, .. } => Some((64, args)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(calls.len(), 2);
+    for (width, args) in calls {
+        assert_eq!(
+            args.iter().map(|v| v.ty.clone()).collect::<Vec<_>>(),
+            vec![
+                EvoIRType::Bits(width),
+                EvoIRType::Ptr(AddressSpace::Generic),
+                EvoIRType::Bits(width),
+                EvoIRType::Bits(64),
+            ]
+        );
+    }
+    let text = render_module(&module);
+    assert_eq!(
+        render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),
+        text
+    );
+}
+
+#[test]
 fn record_marks_agree_across_declarations_definitions_and_indirect_calls() {
     let module = lower("struct S { int a; long b; }; extern struct S external(struct S); struct S local(struct S x){return x;} struct S invoke(struct S (*fp)(struct S),struct S x){return fp(x);} struct S caller(struct S x){return invoke(local,external(x));}");
     let local = module.functions.iter().find(|f| f.name == "local").unwrap();
