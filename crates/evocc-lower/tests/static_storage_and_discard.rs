@@ -55,6 +55,14 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn file_definitions_reuse_symbols_first_declared_inside_functions() {
+    check(
+        include_str!("../../../tests/fixtures/block-extern-global.c"),
+        0,
+    );
+}
+
+#[test]
 fn expression_scopes_keep_their_static_objects_in_the_module() {
     for source in [
         "int f(void){if(({static int n=0; ++n;})) return 7;return 0;} int main(void){return f()!=7 || f()!=7;}",
