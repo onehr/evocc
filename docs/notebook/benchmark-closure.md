@@ -47,7 +47,8 @@ their remaining closure work without creating a second set of measurements.
   exact measured binary; close each substitution mismatch (rows 5, 6).
 - [ ] Resolve the remaining kernel assembly/symbol/control-flow constructs,
   retaining explicit specification conflicts rather than bypassing them (row 7).
-- [ ] Repair remaining toybox function-value and object-subvalue forms (row 9).
+- [x] Classify remaining toybox function-value and object-subvalue forms:
+  all eight measured sites require deferred FP execution (row 9), not PASS.
 - [ ] Admit unused system-header types independently of FP execution (row 10).
 - [ ] Classify and implement admitted declaration/call forms, not a blanket
   diagnostic-code exception (row 13).
@@ -55,6 +56,9 @@ their remaining closure work without creating a second set of measurements.
   and replay the original initializer/place failures (row 14).
 - [ ] Close the variable-length-object requirement under an authorized contract;
   a current profile refusal is not a non-FP pass (row 15).
+  The reduced `void f(int n, int values[n]);` also reports E2001 for the
+  earlier parameter instead of the existing E2203 profile boundary; its
+  parameter-name visibility defect remains separate from prototype `[*]`.
 - [ ] Reduce and repair every remaining non-FP diagnostic family, including
   builtins, ABI, initializers and the remaining TinyCC compile refusals
   (rows 11, 16).
@@ -88,7 +92,7 @@ not a claim that no unknown compiler bug can exist.
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
 | 7 | Remaining kernel refusals | Latest survey: 2,717 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; symbolic `%c` operands require a rule beyond integer-only `i` | `kernel` | OPEN |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
-| 9 | Other toybox lowering refusals | Eight further refusals: seven function-value types and one object subvalue; classify FP dependence individually | `toybox` | OPEN |
+| 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
 | 11 | TinyCC compiler build | 7/11 assemble, 4/11 enter a passing build; three relink failures and four compile refusals remain; external-data PIE is independently reduced for tccrun | `tinycc` | PARTIAL: macro-rescan failures in tccdbg/tccelf CLOSED by original replay |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
@@ -105,6 +109,27 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+The attributed-type repair `1cd7701` is measured in
+`20260908T085411.464607Z` (`python3 tools/bench.py ctest torture --jobs 4`):
+c-testsuite rises to 205/220 and torture remains 1,196/1,692. Original
+`00210` is the only changed outcome, refused to native PASS, with all
+identities and earlier passes preserved. The five-crate changed gate passes
+985 tests, zero failed/ignored, plus Clippy, fmt, Ruff and diff-check.
+Executable SHA-256 is
+`d9d3077f8221e8679fcf9610f050799d2e9b5c7330fdb5a19f779a0329748e50`;
+the checkout is `5aeea8c`, with only the next tests being written while its
+release build finished. Prototype-array production changes were made later
+and are not included in this replay.
+
+Toybox's eight remaining first sites were individually replayed with the
+same adapter transformations (including re-escaping regenerated flags.h).
+They require FP execution: `lib_args`, `lib_xwrap` and `sort` reach strtod;
+`lib_hash` reaches sin; `seq` reaches fabs; `printf` reaches strtold;
+`od` has a long-double subvalue; `uptime` forms FP load averages.
+`CFG_TOYBOX_FLOAT` is one in this measured configuration. All eight remain
+refusals in the 203-unit universe, not invented non-FP passes, and this
+does not waive other outstanding toybox input-adaptation/baseline issues.
 
 The line-control repair `2d063ef` is replayed in
 `20260908T084118.829770Z` (`python3 tools/bench.py ctest torture --jobs 4`):

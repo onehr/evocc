@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout 0a914b7)
+EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout 5aeea8c)
 ═════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ───────────────┐
@@ -24,7 +24,7 @@ EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout 0a914b7)
 │ K1 receipt: EvoCC 41 ; 52/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
-│ E0 c-testsuite 204/220 ███████░ torture 1196/1692 ██████░░ │
+│ E0 c-testsuite 205/220 ███████░ torture 1196/1692 ██████░░ │
 │ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 4/11 toybox 195/203 musl 494/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -39,14 +39,14 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260908T084118.829770Z`; checkout `0a914b7`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260908T085411.464607Z`; checkout `5aeea8c`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
-| ctest | E0b | INCOMPLETE | 204/220 programs | 20260908T084118.829770Z | E3101: 7, E1003: 2, E2202: 2 |
-| torture | E0a | INCOMPLETE | 1196/1692 programs | 20260908T084118.829770Z | E3101: 132, E1001: 108, E2001: 42 |
+| ctest | E0b | INCOMPLETE | 205/220 programs | 20260908T085411.464607Z | E3101: 7, E2202: 2, E3030: 1 |
+| torture | E0a | INCOMPLETE | 1196/1692 programs | 20260908T085411.464607Z | E3101: 132, E1001: 108, E2001: 42 |
 | csmith | E0c | INCOMPLETE | 932/1000 programs | 20260908T080325.213428Z (previous) | original seeds; unavailable oracles are not passes |
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 2/44 units | 20260907T141450.311159Z (previous) | E1001: 38, E2921: 4 |

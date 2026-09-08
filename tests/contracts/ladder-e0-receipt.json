@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T084147Z",
-  "subject": "0a914b7",
-  "driverSha256": "213abc7bd72465d157a2346d1bdff87f76b39b4043fb635028ce119dd26f4a92",
+  "run": "20260908T085436Z",
+  "subject": "5aeea8c",
+  "driverSha256": "d9d3077f8221e8679fcf9610f050799d2e9b5c7330fdb5a19f779a0329748e50",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -66,5 +66,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T084147Z"
+ "evidence": ".evidence/ladder/e0/20260908T085436Z"
 }
