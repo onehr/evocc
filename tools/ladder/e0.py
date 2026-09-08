@@ -102,6 +102,25 @@ def fetch(suite: str) -> Path:
                 ["git", "-C", str(dest), "sparse-checkout", "set", pin["subdir"]],
                 check=True,
             )
+    if suite == "torture":
+        # These execute tests include C sources from a sibling directory.
+        # Read those exact pinned blobs rather than fetching the whole GCC
+        # testsuite or leaving preparation failures classified as refusals.
+        for relative in (
+            "gcc/testsuite/gcc.dg/tree-ssa/pr105777.c",
+            "gcc/testsuite/gcc.dg/tree-ssa/pr109938.c",
+            "gcc/testsuite/gcc.dg/tree-ssa/pr109986.c",
+            "gcc/testsuite/gcc.dg/tree-ssa/pr30314.c",
+            "gcc/testsuite/gcc.dg/pr98304-1.c",
+        ):
+            destination = dest / relative
+            if not destination.exists():
+                blob = subprocess.run(
+                    ["git", "-C", str(dest), "show", f"HEAD:{relative}"],
+                    capture_output=True, check=True,
+                ).stdout
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(blob)
     return dest / pin["subdir"]
 
 
@@ -316,7 +335,7 @@ def main() -> int:
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = EVIDENCE / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    inc = include_flags(sysroot())
+    system_includes = include_flags(sysroot())
     head = sh(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"]).stdout.strip()
     summary = {
         "run": run_id,
@@ -332,7 +351,11 @@ def main() -> int:
             work = BUILD / f"run-{suite}"
             if work.exists():
                 shutil.rmtree(work)
-            names, adjusted = prepare(suite, fetch(suite), work, args.limit)
+            source_dir = fetch(suite)
+            names, adjusted = prepare(suite, source_dir, work, args.limit)
+            # The copied translation unit retains its bytes; quoted headers
+            # and cross-directory inclusions resolve in its original tree.
+            inc = [*system_includes, f"-I{source_dir}"]
             rows = emit(evocc, work, names, inc)
             runs = run_in_container(work)
             counts = collections.Counter()
@@ -364,6 +387,8 @@ def main() -> int:
                 results.write(json.dumps(row) + "\n")
             summary["suites"][suite] = {
                 "pin": PINS[suite],
+                "sourceDirectory": str(source_dir.relative_to(ROOT)),
+                "sourceCommit": sh(["git", "-C", str(source_dir), "rev-parse", "HEAD"], check=True).stdout.strip(),
                 "programs": len(names),
                 "adjustedEmptyParameterLists": adjusted,
                 "outcomes": dict(counts),
@@ -373,7 +398,8 @@ def main() -> int:
                 "programsWithUnhandledRequirements": unhandled_programs,
             }
             print(f"{suite}: {dict(counts)}")
-    json.dump(summary, open(out_dir / "summary.json", "w"), indent=1)
+    with open(out_dir / "summary.json", "w") as stream:
+        json.dump(summary, stream, indent=1)
     receipt = {
         "schemaVersion": 1,
         "rung": "E0",
@@ -381,7 +407,8 @@ def main() -> int:
         "latest": summary,
         "evidence": str(out_dir.relative_to(ROOT)),
     }
-    json.dump(receipt, open(RECEIPT, "w"), indent=1)
+    with open(RECEIPT, "w") as stream:
+        json.dump(receipt, stream, indent=1)
     print("receipt:", RECEIPT.relative_to(ROOT), "evidence:", out_dir.relative_to(ROOT))
     return 0
 
