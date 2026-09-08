@@ -195,6 +195,26 @@ fn constant_case_folding_does_not_waive_runtime_shift_checks() {
 }
 
 #[test]
+fn substituted_member_macro_keeps_its_single_object_projection() {
+    let source = "struct S { int slot; };\n\
+        #define slot state->slot\n\
+        #define SET(s, value) ((s) = (value))\n\
+        int main(void) { struct S object = {0}; struct S *state = &object;
+          SET(slot, 7); return slot != 7; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "substituted-member-macro");
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";

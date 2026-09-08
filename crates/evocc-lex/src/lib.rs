@@ -33,6 +33,10 @@ pub struct Token {
     /// Whether preprocessing whitespace preceded this token. Comments count
     /// as whitespace; the flag is propagated through macro substitution.
     pub preceded_by_whitespace: bool,
+    /// This token occurrence was seen while its macro was being replaced.
+    /// It remains unavailable for expansion when copied into a later rescan
+    /// (C11 6.10.3.4); unrelated occurrences of the spelling stay eligible.
+    pub macro_expansion_inhibited: bool,
     /// The authoritative spelling of this token. The production lexer
     /// materializes it so downstream consumers never index a different
     /// source buffer with this token's location.
@@ -229,6 +233,7 @@ impl Token {
             spelling_span: span,
             span,
             preceded_by_whitespace: false,
+            macro_expansion_inhibited: false,
             text,
         }
     }

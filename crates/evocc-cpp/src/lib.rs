@@ -187,7 +187,7 @@ impl MacroMap {
     /// Expand any identifier token that refers to an object-like macro.
     /// Used to macro-expand argument tokens before `##` pasting.
     fn expand_arg_token(&self, tok: &Token) -> Vec<Token> {
-        if tok.kind != TokenKind::Identifier {
+        if tok.kind != TokenKind::Identifier || tok.macro_expansion_inhibited {
             return vec![tok.clone()];
         }
         let text = match &tok.text {
@@ -1504,6 +1504,13 @@ impl Preprocessor {
                             message: "poisoned-identifier-used".into(),
                         });
                     }
+                    if tok.macro_expansion_inhibited || expanding.contains(&name) {
+                        let mut inhibited = tok.clone();
+                        inhibited.macro_expansion_inhibited = true;
+                        output.push(inhibited);
+                        i += 1;
+                        continue;
+                    }
                     if name == "_Pragma" {
                         if let Some(argument_len) = complete_parenthesized_prefix(&raw[i + 1..]) {
                             let next_index = i + 1 + argument_len;
@@ -1750,7 +1757,7 @@ impl Preprocessor {
         invocation_scope.remove(replacement_owner);
         let mut consumed = 0;
         while let Some(last) = replacement.last() {
-            if last.kind != TokenKind::Identifier {
+            if last.kind != TokenKind::Identifier || last.macro_expansion_inhibited {
                 break;
             }
             let name = token_lexeme(last, source).to_owned();
