@@ -228,7 +228,7 @@ struct FunctionInfo {
     name: String,
     variadic: bool,
     ordinal: u32,
-    parameter_symbols: Vec<SymbolId>,
+    parameter_symbols: Vec<Option<SymbolId>>,
     parameter_types: Vec<FunctionValueType>,
     return_type: Option<FunctionValueType>,
     participant: bool,
@@ -2529,13 +2529,39 @@ fn function_info(
                 .iter()
                 .zip(types)
                 .map(|(parameter, canonical_type)| {
+                    if !function.parameters.parameter_type_matches(
+                        unit.types(),
+                        *canonical_type,
+                        parameter.ty,
+                    ) || !written_declarator_matches(
+                        unit.types(),
+                        &parameter.written,
+                        parameter.ty,
+                        parameter.specifier.type_id(),
+                        None,
+                        false,
+                        true,
+                    ) || !matches!(
+                        parameter.storage,
+                        StorageClass::None | StorageClass::Register
+                    ) {
+                        return Err(LowerError::MalformedFunction {
+                            function: function.name.spelling.clone(),
+                            span: parameter.span,
+                            reason: "parameter declaration disagrees with its semantic identity",
+                        });
+                    }
+                    if parameter.symbol.is_none() && parameter.name.is_none() {
+                        // An omitted C binder still occupies its positional ABI slot.
+                        return Ok(None);
+                    }
                     let (Some(parameter_symbol), Some(parameter_name)) =
                         (parameter.symbol, &parameter.name)
                     else {
                         return Err(LowerError::MalformedFunction {
                             function: function.name.spelling.clone(),
                             span: parameter.span,
-                            reason: "function definition has an unnamed parameter",
+                            reason: "parameter name and symbol disagree",
                         });
                     };
                     let symbol = unit.symbols().symbol(parameter_symbol).map_err(|_| {
@@ -2555,19 +2581,7 @@ fn function_info(
                     let scope_is_valid = scope.kind() == ScopeKind::Function
                         && scope.parent() == Some(unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
-                    if !function.parameters.parameter_type_matches(
-                        unit.types(),
-                        *canonical_type,
-                        parameter.ty,
-                    ) || !written_declarator_matches(
-                        unit.types(),
-                        &parameter.written,
-                        parameter.ty,
-                        parameter.specifier.type_id(),
-                        None,
-                        false,
-                        true,
-                    ) || symbol.kind() != SymbolKind::Parameter
+                    if symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
                         || symbol.ty() != parameter.ty
                         || !matches!(
@@ -2586,7 +2600,7 @@ fn function_info(
                         });
                     }
                     function_scope = Some(symbol.scope());
-                    Ok(parameter_symbol)
+                    Ok(Some(parameter_symbol))
                 })
                 .collect::<Result<Vec<_>, _>>()?
         }
@@ -3144,10 +3158,16 @@ impl<'a> FunctionLowerer<'a> {
                 ty: ty.clone(),
             });
             let value = self.fresh_value(ty);
-            let key = if self.is_aggregate_type(value_type.source) {
-                EnvKey::Address(symbol)
-            } else {
-                EnvKey::Local(symbol)
+            let key = match symbol {
+                Some(symbol) if self.is_aggregate_type(value_type.source) => {
+                    EnvKey::Address(symbol)
+                }
+                Some(symbol) => EnvKey::Local(symbol),
+                None => {
+                    let key = EnvKey::Temporary(self.next_temporary);
+                    self.next_temporary += 1;
+                    key
+                }
             };
             entry_args.push((
                 key,
@@ -3156,14 +3176,16 @@ impl<'a> FunctionLowerer<'a> {
                     value: value.clone(),
                 },
             ));
-            env.insert(
-                key,
-                BoundValue {
-                    value,
-                    integer: (!self.is_aggregate_type(value_type.source))
-                        .then_some(value_type.integer),
-                },
-            );
+            if symbol.is_some() {
+                env.insert(
+                    key,
+                    BoundValue {
+                        value,
+                        integer: (!self.is_aggregate_type(value_type.source))
+                            .then_some(value_type.integer),
+                    },
+                );
+            }
         }
         if self
             .info
@@ -3245,7 +3267,13 @@ impl<'a> FunctionLowerer<'a> {
         });
         self.next_block = 1;
 
-        let locals = self.info.parameter_symbols.iter().copied().collect();
+        let locals = self
+            .info
+            .parameter_symbols
+            .iter()
+            .copied()
+            .flatten()
+            .collect();
         let mut entry = State {
             block: 0,
             env,
@@ -3253,7 +3281,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         // The call interface supplies scalar values, but an addressed parameter
         // is an automatic object owned by this invocation, just like a local.
-        for symbol in self.info.parameter_symbols.iter().copied() {
+        for symbol in self.info.parameter_symbols.iter().copied().flatten() {
             let declared = self
                 .unit
                 .symbols()

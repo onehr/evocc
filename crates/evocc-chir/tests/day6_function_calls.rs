@@ -264,6 +264,7 @@ enum AddFault {
     IndirectCallee,
     VariadicDefinition,
     UnnamedParameter,
+    MissingParameterSymbol,
     ForgedDesignator,
     ForgedWrittenDeclarator,
     ForgedParameterStorage,
@@ -779,6 +780,9 @@ fn program_with_options(
                 if matches!(fault, AddFault::UnnamedParameter) {
                     left_parameter.symbol = None;
                     left_parameter.name = None;
+                }
+                if matches!(fault, AddFault::MissingParameterSymbol) {
+                    left_parameter.symbol = None;
                 }
                 if matches!(fault, AddFault::ForgedParameterStorage) {
                     left_parameter.storage = StorageClass::Register;
@@ -2729,6 +2733,7 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
     for fault in [
         AddFault::IndirectCallee,
         AddFault::UnnamedParameter,
+        AddFault::MissingParameterSymbol,
         AddFault::ForgedDesignator,
         AddFault::ForgedWrittenDeclarator,
         AddFault::ForgedParameterStorage,
@@ -2747,7 +2752,8 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 "unsupported-interpreter-expression: indirect scalar function call",
                 span(138, 142),
             ),
-            AddFault::UnnamedParameter => (
+            AddFault::UnnamedParameter => ("E3007", "invalid-scalar-place", span(20, 24)),
+            AddFault::MissingParameterSymbol => (
                 "E3007",
                 "unsupported-interpreter-function-signature",
                 span(8, 12),
@@ -2788,7 +2794,10 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 error,
                 InterpreterError::UnsupportedExpression { .. }
             )),
-            AddFault::UnnamedParameter
+            AddFault::UnnamedParameter => {
+                assert!(matches!(error, InterpreterError::InvalidScalarPlace { .. }))
+            }
+            AddFault::MissingParameterSymbol
             | AddFault::ForgedWrittenDeclarator
             | AddFault::ForgedParameterStorage => assert!(matches!(
                 error,

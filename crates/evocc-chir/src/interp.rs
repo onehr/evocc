@@ -580,7 +580,7 @@ struct FunctionEnd {
 struct ValidatedFunctionSignature {
     return_type: TypeId,
     return_value_type: ValueType,
-    parameters: Vec<(SymbolId, ValueType)>,
+    parameters: Vec<(Option<SymbolId>, ValueType)>,
 }
 
 #[derive(Debug)]
@@ -4563,6 +4563,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unit.types(),
                 &mut self.memory,
             )?;
+            let Some(symbol) = symbol else {
+                // Argument evaluation and conversion still happen; there is no
+                // source identifier to bind when the parameter name is omitted.
+                continue;
+            };
             match (ty, argument) {
                 (ValueType::Integer(ty), CValue::Integer(value)) => {
                     parameter_bindings.push((
@@ -4785,6 +4790,29 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let mut parameter_spellings = BTreeSet::new();
                 let mut function_scope = None;
                 for (canonical_type, parameter) in types.iter().zip(parameters) {
+                    if !syntax.parameter_type_matches(
+                        self.unit.types(),
+                        *canonical_type,
+                        parameter.ty,
+                    ) || !self.written_declarator_matches(
+                        &parameter.written,
+                        parameter.ty,
+                        parameter.specifier.type_id(),
+                        None,
+                        true,
+                    ) || !matches!(
+                        parameter.storage,
+                        StorageClass::None | StorageClass::Register
+                    ) {
+                        return Err(InterpreterError::UnsupportedFunctionSignature {
+                            symbol: function,
+                            span: parameter.span,
+                        });
+                    }
+                    if parameter.symbol.is_none() && parameter.name.is_none() {
+                        validated.push((None, self.value_type(parameter.ty, parameter.span)?));
+                        continue;
+                    }
                     let (Some(parameter_symbol), Some(parameter_name)) =
                         (parameter.symbol, &parameter.name)
                     else {
@@ -4808,17 +4836,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let scope_is_valid = scope.kind() == ScopeKind::Function
                         && scope.parent() == Some(self.unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
-                    if !syntax.parameter_type_matches(
-                        self.unit.types(),
-                        *canonical_type,
-                        parameter.ty,
-                    ) || !self.written_declarator_matches(
-                        &parameter.written,
-                        parameter.ty,
-                        parameter.specifier.type_id(),
-                        None,
-                        true,
-                    ) || symbol.kind() != SymbolKind::Parameter
+                    if symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
                         || symbol.ty() != parameter.ty
                         || !matches!(
@@ -4837,7 +4855,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                     function_scope = Some(symbol.scope());
                     validated.push((
-                        parameter_symbol,
+                        Some(parameter_symbol),
                         self.value_type(parameter.ty, parameter.span)?,
                     ));
                 }

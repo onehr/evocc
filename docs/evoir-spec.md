@@ -6127,3 +6127,10 @@ The authorized local-register binding is retained at an assembly operand as a ca
 The binding applies only at the assembly boundary, including tied and read-write operands, and register outputs are transferred on every outgoing edge of `asm.goto`; the existing reserved-register rule and clobber conflicts remain fail-closed with E3021 rather than silently dropping a binding.
 Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260908-local-register-operands/forms.c` with exit zero (`forms-results.txt`), while the original input-only reduction exits one with the pre-fix subject.
 No new diagnostic code is introduced; the one independently measured wrong-result reduction is not a count of affected musl units, which the original-unit replay must determine.
+
+### Unnamed parameters in function definitions
+
+A function definition may omit a parameter name while retaining its canonical parameter type and positional call-interface slot; all arguments are evaluated and converted normally, but an omitted name introduces no source identifier or named parameter object.
+Both sealed oracles execute `tests/fixtures/unnamed-definition-parameters.c` at O0/O2 with exit zero under gnu11, with Clang reporting C23-extension warnings (`.evidence/builtin-probes/20260908-unnamed-parameters/results.txt`).
+No diagnostic code is added, and a named parameter with a missing or inconsistent symbol, or a body referring to a nonexistent parameter binding, remains invalid.
+The original torture `pr103209` is one measured first-error refusal of this form; its end-to-end outcome must be remeasured rather than inferred from the reduced fixture.
