@@ -2667,12 +2667,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             return Ok(());
         }
-        self.allocate_automatic_object(
-            declaration.symbol,
-            declaration.ty,
-            declaration.initializer.as_ref(),
-            declaration.span,
-        )?;
+        if self.memory_binding(declaration.symbol).is_none() {
+            self.allocate_automatic_object(
+                declaration.symbol,
+                declaration.ty,
+                declaration.initializer.as_ref(),
+                declaration.span,
+            )?;
+        }
         let Some(initializer) = &declaration.initializer else {
             return Ok(());
         };
@@ -5388,8 +5390,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         // has already issued a new object identity and left the old one as a
         // tombstone, which is what makes a stale pointer stay dangling instead
         // of silently addressing the new object. Two declarations of one symbol
-        // within a single scope activation cannot reach here, because the
-        // symbol table rejects them when the unit is built.
+        // within a single scope activation are handled by reusing the binding:
+        // a backward jump can execute one declaration's initializer again.
         bindings.insert(symbol, MemoryBinding { address, ty });
         Ok(())
     }

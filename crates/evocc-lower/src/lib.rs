@@ -7,6 +7,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
+mod allocation;
+
 use evocc_chir::integer::{
     eval_binary_integer, eval_unary_integer, integer_literal_value, integer_type_for_rank,
     usual_arithmetic_type, CInteger, CIntegerType,
@@ -330,6 +332,7 @@ struct FunctionLowerer<'a> {
     case_labels: BTreeMap<usize, String>,
     address_labels: BTreeMap<String, BlockId>,
     pending_gotos: BTreeMap<String, Vec<State>>,
+    object_declarations: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
     active_control: ControlTargets,
 }
 
@@ -3132,6 +3135,7 @@ impl<'a> FunctionLowerer<'a> {
             case_labels: BTreeMap::new(),
             address_labels: BTreeMap::new(),
             pending_gotos: BTreeMap::new(),
+            object_declarations: BTreeMap::new(),
             active_control: ControlTargets::default(),
         }
     }
@@ -3470,6 +3474,7 @@ impl<'a> FunctionLowerer<'a> {
             blocks: self.finish_blocks()?,
             param_marks,
         };
+        allocation::share_allocation_sites(&mut function)?;
         renumber_function(&mut function)?;
         Ok((function, label_addresses))
     }
@@ -3591,7 +3596,7 @@ impl<'a> FunctionLowerer<'a> {
             .env
             .keys()
             .chain(keys.iter())
-            .any(|key| matches!(key, EnvKey::Compound(_)))
+            .any(|key| matches!(key, EnvKey::Compound(_) | EnvKey::Address(_)))
         {
             let arguments = self.edge_values(state, keys)?;
             return self.terminate(state, Inst::Br(target, arguments));
@@ -3604,7 +3609,32 @@ impl<'a> FunctionLowerer<'a> {
             .filter(|key| matches!(key, EnvKey::Compound(_)) && !keys.contains(key))
             .collect::<Vec<_>>();
         self.end_compound_storage(&leaving, &mut state)?;
+        let leaving = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Address(symbol) if !keys.contains(key) => Some(*symbol),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for symbol in leaving {
+            self.end_object_lifetime(symbol, &mut state)?;
+            state.env.remove(&EnvKey::Address(symbol));
+        }
         for key in keys {
+            if let EnvKey::Address(symbol) = key {
+                if !state.env.contains_key(key) {
+                    let object = self.object_declarations.get(symbol).copied().ok_or(
+                        LowerError::InvalidGeneratedSsa {
+                            message: format!(
+                                "object {} has no lexical storage declaration",
+                                symbol.raw()
+                            ),
+                        },
+                    )?;
+                    self.allocate_object_storage(object, &mut state)?;
+                }
+            }
             if let EnvKey::Compound(identity) = key {
                 if !state.env.contains_key(key) {
                     // A goto may enter below the lexical block's ordinary
@@ -4377,14 +4407,22 @@ impl<'a> FunctionLowerer<'a> {
         control: &ControlTargets,
         leave_scope: bool,
     ) -> Result<Flow, LowerError> {
+        let mut declared = Vec::new();
         for item in items.clone() {
             if let SwitchSegmentItem::Declaration(CHirDecl::Object(object)) = item {
                 initial.locals.insert(object.symbol);
+                declared.push(object.symbol);
+                self.object_declarations.insert(object.symbol, object);
+                if self.memory_symbols.contains(&object.symbol)
+                    && !matches!(object.storage, StorageClass::Static | StorageClass::Extern)
+                    && !initial.env.contains_key(&EnvKey::Address(object.symbol))
+                {
+                    self.allocate_object_storage(object, &mut initial)?;
+                }
             }
         }
         let mut normal = vec![initial];
         let mut last_template = normal.first().cloned();
-        let mut declared = Vec::new();
         while let Some(item) = items.next() {
             let mut future = live_after.clone();
             for later in items.clone() {
@@ -4448,9 +4486,6 @@ impl<'a> FunctionLowerer<'a> {
             last_template = Some(state.clone());
             normal = match item {
                 SwitchSegmentItem::Declaration(declaration) => {
-                    if let CHirDecl::Object(object) = declaration {
-                        declared.push(object.symbol);
-                    }
                     self.lower_declaration(declaration, &mut state)?;
                     vec![state]
                 }
@@ -4532,7 +4567,9 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         incoming.extend(self.pending_gotos.remove(name).unwrap_or_default());
-        let Some(template) = incoming.first().cloned().or(template) else {
+        // The lexical template describes storage at the destination. A jump
+        // predecessor can come from an outer scope and lack those objects.
+        let Some(template) = template.or_else(|| incoming.first().cloned()) else {
             if self.goto_names.contains(name) {
                 return Err(LowerError::InvalidControlFlow {
                     span: nested.span(),
@@ -5863,6 +5900,28 @@ impl<'a> FunctionLowerer<'a> {
         object: &'a ObjectDecl<'a>,
         state: &mut State,
     ) -> Result<(), LowerError> {
+        self.object_declarations.insert(object.symbol, object);
+        if !state.env.contains_key(&EnvKey::Address(object.symbol)) {
+            self.allocate_object_storage(object, state)?;
+        }
+        if object.storage == StorageClass::Static {
+            return Ok(());
+        }
+        let Some(initializer) = &object.initializer else {
+            return Ok(());
+        };
+        let address = self.token(state, EnvKey::Address(object.symbol))?.value;
+        self.lower_initializer_at(address, object.ty, initializer, object.span, state)
+            .map(|_| ())
+    }
+
+    /// A scope activation owns storage; reaching the declaration only runs
+    /// its initializer. Jump-entry edges therefore allocate without storing.
+    fn allocate_object_storage(
+        &mut self,
+        object: &'a ObjectDecl<'a>,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
         let mut layout = self.access_layout(object.ty, object.span)?;
         layout.align_bytes = layout.align_bytes.max(
             self.unit
@@ -5927,12 +5986,7 @@ impl<'a> FunctionLowerer<'a> {
             },
         );
         state.locals.insert(object.symbol);
-
-        let Some(initializer) = &object.initializer else {
-            return Ok(());
-        };
-        self.lower_initializer_at(address, object.ty, initializer, object.span, state)
-            .map(|_| ())
+        Ok(())
     }
 
     fn lower_initializer_at(
@@ -6645,7 +6699,13 @@ impl<'a> FunctionLowerer<'a> {
         self.replace_target(break_placeholder, exit.block);
         let mut exit = exit;
         for symbol in init_symbols {
+            if self.memory_symbols.contains(&symbol)
+                && exit.env.contains_key(&EnvKey::Address(symbol))
+            {
+                self.end_object_lifetime(symbol, &mut exit)?;
+            }
             exit.env.remove(&EnvKey::Local(symbol));
+            exit.env.remove(&EnvKey::Address(symbol));
             exit.locals.remove(&symbol);
         }
         Ok(Flow { normal: vec![exit] })
@@ -6885,7 +6945,12 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         outer: &ControlTargets,
     ) -> Result<Flow, LowerError> {
-        if !switch_has_flat_labels(body) {
+        if !switch_has_flat_labels(body)
+            || matches!(body, CHirStmt::Compound(items, _) if items.iter().any(|item| {
+                matches!(item, CHirBlockItem::Declaration(CHirDecl::Object(object))
+                    if self.memory_symbols.contains(&object.symbol))
+            }))
+        {
             return self.lower_nested_switch(expression, body, state, live_after, outer);
         }
         let selector = self.lower_expr(expression, &mut state)?;

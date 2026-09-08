@@ -273,6 +273,7 @@ fn automatic_objects_end_on_break_continue_and_outgoing_goto() {
     for source in [
         "int main(void){int *p;while(1){int a[1]={7};p=a;break;}return *p;}",
         "int main(void){int *p;for(int i=0;i<1;i++){int a[1]={7};p=a;continue;}return *p;}",
+        "int main(void){int *p,n=0;for(int a[1]={7};n<1;n++){p=a;}return *p;}",
         "int main(void){int *p;{int a[1]={7};p=a;goto out;}out:return *p;}",
     ] {
         evaluates(source, Some("E3010"));
