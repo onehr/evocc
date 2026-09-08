@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.83** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.84** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3995,6 +3995,23 @@ EvoIR intrinsic. A compatible visible `isdigit` definition does not replace
 this builtin operation; ordinary calls to `isdigit` retain the external-call
 contract. The other four ctype builtin spellings retain that call contract.
 
+**Target types in otherwise unused declarations (revision 1.9.84).** The
+GNU target-header profile admits the builtin type spellings `_Float16`,
+`_Float32`, `_Float64`, `_Float128`, `_Float32x`, `_Float64x`, `__fp16`,
+`__Float32x4_t`, `__Float64x2_t`, `__SVFloat32_t`, `__SVFloat64_t` and
+`__SVBool_t` in typedefs and prototypes. Each has its own canonical identity,
+preserves qualifiers, and is not a same-size alias of `float`, `double`,
+`long double`, or a GNU `vector_size` type. Their measured size/alignment
+pairs are respectively 2/2, 4/4, 8/8, 16/16, 8/8, 16/16, 2/2, 16/16 and
+16/16; the last three are sizeless and never receive a fabricated object
+layout. Only the declaration/type-query capability is added: an unused
+prototype needs no EvoIR declaration, while a required value or call with
+these types remains at the existing unsupported-type execution/lowering
+boundary. This does not admit floating-point or vector execution.
+The sealed `20260908-header-types/types.c` and `results.txt` record both
+compilers: Clang-19 lacks seven GCC spellings, whose admission is the
+explicitly requested GCC target-header profile, not claimed oracle consensus.
+
 #### 10.1.15 Checked arithmetic builtins
 
 `__builtin_add_overflow(a, b, p)`, `__builtin_sub_overflow(a, b, p)` and
@@ -5780,6 +5797,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.84 | 2026-09-08 | Define measured target-header type identities and layout queries without admitting floating-point or vector execution. GCC-only names and sizeless types are explicit; this changes no compiler code. |
 | 1.9.83 | 2026-09-08 | Define explicitly selected signed-wrapping arithmetic while retaining the default UB and memory obligations. Sealed original torture programs require these options; this revision changes the contract, not compiler code. |
 | 1.9.82 | 2026-09-08 | Define the already-admitted GCC digit builtin as its measured integer operation, distinct from an external ctype call; record source rN local-register aliases as the existing xN physical binding. This changes the contract, not compiler code. |
 | 1.9.81 | 2026-09-08 | Define integer mode attributes under the authorized non-floating-point closure, including their canonical ranks, qualifiers, declaration placements and the refused abstract-type-name oracle conflict. This changes the contract, not compiler code. |
@@ -5877,6 +5895,13 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### Unused target-header types are not floating-point execution
+
+Section 10.1.14 admits the twelve measured target type spellings with distinct identity and only their measured fixed layouts, leaving the three scalable types sizeless and all value execution deferred.
+Evidence `.evidence/builtin-probes/20260908-header-types/{types.c,results.txt}` records GCC-14 and Clang-19 separately, including seven names absent in Clang; this is the user's authorized GNU target-header admission, not an inferred agreement or scalar substitute.
+No new diagnostic is allocated: unsupported layout/value consumers retain their existing refusal and unused declarations do not reach EvoIR.
+The inventory records 31 vector-header and seven extended-float first errors in zstd and two vector-header errors in cJSON; only original-unit replay can establish their new outcomes.
 
 ### Explicit arithmetic options in compiler benchmarks
 
