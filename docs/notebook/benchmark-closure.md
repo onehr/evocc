@@ -110,6 +110,18 @@ not a claim that no unknown compiler bug can exist.
 
 ### Latest completed incremental replay
 
+The prototype-array repair `858b8c2` is measured in
+`20260908T090630.550681Z` (`python3 tools/bench.py ctest torture --jobs 4`):
+c-testsuite rises to 206/220 and torture remains 1,196/1,692. Original
+`00162` is the only changed outcome, refused to native PASS; both identity
+sets and all earlier passes are unchanged. The source checkout `91158d1`
+is clean at capture, with executable SHA-256
+`384941528b53ad45a9c9ff1ae2879476bf01e017db673e28d31ffb02892e5f31`.
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh f1c2453 --quiet` passes 990 tests, zero failed or
+ignored, plus Clippy, fmt, Ruff and diff-check. This closes prototype `[*]`,
+not real VLA execution or the entire declaration-coverage family.
+
 The attributed-type repair `1cd7701` is measured in
 `20260908T085411.464607Z` (`python3 tools/bench.py ctest torture --jobs 4`):
 c-testsuite rises to 205/220 and torture remains 1,196/1,692. Original
