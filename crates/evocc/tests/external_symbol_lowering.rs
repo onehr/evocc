@@ -98,6 +98,85 @@ fn composite_function_declarations_preserve_calls_and_reject_conflicts() {
 }
 
 #[test]
+fn legacy_integer_declarations_require_the_explicit_language_mode() {
+    let source = include_str!("../../../tests/fixtures/legacy-integer-declarations.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run_with_options(source, mode, &["-std=gnu89"]);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution_with_options(source, "legacy-integer-declarations", &["-std=gnu89"]);
+    for options in [
+        &[][..],
+        &["-std=gnu11"][..],
+        &["-std=gnu89", "-std=gnu11"][..],
+    ] {
+        let output = run_with_options(source, "--parse-only", options);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E1001"));
+    }
+}
+
+#[test]
+fn legacy_language_macros_follow_mode_before_user_overrides() {
+    let source = "__STDC_VERSION__ __GNUC_STDC_INLINE__ __GNUC_GNU_INLINE__\n";
+    for (options, expected) in [
+        (
+            vec!["-std=gnu89"],
+            "__STDC_VERSION__ __GNUC_STDC_INLINE__ 1",
+        ),
+        (vec!["-std=gnu11"], "201112L 1 __GNUC_GNU_INLINE__"),
+        (
+            vec!["-std=gnu11", "-std=gnu89"],
+            "__STDC_VERSION__ __GNUC_STDC_INLINE__ 1",
+        ),
+        (
+            vec![
+                "-std=gnu89",
+                "-D__STDC_VERSION__=17",
+                "-U__GNUC_GNU_INLINE__",
+            ],
+            "17 __GNUC_STDC_INLINE__ __GNUC_GNU_INLINE__",
+        ),
+    ] {
+        let output = run_with_options(source, "-E", &options);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), expected);
+    }
+}
+
+#[test]
+fn legacy_declarations_preserve_missing_names_and_type_conflicts() {
+    for (source, code) in [
+        ("int main(void) { return missing_object; }", "E2001"),
+        (
+            "int main(void) { return later(1); } long later(int x) { return x; }",
+            "E2002",
+        ),
+        ("int f(a) int a; int a; { return a; }", "E2002"),
+        ("int f(a) int absent; { return a; }", "E1001"),
+        ("int main(void) { int later; return later(1); }", "E2202"),
+    ] {
+        let output = run_with_options(source, "--parse-only", &["-std=gnu89"]);
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn flexible_string_initializers_execute_without_completing_the_record_type() {
     let source = include_str!("../../../tests/fixtures/flexible-string-initializers.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

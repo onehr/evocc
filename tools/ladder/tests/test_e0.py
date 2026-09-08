@@ -15,6 +15,20 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_language_mode_is_preserved_for_emission_and_diagnosis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / "src").mkdir()
+            (work / "asm").mkdir()
+            (work / "src/probe.c").write_text('/* { dg-options "-std=gnu89" } */\nmain(){return 0;}\n')
+            with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="ret\n", stderr="")) as run:
+                rows = e0.emit(Path("/compiler"), work, ["probe"], [])
+                self.assertIn("-std=gnu89", run.call_args.args[0])
+            self.assertEqual(rows["probe"]["options"], {"applied": ["-std=gnu89"], "unhandled": []})
+            with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="0\n", stderr="")) as run:
+                e0.interpreter_verdict(Path("/compiler"), work, "probe", [])
+                self.assertIn("-std=gnu89", run.call_args.args[0])
+
     def test_refusals_preserve_the_first_error_source_location(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
