@@ -108,7 +108,10 @@ fn observe(source: &str, ordinal: u32) -> (i128, i128) {
 #[test]
 fn abrupt_value_expressions_have_no_synthetic_fallthrough() {
     assert_eq!(
-        observe(include_str!("../../../tests/fixtures/abrupt-expression-values.c"), 70),
+        observe(
+            include_str!("../../../tests/fixtures/abrupt-expression-values.c"),
+            70
+        ),
         (0, 0)
     );
 }
@@ -119,14 +122,21 @@ fn jumping_out_of_an_initializer_keeps_the_reached_read_uninitialized() {
     let arena = Arena::default();
     let unit = parse(source, &arena, 71);
     let error = interpret_scalar_function(
-        &unit, function_symbol(&unit, "main"), ChirLimits::new(100_000),
-    ).unwrap_err();
+        &unit,
+        function_symbol(&unit, "main"),
+        ChirLimits::new(100_000),
+    )
+    .unwrap_err();
     assert_eq!(error.code(), "E3001");
     let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
         .expect("abrupt initializer must lower without inventing an initialized value");
     let error = interpret_module(
-        &module, "main", &entry_arguments(&module), EvoIrLimits::new(100_000),
-    ).unwrap_err();
+        &module,
+        "main",
+        &entry_arguments(&module),
+        EvoIrLimits::new(100_000),
+    )
+    .unwrap_err();
     assert_eq!(error.code(), "E3001");
 }
 

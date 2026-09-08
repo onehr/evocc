@@ -35,9 +35,17 @@ int loops(void) {
     }
     return effects;
 }
+int comma(void) {
+    int value = ((void)({ return 11; }), 42);
+    return value;
+}
+int alternatives(int condition) {
+    return (condition ? (void)({ return 17; }) : (void)({ return 19; })), 0;
+}
 int main(void) {
     if (assignment() != 2 || effects != 1) return 1;
     if (returned() != 7 || argument() != 3 || effects != 1) return 2;
     if (pointer() != 5 || loops() != 2) return 3;
+    if (comma() != 11 || alternatives(0) != 19 || alternatives(1) != 17) return 4;
     return 0;
 }

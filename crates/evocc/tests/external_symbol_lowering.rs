@@ -45,7 +45,11 @@ fn abrupt_value_expressions_preserve_only_executed_effects() {
     let source = include_str!("../../../tests/fixtures/abrupt-expression-values.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
         let output = run(source, mode);
-        assert!(output.status.success(), "{mode}: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert_eq!(output.stdout, b"0\n", "{mode}");
     }
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
