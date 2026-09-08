@@ -815,8 +815,8 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 .is_some_and(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic);
             let is_file = unit
                 .symbols()
-                .symbol(object.symbol)
-                .is_ok_and(|symbol| symbol.scope() == unit.symbols().file_scope());
+                .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
+                .unwrap_or(false);
             if is_aggregate
                 || is_file
                 || is_qualified_memory
@@ -865,7 +865,10 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             CHirExpr::Ident { symbol, .. } => {
                 if unit.symbols().symbol(*symbol).is_ok_and(|entry| {
                     entry.kind() == SymbolKind::Object
-                        && entry.scope() == unit.symbols().file_scope()
+                        && unit
+                            .symbols()
+                            .is_bound_in_scope(*symbol, unit.symbols().file_scope())
+                            .unwrap_or(false)
                 }) {
                     out.insert(*symbol);
                 }
@@ -1164,7 +1167,10 @@ fn lower_globals<'a>(
                 .ok_or(LowerError::InvalidGeneratedSsa {
                     message: format!("global {} has no allocation origin", object.symbol.raw()),
                 })?;
-            let file_scope = symbol.scope() == unit.symbols().file_scope();
+            let file_scope = unit
+                .symbols()
+                .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
+                .unwrap_or(false);
             Ok(GlobalObject {
                 relocs,
                 symbol: if file_scope {
@@ -1217,7 +1223,11 @@ fn symbolic_address(
                     .to_owned(),
                 0,
             ))
-        } else if symbol.scope() == unit.symbols().file_scope() {
+        } else if unit
+            .symbols()
+            .is_bound_in_scope(id, unit.symbols().file_scope())
+            .unwrap_or(false)
+        {
             Ok((symbol.spelling().to_owned(), 0))
         } else if symbol.storage_class() == Some(StorageClass::Static) {
             Ok((
@@ -5283,7 +5293,12 @@ impl<'a> FunctionLowerer<'a> {
             .symbols()
             .symbol(symbol)
             .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
-        if declaration.scope() != self.unit.symbols().file_scope() {
+        if !self
+            .unit
+            .symbols()
+            .is_bound_in_scope(symbol, self.unit.symbols().file_scope())
+            .unwrap_or(false)
+        {
             return Err(LowerError::InvalidGeneratedSsa {
                 message: format!(
                     "automatic memory object '{}' ({}) has no live address binding",
@@ -6497,7 +6512,10 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         if self.unit.symbols().symbol(symbol).is_ok_and(|entry| {
-            entry.scope() == self.unit.symbols().file_scope()
+            self.unit
+                .symbols()
+                .is_bound_in_scope(symbol, self.unit.symbols().file_scope())
+                .unwrap_or(false)
                 || matches!(
                     entry.storage_class(),
                     Some(StorageClass::Static | StorageClass::Extern)

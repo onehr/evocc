@@ -716,8 +716,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
     fn symbol_is_bound_in_scope(&self, symbol: SymbolId, scope: ScopeId) -> bool {
         self.unit
             .symbols()
-            .scope_symbols(scope)
-            .is_ok_and(|symbols| symbols.contains(&symbol))
+            .is_bound_in_scope(symbol, scope)
+            .unwrap_or(false)
     }
 
     fn function_scope_ancestor(&self, mut scope: ScopeId) -> Option<ScopeId> {

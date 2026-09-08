@@ -5310,7 +5310,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             })?;
         if symbol.kind() != SymbolKind::Object
             || symbol.spelling() != declaration.name.spelling
-            || symbol.ty() != declaration.ty
+            || !self.unit.types().compatible(symbol.ty(), declaration.ty)
             || !(symbol.storage_class() == Some(declaration.storage)
                 || (declaration.storage == StorageClass::Extern
                     && matches!(
@@ -5360,7 +5360,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         }
-        self.access_layout(declaration.ty, declaration.span)?;
+        // A declaration does not allocate an object: an earlier extern array
+        // may still be incomplete even when its later definition is complete.
+        if declaration.storage != StorageClass::Extern {
+            self.access_layout(declaration.ty, declaration.span)?;
+        }
         Ok(())
     }
 
@@ -8496,8 +8500,8 @@ fn has_static_storage_duration(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
     }
     let file_scope = unit
         .symbols()
-        .scope(declaration.scope())
-        .is_ok_and(|scope| scope.kind() == ScopeKind::File);
+        .is_bound_in_scope(symbol, unit.symbols().file_scope())
+        .unwrap_or(false);
     file_scope || declaration.storage_class() == Some(StorageClass::Static)
 }
 

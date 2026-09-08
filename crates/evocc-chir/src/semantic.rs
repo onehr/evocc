@@ -792,6 +792,18 @@ impl SymbolTable {
         Ok(self.scope(id)?.symbols())
     }
 
+    /// Whether this exact scope binds the symbol, without searching parents.
+    /// A linked entity may be bound in several scopes; `Symbol::scope` records
+    /// its first declaration, not every subsequent binding.
+    pub fn is_bound_in_scope(
+        &self,
+        symbol: SymbolId,
+        scope: ScopeId,
+    ) -> Result<bool, SymbolTableError> {
+        self.symbol(symbol)?;
+        Ok(self.scope_symbols(scope)?.contains(&symbol))
+    }
+
     pub fn scope_tags(&self, id: ScopeId) -> Result<&[TagId], SymbolTableError> {
         Ok(self.scope(id)?.tags())
     }
