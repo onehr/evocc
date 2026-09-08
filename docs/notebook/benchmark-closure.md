@@ -104,7 +104,7 @@ not a claim that no unknown compiler bug can exist.
 | 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
 | 11 | TinyCC compiler build | 7/11 assemble and pass together; all original PIE link failures are repaired; four compile refusals remain | `tinycc` | PARTIAL: external object/function addresses CLOSED in `20260908T102835Z`; remaining source forms OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
-| 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
+| 13 | Torture declaration coverage | 36 E1001 refusals after consuming GNU89; 66 original programs now reach a common function-declaration placement defect in the allocation manifest | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
 | 16 | Remaining diagnostic classes | Torture 459 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
@@ -133,9 +133,15 @@ three pre-existing standing-run ignores; Clippy, fmt, Ruff and diff-check pass.
 The first gate found two call-target regressions: missing-parenthesis syntax
 must retain its diagnostic priority, and a precedence fixture had incorrectly
 declared a called function as an integer object. Both are corrected and the
-gate rerun is green. The 72 originally refused GNU89 programs still require
-original-program replay; neither their success nor complete GNU89 conformance
-is inferred from the focused tests.
+gate rerun is green. Original replay `20260908T181121.039466Z`, subject
+`87ebd71`, executable SHA-256
+`0b500b9f358caf8b7ae3c320fa88e3443e8b215032b203cabfcd96030a2231ff`
+retains all original identities and outcomes: torture 1,210/1,692 and ctest
+206/220 pass. Seventy E1001 first errors move, but 66 programs expose the same
+misplaced block-scope implicit function declaration in the allocation manifest.
+Captures: `.evidence/ladder/e0/20260908T181121Z` and `20260908T181148Z`.
+The representation defect needs another RED and repair; neither GNU89
+original-program closure nor complete mode conformance is claimed.
 
 ### Flexible character-array initializer storage
 

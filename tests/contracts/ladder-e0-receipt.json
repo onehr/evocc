@@ -3,11 +3,11 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T172644Z",
-  "subject": "b0da087",
-  "driverSha256": "1c4c9532fa7d152b134e09a5a9b4e503e8c074a178d5187a2adc6f7927d35b25",
+  "run": "20260908T181148Z",
+  "subject": "87ebd71",
+  "driverSha256": "0b500b9f358caf8b7ae3c320fa88e3443e8b215032b203cabfcd96030a2231ff",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
-  "optionPolicy": "supported unconditional signed-wrapping options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
+  "optionPolicy": "supported unconditional language-mode, signed-wrapping and builtin options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
    "torture": {
@@ -24,22 +24,22 @@
      "fail": 23
     },
     "refusalsByCode": {
-     "E3101": 129,
-     "E1001": 106,
-     "E2001": 40,
+     "E3101": 195,
+     "E2001": 39,
+     "E1001": 36,
      "E2201": 23,
-     "E2203": 19,
+     "E2203": 21,
      "E2102": 19,
-     "E1205": 16,
+     "E1205": 17,
      "E3021": 16,
      "E3030": 15,
      "E0105": 12,
      "E0112": 11,
      "E3029": 10,
      "E3046": 6,
+     "E2920": 6,
      "E4003": 5,
      "E2913": 4,
-     "E2920": 4,
      "E2202": 4,
      "E2903": 3,
      "E2933": 2,
@@ -64,12 +64,13 @@
      "E3001 read-of-uninitialized-object": 1
     },
     "appliedOptions": {
+     "-std=gnu89": 75,
      "-fwrapv": 12,
      "-fno-strict-overflow": 1
     },
-    "programsWithUnhandledRequirements": 326
+    "programsWithUnhandledRequirements": 262
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T172644Z"
+ "evidence": ".evidence/ladder/e0/20260908T181148Z"
 }
