@@ -37,6 +37,17 @@ fn verify_assembly(
 
     // Every operand that needs a register has one.
     for operand in body.numbered() {
+        if matches!(&operand.value, AsmValue::Symbol { .. })
+            && !matches!(
+                operand.constraint,
+                AsmConstraint::Immediate(crate::AsmImmediate::Integer)
+            )
+        {
+            return Err(refuse(
+                block,
+                "only i admits a symbolic assembly operand".to_owned(),
+            ));
+        }
         if let Some(expected) = operand.fixed_register {
             if !matches!(expected, 0..=15 | 19..=28) || number(operand) != Some(expected) {
                 return Err(refuse(
@@ -60,7 +71,7 @@ fn verify_assembly(
                     ));
                 }
             }
-            AsmValue::Imm(_) => {
+            AsmValue::Imm(_) | AsmValue::Symbol { .. } => {
                 return Err(refuse(
                     block,
                     format!(

@@ -365,7 +365,6 @@ fn emit_unit(
                     module
                         .declares
                         .iter()
-                        .filter(|f| f.linkage == Linkage::Weak)
                         .map(|f| (SymbolKind::Function, f.name.as_str())),
                 ),
         );
@@ -658,8 +657,8 @@ fn instructions_in(body: &str) -> usize {
     body.lines().filter(|line| line.starts_with(' ')).count()
 }
 
-/// Undefined objects need GOT indirection for PIE linking. Unresolved weak
-/// functions need it to preserve the null address of an absent definition.
+/// Undefined symbols need GOT indirection for PIE linking, including strong
+/// function addresses and the null address of an absent weak definition.
 /// The address slot is linker storage, not an abstract C memory operation.
 struct SymbolEmission<'a> {
     target: Target,
@@ -929,10 +928,21 @@ fn emit_assembly(
     // The reference is resolved against the operand it names, at the width the
     // modifier asks for or the operand's own.
     let render = |operand: &AsmOperand, width: Option<RegClass>| -> String {
-        match operand.value {
+        match &operand.value {
             AsmValue::Imm(value) => format!("{value}"),
+            AsmValue::Symbol { name, addend } => {
+                let symbol = relocation_block(name).map_or_else(
+                    || format!("{}{name}", target.symbol_prefix()),
+                    |(function, block)| block_symbol(target, function, block),
+                );
+                if *addend == 0 {
+                    symbol
+                } else {
+                    format!("{symbol}{addend:+}")
+                }
+            }
             AsmValue::Zero(class) => {
-                let class = width.unwrap_or(class);
+                let class = width.unwrap_or(*class);
                 if class == RegClass::Gpr32 {
                     "wzr"
                 } else {
@@ -941,7 +951,7 @@ fn emit_assembly(
                 .to_owned()
             }
             AsmValue::Reg(reg) => {
-                let spelled = spell(reg, width.unwrap_or(reg.class));
+                let spelled = spell(*reg, width.unwrap_or(reg.class));
                 if matches!(operand.constraint, AsmConstraint::Memory { .. }) {
                     format!("[{spelled}]")
                 } else {
@@ -1004,7 +1014,11 @@ fn emit_assembly(
             'x' => Some(RegClass::Gpr64),
             _ => None,
         };
-        let at = if width.is_some() { index + 1 } else { index };
+        let at = if width.is_some() || characters[index] == 'c' {
+            index + 1
+        } else {
+            index
+        };
         if at >= characters.len() {
             rendered.push('%');
             rendered.push(characters[index]);

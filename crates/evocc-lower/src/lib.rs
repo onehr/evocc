@@ -309,6 +309,16 @@ struct ExprValue {
     integer: CIntegerType,
 }
 
+enum AssemblyConstant {
+    Integer(CInteger),
+    Address(String, i64),
+}
+
+enum AssemblyInputSource {
+    Constant(AssemblyConstant),
+    Temporary(EnvKey),
+}
+
 struct FunctionLowerer<'a> {
     unit: &'a CHirUnit<'a>,
     target: &'a TargetDataLayout,
@@ -3914,6 +3924,132 @@ impl<'a> FunctionLowerer<'a> {
         Ok(bound)
     }
 
+    fn assembly_constant(
+        &self,
+        expression: &CHirExpr<'_>,
+        constraint: &str,
+    ) -> Result<AssemblyConstant, LowerError> {
+        let refuse = || LowerError::AsmOperand {
+            span: expression.span(),
+            reason: constraint.to_owned(),
+        };
+        if evocc_chir::builtin_constant_p(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        ) {
+            if let Ok(integer) = evocc_chir::interp::interpret_static_integer_expression(
+                self.unit,
+                expression,
+                self.target,
+            ) {
+                if integer.ty().bits() > 64 {
+                    return Err(LowerError::WideInteger {
+                        span: expression.span(),
+                    });
+                }
+                return Ok(AssemblyConstant::Integer(integer));
+            }
+        }
+        if constraint != "i" {
+            return Err(refuse());
+        }
+        if null_pointer_constant(self.unit, self.target, expression) {
+            return Ok(AssemblyConstant::Integer(CInteger::new(
+                0,
+                CIntegerType::ULONG,
+            )));
+        }
+        let mut references = FunctionReferences::default();
+        collect_references_expr(expression, &mut references);
+        let labels = references
+            .labels
+            .into_iter()
+            .map(|(expression, name)| {
+                self.address_labels
+                    .get(&name)
+                    .map(|block| (expression, format!("{}^b{block}", self.info.name)))
+                    .ok_or_else(refuse)
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let (symbol, addend) = symbolic_address(
+            self.unit,
+            self.target,
+            expression,
+            false,
+            self.allocation_origins,
+            &self.string_origins,
+            &labels,
+        )
+        .map_err(|_| refuse())?;
+        Ok(AssemblyConstant::Address(symbol, addend))
+    }
+
+    fn emit_assembly_constant(
+        &mut self,
+        constant: AssemblyConstant,
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<Value, LowerError> {
+        let (symbol, addend) = match constant {
+            AssemblyConstant::Integer(integer) => {
+                return self
+                    .constant(state, integer.ty(), integer.raw_bits() as u64)
+                    .map(|value| value.value);
+            }
+            AssemblyConstant::Address(symbol, addend) => (symbol, addend),
+        };
+        let address = if let Some((_, block)) = symbol.split_once("^b") {
+            let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+            let block = block.parse().map_err(|_| LowerError::AsmOperand {
+                span,
+                reason: "i label identity".to_owned(),
+            })?;
+            self.emit(
+                state,
+                Inst::BlockAddr {
+                    result: result.clone(),
+                    block,
+                },
+            )?;
+            result
+        } else if let Some(id) = self
+            .functions
+            .iter()
+            .find_map(|(id, function)| (function.name == symbol).then_some(*id))
+        {
+            self.function_address(id, span, state)?.value
+        } else {
+            let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+            self.emit(
+                state,
+                Inst::GlobalAddr {
+                    result: result.clone(),
+                    symbol,
+                },
+            )?;
+            result
+        };
+        let integer = self.fresh_value(EvoIRType::Bits(64));
+        self.emit(
+            state,
+            Inst::PointerCast {
+                result: integer.clone(),
+                operand: address,
+            },
+        )?;
+        if addend == 0 {
+            return Ok(integer);
+        }
+        let offset = self
+            .constant(state, CIntegerType::ULONG, addend as u64)?
+            .value;
+        let result = self.fresh_value(EvoIRType::Bits(64));
+        self.emit(state, Inst::Add(result.clone(), integer, offset))?;
+        Ok(result)
+    }
+
     fn lower_assembly(
         &mut self,
         source: &'a AsmStmt<'a>,
@@ -3930,7 +4066,7 @@ impl<'a> FunctionLowerer<'a> {
         let mut writebacks = Vec::new();
         let mut temporary_keys = Vec::new();
         let mut incoming_keys = Vec::new();
-        let mut input_keys = Vec::new();
+        let mut pending_inputs = Vec::new();
         for operand in &source.outputs {
             if !matches!(
                 operand.constraint.as_str(),
@@ -4006,29 +4142,12 @@ impl<'a> FunctionLowerer<'a> {
                 operand.constraint.as_str(),
                 "I" | "J" | "K" | "L" | "i" | "n"
             );
-            if immediate
-                && !evocc_chir::builtin_constant_p(
-                    operand.expression,
-                    self.unit.types(),
-                    self.unit.symbols(),
-                    self.target,
-                )
-            {
-                return Err(refuse(operand.constraint.clone()));
+            if immediate {
+                let constant = self.assembly_constant(operand.expression, &operand.constraint)?;
+                pending_inputs.push(AssemblyInputSource::Constant(constant));
+                continue;
             }
-            let value = if immediate {
-                let integer = evocc_chir::interp::interpret_static_integer_expression(
-                    self.unit,
-                    operand.expression,
-                    self.target,
-                )
-                .map_err(|_| refuse(operand.constraint.clone()))?;
-                if integer.ty().bits() > 64 {
-                    return Err(LowerError::WideInteger { span: operand.span });
-                }
-                self.constant(&state, integer.ty(), integer.raw_bits() as u64)?
-                    .value
-            } else if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+            let value = if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
                 self.lower_unary(
                     UnaryOp::AddrOf,
                     operand.expression,
@@ -4041,7 +4160,18 @@ impl<'a> FunctionLowerer<'a> {
             };
             let key = self.retain_temporary(value.clone(), &mut state);
             temporary_keys.push(key);
-            input_keys.push(key);
+            pending_inputs.push(AssemblyInputSource::Temporary(key));
+        }
+        for (operand, pending) in source.inputs.iter().zip(pending_inputs) {
+            // Immediate expressions have no execution effects. Define their
+            // values here, after other operands may have split the block, so
+            // machine lowering need not guess constants through edge arguments.
+            let value = match pending {
+                AssemblyInputSource::Constant(constant) => {
+                    self.emit_assembly_constant(constant, operand.span, &state)?
+                }
+                AssemblyInputSource::Temporary(key) => self.token(&state, key)?.value,
+            };
             // An admitted immediate letter paired with r permits a register
             // for every value. Select it after the single evaluation, leaving
             // no alternatives for downstream consumers to resolve.
@@ -4072,9 +4202,6 @@ impl<'a> FunctionLowerer<'a> {
             if let Some(key) = key {
                 output.incoming = Some(self.token(&state, key)?.value);
             }
-        }
-        for (input, key) in inputs.iter_mut().zip(input_keys) {
-            input.value = self.token(&state, key)?.value;
         }
         let results = result_types
             .into_iter()

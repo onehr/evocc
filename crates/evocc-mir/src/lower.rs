@@ -573,6 +573,7 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 struct Lowerer {
+    function_name: String,
     next_vreg: u32,
     next_block: u32,
     map: HashMap<u32, VReg>,
@@ -591,6 +592,8 @@ struct Lowerer {
     /// prior definition in the same function, and this is where an assembly
     /// operand finds it.
     constants: HashMap<u32, u64>,
+    symbolic_addresses: HashMap<u32, (String, i64)>,
+    literal_only: HashSet<u32>,
     /// Section 6 (revision 0.18): the shape of the record result this function
     /// returns in `x0`/`x1`, and the frame slot the entry block gave it.
     destination: Option<(RecordShape, VReg)>,
@@ -1006,6 +1009,7 @@ fn lower_function(
     let _ = entry;
 
     let mut lowerer = Lowerer {
+        function_name: function.name.clone(),
         next_vreg: 0,
         next_block: u32::try_from(function.blocks.len()).unwrap_or(u32::MAX),
         map: HashMap::new(),
@@ -1016,6 +1020,8 @@ fn lower_function(
             .variadic
             .then(|| named_argument_extent(target, function)),
         constants: HashMap::new(),
+        symbolic_addresses: HashMap::new(),
+        literal_only: HashSet::new(),
         destination: None,
         destination_readers: HashMap::new(),
         record_origins: 0,
@@ -1233,6 +1239,7 @@ fn lower_block(
     insts.extend(prologue);
     // Set when an `icmp` was fused into the block's `cond_br`.
     let mut fused: Option<(VReg, Cond)> = None;
+    lowerer.literal_only = assembly_literal_definitions(block);
 
     for (index, inst) in block.insts.iter().enumerate() {
         if let Inst::UbAssume(condition, reason) = inst {
@@ -1560,6 +1567,54 @@ fn uses_of(block: &Block, value: u32) -> usize {
         .count()
 }
 
+/// Assembly immediates are link-time operands, not runtime address loads.
+/// Keep their pure definition closure for resolution without creating GPRs or
+/// otherwise introducing references absent from the emitted template. Any
+/// ordinary use, including an edge argument, still needs its original value.
+fn assembly_literal_definitions(block: &Block) -> HashSet<u32> {
+    let instructions = || block.insts.iter().chain(std::iter::once(&block.terminator));
+    let mut immediates = Vec::new();
+    for inst in instructions() {
+        let (Inst::Asm(body) | Inst::AsmGoto { assembly: body, .. }) = inst else {
+            continue;
+        };
+        for input in &body.inputs {
+            if matches!(input.constraint.as_str(), "I" | "J" | "K" | "L" | "i" | "n") {
+                immediates.push(input.value.id);
+            }
+        }
+    }
+    let mut literals = HashSet::new();
+    if immediates.is_empty() {
+        return literals;
+    }
+    let mut uses: HashMap<u32, usize> = HashMap::new();
+    for value in instructions().flat_map(inst_uses) {
+        *uses.entry(value.id).or_default() += 1;
+    }
+    for value in immediates {
+        *uses.get_mut(&value).expect("counted assembly use") -= 1;
+    }
+    for inst in block.insts.iter().rev() {
+        let result = match inst {
+            Inst::Const(value, _) if matches!(value.ty, EvoIRType::Bits(1..=64)) => value,
+            Inst::GlobalAddr { result, .. }
+            | Inst::FuncAddr { result, .. }
+            | Inst::BlockAddr { result, .. }
+            | Inst::PointerCast { result, .. } => result,
+            Inst::Add(value, ..) | Inst::Sub(value, ..) if value.ty == EvoIRType::Bits(64) => value,
+            _ => continue,
+        };
+        if uses.get(&result.id).copied().unwrap_or(0) == 0 {
+            literals.insert(result.id);
+            for value in inst_uses(inst) {
+                *uses.get_mut(&value.id).expect("counted definition use") -= 1;
+            }
+        }
+    }
+    literals
+}
+
 /// The registers a continuation block must receive: everything already bound
 /// that instruction `from` onwards still reads.
 fn live_across(lowerer: &Lowerer, block: &Block, from: usize) -> Vec<VReg> {
@@ -1809,6 +1864,57 @@ fn lower_inst(
     inst: &Inst,
     external: &dyn Fn(&str) -> bool,
 ) -> Result<(), String> {
+    let symbolic = match inst {
+        Inst::GlobalAddr { result, symbol } | Inst::FuncAddr { result, symbol } => {
+            Some((result.id, (symbol.clone(), 0)))
+        }
+        Inst::BlockAddr { result, block } => Some((
+            result.id,
+            (format!("{}^b{block}", lowerer.function_name), 0),
+        )),
+        Inst::PointerCast { result, operand } => lowerer
+            .symbolic_addresses
+            .get(&operand.id)
+            .cloned()
+            .map(|address| (result.id, address)),
+        Inst::Add(result, lhs, rhs) | Inst::Sub(result, lhs, rhs)
+            if result.ty == EvoIRType::Bits(64) =>
+        {
+            let (base, offset, subtract) = if lowerer.symbolic_addresses.contains_key(&lhs.id) {
+                (lhs, rhs, matches!(inst, Inst::Sub(..)))
+            } else if matches!(inst, Inst::Add(..)) {
+                (rhs, lhs, false)
+            } else {
+                (lhs, rhs, true)
+            };
+            lowerer
+                .symbolic_addresses
+                .get(&base.id)
+                .and_then(|(name, addend)| {
+                    let offset = *lowerer.constants.get(&offset.id)? as i64;
+                    let addend = if subtract {
+                        addend.checked_sub(offset)
+                    } else {
+                        addend.checked_add(offset)
+                    }?;
+                    Some((result.id, (name.clone(), addend)))
+                })
+        }
+        _ => None,
+    };
+    if let Some((id, symbolic)) = symbolic {
+        lowerer.symbolic_addresses.insert(id, symbolic);
+    }
+    if let Inst::Const(result, bits) = inst {
+        lowerer.constants.insert(result.id, *bits);
+    }
+    if !lowerer.literal_only.is_empty()
+        && inst_results(inst)
+            .first()
+            .is_some_and(|result| lowerer.literal_only.contains(&result.id))
+    {
+        return Ok(());
+    }
     // Section 5's `bits<128>` row expands each form over the halves, so it is
     // consulted before the rows that assume one register per value.
     if lower_pair(lowerer, insts, inst)? {
@@ -1820,7 +1926,6 @@ fn lower_inst(
             let dst = lowerer.fresh(class);
             insts.push(MInst::MovImm { dst, imm: *bits });
             lowerer.bind(result, dst);
-            lowerer.constants.insert(result.id, *bits);
         }
         // Section 5: "any value is permitted; zero is chosen so the output is
         // deterministic".
@@ -2869,6 +2974,20 @@ fn lower_assembly(
             .ok_or_else(|| format!("an assembly input constraint '{}'", input.constraint))?;
         let value = match constraint {
             AsmConstraint::Immediate(_) => {
+                if base == "i" {
+                    if let Some((name, addend)) = lowerer.symbolic_addresses.get(&input.value.id) {
+                        inputs.push(AsmOperand {
+                            constraint,
+                            fixed_register,
+                            name: named(&input.name),
+                            value: AsmValue::Symbol {
+                                name: name.clone(),
+                                addend: *addend,
+                            },
+                        });
+                        continue;
+                    }
+                }
                 let literal = lowerer
                     .constants
                     .get(&input.value.id)

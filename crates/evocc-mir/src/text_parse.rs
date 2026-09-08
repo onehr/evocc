@@ -654,10 +654,50 @@ fn parse_operand(text: &str, classes: &HashMap<u32, RegClass>) -> Result<ParsedO
     } else {
         return Err(format!("trailing text '{rest}' in an asm operand"));
     };
+    if matches!(&value, Some(AsmValue::Symbol { .. }))
+        && !matches!(
+            constraint,
+            AsmConstraint::Immediate(crate::AsmImmediate::Integer)
+        )
+    {
+        return Err("only i admits a symbolic assembly operand".to_owned());
+    }
     Ok((constraint, fixed_register, name, value))
 }
 
 fn parse_operand_value(text: &str, classes: &HashMap<u32, RegClass>) -> Result<AsmValue, String> {
+    if let Some(symbol) = text.strip_prefix('@') {
+        let split = symbol.find(['+', '-']).ok_or_else(|| {
+            "a symbolic assembly operand needs an explicit signed addend".to_owned()
+        })?;
+        let (name, offset) = symbol.split_at(split);
+        let mut parts = name.split("^b");
+        let identifier = parts.next().unwrap_or_default();
+        let block = parts.next();
+        if identifier.is_empty()
+            || !identifier.chars().enumerate().all(|(i, ch)| {
+                ch.is_ascii_alphabetic()
+                    || ch == '_'
+                    || (i > 0 && (ch.is_ascii_digit() || ch == '.'))
+            })
+            || parts.next().is_some()
+            || block.is_some_and(|id| {
+                id.parse::<u32>().is_err() || (id.len() > 1 && id.starts_with('0'))
+            })
+        {
+            return Err(format!("invalid assembly symbol: {name}"));
+        }
+        let addend = offset
+            .parse::<i64>()
+            .map_err(|_| format!("invalid assembly addend: {offset}"))?;
+        if format!("{addend:+}") != offset {
+            return Err("noncanonical symbolic assembly addend".to_owned());
+        }
+        return Ok(AsmValue::Symbol {
+            name: name.to_owned(),
+            addend,
+        });
+    }
     if let Some(class) = text.strip_prefix("#zero:") {
         return match class {
             "gpr32" => Ok(AsmValue::Zero(RegClass::Gpr32)),

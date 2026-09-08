@@ -39,6 +39,14 @@ fn symbolic_immediates_preserve_symbols_offsets_and_ir_round_trips() {
         let text = evocc_mir::render_module(&mir);
         assert_eq!(evocc_mir::parse_module(&text).unwrap(), mir);
         assert!(text.contains("@words+8"), "{text}");
+        for invalid in [
+            text.replace("@words+8", "@words+08"),
+            text.replace("@words+8", "@words"),
+            text.replace("@words+8", "@words;other+8"),
+            text.replace("\"i\"", "\"n\""),
+        ] {
+            assert!(evocc_mir::parse_module(&invalid).is_err(), "{invalid}");
+        }
         let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
         let prefix = if target == evocc_mir::Target::Darwin {
             "_"
@@ -53,6 +61,39 @@ fn symbolic_immediates_preserve_symbols_offsets_and_ir_round_trips() {
         }
         assert!(!assembly.contains("%c"), "{assembly}");
     }
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn symbolic_inline_arguments_preserve_one_evaluation_on_the_machine() {
+    execute_native_assembly(
+        r#"
+        static int object, effects;
+        static inline __attribute__((always_inline)) int f(int *key, int branch) {
+            asm volatile("// %c0 %w1" : : "i"(key), "r"(branch ? ++effects : --effects));
+            asm volatile("// %c0" : : "i"(&&done));
+        done: return effects;
+        }
+        int main(void) { int a = f(&object, 1); int b = f(&object, 0); return a != 1 || b != 0 || effects != 0; }
+        "#,
+        "symbolic-single-evaluation",
+    );
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn symbolic_immediates_do_not_create_runtime_symbol_references() {
+    execute_native_assembly(
+        r#"
+        extern long absent_object;
+        extern void absent_function(void);
+        int main(void) {
+            asm volatile("// %c0 %c1" : : "i"(&absent_object), "i"(absent_function));
+            return 0;
+        }
+        "#,
+        "symbolic-no-runtime-reference",
+    );
 }
 
 #[test]
@@ -80,6 +121,7 @@ fn symbolic_immediates_do_not_admit_dynamic_addresses_or_numeric_only_constraint
         r#"void f(long *p){asm volatile(""::"i"(p));}"#,
         r#"extern long object; void f(void){asm volatile(""::"n"(&object));}"#,
         r#"void f(long x){asm volatile("// %c0"::"r"(x));}"#,
+        r#"static inline __attribute__((always_inline)) void f(long *p){asm volatile(""::"i"(p));} void g(long *p){f(p);}"#,
     ] {
         let output = run(source, "--emit=asm");
         assert!(!output.status.success(), "{source}");

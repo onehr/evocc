@@ -200,7 +200,11 @@ impl InlineAssembly {
                 "r" | "rZ" => assembly_register_type(&input.value.ty),
                 "Q" | "Qo" => matches!(input.value.ty, EvoIRType::Ptr(_)),
                 "p" => matches!(input.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }),
-                "I" | "J" | "K" | "L" | "i" | "n" => matches!(input.value.ty, EvoIRType::Bits(_)),
+                "i" => matches!(
+                    input.value.ty,
+                    EvoIRType::Bits(_) | EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                ),
+                "I" | "J" | "K" | "L" | "n" => matches!(input.value.ty, EvoIRType::Bits(_)),
                 text if text.len() == 1 && text.as_bytes()[0].is_ascii_digit() => self
                     .outputs
                     .get(usize::from(text.as_bytes()[0] - b'0'))
@@ -258,7 +262,7 @@ impl InlineAssembly {
             let modifier = bytes
                 .get(position)
                 .copied()
-                .filter(|byte| matches!(byte, b'w' | b'x' | b'l'));
+                .filter(|byte| matches!(byte, b'w' | b'x' | b'l' | b'c'));
             position += usize::from(modifier.is_some());
             let operand = if bytes.get(position) == Some(&b'[') {
                 position += 1;
@@ -303,6 +307,9 @@ impl InlineAssembly {
             };
             if *constraint == "rZ" && !matches!(modifier, Some(b'w' | b'x')) {
                 return Err("assembly rZ reference requires %w or %x".into());
+            }
+            if modifier == Some(b'c') && !matches!(*constraint, "I" | "J" | "K" | "L" | "i" | "n") {
+                return Err("assembly %c reference requires an immediate constraint".into());
             }
         }
         Ok(())

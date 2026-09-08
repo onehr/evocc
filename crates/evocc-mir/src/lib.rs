@@ -1037,7 +1037,7 @@ pub enum AsmImmediate {
     K,
     /// `L`: the 64-bit ones.
     L,
-    /// `i`: an integer constant.
+    /// `i`: a numeric constant or a link-time symbolic address.
     Integer,
     /// `n`: an integer constant.
     N,
@@ -1179,12 +1179,14 @@ impl AsmConstraint {
 }
 
 /// What one operand of an `asm` is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AsmValue {
     /// A virtual register the allocator assigns.
     Reg(VReg),
     /// An immediate the emitter writes literally.
     Imm(i64),
+    /// A linker-resolved address; only the `i` constraint admits it.
+    Symbol { name: String, addend: i64 },
     /// EvoIR Section 3.11's `rZ` when the operand is the constant zero: the
     /// zero register, which "consumes no allocation".
     Zero(RegClass),
@@ -1229,7 +1231,7 @@ impl AsmOperand {
     pub const fn register(&self) -> Option<VReg> {
         match self.value {
             AsmValue::Reg(reg) => Some(reg),
-            AsmValue::Imm(_) | AsmValue::Zero(_) => None,
+            AsmValue::Imm(_) | AsmValue::Symbol { .. } | AsmValue::Zero(_) => None,
         }
     }
 

@@ -30,6 +30,82 @@ struct Uses<'a> {
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
 }
 
+/// Replaying an immutable parameter's argument must not read mutable storage
+/// or repeat effects. This is an inlining property, not builtin_constant_p:
+/// taking a stable object's address is repeatable even though that builtin
+/// deliberately does not claim address constants as integer constants.
+fn repeatable_argument(
+    expression: &CHirExpr<'_>,
+    types: &evocc_types::TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> bool {
+    let repeat = |expression| repeatable_argument(expression, types, symbols, target);
+    if crate::constant::eval_integer_constant(expression, types, symbols, target).is_some() {
+        return true;
+    }
+    match expression {
+        CHirExpr::StringLit(..) | CHirExpr::LabelAddress { .. } => true,
+        CHirExpr::Ident { symbol, facts, .. } => symbols.symbol(*symbol).is_ok_and(|symbol| {
+            symbol.kind() == SymbolKind::Function
+                || matches!(
+                    types.get(facts.ty()).map(|ty| &ty.kind),
+                    Some(TypeKind::Array { .. })
+                )
+        }),
+        CHirExpr::Cast(_, operand, _) => repeat(operand),
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+            repeatable_place(operand, types, symbols, target)
+        }
+        CHirExpr::MemoryRead { facts, .. }
+            if matches!(
+                types.get(facts.ty()).map(|ty| &ty.kind),
+                Some(TypeKind::Array { .. })
+            ) =>
+        {
+            repeatable_place(expression, types, symbols, target)
+        }
+        CHirExpr::Binary(BinaryOp::Add | BinaryOp::Sub, left, right, _) => {
+            repeat(left) && repeat(right)
+        }
+        CHirExpr::Ternary(condition, yes, no, _) => {
+            crate::constant::eval_integer_constant(condition, types, symbols, target)
+                .is_some_and(|condition| repeat(if condition.raw_bits() == 0 { no } else { yes }))
+        }
+        _ => false,
+    }
+}
+
+fn repeatable_place(
+    expression: &CHirExpr<'_>,
+    types: &evocc_types::TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> bool {
+    let repeat = |expression| repeatable_argument(expression, types, symbols, target);
+    match expression {
+        CHirExpr::Ident { .. } | CHirExpr::StringLit(..) => true,
+        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => repeat(pointer),
+        CHirExpr::MemoryRead { place, .. } => {
+            let base = match place.root() {
+                PlaceRoot::Object { .. } => true,
+                PlaceRoot::PointerExpression { pointer, .. } => repeat(pointer),
+                PlaceRoot::CompoundLiteral { .. } => false,
+            };
+            base && place
+                .projections()
+                .iter()
+                .all(|projection| match projection {
+                    PlaceProjection::Field(_) => true,
+                    PlaceProjection::Index(index) => repeat(index.index()),
+                })
+        }
+        CHirExpr::Member(base, _, _) => repeatable_place(base, types, symbols, target),
+        CHirExpr::Index(base, index, _) => repeat(base) && repeat(index),
+        _ => false,
+    }
+}
+
 // Inspect semantic expression roots only. In particular, an initializer's
 // written form and a statement expression's value are not second executions.
 fn inspect<'a>(nodes: impl IntoIterator<Item = Node<'a>>) -> Uses<'a> {
@@ -1033,13 +1109,7 @@ impl<'a> Substitution<'a, '_> {
                 if !uses.mutable.contains(&original)
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
-                    && crate::constant::eval_integer_constant(
-                        arg,
-                        &self.unit.types,
-                        &self.unit.symbols,
-                        self.target,
-                    )
-                    .is_some()
+                    && repeatable_argument(arg, &self.unit.types, &self.unit.symbols, self.target)
                 {
                     c.constants.insert(original, arg);
                 }

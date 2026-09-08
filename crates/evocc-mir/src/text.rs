@@ -188,9 +188,10 @@ fn render_asm_body(body: &AsmBody) -> String {
             let _ = write!(
                 text,
                 ": {}",
-                match operand.value {
-                    AsmValue::Reg(reg) => use_of(reg),
+                match &operand.value {
+                    AsmValue::Reg(reg) => use_of(*reg),
                     AsmValue::Imm(value) => format!("#{value}"),
+                    AsmValue::Symbol { name, addend } => format!("@{name}{addend:+}"),
                     AsmValue::Zero(class) => format!("#zero:{}", class.mnemonic()),
                 }
             );
