@@ -58,6 +58,15 @@ fn goto_can_reach_a_label_after_the_segment_loses_fallthrough() {
 }
 
 #[test]
+fn signed_enum_and_integer_pointer_arms_form_a_signed_place() {
+    assert_execution(
+        "enum e { a = (-2147483647 - 1) }; int *p; enum e *q;
+         int main(void) { enum e x = a; q = &x;
+           return *(1 ? q : p) > 0; }",
+    );
+}
+
+#[test]
 fn goto_reaches_a_nested_label_without_evaluating_its_guard() {
     assert_execution(
         "int f(int x) { int n = 0; switch (x) {

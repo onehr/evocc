@@ -315,3 +315,83 @@ fn committed_type_transactions_persist_and_tokens_are_one_shot() {
         Err(TypeInternerTransactionError)
     );
 }
+
+#[test]
+fn enum_compatibility_uses_the_underlying_rank_without_erasing_tag_identity() {
+    let mut types = TypeInterner::new();
+    for (minimum, maximum, packed, rank) in [
+        (-2147483648, 1, false, IntRank::Int),
+        (0, 1, false, IntRank::UInt),
+        (0, 255, true, IntRank::UChar),
+        (-1, 127, true, IntRank::SChar),
+        (-1, 200, true, IntRank::Short),
+        (-1, 0x100000000, false, IntRank::Long),
+        (0, 0xffffffffffffffff, false, IntRank::ULong),
+    ] {
+        let tag = types.declare_tag(TagKind::Enum, None);
+        let nominal = types.intern(plain(TypeKind::Enum(tag)));
+        let integer = types.intern(plain(TypeKind::Int(rank)));
+        assert!(!types.compatible(nominal, integer), "incomplete enum");
+        assert!(types.set_tag_layout(
+            tag,
+            TagLayoutAttributes {
+                packed,
+                ..Default::default()
+            }
+        ));
+        types
+            .complete_tag(
+                tag,
+                TagDefinition::Enum(vec![
+                    EnumConstant {
+                        name: "minimum".into(),
+                        value: minimum,
+                    },
+                    EnumConstant {
+                        name: "maximum".into(),
+                        value: maximum,
+                    },
+                ]),
+            )
+            .unwrap();
+        assert!(
+            types.compatible(nominal, integer),
+            "{minimum}..{maximum}: {rank:?}"
+        );
+        assert!(types.compatible(integer, nominal));
+        let nominal_pointer = types.intern(pointer(nominal));
+        let integer_pointer = types.intern(pointer(integer));
+        assert!(types.compatible(nominal_pointer, integer_pointer));
+        let qualified = types.intern(constant(TypeKind::Enum(tag)));
+        let qualified_pointer = types.intern(pointer(qualified));
+        assert!(!types.compatible(qualified_pointer, integer_pointer));
+        assert!(types.compatible_ignoring_top_qualifiers(qualified, integer));
+        let other_tag = types.declare_tag(TagKind::Enum, None);
+        types
+            .complete_tag(
+                other_tag,
+                TagDefinition::Enum(vec![EnumConstant {
+                    name: "other".into(),
+                    value: minimum,
+                }]),
+            )
+            .unwrap();
+        let other = types.intern(plain(TypeKind::Enum(other_tag)));
+        assert!(!types.compatible(nominal, other), "distinct enum tags");
+        let nominal_function = types.intern(function(
+            integer,
+            FunctionParameters::Prototype {
+                types: vec![nominal],
+                variadic: false,
+            },
+        ));
+        let integer_function = types.intern(function(
+            integer,
+            FunctionParameters::Prototype {
+                types: vec![integer],
+                variadic: false,
+            },
+        ));
+        assert!(types.compatible(nominal_function, integer_function));
+    }
+}

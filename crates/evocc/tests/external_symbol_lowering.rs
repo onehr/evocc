@@ -215,6 +215,22 @@ fn substituted_member_macro_keeps_its_single_object_projection() {
 }
 
 #[test]
+fn enum_pointer_composites_preserve_the_signed_integer_representation() {
+    let source = include_str!("../../../tests/fixtures/enum-compatible-pointers.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "enum-compatible-pointers");
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";
