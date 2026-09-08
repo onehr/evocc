@@ -41,6 +41,50 @@ fn globals_first_declared_in_a_block_keep_their_external_storage() {
 }
 
 #[test]
+fn prefetch_accepts_qualified_addresses_without_loading_the_object() {
+    let source = include_str!("../../../tests/fixtures/qualified-prefetch.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("@__builtin_prefetch"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "qualified-prefetch");
+
+    for (source, code) in [
+        ("void f(void) { __builtin_prefetch(); }", "E2909"),
+        ("void f(void) { __builtin_prefetch(0, 0, 0, 0); }", "E2909"),
+        ("void f(void) { __builtin_prefetch(1); }", "E2913"),
+        (
+            "void f(void) { struct S { int x; } s; __builtin_prefetch(s); }",
+            "E2913",
+        ),
+        (
+            "void f(void) { struct S { int x; } s; __builtin_prefetch(0, s); }",
+            "E2913",
+        ),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn deallocation_builtin_keeps_the_ordinary_external_call_contract() {
     let source = "static int calls; static void *argument(void) { ++calls; return (void *)0; } int main(void) { __builtin_free(argument()); return calls != 1; }";
     let output = run(source, "--emit=evoir");
