@@ -9,6 +9,14 @@ description = "Independent EvoIR equality proof checker"
 name = "evo-proofcheck"
 path = "src/main.rs"
 
+# The correspondence runner of the proof layer. It is a second binary rather
+# than a mode of the first: Section 11.2 fixes the checker's interface at three
+# file arguments and nothing else, and a flag that switched it into a vector
+# runner would be a fourth thing a certificate's verdict could depend on.
+[[bin]]
+name = "evo-facts-vectors"
+path = "src/bin/evo-facts-vectors.rs"
+
 [dependencies]
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-proof = { path = "../evocc-proof" }

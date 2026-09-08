@@ -10,3 +10,13 @@ evocc-egraph = { path = "../evocc-egraph" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-proof = { path = "../evocc-proof" }
 evocc-types = { path = "../evocc-types" }
+
+# The front end is a dev-dependency and stays one. Section 11.5 fixes what the
+# optimizer depends on, and lowering C is not part of it; the `certificate_triple`
+# example needs a C source only so that a sealed fixture can carry the program a
+# reader recognizes rather than the EvoIR it happens to lower to.
+[dev-dependencies]
+evocc-common = { path = "../evocc-common" }
+evocc-lex = { path = "../evocc-lex" }
+evocc-lower = { path = "../evocc-lower" }
+evocc-parser = { path = "../evocc-parser" }

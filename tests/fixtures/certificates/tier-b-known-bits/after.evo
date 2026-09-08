@@ -1,0 +1,34 @@
+func @tier_b(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
+    %v4 = const.bits<32> 65535
+    %v5 = and.bits<32> %v0, %v4
+    %v6 = const.bits<32> 4294901760
+    %v7 = and.bits<32> %v1, %v6
+    %v8 = const.bits<32> 0
+    %v9 = const.bits<32> 65535
+    %v10 = const.bits<32> 65535
+    %v11 = const.bits<32> 65536
+    %v12 = const.bits<1> 1
+    %v13 = const.bits<32> 1
+    %v14 = add.bits<32> %v8, %v5
+    %v15 = add.bits<32> %v14, %v4
+    %v16 = add.bits<32> %v15, %v5
+    %v17 = add.bits<32> %v16, %v13
+    ret %v17, %v2, %v3
+}
+
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = const.bits<32> 305419896
+    %v3 = const.bits<32> 2596069104
+    (%v4, %v5, %v6) = call @tier_b(%v2, %v3, %v0, %v1)
+    %v7 = const.bits<32> 1000
+    %v8 = divisor_nonzero %v7
+    ub.assume.remainder_by_zero %v8
+    %v9 = urem.bits<32> %v4, %v7
+    ret %v9, %v5, %v6
+}

@@ -28,6 +28,12 @@ lessons.md
 .toolchain/artifacts/
 .build/
 
+# Correspondence vectors and the answers each side writes beside them. Both are
+# regenerated from tools/lean/vectors.py and a fixed seed; a tracked copy would
+# be a second thing to keep in step with the generator, and the sets run to tens
+# of megabytes.
+lean/vectors/
+
 # Rust build artifacts.
 target/
 target-*/
