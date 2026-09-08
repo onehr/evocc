@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 462 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 461 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Signed-wrapping modes now pass nine previously failing originals; 326 programs still carry unhandled requirements, recorded rather than guessed or removed | `torture` | PARTIAL: wrapping semantics and original replay CLOSED in `20260908T135846.118517Z`; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -127,10 +127,16 @@ Both interpreters and native Darwin now pass the direct/indirect small and
 large record regression; both Linux cross-link directions pass with GCC-14
 and Clang-19 at O0/O2 (eight executions). The changed all-targets gate against
 `f065b94` passes 764 tests, zero failures and four pre-existing standing-run
-ignores; Clippy, fmt, Ruff and diff-check pass. Original replay is pending.
+ignores; Clippy, fmt, Ruff and diff-check pass. The repair is `7f55a01`.
 Evidence: `.evidence/builtin-probes/20260908-variadic-record/results.txt`.
 The subject assembly uses the specified GNU assembler; the initial Clang
 integrated-assembler refusal of `:pg_hi21:` is recorded, not called a pass.
+Original replay `20260908T160746.894867Z`, executable SHA-256
+`4bbe84757e3e6adbdb70a53cbd5140a3d13cfe1f8108e0d8162f47b6f73dd2e0`,
+changes exactly `920726-1` from REFUSED to PASS, with no regressions.
+Torture now has 1,208 passes, 461 refusals and 23 failures out of the same
+1,692 programs; ctest is unchanged at 206/220. Captures:
+`.evidence/ladder/e0/20260908T160747Z` and `20260908T160812Z`.
 
 ### Kernel replay and linked object definitions
 
