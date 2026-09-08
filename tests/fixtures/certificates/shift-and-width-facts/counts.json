@@ -1,0 +1,28 @@
+{
+  "input": "source.c",
+  "registryName": "p0.scalar.v3",
+  "registryDigest": "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15",
+  "regions": 17,
+  "witnesses": 128,
+  "seeds": 20,
+  "events": {
+    "node": 139,
+    "rewrite": 62,
+    "congruence": 40,
+    "epoch": 55,
+    "extract": 17
+  },
+  "premises": 36,
+  "entryExecuted": true,
+  "rules": {
+    "p0_001_add_zero_rhs": 5,
+    "p0_005_and_zero_rhs": 20,
+    "p0_101_fold_sub": 1,
+    "p1_206_known_shl": 6,
+    "p1_207_known_lshr": 6,
+    "p1_208_known_ashr": 5,
+    "p1_230_known_zext": 7,
+    "p1_231_known_sext": 4,
+    "p1_232_known_trunc": 8
+  }
+}

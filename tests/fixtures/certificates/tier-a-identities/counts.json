@@ -1,0 +1,30 @@
+{
+  "input": "source.c",
+  "registryName": "p0.scalar.v3",
+  "registryDigest": "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15",
+  "regions": 19,
+  "witnesses": 173,
+  "seeds": 0,
+  "events": {
+    "node": 210,
+    "rewrite": 88,
+    "congruence": 42,
+    "epoch": 78,
+    "extract": 19
+  },
+  "premises": 10,
+  "entryExecuted": true,
+  "rules": {
+    "p0_001_add_zero_rhs": 13,
+    "p0_003_mul_one_rhs": 9,
+    "p0_005_and_zero_rhs": 7,
+    "p0_007_or_zero_rhs": 7,
+    "p0_009_double_neg": 6,
+    "p0_010_icmp_eq_self": 6,
+    "p0_012_icmp_slt_self": 5,
+    "p0_013_icmp_sle_self": 4,
+    "p0_100_fold_add": 14,
+    "p0_101_fold_sub": 7,
+    "p1_230_known_zext": 10
+  }
+}
