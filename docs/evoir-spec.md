@@ -6407,3 +6407,10 @@ The file-scope extension in 10.1.3 initializes the declared record's own final f
 In `.evidence/builtin-probes/20260909-flexible-strings/`, both sealed oracles reject `nested-list.c`, while GCC accepts the nested strings in `strings.c` and `nested-record.c` and Clang rejects them, so the profile takes the refusing result (`results.txt`).
 Both accept and execute `direct.c` at O0/O2, including the narrow, wide and empty strings, their terminating zero and unchanged record `sizeof`; automatic-object initialization still reports E2919.
 This distinguishes the direct string in original torture `20010924-1` from the oracle-conflicting nested form in `pr28865`, and neither original outcome is inferred from the probes.
+
+### Redundant sign bits and integer parity
+
+`__builtin_clrsb`, `__builtin_clrsbl` and `__builtin_clrsbll` convert their sole operand once to `int`, `long` and `long long` respectively, then return an `int` count of leading bits equal to the sign bit excluding that sign bit itself (zero and negative one give N-1).
+`__builtin_parity`, `__builtin_parityl` and `__builtin_parityll` instead convert once to the corresponding unsigned type and return the population count modulo two as `int`; all six forms are total, fold on constant operands, and use the existing bit-builtin arity, callable-form and operand diagnostics.
+Both sealed compilers execute `tests/fixtures/integer-bit-counts.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260909-integer-bit-counts/results.txt`); one original torture program, `builtin-bitops-1`, reaches these missing families.
+No instruction or diagnostic is added: lowering uses the existing width-typed bit operations and `ctlz`/`ctpop`, with no zero-operand UB obligation for these total operations.
