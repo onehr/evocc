@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.84** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.85** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1043,6 +1043,7 @@ units containing 24,735 `asm` statements:
 | Constraint | Meaning | Measured uses |
 |---|---|---|
 | `r`, `=r`, `+r` | a general register, read, written, or both | 14,038 |
+| `rm`, `mr`, `=rm`, `=mr`, `+rm`, `+mr`, `=&rm`, `=&mr`, `+&rm`, `+&mr` (source only) | a register or memory alternative; lowering selects the existing register form, preserving read/write and early-clobber markers | one first-error unit at `vdso/math64.h:13` in `measure-20260908T123730Z` |
 | `=&r`, `+&r` | written, and not sharing a register with any input (early clobber) | 7,537 |
 | `rZ` | a general register, or the zero register when the operand is the constant zero; the template must spell it with a width modifier, since the zero prints as `xzr`/`wzr` only under `%x`/`%w` (measured: `orr %0, %1, %2` with `rZ` is an assembler error under GCC-14 and `orr %0, %1, %x2` is accepted by both) | 3,301 |
 | `Q`, `=Q`, `+Q`, `Qo` | a memory operand whose address is a register with no offset | 8,113 |
@@ -1084,6 +1085,15 @@ local-definition rule. A dynamic address or an address under `n` remains
 prints an `i` or numeric immediate without an immediate prefix; it cannot name
 a register or memory operand. The machine emitter writes the symbol's target
 spelling and signed addend, preserving linkage and block identity.
+
+For the exact source `rm`/`mr` forms in the table (revision 1.9.85), lowering
+evaluates each input or output place once, selects `r`, and preserves `=`,
+`+` and `&`; register type, binding, clobber and all outgoing-edge rules are
+unchanged. C-HIR retains the written constraint, while EvoIR contains only
+the selected constraint. This does not admit arbitrary memory constraints or
+wider register values. The sealed `20260908-register-memory/operands.c` and
+`results.txt` execute with both compilers at O0/O2, including the kernel's
+empty `+rm` loop, projected places, fixed outputs and both `asm goto` edges.
 The sealed GCC-14 and Clang-19 probe
 `.evidence/builtin-probes/20260908-symbolic-assembly/immediates.c` executes
 with exit zero at `-O0` and `-O2` under the kernel's
@@ -5797,6 +5807,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.85 | 2026-09-08 | Define source register-or-memory alternatives by selection of the existing register path, preserving operand evaluation and output markers; sealed GCC/Clang probes agree. This changes no compiler code. |
 | 1.9.84 | 2026-09-08 | Define measured target-header type identities and layout queries without admitting floating-point or vector execution. GCC-only names and sizeless types are explicit; this changes no compiler code. |
 | 1.9.83 | 2026-09-08 | Define explicitly selected signed-wrapping arithmetic while retaining the default UB and memory obligations. Sealed original torture programs require these options; this revision changes the contract, not compiler code. |
 | 1.9.82 | 2026-09-08 | Define the already-admitted GCC digit builtin as its measured integer operation, distinct from an external ctype call; record source rN local-register aliases as the existing xN physical binding. This changes the contract, not compiler code. |
@@ -5895,6 +5906,13 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### Register-or-memory source constraints
+
+Section 3.11 admits only its listed `rm`/`mr` alternatives by selecting an already implemented register form, without changing IR instructions or backend constraints.
+Both sealed compilers at O0/O2 build and execute `.evidence/builtin-probes/20260908-register-memory/operands.c` with exit zero, recorded in `results.txt`.
+No code is allocated or withdrawn; unknown constraints and invalid register operands remain E3021.
+The measured original first-error class has one unit, `lib/math/div64.o`; a probe is not a claimed corpus pass.
 
 ### Unused target-header types are not floating-point execution
 
