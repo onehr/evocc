@@ -6454,3 +6454,10 @@ A cast between pointers to different function types preserves the function ident
 Lowering uses the existing `ptr.to_int` and `ptr.from_int.fnptr<Sig>` pair, without weakening the static call validator or the dynamic signature check.
 Both sealed compilers at O0/O2 execute the round trip and argument-side goto in `.evidence/builtin-probes/20260909-function-pointer-casts/forms.c` with exit zero (`results.txt`); `reached.c` is separately an invalid-call diagnostic regression, not a claimed positive execution.
 No diagnostic or instruction is added; one original torture first-error program, `call-trap-1` in `20260908T195511Z`, reaches this missing conversion and requires a fresh original replay.
+
+### Qualified object addresses in a prefetch hint
+
+The address argument of `__builtin_prefetch` accepts an object pointer with any pointee qualifiers and converts it to the builtin's existing `const void *` interface without reading the object; evaluation of the address expression, including volatile pointer loads and updates, occurs exactly once.
+Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260909-qualified-prefetch/forms.c` with exit zero, warning about the discarded qualifier (`results.txt`).
+This address-only hint rule does not loosen ordinary implicit pointer conversions, change the optional argument checks, or add an instruction or diagnostic.
+One original torture first-error program, `builtin-prefetch-3` in `20260908T204820Z`, reaches this refusal; the original-program replay determines its outcome.
