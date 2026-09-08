@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.86** | **Authoritative reference** | **2026-09-09**
+**Revision 1.9.87** | **Authoritative reference** | **2026-09-09**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2205,7 +2205,12 @@ authority, not the reasoning behind it.
 
 Every root and witness result in this profile has type `bits<N>` with
 `1 <= N <= 64`. Comparisons consume one common `bits<N>` sort and produce
-`bits<1>`; a shift consumes its amount in any `bits<M>`; a width change
+`bits<1>`; a shift consumes its amount in a `bits<M>` with `1 <= M <= 64` (revision
+1.9.87: the sentence had said any width, and both the producer's and the
+checker's eligibility, written separately, bound the amount to the same range
+as every other sort, as the 64-bit masks of the 8.10 lattice require; a shift
+whose amount is wider is an ineligible region, never a refusal, and the
+interpreter still executes it under 3.4); a width change
 consumes one sort and produces another, both within the bound. Wider scalar equality is a later registry revision; silently
 truncating a wider constant to the host's integer width is invalid.
 
@@ -5857,6 +5862,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.87 | 2026-09-09 | Bounds the shift-amount width of the P0 profile to 1..64, matching both eligibility implementations and the 64-bit fact lattice; wider amounts make a region ineligible. |
 | 1.9.86 | 2026-09-09 | Clarifies that constants are minimal elements of the known-bits lattice, not its bottom; states the two classes of proof coverage and that coverage constraints live only in registry text; adds Section 11.7 listing the trusted base A1-A7 behind a certificate. |
 | 1.9.85 | 2026-09-08 | Define source register-or-memory alternatives by selection of the existing register path, preserving operand evaluation and output markers; sealed GCC/Clang probes agree. This changes no compiler code. |
 | 1.9.84 | 2026-09-08 | Define measured target-header type identities and layout queries without admitting floating-point or vector execution. GCC-only names and sizeless types are explicit; this changes no compiler code. |
@@ -6384,7 +6390,7 @@ Original torture `20000223-1` reaches the missing void query; `align-3` also req
 
 ### Flexible-member initialization stays on the declared record
 
-The file-scope extension in 10.1.3 initializes the declared record's own final flexible member, not a flexible member reached through a nested record or union subobject; nested initialization reports the existing E2202 (`invalid-initializer-type`).
+The file-scope extension in 10.1.3 initializes the declared record's own final flexible member, not a flexible member reached through a nested record or union subobject; nonempty nested initialization reports the existing E2202 (`invalid-initializer-type`), while an empty list adds no flexible storage and remains accepted (`nested-empty.c`, both oracles execute successfully).
 In `.evidence/builtin-probes/20260909-flexible-strings/`, both sealed oracles reject `nested-list.c`, while GCC accepts the nested strings in `strings.c` and `nested-record.c` and Clang rejects them, so the profile takes the refusing result (`results.txt`).
 Both accept and execute `direct.c` at O0/O2, including the narrow, wide and empty strings, their terminating zero and unchanged record `sizeof`; automatic-object initialization still reports E2919.
 This distinguishes the direct string in original torture `20010924-1` from the oracle-conflicting nested form in `pr28865`, and neither original outcome is inferred from the probes.
