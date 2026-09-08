@@ -20,6 +20,68 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+fn unnamed_definition_parameters_preserve_call_positions_and_argument_effects() {
+    let source = include_str!("../../../tests/fixtures/unnamed-definition-parameters.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+        let output = run(source, mode);
+        if !output.status.success() {
+            failures.push(format!(
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        } else if mode != "--emit=asm" && output.stdout != b"0\n" {
+            failures.push(format!("{mode}: unexpected result {:?}", output.stdout));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+fn unnamed_definition_parameters_execute_with_the_positional_abi() {
+    let output = run(
+        include_str!("../../../tests/fixtures/unnamed-definition-parameters.c"),
+        "--emit=evoir",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    let assembly =
+        evocc_mir::compile_module_for(evocc_mir::Target::Darwin, &module, &|_| true).unwrap();
+    let directory =
+        std::env::temp_dir().join(format!("evocc-unnamed-parameters-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let asm = directory.join("probe.s");
+    let binary = directory.join("probe");
+    fs::write(&asm, assembly).unwrap();
+    let linked = Command::new("clang")
+        .arg(&asm)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        linked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&linked.stderr)
+    );
+    let executed = Command::new(&binary).output().unwrap();
+    assert_eq!(
+        executed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    fs::remove_file(binary).unwrap();
+    fs::remove_file(asm).unwrap();
+    fs::remove_dir(directory).unwrap();
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";
