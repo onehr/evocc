@@ -37,6 +37,7 @@ const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LowerError {
+    Linkage(evocc_chir::linkage::LinkageError),
     Inline {
         span: SourceSpan,
         cycle: bool,
@@ -119,6 +120,7 @@ pub enum LowerError {
 impl fmt::Display for LowerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Linkage(error) => formatter.write_str(error.message),
             Self::Inline { reason, .. } => formatter.write_str(reason),
             Self::UnknownSymbol { symbol, .. } => {
                 write!(formatter, "unknown C-HIR symbol {}", symbol.raw())
@@ -165,6 +167,7 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Linkage(error) => error.code,
             Self::Inline { cycle: true, .. } => "E2932",
             Self::Asm { .. } => "E3021",
             Self::AsmOperand { .. } => "E3021",
@@ -188,6 +191,7 @@ impl LowerError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::Linkage(error) => Some(error.span),
             Self::Inline { span, .. }
             | Self::UnknownSymbol { span, .. }
             | Self::UnknownType { span, .. }
@@ -334,6 +338,7 @@ struct FunctionLowerer<'a> {
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
     if evocc_chir::inline::has_inline_definitions(unit) {
+        evocc_chir::linkage::SymbolLinkage::derive(unit).map_err(LowerError::Linkage)?;
         // Validate the source representation before removing or rewriting
         // anything, as well as validating the rewritten representation below.
         AllocationSiteManifest::derive(unit).map_err(|e| LowerError::InvalidGeneratedSsa {
@@ -356,6 +361,7 @@ fn lower_resolved_unit(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
 ) -> Result<Module, LowerError> {
+    let linkage = evocc_chir::linkage::SymbolLinkage::derive(unit).map_err(LowerError::Linkage)?;
     let global_register_symbols = collect_global_register_symbols(unit);
     let global_registers = unit
         .iter()
@@ -396,7 +402,8 @@ fn lower_resolved_unit(
                 })
         })
         .collect::<BTreeMap<_, _>>();
-    let memory_profile = !global_registers.is_empty()
+    let memory_profile = !linkage.aliases.is_empty()
+        || !global_registers.is_empty()
         || !memory_symbols.is_empty()
         || unit.iter().any(|declaration| match declaration {
             CHirDecl::Function(function) => function
@@ -446,6 +453,7 @@ fn lower_resolved_unit(
             symbol: format!("__evocc.string.{origin}"),
             origin,
             kind: GlobalKind::StringLiteral,
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: GlobalVisibility::Internal,
             layout: AccessLayout::new(bytes.len() as u64, align),
             initialized: vec![true; bytes.len()],
@@ -530,6 +538,7 @@ fn lower_resolved_unit(
             symbol: format!("__evocc.compound.{}", site.ordinal().raw()),
             origin: site.ordinal().raw(),
             kind: GlobalKind::CompoundLiteral,
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: GlobalVisibility::Internal,
             layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
             initialized: vec![true; bytes.len()],
@@ -591,6 +600,7 @@ fn lower_resolved_unit(
         declares.insert(
             info.name.clone(),
             FunctionDeclaration {
+                linkage: evocc_evoir::Linkage::Strong,
                 name: info.name.clone(),
                 variadic: info.variadic,
                 params,
@@ -667,6 +677,7 @@ fn lower_resolved_unit(
         extern_objects.insert(
             entry.spelling().to_owned(),
             ExternalObject {
+                linkage: evocc_evoir::Linkage::Strong,
                 symbol: entry.spelling().to_owned(),
                 size,
                 align: align.max(entry.declared_alignment()),
@@ -674,6 +685,7 @@ fn lower_resolved_unit(
         );
     }
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: unit
             .iter()
             .filter_map(|decl| match decl {
@@ -686,6 +698,68 @@ fn lower_resolved_unit(
         declares: declares.into_values().collect(),
         functions: lowered,
     };
+    for (symbol, target) in &linkage.aliases {
+        let alias = unit.symbols().symbol(*symbol).expect("resolved alias");
+        let target = unit
+            .symbols()
+            .symbol(*target)
+            .expect("resolved alias target");
+        module.aliases.push(evocc_evoir::SymbolAlias {
+            name: alias.spelling().to_owned(),
+            target: target.spelling().to_owned(),
+            visibility: if alias.storage_class() == Some(StorageClass::Static) {
+                GlobalVisibility::Internal
+            } else {
+                GlobalVisibility::External
+            },
+            linkage: if linkage.weak.contains(symbol) {
+                evocc_evoir::Linkage::Weak
+            } else {
+                evocc_evoir::Linkage::Strong
+            },
+        });
+    }
+    let alias_names = module
+        .aliases
+        .iter()
+        .map(|a| a.name.as_str())
+        .collect::<BTreeSet<_>>();
+    module
+        .extern_objects
+        .retain(|g| !alias_names.contains(g.symbol.as_str()));
+    module
+        .declares
+        .retain(|f| !alias_names.contains(f.name.as_str()));
+    let weak_names = linkage
+        .weak
+        .iter()
+        .map(|symbol| {
+            unit.symbols()
+                .symbol(*symbol)
+                .expect("resolved weak symbol")
+                .spelling()
+        })
+        .collect::<BTreeSet<_>>();
+    for f in &mut module.functions {
+        if weak_names.contains(f.name.as_str()) {
+            f.linkage = evocc_evoir::Linkage::Weak;
+        }
+    }
+    for f in &mut module.declares {
+        if weak_names.contains(f.name.as_str()) {
+            f.linkage = evocc_evoir::Linkage::Weak;
+        }
+    }
+    for g in &mut module.globals {
+        if weak_names.contains(g.symbol.as_str()) {
+            g.linkage = evocc_evoir::Linkage::Weak;
+        }
+    }
+    for g in &mut module.extern_objects {
+        if weak_names.contains(g.symbol.as_str()) {
+            g.linkage = evocc_evoir::Linkage::Weak;
+        }
+    }
     module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
@@ -1129,6 +1203,7 @@ fn lower_globals(
                 } else {
                     GlobalKind::FunctionStatic
                 },
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: if file_scope && object.storage != StorageClass::Static {
                     GlobalVisibility::External
                 } else {
@@ -3339,6 +3414,7 @@ impl<'a> FunctionLowerer<'a> {
             params,
             ret_tys: self.return_types(),
             effects: Default::default(),
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: if declaration.storage == StorageClass::Static {
                 evocc_evoir::GlobalVisibility::Internal
             } else {

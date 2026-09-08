@@ -8,7 +8,7 @@ use evocc_types::{canonical_marks, AddressSpace, EvoIRType, ParamMark, RecordSha
 use crate::{
     validate_module, validate_section9_bytes, Block, BlockArg, BlockId, CmpOp, EffectSummary,
     ExternalObject, Function, FunctionDeclaration, FunctionParam, GlobalKind, GlobalObject,
-    GlobalVisibility, Inst, Module, TrapReason, UbReason, Value,
+    GlobalVisibility, Inst, Linkage, Module, SymbolAlias, TrapReason, UbReason, Value,
 };
 
 type BinaryConstructor = fn(Value, Value, Value) -> Inst;
@@ -27,6 +27,7 @@ struct Header {
     name: String,
     convention: String,
     visibility: GlobalVisibility,
+    linkage: Linkage,
     signature: Signature,
 }
 
@@ -44,6 +45,7 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
     let text = std::str::from_utf8(bytes).map_err(|_| "EvoIR text is not UTF-8".to_owned())?;
     let lines = text.lines().collect::<Vec<_>>();
     let mut signatures = HashMap::new();
+    let mut definitions = std::collections::HashSet::new();
     for line in &lines {
         if line.starts_with("func @") || line.starts_with("declare @") {
             let header = if line.starts_with("declare @") {
@@ -51,6 +53,9 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
             } else {
                 parse_function_header(line)?
             };
+            if line.starts_with("func @") {
+                definitions.insert(header.name.clone());
+            }
             if signatures
                 .insert(header.name.clone(), header.signature)
                 .is_some()
@@ -63,6 +68,23 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
         }
     }
 
+    // An alias can precede its target's definition. Headers are indexed first,
+    // but only a real definition may supply an alias's call interface.
+    for line in &lines {
+        if line.starts_with("alias @") {
+            let alias = parse_alias(line)?;
+            if definitions.contains(&alias.target) {
+                if let Some(signature) = signatures.get(&alias.target).cloned() {
+                    if signatures.insert(alias.name.clone(), signature).is_some() {
+                        return Err(format!(
+                            "E3041: symbol-declared-and-defined: '{}'",
+                            alias.name
+                        ));
+                    }
+                }
+            }
+        }
+    }
     let mut parser = ModuleParser {
         lines: &lines,
         position: 0,
@@ -127,8 +149,10 @@ impl ModuleParser<'_> {
             cursor.expect(" align=")?;
             let align =
                 u32::try_from(cursor.index()?).map_err(|_| "external alignment exceeds u32")?;
+            let linkage = parse_linkage(&mut cursor)?;
             cursor.finish()?;
             extern_objects.push(ExternalObject {
+                linkage,
                 symbol,
                 size,
                 align,
@@ -146,6 +170,7 @@ impl ModuleParser<'_> {
         {
             let header = parse_declaration_header(self.lines[self.position])?;
             declares.push(FunctionDeclaration {
+                linkage: header.linkage,
                 variadic: header.signature.variadic,
                 name: header.name,
                 params: header.signature.params,
@@ -155,6 +180,18 @@ impl ModuleParser<'_> {
             self.position += 1;
         }
         if !declares.is_empty() && self.lines.get(self.position) == Some(&"") {
+            self.position += 1;
+        }
+        let mut aliases = Vec::new();
+        while self
+            .lines
+            .get(self.position)
+            .is_some_and(|line| line.starts_with("alias @"))
+        {
+            aliases.push(parse_alias(self.lines[self.position])?);
+            self.position += 1;
+        }
+        if !aliases.is_empty() && self.lines.get(self.position) == Some(&"") {
             self.position += 1;
         }
         let mut functions = Vec::new();
@@ -186,6 +223,7 @@ impl ModuleParser<'_> {
             self.position += 1;
         }
         Ok(Module {
+            aliases,
             assembly,
             globals,
             extern_objects,
@@ -249,6 +287,7 @@ impl ModuleParser<'_> {
             param_marks: header.signature.marks,
             ret_tys: header.signature.results,
             effects,
+            linkage: header.linkage,
             visibility: header.visibility,
             blocks,
         })
@@ -309,6 +348,37 @@ impl ModuleParser<'_> {
     }
 }
 
+fn parse_linkage(cursor: &mut Cursor<'_>) -> Result<Linkage, String> {
+    if cursor.at(" linkage=weak") {
+        cursor.expect(" linkage=weak")?;
+        Ok(Linkage::Weak)
+    } else {
+        Ok(Linkage::Strong)
+    }
+}
+
+fn parse_alias(line: &str) -> Result<SymbolAlias, String> {
+    let mut cursor = Cursor::new(line);
+    cursor.expect("alias @")?;
+    let name = cursor.ident()?.to_owned();
+    cursor.expect(" = @")?;
+    let target = cursor.ident()?.to_owned();
+    let visibility = if cursor.at(" visibility=internal") {
+        cursor.expect(" visibility=internal")?;
+        GlobalVisibility::Internal
+    } else {
+        GlobalVisibility::External
+    };
+    let linkage = parse_linkage(&mut cursor)?;
+    cursor.finish()?;
+    Ok(SymbolAlias {
+        name,
+        target,
+        visibility,
+        linkage,
+    })
+}
+
 fn parse_global(line: &str) -> Result<GlobalObject, String> {
     let (line, relocations) = line
         .split_once(" relocs=")
@@ -350,7 +420,13 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
             });
         }
     }
-    let fields = line.split(' ').collect::<Vec<_>>();
+    let mut fields = line.split(' ').collect::<Vec<_>>();
+    let linkage = if fields.get(5) == Some(&"linkage=weak") {
+        fields.remove(5);
+        Linkage::Weak
+    } else {
+        Linkage::Strong
+    };
     if fields.len() != 9 || fields[0] != "global" {
         return Err("malformed module global".to_owned());
     }
@@ -389,6 +465,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(GlobalObject {
+        linkage,
         relocs,
         symbol,
         origin,
@@ -409,6 +486,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     cursor.expect(") -> (")?;
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = target_default")?;
+    let linkage = parse_linkage(&mut cursor)?;
     cursor.finish()?;
     check_marks(&params, &marks)?;
     Ok(Header {
@@ -416,6 +494,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
         convention: "target_default".to_owned(),
         // A `declare` names a symbol this module does not define, so it has no
         // linkage of its own and Section 9 gives it no visibility field.
+        linkage,
         visibility: GlobalVisibility::External,
         signature: Signature {
             params,
@@ -477,11 +556,13 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     } else {
         GlobalVisibility::External
     };
+    let linkage = parse_linkage(&mut cursor)?;
     cursor.finish()?;
     Ok(Header {
         name,
         convention,
         visibility,
+        linkage,
         signature: Signature {
             params,
             marks,

@@ -22,11 +22,13 @@ fn bit(id: u32) -> Value {
 
 fn input() -> Module {
     Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),

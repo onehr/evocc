@@ -64,6 +64,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
     };
     let result_ty = result.ty.clone();
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -92,6 +93,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),

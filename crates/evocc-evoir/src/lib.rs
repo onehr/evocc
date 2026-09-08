@@ -741,6 +741,7 @@ impl EffectSummary {
 /// A function in EvoIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
+    pub linkage: Linkage,
     pub name: String,
     pub params: Vec<FunctionParam>,
     /// The record marks of Section 10.1.3 (revision 1.9.73), one per
@@ -765,6 +766,7 @@ pub struct Function {
 /// A collection of mutually callable EvoIR functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
+    pub aliases: Vec<SymbolAlias>,
     /// File-scope assembler text, retained in source order and not interpreted.
     pub assembly: Vec<String>,
     pub globals: Vec<GlobalObject>,
@@ -776,6 +778,7 @@ pub struct Module {
 /// Storage supplied by a linker, never allocated or initialized by this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalObject {
+    pub linkage: Linkage,
     pub symbol: String,
     pub size: Option<u64>,
     pub align: u32,
@@ -784,6 +787,7 @@ pub struct ExternalObject {
 /// A callable interface without an implementation or a producer-supplied effect summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDeclaration {
+    pub linkage: Linkage,
     pub name: String,
     pub params: Vec<EvoIRType>,
     /// The record marks of Section 10.1.3, one per parameter, canonical as on
@@ -809,6 +813,7 @@ impl FunctionDeclaration {
                 .collect(),
             ret_tys: self.ret_tys.clone(),
             effects: EffectSummary::top(),
+            linkage: self.linkage,
             visibility: GlobalVisibility::External,
             blocks: Vec::new(),
             param_marks: self.param_marks.clone(),
@@ -817,6 +822,14 @@ impl FunctionDeclaration {
 }
 
 impl Module {
+    /// Alias records are flattened and validated before consumers use them.
+    pub fn symbol_target<'a>(&'a self, name: &'a str) -> &'a str {
+        self.aliases
+            .iter()
+            .find(|alias| alias.name == name)
+            .map_or(name, |alias| alias.target.as_str())
+    }
+
     /// Replace every stored summary with the least fixed point implied by this
     /// module's instructions and direct-call graph.
     pub fn recompute_effect_summaries(&mut self) {
@@ -831,12 +844,17 @@ impl Module {
 /// summary already present in the module.
 #[must_use]
 pub fn derive_effect_summaries(module: &Module) -> Vec<EffectSummary> {
-    let positions = module
+    let mut positions = module
         .functions
         .iter()
         .enumerate()
         .map(|(index, function)| (function.name.as_str(), index))
         .collect::<HashMap<_, _>>();
+    for alias in &module.aliases {
+        if let Some(index) = positions.get(alias.target.as_str()).copied() {
+            positions.insert(alias.name.as_str(), index);
+        }
+    }
     let local = module
         .functions
         .iter()
@@ -986,9 +1004,36 @@ pub enum GlobalVisibility {
     Internal,
 }
 
+/// Symbol strength is independent of visibility and of the value's type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Linkage {
+    #[default]
+    Strong,
+    Weak,
+}
+
+impl Linkage {
+    pub const fn suffix(self) -> &'static str {
+        match self {
+            Self::Strong => "",
+            Self::Weak => " linkage=weak",
+        }
+    }
+}
+
+/// A second symbol for one definition, with no allocation or forwarding body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolAlias {
+    pub name: String,
+    pub target: String,
+    pub visibility: GlobalVisibility,
+    pub linkage: Linkage,
+}
+
 /// One eagerly allocated module object and its byte initialization state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalObject {
+    pub linkage: Linkage,
     pub relocs: Vec<Relocation>,
     pub symbol: String,
     pub origin: u64,
@@ -1406,9 +1451,45 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         .chain(module.declares.iter().map(|f| f.name.as_str()))
         .chain(module.globals.iter().map(|g| g.symbol.as_str()))
         .chain(module.extern_objects.iter().map(|g| g.symbol.as_str()))
+        .chain(module.aliases.iter().map(|alias| alias.name.as_str()))
     {
         if !symbols.insert(name) {
             return Err(format!("E3041: symbol-declared-and-defined: '{name}'"));
+        }
+    }
+    for (name, visibility, linkage) in module
+        .functions
+        .iter()
+        .map(|f| (&f.name, f.visibility, f.linkage))
+        .chain(
+            module
+                .globals
+                .iter()
+                .map(|g| (&g.symbol, g.visibility, g.linkage)),
+        )
+        .chain(
+            module
+                .aliases
+                .iter()
+                .map(|a| (&a.name, a.visibility, a.linkage)),
+        )
+    {
+        if visibility == GlobalVisibility::Internal && linkage == Linkage::Weak {
+            return Err(format!("E3060: weak-internal-symbol: '{name}'"));
+        }
+    }
+    let definitions = module
+        .functions
+        .iter()
+        .map(|f| f.name.as_str())
+        .chain(module.globals.iter().map(|g| g.symbol.as_str()))
+        .collect::<HashSet<_>>();
+    for alias in &module.aliases {
+        if !definitions.contains(alias.target.as_str()) {
+            return Err(format!(
+                "E3061: alias-target-not-defined: '{}'",
+                alias.target
+            ));
         }
     }
     for function in &module.functions {
@@ -1447,6 +1528,11 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
         callable_signature(declaration)?;
         functions.insert(declaration.name.as_str(), declaration);
+    }
+    for alias in &module.aliases {
+        if let Some(function) = functions.get(alias.target.as_str()).copied() {
+            functions.insert(alias.name.as_str(), function);
+        }
     }
     let mut externs = HashSet::new();
     for object in &module.extern_objects {
@@ -1570,6 +1656,11 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
     }
 
+    for alias in &module.aliases {
+        if let Some(global) = globals.get(alias.target.as_str()).copied() {
+            globals.insert(alias.name.as_str(), global);
+        }
+    }
     let mut effect_participants = HashSet::new();
     for function in &module.functions {
         for block in &function.blocks {
@@ -1577,13 +1668,13 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 match instruction {
                     Inst::Call { callee, .. } => {
                         effect_participants.insert(function.name.as_str());
-                        effect_participants.insert(callee.as_str());
+                        effect_participants.insert(module.symbol_target(callee));
                     }
                     Inst::IndirectCall { .. } => {
                         effect_participants.insert(function.name.as_str());
                     }
                     Inst::FuncAddr { symbol, .. } => {
-                        effect_participants.insert(symbol.as_str());
+                        effect_participants.insert(module.symbol_target(symbol));
                     }
                     Inst::Load { .. }
                     | Inst::VaAccess(_)
@@ -3787,12 +3878,17 @@ fn interpret_module_in_state(
     mut state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
-    let function_indices: HashMap<&str, usize> = module
+    let mut function_indices: HashMap<&str, usize> = module
         .functions
         .iter()
         .enumerate()
         .map(|(index, function)| (function.name.as_str(), index))
         .collect();
+    for alias in &module.aliases {
+        if let Some(index) = function_indices.get(alias.target.as_str()).copied() {
+            function_indices.insert(alias.name.as_str(), index);
+        }
+    }
     state.functions = module
         .functions
         .iter()
@@ -3823,6 +3919,11 @@ fn interpret_module_in_state(
         .ok_or_else(|| InterpreterError::InvalidModule {
             message: "activation address identity exhausted".to_owned(),
         })?;
+    for alias in &module.aliases {
+        if let Some(identity) = state.functions.get(&alias.target).copied() {
+            state.functions.insert(alias.name.clone(), identity);
+        }
+    }
     initialize_globals(module, &mut state)?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
         InterpreterError::MissingEntryFunction {
@@ -5326,6 +5427,11 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
         }
         state.globals.insert(global.symbol.clone(), pointer);
     }
+    for alias in &module.aliases {
+        if let Some(pointer) = state.globals.get(&alias.target).copied() {
+            state.globals.insert(alias.name.clone(), pointer);
+        }
+    }
     for global in &module.globals {
         for relocation in &global.relocs {
             let pointer = if let Some(pointer) = state.globals.get(&relocation.symbol) {
@@ -5964,6 +6070,7 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "threaded".to_owned(),
@@ -6001,6 +6108,7 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "tokens".to_owned(),
@@ -6048,6 +6156,7 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "increment".to_owned(),
@@ -6108,6 +6217,7 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "pointer_passthrough".to_owned(),
@@ -6189,6 +6299,7 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "bad_condition".to_owned(),
@@ -6253,6 +6364,7 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "deep_result".to_owned(),
@@ -6367,6 +6479,7 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "loop_sum".to_owned(),
@@ -6440,6 +6553,7 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "swap_once".to_owned(),
@@ -6512,6 +6626,7 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "raw".to_owned(),
@@ -6543,6 +6658,7 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "division".to_owned(),
@@ -6614,6 +6730,7 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: name.to_owned(),
@@ -6656,6 +6773,7 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
@@ -6694,6 +6812,7 @@ mod tests {
             param_marks: Vec::new(),
         };
         let mut module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -6731,6 +6850,7 @@ mod tests {
             }
         };
         let main = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
@@ -6770,6 +6890,7 @@ mod tests {
             param_marks: Vec::new(),
         };
         let mut module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -6802,6 +6923,7 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "countdown".to_owned(),
@@ -6889,6 +7011,7 @@ mod tests {
         };
         *callee = "countdown".to_owned();
         let mut module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -7225,6 +7348,7 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "defined_add".to_owned(),
@@ -7290,6 +7414,7 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "overflow".to_owned(),
@@ -7322,6 +7447,7 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "predicates".to_owned(),
@@ -7368,6 +7494,7 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "extended_integer_ops".to_owned(),
@@ -7426,6 +7553,7 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "separated_predicates".to_owned(),
@@ -7529,6 +7657,7 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "mixed_width_shifts".to_owned(),
@@ -7703,6 +7832,7 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "typed_ub".to_owned(),
@@ -7743,6 +7873,7 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_scalar".to_owned(),
@@ -7761,6 +7892,7 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_pointer".to_owned(),
@@ -7787,6 +7919,7 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "uninitialized_effect_token".to_owned(),
@@ -7811,6 +7944,7 @@ mod tests {
         }
 
         let invalid_void = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_void".to_owned(),
@@ -7834,6 +7968,7 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "propagate_uninitialized".to_owned(),
@@ -7864,6 +7999,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),
@@ -7892,6 +8028,7 @@ mod tests {
         assert_eq!(
             interpret_module(
                 &Module {
+                    aliases: Vec::new(),
                     assembly: Vec::new(),
                     extern_objects: Vec::new(),
                     declares: Vec::new(),
@@ -7921,6 +8058,7 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "definite_assignment_loop".to_owned(),
@@ -7982,6 +8120,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),
@@ -8004,6 +8143,7 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_read".to_owned(),
@@ -8037,6 +8177,7 @@ mod tests {
         assert_eq!(function_error.message(), "read-of-uninitialized-object");
 
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -8088,6 +8229,7 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_arithmetic".to_owned(),
@@ -8110,6 +8252,7 @@ mod tests {
             ),
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_comparison".to_owned(),
@@ -8132,6 +8275,7 @@ mod tests {
             ),
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_cast".to_owned(),
@@ -8153,6 +8297,7 @@ mod tests {
             ),
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_zero_extend".to_owned(),
@@ -8174,6 +8319,7 @@ mod tests {
             ),
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_truncate".to_owned(),
@@ -8195,6 +8341,7 @@ mod tests {
             ),
             (
                 Function {
+                    linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_shifted_predicate_operand".to_owned(),
@@ -8235,6 +8382,7 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_condition".to_owned(),
@@ -8342,6 +8490,7 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "fallthrough".to_owned(),
@@ -8369,6 +8518,7 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "conditional_fallthrough".to_owned(),
@@ -8426,6 +8576,7 @@ mod tests {
 
         let module_error = interpret_module(
             &Module {
+                aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),

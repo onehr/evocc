@@ -531,6 +531,7 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -1954,6 +1955,7 @@ fn main() {
     let right = value(3, bits32.clone());
     let valid = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "block_arg_identity".to_owned(),
         params: Vec::new(),

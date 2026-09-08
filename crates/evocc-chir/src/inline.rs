@@ -33,37 +33,54 @@ struct Uses<'a> {
 // Inspect semantic expression roots only. In particular, an initializer's
 // written form and a statement expression's value are not second executions.
 fn inspect<'a>(nodes: impl IntoIterator<Item = Node<'a>>) -> Uses<'a> {
+    inspect_with_declarations(nodes, &mut |_| {})
+}
+
+pub(crate) fn for_each_declaration<'a>(
+    unit: &CHirUnit<'a>,
+    mut visit: impl FnMut(&'a CHirDecl<'a>),
+) {
+    inspect_with_declarations(unit.iter().map(Node::Decl), &mut visit);
+}
+
+fn inspect_with_declarations<'a>(
+    nodes: impl IntoIterator<Item = Node<'a>>,
+    visit: &mut impl FnMut(&'a CHirDecl<'a>),
+) -> Uses<'a> {
     let mut work: Vec<_> = nodes.into_iter().collect();
     let mut uses = Uses::default();
     while let Some(node) = work.pop() {
         match node {
-            Node::Decl(decl) => match decl {
-                CHirDecl::Object(o) => {
-                    if o.storage == StorageClass::Static {
-                        uses.statics.insert(o.symbol, o);
-                    }
-                    if let Some(i) = &o.initializer {
-                        for a in i.plan.actions() {
-                            if let InitAction::StoreScalar { value, .. }
-                            | InitAction::CopyAggregate { value, .. } = a
-                            {
-                                work.push(Node::Expr(value, false));
+            Node::Decl(decl) => {
+                visit(decl);
+                match decl {
+                    CHirDecl::Object(o) => {
+                        if o.storage == StorageClass::Static {
+                            uses.statics.insert(o.symbol, o);
+                        }
+                        if let Some(i) = &o.initializer {
+                            for a in i.plan.actions() {
+                                if let InitAction::StoreScalar { value, .. }
+                                | InitAction::CopyAggregate { value, .. } = a
+                                {
+                                    work.push(Node::Expr(value, false));
+                                }
                             }
                         }
                     }
-                }
-                CHirDecl::Function(f) => {
-                    if let Some(b) = f.body {
-                        work.push(Node::Stmt(b));
+                    CHirDecl::Function(f) => {
+                        if let Some(b) = f.body {
+                            work.push(Node::Stmt(b));
+                        }
                     }
-                }
-                CHirDecl::Asm(a) => {
-                    for o in a.inputs.iter().chain(&a.outputs) {
-                        work.push(Node::Expr(o.expression, false));
+                    CHirDecl::Asm(a) => {
+                        for o in a.inputs.iter().chain(&a.outputs) {
+                            work.push(Node::Expr(o.expression, false));
+                        }
                     }
+                    CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
                 }
-                CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
-            },
+            }
             Node::Stmt(s) => match s {
                 CHirStmt::Compound(items, _) => {
                     for i in items {
@@ -242,7 +259,13 @@ pub fn substitute<'a>(
     arena: &'a Arena,
     target: &TargetDataLayout,
 ) -> Result<CHirUnit<'a>, InlineError> {
-    let uses = inspect(unit.iter().map(Node::Decl));
+    let mut uses = inspect(unit.iter().map(Node::Decl));
+    let linkage = crate::linkage::SymbolLinkage::derive(unit).map_err(|e| InlineError {
+        span: e.span,
+        cycle: false,
+        message: e.message.to_owned(),
+    })?;
+    uses.addresses.extend(linkage.aliases.values());
     let eligible: BTreeMap<_, _> = unit
         .iter()
         .filter_map(|d| match d {

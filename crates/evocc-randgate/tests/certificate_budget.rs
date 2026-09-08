@@ -53,6 +53,7 @@ fn module() -> Module {
     let world = value(6, EvoIRType::World);
 
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -88,6 +89,7 @@ fn module() -> Module {
     };
 
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),

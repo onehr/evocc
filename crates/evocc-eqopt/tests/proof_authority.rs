@@ -15,11 +15,13 @@ fn bits(id: u32) -> Value {
 /// `f(x) = (x + 0) * 1`, whose two identities are P0 rewrite opportunities.
 fn identity_module() -> Module {
     Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),

@@ -25,12 +25,14 @@ fn main() {
     let paths = env::args_os().skip(1).collect::<Vec<_>>();
     assert_eq!(paths.len(), 3);
     let before = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
             variadic: false,
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             name: "main".to_owned(),
             params: vec![FunctionParam { name: "x".to_owned(), ty: EvoIRType::Bits(32) }],

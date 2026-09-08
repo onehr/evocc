@@ -63,12 +63,14 @@ fn bits(id: u32) -> Value {
 
 fn input_module() -> Module {
     Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
             variadic: false,
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             name: "main".to_owned(),
             params: vec![FunctionParam {

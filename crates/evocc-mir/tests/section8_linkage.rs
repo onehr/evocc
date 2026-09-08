@@ -82,6 +82,25 @@ fn weak_symbols_and_aliases_emit_linkage_without_copying_definitions() {
     );
     assert!(!text.contains("\nalternative:\n"));
     assert!(!text.contains("\nother_value:\n"));
+    assert!(!text.contains(".globl fallback"));
+    assert!(!text.contains(".globl value"));
+    assert!(!text.contains(".size alternative"));
+    let text = emitted(Target::Darwin, &source);
+    for form in [
+        ".globl _fallback\n.weak_definition _fallback",
+        ".weak_reference _optional",
+        ".weak_reference _absent",
+        ".set _alternative, _helper",
+        ".set _other_value, _value",
+    ] {
+        assert!(text.contains(form), "missing {form}: {text}");
+    }
+    let source = format!(
+        "alias @alternative = @helper\n\n{}\n{}",
+        adder("helper", INTERNAL),
+        caller("entry_point", "", "alternative", PURE)
+    );
+    assert!(emitted(Target::Linux, &source).contains("bl alternative"));
 }
 
 fn emitted(target: Target, text: &str) -> String {

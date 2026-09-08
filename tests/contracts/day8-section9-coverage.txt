@@ -25,13 +25,14 @@ EvoIRType.Tuple(elements)|tuple<bits<5>, f64>
 EvoIRType.Vec(count,element)|vec<7, f32>
 EvoIRType.Void|%arg17: void
 EvoIRType.World|%arg15: world
-Function(name,params,param_marks,variadic,ret_tys,effects,visibility,blocks)|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default
+Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,blocks)|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default linkage=weak
+SymbolAlias(name,target,visibility,linkage)|alias @sentinel_alias = @sentinel_file visibility=internal
 FunctionParam(name[omitted],ty)|%arg17: void
 GlobalKind.CompoundLiteral|kind=compound_literal
 GlobalKind.File|kind=file
 GlobalKind.FunctionStatic|kind=function_static
 GlobalKind.StringLiteral|kind=string_literal
-GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized,relocs)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3)]
+GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3)]
 GlobalVisibility.External|visibility=external
 GlobalVisibility.Internal|visibility=internal
 IndexSignedness.Signed|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
@@ -81,7 +82,7 @@ Inst.UbAssume(condition,reason)|ub.assume.invalid_signed_left_shift %v1200
 Inst.Uninitialized(result)|%v1010 = uninitialized.bits<29>
 Inst.Xor(result,lhs,rhs)|%v1120 = xor.bits<37> %v1121, %v1122
 Inst.ZExt(result,source,target_ty)|%v1410 = zext.bits<37> %v1411
-Module(assembly,globals,extern_objects,declares,functions)|asm ".globl sentinel_asm\x0a"
+Module(assembly,globals,extern_objects,declares,aliases,functions)|asm ".globl sentinel_asm\x0a"
 OffsetDirection.Add|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
 OffsetDirection.Subtract|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
 ParamMark.ByVal(shape)|%arg3: ptr<generic> byval(24, 8)

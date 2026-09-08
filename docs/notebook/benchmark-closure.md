@@ -24,7 +24,7 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | `alias-2/3/4` undefined `b`; musl 167 symbol-parity exclusions require subtyping, not assuming one cause; pin object symbol tables and native alias accesses | `torture musl` | OPEN: EvoIR 1.9.79 / EvoMIR 0.22, `5a42279` |
+| 2 | Object aliases and weak symbols | Alias identities and weak definitions implemented; original-program replay pending; unresolved weak address recipe fails natively | `torture musl` | OPEN: implementation gate green; weak-address contract exception pending |
 | 3 | Explicit register operands | Singleton `sigsetjmp_tail.lo` breaks two setjmp tests; syscall assembly does not preserve the specified register mapping; pin register/ABI semantics and native execution | `musl` | OPEN |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
@@ -46,6 +46,39 @@ Only one heavyweight benchmark invocation runs at once.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Symbol linkage
+
+Tests-only checkpoint `0f2a71d` has nine semantic failures and zero build
+errors. Module records now preserve weak marks and flattened object/function
+aliases; aliases share allocation, call identity, effects and relocation
+targets in both interpreters, without forwarding bodies or copied storage.
+Alias references keep internal targets, including otherwise removable
+always-inline definitions. Invalid weak/internal combinations and alias
+targets report E3060/E3061; the shared-type constructor changes are mechanical.
+
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 0f2a71d --quiet`:
+1,471 passed, zero failed, four pre-existing ignored tests; Clippy and fmt
+PASS. `ruff check tools tests/acceptance`, `python3 tools/check-textual-grammar.py`
+(42/42 instruction shapes, not a full syntax claim) and diff-check PASS.
+The first gate caught a malformed-C-HIR diagnostic-order regression; the
+shared call-type check was corrected, the original negative assertion retained,
+and the entire changed gate rerun. Focused linkage/address tests are 34/34.
+
+Native AArch64 static-link probes pass object-alias writes, equal loaded
+addresses, function aliases, weak definitions alone and strong-over-weak
+replacement under both GCC-14 and Clang-19 link drivers. This does **not**
+close weak external references: the explicit counterexample is
+`.evidence/builtin-probes/20260908-weak-external-address/{probe.c,subject.s,results.txt}`.
+Both sealed oracles at O0/O2 exit zero; the emitted subject links statically
+but exits one. Default PIE linking additionally refuses its direct relocations.
+
+SPEC_BODY_CONFLICT — WEAK-EXTERNAL-ADDRESS: EvoMIR Section 8's external-symbol
+rule prescribes direct `adrp`/`add`, while revision 0.22 requires undefined weak
+references to resolve to address zero; the measured linked address is 0x400000.
+The proposed exception is GOT-based address materialization only for weak
+extern/declare records, with no new EvoIR instruction; it is not implemented
+without authority. Alias/weak remains OPEN, irrespective of the green unit gate.
 
 ### Macro definition restoration
 

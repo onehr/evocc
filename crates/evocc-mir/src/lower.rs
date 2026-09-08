@@ -109,7 +109,7 @@ pub fn lower_module_for(
         .iter()
         .map(|declaration| declaration.name.as_str())
         .collect();
-    let crosses = |name: &str| external(name) || declared.contains(name);
+    let crosses = |name: &str| external(module.symbol_target(name)) || declared.contains(name);
     let signatures = Signatures::of(module);
 
     let mut functions = Vec::new();
@@ -506,7 +506,7 @@ fn scan_inst(
             if !module
                 .functions
                 .iter()
-                .any(|function| &function.name == callee)
+                .any(|function| function.name == module.symbol_target(callee))
                 && !module
                     .declares
                     .iter()
@@ -1076,6 +1076,11 @@ impl<'a> Signatures<'a> {
                 declaration.name.as_str(),
                 declaration.param_marks.as_slice(),
             );
+        }
+        for alias in &module.aliases {
+            if let Some(marks) = functions.get(alias.target.as_str()).copied() {
+                functions.insert(alias.name.as_str(), marks);
+            }
         }
         Self { functions }
     }

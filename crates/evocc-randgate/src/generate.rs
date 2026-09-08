@@ -256,6 +256,7 @@ fn generate_globals(
             };
             let bytes = (0..8).map(|_| (rng.next_u64() & 0xff) as u8).collect();
             GlobalObject {
+                linkage: evocc_evoir::Linkage::Strong,
                 relocs: Vec::new(),
                 symbol: format!("g{index}"),
                 origin,
@@ -397,6 +398,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
 
     let function = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "r0".to_owned(),
         params: vec![
@@ -591,6 +593,7 @@ fn generate_function(
 
     Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: signature.name.clone(),
         params,

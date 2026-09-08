@@ -50,6 +50,7 @@ fn identity(width: u16) -> Function {
     let memory = mem(1);
     let ordered = world(2);
     Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: format!("identity{width}"),
@@ -91,6 +92,7 @@ fn caller(insts: Vec<Inst>, result: Value, memory: Value, ordered: Value) -> Fun
     let memory_in = mem(0);
     let world_in = world(1);
     Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -127,6 +129,7 @@ fn null_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -164,6 +167,7 @@ fn static_signature_mismatch_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -301,6 +305,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
         call_world,
     );
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -310,6 +315,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
                 symbol: "object_source".to_owned(),
                 origin: 8001,
                 kind: GlobalKind::File,
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(8, 8),
                 bytes: vec![0; 8],

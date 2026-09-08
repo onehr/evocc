@@ -71,9 +71,10 @@ fn render_global(text: &mut String, global: &GlobalObject) {
     };
     let _ = writeln!(
         text,
-        "global @{} origin={} kind={kind} visibility={visibility} size={} align={} bytes={bytes} initialized={initialized}",
+        "global @{} origin={} kind={kind} visibility={visibility}{} size={} align={} bytes={bytes} initialized={initialized}",
         global.symbol,
         global.origin,
+        global.linkage.suffix(),
         global.layout.size_bytes,
         global.layout.align_bytes,
     );

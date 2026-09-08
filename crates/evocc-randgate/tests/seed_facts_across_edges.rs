@@ -120,6 +120,7 @@ fn counted_loop(remask: bool) -> Module {
     let carried_on = if remask { remasked } else { stepped };
 
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -187,6 +188,7 @@ fn counted_loop(remask: bool) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -477,6 +479,7 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
     let other = bits(6);
     let result = bits(9);
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -526,6 +529,7 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -592,6 +596,7 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         ty: EvoIRType::Bits(1),
     };
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -644,6 +649,7 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -709,6 +715,7 @@ fn double_negation(derived: bool) -> Module {
         )
     };
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -758,6 +765,7 @@ fn double_negation(derived: bool) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),

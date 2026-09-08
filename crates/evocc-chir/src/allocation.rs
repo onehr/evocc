@@ -1101,7 +1101,12 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             CHirDecl::Object(object) => {
                 self.validate_object_declaration(object, file_scope, current_function)?;
                 let strength = if file_scope {
-                    if object.storage == StorageClass::Register && object.asm_label.is_some() {
+                    if (object.storage == StorageClass::Register && object.asm_label.is_some())
+                        || object
+                            .attributes
+                            .iter()
+                            .any(|attribute| attribute.name == "alias")
+                    {
                         None
                     } else if object.initializer.is_some() {
                         Some(AnchorStrength::Definition)

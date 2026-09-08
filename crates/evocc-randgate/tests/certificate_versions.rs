@@ -53,6 +53,7 @@ fn module() -> Module {
         value: value.clone(),
     };
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
@@ -85,6 +86,7 @@ fn module() -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),

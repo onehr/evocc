@@ -53,9 +53,16 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
         }
     }
     let first = text.lines().next().unwrap_or_default();
-    if !["global @", "extern @", "declare @", "func @", "asm "]
-        .iter()
-        .any(|prefix| first.starts_with(prefix))
+    if ![
+        "global @",
+        "extern @",
+        "declare @",
+        "alias @",
+        "func @",
+        "asm ",
+    ]
+    .iter()
+    .any(|prefix| first.starts_with(prefix))
     {
         return Err("EvoIR text does not begin with a module item".to_owned());
     }
@@ -85,7 +92,7 @@ pub fn render_module(module: &Module) -> String {
             .map(|bit| if *bit { '1' } else { '0' })
             .collect::<String>();
         rendered.push_str(&format!(
-            "global @{} origin={} kind={} visibility={} size={} align={} bytes={} initialized={}\n",
+            "global @{} origin={} kind={} visibility={}{} size={} align={} bytes={} initialized={}\n",
             global.symbol,
             global.origin,
             match global.kind {
@@ -98,6 +105,7 @@ pub fn render_module(module: &Module) -> String {
                 GlobalVisibility::External => "external",
                 GlobalVisibility::Internal => "internal",
             },
+            global.linkage.suffix(),
             global.layout.size_bytes,
             global.layout.align_bytes,
             bytes,
@@ -120,6 +128,7 @@ pub fn render_module(module: &Module) -> String {
     if !globals.is_empty()
         && (!module.extern_objects.is_empty()
             || !module.declares.is_empty()
+            || !module.aliases.is_empty()
             || !module.functions.is_empty())
     {
         rendered.push('\n');
@@ -127,22 +136,25 @@ pub fn render_module(module: &Module) -> String {
 
     for object in &module.extern_objects {
         rendered.push_str(&format!(
-            "extern @{} size={} align={}\n",
+            "extern @{} size={} align={}{}\n",
             object.symbol,
             object
                 .size
                 .map_or_else(|| "unknown".to_owned(), |size| size.to_string()),
-            object.align
+            object.align,
+            object.linkage.suffix()
         ));
     }
     if !module.extern_objects.is_empty()
-        && (!module.declares.is_empty() || !module.functions.is_empty())
+        && (!module.declares.is_empty()
+            || !module.aliases.is_empty()
+            || !module.functions.is_empty())
     {
         rendered.push('\n');
     }
     for declaration in &module.declares {
         rendered.push_str(&format!(
-            "declare @{}({}) -> ({}) cc = target_default\n",
+            "declare @{}({}) -> ({}) cc = target_default{}\n",
             declaration.name,
             render_parameter_types(
                 &declaration.params,
@@ -154,10 +166,28 @@ pub fn render_module(module: &Module) -> String {
                 .iter()
                 .map(render_type)
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            declaration.linkage.suffix()
         ));
     }
-    if !module.declares.is_empty() && !module.functions.is_empty() {
+    if !module.declares.is_empty() && (!module.aliases.is_empty() || !module.functions.is_empty()) {
+        rendered.push('\n');
+    }
+
+    for alias in &module.aliases {
+        rendered.push_str(&format!(
+            "alias @{} = @{}{}{}\n",
+            alias.name,
+            alias.target,
+            if alias.visibility == GlobalVisibility::Internal {
+                " visibility=internal"
+            } else {
+                ""
+            },
+            alias.linkage.suffix()
+        ));
+    }
+    if !module.aliases.is_empty() && !module.functions.is_empty() {
         rendered.push('\n');
     }
 
@@ -793,8 +823,9 @@ fn render_function(function: &Function) -> String {
         GlobalVisibility::Internal => " visibility=internal",
     };
     rendered.push_str(&format!(
-        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}\n",
+        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}{}\n",
         function.name,
+        function.linkage.suffix(),
     ));
     rendered.push_str(&format!(
         "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}\n{{\n",
@@ -860,11 +891,13 @@ mod tests {
     #[test]
     fn first_block_is_entry_and_trap_uses_section_9_mnemonic() {
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
+                linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "stopped".to_owned(),
@@ -900,6 +933,7 @@ mod tests {
     #[test]
     fn module_global_has_exact_section_9_text() {
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -908,6 +942,7 @@ mod tests {
                 symbol: "__evocc.string.7".to_owned(),
                 origin: 7,
                 kind: GlobalKind::StringLiteral,
+                linkage: crate::Linkage::Strong,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(3, 1),
                 bytes: vec![0x45, 0x56, 0],

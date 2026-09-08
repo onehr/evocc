@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use evocc_evoir::{GlobalObject, GlobalVisibility};
+use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::{
     linscan::physical, Allocated, AsmBody, AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst,
@@ -294,10 +294,68 @@ pub fn emit_module_unit(
     globals: &[GlobalObject],
     assembly: &[String],
 ) -> String {
+    emit_unit(target, functions, globals, assembly, None)
+}
+
+pub(crate) fn emit_linked_module(
+    target: Target,
+    functions: &[Allocated],
+    module: &Module,
+) -> String {
+    emit_unit(
+        target,
+        functions,
+        &module.globals,
+        &module.assembly,
+        Some(module),
+    )
+}
+
+fn emit_unit(
+    target: Target,
+    functions: &[Allocated],
+    globals: &[GlobalObject],
+    assembly: &[String],
+    module: Option<&Module>,
+) -> String {
     let prefix = target.symbol_prefix();
     let mut text = String::new();
     text.push_str(target.text_section());
     text.push('\n');
+    let mut aliases: BTreeMap<&str, Vec<&SymbolAlias>> = BTreeMap::new();
+    let mut weak_functions = BTreeSet::new();
+    if let Some(module) = module {
+        for alias in &module.aliases {
+            aliases.entry(&alias.target).or_default().push(alias);
+        }
+        weak_functions.extend(
+            module
+                .functions
+                .iter()
+                .filter(|f| f.linkage == Linkage::Weak)
+                .map(|f| f.name.as_str()),
+        );
+        for name in module
+            .extern_objects
+            .iter()
+            .filter(|g| g.linkage == Linkage::Weak)
+            .map(|g| g.symbol.as_str())
+            .chain(
+                module
+                    .declares
+                    .iter()
+                    .filter(|f| f.linkage == Linkage::Weak)
+                    .map(|f| f.name.as_str()),
+            )
+        {
+            let directive = if target == Target::Linux {
+                ".weak"
+            } else {
+                ".weak_reference"
+            };
+            let _ = writeln!(text, "{directive} {prefix}{name}");
+        }
+    }
     let mut static_blocks: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
     for relocation in globals.iter().flat_map(|global| &global.relocs) {
         if let Some((function, block)) = relocation_block(&relocation.symbol) {
@@ -310,6 +368,13 @@ pub fn emit_module_unit(
             target,
             function,
             static_blocks.get(function.name.as_str()),
+            weak_functions.contains(function.name.as_str()),
+        );
+        emit_aliases(
+            &mut text,
+            target,
+            aliases.get(function.name.as_str()),
+            "function",
         );
     }
     if !globals.is_empty() {
@@ -337,7 +402,12 @@ pub fn emit_module_unit(
             // Section 8 (revision 0.16): an internal object's symbol is local
             // to the object file, so it is defined and never declared global.
             if global.visibility == GlobalVisibility::External {
-                let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
+                emit_definition_linkage(
+                    &mut text,
+                    target,
+                    &global.symbol,
+                    global.linkage == Linkage::Weak,
+                );
             }
             if target == Target::Linux {
                 let _ = writeln!(text, ".type {}, %object", global.symbol);
@@ -347,6 +417,12 @@ pub fn emit_module_unit(
             if target == Target::Linux {
                 let _ = writeln!(text, ".size {0}, .-{0}", global.symbol);
             }
+            emit_aliases(
+                &mut text,
+                target,
+                aliases.get(global.symbol.as_str()),
+                "object",
+            );
         }
         // Leave the assembler where it was before the globals: the trailing
         // output of Section 8 belongs to the text section, and a unit whose
@@ -369,6 +445,40 @@ pub fn emit_module_unit(
         let _ = writeln!(text, "\n{ident}");
     }
     text
+}
+
+fn emit_definition_linkage(text: &mut String, target: Target, name: &str, weak: bool) {
+    let prefix = target.symbol_prefix();
+    if weak && target == Target::Linux {
+        let _ = writeln!(text, ".weak {name}");
+    } else {
+        let _ = writeln!(text, ".globl {prefix}{name}");
+        if weak {
+            let _ = writeln!(text, ".weak_definition {prefix}{name}");
+        }
+    }
+}
+
+fn emit_aliases(
+    text: &mut String,
+    target: Target,
+    aliases: Option<&Vec<&SymbolAlias>>,
+    kind: &str,
+) {
+    let prefix = target.symbol_prefix();
+    for alias in aliases.into_iter().flatten() {
+        if alias.visibility == GlobalVisibility::External {
+            emit_definition_linkage(text, target, &alias.name, alias.linkage == Linkage::Weak);
+        }
+        if target == Target::Linux {
+            let _ = writeln!(text, ".type {}, %{kind}", alias.name);
+        }
+        let _ = writeln!(
+            text,
+            ".set {prefix}{}, {prefix}{}",
+            alias.name, alias.target
+        );
+    }
 }
 
 /// One global's initial bytes, with the relocations of EvoIR 2.1 written into
@@ -538,6 +648,7 @@ fn emit_function(
     target: Target,
     allocated: &Allocated,
     static_blocks: Option<&BTreeSet<u32>>,
+    weak: bool,
 ) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
@@ -549,7 +660,8 @@ fn emit_function(
     if allocated.internal {
         text.push('\n');
     } else {
-        let _ = writeln!(text, "\n.globl {prefix}{}", allocated.name);
+        text.push('\n');
+        emit_definition_linkage(text, target, &allocated.name, weak);
     }
     let _ = writeln!(text, ".p2align 2");
     if target == Target::Linux {

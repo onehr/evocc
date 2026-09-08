@@ -41,6 +41,12 @@ pub fn emitted_functions(module: &Module) -> BTreeSet<String> {
         .map(|function| function.name.clone())
         .collect::<BTreeSet<String>>();
 
+    for alias in &module.aliases {
+        if internal.contains(alias.target.as_str()) {
+            kept.insert(alias.target.clone());
+        }
+    }
+
     // A global is kept whatever its visibility, so every relocation it carries
     // is emitted and names a symbol the object must define. A relocation
     // against a block of a function (EvoIR 1.9.69) is written `@f^block` and

@@ -142,6 +142,11 @@ fn function_aliases_share_callable_identity_and_keep_internal_targets() {
         Ok(8),
         &["alias @a = @value", "alias @b = @value"],
     );
+    check(
+        "static inline __attribute__((always_inline)) int value(void){return 7;} int a(void) __attribute__((alias(\"value\"))); int main(void){return a();}",
+        Ok(7),
+        &["alias @a = @value", "func @value"],
+    );
 }
 
 #[test]
@@ -151,6 +156,38 @@ fn weak_marks_accumulate_over_declarations_without_changing_execution() {
         Ok(10),
         &["linkage=weak"],
     );
+    check(
+        "int value=7; int main(void){extern int value __attribute__((weak)); return value;}",
+        Ok(7),
+        &["linkage=weak"],
+    );
+    check(
+        "extern int value __attribute__((weak)); int main(void){return value;}",
+        Err("E3040"),
+        &["linkage=weak"],
+    );
+    check(
+        "int fallback(void) __attribute__((weak)); int main(void){return fallback();}",
+        Err("E3039"),
+        &["linkage=weak"],
+    );
+}
+
+#[test]
+fn invalid_symbol_linkage_is_rejected_by_both_consumers() {
+    for (source, code) in [
+        ("static int x __attribute__((weak)); int main(void){return 0;}", "E3060"),
+        ("static int f(void) __attribute__((weak)); int main(void){return 0;}", "E3060"),
+        ("extern int x __attribute__((alias(\"absent\"))); int main(void){return 0;}", "E3061"),
+        ("extern int x; extern int a __attribute__((alias(\"x\"))); int main(void){return 0;}", "E3061"),
+        ("int a(void) __attribute__((alias(\"b\"))); int b(void) __attribute__((alias(\"a\"))); int main(void){return 0;}", "E3061"),
+    ] {
+        let arena = Arena::default();
+        let unit = parse(source, &arena);
+        let main = unit.iter().find_map(|d| match d { CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol), _ => None }).unwrap();
+        assert_eq!(evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err().code(), code, "{source}");
+        assert_eq!(evocc_chir::interp::interpret_scalar_function(&unit, main, evocc_chir::interp::InterpreterLimits::new(1000)).unwrap_err().code(), code, "{source}");
+    }
 }
 
 #[test]

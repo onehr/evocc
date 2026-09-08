@@ -132,6 +132,7 @@ pub struct InterpretOutcome {
 /// A fail-closed scalar interpreter error.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterpreterError {
+    Linkage(crate::linkage::LinkageError),
     IndirectCallDynamicSignatureMismatch {
         span: SourceSpan,
     },
@@ -260,6 +261,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Linkage(error) => error.code,
             Self::ReadOfUninitializedObject { .. } | Self::UninitializedValue { .. } => "E3001",
             Self::Integer {
                 error: IntegerError::DivisionByZero,
@@ -322,6 +324,7 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::Linkage(error) => error.message.to_owned(),
             Self::UninitializedValue { .. } => "read-of-uninitialized-object".to_owned(),
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
@@ -419,6 +422,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::Linkage(error) => Some(error.span),
             Self::UnknownFunction { .. }
             | Self::MemorySetup { .. }
             | Self::InvalidAllocationManifest { .. }
@@ -863,7 +867,8 @@ pub fn interpret_scalar_function_with_target(
             span,
         }
     })?;
-    let requirements = reachable_memory_requirements(unit, function);
+    let linkage = crate::linkage::SymbolLinkage::derive(unit).map_err(InterpreterError::Linkage)?;
+    let requirements = reachable_memory_requirements(unit, function, &linkage);
     let memory_mode = requirements.requires_memory;
     let mut interpreter = Interpreter::new(unit, target, limits, memory_mode)?;
     // The requested function is validated before any whole-unit work, so a
@@ -904,6 +909,7 @@ struct SymbolOrder {
 }
 
 struct Interpreter<'unit, 'arena> {
+    linkage: crate::linkage::SymbolLinkage,
     argument_lists: evocc_memory::ArgumentLists<CValue>,
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
@@ -945,6 +951,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
+            linkage: crate::linkage::SymbolLinkage::derive(unit)
+                .map_err(InterpreterError::Linkage)?,
             argument_lists: evocc_memory::ArgumentLists::default(),
             unit,
             target: *target,
@@ -1541,6 +1549,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn run(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
+        let function = self.linkage.target(function);
         let symbol = self
             .unit
             .symbols()
@@ -4251,7 +4260,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             // continuation; the hint itself performs no abstract memory access.
             return Ok(None);
         }
-        let target = linked_library_definition(self.unit, *symbol);
+        let target = self
+            .linkage
+            .target(linked_library_definition(self.unit, *symbol));
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
             let result = self.external_library_call(target, spelling, &arguments, call_span)?;
             return Ok(Some(result));
@@ -4412,6 +4423,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
+        let symbol = self.linkage.target(symbol);
         let name = self.unit.symbols().symbol(symbol).ok()?.spelling();
         self.symbol_order()
             .functions
@@ -4465,7 +4477,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let mut functions = BTreeMap::new();
             let mut objects = BTreeSet::new();
             for symbol in referenced.named {
-                let symbol = linked_library_definition(self.unit, symbol);
+                let symbol = self
+                    .linkage
+                    .target(linked_library_definition(self.unit, symbol));
                 let Ok(entry) = self.unit.symbols().symbol(symbol) else {
                     continue;
                 };
@@ -4970,7 +4984,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &self,
         function: SymbolId,
     ) -> Result<&'arena FunctionDecl<'arena>, InterpreterError> {
-        let function = linked_library_definition(self.unit, function);
+        let function = self
+            .linkage
+            .target(linked_library_definition(self.unit, function));
         let symbol = self
             .unit
             .symbols()
@@ -5297,6 +5313,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn memory_binding(&self, symbol: SymbolId) -> Option<MemoryBinding> {
+        let symbol = self.linkage.target(symbol);
         self.memory_frame
             .as_ref()
             .and_then(|frame| frame.bindings.get(&symbol).copied())
@@ -8817,11 +8834,15 @@ fn has_static_storage_duration(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
     file_scope || declaration.storage_class() == Some(StorageClass::Static)
 }
 
-fn reachable_memory_requirements(unit: &CHirUnit<'_>, entry: SymbolId) -> MemoryRequirements {
+fn reachable_memory_requirements(
+    unit: &CHirUnit<'_>,
+    entry: SymbolId,
+    linkage: &crate::linkage::SymbolLinkage,
+) -> MemoryRequirements {
     let mut requires_memory = false;
     let mut visited_functions: BTreeSet<SymbolId> = BTreeSet::new();
     let mut static_objects: BTreeSet<SymbolId> = BTreeSet::new();
-    let mut pending_functions: Vec<SymbolId> = vec![entry];
+    let mut pending_functions: Vec<SymbolId> = vec![linkage.target(entry)];
     let mut pending_objects: Vec<SymbolId> = Vec::new();
 
     while !pending_functions.is_empty() || !pending_objects.is_empty() {
@@ -8839,6 +8860,7 @@ fn reachable_memory_requirements(unit: &CHirUnit<'_>, entry: SymbolId) -> Memory
             collect_statement_symbols(body, &mut referenced);
             classify_referenced_symbols(
                 unit,
+                linkage,
                 referenced,
                 &mut pending_functions,
                 &mut static_objects,
@@ -8861,6 +8883,7 @@ fn reachable_memory_requirements(unit: &CHirUnit<'_>, entry: SymbolId) -> Memory
             }
             classify_referenced_symbols(
                 unit,
+                linkage,
                 referenced,
                 &mut pending_functions,
                 &mut static_objects,
@@ -8888,12 +8911,14 @@ fn reachable_memory_requirements(unit: &CHirUnit<'_>, entry: SymbolId) -> Memory
 /// dropped here; every consumer re-resolves them and fails closed on its own.
 fn classify_referenced_symbols(
     unit: &CHirUnit<'_>,
+    linkage: &crate::linkage::SymbolLinkage,
     referenced: ReferencedSymbols,
     pending_functions: &mut Vec<SymbolId>,
     static_objects: &mut BTreeSet<SymbolId>,
     pending_objects: &mut Vec<SymbolId>,
 ) {
     for symbol in referenced.named {
+        let symbol = linkage.target(symbol);
         let Ok(declaration) = unit.symbols().symbol(symbol) else {
             continue;
         };
@@ -9337,11 +9362,12 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
                 .symbol(*symbol)
                 .ok()
                 .is_some_and(|declaration| {
-                    matches!(
-                        declaration.kind(),
-                        SymbolKind::Object | SymbolKind::Parameter
-                    ) && (has_static_storage_duration(unit, *symbol)
-                        || type_requires_memory(unit.types(), facts.ty()))
+                    declaration.kind() == SymbolKind::Function
+                        || matches!(
+                            declaration.kind(),
+                            SymbolKind::Object | SymbolKind::Parameter
+                        ) && (has_static_storage_duration(unit, *symbol)
+                            || type_requires_memory(unit.types(), facts.ty()))
                 })
         }
         CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
@@ -9372,7 +9398,15 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
                 || expression_requires_memory(unit, else_expression)
         }
         CHirExpr::Call(callee, arguments, _) => {
-            expression_requires_memory(unit, callee)
+            (!matches!(callee, CHirExpr::Ident { facts, .. } if facts.category() == ExprCategory::FunctionDesignator)
+                && PointerTypeDesc::from_expression(unit.symbols(), unit.types(), callee)
+                    .is_ok_and(|p| {
+                        matches!(
+                            unit.types().get(p.pointee()).map(|t| &t.kind),
+                            Some(TypeKind::Function { .. })
+                        )
+                    })
+                && expression_requires_memory(unit, callee))
                 || arguments
                     .iter()
                     .any(|argument| expression_requires_memory(unit, argument))
@@ -10710,7 +10744,8 @@ mod tests {
         let arena = Arena::new(64 * 1024);
         let (unit, main, _bump, counter) = transitive_global_program(&arena);
 
-        let requirements = reachable_memory_requirements(&unit, main);
+        let requirements =
+            reachable_memory_requirements(&unit, main, &crate::linkage::SymbolLinkage::default());
 
         assert!(
             requirements.requires_memory,
@@ -10729,7 +10764,8 @@ mod tests {
 
         // Entering at `bump` still reaches `counter`; entering nowhere else must not
         // invent objects, so the manifest stays exactly one object wide.
-        let requirements = reachable_memory_requirements(&unit, bump);
+        let requirements =
+            reachable_memory_requirements(&unit, bump, &crate::linkage::SymbolLinkage::default());
 
         assert!(requirements.requires_memory);
         assert_eq!(

@@ -562,6 +562,7 @@ mod tests {
 
     fn function(blocks: Vec<Block>) -> Function {
         Function {
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "f".to_owned(),
@@ -579,6 +580,7 @@ mod tests {
     #[test]
     fn derives_witness_and_seed_order_without_producer_help() {
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -612,6 +614,7 @@ mod tests {
     #[test]
     fn poison_is_not_laundered_through_a_block_argument() {
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
@@ -658,6 +661,7 @@ mod tests {
         };
         let quotient = bits(2);
         let module = Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),

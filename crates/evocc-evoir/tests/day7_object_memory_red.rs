@@ -13,6 +13,7 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
     let mem = value(0, EvoIRType::Mem(Region::All));
     let world = value(1, EvoIRType::World);
     let function = Function {
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: name.to_owned(),
@@ -46,6 +47,7 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -130,6 +132,7 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
         vec![loaded, mem3, world3],
     );
     let module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -192,6 +195,7 @@ fn initialized_global_and_volatile_trace_are_observable() {
         vec![loaded, mem1, world1],
     );
     let module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -200,6 +204,7 @@ fn initialized_global_and_volatile_trace_are_observable() {
             symbol: "counter".to_owned(),
             origin: 20,
             kind: GlobalKind::File,
+            linkage: evocc_evoir::Linkage::Strong,
             visibility: GlobalVisibility::External,
             layout,
             bytes: 7_u32.to_le_bytes().to_vec(),

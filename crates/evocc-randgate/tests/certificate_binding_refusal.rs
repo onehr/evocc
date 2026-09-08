@@ -73,6 +73,7 @@ fn module() -> Module {
 
     let function = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
@@ -108,6 +109,7 @@ fn module() -> Module {
     };
 
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -160,6 +162,7 @@ fn sparsely_numbered_module() -> Module {
 
     let function = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
@@ -192,6 +195,7 @@ fn sparsely_numbered_module() -> Module {
     };
 
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -275,6 +279,7 @@ fn aliasing_module() -> Module {
 
     let function = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
@@ -310,6 +315,7 @@ fn aliasing_module() -> Module {
     };
 
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
@@ -392,6 +398,7 @@ fn nested_negation_module() -> Module {
 
     let function = Function {
         variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
@@ -429,6 +436,7 @@ fn nested_negation_module() -> Module {
     };
 
     let mut module = Module {
+        aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),

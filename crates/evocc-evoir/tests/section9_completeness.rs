@@ -282,6 +282,12 @@ fn sentinel_module() -> Module {
     param_marks[3] = ParamMark::ByVal(RecordShape { size: 24, align: 8 });
     Module {
         assembly: vec![".globl sentinel_asm\n".into()],
+        aliases: vec![evocc_evoir::SymbolAlias {
+            name: "sentinel_alias".into(),
+            target: "sentinel_file".into(),
+            visibility: GlobalVisibility::Internal,
+            linkage: evocc_evoir::Linkage::Strong,
+        }],
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![
@@ -290,6 +296,7 @@ fn sentinel_module() -> Module {
                 symbol: "sentinel_file".to_owned(),
                 origin: 7001,
                 kind: GlobalKind::File,
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: GlobalVisibility::External,
                 layout: AccessLayout::new(3, 4),
                 bytes: vec![0xa1, 0xb2, 0xc3],
@@ -300,6 +307,7 @@ fn sentinel_module() -> Module {
                 symbol: "__evocc.static.sentinel.7002".to_owned(),
                 origin: 7002,
                 kind: GlobalKind::FunctionStatic,
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(2, 8),
                 bytes: vec![0xd4, 0xe5],
@@ -310,6 +318,7 @@ fn sentinel_module() -> Module {
                 symbol: "__evocc.string.7003".to_owned(),
                 origin: 7003,
                 kind: GlobalKind::StringLiteral,
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(1, 16),
                 bytes: vec![0xf6],
@@ -319,6 +328,7 @@ fn sentinel_module() -> Module {
                 symbol: "__evocc.compound.7004".into(),
                 origin: 7004,
                 kind: GlobalKind::CompoundLiteral,
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(16, 8),
                 bytes: vec![0; 16],
@@ -331,6 +341,7 @@ fn sentinel_module() -> Module {
             },
         ],
         functions: vec![Function {
+            linkage: evocc_evoir::Linkage::Weak,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "sentinel_function".to_owned(),
@@ -715,16 +726,29 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
 
 fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     let Module {
+        aliases,
         assembly,
         globals,
         extern_objects,
         declares,
         functions,
     } = module;
-    let _ = (assembly, extern_objects, declares);
-    let mut keys = BTreeSet::from(["Module(assembly,globals,extern_objects,declares,functions)"]);
+    let _ = (assembly, extern_objects, declares, aliases);
+    let mut keys =
+        BTreeSet::from(["Module(assembly,globals,extern_objects,declares,aliases,functions)"]);
+    for alias in aliases {
+        let evocc_evoir::SymbolAlias {
+            name,
+            target,
+            visibility,
+            linkage,
+        } = alias;
+        let _ = (name, target, visibility, linkage);
+        keys.insert("SymbolAlias(name,target,visibility,linkage)");
+    }
     for global in globals {
         let GlobalObject {
+            linkage,
             symbol,
             origin,
             kind,
@@ -735,6 +759,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             relocs,
         } = global;
         let _ = (
+            linkage,
             symbol,
             origin,
             kind,
@@ -744,7 +769,9 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             initialized,
             relocs,
         );
-        keys.insert("GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized,relocs)");
+        keys.insert(
+            "GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs)",
+        );
         let AccessLayout {
             size_bytes,
             align_bytes,
@@ -754,6 +781,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     }
     for function in functions {
         let Function {
+            linkage,
             name,
             params,
             param_marks,
@@ -763,8 +791,10 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             visibility,
             blocks,
         } = function;
-        let _ = (name, ret_tys, variadic, visibility);
-        keys.insert("Function(name,params,param_marks,variadic,ret_tys,effects,visibility,blocks)");
+        let _ = (name, ret_tys, variadic, visibility, linkage);
+        keys.insert(
+            "Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,blocks)",
+        );
         for mark in param_marks {
             if let Some(RecordShape { size, align }) = mark.shape() {
                 let _ = (size, align);

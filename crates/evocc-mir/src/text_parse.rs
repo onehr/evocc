@@ -69,6 +69,11 @@ pub fn parse_module(text: &str) -> Result<MModule, String> {
 }
 
 fn parse_global(line: &str) -> Result<GlobalObject, String> {
+    if line.split(' ').nth(5) == Some("linkage=weak") {
+        let mut global = parse_global(&line.replacen(" linkage=weak", "", 1))?;
+        global.linkage = evocc_evoir::Linkage::Weak;
+        return Ok(global);
+    }
     let rest = line
         .strip_prefix("global @")
         .ok_or_else(|| format!("not a global line: '{line}'"))?;
@@ -138,6 +143,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<bool>, String>>()?;
     Ok(GlobalObject {
+        linkage: evocc_evoir::Linkage::Strong,
         relocs: Vec::new(),
         symbol,
         origin,

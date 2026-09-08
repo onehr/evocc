@@ -1624,11 +1624,13 @@ mod tests {
 
     fn module(insts: Vec<Inst>, root: Value, with_input: bool) -> Module {
         Module {
+            aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![Function {
+                linkage: evocc_evoir::Linkage::Strong,
                 visibility: evocc_evoir::GlobalVisibility::External,
                 variadic: false,
                 name: "main".to_owned(),
