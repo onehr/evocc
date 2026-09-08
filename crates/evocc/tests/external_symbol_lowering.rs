@@ -421,6 +421,36 @@ fn designated_aggregates_follow_ordinary_brace_elision() {
 }
 
 #[test]
+fn nested_initializer_continuation_retains_object_boundaries() {
+    for (source, code) in [
+        (
+            "struct S { int a, b; }; struct S s = { .b = 1, 2 };",
+            "E2201",
+        ),
+        (
+            "struct S { int a[2]; }; struct S s = { .a[2] = 1 };",
+            "E2906",
+        ),
+        (
+            "struct S { int a[2]; }; struct S s = { .a[1] = 1, 2 };",
+            "E2201",
+        ),
+        (
+            "struct S { int h; int a[]; }; void f(void) { struct S s = { .h = 1, 2 }; }",
+            "E2201",
+        ),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn alignment_specifiers_share_object_and_member_layout() {
     let source = include_str!("../../../tests/fixtures/alignment-specifiers.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

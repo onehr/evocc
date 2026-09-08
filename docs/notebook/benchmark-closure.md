@@ -135,13 +135,18 @@ Captures are `.evidence/ladder/e0/20260908T202105Z` and `20260908T202128Z`.
 The assembly spelling moves its original sites past parsing, but their
 remaining unsupported constraints are not passes or closure of that family.
 
-The next correctness repair is nested designator continuation: the valid
+The next correctness repair was nested designator continuation: the valid
 `{ .inner.a = 11, 22 }` writes 22 into the outer following field rather than
 `inner.b`. Both interpreters return the same wrong value, while GCC-14 and
 Clang-19 at O0/O2 return zero from the value-checking reduction. Aggregate
 brace elision after a designator (`.m = 0` in `pr33631`) and inferred-array
-bounds need the same subobject cursor. This remains OPEN; sharing an
-initializer plan did not independently prove that the plan was correct.
+bounds need the same subobject cursor. Tests-only `6c38b38` has three
+compiled failures and 48 passes. The shared full-path cursor now makes all
+three value fixtures pass in both interpreters and natively; the dependency
+gate against that checkpoint passes 1,271 tests, zero failures and three
+existing ignores, with Clippy, fmt, Ruff and diff-check green. Original
+replay remains pending; sharing an initializer plan did not independently
+prove that the plan was correct.
 
 ### Alignment specifiers and non-object queries
 
@@ -1148,6 +1153,14 @@ Four original wide-bit-field torture tests (`bitfld-3`, `bitfld-5`, `pr32244-1`,
 `pr34971`) each exit zero with sealed GCC-14 and 134 with Clang-19 at `-O0`.
 Their GCC-specific width arithmetic cannot be treated as a dual-oracle
 positive requirement. Original failure counts remain unchanged.
+
+Original `20230630-2` and `20230630-4` are another measured disagreement:
+both GCC-14 O0/O2 runs pass, while both Clang-19 O0/O2 runs abort with 134
+after warning that `scalar_storage_order` is unknown and ignored. They
+assert GCC's reversed object byte order, not ordinary bit-field layout.
+Evidence is `.evidence/builtin-probes/20260909-storage-order/results.txt`.
+The two subject failures remain in the denominator; matching Clang's
+unimplemented attribute is not a passing GCC torture result.
 
 Torture `pr19687` is already covered by Appendix D's inactive-union-tail
 decision: GCC and Clang agree at O0 but disagree at O2. Its E3001 does not

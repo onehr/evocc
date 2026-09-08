@@ -2288,7 +2288,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 literal.explicit_unit_count()?.checked_add(1)?
                             } else {
                                 self.inferred_array_element_count(
-                                    element,
+                                    target,
                                     elements,
                                     designations,
                                     *span,
@@ -2296,7 +2296,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             }
                         } else {
                             self.inferred_array_element_count(
-                                element,
+                                target,
                                 elements,
                                 designations,
                                 *span,
@@ -2786,7 +2786,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn inferred_array_element_count(
         &mut self,
-        element: TypeId,
+        target: TypeId,
         elements: &[WrittenInitializer<'arena>],
         designations: &[Option<InitializerDesignation<'arena>>],
         span: SourceSpan,
@@ -2794,48 +2794,41 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if elements.len() != designations.len() {
             unreachable!("initializer elements and designations are positional peers");
         }
+        let TypeKind::Array { element, .. } = self.types.get(target)?.kind else {
+            unreachable!("only array initializers infer an element count");
+        };
+        if designations.iter().any(Option::is_some) {
+            if self
+                .validate_initializer_object_graph(element, &mut HashSet::new())
+                .is_err()
+            {
+                self.report("E2202", "invalid-initializer-type", span);
+                return None;
+            }
+            let path = SubobjectPath::root();
+            let mut cursor = self.next_initializer_child(target, &path, None);
+            let mut count = 0;
+            for (written, designation) in elements.iter().zip(designations) {
+                for destination in self.initializer_element_destinations(
+                    target,
+                    &path,
+                    written,
+                    designation.as_ref(),
+                    &mut cursor,
+                )? {
+                    let SubobjectStep::Index { index } = destination.path.steps()[0] else {
+                        unreachable!("an array subobject begins with an index");
+                    };
+                    count = count.max(index.checked_add(1)?);
+                }
+            }
+            return Some(count);
+        }
         let mut source_cursor = 0_usize;
         let mut array_cursor = 0_u64;
         let mut count = 0_u64;
         while source_cursor < elements.len() {
-            if let Some(designation) = &designations[source_cursor] {
-                let Some(first) = designation.designators.first() else {
-                    unreachable!("a written designation has at least one designator");
-                };
-                let last = match first {
-                    WrittenDesignator::Index { expression, span } => {
-                        self.designator_constant_index(expression, *span)?
-                    }
-                    WrittenDesignator::Range { first, last, span } => {
-                        let first = self.designator_constant_index(first, *span)?;
-                        let last = self.designator_constant_index(last, *span)?;
-                        if first > last {
-                            self.report("E2917", "designator-index-not-constant", *span);
-                            return None;
-                        }
-                        last
-                    }
-                    WrittenDesignator::Field(_) => {
-                        // A field designator on an array is diagnosed by the
-                        // ordinary normalizer. Give it one provisional slot so
-                        // type inference never masks that precise error.
-                        array_cursor = array_cursor.checked_add(1)?;
-                        count = count.max(array_cursor);
-                        source_cursor += 1;
-                        continue;
-                    }
-                };
-                array_cursor = last.checked_add(1)?;
-                count = count.max(array_cursor);
-                source_cursor += 1;
-                continue;
-            }
-
-            let next_designation = designations[source_cursor + 1..]
-                .iter()
-                .position(Option::is_some)
-                .map_or(elements.len(), |offset| source_cursor + 1 + offset);
-            let segment = &elements[source_cursor..next_designation];
+            let segment = &elements[source_cursor..];
             let next = match self.initializer_stream_action_count(element, segment, 0) {
                 Ok((next, _)) => next,
                 Err(
@@ -3563,7 +3556,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2919", "flexible-array-initializer-not-static", span);
             return None;
         }
-        let Some(children) = self.aggregate_initializer_children(target) else {
+        if !matches!(
+            self.types.get(target)?.kind,
+            TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_)
+        ) {
             let span = designations
                 .iter()
                 .flatten()
@@ -3571,37 +3567,132 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .map_or_else(|| self.span(), |designation| designation.span);
             self.report("E2906", "designator-outside-object", span);
             return None;
-        };
+        }
 
-        let mut cursor = 0_usize;
+        let mut cursor = self.next_initializer_child(target, &path, None);
         for (element, designation) in elements.iter().zip(designations) {
-            if let Some(designation) = designation {
-                let resolved = self.resolve_initializer_designation(target, &path, designation)?;
-                cursor = self.designation_successor_cursor(&path, &children, &resolved);
-                for destination in resolved {
-                    self.normalize_initializer_value(
-                        destination.ty,
-                        destination.path,
-                        element,
-                        actions,
-                    )?;
-                }
-                continue;
-            }
-
-            let Some((step, child)) = children.get(cursor).copied() else {
-                self.report("E2201", "excess-initializer", element.span());
-                return None;
-            };
-            self.normalize_initializer_value(
-                child,
-                extend_subobject_path(path.clone(), step),
+            for destination in self.initializer_element_destinations(
+                target,
+                &path,
                 element,
-                actions,
-            )?;
-            cursor += 1;
+                designation.as_ref(),
+                &mut cursor,
+            )? {
+                self.normalize_initializer_value(
+                    destination.ty,
+                    destination.path,
+                    element,
+                    actions,
+                )?;
+            }
         }
         Some(())
+    }
+
+    /// A brace-list cursor is a complete subobject path, not an index into
+    /// only the outer aggregate. Bound inference and normalization consume
+    /// the same destinations so nested continuations cannot disagree.
+    fn initializer_element_destinations(
+        &mut self,
+        target: TypeId,
+        base_path: &SubobjectPath,
+        written: &WrittenInitializer<'arena>,
+        designation: Option<&InitializerDesignation<'arena>>,
+        cursor: &mut Option<ResolvedInitializerTarget>,
+    ) -> Option<Vec<ResolvedInitializerTarget>> {
+        let mut destinations = if let Some(designation) = designation {
+            self.resolve_initializer_designation(target, base_path, designation)?
+        } else if let Some(destination) = cursor.clone() {
+            vec![destination]
+        } else {
+            self.report("E2201", "excess-initializer", written.span());
+            return None;
+        };
+        for destination in &mut destinations {
+            while !matches!(written, WrittenInitializer::List { .. })
+                && !self.direct_initializer_expression(destination.ty, written)
+                // Keep the existing flexible-member checks in the normalizer;
+                // descending past an unbounded member would bypass them.
+                && !matches!(
+                    self.types.get(destination.ty)?.kind,
+                    TypeKind::Array { bound: ArrayBound::Unbounded, .. }
+                )
+            {
+                let Some(child) =
+                    self.next_initializer_child(destination.ty, &destination.path, None)
+                else {
+                    break;
+                };
+                *destination = child;
+            }
+            *cursor = self.initializer_successor(target, base_path, &destination.path);
+        }
+        Some(destinations)
+    }
+
+    fn next_initializer_child(
+        &self,
+        target: TypeId,
+        path: &SubobjectPath,
+        after: Option<SubobjectStep>,
+    ) -> Option<ResolvedInitializerTarget> {
+        let kind = &self.types.get(target)?.kind;
+        let (step, ty) = match kind {
+            TypeKind::Array { element, bound } => {
+                let index = match after {
+                    None => 0,
+                    Some(SubobjectStep::Index { index }) => index.checked_add(1)?,
+                    Some(SubobjectStep::Field { .. }) => return None,
+                };
+                if matches!(bound, ArrayBound::Fixed(size) if index >= *size)
+                    || matches!(bound, ArrayBound::Variable)
+                {
+                    return None;
+                }
+                (SubobjectStep::Index { index }, *element)
+            }
+            TypeKind::Union(_) if after.is_some() => return None,
+            _ => self
+                .aggregate_initializer_children(target)?
+                .into_iter()
+                .find(|(step, _)| after.is_none_or(|after| *step > after))?,
+        };
+        Some(ResolvedInitializerTarget {
+            path: extend_subobject_path(path.clone(), step),
+            ty,
+        })
+    }
+
+    fn initializer_successor(
+        &self,
+        target: TypeId,
+        base_path: &SubobjectPath,
+        initialized: &SubobjectPath,
+    ) -> Option<ResolvedInitializerTarget> {
+        let mut parents = Vec::new();
+        let mut ty = target;
+        let mut path = base_path.clone();
+        for &step in &initialized.steps()[base_path.steps().len()..] {
+            parents.push((ty, path.clone(), step));
+            ty = match (&self.types.get(ty)?.kind, step) {
+                (TypeKind::Array { element, .. }, SubobjectStep::Index { .. }) => *element,
+                (
+                    TypeKind::Struct(tag) | TypeKind::Union(tag),
+                    SubobjectStep::Field { field_index },
+                ) => match &self.types.tag(*tag)?.state {
+                    TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) => fields.get(field_index)?.ty,
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            path = extend_subobject_path(path, step);
+        }
+        parents
+            .into_iter()
+            .rev()
+            .find_map(|(ty, path, step)| self.next_initializer_child(ty, &path, Some(step)))
     }
 
     fn resolve_initializer_designation(
@@ -3704,20 +3795,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         Some(element)
-    }
-
-    fn designation_successor_cursor(
-        &self,
-        base_path: &SubobjectPath,
-        children: &[(SubobjectStep, TypeId)],
-        resolved: &[ResolvedInitializerTarget],
-    ) -> usize {
-        resolved
-            .iter()
-            .filter_map(|target| target.path.steps().get(base_path.steps().len()))
-            .filter_map(|step| children.iter().position(|(candidate, _)| candidate == step))
-            .max()
-            .map_or(children.len(), |index| index + 1)
     }
 
     fn final_flexible_array_member(&self, target: TypeId) -> Option<(usize, String, TypeId)> {
