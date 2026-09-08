@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T042040Z",
-  "subject": "2a50ced",
-  "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
+  "run": "20260908T070702Z",
+  "subject": "7b436bc",
+  "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,12 +18,12 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1190,
-     "refused": 468,
-     "fail": 34
+     "pass": 1196,
+     "refused": 461,
+     "fail": 35
     },
     "refusalsByCode": {
-     "E3101": 139,
+     "E3101": 132,
      "E1001": 108,
      "E2001": 42,
      "E2201": 23,
@@ -56,8 +56,8 @@
     },
     "failuresByInterpreterVerdict": {
      "E3006 invalid-signed-left-shift": 13,
+     "E3039 external-call-not-executable": 7,
      "E3004 signed-integer-overflow": 7,
-     "E3039 external-call-not-executable": 6,
      "E3021 not-lowered": 3,
      "E3008 interpreter-fuel-exhausted": 2,
      "E3007 evoir-main-parameters-are-not-canonical": 2,
@@ -66,5 +66,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T042040Z"
+ "evidence": ".evidence/ladder/e0/20260908T070702Z"
 }

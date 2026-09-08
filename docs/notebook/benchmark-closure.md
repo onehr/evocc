@@ -24,28 +24,52 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; its claimed 987-unit passing build is withdrawn for missing test output; weak GOT native probes and changed gate pass | `torture musl` | OPEN: original-program execution replay pending |
-| 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; changed gate 843/0, including native spills and binding validation | `musl` | OPEN: original-unit replay invalidated by incomplete command capture; rerun required |
-| 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
+| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
+| 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
+| 4 | Remaining native failures | ctest 1 runtime failure; torture 35 runtime failures, zero assembly/link failures; original `medce-1` now passes | `ctest torture` | PARTIAL: static label relocation and constant-branch pruning CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Original six extent defects fixed in `measure-20260907T170640Z`; new replay booted but retained overwritten cached assembly and could not verify zero-storage objects | `kernel` | REOPENED: cache-content guard fixed; original replay and zero-storage classification required |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
 | 7 | Remaining kernel refusals | Latest survey: 2,717 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; symbolic `%c` operands require a rule beyond integer-only `i` | `kernel` | OPEN |
-| 8 | Return and edge typing | void return effects repaired: toybox 177 to 191/203, zero regressions; the remaining three edge-value refusals still need reductions | `toybox` | PARTIAL: return fix benched, edge typing OPEN |
-| 9 | Other toybox lowering refusals | Remaining nine of 26 refusals: seven function-value types, one prototype, one object subvalue | `toybox` | OPEN |
+| 8 | Return and edge typing | toybox now 192/203, zero regressions; cut/httpd/sed retain three edge-value refusals involving goto entry and object storage | `toybox` | PARTIAL: return fix benched, edge storage OPEN |
+| 9 | Other toybox lowering refusals | Eight further refusals: seven function-value types and one object subvalue; classify FP dependence individually | `toybox` | OPEN |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
-| 11 | TinyCC compiler build | `arm64-link.o` and `tcc.o` relink failures; seven compile refusals across labels, places, function types and macro directives | `tinycc` | OPEN |
-| 12 | Switch, labels, function prototypes | Named function addresses now pass original ctest 00095 and torture 941014-1; non-compound switch, unstructured labels and four no-prototype function-pointer refusals remain | `ctest torture` | PARTIAL: function designator addresses CLOSED; CFG and erased call signatures OPEN |
+| 11 | TinyCC compiler build | 7/11 assemble, 4/11 enter a passing build; three relink failures and four compile refusals remain; external-data PIE is independently reduced for tccrun | `tinycc` | PARTIAL: macro-rescan failures in tccdbg/tccelf CLOSED by original replay |
+| 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls and enum/integer pointer compatibility pass original native replay | `ctest torture` | PARTIAL: these repaired originals CLOSED; jump-entered storage OPEN |
 | 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 478 total refusals and musl 354 remain exhaustively listed in raw results; classify the residual E3101/builtin/ABI/initializer classes after preceding fixes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 461 total refusals and musl 352 remain listed in raw results; classify residual E3101/builtin/ABI/initializer classes after preceding fixes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | `dg-options`, target requirements and timeout factors are not consumed; define explicit applicability, preserve excluded outcomes, never claim ALL non-FP from a filtered success count | `torture` | OPEN |
-| 18 | Unavailable Csmith references | 68 of 1,000 original seeds unavailable; 932 agree, zero mismatch; investigate termination/runtime without voting or deleting seeds | `csmith` | OPEN |
+| 18 | Unavailable Csmith references | Fresh `20260908T061706Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Existing `make test` recompiles reference sources; tests must consume substituted objects before a subject PASS is possible | `cjson` | OPEN |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Latest completed incremental replay
+
+`python3 tools/bench.py ctest torture csmith tinycc toybox --campaign all
+--programs 500 --jobs 4 --budget 40` completed run
+`20260908T061410.809670Z`, measuring the frozen `a1393e9` executable
+(`2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b`).
+The wrapper returns INCOMPLETE, not PASS: c-testsuite 203/220, torture
+1,195/1,692, Csmith 932/1,000 agreeing, TinyCC 4/11 units in a passing
+mixed build, toybox 192/203. Csmith retains all original seeds and outcomes,
+including 68 oracle-unusable and zero mismatches. TinyCC's original
+`tccdbg.o` and `tccelf.o` change from refusal to assembled and join the
+passing four-unit combination; `arm64-link.o`, `tcc.o`, and `tccrun.o`
+remain isolated relink failures. No earlier PASS was lost in these lanes.
+The subsequent enum repair is not attributed to this older executable.
+
+`python3 tools/bench.py ctest torture --jobs 4` then measures `7b436bc`
+in run `20260908T070638.695281Z`: 203/220 c-testsuite passes and
+1,196/1,692 torture passes. Both original identity sets are unchanged;
+the only outcome change is torture `enum-3`, refused to native PASS,
+with no previously passing program lost. Torture retains 461 refusals
+and 35 runtime failures, with zero emission timeouts or assembly/link
+failures. Unselected lanes keep their earlier compiler identities; this
+is not a new all-milestone PASS.
 
 ### Original-program replay and capture correction
 
@@ -124,6 +148,130 @@ past unallocated automatic objects.
 tools/gate-changed.sh abfa496 --quiet` passed 956 tests, zero failures and
 zero ignored, plus Clippy and fmt. The focused tests include native execution;
 original c-testsuite and torture replay remains the benchmark acceptance.
+
+Replay `20260908T050555.942587Z` (compiler source `5a8d94b`) now measures
+200/220 c-testsuite passes and 1,194/1,692 torture passes. The original
+identity sets are unchanged, and no prior pass is lost. c-testsuite
+`00087`, `00088`, `00089`, `00209`, and torture `20041212-1`, `20111208-1`,
+`pr17377`, `pr67037` change from refusal to native PASS. Torture `eeprof-1`
+changes from refusal to runtime FAIL: it requires `-finstrument-functions`,
+which the adapter does not consume; its expected instrumentation callbacks
+therefore never run. It remains a recorded failure, not a compiler PASS.
+
+### Nested switch dispatch
+
+Tests-only `3fabe4b` exposes non-compound switch refusal and wrong C-HIR
+values for cases inside conditionals and loops. `fa6f895` additionally pins
+integer promotion of a narrow selector and ownership of nested cases and
+continue targets. The sealed GCC-14/Clang-19 O0/O2 probe executes all shapes
+with exit zero (`.evidence/builtin-probes/20260908-nested-switch/results.txt`).
+
+The C-HIR entry point previously selected a different recursive statement
+executor for a call-free, memory-free function. That executor retained the
+same top-level-only case scan. The repair removes it and runs every function
+through the existing iterative machine; switch entry shares goto's scope and
+loop continuations. Lowering retains the compact flat-switch representation,
+while nested labels use the existing label/edge machinery and case matcher,
+not flattened loop bodies. A narrow selector's promoted value must be carried
+instead of being replaced by its original narrow local on later comparisons.
+`19aa801` passes the changed gate against `3fabe4b`: 965 tests, zero
+failures or ignored, Clippy and fmt clean. The test inventory was also
+recounted with the same five crates' `cargo test -- --list` (965).
+Entry past automatic memory-object
+declarations remains a separate open storage/lifetime issue, not waived here.
+
+Original replay `20260908T054623.296899Z` measures source `19aa801`:
+c-testsuite `00051` and `00143` change from refusal to PASS, giving 202/220.
+Torture retains all 1,194 prior passes; `medce-1` changes from refusal to
+link failure at its deliberately unresolved `link_error` symbol, while
+EvoIR execution returns zero. It is not a benchmark PASS: constant branch
+emission still leaves the unreachable call in the object. The 1,692 original
+identities are unchanged. Toybox now has 192/203 assembled substitutions
+in its passing combination, relative to its one baseline failure; TinyCC
+has 5 assembled, 2/11 in a passing build, with three isolated link failures
+(`arm64-link.o`, `tcc.o`, `tccrun.o`). These remain incomplete milestones.
+
+### Discarded expressions with abrupt control flow
+
+Tests-only `c6a4138` records three semantic failures, all `statement
+expression has no normal path to its value`, with no build errors. A
+discarded expression can return, break, continue, or jump rather than
+produce a normal continuation. The tracked fixture
+`tests/fixtures/discarded-expression-exits.c` compiles and exits zero with
+both pinned compilers at O0 and O2 in the sealed network-disabled image.
+The repair reuses statement `Flow` for discarded expressions and merges
+only actual fallthrough states; value-required contexts remain explicitly
+checked. `aa08860` passes all 329 tests selected by the changed gate against
+`c6a4138`, plus Clippy/fmt. Original run `20260908T055627.176403Z` moves
+only c-testsuite `00213` from refusal to PASS (203/220); torture's original
+1,692 identities and every outcome remain unchanged (1,194 PASS).
+
+### Macro inhibition survives argument substitution
+
+Two TinyCC parser failures have one preprocessing cause: `#define field
+p->field` inside a prescanned argument becomes `p->p->field` on a later
+rescan. In the originals this is `s1->s1->eh_frame_section` at
+`tccdbg.c:815` and `s1->s1->symtab_section` at `tccelf.c:1978`, not a new
+kind of projected lvalue. Tests-only `e9abc66` records two wrong-token
+failures plus a passing function-name boundary control, with no build errors.
+Both pinned preprocessors give the same nine lines for tracked fixture
+`tests/fixtures/macro-rescan-inhibition.c` under `-std=gnu11 -E -P` in the
+network-disabled sealed image. Preserve inhibition on the token occurrence,
+not on its spelling globally: later source occurrences and newly pasted
+tokens must remain eligible. All 105 C-preprocessor tests pass. `a1393e9`
+and the constant-branch repair `b6cf13f` pass the combined changed gate
+against `d22b5fc`: 1,243 tests, zero failed or ignored, Clippy `-D warnings`
+and fmt clean. Original-program replay remains the closure requirement.
+
+TinyCC's `tccrun.o` link failure independently names
+`R_AARCH64_ADR_PREL_PG_HI21` against libc `environ` under PIE linking.
+`arm64-link.o` also addresses `stderr`; `tcc.o` addresses `stderr`/`stdout`,
+but their isolated linker diagnostics have not yet been recaptured. The
+existing authorized GOT exception applies to undefined weak references,
+not all external symbols. Keep this address-recipe boundary open; disabling
+PIE in the benchmark is not an implementation fix.
+The tracked reduction `tests/fixtures/external-object-pie.c` compiles and
+exits zero with GCC-14 and Clang-19 using explicit `-fPIE -pie`; the
+subject's `a1393e9` assembly fails GCC linking with the same relocation
+error. Clang's default integrated assembler rejects the prescribed
+`:pg_hi21:` spelling before linking, so that attempt is not reported as
+the same linker diagnosis; use of GNU `as` must be explicit when isolating
+the linkage failure. Explicitly rerunning Clang-19 with
+`-fno-integrated-as -fPIE -pie` reaches the same `environ` relocation failure
+(link exit 1), isolating the address recipe from the assembler syntax.
+
+### Compatible enumeration pointer types
+
+The original torture `enum-3` combines pointers to a negative enumeration
+and its compatible `int` representation. The producer and place consumer
+did not share the same compatibility check, and the interner itself did
+not recognize an enum's existing underlying rank. Tests-only `71949c6`
+records three semantic failures with zero build errors: false rank
+compatibility, refused pointer-expression execution, and E2911 on the
+positive compile-time query. The Appendix D entry records the pinned
+O0/O2 positive executions and a separate GCC/Clang qualifier disagreement;
+the existing nested-qualifier rule is retained, not loosened to follow GCC.
+The extended fixture also exposed E2002 at a compatible redeclaration,
+then allocation-manifest and interpreter-return-type identity checks;
+these consumers now use the same target rank and type compatibility,
+without changing the independent SSA validator or nominal tag identity.
+Implementation `7b436bc` passes
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh 71949c6 --quiet`: 1,560 passed, zero failed, four
+pre-existing standing-campaign tests ignored, Clippy `-D warnings` and fmt
+clean for the twelve affected/reverse-dependent crates. Ruff, diff-check,
+and the 12 benchmark-entry Python tests pass. This is a changed-crate gate,
+not a newly claimed full-workspace or isolated-clone replay. Original
+torture run `20260908T070702Z` closes the reduced enum family by native PASS.
+
+The full original-seed Csmith replay `20260908T051022Z`, through
+`python3 tools/bench.py csmith --campaign all --programs 500 --jobs 4`,
+retains all 1,000 identities and every prior outcome: base 469 agree/31
+oracle-unusable, bitfields 463 agree/37 oracle-unusable, zero mismatch and
+zero subject refusal. Every unusable case times out in both GCC O0 and O2;
+this does not establish that every such source is nonterminating. The native
+campaign measured source `3fabe4b`, before the nested-switch repair, and is
+not relabeled as verification of a later commit.
 
 ### Explicit local-register operand binding
 
@@ -276,10 +424,11 @@ The release executable was unchanged throughout both lanes.
 - Musl `20260908T015031Z` retains all 1,339 original units and every prior
   assembled unit. `intscan.lo` and `sigaction.lo` change from refusal to
   assembled: 987 assembled, 352 refused. Symbol-parity exclusions fall from
-  167 to zero, and all 987 substituted units pass together against the same
-  17-failure reference baseline (previously 817 passed in the mixed build).
-  No subject-failing unit remains in this run. This does not establish
-  complete musl coverage or independently prove explicit register bindings.
+  167 to zero. This run originally claimed all 987 substituted units passed
+  together against the 17-failure reference baseline; that claim is withdrawn
+  because its substituted test report is absent. The valid fresh replay above
+  establishes a 494-unit passing combination, not 987, and does not establish
+  complete musl coverage.
 
 An additional RED checkpoint `f1ee3cf` pins an alias whose target definition
 was first declared by a block-scope extern. Fix `66a1f03` identifies actual

@@ -1,24 +1,22 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T042040.192297Z",
-  "subject": "2a50ced9968b0d070283734393accb58b0631156",
-  "dirty": false,
+  "run": "20260908T070638.695281Z",
+  "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
+  "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
+  "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
+    "ctest",
     "torture",
-    "musl",
     "--jobs",
-    "4",
-    "--budget",
-    "40"
+    "4"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "torture",
-    "musl"
+    "ctest",
+    "torture"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -26,12 +24,12 @@
       "rung": "E0b",
       "note": "self-checking programs and expected stdout",
       "outcomes": {
-        "pass": 196,
-        "refused": 23,
+        "pass": 203,
+        "refused": 16,
         "fail": 1
       },
       "refusals": {
-        "E3101": 14,
+        "E3101": 7,
         "E1003": 2,
         "E2202": 2,
         "E3030": 1,
@@ -43,14 +41,14 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 220,
-      "passed": 196,
+      "passed": 203,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3007 evoir-main-parameters-are-not-canonical": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T005741Z",
-      "evidence": ".evidence/ladder/e0/20260908T005741Z",
+      "run": "20260908T070638Z",
+      "evidence": ".evidence/ladder/e0/20260908T070638Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -62,24 +60,24 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 23.3,
+      "seconds": 24.1,
       "previous": null,
       "measurement": {
-        "run": "20260908T005741.383578Z",
-        "subject": "dba53850025144c3d4f13b2199e942bcbb196b88",
-        "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b"
+        "run": "20260908T070638.695281Z",
+        "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
+        "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99"
       }
     },
     "torture": {
       "rung": "E0a",
       "note": "mixed integer/FP suite; dg-options are not consumed",
       "outcomes": {
-        "pass": 1190,
-        "refused": 468,
-        "fail": 34
+        "pass": 1196,
+        "refused": 461,
+        "fail": 35
       },
       "refusals": {
-        "E3101": 139,
+        "E3101": 132,
         "E1001": 108,
         "E2001": 42,
         "E2201": 23,
@@ -113,20 +111,20 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1190,
+      "passed": 1196,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3006 invalid-signed-left-shift": 13,
+        "E3039 external-call-not-executable": 7,
         "E3004 signed-integer-overflow": 7,
-        "E3039 external-call-not-executable": 6,
         "E3021 not-lowered": 3,
         "E3008 interpreter-fuel-exhausted": 2,
         "E3007 evoir-main-parameters-are-not-canonical": 2,
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T042040Z",
-      "evidence": ".evidence/ladder/e0/20260908T042040Z",
+      "run": "20260908T070702Z",
+      "evidence": ".evidence/ladder/e0/20260908T070702Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -138,69 +136,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 140.5,
-      "previous": {
-        "rung": "E0a",
-        "note": "mixed integer/FP suite; dg-options are not consumed",
-        "outcomes": {
-          "pass": 1189,
-          "refused": 469,
-          "fail": 34
-        },
-        "refusals": {
-          "E3101": 140,
-          "E1001": 108,
-          "E2001": 42,
-          "E2201": 23,
-          "E2203": 19,
-          "E2102": 19,
-          "E1205": 16,
-          "E3021": 16,
-          "E3030": 15,
-          "E0105": 12,
-          "E0112": 11,
-          "E3029": 9,
-          "E3046": 6,
-          "E4003": 5,
-          "E2913": 4,
-          "E2920": 4,
-          "E2202": 3,
-          "E2933": 2,
-          "E1006": 2,
-          "E1007": 2,
-          "E1003": 2,
-          "E0002": 1,
-          "E3026": 1,
-          "E2935": 1,
-          "E1002": 1,
-          "E2101": 1,
-          "E2208": 1,
-          "E3033": 1,
-          "E2204": 1,
-          "E2929": 1
-        },
-        "baselineFailures": 0,
-        "failingUnits": [],
-        "total": 1692,
-        "passed": 1189,
-        "kind": "programs",
-        "runtimeDiagnostics": {
-          "E3006 invalid-signed-left-shift": 13,
-          "E3004 signed-integer-overflow": 7,
-          "E3039 external-call-not-executable": 6,
-          "E3021 not-lowered": 3,
-          "E3008 interpreter-fuel-exhausted": 2,
-          "E3007 evoir-main-parameters-are-not-canonical": 2,
-          "E3001 read-of-uninitialized-object": 1
-        },
-        "status": "INCOMPLETE",
-        "run": "20260908T034747Z",
-        "evidence": ".evidence/ladder/e0/20260908T034747Z"
-      },
+      "seconds": 138.3,
+      "previous": null,
       "measurement": {
-        "run": "20260908T042040.192297Z",
-        "subject": "2a50ced9968b0d070283734393accb58b0631156",
-        "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710"
+        "run": "20260908T070638.695281Z",
+        "subject": "7b436bceb44fcbad9001f7b724197c3e53ba49e7",
+        "driverSha256": "597f6b531e41e0a2036322ef731919d70f775bce88ff4340ec14b8b3cd6fec99"
       }
     },
     "csmith": {
@@ -217,8 +158,8 @@
       "passed": 932,
       "kind": "programs",
       "status": "INCOMPLETE",
-      "run": "20260907T141825Z",
-      "evidence": ".evidence/ladder/csmith/20260907T141825Z",
+      "run": "20260908T061706Z",
+      "evidence": ".evidence/ladder/csmith/20260908T061706Z",
       "receipt": "tests/contracts/ladder-csmith-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -234,7 +175,7 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 1479.2,
+      "seconds": 1387.2,
       "previous": {
         "rung": "E0c",
         "note": "original seeds; unavailable oracles are not passes",
@@ -249,13 +190,13 @@
         "passed": 932,
         "kind": "programs",
         "status": "INCOMPLETE",
-        "run": "20260907T115631Z",
-        "evidence": ".evidence/ladder/csmith/20260907T115631Z"
+        "run": "20260908T051022Z",
+        "evidence": ".evidence/ladder/csmith/20260908T051022Z"
       },
       "measurement": {
-        "run": "20260907T141450.311159Z",
-        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
-        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+        "run": "20260908T061410.809670Z",
+        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
+        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
       }
     },
     "zlib": {
@@ -894,20 +835,20 @@
       "note": "mixed-link compiler tests",
       "outcomes": {},
       "refusals": {
-        "E3101": 3,
-        "E2102": 2,
+        "E3101": 2,
         "E0113": 1,
         "E2921": 1
       },
       "baselineFailures": 0,
       "failingUnits": [
         "arm64-link.o",
-        "tcc.o"
+        "tcc.o",
+        "tccrun.o"
       ],
       "total": 11,
-      "passed": 2,
+      "passed": 4,
       "kind": "units",
-      "compiled": 4,
+      "compiled": 7,
       "excluded": 0,
       "testVerdict": "tests-passed-after-exclusions",
       "adjustments": {
@@ -952,8 +893,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260907T144438Z",
-      "evidence": ".evidence/ladder/tinycc/20260907T144438Z",
+      "run": "20260908T064014Z",
+      "evidence": ".evidence/ladder/tinycc/20260908T064014Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -965,26 +906,29 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 46.7,
+      "seconds": 92.6,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
         "outcomes": {},
         "refusals": {
-          "E2001": 2,
           "E2102": 2,
           "E3101": 2,
           "E0113": 1,
           "E2921": 1
         },
         "baselineFailures": 0,
-        "failingUnits": [],
+        "failingUnits": [
+          "arm64-link.o",
+          "tcc.o",
+          "tccrun.o"
+        ],
         "total": 11,
-        "passed": 1,
+        "passed": 2,
         "kind": "units",
-        "compiled": 3,
-        "excluded": 2,
-        "testVerdict": "tests-passed",
+        "compiled": 5,
+        "excluded": 0,
+        "testVerdict": "tests-passed-after-exclusions",
         "adjustments": {
           "sourcePageBreaksStripped": [
             "coff.h",
@@ -1027,13 +971,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260906T144534Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/tinycc/20260906T144534Z"
+        "run": "20260908T055028Z",
+        "evidence": ".evidence/ladder/tinycc/20260908T055028Z"
       },
       "measurement": {
-        "run": "20260907T141450.311159Z",
-        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
-        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+        "run": "20260908T061410.809670Z",
+        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
+        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
       }
     },
     "toybox": {
@@ -1041,14 +985,14 @@
       "note": "mixed-link tests relative to baseline failures",
       "outcomes": {},
       "refusals": {
-        "E3101": 12
+        "E3101": 11
       },
       "baselineFailures": 1,
       "failingUnits": [],
       "total": 203,
-      "passed": 191,
+      "passed": 192,
       "kind": "units",
-      "compiled": 191,
+      "compiled": 192,
       "excluded": 0,
       "testVerdict": "no-regression",
       "adjustments": {
@@ -1098,8 +1042,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260907T165020Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T165020Z",
+      "run": "20260908T064146Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T064146Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1110,7 +1054,7 @@
         "--jobs",
         "4",
         "--budget",
-        "20"
+        "40"
       ],
       "exitCode": 0,
       "seconds": 58.8,
@@ -1119,14 +1063,14 @@
         "note": "mixed-link tests relative to baseline failures",
         "outcomes": {},
         "refusals": {
-          "E3101": 26
+          "E3101": 11
         },
         "baselineFailures": 1,
         "failingUnits": [],
         "total": 203,
-        "passed": 177,
+        "passed": 192,
         "kind": "units",
-        "compiled": 177,
+        "compiled": 192,
         "excluded": 0,
         "testVerdict": "no-regression",
         "adjustments": {
@@ -1176,13 +1120,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260907T144525Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260907T144525Z"
+        "run": "20260908T054925Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T054925Z"
       },
       "measurement": {
-        "run": "20260907T165020.113321Z",
-        "subject": "427951e8b00d1a243692baf1cd1cb36ea1386145",
-        "driverSha256": "92084dcb125b537b46d5b8e1c554b510a5edc6fd452961a9dfdde39aebbd0792"
+        "run": "20260908T061410.809670Z",
+        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
+        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
       }
     },
     "musl": {
