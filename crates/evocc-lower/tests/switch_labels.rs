@@ -91,3 +91,50 @@ fn shared_label_enters_a_nested_switch_with_effect_tokens() {
           pack(0, p); pack(1, p); return total != 11; }",
     );
 }
+
+#[test]
+fn switch_accepts_a_single_labeled_statement_without_braces() {
+    assert_execution(
+        "int f(int x) { switch (x) case 3: return 7; return 9; }
+         int main(void) { return f(3) != 7 || f(4) != 9; }",
+    );
+}
+
+#[test]
+fn dispatch_enters_nested_cases_without_running_bypassed_guards() {
+    assert_execution(
+        "int f(int x) { int n = 0; switch (x) {
+           case 0: if (++n == 2) {
+             case 1: n += 3;
+           }
+           n += 5; break;
+           { case 2 ... 3: n = 11; break; }
+           default: n = 17;
+         } return n; }
+         int main(void) { return f(0) != 6 || f(1) != 8 ||
+           f(2) != 11 || f(3) != 11 || f(4) != 17; }",
+    );
+}
+
+#[test]
+fn dispatch_into_a_loop_preserves_backedges_and_break_targets() {
+    assert_execution(
+        "void transfer(int *out, int *in, int count) {
+           int n = (count + 3) / 4;
+           switch (count % 4) {
+             case 0: do { *out++ = *in++;
+             case 3:      *out++ = *in++;
+             case 2:      *out++ = *in++;
+             case 1:      *out++ = *in++;
+                     } while (--n > 0);
+           }
+         }
+         int main(void) { int in[9] = {1,2,3,4,5,6,7,8,9}; int out[9];
+           for (int n = 1; n <= 9; n++) {
+             for (int i = 0; i < 9; i++) out[i] = 0;
+             transfer(out, in, n);
+             for (int i = 0; i < 9; i++)
+               if (out[i] != (i < n ? in[i] : 0)) return 1;
+           } return 0; }",
+    );
+}
