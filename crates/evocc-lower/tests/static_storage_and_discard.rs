@@ -55,6 +55,14 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn integer_mode_storage_and_call_values_agree_in_both_interpreters() {
+    check(
+        include_str!("../../../tests/fixtures/integer-mode-memory.c"),
+        0,
+    );
+}
+
+#[test]
 fn static_local_updates_persist_across_calls() {
     check(
         "int f(void){ static int c = 5; c++; return c; } int main(void){ f(); return f(); }",

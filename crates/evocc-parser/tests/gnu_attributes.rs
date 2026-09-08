@@ -79,6 +79,64 @@ fn layout_of(source: &str, name: &str) -> (u64, u32) {
     (layout.size_bytes, layout.align_bytes.max(declared))
 }
 
+#[test]
+fn integer_modes_select_the_measured_canonical_types() {
+    for (mode, spelling, size) in [
+        ("QI", "char", 1),
+        ("HI", "short", 2),
+        ("SI", "int", 4),
+        ("DI", "long", 8),
+        ("TI", "__int128", 16),
+        ("byte", "char", 1),
+        ("word", "long", 8),
+        ("__QI__", "char", 1),
+    ] {
+        for sign in ["signed", "unsigned"] {
+            let source = format!(
+                "typedef {sign} int value __attribute__((mode({mode})));\n\
+                 _Static_assert(sizeof(value) == {size}, \"size\");\n\
+                 _Static_assert(_Alignof(value) == {size}, \"alignment\");\n\
+                 _Static_assert(__builtin_types_compatible_p(value, {sign} {spelling}), \"rank\");"
+            );
+            accepts(&source);
+        }
+    }
+}
+
+#[test]
+fn integer_modes_apply_to_each_declared_entity_without_losing_qualifiers() {
+    accepts(
+        "typedef unsigned int __attribute__((mode(QI))) a, b;\n\
+         typedef const unsigned int c __attribute__((mode(__QI__)));\n\
+         struct s { unsigned int x __attribute__((mode(QI)));\n\
+                    unsigned int y __attribute__((mode(HI))); };\n\
+         _Static_assert(sizeof(a) == 1 && sizeof(b) == 1 && sizeof(c) == 1, \"typedef\");\n\
+         _Static_assert(sizeof(struct s) == 4 && _Alignof(struct s) == 2, \"record\");\n\
+         _Static_assert(__builtin_offsetof(struct s, y) == 2, \"member\");\n\
+         unsigned int x __attribute__((mode(HI)));\n\
+         _Static_assert(sizeof(x) == 2, \"object\");\n\
+         int f(unsigned int x __attribute__((mode(QI)))) {\n\
+             _Static_assert(sizeof(x) == 1, \"parameter\"); return x; }",
+    );
+    rejects(
+        "typedef const int c __attribute__((mode(QI))); int f(void){c x=0; x=1; return x;}",
+        "E2101",
+    );
+}
+
+#[test]
+fn unsupported_and_conflicting_integer_modes_do_not_silently_keep_int() {
+    for source in [
+        "typedef int t __attribute__((mode(unknown)));",
+        "typedef int t __attribute__((mode()));",
+        "typedef int t __attribute__((mode(QI, HI)));",
+        "typedef float t __attribute__((mode(QI)));",
+        "int f(void){return sizeof(unsigned int __attribute__((mode(QI))));}",
+    ] {
+        rejects(source, "E2903");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The two lines that stop every parse lane in the kernel cohort
 // ---------------------------------------------------------------------------

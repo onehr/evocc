@@ -50,6 +50,23 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn integer_mode_attributes_resolve_to_canonical_types_before_lowering() {
+    assert_pairs(
+        &[
+            (
+                "typedef unsigned int t __attribute__((mode(QI))); t f(t x){return x+1;}",
+                "typedef unsigned char t; t f(t x){return x+1;}",
+            ),
+            (
+                "typedef unsigned int t __attribute__((mode(DI))); t f(t x){return x+1;}",
+                "typedef unsigned long t; t f(t x){return x+1;}",
+            ),
+        ],
+        1700,
+    );
+}
+
+#[test]
 fn ignored_type_name_attributes_do_not_change_lowered_function_pointer_calls() {
     assert_pairs(
         &[
