@@ -6148,3 +6148,10 @@ A function pointer whose C parameter list is unspecified retains its address and
 Both sealed compilers execute `tests/fixtures/unprototyped-function-pointers.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260908-unprototyped-pointers/results.txt`).
 Lowering carries the unprototyped address as `ptr<generic>` and uses the existing integer round-trip conversion to a `fnptr` with the promoted call's actual signature at the call site, leaving the validator and dynamic `E3019` signature check unchanged and adding no instruction or diagnostic.
 Four original c-testsuite refusals (`00087`, `00088`, `00089`, `00209`) require unprototyped pointer storage or calls; their subsequent execution, not the reduced fixture, determines the passing count.
+
+### Enumeration and underlying integer compatibility
+
+A complete enumeration is compatible with its existing target-selected underlying integer type, including through pointers and function parameters, without making separately declared enum tags compatible with each other or discarding nested qualifiers.
+Both sealed compilers execute `tests/fixtures/enum-compatible-pointers.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260908-enum-compatibility/results.txt`); for the separate qualified-pointer query GCC returns one and Clang zero, so the existing nested-qualifier distinction remains authoritative rather than adopting GCC's relaxation.
+No diagnostic or representation is added: pointer conditional expressions retain the compatible pointee's signedness and the normal union of pointee qualifiers.
+One original torture refusal, `enum-3`, reaches this rule; full-campaign impact must be remeasured.
