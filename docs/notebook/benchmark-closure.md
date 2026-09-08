@@ -23,12 +23,12 @@ Only one heavyweight benchmark invocation runs at once.
 
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
-| 1 | Macro push/pop state | `00206` wrong stdout and `pushpop_macro` abort; restore saved definitions, including undefined and nested states; original programs pass | `ctest torture` | SPEC_BODY_CONFLICT: Section 10.4 makes other pragmas ignored-safe |
-| 2 | Object aliases and weak symbols | `alias-2/3/4` undefined `b`; musl 167 symbol-parity exclusions require subtyping, not assuming one cause; pin object symbol tables and native alias accesses | `torture musl` | SPEC_BODY_CONFLICT: preserved-only rule, already recorded in Appendix D |
+| 1 | Macro push/pop state | `00206` wrong stdout and `pushpop_macro` abort; restore saved definitions, including undefined and nested states; original programs pass | `ctest torture` | OPEN: authorized by revision 1.9.77, `5a42279` |
+| 2 | Object aliases and weak symbols | `alias-2/3/4` undefined `b`; musl 167 symbol-parity exclusions require subtyping, not assuming one cause; pin object symbol tables and native alias accesses | `torture musl` | OPEN: EvoIR 1.9.79 / EvoMIR 0.22, `5a42279` |
 | 3 | Explicit register operands | Singleton `sigsetjmp_tail.lo` breaks two setjmp tests; syscall assembly does not preserve the specified register mapping; pin register/ABI semantics and native execution | `musl` | OPEN |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
-| 6 | Assembly register alternatives | `Kr` or operand type rejects 2,745 kernel units; implement shared selection/validation and native operand tests | `kernel` | SPEC_BODY_CONFLICT: Section 3.11 explicitly refuses unlisted combinations; only `Ir` was admitted |
+| 6 | Assembly register alternatives | `Kr` or operand type rejects 2,745 kernel units; implement shared selection/validation and native operand tests | `kernel` | OPEN: authorized by revision 1.9.78, `5a42279` |
 | 7 | Remaining kernel refusals | Frame address and computed goto, one unit each; preserve existing explicit deferrals until a supported implementation exists | `kernel` | OPEN |
 | 8 | Return and edge typing | void return effects repaired: toybox 177 to 191/203, zero regressions; the remaining three edge-value refusals still need reductions | `toybox` | PARTIAL: return fix benched, edge typing OPEN |
 | 9 | Other toybox lowering refusals | Remaining nine of 26 refusals: seven function-value types, one prototype, one object subvalue | `toybox` | OPEN |
