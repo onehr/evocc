@@ -6377,7 +6377,7 @@ One original c-testsuite refusal, `00162`, reaches this rule; its original repla
 
 ### Alignment queries on non-object types
 
-On the AArch64 target, `_Alignof` and `__alignof__` of `void` are one, and of a function type or function designator are four; expression operands remain unevaluated.
+On the AArch64 target, `_Alignof` and `__alignof__` of `void` are one, and of an unattributed function type or function designator are four; expression operands remain unevaluated.
 Both sealed compilers at O0/O2 agree on `.evidence/builtin-probes/20260909-nonobject-alignment/align.c`, recorded in `results.txt`, including the distinct existing `sizeof` result of one for either type.
 This is a query rule only: it does not make a void or function type an allocatable object, and adds no diagnostic code or IR instruction.
-Two original torture refusals, `20000223-1` and `align-3`, reach the missing query semantics; their full-program outcomes must be remeasured.
+Original torture `20000223-1` reaches the missing void query; `align-3` also requires an explicit function alignment and is not covered by the unattributed-function probe, so neither full-program outcome is inferred.
