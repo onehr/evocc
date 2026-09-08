@@ -624,7 +624,10 @@ fn integer_expression_type(
         | CHirExpr::StatementExpr { facts, .. } => canonical_integer_type(types, facts.ty()),
         CHirExpr::Unary(operator, operand, _) => match operator {
             crate::UnaryOp::Not => Some(CIntegerType::INT),
-            crate::UnaryOp::Plus | crate::UnaryOp::Neg | crate::UnaryOp::BitNot => Some(
+            crate::UnaryOp::Plus
+            | crate::UnaryOp::Neg
+            | crate::UnaryOp::Abs
+            | crate::UnaryOp::BitNot => Some(
                 CInteger::new(0, integer_expression_type(operand, types, symbols)?)
                     .promoted()
                     .ty(),

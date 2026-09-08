@@ -353,7 +353,7 @@ struct FunctionLowerer<'a> {
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
     if evocc_chir::inline::has_inline_definitions(unit) {
-        evocc_chir::linkage::SymbolLinkage::derive(unit).map_err(LowerError::Linkage)?;
+        unit.symbol_linkage().map_err(LowerError::Linkage)?;
         // Validate the source representation before removing or rewriting
         // anything, as well as validating the rewritten representation below.
         AllocationSiteManifest::derive(unit).map_err(|e| LowerError::InvalidGeneratedSsa {
@@ -376,7 +376,7 @@ fn lower_resolved_unit(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
 ) -> Result<Module, LowerError> {
-    let linkage = evocc_chir::linkage::SymbolLinkage::derive(unit).map_err(LowerError::Linkage)?;
+    let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let global_register_symbols = collect_global_register_symbols(unit);
     let global_registers = unit
         .iter()
@@ -714,15 +714,17 @@ fn lower_resolved_unit(
         declares: declares.into_values().collect(),
         functions: lowered,
     };
-    for (symbol, target) in &linkage.aliases {
+    for (symbol, target_id) in &linkage.aliases {
         let alias = unit.symbols().symbol(*symbol).expect("resolved alias");
         let target = unit
             .symbols()
-            .symbol(*target)
+            .symbol(*target_id)
             .expect("resolved alias target");
         module.aliases.push(evocc_evoir::SymbolAlias {
-            name: alias.spelling().to_owned(),
-            target: target.spelling().to_owned(),
+            name: linkage.function_name(*symbol, alias.spelling()).to_owned(),
+            target: linkage
+                .function_name(*target_id, target.spelling())
+                .to_owned(),
             visibility: if alias.storage_class() == Some(StorageClass::Static) {
                 GlobalVisibility::Internal
             } else {
@@ -750,10 +752,11 @@ fn lower_resolved_unit(
         .weak
         .iter()
         .map(|symbol| {
-            unit.symbols()
+            let entry = unit
+                .symbols()
                 .symbol(*symbol)
-                .expect("resolved weak symbol")
-                .spelling()
+                .expect("resolved weak symbol");
+            linkage.function_name(*symbol, entry.spelling())
         })
         .collect::<BTreeSet<_>>();
     for f in &mut module.functions {
@@ -1206,7 +1209,15 @@ fn symbolic_address(
     let error = || LowerError::StaticRelocation { span };
     let symbol_address = |id: SymbolId| -> Result<(String, i64), LowerError> {
         let symbol = unit.symbols().symbol(id).map_err(|_| error())?;
-        if symbol.kind() == SymbolKind::Function || symbol.scope() == unit.symbols().file_scope() {
+        if symbol.kind() == SymbolKind::Function {
+            Ok((
+                unit.symbol_linkage()
+                    .map_err(LowerError::Linkage)?
+                    .function_name(id, symbol.spelling())
+                    .to_owned(),
+                0,
+            ))
+        } else if symbol.scope() == unit.symbols().file_scope() {
             Ok((symbol.spelling().to_owned(), 0))
         } else if symbol.storage_class() == Some(StorageClass::Static) {
             Ok((
@@ -2261,6 +2272,7 @@ fn index_functions(
     target: &TargetDataLayout,
     memory_participant: bool,
 ) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
+    let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let mut required = BTreeSet::new();
     for declaration in unit.iter() {
         let mut references = FunctionReferences::default();
@@ -2372,6 +2384,12 @@ fn index_functions(
         }
         participants.extend(calls.direct);
     }
+    participants.extend(
+        participants
+            .iter()
+            .map(|symbol| linkage.target(*symbol))
+            .collect::<Vec<_>>(),
+    );
     for symbol in participants {
         let Some(info) = definitions.get_mut(&symbol) else {
             let span = unit
@@ -2388,7 +2406,8 @@ fn index_functions(
             info.participant = true;
         }
     }
-    for (ordinal, info) in definitions.values_mut().enumerate() {
+    for (ordinal, (symbol, info)) in definitions.iter_mut().enumerate() {
+        info.name = linkage.function_name(*symbol, &info.name).to_owned();
         info.ordinal = u32::try_from(ordinal).map_err(|_| LowerError::InvalidGeneratedSsa {
             message: "function count exceeds the aggregate temporary origin namespace".to_owned(),
         })?;
@@ -8050,6 +8069,37 @@ impl<'a> FunctionLowerer<'a> {
                 let operand = self.cast(operand, integer, state)?;
                 let zero = self.constant(state, integer, 0)?;
                 self.emit_signed_arithmetic(state, BinaryOp::Sub, zero, operand, integer)
+            }
+            UnaryOp::Abs => {
+                let integer = integer_promotion(operand.integer);
+                let operand = self.cast(operand, integer, state)?;
+                let amount = self
+                    .constant(state, CIntegerType::UINT, u64::from(integer.bits() - 1))?
+                    .value;
+                let sign = self.fresh_value(bits(integer));
+                self.emit(
+                    state,
+                    Inst::AShr(sign.clone(), operand.value.clone(), amount),
+                )?;
+                let magnitude = self.fresh_value(bits(integer));
+                self.emit(
+                    state,
+                    Inst::Xor(magnitude.clone(), operand.value, sign.clone()),
+                )?;
+                // The builtin's signed-minimum domain error is independent of
+                // the source arithmetic wrapping option.
+                let defined = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(
+                    state,
+                    Inst::SignedSubDefined(defined.clone(), magnitude.clone(), sign.clone()),
+                )?;
+                self.emit(state, Inst::UbAssume(defined, UbReason::SignedOverflow))?;
+                let result = self.fresh_value(bits(integer));
+                self.emit(state, Inst::Sub(result.clone(), magnitude, sign))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer,
+                })
             }
             UnaryOp::BitNot => {
                 let integer = integer_promotion(operand.integer);

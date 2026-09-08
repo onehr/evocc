@@ -65,6 +65,9 @@ fn ordinary_absolute_calls_respect_builtin_options_and_symbol_kind() {
         "static int abs(int x){return x+100;} int main(void){return abs(7)-107;}",
         "int f(int x){return x+100;} int main(void){int (*abs)(int)=f; return abs(7)-107;}",
         "extern int abs(int) __asm__(\"other\"); int other(int x){return x+100;} int main(void){return abs(7)-107;}",
+        "extern int renamed(int) __asm__(\"other\"); int other(int x){return x+100;} static int (*p)(int)=renamed; int main(void){return p(7)-107;}",
+        "extern int renamed(int) __asm__(\"other\"); int renamed(int x){return x+100;} extern int other(int); int main(void){return other(7)-107;}",
+        "unsigned long length(const char *) __asm__(\"strlen\"); int main(void){return length(\"seven\")-5;}",
         "long long a=-1;long long llabs(long long);void abort(void);int main(void){if(llabs(a)!=1)abort();return 0;}long long llabs(long long b){abort();}",
     ] {
         for mode in ["--interpret-c-hir", "--interpret-evoir"] {

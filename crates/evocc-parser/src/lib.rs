@@ -212,6 +212,7 @@ struct EntityState {
     linkage: EntityLinkage,
     thread_local: bool,
     has_definition: bool,
+    assembly_named: bool,
 }
 
 #[derive(Debug)]
@@ -245,6 +246,7 @@ struct SwitchCaseContext {
 }
 
 pub struct Parser<'src, 'arena> {
+    standard_builtins: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     tokens: Vec<Token>,
     pos: usize,
@@ -363,6 +365,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_strchr"
                         | "__builtin_strncpy"
                         | "__builtin_malloc"
+                        | "__builtin_abs"
+                        | "__builtin_labs"
+                        | "__builtin_llabs"
                         | "__builtin_strcpy"
                         | "__builtin_abort"
                         | "__builtin_exit"
@@ -419,6 +424,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             had_error: lexical_diagnostic.is_some(),
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
+            standard_builtins: true,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
@@ -462,6 +468,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// when only a bounded diagnostic prefix is required.
     pub fn set_error_limit(&mut self, limit: NonZeroUsize) {
         self.error_limit = Some(limit);
+    }
+
+    /// Control recognition of ordinary externally linked standard names.
+    /// Explicit `__builtin_` spellings are unaffected.
+    pub fn set_standard_builtins(&mut self, enabled: bool) {
+        self.standard_builtins = enabled;
     }
 
     pub fn parse_translation_unit_in(&mut self, arena: &'arena Arena) -> CHirUnit<'arena> {
@@ -1051,6 +1063,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         linkage,
                         thread_local: data.storage_class() == Some(StorageClass::ThreadLocal),
                         has_definition: false,
+                        assembly_named: false,
                     },
                 );
                 if linkage == EntityLinkage::External {
@@ -1154,6 +1167,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             state.has_definition = true;
             self.set_entity_state(symbol, state);
+        }
+    }
+
+    fn record_assembly_name(&mut self, symbol: SymbolId, name: &Option<String>) {
+        if name.is_some() {
+            if let Some(mut state) = self.entities.get(&symbol).copied() {
+                state.assembly_named = true;
+                self.set_entity_state(symbol, state);
+            }
         }
     }
 
@@ -1587,6 +1609,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 full_type,
             );
             self.add_entity_attributes(symbol, &attributes);
+            self.record_assembly_name(symbol, &asm_label);
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
             if has_body && inherited_from_specifier {
                 self.report("E1001", "expected-declaration", self.span());
@@ -1755,6 +1778,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
             self.add_entity_attributes(symbol, &attributes);
+            self.record_assembly_name(symbol, &asm_label);
             full_type = self
                 .symbols
                 .symbol(symbol)
@@ -2371,7 +2395,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::SizeOfExpr(_, ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
                 .sizeof_type(&self.types, *ty)
                 .is_ok(),
-            CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
+            CHirExpr::Unary(UnaryOp::Abs | UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
@@ -2418,7 +2442,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UnaryOp::Plus => Some(operand),
                     UnaryOp::Neg => Some(-operand),
                     UnaryOp::Not => Some(f64::from(operand == 0.0)),
-                    UnaryOp::BitNot | UnaryOp::AddrOf | UnaryOp::Deref => None,
+                    UnaryOp::Abs | UnaryOp::BitNot | UnaryOp::AddrOf | UnaryOp::Deref => None,
                 }
             }
             CHirExpr::EvaluateOnce(operand, _) => self.eval_real_constant_expression(operand),
@@ -5790,7 +5814,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.canonical_integer_type(symbol.ty())
             }
             CHirExpr::Unary(op, operand, _) => match op {
-                UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot => {
+                UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Abs | UnaryOp::BitNot => {
                     Ok(CInteger::new(0, self.integer_expression_type(operand)?)
                         .promoted()
                         .ty())
@@ -8440,13 +8464,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Unary(op, operand, _) => {
                 let operand = match op {
                     UnaryOp::AddrOf => self.expression_type(operand)?,
-                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Not | UnaryOp::BitNot => {
-                        self.arithmetic_operand_type(operand)?
-                    }
+                    UnaryOp::Plus
+                    | UnaryOp::Neg
+                    | UnaryOp::Abs
+                    | UnaryOp::Not
+                    | UnaryOp::BitNot => self.arithmetic_operand_type(operand)?,
                     UnaryOp::Deref => self.converted_expression_type(operand)?,
                 };
                 match op {
-                    UnaryOp::Plus | UnaryOp::Neg => (
+                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Abs => (
                         self.promoted_arithmetic_type(operand.ty)?,
                         ExprCategory::Value,
                     ),
@@ -9567,7 +9593,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 .push((*symbol, promoted_parameters, span));
                         }
                     }
-                    expression = self.alloc_node(CHirExpr::Call(expression, arguments, span));
+                    expression = if let Some(ty) = self.standard_absolute_type(expression) {
+                        self.resolve_absolute_builtin(ty, &arguments, span)?
+                    } else {
+                        self.alloc_node(CHirExpr::Call(expression, arguments, span))
+                    };
                 }
                 Some(TokenKind::LBracket) => {
                     self.advance();
@@ -10305,6 +10335,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ));
             return Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Le, offset, nine, span)));
         }
+        if matches!(
+            builtin.as_str(),
+            "__builtin_abs" | "__builtin_labs" | "__builtin_llabs"
+        ) {
+            self.validate_builtin_library_declaration(&external_name, function_ty, keyword.span)?;
+            return self.resolve_absolute_builtin(return_ty, &arguments, span);
+        }
         let symbol = self.resolve_builtin_library_function(
             &external_name,
             function_ty,
@@ -10319,6 +10356,66 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             span: keyword.span,
         });
         Some(self.alloc_node(CHirExpr::Call(callee, arguments, span)))
+    }
+
+    fn standard_absolute_type(&mut self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+        if !self.standard_builtins {
+            return None;
+        }
+        let CHirExpr::Ident {
+            symbol, spelling, ..
+        } = expression
+        else {
+            return None;
+        };
+        let state = self.entities.get(symbol)?;
+        if state.linkage != EntityLinkage::External || state.assembly_named {
+            return None;
+        }
+        let declaration = self.symbols.symbol(*symbol).ok()?;
+        if declaration.kind() != SymbolKind::Function {
+            return None;
+        }
+        let actual = declaration.ty();
+        let rank = match spelling.as_str() {
+            "abs" => IntRank::Int,
+            "labs" => IntRank::Long,
+            "llabs" => IntRank::LongLong,
+            _ => return None,
+        };
+        let ty = self.intern(TypeKind::Int(rank), Qualifiers::default());
+        let prototype = self.intern(
+            TypeKind::Function {
+                return_type: ty,
+                parameters: FunctionParameters::Prototype {
+                    types: vec![ty],
+                    variadic: false,
+                },
+            },
+            Qualifiers::default(),
+        );
+        self.types.compatible(actual, prototype).then_some(ty)
+    }
+
+    fn resolve_absolute_builtin(
+        &mut self,
+        ty: TypeId,
+        arguments: &[&'arena CHirExpr<'arena>],
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let [argument] = arguments else {
+            self.report("E2909", "builtin-arity", span);
+            return None;
+        };
+        if self.assignment_constraint(AssignmentOp::Simple, ty, argument)
+            == UpdateConstraint::Invalid
+        {
+            self.report("E2913", "builtin-operand-not-convertible", argument.span());
+            return None;
+        }
+        let converted = self.alloc_node(CHirExpr::Cast(ty, argument, span));
+        let evaluated = self.alloc_node(CHirExpr::EvaluateOnce(converted, span));
+        Some(self.alloc_node(CHirExpr::Unary(UnaryOp::Abs, evaluated, span)))
     }
 
     fn builtin_library_prototype(
@@ -10351,6 +10448,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
 
         let prototype = match builtin {
+            "__builtin_abs" => ("abs", int_ty, vec![int_ty]),
+            "__builtin_labs" => {
+                let ty = self.intern(TypeKind::Int(IntRank::Long), Qualifiers::default());
+                ("labs", ty, vec![ty])
+            }
+            "__builtin_llabs" => {
+                let ty = self.intern(TypeKind::Int(IntRank::LongLong), Qualifiers::default());
+                ("llabs", ty, vec![ty])
+            }
             "__builtin_abort" => ("abort", void_ty, Vec::new()),
             "__builtin_printf" => ("printf", int_ty, vec![const_char_pointer]),
             "__builtin_sprintf" => ("sprintf", int_ty, vec![char_pointer, const_char_pointer]),

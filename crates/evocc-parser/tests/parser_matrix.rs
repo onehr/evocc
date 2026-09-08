@@ -493,6 +493,7 @@ fn unary_name(op: UnaryOp) -> &'static str {
         UnaryOp::AddrOf => "addr",
         UnaryOp::Deref => "deref",
         UnaryOp::Plus => "plus",
+        UnaryOp::Abs => "abs",
     }
 }
 

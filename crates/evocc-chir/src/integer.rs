@@ -576,6 +576,13 @@ pub fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, In
     let operand = operand.promoted();
     match op {
         UnaryOp::Plus => Ok(operand),
+        UnaryOp::Abs => {
+            if operand.ty.is_signed() && operand.mathematical_value() < 0 {
+                eval_unary_integer(UnaryOp::Neg, operand)
+            } else {
+                Ok(operand)
+            }
+        }
         UnaryOp::Neg if operand.ty.signed => {
             let value = operand
                 .mathematical_value()
@@ -602,6 +609,9 @@ pub fn eval_constant_unary_integer(
     op: UnaryOp,
     operand: CInteger,
 ) -> Result<CInteger, IntegerError> {
+    if op == UnaryOp::Abs {
+        return Err(IntegerError::UnsupportedOperator);
+    }
     let operand = operand.promoted();
     if op == UnaryOp::Neg && operand.ty.is_signed() {
         return Ok(CInteger::from_raw(

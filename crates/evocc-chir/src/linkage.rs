@@ -15,11 +15,23 @@ pub struct LinkageError {
 pub struct SymbolLinkage {
     pub weak: BTreeSet<SymbolId>,
     pub aliases: BTreeMap<SymbolId, SymbolId>,
+    function_names: BTreeMap<SymbolId, String>,
+    assembly_targets: BTreeMap<SymbolId, SymbolId>,
 }
 
 impl SymbolLinkage {
     pub fn target(&self, symbol: SymbolId) -> SymbolId {
-        self.aliases.get(&symbol).copied().unwrap_or(symbol)
+        let symbol = self.aliases.get(&symbol).copied().unwrap_or(symbol);
+        self.assembly_targets
+            .get(&symbol)
+            .copied()
+            .unwrap_or(symbol)
+    }
+
+    pub fn function_name<'a>(&'a self, symbol: SymbolId, spelling: &'a str) -> &'a str {
+        self.function_names
+            .get(&symbol)
+            .map_or(spelling, String::as_str)
     }
 
     pub fn derive(unit: &CHirUnit<'_>) -> Result<Self, LinkageError> {
@@ -27,6 +39,7 @@ impl SymbolLinkage {
         let mut names = BTreeMap::new();
         let mut definitions = BTreeSet::new();
         let mut written_aliases = BTreeMap::new();
+        let mut function_declarations = BTreeMap::new();
         // A symbol retains the scope of its first declaration. A later
         // file-scope definition can therefore have a block-scoped identity.
         let file_declarations = unit
@@ -36,6 +49,19 @@ impl SymbolLinkage {
         let mut declarations = Vec::new();
         crate::inline::for_each_declaration(unit, |d| declarations.push(d));
         for declaration in declarations {
+            if let CHirDecl::Function(function) = declaration {
+                function_declarations
+                    .entry(function.symbol)
+                    .and_modify(|old: &mut &crate::FunctionDecl<'_>| {
+                        if function.body.is_some() {
+                            *old = function;
+                        }
+                    })
+                    .or_insert(function);
+                if let Some(name) = &function.asm_label {
+                    result.function_names.insert(function.symbol, name.clone());
+                }
+            }
             let (symbol, name, storage, attributes, defined) = match declaration {
                 CHirDecl::Function(f) => (
                     f.symbol,
@@ -136,6 +162,42 @@ impl SymbolLinkage {
                 });
             }
             result.aliases.insert(symbol, current);
+        }
+        // An assembler label changes linker identity, not the C identifier.
+        // Resolve references to a same-unit body once, without making this
+        // identity relation an emitted ELF alias (which would alias itself).
+        let mut assembly_definitions = BTreeMap::new();
+        for (&symbol, function) in &function_declarations {
+            if function.body.is_some() {
+                let name = result
+                    .function_name(symbol, &function.name.spelling)
+                    .to_owned();
+                if assembly_definitions.insert(name, symbol).is_some() {
+                    return Err(LinkageError {
+                        code: "E3041",
+                        message: "symbol-declared-and-defined",
+                        span: function.span,
+                    });
+                }
+            }
+        }
+        for (&symbol, function) in &function_declarations {
+            let name = result.function_name(symbol, &function.name.spelling);
+            if let Some(&target) = assembly_definitions.get(name) {
+                if !unit
+                    .types()
+                    .compatible(function.ty, function_declarations[&target].ty)
+                {
+                    return Err(LinkageError {
+                        code: "E2002",
+                        message: "incompatible-redeclaration",
+                        span: function.span,
+                    });
+                }
+                if target != symbol {
+                    result.assembly_targets.insert(symbol, target);
+                }
+            }
         }
         Ok(result)
     }

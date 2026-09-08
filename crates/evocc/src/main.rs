@@ -69,6 +69,7 @@ struct DriverOptions {
     standard_includes: bool,
     optimize_scalar_evoir: bool,
     signed_wrapping: bool,
+    standard_builtins: bool,
     /// Report every diagnostic rather than the first.
     ///
     /// A build wants one unambiguous first-error site. Surveying a body of
@@ -203,6 +204,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
     let mut signed_wrapping = false;
+    let mut standard_builtins = true;
     let mut survey = false;
     let mut index = 0;
 
@@ -219,6 +221,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-Oeq-scalar" => optimize_scalar_evoir = true,
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
+            "-fno-builtin" => standard_builtins = false,
+            "-fbuiltin" => standard_builtins = true,
             "--target" => {
                 index += 1;
                 let value = args
@@ -311,6 +315,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         standard_includes,
         optimize_scalar_evoir,
         signed_wrapping,
+        standard_builtins,
         survey,
     })
 }
@@ -573,6 +578,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
 
     let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
+    parser.set_standard_builtins(options.standard_builtins);
     if !options.survey {
         parser.set_error_limit(NonZeroUsize::MIN);
     }

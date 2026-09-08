@@ -4095,7 +4095,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .linkage
             .target(linked_library_definition(self.unit, *symbol));
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
-            let result = self.external_library_call(target, spelling, &arguments, call_span)?;
+            let name = self.linkage.function_name(*symbol, spelling);
+            let result = self.external_library_call(target, name, &arguments, call_span)?;
             return Ok(Some(result));
         }
 
@@ -4282,7 +4283,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == symbol && function.body.is_some())) {
-            return self.external_library_call(symbol, entry.spelling(), &arguments, call_span).map(Some);
+            let name = self.linkage.function_name(symbol, entry.spelling());
+            return self.external_library_call(symbol, name, &arguments, call_span).map(Some);
         }
         let caller_slots = std::mem::take(&mut self.slots);
         let caller_fuel_anchor = self.fuel_anchor.take();
@@ -7100,7 +7102,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         operator: UnaryOp,
         operand: CInteger,
     ) -> Result<CInteger, IntegerError> {
-        if self.unit.signed_wrapping() {
+        if self.unit.signed_wrapping() && operator != UnaryOp::Abs {
             eval_constant_unary_integer(operator, operand)
         } else {
             eval_unary_integer(operator, operand)
@@ -8105,11 +8107,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::StatementExpr { facts, .. } => self.integer_type(facts.ty(), span),
             CHirExpr::Unary(operator, operand, _) => match operator {
                 crate::UnaryOp::Not => Ok(CIntegerType::INT),
-                crate::UnaryOp::Plus | crate::UnaryOp::Neg | crate::UnaryOp::BitNot => {
-                    Ok(CInteger::new(0, self.infer_integer_type(operand)?)
-                        .promoted()
-                        .ty())
-                }
+                crate::UnaryOp::Plus
+                | crate::UnaryOp::Neg
+                | crate::UnaryOp::Abs
+                | crate::UnaryOp::BitNot => Ok(CInteger::new(0, self.infer_integer_type(operand)?)
+                    .promoted()
+                    .ty()),
                 crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => {
                     Err(InterpreterError::UnsupportedExpression {
                         feature: "non-integer unary operand",

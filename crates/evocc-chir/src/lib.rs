@@ -368,6 +368,8 @@ fn push_numeric_unit(output: &mut Vec<u32>, value: u32, prefix: StringPrefix) ->
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Neg,
+    /// Resolved integer absolute-value builtin, with one converted operand.
+    Abs,
     Not,
     BitNot,
     AddrOf,
@@ -1437,7 +1439,7 @@ impl<'arena> CHirUnit<'arena> {
         &self.symbols
     }
 
-    pub(crate) fn symbol_linkage(&self) -> Result<&linkage::SymbolLinkage, linkage::LinkageError> {
+    pub fn symbol_linkage(&self) -> Result<&linkage::SymbolLinkage, linkage::LinkageError> {
         self.resolved_linkage
             .get_or_init(|| linkage::SymbolLinkage::derive(self))
             .as_ref()
