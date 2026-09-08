@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T015031Z",
+ "run": "20260908T042300Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "eea68d679e70193687b8ecd61b6e92e2fff1aeae4fd7dbe92f3088d9fc24fff8",
+ "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 17,
@@ -43,8 +43,7 @@
  },
  "units": 1339,
  "unitsCompiledByEvocc": 987,
- "invalidatedUnitsInPassingBuild": 987,
- "invalidation": "The sealed directory has no substituted-REPORT. report_failures previously treated absence as an empty failure set; the passing-build claim is withdrawn pending replay. Original sealed records are unchanged.",
+ "unitsInPassingBuild": 494,
  "refusalsByCode": {
   "E3101": 240,
   "E1006": 83,
@@ -54,8 +53,11 @@
   "E1005": 1,
   "E3030": 1
  },
- "testResult": "invalidated-missing-report",
- "failingUnits": [],
+ "testResult": "bisection-budget-exhausted",
+ "failingUnits": [
+  "obj/src/stdio/fprintf.lo",
+  "obj/src/stdio/snprintf.lo"
+ ],
  "excludedForSymbolParity": {},
  "symbolParity": {},
  "adjustments": {
@@ -135,5 +137,5 @@
   "-fno-stack-protector": 7,
   "-fno-tree-loop-distribute-patterns": 2
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260908T015031Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260908T042300Z"
 }

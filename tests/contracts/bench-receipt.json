@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T034747.750337Z",
-  "subject": "8a9f19df881b3d1c61e7bc9bdb70d3ac611384a5",
-  "dirty": true,
+  "run": "20260908T042040.192297Z",
+  "subject": "2a50ced9968b0d070283734393accb58b0631156",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "c924c4bd076a1056136f8a3206324c31449b32fdd34ad746eff89fb0b713943d",
+  "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
@@ -20,7 +20,7 @@
     "torture",
     "musl"
   ],
-  "status": "INTERRUPTED",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -74,12 +74,12 @@
       "rung": "E0a",
       "note": "mixed integer/FP suite; dg-options are not consumed",
       "outcomes": {
-        "pass": 1189,
-        "refused": 469,
+        "pass": 1190,
+        "refused": 468,
         "fail": 34
       },
       "refusals": {
-        "E3101": 140,
+        "E3101": 139,
         "E1001": 108,
         "E2001": 42,
         "E2201": 23,
@@ -113,7 +113,7 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1189,
+      "passed": 1190,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3006 invalid-signed-left-shift": 13,
@@ -125,8 +125,8 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T034747Z",
-      "evidence": ".evidence/ladder/e0/20260908T034747Z",
+      "run": "20260908T042040Z",
+      "evidence": ".evidence/ladder/e0/20260908T042040Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -138,15 +138,14 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 158.2,
+      "seconds": 140.5,
       "previous": {
         "rung": "E0a",
         "note": "mixed integer/FP suite; dg-options are not consumed",
         "outcomes": {
           "pass": 1189,
           "refused": 469,
-          "fail": 33,
-          "timeout": 1
+          "fail": 34
         },
         "refusals": {
           "E3101": 140,
@@ -189,19 +188,19 @@
           "E3006 invalid-signed-left-shift": 13,
           "E3004 signed-integer-overflow": 7,
           "E3039 external-call-not-executable": 6,
+          "E3021 not-lowered": 3,
           "E3008 interpreter-fuel-exhausted": 2,
-          "E3021 not-lowered": 2,
           "E3007 evoir-main-parameters-are-not-canonical": 2,
           "E3001 read-of-uninitialized-object": 1
         },
         "status": "INCOMPLETE",
-        "run": "20260908T014701Z",
-        "evidence": ".evidence/ladder/e0/20260908T014701Z"
+        "run": "20260908T034747Z",
+        "evidence": ".evidence/ladder/e0/20260908T034747Z"
       },
       "measurement": {
-        "run": "20260908T034747.750337Z",
-        "subject": "8a9f19df881b3d1c61e7bc9bdb70d3ac611384a5",
-        "driverSha256": "c924c4bd076a1056136f8a3206324c31449b32fdd34ad746eff89fb0b713943d"
+        "run": "20260908T042040.192297Z",
+        "subject": "2a50ced9968b0d070283734393accb58b0631156",
+        "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710"
       }
     },
     "csmith": {
@@ -1188,11 +1187,60 @@
     },
     "musl": {
       "rung": "E7",
-      "status": "ERROR",
-      "error": "Interrupted after detecting command-capture corruption: sysconf.lo and crypt.lo were merged into one record, reducing 1339 units to 1337. Partial bisection is diagnostic only; no new passing-build count is claimed.",
-      "capture": ".evidence/ladder/musl/20260908T035026Z",
-      "captureRepair": "a86454c; whole-record flock, 512/512 identities preserved with 16 sealed-container writers; full original-unit replay still required",
       "note": "libc-test relative to baseline failures",
+      "outcomes": {},
+      "refusals": {
+        "E3101": 240,
+        "E1006": 83,
+        "E2001": 14,
+        "E2203": 8,
+        "E2102": 5,
+        "E1005": 1,
+        "E3030": 1
+      },
+      "baselineFailures": 17,
+      "failingUnits": [
+        "obj/src/stdio/fprintf.lo",
+        "obj/src/stdio/snprintf.lo"
+      ],
+      "total": 1339,
+      "passed": 494,
+      "kind": "units",
+      "compiled": 987,
+      "excluded": 0,
+      "testVerdict": "bisection-budget-exhausted",
+      "adjustments": {
+        "sourcePageBreaksStripped": [],
+        "noreturnSpecifiersRemoved": [
+          "include/assert.h",
+          "include/err.h",
+          "include/pthread.h",
+          "include/setjmp.h",
+          "include/stdlib.h",
+          "include/threads.h",
+          "include/unistd.h",
+          "src/exit/_Exit.c",
+          "src/exit/abort.c",
+          "src/exit/assert.c",
+          "src/exit/exit.c",
+          "src/exit/quick_exit.c",
+          "src/include/pthread.h",
+          "src/legacy/err.c",
+          "src/signal/siglongjmp.c",
+          "src/thread/pthread_create.c",
+          "src/thread/thrd_exit.c",
+          "src/unistd/_exit.c"
+        ],
+        "highBytesReEscaped": [],
+        "sysroot": "none: musl is built -nostdinc against its own headers",
+        "configure": "--disable-shared, so the library is one set of objects",
+        "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
+        "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
+      },
+      "status": "INCOMPLETE",
+      "run": "20260908T042300Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260908T042300Z",
+      "receipt": "tests/contracts/ladder-musl-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
@@ -1203,7 +1251,15 @@
         "4",
         "--budget",
         "40"
-      ]
+      ],
+      "exitCode": 0,
+      "seconds": 1941.9,
+      "previous": null,
+      "measurement": {
+        "run": "20260908T042040.192297Z",
+        "subject": "2a50ced9968b0d070283734393accb58b0631156",
+        "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710"
+      }
     },
     "kernel": {
       "rung": "K1/K5-K7 ramp",

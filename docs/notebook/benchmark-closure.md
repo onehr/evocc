@@ -90,8 +90,40 @@ effects while making only the C identifier binding optional. Both
 interpreters and native execution pass the fixture, including an unnamed
 aggregate parameter; the original `pr103209` now returns zero in both
 interpreters. The changed-crate gate against `a316754` passes 950 tests
-with zero failures or ignored tests, plus Clippy/fmt; original native
-torture replay still determines the benchmark outcome.
+with zero failures or ignored tests, plus Clippy/fmt. Original native
+torture run `20260908T042040Z` passes `pr103209`: 1,190/1,692 pass,
+468 refused, 34 runtime failures, zero emission timeouts or link failures.
+Against `20260908T034747Z`, the identity set is unchanged and this is the
+only changed outcome; all 1,189 previous passes are retained.
+
+The same frozen executable (source `2a50ced`, SHA-256
+`70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710`)
+completed musl run `20260908T042300Z`. Capture now contains all 1,339
+units; 987 assemble with zero symbol-parity exclusions. The 40-probe
+budget is exhausted, with a 494-unit no-new-failures combination verified
+in round 2, relative to 17 reference failures. Single-unit failures are
+`fprintf.lo` and `snprintf.lo`; further failures remain after excluding
+both. The final report exists (48,100 bytes), but belongs to the final
+failing probe, not the best passing subset; `bisect.json` records which
+combination each probe actually measured. This is INCOMPLETE, not a
+restoration of the withdrawn 987-unit passing claim.
+
+### Pointer interfaces and switch entries
+
+`274ede9` compares compatible function/void pointers through their existing
+address representation. `631f03e` routes switch segments through the same
+label-aware sequence lowering as ordinary compounds, retaining goto targets
+after a terminated path. `d32f676` preserves unprototyped function addresses
+in storage, promotes indirect-call arguments, and constructs the actual call
+interface without weakening dynamic signature checks. A long argument or
+missing argument to an integer-parameter target remains E3019 in both
+interpreters. This does not claim support for nested case labels or jumps
+past unallocated automatic objects.
+
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh abfa496 --quiet` passed 956 tests, zero failures and
+zero ignored, plus Clippy and fmt. The focused tests include native execution;
+original c-testsuite and torture replay remains the benchmark acceptance.
 
 ### Explicit local-register operand binding
 

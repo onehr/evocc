@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T034747Z",
-  "subject": "8a9f19d",
-  "driverSha256": "c924c4bd076a1056136f8a3206324c31449b32fdd34ad746eff89fb0b713943d",
+  "run": "20260908T042040Z",
+  "subject": "2a50ced",
+  "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,12 +18,12 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1189,
-     "refused": 469,
+     "pass": 1190,
+     "refused": 468,
      "fail": 34
     },
     "refusalsByCode": {
-     "E3101": 140,
+     "E3101": 139,
      "E1001": 108,
      "E2001": 42,
      "E2201": 23,
@@ -66,5 +66,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T034747Z"
+ "evidence": ".evidence/ladder/e0/20260908T042040Z"
 }
