@@ -35,6 +35,9 @@ target-*/
 .DS_Store
 .claude/worktrees/
 
+# Lake's build tree for the Lean proof layer is derived from lean/ sources.
+lean/.lake/
+
 # Python bytecode caches.
 __pycache__/
 *.pyc
