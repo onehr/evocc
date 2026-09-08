@@ -6323,6 +6323,20 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
+        let mut known_truth = constant_truth(self.unit, self.target, condition);
+        if known_truth.is_some() && !self.address_labels.is_empty() {
+            let addressed = self.address_labels.keys().cloned().collect();
+            let no_cases = BTreeMap::new();
+            if contains_targeted_label(then_branch, &addressed, &no_cases)
+                || else_branch
+                    .is_some_and(|branch| contains_targeted_label(branch, &addressed, &no_cases))
+            {
+                // An address-taken label is an observable code identity.
+                // Section 2.5 still requires its terminator-edge path from
+                // entry; do not remove that path merely to fold a branch.
+                known_truth = None;
+            }
+        }
         let condition = self.lower_condition(condition, &mut state)?;
         let mut then_symbols = live_after.clone();
         collect_symbols_stmt(then_branch, &mut then_symbols);
@@ -6374,10 +6388,15 @@ impl<'a> FunctionLowerer<'a> {
             })?;
             (target.block, self.edge_values(&state, &else_keys)?)
         };
-        self.terminate(
-            &state,
-            Inst::CondBr(condition, then_target, then_args, else_target, else_args),
-        )?;
+        // Keep lowering both arms so labels remain available to other
+        // entries. Only the ordinary conditional edge is constant-folded;
+        // the existing reachability pass then removes truly unreachable code.
+        let terminator = match known_truth {
+            Some(true) => Inst::Br(then_target, then_args),
+            Some(false) => Inst::Br(else_target, else_args),
+            None => Inst::CondBr(condition, then_target, then_args, else_target, else_args),
+        };
+        self.terminate(&state, terminator)?;
 
         let mut normal = Vec::new();
         if let Some(then_state) = then_state {
