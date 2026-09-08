@@ -30,7 +30,9 @@ SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote
 PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 
 #: Options the front end consumes as written.
-PASSED_THROUGH = ("-nostdinc", "-undef")
+PASSED_THROUGH = (
+    "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
+)
 
 SOURCE_DECLARATION = re.compile(r"^source_[^ ]+ := (.+)$")
 SAVED_COMMAND = re.compile(r"^savedcmd_([^ ]+) := (.+)$")
