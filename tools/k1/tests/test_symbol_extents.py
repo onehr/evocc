@@ -45,6 +45,26 @@ class SymbolExtentTest(unittest.TestCase):
         self.table["symbols"]["f"]["value"] = 4096
         self.assertEqual(prove.slice_symbol(self.object, self.table, "f", True, 4), b"CODE")
 
+    def test_zero_fill_object_has_memory_bytes_but_no_file_payload(self):
+        self.table["sections"][1]["type"] = "NOBITS"
+        self.table["sections"][1]["offset"] = 100000
+        self.table["symbols"]["f"]["type"] = "OBJECT"
+        self.assertEqual(prove.slice_symbol(self.object, self.table, "f", False, 4), b"\0" * 4)
+        self.table["sections"][1]["addr"] = 4096
+        self.table["symbols"]["f"]["value"] = 4096
+        self.assertEqual(prove.slice_symbol(self.object, self.table, "f", True, 4), b"\0" * 4)
+
+    def test_zero_fill_does_not_hide_wrong_extents_or_absent_symbols(self):
+        self.table["sections"][1]["type"] = "NOBITS"
+        self.table["symbols"]["f"]["type"] = "OBJECT"
+        self.table["symbols"]["f"]["value"] = 1
+        self.assertIsNone(prove.slice_symbol(self.object, self.table, "f", False, 4))
+        self.table["symbols"]["f"]["value"] = 0
+        self.assertIsNone(prove.slice_symbol(self.object, self.table, "f", False, 8))
+        self.assertIsNone(prove.slice_symbol(self.object, self.table, "absent", False, 4))
+        self.table["symbols"]["f"]["type"] = "FUNC"
+        self.assertIsNone(prove.slice_symbol(self.object, self.table, "f", False, 4))
+
 
 if __name__ == "__main__":
     unittest.main()
