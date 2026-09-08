@@ -1195,6 +1195,8 @@ pub enum AsmValue {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AsmOperand {
     pub constraint: AsmConstraint,
+    /// A local register variable binds only at this assembly boundary.
+    pub fixed_register: Option<u8>,
     pub name: Option<String>,
     pub value: AsmValue,
 }
@@ -1205,6 +1207,7 @@ impl AsmOperand {
     pub const fn reg(constraint: AsmConstraint, reg: VReg) -> Self {
         Self {
             constraint,
+            fixed_register: None,
             name: None,
             value: AsmValue::Reg(reg),
         }
@@ -1215,6 +1218,7 @@ impl AsmOperand {
     pub const fn imm(letter: AsmImmediate, value: i64) -> Self {
         Self {
             constraint: AsmConstraint::Immediate(letter),
+            fixed_register: None,
             name: None,
             value: AsmValue::Imm(value),
         }
@@ -1227,6 +1231,13 @@ impl AsmOperand {
             AsmValue::Reg(reg) => Some(reg),
             AsmValue::Imm(_) | AsmValue::Zero(_) => None,
         }
+    }
+
+    #[must_use]
+    pub fn spelling(&self) -> String {
+        let base = self.constraint.spelling();
+        self.fixed_register
+            .map_or_else(|| base.clone(), |n| format!("{base}@x{n}"))
     }
 }
 

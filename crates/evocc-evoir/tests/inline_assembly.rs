@@ -75,6 +75,26 @@ fn assembly_outputs_bind_on_every_successor_without_self_use() {
 }
 
 #[test]
+fn fixed_register_metadata_rejects_noncanonical_reserved_and_clobbered_bindings() {
+    let valid = EDGES.replace("\"+r\"", "\"+r@x8\"");
+    let module = parse_section9_module(valid.as_bytes()).unwrap();
+    assert_eq!(render_module(&module), valid);
+    for binding in [
+        "+r@w8", "+r@x08", "+r@x16", "+r@x17", "+r@x18", "+r@x29", "+r@sp", "+Q@x8", "+r@x8@x9",
+    ] {
+        let invalid = valid.replace("+r@x8", binding);
+        assert!(
+            parse_section9_module(invalid.as_bytes()).is_err(),
+            "{binding}"
+        );
+    }
+    for register in ["x8", "w8"] {
+        let invalid = valid.replace("clobbers []", &format!("clobbers [\"{register}\"]"));
+        assert!(parse_section9_module(invalid.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn assembly_edges_reject_stale_tokens_self_inputs_and_nonlocal_results() {
     parse_section9_module(EDGES.as_bytes()).expect("the reference edge contract is valid");
     for invalid in [

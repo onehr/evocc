@@ -43,6 +43,33 @@ fn local_register_bindings_execute_inputs_outputs_and_both_goto_edges() {
     execute_native_assembly(FIXED_REGISTERS, "fixed-registers");
 }
 
+#[test]
+fn local_register_bindings_refuse_conflicts_instead_of_dropping_them() {
+    for source in [
+        r#"void f(long n){register long a asm("x8")=n;asm(""::"r"(a):"x8");}"#,
+        r#"void f(long n){register long a asm("x16")=n;asm(""::"r"(a));}"#,
+        r#"long f(long n){register long a asm("x8");register long b asm("x9")=n;asm("":"=r"(a):"0"(b));return a;}"#,
+    ] {
+        let output = run(source, "--emit=asm");
+        assert!(!output.status.success(), "{source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("binding"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn lowered_register_metadata_is_not_a_source_constraint_spelling() {
+    let output = run(r#"void f(long n){asm(""::"r@x8"(n));}"#, "--emit=evoir");
+    assert!(
+        !output.status.success(),
+        "lowered metadata must not extend the source vocabulary"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+}
+
 const REGISTER_ALTERNATIVES: [&str; 12] = [
     "Ir", "Jr", "Kr", "Lr", "ir", "nr", "rI", "rJ", "rK", "rL", "ri", "rn",
 ];

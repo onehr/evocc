@@ -32,6 +32,7 @@ fn assembly_goto_outputs_survive_spilling_on_both_edges() {
     let outputs = (0..12)
         .map(|id| AsmOperand {
             constraint: AsmConstraint::Register(AsmDirection::Write),
+            fixed_register: None,
             name: Some(format!("out{id}")),
             value: AsmValue::Reg(w(id)),
         })
@@ -90,8 +91,15 @@ fn assembly_goto_outputs_survive_spilling_on_both_edges() {
             },
         ],
     };
-    for taken in [false, true] {
+    for (taken, fixed) in [(false, false), (true, false), (false, true), (true, true)] {
         let mut function = function.clone();
+        if fixed {
+            let MTerm::AsmGoto { body, .. } = &mut function.blocks[0].term else {
+                unreachable!()
+            };
+            body.outputs[0].fixed_register = Some(8);
+            body.outputs[1].fixed_register = Some(19);
+        }
         if taken {
             let MTerm::AsmGoto { body, .. } = &mut function.blocks[0].term else {
                 unreachable!()
@@ -107,10 +115,40 @@ fn assembly_goto_outputs_survive_spilling_on_both_edges() {
             emit_module(&[allocated], &[])
         );
         assert_eq!(
-            run_native(&format!("goto-output-spills-{taken}"), &text).unwrap(),
+            run_native(&format!("goto-output-spills-{taken}-{fixed}"), &text).unwrap(),
             78
         );
     }
+}
+
+#[test]
+fn register_binding_is_checked_independently_of_the_allocator() {
+    let mut case = read_write_register();
+    let mut bound = false;
+    for inst in &mut case.function.blocks[0].insts {
+        if let MInst::Asm(body) = inst {
+            body.outputs[0].fixed_register = Some(8);
+            bound = true;
+        }
+    }
+    assert!(bound);
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![case.function.clone()],
+    };
+    let text = evocc_mir::render_module(&module);
+    assert_eq!(evocc_mir::parse_module(&text).unwrap(), module);
+    let mut allocated = allocate(&case.function).unwrap();
+    verify_allocation(&allocated).unwrap();
+    for block in &mut allocated.blocks {
+        for inst in &mut block.insts {
+            if let MInst::Asm(body) = inst {
+                body.outputs[0].fixed_register = Some(9);
+            }
+        }
+    }
+    let refusal = verify_allocation(&allocated).unwrap_err();
+    assert!(refusal.detail.contains("binding x9"), "{refusal:?}");
 }
 
 /// The host toolchain, or the reason there is none.
@@ -317,6 +355,7 @@ fn register_or_zero() -> Case {
             AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
             AsmOperand {
                 constraint: AsmConstraint::RegisterOrZero,
+                fixed_register: None,
                 name: None,
                 value: AsmValue::Zero(RegClass::Gpr32),
             },
@@ -507,11 +546,13 @@ fn named_and_clobbers() -> Case {
         volatile: true,
         outputs: vec![AsmOperand {
             constraint: AsmConstraint::Register(AsmDirection::Write),
+            fixed_register: None,
             name: Some("out".to_owned()),
             value: AsmValue::Reg(w(10)),
         }],
         inputs: vec![AsmOperand {
             constraint: AsmConstraint::Register(AsmDirection::Read),
+            fixed_register: None,
             name: Some("in".to_owned()),
             value: AsmValue::Reg(w(1)),
         }],
@@ -765,6 +806,7 @@ fn both_assembly_forms_round_trip_byte_for_byte() {
             volatile: true,
             outputs: vec![AsmOperand {
                 constraint: AsmConstraint::Register(AsmDirection::Write),
+                fixed_register: None,
                 name: Some("named".to_owned()),
                 value: AsmValue::Reg(w(10)),
             }],

@@ -51,6 +51,32 @@ pub fn assembly_memory_constraint(constraint: &str) -> bool {
     matches!(constraint, "Q" | "=Q" | "+Q" | "Qo")
 }
 
+/// A lowered local-register operand preserves its physical binding in the
+/// quoted constraint. The source vocabulary is unchanged; `@xN` is canonical
+/// IR metadata, not another source constraint alternative.
+pub fn assembly_register_binding(constraint: &str) -> Result<(&str, Option<u8>), String> {
+    let Some((base, register)) = constraint.split_once('@') else {
+        return Ok((constraint, None));
+    };
+    let number = register
+        .strip_prefix('x')
+        .and_then(|text| text.parse::<u8>().ok());
+    let Some(number) = number.filter(|n| matches!(n, 0..=15 | 19..=28)) else {
+        return Err(format!(
+            "unsupported assembly register binding {constraint}"
+        ));
+    };
+    if register != format!("x{number}")
+        || !(matches!(base, "r" | "=r" | "+r" | "=&r" | "+&r")
+            || (base.len() == 1 && base.as_bytes()[0].is_ascii_digit()))
+    {
+        return Err(format!(
+            "unsupported assembly register binding {constraint}"
+        ));
+    }
+    Ok((base, Some(number)))
+}
+
 impl InlineAssembly {
     #[must_use]
     pub fn results(&self) -> Vec<&Value> {
@@ -107,10 +133,18 @@ impl InlineAssembly {
         let mut results = self.results.iter();
         let mut names = std::collections::HashSet::new();
         for output in &self.outputs {
-            if !matches!(
-                output.constraint.as_str(),
-                "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q"
-            ) {
+            let (constraint, binding) = assembly_register_binding(&output.constraint)?;
+            if binding.is_some_and(|reg| {
+                self.clobbers
+                    .iter()
+                    .any(|name| name == &format!("x{reg}") || name == &format!("w{reg}"))
+            }) {
+                return Err(format!(
+                    "assembly register binding {} is clobbered",
+                    output.constraint
+                ));
+            }
+            if !matches!(constraint, "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q") {
                 return Err(format!(
                     "unsupported assembly output constraint {}",
                     output.constraint
@@ -148,10 +182,21 @@ impl InlineAssembly {
             return Err("assembly has extra register results".into());
         }
         for input in &self.inputs {
+            let (constraint, binding) = assembly_register_binding(&input.constraint)?;
+            if binding.is_some_and(|reg| {
+                self.clobbers
+                    .iter()
+                    .any(|name| name == &format!("x{reg}") || name == &format!("w{reg}"))
+            }) {
+                return Err(format!(
+                    "assembly register binding {} is clobbered",
+                    input.constraint
+                ));
+            }
             if !input.name.is_empty() && !names.insert(input.name.as_str()) {
                 return Err(format!("duplicate assembly operand name {}", input.name));
             }
-            let valid = match input.constraint.as_str() {
+            let valid = match constraint {
                 "r" | "rZ" => assembly_register_type(&input.value.ty),
                 "Q" | "Qo" => matches!(input.value.ty, EvoIRType::Ptr(_)),
                 "p" => matches!(input.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }),

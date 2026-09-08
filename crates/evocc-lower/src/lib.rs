@@ -314,6 +314,7 @@ struct FunctionLowerer<'a> {
     info: &'a FunctionInfo,
     memory_symbols: &'a BTreeSet<SymbolId>,
     global_registers: &'a BTreeMap<SymbolId, String>,
+    local_registers: BTreeMap<SymbolId, String>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
     compound_origins: BTreeMap<usize, (u64, bool)>,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
@@ -3086,6 +3087,7 @@ impl<'a> FunctionLowerer<'a> {
             info,
             memory_symbols,
             global_registers,
+            local_registers: BTreeMap::new(),
             allocation_origins,
             compound_origins: compound_origins.clone(),
             compound_scopes: BTreeMap::new(),
@@ -3118,6 +3120,7 @@ impl<'a> FunctionLowerer<'a> {
         collect_goto_names(body, &mut self.goto_names);
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        self.local_registers = std::mem::take(&mut references.local_registers);
         self.compound_scopes = std::mem::take(&mut references.compound_scopes);
         for name in references.labels.values().collect::<BTreeSet<_>>() {
             let id = self.fresh_placeholder();
@@ -3809,6 +3812,34 @@ impl<'a> FunctionLowerer<'a> {
         key
     }
 
+    fn bound_assembly_constraint(
+        &self,
+        constraint: &str,
+        expression: &CHirExpr<'_>,
+        span: SourceSpan,
+    ) -> Result<String, LowerError> {
+        let CHirExpr::Ident { symbol, .. } = expression else {
+            return Ok(constraint.to_owned());
+        };
+        let Some(register) = self.local_registers.get(symbol) else {
+            return Ok(constraint.to_owned());
+        };
+        // Memory/immediate constraints do not request the object's register.
+        if !(matches!(constraint, "r" | "rZ" | "=r" | "+r" | "=&r" | "+&r")
+            || (constraint.len() == 1 && constraint.as_bytes()[0].is_ascii_digit()))
+        {
+            return Ok(constraint.to_owned());
+        }
+        let register = register
+            .strip_prefix('w')
+            .map_or_else(|| register.clone(), |n| format!("x{n}"));
+        let base = if constraint == "rZ" { "r" } else { constraint };
+        let bound = format!("{base}@{register}");
+        evocc_evoir::assembly_register_binding(&bound)
+            .map_err(|reason| LowerError::AsmOperand { span, reason })?;
+        Ok(bound)
+    }
+
     fn lower_assembly(
         &mut self,
         source: &'a AsmStmt<'a>,
@@ -3883,13 +3914,20 @@ impl<'a> FunctionLowerer<'a> {
             temporary_keys.extend(key);
             incoming_keys.push(key);
             outputs.push(AssemblyOutput {
-                constraint: operand.constraint.clone(),
+                constraint: self.bound_assembly_constraint(
+                    &operand.constraint,
+                    operand.expression,
+                    operand.span,
+                )?,
                 name: operand.symbolic.clone().unwrap_or_default(),
                 ty,
                 incoming,
             });
         }
         for operand in &source.inputs {
+            if operand.constraint.contains('@') {
+                return Err(refuse(operand.constraint.clone()));
+            }
             let immediate = matches!(
                 operand.constraint.as_str(),
                 "I" | "J" | "K" | "L" | "i" | "n"
@@ -3947,7 +3985,11 @@ impl<'a> FunctionLowerer<'a> {
                 operand.constraint.clone()
             };
             inputs.push(AssemblyInput {
-                constraint,
+                constraint: self.bound_assembly_constraint(
+                    &constraint,
+                    operand.expression,
+                    operand.span,
+                )?,
                 name: operand.symbolic.clone().unwrap_or_default(),
                 value,
             });
@@ -10373,6 +10415,7 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
 
 #[derive(Default)]
 struct FunctionReferences {
+    local_registers: BTreeMap<SymbolId, String>,
     direct: BTreeSet<SymbolId>,
     any: bool,
     labels: BTreeMap<usize, String>,
@@ -10466,6 +10509,13 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
 
 fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionReferences) {
     if let CHirDecl::Object(object) = declaration {
+        if object.storage == StorageClass::Register {
+            if let Some(register) = &object.asm_label {
+                calls
+                    .local_registers
+                    .insert(object.symbol, register.clone());
+            }
+        }
         if let Some(initializer) = &object.initializer {
             for action in initializer.plan.actions() {
                 if let InitAction::StoreScalar { value, .. }

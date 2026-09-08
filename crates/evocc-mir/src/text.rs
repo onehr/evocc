@@ -180,7 +180,7 @@ fn volatile_marker(volatile: bool) -> &'static str {
 /// a colon. Recorded gap.
 fn render_asm_body(body: &AsmBody) -> String {
     let operand = |operand: &AsmOperand, with_value: bool| -> String {
-        let mut text = format!("\"{}\"", operand.constraint.spelling());
+        let mut text = format!("\"{}\"", operand.spelling());
         if let Some(name) = &operand.name {
             let _ = write!(text, "({name})");
         }

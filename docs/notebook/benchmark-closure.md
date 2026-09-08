@@ -24,12 +24,12 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; authorized weak GOT repair passes native probes and changed gate | `torture musl` | OPEN: newly measured repeated-linkage-scan timeout needs repair |
-| 3 | Explicit register operands | Earlier `sigsetjmp_tail.lo` regression is absent in the latest mixed run; independent x8 input reduction passes four oracle runs but fails native subject execution | `musl` | OPEN: operand binding is lost; representation gap recorded below |
+| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; weak GOT repair passes native probes and changed gate; original memclr now emits in 1.397 seconds | `torture musl` | OPEN: original-program execution replay pending |
+| 3 | Explicit register operands | Binding now reaches IR, allocation and all output edges; 30 focused tests include native execution, spills and independent binding validation | `musl` | OPEN: changed gate and original-unit replay pending |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
-| 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
+| 5 | Kernel substitution mismatches | Original six extent defects fixed in `measure-20260907T170640Z`; new replay booted but retained overwritten cached assembly and could not verify zero-storage objects | `kernel` | REOPENED: cache-content guard fixed; original replay and zero-storage classification required |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
-| 7 | Remaining kernel refusals | Frame address and computed goto, one unit each; preserve existing explicit deferrals until a supported implementation exists | `kernel` | OPEN |
+| 7 | Remaining kernel refusals | Latest survey: 2,717 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; symbolic `%c` operands require a rule beyond integer-only `i` | `kernel` | OPEN |
 | 8 | Return and edge typing | void return effects repaired: toybox 177 to 191/203, zero regressions; the remaining three edge-value refusals still need reductions | `toybox` | PARTIAL: return fix benched, edge typing OPEN |
 | 9 | Other toybox lowering refusals | Remaining nine of 26 refusals: seven function-value types, one prototype, one object subvalue | `toybox` | OPEN |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
@@ -62,8 +62,20 @@ The binding must reach allocation and output edges, including tied/early-clobber
 and asm.goto operands; inserting moves outside that boundary is not an adequate
 substitute. This is separate from the immediate/register alternatives already
 authorized by revision 1.9.78. The user authorized carrying the binding through
-the IR and allocation boundary on 2026-09-08; implementation is next, not a
-pending authorization or a claimed fix.
+the IR and allocation boundary on 2026-09-08.
+Tests-only checkpoint `ce22a80` records both semantic failures without a build
+error. Binding now survives both textual IR forms, uses short-lived pinned
+operands, and transfers outputs over every asm.goto edge. The independent
+allocation verifier rejects a mutated binding; native tests cover both goto
+edges under spilling and a callee-saved x19 binding. A new negative test also
+ensures the source cannot directly admit the lowered `@xN` spelling.
+
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh ce22a80 --quiet`:
+843 passed, zero failed, four existing ignored; Clippy/fmt PASS. The earlier
+842-test gate was superseded by the additional source-vocabulary negative.
+K1 Python tests: 88/88; bench tests: 12/12; Ruff/diff-check PASS; the grammar
+audit has 42/42 instruction shapes with zero disagreement (not a full grammar
+proof). Original musl and torture replay is still required for family closure.
 
 ### Immediate-register input alternatives
 
@@ -83,6 +95,28 @@ Outputs and 128-bit register inputs retain E3021.
 PASS. Original kernel replay is still required before this family closes.
 
 ### Symbol linkage
+
+The immutable-linkage reuse fix (`eecdb45`, RED `4069f80`) passes the
+reverse-dependency changed gate, Clippy and fmt. The original torture
+`memclr.c`, previously exceeding the unchanged 60-second emission limit,
+now emits assembly in **1.397 seconds**, exit 0, empty stderr, using release
+SHA-256 `e7dc4f01d59d217bb75784686b8f7145e582cf2d039e3dcb55f04a671d6a7069`.
+Command: `target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm .build/ladder/run-torture/src/memclr.c`
+under `subprocess.run(timeout=60)`, stdout discarded. This closes the
+emission timeout, not its earlier runtime failure; the original program still
+needs the full execution lane. Profile samples had identified repeated
+whole-unit `SymbolLinkage::derive` inside each scalar initializer.
+
+Kernel replay `measure-20260908T030624Z` reused the valid 2,799-unit survey
+`measure-20260908T022219Z/survey`; every reduction retained release `25ab85d`
+SHA-256 `d59b26ba3656f811592b782e36a2ad0a1cf0a8fb61a1c9bf5efad783b3b71d09`.
+78 assembled, 2,721 refused; `efi/libstub/string.o` and `vsprintf.o` were
+individually reduced link failures (`__efistub_isdigit`). The other 76 objects
+relinked and booted, but `proof.json` reports 52 proven, 2 mismatched,
+7 unverifiable, 12 not linked, 3 without symbols. The benchmark correctly
+remains ERROR, not a validated kernel pass: inspect the zero-filled object
+slices (`xen_features`, `guid_null`, `uuid_null`) and the missing extents for
+`ctype`/`fdt` objects before claiming substitution closure.
 
 Tests-only checkpoint `0f2a71d` has nine semantic failures and zero build
 errors. Module records now preserve weak marks and flattened object/function

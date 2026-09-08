@@ -37,6 +37,14 @@ fn verify_assembly(
 
     // Every operand that needs a register has one.
     for operand in body.numbered() {
+        if let Some(expected) = operand.fixed_register {
+            if !matches!(expected, 0..=15 | 19..=28) || number(operand) != Some(expected) {
+                return Err(refuse(
+                    block,
+                    format!("assembly binding x{expected} does not match its assigned register"),
+                ));
+            }
+        }
         if !operand.constraint.needs_register() {
             continue;
         }

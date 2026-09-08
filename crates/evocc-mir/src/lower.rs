@@ -2783,7 +2783,9 @@ fn population_count(
 /// is named rather than approximated.
 fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
     for output in &assembly.outputs {
-        if AsmConstraint::parse(&output.constraint).is_none() {
+        if AsmConstraint::parse(evocc_evoir::assembly_register_binding(&output.constraint)?.0)
+            .is_none()
+        {
             return Err(format!(
                 "an assembly output constraint '{}'",
                 output.constraint
@@ -2791,7 +2793,9 @@ fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
         }
     }
     for input in &assembly.inputs {
-        if AsmConstraint::parse(&input.constraint).is_none() {
+        if AsmConstraint::parse(evocc_evoir::assembly_register_binding(&input.constraint)?.0)
+            .is_none()
+        {
             return Err(format!(
                 "an assembly input constraint '{}'",
                 input.constraint
@@ -2824,7 +2828,8 @@ fn lower_assembly(
     let mut outputs: Vec<AsmOperand> = Vec::new();
     let mut results = assembly.results.iter();
     for output in &assembly.outputs {
-        let constraint = AsmConstraint::parse(&output.constraint)
+        let (base, fixed_register) = evocc_evoir::assembly_register_binding(&output.constraint)?;
+        let constraint = AsmConstraint::parse(base)
             .ok_or_else(|| format!("an assembly output constraint '{}'", output.constraint))?;
         if let AsmConstraint::Memory { .. } = constraint {
             let place = output
@@ -2833,6 +2838,7 @@ fn lower_assembly(
                 .ok_or_else(|| "a memory output with no place".to_owned())?;
             outputs.push(AsmOperand {
                 constraint,
+                fixed_register,
                 name: named(&output.name),
                 value: AsmValue::Reg(lowerer.reg(place)?),
             });
@@ -2850,6 +2856,7 @@ fn lower_assembly(
         lowerer.bind(result, register);
         outputs.push(AsmOperand {
             constraint,
+            fixed_register,
             name: named(&output.name),
             value: AsmValue::Reg(register),
         });
@@ -2857,7 +2864,8 @@ fn lower_assembly(
 
     let mut inputs: Vec<AsmOperand> = Vec::new();
     for input in &assembly.inputs {
-        let constraint = AsmConstraint::parse(&input.constraint)
+        let (base, fixed_register) = evocc_evoir::assembly_register_binding(&input.constraint)?;
+        let constraint = AsmConstraint::parse(base)
             .ok_or_else(|| format!("an assembly input constraint '{}'", input.constraint))?;
         let value = match constraint {
             AsmConstraint::Immediate(_) => {
@@ -2898,6 +2906,7 @@ fn lower_assembly(
         };
         inputs.push(AsmOperand {
             constraint,
+            fixed_register,
             name: named(&input.name),
             value,
         });

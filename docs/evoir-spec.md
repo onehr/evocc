@@ -6120,3 +6120,10 @@ A `return expression;` in a void function accepts an expression of type void, ex
 Both sealed oracles execute `tests/fixtures/void-return-effects.c` at `-O0` and `-O2` with exit zero, recorded in `.evidence/builtin-probes/20260908-void-return/results.txt`.
 No diagnostic code is added and a non-void value returned from a void function, or a void expression returned from a non-void function, retains the existing refusal.
 Toybox run `20260907T144525Z` has 16 first-error return mismatches, with `blkid.o`'s `return xputsn(str)` reduced to this rule; actual improvement requires the original-unit replay.
+
+### Fixed local-register operands
+
+The authorized local-register binding is retained at an assembly operand as a canonical `@xN` suffix on its quoted constraint, with source `wN` bindings normalized to the same physical register; this is lowered metadata, not a new source constraint spelling.
+The binding applies only at the assembly boundary, including tied and read-write operands, and register outputs are transferred on every outgoing edge of `asm.goto`; the existing reserved-register rule and clobber conflicts remain fail-closed with E3021 rather than silently dropping a binding.
+Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260908-local-register-operands/forms.c` with exit zero (`forms-results.txt`), while the original input-only reduction exits one with the pre-fix subject.
+No new diagnostic code is introduced; the one independently measured wrong-result reduction is not a count of affected musl units, which the original-unit replay must determine.

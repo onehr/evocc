@@ -97,7 +97,7 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
             .first()
             .is_some_and(|inst| matches!(inst, MInst::IndirectResult))
     });
-    let (mut current, pins, outgoing) = pin_boundaries(target, function, &mut next);
+    let (mut current, pins, outgoing) = pin_boundaries(target, function, &mut next)?;
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
 
     // Each round either succeeds or sends at least one interval to the frame,
@@ -155,10 +155,11 @@ fn pin_boundaries(
     platform: Target,
     function: &MFunction,
     next: &mut u32,
-) -> (MFunction, BTreeMap<u32, u8>, u64) {
+) -> Result<(MFunction, BTreeMap<u32, u8>, u64), String> {
     let mut pins: BTreeMap<u32, u8> = BTreeMap::new();
     let mut blocks = Vec::new();
     let mut outgoing_slots: u32 = 0;
+    let mut next_block = function.blocks.iter().map(|b| b.id).max().unwrap_or(0) + 1;
 
     for (index, block) in function.blocks.iter().enumerate() {
         let mut insts = Vec::new();
@@ -273,11 +274,53 @@ fn pin_boundaries(
                         });
                     }
                 }
+                MInst::Asm(body) => {
+                    let (body, after) = pin_assembly(body, &mut insts, next, &mut pins)?;
+                    insts.push(MInst::Asm(body));
+                    insts.extend(after);
+                }
                 other => insts.push(other.clone()),
             }
         }
 
+        let mut bridges = Vec::new();
         let term = match &block.term {
+            MTerm::AsmGoto {
+                body,
+                labels,
+                fallthrough,
+                fallthrough_args,
+            } => {
+                let (body, after) = pin_assembly(body, &mut insts, next, &mut pins)?;
+                let mut edge = |target, args: &Vec<VReg>| {
+                    if after.is_empty() {
+                        return (target, args.clone());
+                    }
+                    let id = next_block;
+                    next_block += 1;
+                    bridges.push(MBlock {
+                        id,
+                        args: Vec::new(),
+                        insts: after.clone(),
+                        term: MTerm::B {
+                            target,
+                            args: args.clone(),
+                        },
+                    });
+                    (id, Vec::new())
+                };
+                let labels = labels
+                    .iter()
+                    .map(|(target, args)| edge(*target, args))
+                    .collect();
+                let (fallthrough, fallthrough_args) = edge(*fallthrough, fallthrough_args);
+                MTerm::AsmGoto {
+                    body,
+                    labels,
+                    fallthrough,
+                    fallthrough_args,
+                }
+            }
             MTerm::Ret { values } => {
                 let mut moved = Vec::new();
                 for (position, value) in values.iter().enumerate() {
@@ -300,6 +343,7 @@ fn pin_boundaries(
             insts,
             term,
         });
+        blocks.extend(bridges);
     }
 
     // Section 7's cycle scratch is pinned where Section 2 puts it.
@@ -316,7 +360,7 @@ fn pin_boundaries(
         }
     }
 
-    (
+    Ok((
         MFunction {
             name: function.name.clone(),
             blocks,
@@ -324,7 +368,84 @@ fn pin_boundaries(
         pins,
         // `sp` stays 16-byte aligned at every call, so the area is rounded up.
         u64::from(outgoing_slots).next_multiple_of(2) * 8,
-    )
+    ))
+}
+
+/// A binding constrains only the asm, never the whole C object's lifetime.
+/// Tied/read-write operands already share a VReg after machine lowering.
+fn pin_assembly(
+    source: &AsmBody,
+    before: &mut Vec<MInst>,
+    next: &mut u32,
+    pins: &mut BTreeMap<u32, u8>,
+) -> Result<(AsmBody, Vec<MInst>), String> {
+    let mut requested = BTreeMap::new();
+    for operand in source.numbered() {
+        if let Some(number) = operand.fixed_register {
+            if !CALLER_SAVED.contains(&number) && !CALLEE_SAVED.contains(&number) {
+                return Err(format!("unsupported assembly register binding x{number}"));
+            }
+            let reg = operand
+                .register()
+                .ok_or("fixed assembly operand has no register")?;
+            if requested
+                .insert(reg.id, number)
+                .is_some_and(|old| old != number)
+            {
+                return Err("conflicting tied assembly register bindings".into());
+            }
+        }
+    }
+    let mut copies = BTreeMap::new();
+    for operand in source.numbered() {
+        if let Some(reg) = operand.register() {
+            if let Some(number) = requested.get(&reg.id) {
+                copies.entry(reg.id).or_insert_with(|| {
+                    let pinned = fresh(next, reg.class);
+                    pins.insert(pinned.id, *number);
+                    pinned
+                });
+            }
+        }
+    }
+    let mut initialized = BTreeSet::new();
+    for operand in source.inputs.iter().chain(
+        source
+            .outputs
+            .iter()
+            .filter(|o| o.constraint.direction() == crate::AsmDirection::ReadWrite),
+    ) {
+        if let Some(reg) = operand.register() {
+            if let Some(pinned) = copies.get(&reg.id) {
+                if initialized.insert(reg.id) {
+                    before.push(MInst::Mov {
+                        dst: *pinned,
+                        src: reg,
+                    });
+                }
+            }
+        }
+    }
+    let after = source
+        .defined()
+        .into_iter()
+        .filter_map(|reg| {
+            copies.get(&reg.id).map(|pinned| MInst::Mov {
+                dst: reg,
+                src: *pinned,
+            })
+        })
+        .collect();
+    let mut body = source.clone();
+    for operand in body.outputs.iter_mut().chain(&mut body.inputs) {
+        if let Some(reg) = operand.register() {
+            if let Some(pinned) = copies.get(&reg.id) {
+                operand.value = AsmValue::Reg(*pinned);
+                operand.fixed_register = requested.get(&reg.id).copied();
+            }
+        }
+    }
+    Ok((body, after))
 }
 
 /// The stack slot Section 6 gives an argument position, or `None` when a

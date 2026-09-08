@@ -506,7 +506,7 @@ fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option
     let mut assigned = results.into_iter();
     let outputs: Vec<AsmOperand> = outputs
         .into_iter()
-        .map(|(constraint, name, value)| {
+        .map(|(constraint, fixed_register, name, value)| {
             let value = match value {
                 Some(value) => value,
                 None if matches!(constraint, AsmConstraint::Memory { .. }) => {
@@ -520,6 +520,7 @@ fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option
             };
             Ok(AsmOperand {
                 constraint,
+                fixed_register,
                 name,
                 value,
             })
@@ -527,9 +528,10 @@ fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option
         .collect::<Result<_, String>>()?;
     let inputs: Vec<AsmOperand> = inputs
         .into_iter()
-        .map(|(constraint, name, value)| {
+        .map(|(constraint, fixed_register, name, value)| {
             Ok(AsmOperand {
                 constraint,
+                fixed_register,
                 name,
                 value: value.ok_or_else(|| format!("an input has no operand in '{body}'"))?,
             })
@@ -607,7 +609,7 @@ fn take_quoted(text: &str) -> Result<(String, &str), String> {
 }
 
 /// Read one bracketed operand list introduced by `prefix`.
-type ParsedOperand = (AsmConstraint, Option<String>, Option<AsmValue>);
+type ParsedOperand = (AsmConstraint, Option<u8>, Option<String>, Option<AsmValue>);
 
 fn take_operand_list(
     text: &mut &str,
@@ -633,7 +635,8 @@ fn take_operand_list(
 
 fn parse_operand(text: &str, classes: &HashMap<u32, RegClass>) -> Result<ParsedOperand, String> {
     let (spelling, rest) = take_quoted(text)?;
-    let constraint = AsmConstraint::parse(&spelling)
+    let (base, fixed_register) = evocc_evoir::assembly_register_binding(&spelling)?;
+    let constraint = AsmConstraint::parse(base)
         .ok_or_else(|| format!("E3021: constraint '{spelling}' is outside the table"))?;
     let mut rest = rest;
     let mut name = None;
@@ -651,7 +654,7 @@ fn parse_operand(text: &str, classes: &HashMap<u32, RegClass>) -> Result<ParsedO
     } else {
         return Err(format!("trailing text '{rest}' in an asm operand"));
     };
-    Ok((constraint, name, value))
+    Ok((constraint, fixed_register, name, value))
 }
 
 fn parse_operand_value(text: &str, classes: &HashMap<u32, RegClass>) -> Result<AsmValue, String> {
