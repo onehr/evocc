@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.80** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.81** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3572,8 +3572,9 @@ attachment position from the table above. Preservation does not depend on
 whether the attribute is understood. A C-HIR dump shows every attribute present
 in the source, so a reviewer can confirm nothing was dropped on the way in.
 
-**Applied semantics.** Exactly two attributes have a meaning in this profile,
-and both act on layout:
+**Applied semantics.** `aligned` and `packed` act on layout; integer `mode`
+selects the canonical integer type as specified below. The separately stated
+inlining and linkage attributes also have their explicitly defined effects.
 
 - `aligned(N)` raises alignment. `N` is an integer constant expression that is
   a power of two representable by the target layout; otherwise `E2903`. On a
@@ -3601,6 +3602,23 @@ service applies them, and every rule above is checked against the frozen GCC-14
 and Clang-19 oracles through the existing layout corpus, which this stage
 extends with attributed cases. An oracle disagreement is `ORACLE_CONFLICT` and
 is never resolved by choosing one.
+
+**Integer `mode` (revision 1.9.81).** On an integer declaration, typedef,
+member or parameter, `mode(QI)`, `mode(HI)`, `mode(SI)`, `mode(DI)` and
+`mode(TI)` select the signed or unsigned canonical integer type of 8, 16,
+32, 64 and 128 bits respectively. On this AArch64 target those types are
+`signed char`/`unsigned char`, `short`/`unsigned short`, `int`/`unsigned int`,
+`long`/`unsigned long`, and signed/unsigned `__int128`; `byte` means `QI`
+and `word` means `DI`, and enclosing the mode name in `__` is equivalent.
+The original integer's signedness and top-level qualifiers are preserved;
+layout, promotions and every consumer use the selected canonical type, not
+the original spelling. An unknown mode, wrong arity or non-integer target is
+`E2903`; pointer-declarator attributes keep the existing never-applied rule.
+An integer `mode` written in an abstract type name is also `E2903`: GCC-14
+applies it while Clang-19 ignores it, so accepting it would admit two layouts.
+Evidence: `.evidence/builtin-probes/20260908-integer-modes/probe.c` and
+`results.txt`, both sealed compilers at O0/O2; `sizeof(unsigned int
+__attribute__((mode(QI))))` is the explicit 1-versus-4 conflict.
 
 **Everything else** is preserved and not applied. The receipt lists, by name,
 every attribute the cohort presented that this profile did not apply, so the
@@ -5734,6 +5752,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.81 | 2026-09-08 | Define integer mode attributes under the authorized non-floating-point closure, including their canonical ranks, qualifiers, declaration placements and the refused abstract-type-name oracle conflict. This changes the contract, not compiler code. |
 | 1.9.80 | 2026-09-08 | Define authorized symbolic `i` operands and the `%c` modifier, retaining numeric-only `n`, the existing address/SSA forms and assembly effects. The sealed non-PIC oracle probe agrees; the default PIE disagreement is explicit. This revision changes the contract, not compiler code. |
 | 1.9.79 | 2026-09-08 | Admits `weak` and `alias` as linkage marks on module records: `linkage=weak` on globals, functions, externs and declarations, and an `alias @name = @target` record that is a second symbol of a definition in this module and one provenance with it; `E3060`, `E3061`; both oracles agree on the linkage probe. Emission in EvoMIR 0.22. |
 | 1.9.78 | 2026-09-08 | Generalizes the `Ir` ruling to any admitted immediate letter paired with `r` (`Jr`, `Kr`, `Lr`, `ir`, `nr`, either order), selecting the register alternative; measured with both oracles. `Kr` was the first error of 2,744 kernel units. |
@@ -5828,6 +5847,12 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### Integer mode attributes select the storage type
+
+Section 10.1.9 now explicitly applies measured integer modes rather than silently preserving a different-width declaration; the user's non-floating-point closure authorizes this body amendment.
+Both sealed compilers agree on the declaration, member, parameter, qualifier, value and rank rows in `.evidence/builtin-probes/20260908-integer-modes/results.txt`; abstract type-name placement disagrees and is refused with existing E2903.
+The original torture `memclr` and `misalign` are two native failures with these ignored attributes; their complete replay, not the focused probe, determines closure.
 
 ### Alternate qualifier spellings
 
