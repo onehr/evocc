@@ -302,6 +302,31 @@ fn flexible_string_initializers_execute_without_completing_the_record_type() {
 }
 
 #[test]
+fn obsolete_designators_use_the_existing_subobject_initializer_plan() {
+    let source = include_str!("../../../tests/fixtures/obsolete-designators.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "obsolete-designators");
+    for source in [
+        "struct S { int a; }; struct S s = { absent: 1 };",
+        "struct S { int a; }; int values[2] = { a: 1 };",
+        "int values[2] = { [3] 1 };",
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2906"));
+    }
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {
