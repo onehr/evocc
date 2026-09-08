@@ -77,6 +77,20 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertEqual(row["status"], "VALIDATION_GAP")
         self.assertEqual(row["passed"], 0)
 
+    def test_cjson_object_test_coverage_is_required_for_every_substitution(self):
+        receipt = {"unitsTotal": 2, "unitsInPassingBuild": 2,
+                   "substitutedUnits": ["cJSON.o", "cJSON_Utils.o"],
+                   "test": {"passed": True, "relinkStatus": 0,
+                            "objectFiles": ["cJSON.o", "cJSON_Utils.o"]}}
+        row = bench.metrics("cjson", receipt)
+        self.assertEqual((row["status"], row["passed"]), ("PASS", 2))
+        receipt["test"]["objectFiles"] = ["cJSON.o"]
+        row = bench.metrics("cjson", receipt)
+        self.assertEqual((row["status"], row["passed"]), ("VALIDATION_GAP", 0))
+        receipt["test"]["objectFiles"].append("cJSON_Utils.o")
+        receipt["test"]["passed"] = False
+        self.assertEqual(bench.metrics("cjson", receipt)["status"], "FAIL")
+
     def test_bisection_exhaustion_and_baseline_failures_are_not_complete(self):
         for verdict in ["bisection-budget-exhausted", "libc-test-clean"]:
             row = bench.metrics("musl", {"units": 5, "unitsInPassingBuild": 5,

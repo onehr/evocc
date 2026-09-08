@@ -148,6 +148,9 @@ class Subject:
     #: Reductions of this subject's failures: the unit, what the suite did,
     #: and the smallest program that shows the same thing.
     defects: tuple[dict, ...] = ()
+    #: Explicit object consumers for adapters whose default test recompiles
+    #: the reference source. Their linkage adaptations have mutation tests.
+    test_objects: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1143,6 +1146,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
             "status": final_tests["status"],
             "relinkStatus": final_relink["status"],
             "command": subject.test,
+            **({"objectFiles": list(subject.test_objects)} if subject.test_objects else {}),
         },
         "attempts": attempts,
         "adjustments": {

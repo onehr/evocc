@@ -3,18 +3,12 @@
 
 Pinned in docs/roadmap.md to v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON).
 
-Two things about this subject are not what the roadmap assumed, and both are
-recorded in the receipt rather than worked around. The Unity suite the
-roadmap names as the oracle is driven by CMake, and the sealed container has
-no cmake; the release's own Makefile is therefore what runs, and its ``make
-test`` builds ``cJSON_test`` by compiling ``cJSON.c`` and ``test.c`` together
-in one command instead of linking ``cJSON.o``. So the suite cannot judge a
-substituted object even when there is one: the two objects this build
-produces go into ``libcjson.a`` and ``libcjson.so``, which the suite does not
-use.
-
-The measurement is still worth taking, because it says what the front end
-does with the two units, and that is the number the ladder wants.
+The public Makefile test and five upstream public-API Unity programs link
+the installed objects. The default Makefile compiles the reference cJSON.c
+into its test binary, while Unity's common.h includes that implementation;
+neither can validate substituted objects unchanged. The adaptations below
+change only test linkage and preserve the selected test sources. They are
+not a claim to run the complete CMake/private-helper Unity suite.
 
 Usage: python3 tools/ladder/cjson.py
 """
@@ -32,6 +26,26 @@ ladder = importlib.util.module_from_spec(_spec)
 sys.modules["ladder_subject"] = ladder
 _spec.loader.exec_module(ladder)
 
+PUBLIC_TESTS = ("cjson_add", "compare_tests", "minify_tests",
+                "old_utils_tests", "misc_utils_tests")
+RELINK = """(
+set -e
+rm -f cJSON_test
+make 'CJSON_TEST_SRC=test.c cJSON.o' static tests
+for test in %s; do
+  "${CC:-gcc-14}" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test
+done
+)
+""" % " ".join(PUBLIC_TESTS)
+TEST = """(
+set -e
+./cJSON_test
+for test in %s; do
+  ./tests/$test
+done
+)
+""" % " ".join(PUBLIC_TESTS)
+
 CJSON = ladder.Subject(
     name="cjson",
     rung="E3",
@@ -41,20 +55,23 @@ CJSON = ladder.Subject(
     tree="cJSON-1.7.19",
     # Serial: the release's Makefile does not declare that the utils shared
     # library needs cJSON.o, so a parallel build races against itself.
-    build="make",
-    test="make test",
+    build="(set -e\nmake\n" + RELINK + ")",
+    test=TEST,
     # ``make all`` is not idempotent here: it recreates the shared library's
     # symbolic links and fails because they exist. The relink asks for the
     # targets that consume the objects instead.
-    relink="make static tests",
+    relink=RELINK,
+    test_objects=("cJSON.o", "cJSON_Utils.o"),
     notes=(
-        "the Unity suite the roadmap names is built by CMake, which the "
-        "sealed container does not have; the release's own Makefile runs "
-        "instead",
-        "that Makefile's `make test` compiles cJSON.c and test.c together "
-        "into one binary rather than linking cJSON.o, so the suite does not "
-        "judge a substituted object; the units are measured, the suite "
-        "result is the reference build's",
+        "the release Makefile builds the libraries; its public test is "
+        "relinked from test.c and the installed cJSON.o on every trial",
+        "five unchanged public-API Unity programs (cjson_add, compare_tests, "
+        "minify_tests, old_utils_tests, misc_utils_tests) link both installed "
+        "objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, "
+        "with cJSON.h, stdbool.h and string.h supplied explicitly",
+        "this is the public Makefile test plus 54 public-API Unity assertions, "
+        "not the full CMake/private-helper Unity suite; CMake is unavailable "
+        "and private helpers cannot test an independently compiled object",
         "cJSON's numbers are doubles, and the back end refuses floating "
         "point, so these units are not expected to pass before the "
         "floating-point rung",

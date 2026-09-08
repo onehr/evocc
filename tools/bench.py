@@ -32,7 +32,7 @@ CATALOG = {
     "csmith": ("E0c", "csmith", "original seeds; unavailable oracles are not passes"),
     "zlib": ("E1", "subject", "mixed-link program tests"),
     "zstd": ("E2", "subject", "mixed-link program tests; see recorded source/build adjustments"),
-    "cjson": ("E3", "subject", "validation gap: make test rebuilds C sources, not substituted objects; FP deferred"),
+    "cjson": ("E3", "subject", "installed objects judged by public API tests; full private-helper suite and FP deferred"),
     "tinycc": ("E5", "mixed", "mixed-link compiler tests"),
     "toybox": ("E6", "mixed", "mixed-link tests relative to baseline failures"),
     "musl": ("E7", "mixed", "libc-test relative to baseline failures"),
@@ -158,7 +158,13 @@ def metrics(name, data):
         baseline = data.get("baselineTest", {})
         if isinstance(baseline, dict):
             row["baselineFailures"] = baseline.get("libcTestFailingCases", len(baseline.get("failing", [])))
-        if name == "cjson":
+        if name == "cjson" and (
+            not isinstance(row["testVerdict"], dict)
+            or not row["testVerdict"].get("objectFiles")
+            or not set(data.get("substitutedUnits", [])).issubset(
+                row["testVerdict"]["objectFiles"]
+            )
+        ):
             row.update(status="VALIDATION_GAP", passed=0)
         elif isinstance(row["testVerdict"], dict):
             if not row["testVerdict"].get("passed") or row["testVerdict"].get("relinkStatus") != 0:

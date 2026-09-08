@@ -1,6 +1,7 @@
 """The cJSON test commands must execute the installed library objects."""
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -28,7 +29,7 @@ class ObjectConsumptionTest(unittest.TestCase):
             tests = root / "tests"
             (tests / "unity/src").mkdir(parents=True)
             (tests / "unity/src/unity.c").write_text("/* test runner fixture */\n")
-            for name in ("cjson_add", "compare_tests", "readme_examples", "minify_tests",
+            for name in ("cjson_add", "compare_tests", "minify_tests",
                          "old_utils_tests", "misc_utils_tests"):
                 (tests / f"{name}.c").write_text(
                     '#include "../cJSON.h"\n'
@@ -48,15 +49,17 @@ class ObjectConsumptionTest(unittest.TestCase):
             def run(command):
                 return subprocess.run(
                     command, shell=True, cwd=root, text=True, capture_output=True,
-                    check=False, timeout=30,
+                    check=False, timeout=30, env=dict(os.environ, CC="cc"),
                 )
 
             built = run(lane.CJSON.build)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            originals = {name: (root / name).read_bytes()
+                         for name in ("cJSON.o", "cJSON_Utils.o")}
             for symbol, object_name in [("core", "cJSON.o"), ("utils", "cJSON_Utils.o")]:
                 with self.subTest(object=object_name):
-                    originals = {name: (root / name).read_bytes()
-                                 for name in ("cJSON.o", "cJSON_Utils.o")}
+                    for name, contents in originals.items():
+                        (root / name).write_bytes(contents)
                     linked = run(lane.CJSON.relink)
                     self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
                     self.assertEqual(run(lane.CJSON.test).returncode, 0)
@@ -70,5 +73,3 @@ class ObjectConsumptionTest(unittest.TestCase):
                     self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
                     self.assertNotEqual(run(lane.CJSON.test).returncode, 0,
                                         f"the tests bypassed changed {object_name}")
-                    for name, contents in originals.items():
-                        (root / name).write_bytes(contents)
