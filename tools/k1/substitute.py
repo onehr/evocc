@@ -188,8 +188,10 @@ def reusable(entry: dict | None, unit: str, asm_root: Path) -> dict | None:
     outcome = entry.get("outcome")
     if outcome not in CACHEABLE_OUTCOMES:
         return None
-    if outcome == "emitted" and not assembly_path(asm_root, unit).is_file():
-        return None
+    if outcome == "emitted":
+        assembly = assembly_path(asm_root, unit)
+        if not assembly.is_file() or entry.get("assemblySha256") != sha256_file(assembly):
+            return None
     row = dict(entry)
     row["unit"] = unit
     row["fromCache"] = True
@@ -258,6 +260,7 @@ def emit_assembly(
         "outcome": "emitted",
         "assembly": str(assembly),
         "assemblyBytes": len(completed.stdout),
+        "assemblySha256": sha256_file(assembly),
     }
 
 
