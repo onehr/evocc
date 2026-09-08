@@ -2,7 +2,7 @@
 #![allow(clippy::should_implement_trait)]
 //! C preprocessor: macro expansion, directives, token stream
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub use evocc_common::{FileId, SourceSpan};
 use evocc_lex::preprocessing_number_len_at;
@@ -615,8 +615,15 @@ pub fn pragma_pack_action(token: &Token) -> Option<PragmaPackAction> {
 }
 
 #[derive(Debug)]
+struct SavedMacro {
+    definition: Option<Macro>,
+    feature_query: bool,
+}
+
+#[derive(Debug)]
 pub struct Preprocessor {
     macros: MacroMap,
+    macro_stacks: HashMap<String, Vec<SavedMacro>>,
     include_guard_seen: bool,
     pragma_once_files: HashSet<String>,
     include_paths: Vec<String>,
@@ -634,6 +641,8 @@ pub struct Preprocessor {
     builtin_feature_queries: HashSet<String>,
     poisoned_identifiers: HashSet<String>,
     ignored_pragma_count: u64,
+    ignored_pragma_counts: BTreeMap<String, u64>,
+    empty_macro_pop_count: u64,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -651,6 +660,7 @@ impl Preprocessor {
         };
         let mut preprocessor = Self {
             macros: MacroMap::new(),
+            macro_stacks: HashMap::new(),
             include_guard_seen: false,
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
@@ -668,6 +678,8 @@ impl Preprocessor {
             builtin_feature_queries: HashSet::new(),
             poisoned_identifiers: HashSet::new(),
             ignored_pragma_count: 0,
+            ignored_pragma_counts: BTreeMap::new(),
+            empty_macro_pop_count: 0,
             current_file: String::new(),
         };
         preprocessor.install_predefined_profile(profile)?;
@@ -780,6 +792,14 @@ impl Preprocessor {
         self.ignored_pragma_count
     }
 
+    pub fn ignored_pragma_counts(&self) -> &BTreeMap<String, u64> {
+        &self.ignored_pragma_counts
+    }
+
+    pub fn empty_macro_pop_count(&self) -> u64 {
+        self.empty_macro_pop_count
+    }
+
     /// Return the resolved source path registered for `file` in this
     /// preprocessing run.
     pub fn source_path(&self, file: FileId) -> Option<&str> {
@@ -827,6 +847,9 @@ impl Preprocessor {
         self.counter = 0;
         self.poisoned_identifiers.clear();
         self.ignored_pragma_count = 0;
+        self.ignored_pragma_counts.clear();
+        self.empty_macro_pop_count = 0;
+        self.macro_stacks.clear();
         self.register_entry_source(&tokens);
         let mut expanding: HashSet<String> = HashSet::new();
         let entry_span = tokens
@@ -869,10 +892,9 @@ impl Preprocessor {
         TokenStream::new(self.consume_pragma_operators(output, source))
     }
 
-    /// Consume `_Pragma` only after ordinary macro expansion has produced its
-    /// final operand tokens. This is the phase-4 boundary at which a
-    /// stringized operand can be validated and destringized without guessing
-    /// what a still-expandable macro invocation will produce.
+    /// Diagnose incomplete operators left after replacement-list boundaries
+    /// have been joined. Complete operators execute during rescanning, before
+    /// subsequent uses of any macro whose definition they restore.
     fn consume_pragma_operators(&mut self, tokens: Vec<Token>, source: &str) -> Vec<Token> {
         let mut output = Vec::with_capacity(tokens.len());
         let mut index = 0;
@@ -1483,14 +1505,35 @@ impl Preprocessor {
                         });
                     }
                     if name == "_Pragma" {
-                        if let Some((pragma_text, next_index)) =
-                            parse_pragma_operator(&raw, i, source)
-                        {
-                            let pragma_tokens = lex_decoded_tokens(tok.span.file, &pragma_text);
-                            if let Some(marker) =
-                                self.process_pragma(&pragma_tokens, &pragma_text, tok.span)
-                            {
-                                output.push(marker);
+                        if let Some(argument_len) = complete_parenthesized_prefix(&raw[i + 1..]) {
+                            let next_index = i + 1 + argument_len;
+                            let direct = parse_pragma_operator(&raw, i, source);
+                            let parsed = direct.or_else(|| {
+                                let operand = self.process_impl(
+                                    TokenStream::new(raw[i + 2..next_index - 1].to_vec()),
+                                    source,
+                                    expanding,
+                                    false,
+                                    0,
+                                );
+                                let mut invocation = raw[i..i + 2].to_vec();
+                                invocation.extend(operand.into_vec());
+                                invocation.push(raw[next_index - 1].clone());
+                                parse_pragma_operator(&invocation, 0, source)
+                            });
+                            if let Some((pragma_text, _)) = parsed {
+                                let pragma_tokens = lex_decoded_tokens(tok.span.file, &pragma_text);
+                                if let Some(marker) =
+                                    self.process_pragma(&pragma_tokens, &pragma_text, tok.span)
+                                {
+                                    output.push(marker);
+                                }
+                            } else {
+                                self.errors.push(PreprocessError {
+                                    code: "E0112",
+                                    span: tok.span,
+                                    message: "stray-token".into(),
+                                });
                             }
                             i = next_index;
                             continue;
@@ -1712,10 +1755,11 @@ impl Preprocessor {
             }
             let name = token_lexeme(last, source).to_owned();
             if expanding.contains(&name)
-                || !self
-                    .macros
-                    .get(&name)
-                    .is_some_and(|macro_def| macro_def.is_function)
+                || (name != "_Pragma"
+                    && !self
+                        .macros
+                        .get(&name)
+                        .is_some_and(|macro_def| macro_def.is_function))
             {
                 break;
             }
@@ -1831,6 +1875,31 @@ impl Preprocessor {
             return None;
         }
 
+        if matches!(first, "push_macro" | "pop_macro") {
+            if let Some(name) = macro_pragma_name(tokens, source) {
+                if first == "push_macro" {
+                    self.macro_stacks
+                        .entry(name.to_owned())
+                        .or_default()
+                        .push(SavedMacro {
+                            definition: self.macros.get(name).cloned(),
+                            feature_query: self.builtin_feature_queries.contains(name),
+                        });
+                } else if let Some(saved) = self.macro_stacks.get_mut(name).and_then(Vec::pop) {
+                    self.undefine(name);
+                    if let Some(definition) = saved.definition {
+                        self.macros.macros.insert(name.to_owned(), definition);
+                    }
+                    if saved.feature_query {
+                        self.builtin_feature_queries.insert(name.to_owned());
+                    }
+                } else {
+                    self.empty_macro_pop_count = self.empty_macro_pop_count.saturating_add(1);
+                }
+                return None;
+            }
+        }
+
         match (first, second) {
             ("once", _) => self.pragma_once(),
             ("GCC", "poison") => {
@@ -1843,11 +1912,15 @@ impl Preprocessor {
                     }
                 }
             }
-            ("GCC", "diagnostic" | "visibility") => {
-                self.ignored_pragma_count = self.ignored_pragma_count.saturating_add(1);
-            }
             _ => {
                 self.ignored_pragma_count = self.ignored_pragma_count.saturating_add(1);
+                let name = if first == "GCC" {
+                    format!("{first} {second}")
+                } else {
+                    first.to_owned()
+                };
+                let count = self.ignored_pragma_counts.entry(name).or_default();
+                *count = count.saturating_add(1);
             }
         }
         None
@@ -2360,6 +2433,21 @@ fn parse_header_name(tokens: &[Token], source: &str) -> Option<(String, IncludeK
         return (!name.is_empty()).then_some((name, IncludeKind::Angle));
     }
     None
+}
+
+fn macro_pragma_name<'a>(tokens: &'a [Token], source: &'a str) -> Option<&'a str> {
+    let [_, open, name, close] = tokens else {
+        return None;
+    };
+    if open.kind != TokenKind::LParen
+        || name.kind != TokenKind::StringLiteral
+        || close.kind != TokenKind::RParen
+    {
+        return None;
+    }
+    token_lexeme(name, source)
+        .strip_prefix('"')?
+        .strip_suffix('"')
 }
 
 fn parse_pragma_operator(tokens: &[Token], index: usize, source: &str) -> Option<(String, usize)> {

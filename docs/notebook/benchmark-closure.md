@@ -47,6 +47,22 @@ Only one heavyweight benchmark invocation runs at once.
 
 ## Progress
 
+### Macro definition restoration
+
+Revision 1.9.77 is implemented through per-name stacks that preserve the whole
+definition and its feature-query implementation, or its undefined state.
+The tests-only checkpoint `a6c302d` has five semantic failures, zero build
+errors; restoring `_Pragma` effects during rescanning also fixes their ordering
+relative to subsequent macro uses. Header spelling, pack independence, invalid
+argument classification and fresh-translation-unit stacks are pinned.
+The measured probe has one empty pop; malformed push/pop arguments are counted
+separately as ignored pragmas by name, and successful stack operations are not
+reported as ignored-safe.
+
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh a6c302d --quiet`:
+1,037 passed, zero failed or ignored; Clippy and fmt PASS. Ruff and diff-check
+PASS. Original-program benchmark closure is pending, not inferred from this gate.
+
 ### Void return effects
 
 Tests-only checkpoint `427951e` produced three declared semantic failures and

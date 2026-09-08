@@ -242,3 +242,75 @@ fn macro_pragmas_in_inactive_branches_have_no_effect() {
         "2",
     );
 }
+
+#[test]
+fn macro_stack_observations_distinguish_empty_pops_from_ignored_pragmas() {
+    let source = concat!(
+        "#define A 1\n#pragma push_macro(\"A\")\n#pragma pop_macro(\"A\")\n",
+        "#pragma pop_macro(\"A\")\n#pragma push_macro(A)\n",
+        "#pragma pop_macro(\"A\", \"B\")\n",
+        "#pragma pack(push, 1)\n#pragma pack(pop)\n",
+    );
+    let mut preprocessor = Preprocessor::new();
+    let output = preprocessor.process(TokenStream::new(lex(FileId::DUMMY, source)), source);
+    assert!(preprocessor.errors().is_empty());
+    assert_eq!(preprocessor.empty_macro_pop_count(), 1);
+    assert_eq!(preprocessor.ignored_pragma_count(), 2);
+    assert_eq!(preprocessor.ignored_pragma_counts()["push_macro"], 1);
+    assert_eq!(preprocessor.ignored_pragma_counts()["pop_macro"], 1);
+    assert_eq!(
+        output
+            .into_vec()
+            .iter()
+            .filter_map(evocc_cpp::pragma_pack_action)
+            .collect::<Vec<_>>(),
+        [
+            evocc_cpp::PragmaPackAction::Push(Some(1)),
+            evocc_cpp::PragmaPackAction::Pop
+        ]
+    );
+}
+
+#[test]
+fn macro_stacks_do_not_leak_between_translation_units() {
+    let mut preprocessor = Preprocessor::new();
+    let first = "#define A 1\n#pragma push_macro(\"A\")\n#undef A\n#define A 2\n";
+    preprocessor.process(TokenStream::new(lex(FileId::DUMMY, first)), first);
+    let next = "#pragma pop_macro(\"A\")\nA\n";
+    let output = preprocessor
+        .process(TokenStream::new(lex(FileId::DUMMY, next)), next)
+        .into_vec();
+    assert!(preprocessor.errors().is_empty());
+    assert_eq!(preprocessor.empty_macro_pop_count(), 1);
+    assert_eq!(
+        output
+            .iter()
+            .filter(|token| token.kind != TokenKind::Eof)
+            .map(|token| spelling(token, next))
+            .collect::<Vec<_>>(),
+        ["2"]
+    );
+}
+
+#[test]
+fn a_definition_saved_in_a_header_keeps_its_spelling_after_restoration() {
+    let source = "#include \"saved-macro.h\"\n#pragma pop_macro(\"VALUE\")\nVALUE(2)\n";
+    let mut preprocessor = Preprocessor::new();
+    preprocessor.add_include_path(format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR")));
+    let output = preprocessor
+        .process(TokenStream::new(lex(FileId::new(93_032), source)), source)
+        .into_vec();
+    assert!(
+        preprocessor.errors().is_empty(),
+        "{:?}",
+        preprocessor.errors()
+    );
+    assert_eq!(
+        output
+            .iter()
+            .filter(|token| token.kind != TokenKind::Eof)
+            .map(|token| spelling(token, source))
+            .collect::<Vec<_>>(),
+        expected("(2 + 7)")
+    );
+}
