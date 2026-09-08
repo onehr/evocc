@@ -95,7 +95,7 @@ not a claim that no unknown compiler bug can exist.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | ctest 1 runtime failure; torture 24 runtime failures, zero assembly/link failures; nine option-dependent originals now pass | `ctest torture` | PARTIAL: storage, packed access and wrapping repairs benched; other failures OPEN |
+| 4 | Remaining native failures | ctest 1 runtime failure; torture 23 runtime failures, zero assembly/link failures; nine option-dependent originals and three absolute-value originals now pass | `ctest torture` | PARTIAL: storage, packed access, wrapping and absolute-value repairs benched; other failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | Fresh survey: 2,712 `%a` assembly references, one computed goto and one frame address; all prior `asm:i`/`+rm` first errors clear | `kernel` | OPEN: 85 assemble, 83 substitute and boot, 69 linked; kaslr missing-global and insn signed-shift failures isolated and retained; zero substitution mismatches in the passing combination |
@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 464 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 462 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Signed-wrapping modes now pass nine previously failing originals; 326 programs still carry unhandled requirements, recorded rather than guessed or removed | `torture` | PARTIAL: wrapping semantics and original replay CLOSED in `20260908T135846.118517Z`; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -161,10 +161,22 @@ ordinary standard-name call selection, with options and same-unit assembler
 identities preserved. The original tests-only checkpoint is `a3884e3`.
 Both interpreter/native focused tests pass; the affected all-targets gate
 against that checkpoint passes 1,032 tests, zero failures or ignored tests,
-plus Clippy, fmt and Ruff. This is not yet original-program replay closure.
+plus Clippy, fmt and Ruff. Original-program replay now closes the three
+identified absolute-value cases, not the remaining native failures.
 `afabd27` separately records the missing benchmark builtin-option projection
 as a tests-only RED; `b01821d` implements it after the frozen kernel run
 finishes, with all 42 targeted Python tests passing.
+
+`python3 tools/bench.py ctest torture --jobs 4`, wrapper
+`20260908T151818.777128Z`, measures subject `d160f3f`, executable SHA-256
+`1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3`.
+ctest remains 206 passed, 13 refused and one failed out of 220; torture is
+1,207 passed, 462 refused and 23 failed out of the same 1,692 identities.
+Exactly `20021127-1` moves FAIL to PASS and `pr34130` / `pr42614` move
+REFUSED to PASS, with no regressions and no assembly/link failures.
+Captures: `.evidence/ladder/e0/20260908T151818Z` and
+`.evidence/ladder/e0/20260908T151844Z`. This executable predates the
+abrupt-expression repair below; that repair has no benchmark closure yet.
 
 The original `arith-rand` and `arith-rand-ll` each pass ordinary sealed GCC-14
 and Clang-19 at O0/O2, but **both independent UBSan instrumentations** report

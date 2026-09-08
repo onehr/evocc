@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T135911Z",
-  "subject": "02d66b1",
-  "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36",
+  "run": "20260908T151844Z",
+  "subject": "d160f3f",
+  "driverSha256": "1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "supported unconditional signed-wrapping options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
   "target": "aarch64-unknown-linux-gnu",
@@ -19,14 +19,14 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1204,
-     "refused": 464,
-     "fail": 24
+     "pass": 1207,
+     "refused": 462,
+     "fail": 23
     },
     "refusalsByCode": {
      "E3101": 134,
      "E1001": 106,
-     "E2001": 42,
+     "E2001": 40,
      "E2201": 23,
      "E2203": 19,
      "E2102": 19,
@@ -58,7 +58,7 @@
     },
     "failuresByInterpreterVerdict": {
      "E3006 invalid-signed-left-shift": 13,
-     "E3039 external-call-not-executable": 7,
+     "E3039 external-call-not-executable": 6,
      "E3008 interpreter-fuel-exhausted": 2,
      "E3021 not-lowered": 1,
      "E3001 read-of-uninitialized-object": 1
@@ -71,5 +71,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T135911Z"
+ "evidence": ".evidence/ladder/e0/20260908T151844Z"
 }
