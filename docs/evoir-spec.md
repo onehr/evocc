@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.76** | **Authoritative reference** | **2026-09-07**
+**Revision 1.9.79** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1048,19 +1048,27 @@ units containing 24,735 `asm` statements:
 | `Q`, `=Q`, `+Q`, `Qo` | a memory operand whose address is a register with no offset | 8,113 |
 | a digit `0` to `9` | this operand occupies the same location as the output that digit names (a tied operand) | 3,528 |
 | `I`, `J` | an immediate the add or subtract forms accept, and its negation | 876 |
-| `Ir` (source input) | either an `I` immediate or a general register; lowering selects the legal `r` alternative | 2,726 first-error units in survey `20260907T043340Z-13363` |
+| `Ir`, `Jr`, `Kr`, `Lr`, `ir`, `nr` (source input, either letter order) | an admitted immediate letter or a general register; lowering selects the `r` alternative | `Ir` 2,726 first-error units in survey `20260907T043340Z-13363`; `Kr` 2,744 in `20260907T074335Z-32186` |
 | `K`, `L` | an immediate the 32-bit and 64-bit logical forms accept | 1,104 |
 | `i`, `n` | an integer constant | 113 |
 | `p` | an address | 48 |
 
-For source input `Ir`, C-HIR preserves the written constraint and lowering
-evaluates the operand exactly once, then records the selected `r` constraint
-in the EvoIR `asm` or `asm.goto`. This applies to constants and dynamic values,
-with the same operand types and template modifiers as `r`; it does not admit
-`Ir` as an output constraint or as an unresolved EvoIR constraint. No new
-backend constraint is required. This choice is authorized on 2026-09-07 and
-measured with both GCC-14 and Clang-19 in
-`.evidence/builtin-probes/20260907-inline-residue/ir-constraint.c` and `oracles.out`.
+For a source input whose constraint is exactly one of the admitted immediate
+letters `I`, `J`, `K`, `L`, `i`, `n` together with `r`, in either order
+(revision 1.9.78; `Ir` alone since revision 1.9.76), C-HIR preserves the
+written constraint and lowering evaluates the operand exactly once, then
+records the selected `r` constraint in the EvoIR `asm` or `asm.goto`. The
+register alternative is legal for every value the immediate alternative
+admits, so selecting it never changes what the template means, and it applies
+to constants and dynamic values alike with the same operand types and template
+modifiers as `r`. None of these is admitted as an output constraint or as an
+unresolved EvoIR constraint, and no new backend constraint is required.
+Measured with both GCC-14 and Clang-19: `Ir` in
+`.evidence/builtin-probes/20260907-inline-residue/ir-constraint.c` and
+`oracles.out`; `Kr`, `Lr`, `Jr` and `ir` in
+`.evidence/builtin-probes/20260908-linkage-pragma/kr.c`, where both oracles
+print `ff00 f0f ff01 69` and `2 f0f5`, and GCC-14 at `-O2` itself takes the
+register alternative for the dynamic operand (`bic x2, x2, x0`).
 
 A constraint outside this table, or a constraint string combining letters
 this table does not combine, is `E3021` with the constraint named. Clobbers:
@@ -1423,6 +1431,40 @@ for a definition without `static`.
 **Function linkage (revision 1.9.70).** A function carries the same
 distinction, written after the calling convention:
 
+**Linkage marks (revision 1.9.79).** `weak` and `alias` are facts about
+symbols and nothing else, so they are written on module records, never on
+types or instructions. Both sealed oracles agree on them
+(`.evidence/builtin-probes/20260907-function-specifiers/linkage.c`,
+`termination.out`: `alternative` and `value` share one address and type `T`,
+`fallback` has type `W`).
+
+`linkage=weak` may follow the visibility of a `global`, the calling convention
+and optional `visibility` of a `func`, and the end of an `extern` or
+`declare`. On a definition it means the symbol is emitted weak, so an ordinary
+definition of the same name in another object wins at link time; inside the
+module the definition is the definition, and the interpreter executes it
+exactly as a strong one, because the module alone contains no competitor. On
+an `extern` or `declare` it means a reference that resolves to address zero
+when no object defines the name; the interpreter treats it as any other
+external, at the boundary of revision 1.9.64, and states nothing about its
+address. `visibility=internal` together with `linkage=weak` is `E3060`
+(`weak-internal-symbol`). C-HIR writes the mark for `__attribute__((weak))` on
+a definition or declaration of an object or function.
+
+`alias @name = @target` declares a second symbol for something defined in
+this module. `@target` must name a `global` or a `func` of this module, not an
+`extern`, a `declare` or another `alias`; anything else is `E3061`
+(`alias-target-not-defined`), and an alias of an alias is written as a second
+alias of the same target. The alias has the target's kind, size, alignment or
+signature, and every use of `@name` in the module (`global_addr`, `func_addr`,
+`call`, a relocation) means the target, so `global_addr @name` and
+`global_addr @target` are one provenance and compare equal, which is what the
+probe measured. The alias carries its own `visibility` and `linkage`, external
+and strong when omitted; the target's are unchanged, and an alias counts as a
+reference to its target for the drop rule of revision 1.9.70. C-HIR writes an
+alias for `__attribute__((alias("target")))`, resolving the string to the
+symbol of this unit's definition. Emission is EvoMIR 0.22.
+
 ```text
 func @name(...) -> (...) cc = target_default visibility=internal
 ```
@@ -1732,6 +1774,8 @@ twice would let a reader think two conditions are the same finding.
 | `E3039` | `external-call-not-executable` | runtime |
 | `E3040` | `external-object-not-executable` | runtime |
 | `E3041` | `symbol-declared-and-defined` | module validation |
+| `E3060` | `weak-internal-symbol` | module validation |
+| `E3061` | `alias-target-not-defined` | module validation |
 | `E3029` | `not-lowered: computed-goto` | lowering (`goto *` only since 1.9.68) |
 | `E3045` | `not-lowered: ordered-pointer-comparison` | lowering — executor-allocated, **withdrawn at 1.9.68** |
 
@@ -2566,21 +2610,24 @@ digested.
 ```text
 module          := ε | segment (newline segment)*
                    -- at most one of each, in this order:
-                   -- global_seq, extern_seq, declare_seq, function_seq, module_asm_seq
+                   -- global_seq, extern_seq, declare_seq, alias_seq, function_seq, module_asm_seq
 global_seq      := global+
 extern_seq      := extern_object+
 extern_object   := "extern " symbol " size=" (integer | "unknown")
-                   " align=" integer newline
+                   " align=" integer [" linkage=weak"] newline
 declare_seq     := declare+
 declare         := "declare " symbol "(" sig_param_list [", ..."] ")"
-                   " -> (" type_list ")" " cc = " ident newline
+                   " -> (" type_list ")" " cc = " ident [" linkage=weak"] newline
+alias_seq       := alias+
+alias           := "alias " symbol " = " symbol [" visibility=internal"]
+                   [" linkage=weak"] newline
 function_seq    := function (newline function)*
 module_asm_seq  := module_asm+
 module_asm      := "asm " quoted_string newline
 
 global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
-                   " size=" integer " align=" integer
+                   [" linkage=weak"] " size=" integer " align=" integer
                    " bytes=" hex_byte+ " initialized=" bit+
                    [" relocs=[" reloc (", " reloc)* "]"] newline
 reloc           := "(" integer ", " reloc_target ", " integer ")"
@@ -2604,7 +2651,7 @@ address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list [", ..."] ")"
                    " -> (" type_list ")"
-                   " cc = " ident [" visibility=internal"] newline
+                   " cc = " ident [" visibility=internal"] [" linkage=weak"] newline
                    indent effects_clause newline
                    "{" newline
                    block_seq
@@ -3534,10 +3581,11 @@ is never resolved by choosing one.
 every attribute the cohort presented that this profile did not apply, so the
 size of that set is measured rather than assumed. In particular `section`,
 `noreturn`, `unused`, `gnu_inline`, `no_instrument_function`,
-`cold`, `pure`, `const` and `weak` are preserved without effect here; they carry
-linkage, effect or backend semantics that belong to later stages, and applying
+`cold`, `pure` and `const` are preserved without effect here; they carry
+effect or backend semantics that belong to later stages, and applying
 a partial reading now would create a second source of truth for each.
-`always_inline` has an effect since revision 1.9.74, stated next.
+`always_inline` has an effect since revision 1.9.74, stated next; `weak` and
+`alias` are linkage marks since revision 1.9.79 (Section 5.2).
 
 **`always_inline` (revision 1.9.74).** A call whose callee is a function
 defined in this unit with the `always_inline` attribute is replaced, in
@@ -4713,6 +4761,23 @@ following members, 5/1, Clang-19 ignores it, 8/4; evidence
 and continue); the receipt counts it. `pack(show)` and any other
 argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
 used later is `E0108` (`poisoned-identifier-used`) at the use.
+**`push_macro` and `pop_macro` (revision 1.9.77).** `#pragma push_macro("NAME")`
+saves the current definition state of the macro `NAME` on a stack that belongs
+to that name: the definition, with its parameter list and replacement list, or
+the fact that `NAME` is not defined. `#pragma pop_macro("NAME")` removes the
+top state of that stack and makes it current, so a name that was pushed while
+undefined becomes undefined again, and a name pushed with a definition regains
+it, whatever `#define` and `#undef` happened in between. A pop on an empty
+stack changes nothing; the receipt counts it. The stacks are per name, nest,
+and are independent of the `pack` stack. The `_Pragma` spelling is the same
+directive. Ignoring these two pragmas is not safe, which is why they leave the
+ignored-safe set. Both sealed oracles agree on every case above
+(`.evidence/builtin-probes/20260908-linkage-pragma/pushpop.c`: nested pushes,
+a push of an undefined name, a function-like macro, and an empty pop; both
+print `2 1 1 0 11` in `oracles.out`, Clang-19 warning on the empty pop and
+continuing). An argument that is not exactly one string literal is handled as
+any other unrecognized pragma content, ignored-safe and listed by name.
+
 Any other pragma is ignored-safe; the acceptance receipt lists the ignored
 pragma names it met.
 
@@ -5644,6 +5709,9 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.79 | 2026-09-08 | Admits `weak` and `alias` as linkage marks on module records: `linkage=weak` on globals, functions, externs and declarations, and an `alias @name = @target` record that is a second symbol of a definition in this module and one provenance with it; `E3060`, `E3061`; both oracles agree on the linkage probe. Emission in EvoMIR 0.22. |
+| 1.9.78 | 2026-09-08 | Generalizes the `Ir` ruling to any admitted immediate letter paired with `r` (`Jr`, `Kr`, `Lr`, `ir`, `nr`, either order), selecting the register alternative; measured with both oracles. `Kr` was the first error of 2,744 kernel units. |
+| 1.9.77 | 2026-09-08 | `push_macro` and `pop_macro` are applied as per-name stacks of definition states, since ignoring them is not safe; both oracles agree on nesting, the undefined state and the empty pop. |
 | 1.9.76 | 2026-09-07 | Admit source input `Ir` under the user's ruling, selecting its existing `r` alternative before EvoIR construction. C-HIR retains the spelling; executable validation must cover the complete source-to-machine path. This specification change alone changes no production code. |
 | 1.9.75 | 2026-09-07 | The out-of-line body of a `static always_inline` function is not lowered when every call was substituted and no address is taken; otherwise it is lowered as before. The executor found the retained body reporting `E3021` before the machine could drop it. |
 | 1.9.74 | 2026-09-07 | `always_inline` definitions are substituted at their calls in C-HIR (parameters as fresh objects, returns as a result object, statics shared, callee-first, cycles `E2932`), and constants are folded again afterwards so immediate `asm` operands fed through a parameter become constant. The tenth kernel survey put that construct first in 2,727 units. |
@@ -5776,6 +5844,7 @@ Both sealed oracles make `alternative` an alias of `value` and emit `fallback` a
 Section 10.1.9 explicitly says `weak` and other non-layout attributes are preserved without effect; this body constraint takes precedence over inventing linker semantics in Appendix D, so the execution request's applied alias/weak feature is not closed.
 No validator is loosened, alias body fabricated, or new diagnostic allocated; C-HIR retains the attributes, but linked program behavior is not claimed equivalent.
 The supplied musl inventory identifies 108 affected symbols, not a measured first-error unit count; this remains an explicit incomplete requirement.
+Closed by revision 1.9.79, which admits both as linkage marks with emission in EvoMIR 0.22.
 
 ### C11 function specifiers and the variable-length-array capability
 

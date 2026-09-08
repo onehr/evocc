@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.21** | **Authoritative reference** | **2026-09-07**
+**Revision 0.22** | **Authoritative reference** | **2026-09-08**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -495,7 +495,6 @@ measured by emitting one module both ways (revision 0.9):
 
 | | Darwin arm64 | Linux AArch64 |
 |---|---|---|
-| 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |
 | symbol prefix | `_main` | `main` |
 | page-relative pair | `_g@PAGE`, `_g@PAGEOFF` | `:pg_hi21:g`, `:lo12:g` |
 | sections | `.section __TEXT,__text,…`, `.section __DATA,__data` | `.text`, `.data` |
@@ -540,6 +539,22 @@ relocation may name it. Module assembly may reference any symbol, so a
 symbol named in a module assembly entry counts as referenced. This is
 what lets two EvoCC objects that share a header link together (EvoIR
 1.9.70).
+
+**Linkage marks (revision 0.22).** A function or global with `linkage=weak`
+(EvoIR 1.9.79) is emitted with `.weak name` where `.globl name` would stand;
+on Darwin the definition is `.globl name` followed by `.weak_definition name`.
+An `extern` or `declare` with `linkage=weak` is emitted as `.weak name`
+(Darwin `.weak_reference name`) with no definition, so the linker resolves the
+reference to zero when nothing defines it. An `alias @name = @target` is
+emitted directly after the target's definition as `.globl name` (`.weak name`
+when the alias is weak, nothing when it is internal), `.type name, %function`
+or `%object` following the target's kind on ELF, and `.set name, target`, both
+symbols carrying the platform prefix. An alias counts as a reference to its
+target, so an internal target of an emitted alias is never dropped. Nothing is
+copied: the alias has no bytes and no body of its own, and a symbol size,
+where the emitter states one, is stated for the target only. The Linux target
+is the one this revision measures; the Darwin spellings are stated, not yet
+measured.
 
 **Data spelling (revision 0.20).** A global whose bytes are all zero,
 whose EvoIR 2.1 `initialized=` bits are all set and which carries no
@@ -710,6 +725,8 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.22 | 2026-09-08 | Emits `linkage=weak` as `.weak` (Darwin `.weak_definition`/`.weak_reference`) and `alias` records as `.set name, target` after the target, with the alias's own linkage directive and type (EvoIR 1.9.79). |
+| 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |
 | 0.20 | 2026-09-07 | Zero data goes to the zero-filled section and zero runs are `.zero` (the record of the emitter's run encoding); notes the Darwin variadic gap. |
 | 0.19 | 2026-09-07 | Records the `indirect.result` marker the record-convention window introduced for the `x8` destination register. |
 | 0.18 | 2026-09-06 | Records marked `byval`/`sret` follow AAPCS64: up to 16 bytes in general registers, larger by pointer, results in `x0`/`x1` or through `x8` (EvoIR 1.9.73). |
