@@ -1058,12 +1058,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             if !has_static_storage_duration(self.unit, symbol) {
                 continue;
             }
-            let object = find_storage_object_declaration(self.unit, symbol).ok_or(
-                InterpreterError::MalformedObjectDeclaration {
-                    symbol,
-                    span: site.anchor(),
-                },
-            )?;
+            let object = find_storage_object_declaration(
+                self.unit,
+                symbol,
+                manifest.function_static_objects(),
+            )
+            .ok_or(InterpreterError::MalformedObjectDeclaration {
+                symbol,
+                span: site.anchor(),
+            })?;
             plans.push((object, site.ordinal().raw()));
         }
 
@@ -8509,7 +8512,10 @@ fn reachable_memory_requirements(
         }
 
         while let Some(object) = pending_objects.pop() {
-            let Some(declaration) = find_storage_object_declaration(unit, object) else {
+            // Function-static initializers were already visited with their
+            // declaration by collect_statement_symbols. Only file objects
+            // need this separate initializer-closure lookup.
+            let Some(declaration) = find_storage_object_declaration(unit, object, &[]) else {
                 continue;
             };
             let Some(initializer) = &declaration.initializer else {
@@ -9078,11 +9084,17 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
 fn find_storage_object_declaration<'arena>(
     unit: &CHirUnit<'arena>,
     symbol: SymbolId,
+    function_statics: &[&'arena ObjectDecl<'arena>],
 ) -> Option<ObjectDecl<'arena>> {
-    let mut declarations = Vec::new();
-    for declaration in unit.iter() {
-        collect_object_declarations(declaration, symbol, &mut declarations);
-    }
+    let declarations: Vec<_> = unit
+        .iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Object(object) => Some(object),
+            _ => None,
+        })
+        .chain(function_statics.iter().copied())
+        .filter(|object| object.symbol == symbol)
+        .collect();
     declarations
         .iter()
         .find(|declaration| declaration.initializer.is_some())
@@ -9091,76 +9103,7 @@ fn find_storage_object_declaration<'arena>(
                 .iter()
                 .find(|declaration| declaration.storage != StorageClass::Extern)
         })
-        .cloned()
-}
-
-fn collect_object_declarations<'arena>(
-    declaration: &'arena CHirDecl<'arena>,
-    symbol: SymbolId,
-    output: &mut Vec<ObjectDecl<'arena>>,
-) {
-    match declaration {
-        CHirDecl::Object(object) if object.symbol == symbol => output.push(object.clone()),
-        CHirDecl::Function(function) => {
-            if let Some(body) = function.body {
-                collect_statement_object_declarations(body, symbol, output);
-            }
-        }
-        CHirDecl::Object(_) | CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
-    }
-}
-
-fn collect_statement_object_declarations<'arena>(
-    statement: &'arena CHirStmt<'arena>,
-    symbol: SymbolId,
-    output: &mut Vec<ObjectDecl<'arena>>,
-) {
-    match statement {
-        CHirStmt::If(_, then_statement, else_statement, _) => {
-            collect_statement_object_declarations(then_statement, symbol, output);
-            if let Some(else_statement) = else_statement {
-                collect_statement_object_declarations(else_statement, symbol, output);
-            }
-        }
-        CHirStmt::Switch(_, body, _)
-        | CHirStmt::While(_, body, _)
-        | CHirStmt::DoWhile(body, _, _)
-        | CHirStmt::Label(_, body, _)
-        | CHirStmt::Case(_, body, _)
-        | CHirStmt::CaseRange(_, _, body, _)
-        | CHirStmt::Default(body, _) => {
-            collect_statement_object_declarations(body, symbol, output);
-        }
-        CHirStmt::For(initializer, _, _, body, _) => {
-            if let CHirForInit::Declaration(declarations) = initializer {
-                for declaration in declarations {
-                    collect_object_declarations(declaration, symbol, output);
-                }
-            }
-            collect_statement_object_declarations(body, symbol, output);
-        }
-        CHirStmt::Compound(items, _) => {
-            for item in items {
-                match item {
-                    CHirBlockItem::Declaration(declaration) => {
-                        collect_object_declarations(declaration, symbol, output);
-                    }
-                    CHirBlockItem::Statement(statement) => {
-                        collect_statement_object_declarations(statement, symbol, output);
-                    }
-                }
-            }
-        }
-        CHirStmt::Expr(_, _)
-        | CHirStmt::Asm(_)
-        | CHirStmt::Return(_, _)
-        | CHirStmt::Break(_)
-        | CHirStmt::Continue(_)
-        | CHirStmt::Goto(_, _)
-        | CHirStmt::ComputedGoto(_, _)
-        | CHirStmt::AttributedNull(_, _)
-        | CHirStmt::Null(_) => {}
-    }
+        .map(|object| (*object).clone())
 }
 
 fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {

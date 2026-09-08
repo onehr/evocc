@@ -564,6 +564,7 @@ fn lower_resolved_unit(
     globals.extend(lower_globals(
         unit,
         target,
+        manifest.function_static_objects(),
         &memory_symbols,
         &allocation_origins,
         &static_literal_origins,
@@ -1041,59 +1042,20 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     symbols
 }
 
-fn lower_globals(
-    unit: &CHirUnit<'_>,
+#[allow(clippy::too_many_arguments)]
+fn lower_globals<'a>(
+    unit: &CHirUnit<'a>,
     target: &TargetDataLayout,
+    function_statics: &[&'a ObjectDecl<'a>],
     memory_symbols: &BTreeSet<SymbolId>,
     origins: &BTreeMap<SymbolId, u64>,
     strings: &BTreeMap<usize, u64>,
     label_addresses: &BTreeMap<usize, String>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
-    fn collect_nested<'a>(
-        statement: &'a CHirStmt<'a>,
-        out: &mut BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
-    ) {
-        match statement {
-            CHirStmt::Compound(items, _) => {
-                for item in items {
-                    match item {
-                        CHirBlockItem::Declaration(CHirDecl::Object(object)) => {
-                            if object.storage == StorageClass::Static {
-                                out.insert(object.symbol, object);
-                            }
-                        }
-                        CHirBlockItem::Declaration(_) => {}
-                        CHirBlockItem::Statement(statement) => collect_nested(statement, out),
-                    }
-                }
-            }
-            CHirStmt::If(_, left, right, _) => {
-                collect_nested(left, out);
-                if let Some(right) = right {
-                    collect_nested(right, out);
-                }
-            }
-            CHirStmt::Switch(_, body, _)
-            | CHirStmt::While(_, body, _)
-            | CHirStmt::DoWhile(body, _, _)
-            | CHirStmt::For(_, _, _, body, _)
-            | CHirStmt::Case(_, body, _)
-            | CHirStmt::CaseRange(_, _, body, _)
-            | CHirStmt::Default(body, _)
-            | CHirStmt::Label(_, body, _) => collect_nested(body, out),
-            CHirStmt::Expr(..)
-            | CHirStmt::Asm(_)
-            | CHirStmt::Return(..)
-            | CHirStmt::Break(_)
-            | CHirStmt::Continue(_)
-            | CHirStmt::Goto(..)
-            | CHirStmt::ComputedGoto(..)
-            | CHirStmt::AttributedNull(_, _)
-            | CHirStmt::Null(_) => {}
-        }
-    }
-
-    let mut declarations = BTreeMap::<SymbolId, &ObjectDecl<'_>>::new();
+    let mut declarations = function_statics
+        .iter()
+        .map(|object| (object.symbol, *object))
+        .collect::<BTreeMap<SymbolId, &ObjectDecl<'_>>>();
     for declaration in unit.iter() {
         match declaration {
             CHirDecl::Object(object)
@@ -1117,11 +1079,6 @@ fn lower_globals(
                         }
                     })
                     .or_insert(object);
-            }
-            CHirDecl::Function(function) => {
-                if let Some(body) = function.body {
-                    collect_nested(body, &mut declarations);
-                }
             }
             _ => {}
         }
@@ -3916,6 +3873,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         let register = register
             .strip_prefix('w')
+            .or_else(|| register.strip_prefix('r'))
             .map_or_else(|| register.clone(), |n| format!("x{n}"));
         let base = if constraint == "rZ" { "r" } else { constraint };
         let bound = format!("{base}@{register}");

@@ -10253,6 +10253,37 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             Qualifiers::default(),
         );
+        if builtin == "__builtin_isdigit" {
+            self.validate_builtin_library_declaration(&external_name, function_ty, keyword.span)?;
+            // This GCC builtin is an integer operation, not a dependency on
+            // libc's isdigit symbol. The argument appears exactly once.
+            let converted = self.alloc_node(CHirExpr::Cast(return_ty, arguments[0], span));
+            let unsigned = self.intern(TypeKind::Int(IntRank::UInt), Qualifiers::default());
+            let converted = self.alloc_node(CHirExpr::Cast(unsigned, converted, span));
+            let forty_eight = self.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: 48,
+                    suffix: IntSuffix::U,
+                    base: IntBase::Dec,
+                },
+                span,
+            ));
+            let nine = self.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: 9,
+                    suffix: IntSuffix::U,
+                    base: IntBase::Dec,
+                },
+                span,
+            ));
+            let offset = self.alloc_node(CHirExpr::Binary(
+                BinaryOp::Sub,
+                converted,
+                forty_eight,
+                span,
+            ));
+            return Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Le, offset, nine, span)));
+        }
         let symbol = self.resolve_builtin_library_function(
             &external_name,
             function_ty,
@@ -10378,13 +10409,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some((prototype.0.to_owned(), prototype.1, prototype.2))
     }
 
-    fn resolve_builtin_library_function(
+    fn validate_builtin_library_declaration(
         &mut self,
         external_name: &str,
         function_ty: TypeId,
-        return_ty: TypeId,
         span: SourceSpan,
-    ) -> Option<SymbolId> {
+    ) -> Option<()> {
         let visible = self
             .symbols
             .resolve(self.current_scope, external_name)
@@ -10399,6 +10429,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
         }
+        Some(())
+    }
+
+    fn resolve_builtin_library_function(
+        &mut self,
+        external_name: &str,
+        function_ty: TypeId,
+        return_ty: TypeId,
+        span: SourceSpan,
+    ) -> Option<SymbolId> {
+        self.validate_builtin_library_declaration(external_name, function_ty, span)?;
         let (symbol, introduced) = self
             .symbols
             .declare_builtin_function(external_name, function_ty, span)

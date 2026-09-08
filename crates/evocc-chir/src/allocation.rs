@@ -359,6 +359,7 @@ impl std::error::Error for AllocationSiteManifestError {}
 #[derive(Debug)]
 pub struct AllocationSiteManifest<'arena> {
     sites: Vec<AllocationSite<'arena>>,
+    function_static_objects: Vec<&'arena crate::ObjectDecl<'arena>>,
     object_sites: HashMap<SymbolId, usize>,
     string_sites: HashMap<usize, usize>,
     compound_sites: HashMap<usize, usize>,
@@ -384,6 +385,14 @@ impl<'arena> AllocationSiteManifest<'arena> {
     #[must_use]
     pub fn sites(&self) -> &[AllocationSite<'arena>] {
         &self.sites
+    }
+
+    /// Declarations discovered by the same validated, expression-aware walk
+    /// that assigns allocation identities. Consumers must not rescan only
+    /// statement bodies and lose statics nested in statement expressions.
+    #[must_use]
+    pub fn function_static_objects(&self) -> &[&'arena crate::ObjectDecl<'arena>] {
+        &self.function_static_objects
     }
 
     #[must_use]
@@ -518,6 +527,7 @@ struct Deriver<'unit, 'arena> {
     objects: HashMap<SymbolId, PendingObject<'arena>>,
     strings: Vec<PendingSite<'arena>>,
     local_object_declarations: HashMap<SymbolId, SourceSpan>,
+    function_static_objects: Vec<&'arena crate::ObjectDecl<'arena>>,
     function_definitions: HashMap<SymbolId, SourceSpan>,
     parameter_owners: HashMap<SymbolId, SymbolId>,
     function_scope_owners: HashMap<ScopeId, SymbolId>,
@@ -536,6 +546,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             objects: HashMap::new(),
             strings: Vec::new(),
             local_object_declarations: HashMap::new(),
+            function_static_objects: Vec::new(),
             function_definitions: HashMap::new(),
             parameter_owners: HashMap::new(),
             function_scope_owners: HashMap::new(),
@@ -622,6 +633,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
 
         Ok(AllocationSiteManifest {
             sites,
+            function_static_objects: self.function_static_objects,
             object_sites,
             string_sites,
             compound_sites,
@@ -1100,6 +1112,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             }
             CHirDecl::Object(object) => {
                 self.validate_object_declaration(object, file_scope, current_function)?;
+                if !file_scope && object.storage == StorageClass::Static {
+                    self.function_static_objects.push(object);
+                }
                 let strength = if file_scope {
                     if (object.storage == StorageClass::Register && object.asm_label.is_some())
                         || object
