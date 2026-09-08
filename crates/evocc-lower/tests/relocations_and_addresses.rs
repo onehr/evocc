@@ -122,6 +122,38 @@ fn address_of_a_function_uses_its_call_signature_not_object_storage() {
 }
 
 #[test]
+fn object_aliases_share_storage_and_relocation_provenance() {
+    check(
+        "int a=7; extern int b __attribute__((alias(\"a\"))); static int *p=&b; int main(void){b=9; return (a==9) | ((&a==&b)<<1) | ((*p==9)<<2);}",
+        Ok(7),
+        &["alias @b = @a"],
+    );
+}
+
+#[test]
+fn function_aliases_share_callable_identity_and_keep_internal_targets() {
+    check(
+        "static int value(void){return 7;} int alternative(void) __attribute__((alias(\"value\"))); int main(void){return alternative() + (alternative==value);}",
+        Ok(8),
+        &["alias @alternative = @value", "visibility=internal"],
+    );
+    check(
+        "int value(void){return 7;} int a(void) __attribute__((alias(\"value\"))); int b(void) __attribute__((alias(\"a\"))); int main(void){return b()+(a==b);}",
+        Ok(8),
+        &["alias @a = @value", "alias @b = @value"],
+    );
+}
+
+#[test]
+fn weak_marks_accumulate_over_declarations_without_changing_execution() {
+    check(
+        "int fallback(void) __attribute__((weak)); int fallback(void){return 3;} extern int value __attribute__((weak)); int value=7; int main(void){return fallback()+value;}",
+        Ok(10),
+        &["linkage=weak"],
+    );
+}
+
+#[test]
 fn address_of_a_dereferenced_function_pointer_preserves_the_pointer() {
     check(
         "typedef int (*fn)(void); int calls; int f(void){return 7;} fn get(void){calls++;return f;} int main(void){fn p=&*get(); return p()+calls;}",

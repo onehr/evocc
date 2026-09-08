@@ -55,6 +55,35 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 /// call to a `declare` therefore gives its caller.
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
+#[test]
+fn weak_symbols_and_aliases_emit_linkage_without_copying_definitions() {
+    let source = format!(
+        "global @value origin=0 kind=file visibility=external linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @absent size=4 align=4 linkage=weak\n\ndeclare @optional(bits<32>, mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default linkage=weak\n\nalias @alternative = @helper\nalias @other_value = @value linkage=weak\n\n{}\n{}",
+        adder("helper", INTERNAL), adder("fallback", " linkage=weak"),
+    );
+    let text = emitted(Target::Linux, &source);
+    for form in [
+        ".weak value",
+        ".weak fallback",
+        ".weak absent",
+        ".weak optional",
+        ".globl alternative",
+        ".type alternative, %function",
+        ".set alternative, helper",
+        ".weak other_value",
+        ".type other_value, %object",
+        ".set other_value, value",
+    ] {
+        assert!(text.contains(form), "missing {form}: {text}");
+    }
+    assert!(
+        text.contains("\nhelper:\n"),
+        "an alias keeps its internal target"
+    );
+    assert!(!text.contains("\nalternative:\n"));
+    assert!(!text.contains("\nother_value:\n"));
+}
+
 fn emitted(target: Target, text: &str) -> String {
     let module = parse_section9_module(text.as_bytes()).expect("the unit parses");
     match compile_module_for(target, &module, &|_| true) {
