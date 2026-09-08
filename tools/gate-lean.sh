@@ -12,7 +12,12 @@
 #      and confirm the checked-in file is what the generator produces;
 #   2. run the generator's own Python tests;
 #   3. lake build, on the pinned toolchain;
-#   4. the evaluator self-test, then the six-step audit and its receipt.
+#   4. the evaluator self-test;
+#   5. the differential vectors, this side only: the Rust runners write
+#      <name>.rust.jsonl beside these files and tools/lean/diff.py compares
+#      them; here the named vectors are checked against their own expected
+#      values, which needs no second runner;
+#   6. the six-step audit and its receipt.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -35,8 +40,17 @@ echo "lake build wall time: $((end - start))s"
 echo "== 4. evaluator self-test =="
 lake exe evoir-sem --selftest
 
-echo "== 5. audit and receipt =="
+echo "== 5. differential vectors, this side =="
 cd "$ROOT"
+python3 tools/lean/vectors.py --profile "${LEAN_VECTOR_PROFILE:-full}"
+cd "$ROOT/lean"
+for name in transfers-small lattice-small values-width8 random named; do
+  lake exe evoir-sem "vectors/$name.jsonl" "vectors/$name.lean.jsonl"
+done
+cd "$ROOT"
+python3 tools/lean/diff.py --expect lean/vectors/named.lean.jsonl
+
+echo "== 6. audit and receipt =="
 python3 tools/lean/audit.py
 
 echo "gate-lean: all steps passed"

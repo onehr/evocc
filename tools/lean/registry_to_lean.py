@@ -5,12 +5,16 @@ The block this reads is normative text: Section 11.6 prints the rules and the
 SHA-256 of their exact bytes, and Section 11.3 says the registry digest covers
 those bytes including the newline after the last rule.  This tool
 
-  1. extracts the block for one registry name,
-  2. recomputes the digest and refuses to run when it differs from the digest
-     the specification states beside the block,
-  3. decodes each line into a rule value,
-  4. renders the decoded values back to text and compares byte for byte,
-  5. writes `lean/EvoIR/Registry.lean` containing nothing but data.
+  1. extracts the block for one registry name and for the revision it
+     revises,
+  2. recomputes both digests and refuses to run when either differs from the
+     digest the specification states beside its block,
+  3. checks byte for byte that the earlier registry's block is a prefix of the
+     later one's, which is what makes a certificate naming the earlier
+     registry covered by the proof of the later one by construction,
+  4. decodes each line into a rule value,
+  5. renders the decoded values back to text and compares byte for byte,
+  6. writes `lean/EvoIR/Registry.lean` containing nothing but data.
 
 The Lean file holds rule values, never propositions: what a rule means is
 fixed once by `RuleSound` in `EvoIR/Rule.lean`.  The round trip says the two
@@ -379,7 +383,16 @@ namespace EvoIR
 """
 
 
-def emit(rules: list[Rule], name: str, digest: str, block: str) -> str:
+def emit(
+    rules: list[Rule],
+    name: str,
+    digest: str,
+    block: str,
+    prefix_name: str,
+    prefix_digest: str,
+    prefix_block: str,
+) -> str:
+    prefix_count = len([line for line in prefix_block.split("\n") if line])
     out = [HEADER]
     out.append("/-- The registry name a certificate commits to. -/")
     out.append(f"def registryName : String := {lean_string(name)}\n")
@@ -390,6 +403,16 @@ def emit(rules: list[Rule], name: str, digest: str, block: str) -> str:
         "newline after the last rule. -/"
     )
     out.append(f"def registryText : String := {lean_string(block)}\n")
+    out.append(
+        "/-- The revision this one revises.  Section 11.6: a revision includes\n"
+        "every rule of the registry it revises, unchanged and in the same order,\n"
+        "before its new rules, so a certificate naming the earlier registry\n"
+        "fires only rules this file also holds. -/"
+    )
+    out.append(f"def registryPrefixName : String := {lean_string(prefix_name)}\n")
+    out.append(f"def registryPrefixDigest : String := {lean_string(prefix_digest)}\n")
+    out.append(f"def registryPrefixCount : Nat := {prefix_count}\n")
+    out.append(f"def registryPrefixText : String := {lean_string(prefix_block)}\n")
     for rule in rules:
         out.append(f"def {lean_ident(rule.ident)} : Rule :=")
         out.append("  { id := " + lean_string(rule.ident))
@@ -408,6 +431,15 @@ def emit(rules: list[Rule], name: str, digest: str, block: str) -> str:
         "#guard (registry.map Rule.render).foldr (fun l acc => l ++ \"\\n\" ++ acc) \"\" "
         "== registryText\n"
     )
+    out.append(
+        "/-! The earlier revision is a prefix, in the rule values and in the\n"
+        "bytes the earlier digest covers. -/"
+    )
+    out.append(
+        "#guard ((registry.take registryPrefixCount).map Rule.render).foldr "
+        "(fun l acc => l ++ \"\\n\" ++ acc) \"\" == registryPrefixText\n"
+    )
+    out.append("#guard registryText.startsWith registryPrefixText\n")
     out.append("end EvoIR")
     return "\n".join(out) + "\n"
 
@@ -416,6 +448,12 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", default="docs/evoir-spec.md")
     parser.add_argument("--registry", default="p0.scalar.v4")
+    parser.add_argument(
+        "--prefix-registry",
+        default="p0.scalar.v3",
+        help="the revision the chosen registry revises; its block must be a "
+        "byte prefix of the chosen one's",
+    )
     parser.add_argument("--out", default="lean/EvoIR/Registry.lean")
     parser.add_argument(
         "--check",
@@ -434,6 +472,24 @@ def main(argv: list[str]) -> int:
             f"registry digest mismatch for {args.registry}:\n"
             f"  specification states {stated}\n"
             f"  bytes of the block   {computed}",
+            file=sys.stderr,
+        )
+        return 2
+
+    prefix_block, prefix_stated = extract_block(spec, args.prefix_registry)
+    prefix_computed = hashlib.sha256(prefix_block.encode("utf-8")).hexdigest()
+    if prefix_computed != prefix_stated:
+        print(
+            f"registry digest mismatch for {args.prefix_registry}:\n"
+            f"  specification states {prefix_stated}\n"
+            f"  bytes of the block   {prefix_computed}",
+            file=sys.stderr,
+        )
+        return 2
+    if not block.startswith(prefix_block):
+        print(
+            f"{args.prefix_registry} is not a byte prefix of {args.registry}; "
+            "a certificate naming the earlier registry would not be covered",
             file=sys.stderr,
         )
         return 2
@@ -463,7 +519,9 @@ def main(argv: list[str]) -> int:
                 print(f"    rendered      {right!r}", file=sys.stderr)
         return 3
 
-    text = emit(rules, args.registry, stated, block)
+    text = emit(
+        rules, args.registry, stated, block, args.prefix_registry, prefix_stated, prefix_block
+    )
     out_path = Path(args.out)
     if args.check:
         if not out_path.exists():
@@ -472,12 +530,18 @@ def main(argv: list[str]) -> int:
         if out_path.read_text(encoding="utf-8") != text:
             print(f"{out_path} is not what the generator produces", file=sys.stderr)
             return 4
-        print(f"{out_path} matches the generator, {len(rules)} rules, digest {stated}")
+        print(
+            f"{out_path} matches the generator, {len(rules)} rules, digest {stated}; "
+            f"{args.prefix_registry} ({prefix_stated}) is a byte prefix"
+        )
         return 0
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(text, encoding="utf-8")
-    print(f"wrote {out_path}: {len(rules)} rules, digest {stated}")
+    print(
+        f"wrote {out_path}: {len(rules)} rules, digest {stated}; "
+        f"{args.prefix_registry} ({prefix_stated}) is a byte prefix"
+    )
     return 0
 
 

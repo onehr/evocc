@@ -183,13 +183,18 @@ def evalCase (j : Json) : Option String := do
   | "covers" => runCovers n (← readFacts (← arrField j "facts"))
   | _ => none
 
-/-- Append the result to the input line's own bytes. -/
+/-- Append the result to the input line's own bytes.
+
+A vector this implementation cannot answer gets `"unsupported"` rather than
+stopping the run, so a runner that covers less of the space still produces a
+line the comparison can treat as an abstention.  A line that is not a JSON
+object is a defect in the vector file and stops the run. -/
 def evalLine (line : String) : Except String String := do
   let trimmed := line.trimAscii.toString
   let j ← Json.parse trimmed
-  let result ← match evalCase j with
-    | some r => pure r
-    | none => throw s!"cannot evaluate: {trimmed}"
+  let result := match evalCase j with
+    | some r => r
+    | none => "\"unsupported\""
   if trimmed.endsWith "}" then
     let head := (trimmed.dropEnd 1).toString
     let sep := if head.trimAscii.toString.endsWith "{" then "" else ","
@@ -250,14 +255,13 @@ def run (args : List String) : IO UInt32 := do
   | [inPath, outPath] => do
       let text ← IO.FS.readFile inPath
       let lines := text.splitOn "\n" |>.filter (fun l => !l.trimAscii.toString.isEmpty)
-      let mut out := ""
-      for line in lines do
-        match evalLine line with
-        | .error e => IO.eprintln e; return 2
-        | .ok o => out := out ++ o ++ "\n"
-      IO.FS.writeFile outPath out
-      IO.println s!"{lines.length} vectors evaluated"
-      pure 0
+      IO.FS.withFile outPath IO.FS.Mode.write fun handle => do
+        for line in lines do
+          match evalLine line with
+          | .error e => IO.eprintln e; return 2
+          | .ok o => handle.putStr (o ++ "\n")
+        IO.println s!"{lines.length} vectors evaluated"
+        pure 0
   | _ => do IO.eprintln usage; pure 64
 
 end EvoIR.Eval

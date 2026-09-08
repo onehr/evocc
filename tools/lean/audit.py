@@ -78,6 +78,16 @@ ENUMERATED_ROWS = [
 
 ENUMERATED_WIDTHS = list(range(1, 65))
 
+# What Section 8.5 admits, as the eligibility implementations enforce it: a
+# root or witness is `bits<N>` with 1 <= N <= 64, a comparison consumes one
+# common `bits<N>`, a shift consumes an amount of `bits<M>` with 1 <= M <= 64,
+# and a width change's two widths are both inside the bound.  A parametric
+# theorem proves more than this; an enumerated row proves exactly it.
+PROFILE_BOUND = (
+    "Section 8.5: 1 <= N <= 64 for a root or witness, 1 <= M <= 64 for a "
+    "shift amount, both width-change widths inside the same bound"
+)
+
 # The lattice, merge and predicate lemmas, with the proposition each must
 # state.  These are written out rather than generated: the specification
 # prints them as prose, not as a machine-readable table.
@@ -419,6 +429,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--repo", default=".")
     parser.add_argument("--spec", default="docs/evoir-spec.md")
     parser.add_argument("--registry", default="p0.scalar.v4")
+    parser.add_argument("--prefix-registry", default="p0.scalar.v3")
     parser.add_argument("--out", default="tests/contracts/lean-p0-receipt.json")
     args = parser.parse_args(argv)
 
@@ -430,7 +441,17 @@ def main(argv: list[str]) -> int:
     block, digest = extract_block(spec, args.registry)
     if hashlib.sha256(block.encode("utf-8")).hexdigest() != digest:
         raise AuditFailure("the registry block does not hash to the stated digest")
+    prefix_block, prefix_digest = extract_block(spec, args.prefix_registry)
+    if hashlib.sha256(prefix_block.encode("utf-8")).hexdigest() != prefix_digest:
+        raise AuditFailure(
+            f"the {args.prefix_registry} block does not hash to the stated digest"
+        )
+    if not block.startswith(prefix_block):
+        raise AuditFailure(
+            f"{args.prefix_registry} is not a byte prefix of {args.registry}"
+        )
     rules = [parse_rule(line) for line in block.split("\n") if line]
+    prefix_rules = [parse_rule(line) for line in prefix_block.split("\n") if line]
     revision = next(
         line.strip() for line in spec.split("\n") if line.startswith("**Revision ")
     )
@@ -475,6 +496,8 @@ def main(argv: list[str]) -> int:
         entry["instances"] = {
             "kind": "parametric",
             "space": "every width environment and every result width",
+            "profile_bound": PROFILE_BOUND,
+            "covers_profile": True,
         }
         segment_a.append(entry)
 
@@ -483,7 +506,12 @@ def main(argv: list[str]) -> int:
         entry = target_entry(byname, name, expected)
         entry["row"] = key
         entry["source"] = why
-        entry["instances"] = {"kind": "parametric", "space": "every width"}
+        entry["instances"] = {
+            "kind": "parametric",
+            "space": "every width",
+            "profile_bound": PROFILE_BOUND,
+            "covers_profile": True,
+        }
         segment_b.append(entry)
 
     for row, ctor, params, name in PARAMETRIC_ROWS:
@@ -495,6 +523,8 @@ def main(argv: list[str]) -> int:
         entry["instances"] = {
             "kind": "parametric",
             "space": "every " + " and every ".join(params),
+            "profile_bound": PROFILE_BOUND,
+            "covers_profile": True,
         }
         segment_b.append(entry)
 
@@ -521,7 +551,12 @@ def main(argv: list[str]) -> int:
             {
                 "row": row,
                 "source": "8.10 transfer table",
-                "instances": {"kind": "enumerated", "widths": ENUMERATED_WIDTHS},
+                "instances": {
+                    "kind": "enumerated",
+                    "widths": ENUMERATED_WIDTHS,
+                    "profile_bound": PROFILE_BOUND,
+                    "covers_profile": True,
+                },
                 "proof_kind": "native-backed" if "native-backed" in kinds else "kernel-only",
                 "native_axioms": sorted(native),
                 "theorems": widths,
@@ -553,6 +588,19 @@ def main(argv: list[str]) -> int:
             "registry_name": args.registry,
             "registry_digest": digest,
             "registry_rules": len(rules),
+            "verified_prefix": {
+                "registry_name": args.prefix_registry,
+                "registry_digest": prefix_digest,
+                "registry_rules": len(prefix_rules),
+                "relation": "byte prefix of "
+                + args.registry
+                + ": the first "
+                + str(len(prefix_rules))
+                + " rules and their exact bytes are the same, so a certificate "
+                "naming "
+                + args.prefix_registry
+                + " fires only rules this receipt covers",
+            },
             "spec_revision": revision,
             "spec_sha256": hashlib.sha256(spec.encode("utf-8")).hexdigest(),
             "lean_commit": git(repo, "log", "-1", "--format=%H", "--", "lean"),
