@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.85** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.86** | **Authoritative reference** | **2026-09-09**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2458,8 +2458,14 @@ KnownBits<N> = { mask: bits<N>, value: bits<N> }   -- bit i known iff mask[i]=1,
 ConstValue<N> = KnownBits<N> with mask all ones
 ```
 
-`ConstValue` is not a separate lattice; it is the bottom of `KnownBits`. This
-keeps one join and one transfer function per operator instead of two of each.
+`ConstValue` is not a separate lattice: a fully known fact is a minimal
+element of `KnownBits`, and two different constants are minimal and
+incomparable, so no fact lies below them. The contradiction that arises when
+two facts disagree on a bit both know is not a fact of this lattice but the
+invalid union of the merge paragraph below (revision 1.9.86 states this; earlier
+text called the constant "the bottom", which would have made two constants
+comparable). This keeps one join and one transfer function per operator
+instead of two of each.
 
 **Order.** `a ⊑ b` when every bit known in `b` is known in `a` with the same
 value. The top is nothing known. Facts only ever move down within one
@@ -5712,6 +5718,50 @@ certificate and should pass.
 
 ---
 
+**Proof coverage (revision 1.9.86).** A machine-checked proof of a registry
+covers *instances*: a rule together with every type parameter the registry
+admits for it (the result width, the operand widths of a comparison, the two
+widths of a shift, the two widths of a width change) and its side condition.
+Coverage is stated in two classes, because they fail independently: the
+*rule* class, where a registry counts as proved only when every instance the
+registry text admits has a proof; and the *analysis* class, where every
+Section 8.10 transfer, the merge, the join and the side-condition predicates
+that produce or consume a premise are proved over the parameter range the
+registry's rules can reach, including a shift amount of any width. The only
+place a coverage constraint may live is the registry text itself: a registry
+whose proof coverage is incomplete stays usable by producer and checker
+exactly as before and its receipt says which instances are unproved; a
+configuration that requires proof either completes the instance space or
+publishes a new registry whose side conditions exclude the unproved
+instances, under a new digest that both sides interpret identically. No
+enabling condition is ever implied under an old digest, and an independent
+proof gate may fail without failing any build. The receipt is
+`tests/contracts/lean-p0-receipt.json`; the plan is `docs/lean-plan.md`.
+
+### 11.7 Trusted Base
+
+What a certificate establishes rests on the following, each stated so that a
+reader can see which are checked by a machine and which are believed. The
+receipt above lists them by number.
+
+| Item | Trusted object | Guarantor |
+|---|---|---|
+| A1 | Section 8.5 eligibility and taint: every value the e-graph touches is total, poison-free and effect-free | The producer's and the checker's separate Rust implementations |
+| A2 | The function-level seed-fact fixed point of Section 8.10: entry arguments top, every edge including back edges | The checker's own recomputation; an inductive-invariant check of the final table, where present, adds independent evidence |
+| A3 | The checker's replay, extraction and reassembly, including the association of facts with the right class in the pre-merge state | Rust, Section 11.2 |
+| A4 | The Section 9 parser, shared by producer and checker | Rust |
+| A5 | The Lean kernel, and on SAT-backed proofs the per-theorem native reflection axioms and the compiler behind them | Lean toolchain pinned in `lean/lean-toolchain` |
+| A6 | The registry decoder, the Lean semantics definitions and the audit script | Reviewed code; round-trip comparison of decoded data against the digest-bound text |
+| A7 | Agreement between the Rust semantics (interpreter, folds, transfers) and the Lean model | Differential vectors only; evidence, not proof |
+
+A proof of the registry replaces two things that were previously believed on
+review alone: that each registry rule is a valid equality of the Section 3
+semantics, and that the Section 8.10 transfers, merge, join and predicates are
+sound abstractions of it. It replaces nothing else in this table. The claim a
+proved registry licenses is therefore: "the listed rules and analysis rows are
+machine-checked against the Lean model of the EvoIR scalar semantics, within
+the stated coverage, with the stated axioms"; it is not a verified compiler.
+
 ## Appendix A: Instruction Quick Reference
 
 | Category | Instruction | Result | Operands | May Trap |
@@ -5807,6 +5857,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.86 | 2026-09-09 | Clarifies that constants are minimal elements of the known-bits lattice, not its bottom; states the two classes of proof coverage and that coverage constraints live only in registry text; adds Section 11.7 listing the trusted base A1-A7 behind a certificate. |
 | 1.9.85 | 2026-09-08 | Define source register-or-memory alternatives by selection of the existing register path, preserving operand evaluation and output markers; sealed GCC/Clang probes agree. This changes no compiler code. |
 | 1.9.84 | 2026-09-08 | Define measured target-header type identities and layout queries without admitting floating-point or vector execution. GCC-only names and sizeless types are explicit; this changes no compiler code. |
 | 1.9.83 | 2026-09-08 | Define explicitly selected signed-wrapping arithmetic while retaining the default UB and memory obligations. Sealed original torture programs require these options; this revision changes the contract, not compiler code. |
