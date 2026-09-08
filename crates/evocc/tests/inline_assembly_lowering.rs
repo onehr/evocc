@@ -323,8 +323,8 @@ fn assembly_constraints_and_refusals() {
         ),
         (
             "unlisted_constraint_combination",
-            r#"asm("" : : "Jr"(1));"#,
-            Some("Jr"),
+            r#"asm("" : : "Jrr"(1));"#,
+            Some("Jrr"),
         ),
         (
             "register_alternative_constant",
@@ -348,8 +348,8 @@ fn assembly_constraints_and_refusals() {
         ),
         (
             "reversed_unlisted_combination",
-            r#"asm("" : : "rI"(x));"#,
-            Some("rI"),
+            r#"asm("" : : "rII"(x));"#,
+            Some("rII"),
         ),
         (
             "register_alternative_wide_input",

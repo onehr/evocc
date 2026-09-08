@@ -3930,10 +3930,15 @@ impl<'a> FunctionLowerer<'a> {
             let key = self.retain_temporary(value.clone(), &mut state);
             temporary_keys.push(key);
             input_keys.push(key);
-            // Source Ir permits either an immediate or a register. Commit to
-            // the existing register alternative here, after evaluating once,
-            // so every downstream consumer sees a fully selected constraint.
-            let constraint = if operand.constraint == "Ir" {
+            // An admitted immediate letter paired with r permits a register
+            // for every value. Select it after the single evaluation, leaving
+            // no alternatives for downstream consumers to resolve.
+            let register_alternative = matches!(
+                operand.constraint.as_bytes(),
+                [b'I' | b'J' | b'K' | b'L' | b'i' | b'n', b'r']
+                    | [b'r', b'I' | b'J' | b'K' | b'L' | b'i' | b'n']
+            );
+            let constraint = if register_alternative {
                 if !evocc_evoir::assembly_register_type(&value.ty) {
                     return Err(refuse(operand.constraint.clone()));
                 }

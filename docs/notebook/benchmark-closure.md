@@ -28,7 +28,7 @@ Only one heavyweight benchmark invocation runs at once.
 | 3 | Explicit register operands | Earlier `sigsetjmp_tail.lo` regression is absent in the latest mixed run, but no register-binding fix was made; pin the specified register mapping and native execution independently | `musl` | OPEN |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
-| 6 | Assembly register alternatives | `Kr` or operand type rejects 2,745 kernel units; implement shared selection/validation and native operand tests | `kernel` | OPEN: authorized by revision 1.9.78, `5a42279` |
+| 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
 | 7 | Remaining kernel refusals | Frame address and computed goto, one unit each; preserve existing explicit deferrals until a supported implementation exists | `kernel` | OPEN |
 | 8 | Return and edge typing | void return effects repaired: toybox 177 to 191/203, zero regressions; the remaining three edge-value refusals still need reductions | `toybox` | PARTIAL: return fix benched, edge typing OPEN |
 | 9 | Other toybox lowering refusals | Remaining nine of 26 refusals: seven function-value types, one prototype, one object subvalue | `toybox` | OPEN |
@@ -46,6 +46,23 @@ Only one heavyweight benchmark invocation runs at once.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Immediate-register input alternatives
+
+Tests-only checkpoint `9c46be8` has three E3021 semantic failures (`Jr`/`Kr`)
+and zero build errors. Lowering now selects the existing `r` alternative for
+exactly `I`, `J`, `K`, `L`, `i`, `n` paired with `r` in either order, after
+evaluating the operand once. No backend constraint or instruction is added.
+Two old rejection rows are migrated to still-invalid `Jrr`/`rII`; the newly
+admitted `Jr`/`rI` are covered by the positive table, not silently dropped.
+
+The eleven focused tests pass, including native assembly/link/execution of
+all twelve spellings, 32/64-bit values, single evaluation and both asm.goto
+output edges. The six logical/add/sub values match the sealed `kr.c` probe.
+Outputs and 128-bit register inputs retain E3021.
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9c46be8 --quiet`:
+303 passed, zero failed or ignored, Clippy and fmt PASS; Ruff and diff-check
+PASS. Original kernel replay is still required before this family closes.
 
 ### Symbol linkage
 
