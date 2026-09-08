@@ -140,6 +140,19 @@ fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
 }
 
 #[test]
+fn nested_flexible_member_initializers_remain_outside_the_profile() {
+    for source in [
+        "struct S { int n; char d[]; }; union U { struct S s; char space[36]; } u = {{1, \"abc\"}};",
+        "struct S { int n; char d[]; }; union U { struct S s; char space[36]; } u = {{1, {'a', 'b', 'c', 0}}};",
+        "struct S { int n; char d[]; }; struct O { int n; struct S s; } o = {1, {2, \"abc\"}};",
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2202"));
+    }
+}
+
+#[test]
 fn ordinary_absolute_calls_respect_builtin_options_and_symbol_kind() {
     let source = "int abs(int x){return x+100;} long labs(long x){return x+200;} long long llabs(long long x){return x+300;} int main(void){volatile int x=-7; return abs(x)+labs(x)+llabs(x);}";
     for (options, expected) in [
