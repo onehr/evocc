@@ -3,12 +3,12 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260907T144430Z",
+ "run": "20260908T121307Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
+ "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 2,
  "unitsEvoccCompiled": 0,
@@ -47,7 +47,11 @@
   "passed": true,
   "status": 0,
   "relinkStatus": 0,
-  "command": "make test"
+  "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+  "objectFiles": [
+   "cJSON.o",
+   "cJSON_Utils.o"
+  ]
  },
  "attempts": [
   {
@@ -76,12 +80,13 @@
   ],
   "configure": "",
   "subject": [
-   "the Unity suite the roadmap names is built by CMake, which the sealed container does not have; the release's own Makefile runs instead",
-   "that Makefile's `make test` compiles cJSON.c and test.c together into one binary rather than linking cJSON.o, so the suite does not judge a substituted object; the units are measured, the suite result is the reference build's",
+   "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
+   "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
+   "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
    "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
    "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
   ],
-  "buildCommand": "make",
+  "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
   "optionsTheDriverRejects": [
    "-std=c89"
   ],
@@ -152,6 +157,6 @@
   }
  ],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260907T144430Z",
+ "evidence": ".evidence/ladder/cjson/20260908T121307Z",
  "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E1001': 2}"
 }

@@ -72,7 +72,7 @@ their remaining closure work without creating a second set of measurements.
   (rows 11, 16).
 - [ ] Account for every original Csmith seed, including all 68 unavailable
   references; never replace a seed or count a timeout as agreement (row 18).
-- [ ] Make cJSON tests execute the subject objects, not rebuilt reference C
+- [x] Make cJSON tests execute the subject objects, not rebuilt reference C
   sources (row 19).
 - [ ] Resolve or independently establish reference-baseline/environment failures;
   retain them in the reported universe (row 20).
@@ -95,7 +95,7 @@ not a claim that no unknown compiler bug can exist.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | ctest 1 runtime failure; torture 35 runtime failures, zero assembly/link failures; original `medce-1` now passes | `ctest torture` | PARTIAL: static label relocation and constant-branch pruning CLOSED; other failures OPEN |
+| 4 | Remaining native failures | ctest 1 runtime failure; torture 33 runtime failures, zero assembly/link failures; original `memclr` and `misalign` now pass | `ctest torture` | PARTIAL: static labels, constant branches, integer modes and packed accesses benched; other failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
 | 7 | Remaining kernel refusals | Fresh survey: 2,260 `=r@r0` bindings, 457 `asm:i`, one `asm:+rm`, one computed goto, one frame address, one missing function-static global; two assembled EFI units still fail to link on `__efistub_isdigit` | `kernel` | OPEN: reduced register aliases and builtin digit classification; no predicted clean count |
@@ -107,16 +107,44 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 461 total refusals and musl 352 remain listed in raw results; classify residual E3101/builtin/ABI/initializer classes after preceding fixes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 464 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | `dg-options`, target requirements and timeout factors are not consumed; define explicit applicability, preserve excluded outcomes, never claim ALL non-FP from a filtered success count | `torture` | OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
-| 19 | cJSON subject test linkage | Existing `make test` recompiles reference sources; tests must consume substituted objects before a subject PASS is possible | `cjson` | OPEN |
+| 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
 
 ### Latest completed incremental replay
+
+The digit-builtin, register-alias and expression-scope static fixes pass
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh afc4c63 --all-targets --quiet -- --test-threads=1`:
+1,015 tests, zero failures or ignored tests in the five selected crates,
+Clippy and fmt green. Ruff lint and diff-check pass. This is an incremental
+all-targets gate, not the final whole-workspace/doctest replay. Their original
+kernel replay is pending and is not credited to the earlier measurements.
+
+`python3 tools/bench.py ctest torture tinycc cjson --jobs 4`, wrapper
+`20260908T120936.530123Z`, measures executable SHA-256
+`ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135`.
+The captured subject is `a81c243` with only a new C test fixture pending;
+the measured production includes `5b3c87a`, not the later digit/register fixes.
+Every original ctest and torture identity is retained. ctest remains
+206 pass / 13 refused / 1 failed out of 220. Torture becomes
+1,195 pass / 464 refused / 33 failed out of 1,692: `memclr` and `misalign`
+change from FAIL to PASS, while `20050107-1`, `20050119-1` and `20050119-2`
+change from PASS with ignored enum attributes to E2903 under the measured
+enum-mode conflict. These five are the only outcome changes; this is not a
+zero-regression claim or closure of the non-FP objective.
+TinyCC remains 7/11 assembled and all seven pass together; `tccpp` advances
+past the repaired ordinary-call directive case to an FP call refusal.
+cJSON relinks and executes its actual installed objects successfully, but
+both are reference objects because its two subject units still hit header
+declarations. This validates the adapter repair, not an EvoCC cJSON PASS.
+Native runs are `20260908T120936Z`, `20260908T121000Z`,
+`20260908T121237Z` and `20260908T121307Z`, respectively.
 
 Shared symbol addressing and link-time assembly operands `7ac11d3` are
 measured by `python3 tools/bench.py tinycc kernel --jobs 4 --allow-qemu-drift`,
@@ -138,8 +166,9 @@ or missing extents still fail. This is 64 linked units, not a full kernel.
 The binary was not rebuilt while the lane consumed it; later C-preprocessor
 and test-linkage changes are not attributed to this measurement.
 
-Integer `mode` and packed-subobject execution landed in `5b3c87a`; original
-benchmark replay is pending, so these families are not closed.
+Integer `mode` and packed-subobject execution landed in `5b3c87a`; the
+original memory failures are now replayed above, with the enum conflicts
+kept separate from the successful repairs.
 The exact memory fixture passes both sealed compilers at O0/O2 and the two
 interpreters plus native execution; the changed gate found an old wide-access
 test that required natural alignment even for packed storage. Its replacement
@@ -150,8 +179,8 @@ CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh f747dc5
 Clippy and fmt green; Ruff lint and diff-check also pass. `cargo test` with
 the same ten-package set and `-- --list` lists 1,545 including those four.
 The preceding 1,540-pass/one-failure attempt remains a failed gate.
-The enum-mode oracle conflict remains visible: original torture `20050107-1`
-previously passed with an ignored attribute, but the two oracles disagree on
+The enum-mode oracle conflict remains visible: the three original programs
+named above previously passed with ignored attributes, but the oracles disagree on
 the resulting type compatibility. This is not a new PASS or a reason to drop
 the original program; `_Bool`, enum and abstract-type-name mode conflicts
 are explicitly refused under the existing conflict protocol.
