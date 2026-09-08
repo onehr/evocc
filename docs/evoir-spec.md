@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.82** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.83** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1644,6 +1644,20 @@ For operands of type `bits<N>`, `signed_add_defined`,
 `signed_sub_defined`, and `signed_mul_defined` each have type
 `(bits<N>, bits<N>) -> bits<1>`. They are true exactly when the corresponding
 mathematical result is representable by the signed `N`-bit C result type.
+
+**Explicit signed-wrapping mode (revision 1.9.83).** The default above is
+unchanged. `-fwrapv` enables two's-complement wrapping for signed addition,
+subtraction, multiplication and negation, including their update forms,
+after C promotions and conversions. `-fno-strict-overflow` also enables
+this arithmetic mode; `-fno-wrapv` and `-fstrict-overflow` disable it, in
+command-line order. The selected mode belongs to the C-HIR translation unit
+and survives substitution. In this mode lowering omits only the signed
+add/subtract/multiply overflow obligations; EvoIR's bit-vector operations
+already have the required semantics. Division, remainder, shifts, pointer
+provenance, object bounds and all other diagnostics remain unchanged. In
+particular this profile does not use either option to waive pointer safety
+or admit out-of-object accesses; it does not claim GCC's full pointer-wrap
+option compatibility.
 
 Memory obligations are deliberately not encoded as `bits<1>` plus one generic
 `ub.assume` reason. Such an encoding would erase whether a dynamic failure was
@@ -5766,6 +5780,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.83 | 2026-09-08 | Define explicitly selected signed-wrapping arithmetic while retaining the default UB and memory obligations. Sealed original torture programs require these options; this revision changes the contract, not compiler code. |
 | 1.9.82 | 2026-09-08 | Define the already-admitted GCC digit builtin as its measured integer operation, distinct from an external ctype call; record source rN local-register aliases as the existing xN physical binding. This changes the contract, not compiler code. |
 | 1.9.81 | 2026-09-08 | Define integer mode attributes under the authorized non-floating-point closure, including their canonical ranks, qualifiers, declaration placements and the refused abstract-type-name oracle conflict. This changes the contract, not compiler code. |
 | 1.9.80 | 2026-09-08 | Define authorized symbolic `i` operands and the `%c` modifier, retaining numeric-only `n`, the existing address/SSA forms and assembly effects. The sealed non-PIC oracle probe agrees; the default PIE disagreement is explicit. This revision changes the contract, not compiler code. |
@@ -5862,6 +5877,13 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### Explicit arithmetic options in compiler benchmarks
+
+Section 6.1 defines opt-in signed wrapping rather than weakening the default execution contract; memory, shift and division obligations remain in force.
+The sealed probes `.evidence/builtin-probes/20260908-wrapping-arithmetic/{wrap.c,results.txt}` pass GCC-14 and Clang-19 at O0/O2, including the 128-bit boundary, and the preceding `20260908-torture-options/results.txt` retains the default-mode failures.
+Nine original torture runtime failures are positive with their named wrapping option; the adapter must preserve each source and record applied options separately from unhandled directives and options.
+No diagnostic is added, and unsupported target/dialect requirements or an oracle conflict cannot be relabelled as a passing measurement.
 
 ### The digit builtin does not introduce a libc dependency
 
