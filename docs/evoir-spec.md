@@ -6374,3 +6374,10 @@ An outermost `[*]` in a function-prototype parameter, named or abstract and opti
 Both sealed oracles compile and run `.evidence/builtin-probes/20260908-prototype-array/valid.c` with exit zero, and reject the object, definition, attributed-definition, `static *` and inner-qualifier probes (`results.txt`); those malformed placements report E1005 (`invalid-declarator`).
 Inner variable array layers and actual variable-length objects retain the existing E2203 boundary, and `__STDC_NO_VLA__` remains one.
 One original c-testsuite refusal, `00162`, reaches this rule; its original replay determines closure rather than prototype acceptance alone.
+
+### Alignment queries on non-object types
+
+On the AArch64 target, `_Alignof` and `__alignof__` of `void` are one, and of a function type or function designator are four; expression operands remain unevaluated.
+Both sealed compilers at O0/O2 agree on `.evidence/builtin-probes/20260909-nonobject-alignment/align.c`, recorded in `results.txt`, including the distinct existing `sizeof` result of one for either type.
+This is a query rule only: it does not make a void or function type an allocatable object, and adds no diagnostic code or IR instruction.
+Two original torture refusals, `20000223-1` and `align-3`, reach the missing query semantics; their full-program outcomes must be remeasured.
