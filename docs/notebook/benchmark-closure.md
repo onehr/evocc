@@ -116,6 +116,18 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Deallocation builtin and assembly spelling
+
+`b95f568` is the two-test compiled RED: E2001 for `__builtin_free`, E1001
+for file-scope `__asm`, with the other 77 integration tests passing. Three
+entries in the shared contextual-spelling/prototype tables implement the
+two forms without a new intrinsic, interpreter library model or assembly
+path. All 79 integration tests now pass, including native execution,
+byte-identical assembly/IR for the alternate spelling and the retained
+external-call and invalid-prototype diagnostics. The changed all-targets
+gate against `b95f568` passes 1,267 tests, zero failures and three existing
+ignores; Clippy, fmt, Ruff and diff-check pass. Original replay is pending.
+
 ### Alignment specifiers and non-object queries
 
 `572a823` and `65430a9` are the compiled RED checkpoints: missing C11

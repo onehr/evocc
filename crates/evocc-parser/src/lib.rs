@@ -366,6 +366,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_strchr"
                         | "__builtin_strncpy"
                         | "__builtin_malloc"
+                        | "__builtin_free"
                         | "__builtin_abs"
                         | "__builtin_labs"
                         | "__builtin_llabs"
@@ -415,7 +416,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
-                    Some("asm" | "__asm__") => TokenKind::Asm,
+                    Some("asm" | "__asm" | "__asm__") => TokenKind::Asm,
                     Some("__volatile" | "__volatile__") => TokenKind::Volatile,
                     _ => TokenKind::Identifier,
                 };
@@ -10703,6 +10704,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 vec![char_pointer, const_char_pointer, size_ty],
             ),
             "__builtin_malloc" => ("malloc", void_pointer, vec![size_ty]),
+            "__builtin_free" => ("free", void_ty, vec![void_pointer]),
             "__builtin_strcpy" => (
                 "strcpy",
                 char_pointer,
