@@ -823,6 +823,46 @@ fn unnamed_definition_parameters_execute_with_the_positional_abi() {
 }
 
 #[test]
+fn function_pointer_casts_preserve_identity_and_argument_exits() {
+    let source = include_str!("../../../tests/fixtures/function-pointer-cast-roundtrip.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("ptr.to_int"), "{text}");
+    assert!(text.contains("ptr.from_int.fnptr"), "{text}");
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "function-pointer-cast-roundtrip");
+}
+
+#[test]
+fn function_pointer_casts_check_signatures_only_at_a_reached_call() {
+    let source = "static void f(void) {} int main(void) { return ((int (*)(int))f)(7); }";
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if output.status.success() || !String::from_utf8_lossy(&output.stderr).contains("E3019") {
+            failures.push(format!(
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn function_and_void_pointer_equality_preserves_addresses_and_effects() {
     let source = include_str!("../../../tests/fixtures/function-void-pointer-equality.c");
     let mut failures = Vec::new();
