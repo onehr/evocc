@@ -191,3 +191,27 @@ fn file_scope_flexible_array_initializer_extends_only_the_object() {
         3
     );
 }
+
+#[test]
+fn flexible_string_initializers_preserve_object_extent_and_terminators() {
+    let module = lower(include_str!(
+        "../../../tests/fixtures/flexible-string-initializers.c"
+    ));
+    let expected: [(&str, &[u8]); 6] = [
+        ("text", b"owx\0"),
+        ("listed", b"lwx\0"),
+        ("empty", b"e\0"),
+        ("wide", &[7, 0, 0, 0, b'w', 0, b'x', 0, 0, 0]),
+        ("terminated", b"wx\0\0\0"),
+        ("exact", b"wx"),
+    ];
+    for (name, bytes) in expected {
+        let object = module
+            .globals
+            .iter()
+            .find(|global| global.symbol == name)
+            .unwrap();
+        assert_eq!(object.layout.size_bytes, bytes.len() as u64, "{name}");
+        assert_eq!(object.bytes, bytes, "{name}");
+    }
+}

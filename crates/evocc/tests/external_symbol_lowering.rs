@@ -98,6 +98,30 @@ fn composite_function_declarations_preserve_calls_and_reject_conflicts() {
 }
 
 #[test]
+fn flexible_string_initializers_execute_without_completing_the_record_type() {
+    let source = include_str!("../../../tests/fixtures/flexible-string-initializers.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "flexible-string-initializers");
+    for invalid in [
+        "struct S { char head; char data[]; }; int main(void) { struct S s = { 'o', \"wx\" }; return s.data[1]; }",
+        "struct S { int head; unsigned short data[]; }; int main(void) { struct S s = { 7, L\"wx\" }; return s.data[1]; }",
+    ] {
+        let output = run(invalid, "--parse-only");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2919"));
+    }
+}
+
+#[test]
 fn integer_absolute_builtins_preserve_types_values_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/integer-absolute.c");
     for options in [vec![], vec!["-fno-builtin"]] {
