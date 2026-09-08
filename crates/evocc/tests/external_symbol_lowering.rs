@@ -164,7 +164,11 @@ fn legacy_declarations_preserve_missing_names_and_type_conflicts() {
         ),
         ("int f(a) int a; int a; { return a; }", "E2002"),
         ("int f(a) int absent; { return a; }", "E1001"),
-        ("int main(void) { int later; return later(1); }", "E2202"),
+        ("int main(void) { int later; return later(1); }", "E2937"),
+        (
+            "static const fixed = 3; int main(void) { fixed = 9; return fixed; }",
+            "E2101",
+        ),
     ] {
         let output = run_with_options(source, "--parse-only", &["-std=gnu89"]);
         assert!(!output.status.success(), "accepted {source}");
@@ -173,6 +177,36 @@ fn legacy_declarations_preserve_missing_names_and_type_conflicts() {
             "{source}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+}
+
+#[test]
+fn legacy_integer_specifiers_preserve_qualifiers_and_parameter_storage() {
+    let source = "static const fixed = 3; int f(a, b) register a; volatile b; { return a + b + fixed; } int main(void) { return f(2, 4) != 9; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run_with_options(source, mode, &["-std=gnu89"]);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution_with_options(source, "legacy-qualified-declarations", &["-std=gnu89"]);
+}
+
+#[test]
+fn a_visible_object_is_not_an_implicit_function() {
+    for options in [&[][..], &["-std=gnu89"][..]] {
+        for source in [
+            "int main(void) { int later; return later(1); }",
+            "int main(void) { int *p; p(); return 0; }",
+        ] {
+            let output = run_with_options(source, "--parse-only", options);
+            assert!(!output.status.success(), "accepted {source}");
+            assert!(String::from_utf8_lossy(&output.stderr).contains("E2937"));
+        }
     }
 }
 

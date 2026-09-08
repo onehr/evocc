@@ -164,6 +164,7 @@ def program_options(source: Path) -> dict[str, list[str]]:
     supported = {
         "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
         "-fbuiltin", "-fno-builtin",
+        "-std=gnu89", "-std=gnu11",
     }
     base, additional, unhandled = [], [], []
     tokens = re.finditer(
@@ -322,7 +323,7 @@ def main() -> int:
         "subject": head,
         "driverSha256": sha256(evocc),
         "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
-        "optionPolicy": "supported unconditional signed-wrapping options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
+        "optionPolicy": "supported unconditional language-mode, signed-wrapping and builtin options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
         "target": TARGET,
         "suites": {},
     }

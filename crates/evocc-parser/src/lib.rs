@@ -247,6 +247,7 @@ struct SwitchCaseContext {
 
 pub struct Parser<'src, 'arena> {
     standard_builtins: bool,
+    legacy_declarations: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     tokens: Vec<Token>,
     pos: usize,
@@ -425,6 +426,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
             standard_builtins: true,
+            legacy_declarations: false,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
@@ -474,6 +476,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// Explicit `__builtin_` spellings are unaffected.
     pub fn set_standard_builtins(&mut self, enabled: bool) {
         self.standard_builtins = enabled;
+    }
+
+    /// Admit the omitted integer declarations of explicitly selected GNU89.
+    /// The default language keeps unknown calls and missing types diagnosed.
+    pub fn set_legacy_declarations(&mut self, enabled: bool) {
+        self.legacy_declarations = enabled;
     }
 
     pub fn parse_translation_unit_in(&mut self, arena: &'arena Arena) -> CHirUnit<'arena> {
@@ -3976,7 +3984,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 let mut attributes =
                     self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
-                let Some(specifier) = self.parse_type_specifier_with_attributes(&mut attributes)
+                let Some(specifier) =
+                    self.parse_type_specifier_inner(None, None, Some(&mut attributes), true)
                 else {
                     self.report("E1001", "expected-declaration", self.span());
                     return None;
@@ -4022,7 +4031,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.side_declarations.push(declaration);
                 }
             }
-            if declared.len() != parameters.len() {
+            if !self.legacy_declarations && declared.len() != parameters.len() {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             }
@@ -4792,7 +4801,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         attributes: &mut Vec<Attribute>,
     ) -> Option<ParsedSpecifier<'arena>> {
-        self.parse_type_specifier_inner(None, None, Some(attributes))
+        self.parse_type_specifier_inner(None, None, Some(attributes), false)
     }
 
     fn parse_declaration_type_specifier(
@@ -4816,7 +4825,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 inherited_function_parameters: None,
             });
         }
-        self.parse_type_specifier_inner(Some(storage), Some(inline_spans), Some(attributes))
+        self.parse_type_specifier_inner(Some(storage), Some(inline_spans), Some(attributes), true)
     }
 
     fn parse_type_specifier_inner(
@@ -4824,6 +4833,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         mut storage: Option<&mut Option<StorageClass>>,
         mut inline_spans: Option<&mut Vec<SourceSpan>>,
         mut specifier_attributes: Option<&mut Vec<Attribute>>,
+        allow_implicit_integer: bool,
     ) -> Option<ParsedSpecifier<'arena>> {
         let start = self.span();
         let mut qualifiers = self.parse_qualifiers_with_inline(
@@ -5015,6 +5025,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             end = self.advance().map(|token| token.span);
         }
         if words.is_empty() {
+            if allow_implicit_integer
+                && self.legacy_declarations
+                && matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Identifier | TokenKind::Star | TokenKind::LParen)
+                )
+            {
+                let ty = self.intern(TypeKind::Int(IntRank::Int), qualifiers);
+                return Some(ParsedSpecifier {
+                    surface: TypeSpecifier::Builtin { ty, span: start },
+                    tag_event: None,
+                    inherited_function_parameters: None,
+                });
+            }
             return None;
         }
         let end = end.expect("a builtin type word established an end span");
@@ -9576,6 +9600,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         );
                         return None;
                     }
+                    let parameters =
+                        self.converted_expression_type(expression)
+                            .and_then(|inferred| {
+                                let OperandTypeClass::Pointer(pointer) =
+                                    self.operand_type_class(inferred.ty)
+                                else {
+                                    return None;
+                                };
+                                match self.types.get(pointer.pointee).map(|ty| &ty.kind) {
+                                    Some(TypeKind::Function { parameters, .. }) => {
+                                        Some(parameters.clone())
+                                    }
+                                    _ => None,
+                                }
+                            });
                     self.advance();
                     let mut arguments = Vec::new();
                     if self.peek_kind() != Some(TokenKind::RParen) {
@@ -9592,30 +9631,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
-                    let default_promoted_from = self
-                        .converted_expression_type(expression)
-                        .and_then(|inferred| {
-                            let OperandTypeClass::Pointer(pointer) =
-                                self.operand_type_class(inferred.ty)
-                            else {
-                                return None;
-                            };
-                            match self.types.get(pointer.pointee).map(|ty| &ty.kind) {
-                                Some(TypeKind::Function {
-                                    parameters:
-                                        FunctionParameters::Prototype {
-                                            types,
-                                            variadic: true,
-                                        },
-                                    ..
-                                }) => Some(types.len()),
-                                Some(TypeKind::Function {
-                                    parameters: FunctionParameters::Unspecified,
-                                    ..
-                                }) => Some(0),
-                                _ => None,
-                            }
-                        });
+                    let Some(parameters) = parameters else {
+                        self.report("E2937", "invalid-call-target", expression.span());
+                        return None;
+                    };
+                    let default_promoted_from = match parameters {
+                        FunctionParameters::Prototype {
+                            types,
+                            variadic: true,
+                        } => Some(types.len()),
+                        FunctionParameters::Unspecified => Some(0),
+                        FunctionParameters::Prototype { .. } => None,
+                    };
                     let promoted_parameters = match default_promoted_from {
                         Some(fixed) if fixed <= arguments.len() => {
                             self.promote_call_arguments(&mut arguments[fixed..])?
@@ -9748,6 +9775,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .symbols
                     .resolve(self.current_scope, resolved_spelling)
                     .expect("the parser current scope is always live")
+                    .or_else(|| {
+                        (self.legacy_declarations && self.peek_kind() == Some(TokenKind::LParen))
+                            .then(|| {
+                                self.declare_implicit_called_function(resolved_spelling, tok.span)
+                            })
+                    })
                 else {
                     self.report(
                         "E2001",
@@ -10598,6 +10631,55 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         Some(())
+    }
+
+    fn declare_implicit_called_function(&mut self, spelling: &str, span: SourceSpan) -> SymbolId {
+        let return_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let function_ty = self.intern(
+            TypeKind::Function {
+                return_type: return_ty,
+                parameters: FunctionParameters::Unspecified,
+            },
+            Qualifiers::default(),
+        );
+        let name = SpannedName {
+            spelling: spelling.to_owned(),
+            span,
+        };
+        let symbol = self.declare_symbol(
+            &name,
+            SymbolData::Function {
+                storage: StorageClass::Extern,
+            },
+            function_ty,
+        );
+        // This is an ordinary declaration with linkage, not a builtin symbol.
+        // The enclosing declaration transaction owns it and rolls it back
+        // along with other operand-local declarations when necessary.
+        self.side_declarations
+            .push(self.alloc_node(CHirDecl::Function(FunctionDecl {
+                symbol,
+                name,
+                ty: function_ty,
+                return_specifier: TypeSpecifier::Builtin {
+                    ty: return_ty,
+                    span,
+                },
+                written: WrittenDeclarator {
+                    layers: vec![WrittenDeclaratorLayer::Function { span }],
+                    span,
+                },
+                parameters: ParameterSyntax::Unspecified,
+                storage: StorageClass::Extern,
+                asm_label: None,
+                asm_label_span: None,
+                inline_spans: Vec::new(),
+                gnu_extension_spans: Vec::new(),
+                attributes: Vec::new(),
+                body: None,
+                span,
+            })));
+        symbol
     }
 
     fn resolve_builtin_library_function(

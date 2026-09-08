@@ -6047,6 +6047,12 @@ For this explicitly selected mode only, the default GNU11 predefined set is over
 Both sealed compilers execute `functions.c`, `objects.c` and `calls.c` at O0/O2 in GNU89, reject them in GNU11, and agree on those mode macros (`.evidence/builtin-probes/20260908-legacy-declarations/results.txt`); no new diagnostic is allocated.
 The original run `20260908T163937Z` contains 72 E1001 programs explicitly requesting GNU89, not 72 predicted passes; this admission rule does not claim closure of other language-mode differences such as external inline emission.
 
+### A call requires a function designator or function pointer
+
+After the ordinary expression conversions, the called expression must have pointer-to-function type; a visible non-callable object is not replaced by an implicit function declaration and reports E2937 (`invalid-call-target`) at the called expression in either language mode.
+Both sealed compilers reject `noncallable.c` in `.evidence/builtin-probes/20260908-legacy-declarations/`, while both execute the combined legacy declaration fixture at O0/O2; `return-conflict.c` is separately rejected by both with the existing redeclaration boundary.
+The parser previously silently accepted the non-callable probe; no benchmark pass count is inferred from this negative regression.
+
 ### Termination builtins and the existing external-call boundary
 
 `__builtin_abort()` has prototype `void (void)` and resolves to the ordinary external `abort` call, with the same compatible-declaration check and no invented interpreter library model.

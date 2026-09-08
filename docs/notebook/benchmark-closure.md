@@ -116,6 +116,27 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Explicit legacy integer declarations
+
+`46228fa` is the tests-only RED for explicit GNU89 omitted integer types,
+identifier-list parameters, undeclared calls, mode macros and exact option
+propagation into emission and diagnosis. The default GNU11 behavior remains
+strict. The implementation creates ordinary linked function declarations,
+retains parsed qualifiers and rejects non-callable objects with the measured
+E2937 rule; no missing function is replaced by an interpreter model.
+Both sealed compilers agree on the positive and negative probes in
+`.evidence/builtin-probes/20260908-legacy-declarations/results.txt`.
+Both interpreters and native Darwin pass the execution fixtures. The focused
+run passes 44 Rust tests and 18 Python tests. The changed all-targets gate
+against `46228fa` passes 1,257 tests across eight crates, zero failures and
+three pre-existing standing-run ignores; Clippy, fmt, Ruff and diff-check pass.
+The first gate found two call-target regressions: missing-parenthesis syntax
+must retain its diagnostic priority, and a precedence fixture had incorrectly
+declared a called function as an integer object. Both are corrected and the
+gate rerun is green. The 72 originally refused GNU89 programs still require
+original-program replay; neither their success nor complete GNU89 conformance
+is inferred from the focused tests.
+
 ### Flexible character-array initializer storage
 
 `4ca0c26` is the two-test RED for direct file-scope flexible members initialized
@@ -1049,7 +1070,20 @@ The original sealed run already has four timeouts and a Clang O2 exit 1 for
 this seed. A further GCC O1 UBSan check times out; Clang's trapping UBSan build
 exits 139 (the non-trapping sanitizer runtime is unavailable in the image).
 None of those outcomes is a PASS or authority to rewrite the original seed.
-The other 67 unavailable inputs remain to be classified independently.
+Base and bitfields seed 307 have now also been inspected. Their preprocessed
+bodies are byte-identical (SHA-256
+`c0cc0b2e72bfc407c6352251c0a548b2e9e334c063693dcf9b9497c8a6b068a4`).
+`func_22` reaches `lbl_213` with `p_24=65535` and `l_207=6`; each pass resets
+`g_49` to zero and a nonzero 16-bit sum takes the goto before its update.
+In a bounded diagnostic of the unchanged source, GCC-14 O2 times out with
+or without `-fno-finite-loops`; Clang-19 O2 prints the old checksum by default
+but times out with that option. The option also removes its emitted
+`llvm.loop.mustprogress` metadata. This is an optimization-dependent reference
+domain, not a checksum that every oracle supplies; both original verdicts
+remain oracle-unusable. The compact commands, output and source reasoning are
+in `.evidence/builtin-probes/20260909-csmith-loops/results.txt`.
+The other 65 unavailable inputs still need independent source classification;
+none of the 68 unavailable originals is counted as agreement.
 
 Final confirmation command (only after the applicable incremental checks):
 

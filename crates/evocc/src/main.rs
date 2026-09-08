@@ -70,6 +70,7 @@ struct DriverOptions {
     optimize_scalar_evoir: bool,
     signed_wrapping: bool,
     standard_builtins: bool,
+    legacy_declarations: bool,
     /// Report every diagnostic rather than the first.
     ///
     /// A build wants one unambiguous first-error site. Surveying a body of
@@ -205,6 +206,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut optimize_scalar_evoir = false;
     let mut signed_wrapping = false;
     let mut standard_builtins = true;
+    let mut legacy_declarations = false;
     let mut survey = false;
     let mut index = 0;
 
@@ -274,7 +276,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 }
                 macro_prefix_maps.push((old.to_owned(), new.to_owned()));
             }
-            "-std=gnu11" => {}
+            "-std=gnu11" => legacy_declarations = false,
+            "-std=gnu89" => legacy_declarations = true,
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
             }
@@ -316,6 +319,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         optimize_scalar_evoir,
         signed_wrapping,
         standard_builtins,
+        legacy_declarations,
         survey,
     })
 }
@@ -432,6 +436,11 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
+    if options.legacy_declarations {
+        pp.undefine("__STDC_VERSION__");
+        pp.undefine("__GNUC_STDC_INLINE__");
+        pp.define("__GNUC_GNU_INLINE__".to_owned(), decoded_tokens("1")?);
+    }
     if let Some(parent) = std::path::Path::new(&options.input).parent() {
         pp.add_include_path(parent.to_string_lossy().to_string());
     }
@@ -579,6 +588,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
     parser.set_standard_builtins(options.standard_builtins);
+    parser.set_legacy_declarations(options.legacy_declarations);
     if !options.survey {
         parser.set_error_limit(NonZeroUsize::MIN);
     }

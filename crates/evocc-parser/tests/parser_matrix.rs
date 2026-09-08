@@ -128,11 +128,11 @@ const EXPRESSIONS: &[ExpressionCase] = &[
 
 // The postfix probes below are real C, not merely token sequences: subscripting
 // requires a pointer operand and member access requires a record operand, so
-// `items`, `object` and `pointer` are declared with the types those operators
+// `items`, `object`, `pointer` and `callee` have the types those operators
 // actually accept.
 const EXPRESSION_BINDINGS: &str = concat!(
     "struct Probe { int member; }; ",
-    "int seed; int callee; int left; int right; int *items; int index; ",
+    "int seed; int callee(int, int); int left; int right; int *items; int index; ",
     "struct Probe object; struct Probe *pointer; int counter; int value; int middle; ",
     "int alpha; int beta; int gamma; int delta; int condition; int one; int two; "
 );
