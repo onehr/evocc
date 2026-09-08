@@ -159,6 +159,10 @@ fn legacy_declarations_preserve_missing_names_and_type_conflicts() {
     for (source, code) in [
         ("int main(void) { return missing_object; }", "E2001"),
         (
+            "main() { { if (0) missing(); } return sizeof(missing); }",
+            "E2001",
+        ),
+        (
             "int main(void) { return later(1); } long later(int x) { return x; }",
             "E2002",
         ),
@@ -217,6 +221,7 @@ fn legacy_external_calls_keep_their_block_declarations_in_the_body() {
         "main() { { if (0) abort(); } return 0; }",
         "main() { return 0 ? abort() : 0; }",
         "main() { if (0) { exit(3); } return 0; }",
+        "main() { typeof(({ missing(); 1; })) x; int missing = 5; return missing - 5; }",
     ] {
         for mode in ["--interpret-c-hir", "--interpret-evoir"] {
             let output = run_with_options(source, mode, &["-std=gnu89"]);
@@ -246,6 +251,12 @@ fn integer_sign_and_parity_counts_share_constant_and_runtime_semantics() {
     }
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     assert_native_execution(source, "integer-bit-counts");
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    let module = String::from_utf8(output.stdout).unwrap();
+    assert!(module.contains("ctlz.bits<32>"));
+    assert!(module.contains("ctpop.bits<64>"));
+    assert!(!module.contains("bit_builtin_zero_operand"));
 }
 
 #[test]

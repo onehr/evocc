@@ -20,17 +20,24 @@ static int redundant(unsigned long x, unsigned width) {
     unsigned long mask = width == 32 ? 0xffffffffUL : ~0UL;
     x &= mask;
     if ((x >> (width - 1)) != 0) x = (~x) & mask;
-    int result = 0;
-    for (unsigned i = width - 1; i != 0; --i) {
-        if ((x >> (i - 1)) != 0) break;
-        result++;
-    }
-    return result;
+    if (!x) return width - 1;
+    int top = 0;
+    if (x >> 32) { x >>= 32; top += 32; }
+    if (x >> 16) { x >>= 16; top += 16; }
+    if (x >> 8) { x >>= 8; top += 8; }
+    if (x >> 4) { x >>= 4; top += 4; }
+    if (x >> 2) { x >>= 2; top += 2; }
+    if (x >> 1) top++;
+    return width - 2 - top;
 }
 static int parity(unsigned long x) {
-    int result = 0;
-    while (x) { result ^= x & 1; x >>= 1; }
-    return result;
+    x ^= x >> 32;
+    x ^= x >> 16;
+    x ^= x >> 8;
+    x ^= x >> 4;
+    x ^= x >> 2;
+    x ^= x >> 1;
+    return x & 1;
 }
 int main(void) {
     for (unsigned i = 0; i < sizeof(samples) / sizeof(samples[0]); ++i) {

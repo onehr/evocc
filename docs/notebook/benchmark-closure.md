@@ -116,6 +116,30 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Block-local implicit calls, remaining bit counts and source dependencies
+
+`0c6e054` contains compiled RED regressions for the block-only external
+declaration failure and the `clrsb`/`parity` families. The block's C-HIR now
+contains its implicit function declarations; symbol visibility and the
+manifest's scope validation are unchanged. Five execution shapes include
+nested blocks, a conditional return and an unevaluated `typeof` operand.
+The six integer builtins use the shared integer kernel and existing EvoIR
+bit operations, not new external calls or instructions. The 42-test CLI
+integration target passes, including both interpreters and native execution;
+the eight-crate all-targets changed gate against `0c6e054`, Clippy and fmt
+pass. The terminal truncated part of the test listing, so no reconstructed
+workspace test count is claimed for that invocation.
+
+The original E0105 family is also a preparation defect: all seven programs
+using `memcpy-ax.h` or `gcc_tmpnam.h` emit when given only their original
+include directory. Five more include C files outside the sparse subtree.
+`266d612` is the two-test RED. Preparation now exposes the pinned original
+directory to both emission and diagnosis and retrieves only those five
+referenced blobs from the same commit. Sources are not rewritten and no
+program is removed. The seven preparation tests and thirteen wrapper tests
+pass; the original-source directory and commit are recorded in each suite's
+receipt. Original-program replay remains required for both repairs.
+
 ### Explicit legacy integer declarations
 
 `46228fa` is the tests-only RED for explicit GNU89 omitted integer types,

@@ -16,6 +16,8 @@ pub enum BitBuiltinOp {
     CountLeadingZeros,
     CountTrailingZeros,
     PopulationCount,
+    RedundantSignBits,
+    Parity,
 }
 
 /// A C integer type in the Day 5 AArch64 GNU ABI.
@@ -257,6 +259,16 @@ pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger>
             raw.trailing_zeros()
         }
         BitBuiltinOp::PopulationCount => raw.count_ones(),
+        BitBuiltinOp::RedundantSignBits => {
+            let width = u32::from(operand.ty().bits());
+            let normalized = if raw >> (width - 1) != 0 {
+                !raw & operand.ty().mask()
+            } else {
+                raw
+            };
+            normalized.leading_zeros() - (128 - width) - 1
+        }
+        BitBuiltinOp::Parity => raw.count_ones() & 1,
     };
     Some(CInteger::new(u64::from(result), CIntegerType::INT))
 }

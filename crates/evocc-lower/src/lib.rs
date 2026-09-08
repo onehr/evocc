@@ -8908,15 +8908,29 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         use evocc_chir::integer::BitBuiltinOp;
-        let input = self.lower_expr(operand, state)?;
+        let mut input = self.lower_expr(operand, state)?;
         let total_op = match op {
-            BitBuiltinOp::CountLeadingZeros => evocc_evoir::BitOp::LeadingZeros,
+            BitBuiltinOp::CountLeadingZeros | BitBuiltinOp::RedundantSignBits => {
+                evocc_evoir::BitOp::LeadingZeros
+            }
             BitBuiltinOp::CountTrailingZeros | BitBuiltinOp::FindFirstSet => {
                 evocc_evoir::BitOp::TrailingZeros
             }
-            BitBuiltinOp::PopulationCount => evocc_evoir::BitOp::Population,
+            BitBuiltinOp::PopulationCount | BitBuiltinOp::Parity => evocc_evoir::BitOp::Population,
             BitBuiltinOp::ByteSwap => evocc_evoir::BitOp::ByteSwap,
         };
+        if op == BitBuiltinOp::RedundantSignBits {
+            let amount =
+                self.constant(state, input.integer, u64::from(input.integer.bits() - 1))?;
+            let sign = self.fresh_value(input.value.ty.clone());
+            self.emit(
+                state,
+                Inst::AShr(sign.clone(), input.value.clone(), amount.value),
+            )?;
+            let normalized = self.fresh_value(input.value.ty.clone());
+            self.emit(state, Inst::Xor(normalized.clone(), input.value, sign))?;
+            input.value = normalized;
+        }
         let zero = self.constant(state, input.integer, 0)?;
         let nonzero = self.fresh_value(EvoIRType::Bits(1));
         self.emit(
@@ -8945,6 +8959,17 @@ impl<'a> FunctionLowerer<'a> {
             value: counted,
             integer: input.integer,
         };
+        if matches!(op, BitBuiltinOp::RedundantSignBits | BitBuiltinOp::Parity) {
+            let one = self.constant(state, input.integer, 1)?;
+            let result = self.fresh_value(counted.value.ty.clone());
+            let instruction = if op == BitBuiltinOp::RedundantSignBits {
+                Inst::Sub(result.clone(), counted.value, one.value)
+            } else {
+                Inst::And(result.clone(), counted.value, one.value)
+            };
+            self.emit(state, instruction)?;
+            counted.value = result;
+        }
         if op == BitBuiltinOp::FindFirstSet {
             let one = self.constant(state, input.integer, 1)?;
             let incremented = self.fresh_value(counted.value.ty.clone());

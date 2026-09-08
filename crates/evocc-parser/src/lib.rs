@@ -397,6 +397,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_popcount"
                         | "__builtin_popcountl"
                         | "__builtin_popcountll"
+                        | "__builtin_clrsb"
+                        | "__builtin_clrsbl"
+                        | "__builtin_clrsbll"
+                        | "__builtin_parity"
+                        | "__builtin_parityl"
+                        | "__builtin_parityll"
                         | "__builtin_bswap16"
                         | "__builtin_bswap32"
                         | "__builtin_bswap64",
@@ -7422,6 +7428,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut at_block_start = true;
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
+            let side_start = self.side_declarations.len();
+            let mut item_start = items.len();
             if at_block_start && self.peek_kind() == Some(TokenKind::LocalLabel) {
                 self.parse_local_label_declaration();
             } else if self.peek_kind() == Some(TokenKind::StaticAssert) {
@@ -7448,6 +7456,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if self.pos == before {
                 self.report("E1003", "expected-expression", self.span());
                 self.advance();
+            }
+            // An implicit external call declares a function in this block,
+            // even when no later file-scope declaration names that function.
+            // Keep that declaration next to the statement which introduced
+            // it instead of leaking it into the enclosing unit's side list.
+            for declaration in self.side_declarations.split_off(side_start) {
+                if matches!(declaration, CHirDecl::Function(function)
+                    if !self.symbols.is_builtin_function(function.symbol))
+                {
+                    items.insert(item_start, CHirBlockItem::Declaration(declaration));
+                    item_start += 1;
+                } else {
+                    self.side_declarations.push(declaration);
+                }
             }
         }
         let rbrace = if self.peek_kind() == Some(TokenKind::RBrace) {
@@ -11056,6 +11078,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             "__builtin_popcount" => (BitBuiltinOp::PopulationCount, IntRank::UInt),
             "__builtin_popcountl" => (BitBuiltinOp::PopulationCount, IntRank::ULong),
             "__builtin_popcountll" => (BitBuiltinOp::PopulationCount, IntRank::ULongLong),
+            "__builtin_clrsb" => (BitBuiltinOp::RedundantSignBits, IntRank::Int),
+            "__builtin_clrsbl" => (BitBuiltinOp::RedundantSignBits, IntRank::Long),
+            "__builtin_clrsbll" => (BitBuiltinOp::RedundantSignBits, IntRank::LongLong),
+            "__builtin_parity" => (BitBuiltinOp::Parity, IntRank::UInt),
+            "__builtin_parityl" => (BitBuiltinOp::Parity, IntRank::ULong),
+            "__builtin_parityll" => (BitBuiltinOp::Parity, IntRank::ULongLong),
             "__builtin_bswap16" => (BitBuiltinOp::ByteSwap, IntRank::UShort),
             "__builtin_bswap32" => (BitBuiltinOp::ByteSwap, IntRank::UInt),
             "__builtin_bswap64" => (BitBuiltinOp::ByteSwap, IntRank::ULong),
