@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-07 UTC,EvoIR 1.9.76 / EvoMIR 0.21, checkout 4b50b19)
+EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout dba5385)
 ═════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ───────────────┐
@@ -24,13 +24,13 @@ EvoCC ── (2026-09-07 UTC,EvoIR 1.9.76 / EvoMIR 0.21, checkout 4b50b19)
 │ K1 receipt: EvoCC 41 ; 52/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
-│ E0 c-testsuite 195/220 ███████░ torture 1185/1692 ██████░░ │
+│ E0 c-testsuite 196/220 ███████░ torture 1186/1692 ██████░░ │
 │ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 2/11 toybox 191/203 musl 817/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 (,)
-Q0 █████████░ 97 , 40 ,0
+Q0 █████████░ 101 , 40 ,0
 Q1 kernel ████░░░░░░ 2,798/2,798, 52/2,798, 384/384
 Q2 e-graph pipeline ███░░░░░░░ , GCC -O2
 Q3 ███░░░░░░░ ,(13 3 )
@@ -39,14 +39,14 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260907T174641.388158Z`; checkout `4b50b19`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260908T005741.383578Z`; checkout `dba5385`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
-| ctest | E0b | INCOMPLETE | 195/220 programs | 20260907T174641.388158Z | E3101: 14, E1003: 2, E2202: 2 |
-| torture | E0a | INCOMPLETE | 1185/1692 programs | 20260907T174641.388158Z | E3101: 140, E1001: 108, E2001: 42 |
+| ctest | E0b | INCOMPLETE | 196/220 programs | 20260908T005741.383578Z | E3101: 14, E1003: 2, E2202: 2 |
+| torture | E0a | INCOMPLETE | 1186/1692 programs | 20260908T005741.383578Z | E3101: 140, E1001: 108, E2001: 42 |
 | csmith | E0c | INCOMPLETE | 932/1000 programs | 20260907T141450.311159Z (previous) | original seeds; unavailable oracles are not passes |
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 2/44 units | 20260907T141450.311159Z (previous) | E1001: 38, E2921: 4 |

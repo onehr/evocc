@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260907T174705Z",
-  "subject": "4b50b19",
-  "driverSha256": "4746bc92624a640dd1236d6bb12a93ccd79b05c835c19f928e5736ffd6d79c17",
+  "run": "20260908T005804Z",
+  "subject": "dba5385",
+  "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,9 +18,9 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1185,
+     "pass": 1186,
      "refused": 469,
-     "fail": 35,
+     "fail": 34,
      "link-fail": 3
     },
     "refusalsByCode": {
@@ -57,8 +57,8 @@
     },
     "failuresByInterpreterVerdict": {
      "E3006 invalid-signed-left-shift": 13,
-     "E3039 external-call-not-executable": 7,
      "E3004 signed-integer-overflow": 7,
+     "E3039 external-call-not-executable": 6,
      "E3007 evoir-main-parameters-are-not-canonical": 3,
      "E3021 not-lowered": 3,
      "E3040 external-object-not-executable": 2,
@@ -68,5 +68,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260907T174705Z"
+ "evidence": ".evidence/ladder/e0/20260908T005804Z"
 }

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "run": "20260907T174641.388158Z",
-  "subject": "4b50b19580fe66c6cea7e3689ebb1f6c90fe037f",
-  "dirty": true,
+  "run": "20260908T005741.383578Z",
+  "subject": "dba53850025144c3d4f13b2199e942bcbb196b88",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "4746bc92624a640dd1236d6bb12a93ccd79b05c835c19f928e5736ffd6d79c17",
+  "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
@@ -24,9 +24,9 @@
       "rung": "E0b",
       "note": "self-checking programs and expected stdout",
       "outcomes": {
-        "pass": 195,
+        "pass": 196,
         "refused": 23,
-        "fail": 2
+        "fail": 1
       },
       "refusals": {
         "E3101": 14,
@@ -41,15 +41,14 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 220,
-      "passed": 195,
+      "passed": 196,
       "kind": "programs",
       "runtimeDiagnostics": {
-        "E3007 evoir-main-parameters-are-not-canonical": 1,
-        "E3039 external-call-not-executable": 1
+        "E3007 evoir-main-parameters-are-not-canonical": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260907T174641Z",
-      "evidence": ".evidence/ladder/e0/20260907T174641Z",
+      "run": "20260908T005741Z",
+      "evidence": ".evidence/ladder/e0/20260908T005741Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -61,21 +60,21 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 23.9,
+      "seconds": 23.3,
       "previous": null,
       "measurement": {
-        "run": "20260907T174641.388158Z",
-        "subject": "4b50b19580fe66c6cea7e3689ebb1f6c90fe037f",
-        "driverSha256": "4746bc92624a640dd1236d6bb12a93ccd79b05c835c19f928e5736ffd6d79c17"
+        "run": "20260908T005741.383578Z",
+        "subject": "dba53850025144c3d4f13b2199e942bcbb196b88",
+        "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b"
       }
     },
     "torture": {
       "rung": "E0a",
       "note": "mixed integer/FP suite; dg-options are not consumed",
       "outcomes": {
-        "pass": 1185,
+        "pass": 1186,
         "refused": 469,
-        "fail": 35,
+        "fail": 34,
         "link-fail": 3
       },
       "refusals": {
@@ -113,12 +112,12 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1185,
+      "passed": 1186,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3006 invalid-signed-left-shift": 13,
-        "E3039 external-call-not-executable": 7,
         "E3004 signed-integer-overflow": 7,
+        "E3039 external-call-not-executable": 6,
         "E3007 evoir-main-parameters-are-not-canonical": 3,
         "E3021 not-lowered": 3,
         "E3040 external-object-not-executable": 2,
@@ -126,8 +125,8 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260907T174705Z",
-      "evidence": ".evidence/ladder/e0/20260907T174705Z",
+      "run": "20260908T005804Z",
+      "evidence": ".evidence/ladder/e0/20260908T005804Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -139,12 +138,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 144.3,
+      "seconds": 140.4,
       "previous": null,
       "measurement": {
-        "run": "20260907T174641.388158Z",
-        "subject": "4b50b19580fe66c6cea7e3689ebb1f6c90fe037f",
-        "driverSha256": "4746bc92624a640dd1236d6bb12a93ccd79b05c835c19f928e5736ffd6d79c17"
+        "run": "20260908T005741.383578Z",
+        "subject": "dba53850025144c3d4f13b2199e942bcbb196b88",
+        "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b"
       }
     },
     "csmith": {

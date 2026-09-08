@@ -23,7 +23,7 @@ Only one heavyweight benchmark invocation runs at once.
 
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
-| 1 | Macro push/pop state | `00206` wrong stdout and `pushpop_macro` abort; restore saved definitions, including undefined and nested states; original programs pass | `ctest torture` | OPEN: authorized by revision 1.9.77, `5a42279` |
+| 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | `alias-2/3/4` undefined `b`; musl 167 symbol-parity exclusions require subtyping, not assuming one cause; pin object symbol tables and native alias accesses | `torture musl` | OPEN: EvoIR 1.9.79 / EvoMIR 0.22, `5a42279` |
 | 3 | Explicit register operands | Singleton `sigsetjmp_tail.lo` breaks two setjmp tests; syscall assembly does not preserve the specified register mapping; pin register/ABI semantics and native execution | `musl` | OPEN |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
@@ -61,7 +61,15 @@ reported as ignored-safe.
 
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh a6c302d --quiet`:
 1,037 passed, zero failed or ignored; Clippy and fmt PASS. Ruff and diff-check
-PASS. Original-program benchmark closure is pending, not inferred from this gate.
+PASS. Implementation `dba5385` is measured by
+`python3 tools/bench.py ctest torture --jobs 4`, wrapper run
+`20260908T005741.383578Z`, compiler
+`0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b`.
+Native runs `20260908T005741Z` and `20260908T005804Z` retain every original
+220/1,692 identity and every prior pass: the only outcome changes are
+`00206` and `pushpop_macro`, both failure to pass. c-testsuite rises 195 to
+196/220; torture rises 1,185 to 1,186/1,692. The macro family is closed;
+the benchmark suites remain INCOMPLETE, with 1/34 runtime failures respectively.
 
 ### Void return effects
 
