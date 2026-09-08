@@ -676,6 +676,10 @@ impl TypeInterner {
             | (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => true,
             (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) => left == right,
             (TypeKind::Int(left), TypeKind::Int(right)) => left == right,
+            (TypeKind::Enum(tag), TypeKind::Int(rank))
+            | (TypeKind::Int(rank), TypeKind::Enum(tag)) => {
+                self.enum_representation(*tag) == Some(*rank)
+            }
             (TypeKind::Float(left), TypeKind::Float(right)) => left == right,
             (TypeKind::Complex(left), TypeKind::Complex(right)) => left == right,
             (TypeKind::Pointer(left), TypeKind::Pointer(right)) => {
@@ -714,6 +718,28 @@ impl TypeInterner {
             | (TypeKind::Enum(left), TypeKind::Enum(right)) => left == right,
             _ => false,
         }
+    }
+
+    /// The frozen target integer rank of a complete enumeration. Nominal tag
+    /// identity is retained separately; two enum tags do not become compatible
+    /// merely because their integer representations agree.
+    #[must_use]
+    pub fn enum_representation(&self, tag: TagId) -> Option<IntRank> {
+        let tag = self.tag(tag)?;
+        let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
+            return None;
+        };
+        let minimum = constants
+            .iter()
+            .map(|constant| constant.value)
+            .min()
+            .unwrap_or(0);
+        let maximum = constants
+            .iter()
+            .map(|constant| constant.value)
+            .max()
+            .unwrap_or(0);
+        Some(enum_integer_rank(minimum, maximum, tag.layout.packed))
     }
 
     fn compatible_parameters(&self, left: &FunctionParameters, right: &FunctionParameters) -> bool {
@@ -1424,7 +1450,7 @@ impl<'a> LayoutContext<'a> {
             .types
             .tag(tag_id)
             .ok_or(LayoutError::UnknownTag(tag_id))?;
-        let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
+        let Some(rank) = self.types.enum_representation(tag_id) else {
             return if matches!(tag.state, TagState::Incomplete) {
                 Err(LayoutError::IncompleteTag(tag_id))
             } else {
@@ -1435,21 +1461,7 @@ impl<'a> LayoutContext<'a> {
             };
         };
 
-        let minimum = constants
-            .iter()
-            .map(|constant| constant.value)
-            .min()
-            .unwrap_or(0);
-        let maximum = constants
-            .iter()
-            .map(|constant| constant.value)
-            .max()
-            .unwrap_or(0);
-        Ok(integer_layout(enum_integer_rank(
-            minimum,
-            maximum,
-            tag.layout.packed,
-        )))
+        Ok(integer_layout(rank))
     }
 
     fn layout_record(&mut self, tag_id: TagId) -> Result<RecordLayout, LayoutError> {

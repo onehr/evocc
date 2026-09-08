@@ -14,6 +14,9 @@ _Static_assert(!__builtin_types_compatible_p(enum negative, unsigned int), "not 
 _Static_assert(!__builtin_types_compatible_p(enum negative, enum other_negative), "nominal tags");
 _Static_assert(__builtin_types_compatible_p(enum negative *, int *), "pointed-to mode");
 
+enum negative identity(enum negative x);
+int identity(int x) { return x; }
+
 int main(void) {
     enum negative e = NEGATIVE;
     int i = -7;
@@ -23,5 +26,5 @@ int main(void) {
     if (*(1 ? p : q) != -7 || *(0 ? p : q) >= 0) return 2;
     p = q;
     *p = -11;
-    return e != -11;
+    return identity(e) != -11;
 }

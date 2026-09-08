@@ -97,7 +97,7 @@ impl PointerTypeDesc {
             .get(right.pointee)
             .ok_or(MemoryPlaceError::UnknownType(right.pointee))?
             .kind;
-        let pointee = if left_kind == right_kind
+        let pointee = if types.compatible_ignoring_top_qualifiers(left.pointee, right.pointee)
             || (matches!(left_kind, TypeKind::Void) && is_object_or_function_type(right_kind))
         {
             left.pointee

@@ -1181,6 +1181,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::GnuInt128(right)
             }
             (TypeKind::Int(left), TypeKind::Int(right)) if left == right => TypeKind::Int(right),
+            (TypeKind::Enum(tag), TypeKind::Int(rank))
+            | (TypeKind::Int(rank), TypeKind::Enum(tag))
+                if self.types.enum_representation(tag) == Some(rank) =>
+            {
+                TypeKind::Int(rank)
+            }
             (TypeKind::Float(left), TypeKind::Float(right)) if left == right => {
                 TypeKind::Float(right)
             }
@@ -8942,7 +8948,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         else {
             return false;
         };
-        if left.kind == right.kind || self.types.compatible(left_pointee, right_pointee) {
+        if self
+            .types
+            .compatible_ignoring_top_qualifiers(left_pointee, right_pointee)
+        {
             return true;
         }
         if matches!(

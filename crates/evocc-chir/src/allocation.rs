@@ -1672,6 +1672,9 @@ fn types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
             | (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => {}
             (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) if left == right => {}
             (TypeKind::Int(left), TypeKind::Int(right)) if left == right => {}
+            (TypeKind::Enum(tag), TypeKind::Int(rank))
+            | (TypeKind::Int(rank), TypeKind::Enum(tag))
+                if types.enum_representation(*tag) == Some(*rank) => {}
             (TypeKind::Float(left), TypeKind::Float(right)) if left == right => {}
             (TypeKind::Complex(left), TypeKind::Complex(right)) if left == right => {}
             (TypeKind::Pointer(left), TypeKind::Pointer(right)) => {

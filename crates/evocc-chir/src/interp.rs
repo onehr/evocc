@@ -4751,7 +4751,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         else {
             return false;
         };
-        left_return == right_return
+        self.unit.types().compatible(*left_return, *right_return)
             && function_parameters_compatible(self.unit.types(), left_parameters, right_parameters)
     }
 
