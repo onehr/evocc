@@ -6447,3 +6447,10 @@ No new diagnostic is allocated; torture run `20260908T191304Z` has two first-err
 `__asm` is the same contextual spelling as `asm` and `__asm__` in every assembly position, promoted only after preprocessing and preserving its written spelling in C-HIR; constraints, effects and native assembly remain unchanged.
 Both sealed compilers at O0/O2 execute the integer inline-assembly assertion in `.evidence/builtin-probes/20260909-library-and-assembly-spellings/forms.c` with exit zero (`results.txt`).
 No diagnostic is allocated; two original torture first errors use this spelling, one of which additionally requires x86 floating-point assembly and is not thereby admitted on AArch64.
+
+### Function-pointer casts preserve the dynamic call boundary
+
+A cast between pointers to different function types preserves the function identity while changing the pointer's static call interface; casting back recovers the original interface, including after storage, and a mismatched interface reports the existing E3019 only when the indirect call is actually reached after evaluating its arguments.
+Lowering uses the existing `ptr.to_int` and `ptr.from_int.fnptr<Sig>` pair, without weakening the static call validator or the dynamic signature check.
+Both sealed compilers at O0/O2 execute the round trip and argument-side goto in `.evidence/builtin-probes/20260909-function-pointer-casts/forms.c` with exit zero (`results.txt`); `reached.c` is separately an invalid-call diagnostic regression, not a claimed positive execution.
+No diagnostic or instruction is added; one original torture first-error program, `call-trap-1` in `20260908T195511Z`, reaches this missing conversion and requires a fresh original replay.
