@@ -129,6 +129,14 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertNotIn("a.o", argv)
         self.assertEqual(argv.count(f"{self.tree}/a.c"), 1)
 
+    def test_explicit_arithmetic_modes_reach_the_subject_in_written_order(self) -> None:
+        flags = ["-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow"]
+        for written in (flags, flags[::-1]):
+            with self.subTest(flags=written):
+                argv, omitted = self.command(f"gcc {' '.join(written)} -c -o a.o a.c\n")
+                self.assertEqual([flag for flag in argv if flag in flags], written)
+                self.assertFalse(set(flags).intersection(omitted))
+
     def test_a_separate_include_value_is_translated(self) -> None:
         argv, _ = self.command(f"gcc -include {TREE}/lib/zstd.h -c -o a.o a.c\n")
         self.assertIn("-include", argv)
