@@ -61,13 +61,20 @@ theorem mul_two_eq {n : Nat} (h : 2 ≤ n) (x : BitVec n) : x * BitVec.ofNat n 2
   rw [BitVec.toNat_mul, BitVec.toNat_add, BitVec.toNat_ofNat,
       Nat.mod_eq_of_lt (two_lt_two_pow n h), Nat.mul_two]
 
+theorem two_mul_eq {n : Nat} (h : 2 ≤ n) (x : BitVec n) : BitVec.ofNat n 2 * x = x + x := by
+  rw [BitVec.mul_comm]; exact mul_two_eq h x
+
 /-- `shl(x,1) = add(x,x)` at any width of at least two.  The amount is decoded
-at its own width, which for `const_like(?x,1)` is the width of `?x`. -/
-theorem shl_one_eq {n : Nat} (h : 2 ≤ n) (x : BitVec n) :
-    x <<< (BitVec.ofNat n 1).toNat = x + x := by
-  rw [ofNat_one_toNat n h]
+at its own width, which for `const_like(?x,1)` is the width of `?x`, and
+`(1 : bits<n>).toNat` is `1 % 2 ^ n`. -/
+theorem shl_one_eq {n : Nat} (h : 2 ≤ n) (x : BitVec n) : x <<< (1 % 2 ^ n) = x + x := by
+  rw [Nat.mod_eq_of_lt (by have := two_lt_two_pow n h; omega)]
   apply BitVec.eq_of_toNat_eq
   rw [BitVec.toNat_shiftLeft, BitVec.toNat_add, Nat.shiftLeft_eq, Nat.pow_one, Nat.mul_two]
+
+theorem shl_ofNat_one_eq {n : Nat} (h : 2 ≤ n) (x : BitVec n) :
+    x <<< (BitVec.ofNat n 1).toNat = x + x := by
+  rw [BitVec.toNat_ofNat]; exact shl_one_eq h x
 
 /-! ## A value compared with itself -/
 

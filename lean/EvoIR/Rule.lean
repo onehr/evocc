@@ -109,6 +109,19 @@ def elabPat (Γ : Var → Nat) : (n : Nat) → Pat → Option (Term Γ n)
           | none => none
       | none => none
 
+/-- The `fold.` marker is rendering, not meaning: Section 11.6 gives the fold
+builders the operator's own semantics, so the two sides of a fold rule
+elaborate to the same term. -/
+theorem elabPat_bin_fold {Γ : Var → Nat} {n : Nat} (o : BinOp) (a b : Pat) :
+    elabPat Γ n (.bin o true a b) = elabPat Γ n (.bin o false a b) := rfl
+
+theorem elabPat_cmp_fold {Γ : Var → Nat} {n : Nat} (o : CmpOp) (a b : Pat) :
+    elabPat Γ n (.cmp o true a b) = elabPat Γ n (.cmp o false a b) := by
+  match n with
+  | 0 => rfl
+  | 1 => rfl
+  | _ + 2 => rfl
+
 /-- The value a pattern denotes at width `n`, or nothing when it does not type
 there. -/
 def denotePat (Γ : Var → Nat) (σ : Subst Γ) (n : Nat) (p : Pat) : Option (BitVec n) :=
