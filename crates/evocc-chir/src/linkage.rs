@@ -27,6 +27,12 @@ impl SymbolLinkage {
         let mut names = BTreeMap::new();
         let mut definitions = BTreeSet::new();
         let mut written_aliases = BTreeMap::new();
+        // A symbol retains the scope of its first declaration. A later
+        // file-scope definition can therefore have a block-scoped identity.
+        let file_declarations = unit
+            .iter()
+            .map(|d| d as *const CHirDecl<'_>)
+            .collect::<std::collections::HashSet<_>>();
         let mut declarations = Vec::new();
         crate::inline::for_each_declaration(unit, |d| declarations.push(d));
         for declaration in declarations {
@@ -47,10 +53,7 @@ impl SymbolLinkage {
                 ),
                 _ => continue,
             };
-            let file_scope = unit
-                .symbols()
-                .symbol(symbol)
-                .is_ok_and(|s| s.scope() == unit.symbols().file_scope());
+            let file_scope = file_declarations.contains(&(declaration as *const CHirDecl<'_>));
             if file_scope {
                 names.insert(name.clone(), symbol);
             }
