@@ -3,12 +3,12 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T121307Z",
+ "run": "20260908T140339Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135",
+ "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 2,
  "unitsEvoccCompiled": 0,
@@ -21,20 +21,21 @@
   "refused": 2
  },
  "refusalsByCode": {
-  "E1001": 2
+  "E2001": 1,
+  "E3101": 1
  },
  "refusals": [
   {
    "unit": "cJSON.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "bits/math-vector.h:156:9"
+   "code": "E2001",
+   "message": "undeclared-identifier: __builtin_nanf",
+   "at": "cJSON-1.7.19/cJSON.c:113:25"
   },
   {
    "unit": "cJSON_Utils.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "bits/math-vector.h:156:9"
+   "code": "E3101",
+   "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+   "at": "bits/mathcalls.h:195:1"
   }
  ],
  "excludedUnits": [],
@@ -157,6 +158,6 @@
   }
  ],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260908T121307Z",
- "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E1001': 2}"
+ "evidence": ".evidence/ladder/cjson/20260908T140339Z",
+ "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E2001': 1, 'E3101': 1}"
 }

@@ -95,20 +95,20 @@ not a claim that no unknown compiler bug can exist.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | ctest 1 runtime failure; torture 33 runtime failures, zero assembly/link failures; original `memclr` and `misalign` now pass | `ctest torture` | PARTIAL: static labels, constant branches, integer modes and packed accesses benched; other failures OPEN |
+| 4 | Remaining native failures | ctest 1 runtime failure; torture 24 runtime failures, zero assembly/link failures; nine option-dependent originals now pass | `ctest torture` | PARTIAL: storage, packed access and wrapping repairs benched; other failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | Fresh survey: 2,717 `asm:i` at the two jump_label.h sites, one `asm:+rm`, one computed goto and one frame address; `ghes_helpers` now assembles, and the two digit-builtin EFI link failures are gone | `kernel` | OPEN: 79 assemble, 79 substitute and boot, 65 linked, zero substitution mismatches; local-address assembly propagation is reduced but not fixed |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
-| 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
+| 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
 | 11 | TinyCC compiler build | 7/11 assemble and pass together; all original PIE link failures are repaired; four compile refusals remain | `tinycc` | PARTIAL: external object/function addresses CLOSED in `20260908T102835Z`; remaining source forms OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
-| 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
+| 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
 | 16 | Remaining diagnostic classes | Torture 464 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
-| 17 | Torture applicability/options | Supported unconditional signed-wrapping options now reach both compilation and diagnosis; other options and target/timeout directives remain recorded, not guessed or used to remove programs | `torture` | PARTIAL: nine option-dependent originals confirmed by both oracles; subject corpus replay pending |
+| 17 | Torture applicability/options | Signed-wrapping modes now pass nine previously failing originals; 326 programs still carry unhandled requirements, recorded rather than guessed or removed | `torture` | PARTIAL: wrapping semantics and original replay CLOSED in `20260908T135846.118517Z`; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
@@ -116,7 +116,40 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Newly reduced control-flow case
+
+`int f(void) { int first=({ goto done; 0; }); int k=5; done:return k; }`
+still reports E3101, `statement expression has no normal path to its value`,
+instead of lowering the abrupt initializer and diagnosing the reached
+uninitialized read. This is an OPEN non-FP lowering case in rows 4/16, not
+a reason to broaden inlining's constant propagation. Its conditional form
+has a normal alternative and tests that a skipped initializer is never
+turned into a constant value by the inliner.
+
 ### Latest completed incremental replay
+
+`python3 tools/bench.py ctest torture zstd cjson --jobs 4`, wrapper
+`20260908T135846.118517Z`, captures clean `02d66b1` and executable
+SHA-256 `4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36`.
+The production includes wrapping and target-header types; its assembly RED
+tests are deliberately still red, and no later assembly fix enters this run.
+ctest stays 206/220, with 13 refused and one runtime failure. Torture keeps
+all 1,692 identities: 1,204 pass, 464 refuse, 24 fail, zero link/assembly
+failures. Exactly `20040409-1w`, `20040409-2w`, `20040409-3w`, `920612-1`,
+`930529-1`, `950704-1`, `pr22493-1`, `pr23047` and `pr57124` move FAIL to
+PASS; no other program changes outcome. The two header-dependent E1001
+refusals now report unsupported value execution, not a new pass.
+Native captures are `20260908T135846Z` and `20260908T135911Z`.
+
+zstd remains 2/44 in its passing mixed build (`20260908T140139Z`); 37 units
+now reach `arm_neon.h:40`, `typedef __Int8x8_t int8x8_t`, and five reach
+`__PRETTY_FUNCTION__`. cJSON remains 0/2 (`20260908T140339Z`): `cJSON.c`
+reaches `__builtin_nanf`, and `cJSON_Utils.c` reaches a floating-point
+function type. Its public tests still execute the installed reference
+objects; this is not an EvoCC cJSON pass.
+The header implementation passed the changed all-targets gate against
+`57bc8c2`: 1,889 passed, zero failed, four pre-existing ignored; Clippy,
+fmt, Ruff lint and diff-check passed. This is not the final offline replay.
 
 `python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
 `20260908T123730.141577Z`, captures clean subject `bc7cc9b` and executable
@@ -143,9 +176,9 @@ tools/gate-changed.sh dbd89ee --all-targets --quiet -- --test-threads=1`:
 Clippy and fmt green. The three option/preparation Python tests and thirteen
 benchmark-entry tests pass, as do Ruff lint and diff-check. The default and
 explicitly disabled modes still report E3004; shift, division and pointer
-checks remain tested. This is not yet an original torture replay: the kernel
-measurement is still consuming the preceding fixed executable, which must
-not be overwritten during its run.
+checks remain tested. The original torture replay is recorded above; its
+measurement retained every source and did not change the earlier kernel
+run's binary or results.
 
 The digit-builtin, register-alias and expression-scope static fixes pass
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
@@ -153,7 +186,7 @@ tools/gate-changed.sh afc4c63 --all-targets --quiet -- --test-threads=1`:
 1,015 tests, zero failures or ignored tests in the five selected crates,
 Clippy and fmt green. Ruff lint and diff-check pass. This is an incremental
 all-targets gate, not the final whole-workspace/doctest replay. Their original
-kernel replay is pending and is not credited to the earlier measurements.
+kernel replay is recorded above, separately from the preceding measurements.
 
 `python3 tools/bench.py ctest torture tinycc cjson --jobs 4`, wrapper
 `20260908T120936.530123Z`, measures executable SHA-256

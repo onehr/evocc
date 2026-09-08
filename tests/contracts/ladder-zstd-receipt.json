@@ -3,12 +3,12 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260907T144316Z",
+ "run": "20260908T140139Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6",
+ "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
  "unitsEvoccCompiled": 2,
@@ -25,8 +25,8 @@
   "refused": 42
  },
  "refusalsByCode": {
-  "E1001": 38,
-  "E2921": 4
+  "E1001": 37,
+  "E2921": 5
  },
  "refusals": [
   {
@@ -51,13 +51,13 @@
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "code": "E2921",
+   "message": "pretty-function-unsupported",
+   "at": "common/threading.c:142:5"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
@@ -93,7 +93,7 @@
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
@@ -153,7 +153,7 @@
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
@@ -165,13 +165,13 @@
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
@@ -183,7 +183,7 @@
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": "include/stdlib.h:141:8"
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
@@ -498,6 +498,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260907T144316Z",
- "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 38, 'E2921': 4}"
+ "evidence": ".evidence/ladder/zstd/20260908T140139Z",
+ "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 37, 'E2921': 5}"
 }

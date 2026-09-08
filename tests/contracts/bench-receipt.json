@@ -1,21 +1,26 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T123730.141577Z",
-  "subject": "bc7cc9b3fb1dc933bec2e5d61fffd7dd3c68d665",
+  "run": "20260908T135846.118517Z",
+  "subject": "02d66b18617946db7463c5add57c2e08ffc5d8b0",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "fc07b29798f1bc914a0064a3a7f90c2cb43cd253f6e29f0e830e9a64aa892a69",
+  "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel",
+    "ctest",
+    "torture",
+    "zstd",
+    "cjson",
     "--jobs",
-    "4",
-    "--allow-qemu-drift"
+    "4"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel"
+    "ctest",
+    "torture",
+    "zstd",
+    "cjson"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -28,11 +33,10 @@
         "fail": 1
       },
       "refusals": {
-        "E3101": 7,
+        "E3101": 8,
         "E2202": 2,
         "E3030": 1,
         "E2102": 1,
-        "E1001": 1,
         "E2203": 1
       },
       "baselineFailures": 0,
@@ -44,8 +48,8 @@
         "E3007 evoir-main-parameters-are-not-canonical": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T120936Z",
-      "evidence": ".evidence/ladder/e0/20260908T120936Z",
+      "run": "20260908T135846Z",
+      "evidence": ".evidence/ladder/e0/20260908T135846Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -57,25 +61,25 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 24.0,
+      "seconds": 25.5,
       "previous": null,
       "measurement": {
-        "run": "20260908T120936.530123Z",
-        "subject": "a81c243d4412489d5907c4f5855d4c9278f8d2ec",
-        "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135"
+        "run": "20260908T135846.118517Z",
+        "subject": "02d66b18617946db7463c5add57c2e08ffc5d8b0",
+        "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36"
       }
     },
     "torture": {
       "rung": "E0a",
-      "note": "mixed integer/FP suite; dg-options are not consumed",
+      "note": "mixed integer/FP suite; supported wrapping options consumed, other requirements recorded but not yet interpreted",
       "outcomes": {
-        "pass": 1195,
+        "pass": 1204,
         "refused": 464,
-        "fail": 33
+        "fail": 24
       },
       "refusals": {
-        "E3101": 132,
-        "E1001": 108,
+        "E3101": 134,
+        "E1001": 106,
         "E2001": 42,
         "E2201": 23,
         "E2203": 19,
@@ -109,20 +113,18 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1195,
+      "passed": 1204,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3006 invalid-signed-left-shift": 13,
         "E3039 external-call-not-executable": 7,
-        "E3004 signed-integer-overflow": 7,
         "E3008 interpreter-fuel-exhausted": 2,
-        "E3007 evoir-main-parameters-are-not-canonical": 2,
         "E3021 not-lowered": 1,
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260908T121000Z",
-      "evidence": ".evidence/ladder/e0/20260908T121000Z",
+      "run": "20260908T135911Z",
+      "evidence": ".evidence/ladder/e0/20260908T135911Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -134,12 +136,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 156.3,
+      "seconds": 147.6,
       "previous": null,
       "measurement": {
-        "run": "20260908T120936.530123Z",
-        "subject": "a81c243d4412489d5907c4f5855d4c9278f8d2ec",
-        "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135"
+        "run": "20260908T135846.118517Z",
+        "subject": "02d66b18617946db7463c5add57c2e08ffc5d8b0",
+        "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36"
       }
     },
     "csmith": {
@@ -319,8 +321,8 @@
       "note": "mixed-link program tests; see recorded source/build adjustments",
       "outcomes": {},
       "refusals": {
-        "E1001": 38,
-        "E2921": 4
+        "E1001": 37,
+        "E2921": 5
       },
       "baselineFailures": 0,
       "failingUnits": [],
@@ -479,8 +481,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260907T144316Z",
-      "evidence": ".evidence/ladder/zstd/20260907T144316Z",
+      "run": "20260908T140139Z",
+      "evidence": ".evidence/ladder/zstd/20260908T140139Z",
       "receipt": "tests/contracts/ladder-zstd-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -490,7 +492,7 @@
         "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 73.7,
+      "seconds": 120.0,
       "previous": {
         "rung": "E2",
         "note": "mixed-link program tests; see recorded source/build adjustments",
@@ -656,13 +658,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260906T185946Z",
-        "evidence": ".evidence/ladder/zstd/20260906T185946Z"
+        "run": "20260907T144316Z",
+        "evidence": ".evidence/ladder/zstd/20260907T144316Z"
       },
       "measurement": {
-        "run": "20260907T141450.311159Z",
-        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
-        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+        "run": "20260908T135846.118517Z",
+        "subject": "02d66b18617946db7463c5add57c2e08ffc5d8b0",
+        "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36"
       }
     },
     "cjson": {
@@ -670,7 +672,8 @@
       "note": "installed objects judged by public API tests; full private-helper suite and FP deferred",
       "outcomes": {},
       "refusals": {
-        "E1001": 2
+        "E2001": 1,
+        "E3101": 1
       },
       "baselineFailures": 0,
       "failingUnits": [],
@@ -741,8 +744,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260908T121307Z",
-      "evidence": ".evidence/ladder/cjson/20260908T121307Z",
+      "run": "20260908T140339Z",
+      "evidence": ".evidence/ladder/cjson/20260908T140339Z",
       "receipt": "tests/contracts/ladder-cjson-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -752,7 +755,7 @@
         "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 7.6,
+      "seconds": 18.6,
       "previous": {
         "rung": "E3",
         "note": "installed objects judged by public API tests; full private-helper suite and FP deferred",
@@ -771,7 +774,11 @@
           "passed": true,
           "status": 0,
           "relinkStatus": 0,
-          "command": "make test"
+          "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+          "objectFiles": [
+            "cJSON.o",
+            "cJSON_Utils.o"
+          ]
         },
         "adjustments": {
           "sysroot": {
@@ -792,12 +799,13 @@
           ],
           "configure": "",
           "subject": [
-            "the Unity suite the roadmap names is built by CMake, which the sealed container does not have; the release's own Makefile runs instead",
-            "that Makefile's `make test` compiles cJSON.c and test.c together into one binary rather than linking cJSON.o, so the suite does not judge a substituted object; the units are measured, the suite result is the reference build's",
+            "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
+            "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
+            "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
             "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
             "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
           ],
-          "buildCommand": "make",
+          "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
           "optionsTheDriverRejects": [
             "-std=c89"
           ],
@@ -823,14 +831,14 @@
             "-std=c89"
           ]
         },
-        "status": "VALIDATION_GAP",
-        "run": "20260907T144430Z",
-        "evidence": ".evidence/ladder/cjson/20260907T144430Z"
+        "status": "INCOMPLETE",
+        "run": "20260908T121307Z",
+        "evidence": ".evidence/ladder/cjson/20260908T121307Z"
       },
       "measurement": {
-        "run": "20260908T120936.530123Z",
-        "subject": "a81c243d4412489d5907c4f5855d4c9278f8d2ec",
-        "driverSha256": "ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135"
+        "run": "20260908T135846.118517Z",
+        "subject": "02d66b18617946db7463c5add57c2e08ffc5d8b0",
+        "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36"
       }
     },
     "tinycc": {
