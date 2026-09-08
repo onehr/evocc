@@ -621,6 +621,13 @@ struct SavedMacro {
 }
 
 #[derive(Debug)]
+struct LineControl {
+    physical_line: u32,
+    presumed_line: u32,
+    filename: Option<String>,
+}
+
+#[derive(Debug)]
 pub struct Preprocessor {
     macros: MacroMap,
     macro_stacks: HashMap<String, Vec<SavedMacro>>,
@@ -635,6 +642,7 @@ pub struct Preprocessor {
     standard_includes: bool,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
+    line_controls: HashMap<FileId, Vec<LineControl>>,
     reserved_file_ids: HashSet<FileId>,
     next_file_id: u32,
     counter: u32,
@@ -672,6 +680,7 @@ impl Preprocessor {
             standard_includes: true,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
+            line_controls: HashMap::new(),
             reserved_file_ids: HashSet::new(),
             next_file_id: 1,
             counter: 0,
@@ -840,6 +849,7 @@ impl Preprocessor {
     /// lexer uses `Borrowed` tokens whose text is identified by byte range.
     pub fn process(&mut self, tokens: TokenStream, source: &str) -> TokenStream {
         self.reset_source_table();
+        self.line_controls.clear();
         self.cond_stack.clear();
         self.errors.clear();
         self.include_guard_seen = false;
@@ -1267,6 +1277,11 @@ impl Preprocessor {
     ) -> TokenStream {
         let mut output: Vec<Token> = Vec::new();
         let mut raw = tokens.into_vec();
+        if directives_enabled {
+            if let Some(token) = raw.first() {
+                self.line_controls.remove(&token.span.file);
+            }
+        }
         let len = raw.len();
         let mut i: usize = 0;
 
@@ -1455,6 +1470,30 @@ impl Preprocessor {
                         }
                         skip_line(&raw, &mut i, source);
                     }
+                    "line" => {
+                        let operands = collect_line_tokens(&raw, &mut i, source);
+                        if self.cond_active() {
+                            let last = operands.last().unwrap_or(tok);
+                            let start = last.spelling_span.byte_end as usize;
+                            let gap = source.as_bytes().get(start..).unwrap_or_default();
+                            let boundary =
+                                logical_newline_offset(gap).map(|offset| start + offset + 1);
+                            let next_line = boundary
+                                .and_then(|end| {
+                                    source
+                                        .as_bytes()
+                                        .get(tok.spelling_span.byte_start as usize..end)
+                                })
+                                .map_or(tok.span.line_start + 1, |text| {
+                                    tok.span.line_start
+                                        + text.iter().filter(|byte| **byte == b'\n').count() as u32
+                                });
+                            self.process_line_directive(
+                                &operands, source, tok.span, next_line, expanding,
+                            );
+                        }
+                        skip_line(&raw, &mut i, source);
+                    }
                     "error" => {
                         let message_tokens = collect_line_tokens(&raw, &mut i, source);
                         if self.cond_active() {
@@ -1473,7 +1512,7 @@ impl Preprocessor {
                         skip_line(&raw, &mut i, source);
                     }
                     _ => {
-                        // Unknown directive (including #line, #warning): skip.
+                        // Unknown directives (including #warning): skip.
                         skip_line(&raw, &mut i, source);
                     }
                 }
@@ -1572,7 +1611,7 @@ impl Preprocessor {
                         continue;
                     }
                     if name == "__FILE__" {
-                        let displayed_file = self.mapped_file_name();
+                        let displayed_file = self.mapped_file_name(tok.span);
                         let file_str = synthetic_expansion_token(
                             make_string_token(&displayed_file),
                             tok,
@@ -1585,12 +1624,15 @@ impl Preprocessor {
                         continue;
                     }
                     if name == "__LINE__" {
-                        let line_num = tok.span.line_start;
-                        let line_tok = synthetic_expansion_token(
-                            make_int_token(line_num as i64),
-                            tok,
-                            tok.span,
+                        let line_num = self.presumed_location(tok.span).map_or(
+                            i64::from(tok.span.line_start),
+                            |location| {
+                                i64::from(location.presumed_line)
+                                    + i64::from(tok.span.line_start - location.physical_line)
+                            },
                         );
+                        let line_tok =
+                            synthetic_expansion_token(make_int_token(line_num), tok, tok.span);
                         let sub_stream = TokenStream::new(vec![line_tok]);
                         let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
@@ -1975,13 +2017,82 @@ impl Preprocessor {
         evaluate_if_expr(&expanded, source)
     }
 
-    fn mapped_file_name(&self) -> String {
+    fn presumed_location(&self, span: SourceSpan) -> Option<&LineControl> {
+        self.line_controls
+            .get(&span.file)?
+            .iter()
+            .rev()
+            .find(|entry| entry.physical_line <= span.line_start)
+    }
+
+    fn process_line_directive(
+        &mut self,
+        operands: &[Token],
+        source: &str,
+        span: SourceSpan,
+        physical_line: u32,
+        expanding: &mut HashSet<String>,
+    ) {
+        let expanded = self
+            .process_impl(
+                TokenStream::new(operands.to_vec()),
+                source,
+                expanding,
+                false,
+                0,
+            )
+            .into_vec()
+            .into_iter()
+            .filter(|token| token.kind != TokenKind::Eof)
+            .collect::<Vec<_>>();
+        let number = expanded.first().and_then(|token| {
+            let text = token_lexeme(token, source);
+            (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
+                .then(|| text.parse::<u32>().ok())
+                .flatten()
+        });
+        let filename = expanded.get(1).and_then(|token| {
+            (token.kind == TokenKind::StringLiteral)
+                .then(|| token_lexeme(token, source))
+                .and_then(|text| text.strip_prefix('"')?.strip_suffix('"'))
+                .map(str::to_owned)
+        });
+        let Some(presumed_line) =
+            number.filter(|_| expanded.len() <= 2 && (expanded.len() == 1 || filename.is_some()))
+        else {
+            self.errors.push(PreprocessError {
+                code: "E2936",
+                span,
+                message: "invalid-line-directive".to_owned(),
+            });
+            return;
+        };
+        let filename = filename.or_else(|| {
+            self.presumed_location(span)
+                .and_then(|entry| entry.filename.clone())
+        });
+        self.line_controls
+            .entry(span.file)
+            .or_default()
+            .push(LineControl {
+                physical_line,
+                presumed_line,
+                filename,
+            });
+    }
+
+    fn mapped_file_name(&self, span: SourceSpan) -> String {
+        let filename = self
+            .presumed_location(span)
+            .and_then(|location| location.filename.as_deref())
+            .or_else(|| self.source_path(span.file))
+            .unwrap_or(&self.current_file);
         for (old, new) in self.macro_prefix_maps.iter().rev() {
-            if let Some(suffix) = self.current_file.strip_prefix(old) {
+            if let Some(suffix) = filename.strip_prefix(old) {
                 return format!("{new}{suffix}");
             }
         }
-        self.current_file.clone()
+        filename.to_owned()
     }
 
     fn push_cond(&mut self, value: bool, opening_span: SourceSpan) {
@@ -2155,7 +2266,11 @@ fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) 
         return previous.spelling_span.line_start != current.spelling_span.line_start;
     }
 
-    let gap = &source.as_bytes()[start..end];
+    logical_newline_offset(&source.as_bytes()[start..end]).is_some()
+}
+
+/// Byte offset of the first newline surviving splicing and comment removal.
+fn logical_newline_offset(gap: &[u8]) -> Option<usize> {
     let mut index = 0;
     while index < gap.len() {
         if gap[index] == b'\\' && gap.get(index + 1) == Some(&b'\n') {
@@ -2188,18 +2303,18 @@ fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) 
                 {
                     index += 3;
                 } else if gap[index] == b'\n' {
-                    return true;
+                    return Some(index);
                 } else {
                     index += 1;
                 }
             }
         } else if gap[index] == b'\n' {
-            return true;
+            return Some(index);
         } else {
             index += 1;
         }
     }
-    false
+    None
 }
 
 /// Return whether translation phase 2 leaves no characters between two
