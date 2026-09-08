@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 461 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 460 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Signed-wrapping modes now pass nine previously failing originals; 326 programs still carry unhandled requirements, recorded rather than guessed or removed | `torture` | PARTIAL: wrapping semantics and original replay CLOSED in `20260908T135846.118517Z`; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -132,8 +132,16 @@ GCC-14 and Clang-19 at O0/O2 agree, and both reject all three negative probes
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
 tools/gate-changed.sh 0f0a6a5 --all-targets --locked --offline --quiet`
 passes 1,630 tests across 12 affected crates, zero failures and four existing
-standing-run ignores; Clippy, fmt, Ruff and diff-check pass. Original
-benchmark replay is still pending; these focused results do not close row 13.
+standing-run ignores; Clippy, fmt, Ruff and diff-check pass. The repair is
+`4f7bee9`; original replay `20260908T163813.683179Z` uses executable SHA-256
+`23f7bd31fb89bfbc21b26589870f3ec155ad8978e2918b9fae9ecba7ec6361bc`.
+All original identities are unchanged: torture `const-addr-expr-1` changes
+from REFUSED to PASS, while `comp-goto-1` remains refused and reaches the
+existing E3029 computed-goto boundary instead of E3101. No outcome regresses.
+Torture is now 1,209 passes, 460 refusals and 23 failures out of 1,692;
+ctest remains 206 passes, 13 refusals and one failure out of 220.
+Captures: `.evidence/ladder/e0/20260908T163814Z` and `20260908T163937Z`.
+This closes the identified composite-declaration defect, not all of row 13.
 
 ### Variadic record return placement
 
