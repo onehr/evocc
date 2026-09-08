@@ -116,6 +116,28 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Flexible character-array initializer storage
+
+`4ca0c26` is the two-test RED for direct file-scope flexible members initialized
+by narrow, wide or empty strings. The declared array type remains incomplete;
+the shared string extent calculation supplies storage, including the terminating
+zero, without changing `sizeof` of the record. Fixed arrays retain their exact
+bound, including omitted terminators and zero-filled padding. Both interpreters
+and native Darwin now execute the fixture successfully.
+The separate RED `0131fa1` prevents accidentally admitting nonempty flexible
+initializers nested in another record or union: GCC and Clang disagree on the
+string form, so it remains E2202. Empty nested lists are accepted by both and
+remain accepted; automatic flexible initialization retains E2919.
+Sealed GCC-14/Clang-19 O0/O2 results and the negative admissions are recorded in
+`.evidence/builtin-probes/20260909-flexible-strings/results.txt`.
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh 4ca0c26 --all-targets --locked --offline --quiet`
+passes 1,986 tests across all 17 workspace crates, zero failures and four
+pre-existing standing-run ignores; Clippy and fmt pass. The shared merge changed
+Cargo.lock, so this is a full-workspace rather than five-crate gate.
+Original-program benchmark replay is still pending: the focused result alone
+does not close torture `20010924-1` or turn the nested oracle conflict into PASS.
+
 ### Compatible function declarations and actual definition arity
 
 `0f0a6a5` is the tests-only RED for compatible unspecified declarations

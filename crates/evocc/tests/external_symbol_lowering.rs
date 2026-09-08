@@ -150,6 +150,16 @@ fn nested_flexible_member_initializers_remain_outside_the_profile() {
         assert!(!output.status.success(), "accepted {source}");
         assert!(String::from_utf8_lossy(&output.stderr).contains("E2202"));
     }
+    let empty = "struct S { int n; char d[]; }; union U { struct S s; char space[36]; } u = {{3, {}}}; struct O { int n; struct S s; } o = {1, {2, {}}}; int main(void) { return u.s.n != 3 || o.s.n != 2 || sizeof(o) != 8; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(empty, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
 }
 
 #[test]

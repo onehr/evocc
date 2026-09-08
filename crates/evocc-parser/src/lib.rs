@@ -3228,6 +3228,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         actions: &mut Vec<InitAction<'arena>>,
     ) -> Option<()> {
         let kind = self.types.get(target)?.kind.clone();
+        if self.flexible_initializer_allowed
+            && matches!(
+                kind,
+                TypeKind::Array {
+                    bound: ArrayBound::Unbounded,
+                    ..
+                }
+            )
+            && !matches!(path.steps(), [SubobjectStep::Field { .. }])
+            && !matches!(written, WrittenInitializer::List { elements, .. } if elements.is_empty())
+        {
+            self.report("E2202", "invalid-initializer-type", written.span());
+            return None;
+        }
         match (&kind, written) {
             (
                 TypeKind::Array { .. },
@@ -3715,6 +3729,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         actions
             .iter()
             .filter_map(|action| match action.path().steps() {
+                [SubobjectStep::Field {
+                    field_index: candidate,
+                }] if *candidate == field_index => match action {
+                    InitAction::StoreString { literal, .. } => {
+                        literal.initializer_element_count(&ArrayBound::Unbounded)
+                    }
+                    _ => None,
+                },
                 [SubobjectStep::Field {
                     field_index: candidate,
                 }, SubobjectStep::Index { index }]

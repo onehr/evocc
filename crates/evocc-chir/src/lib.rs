@@ -167,6 +167,18 @@ impl StringLit {
         u64::try_from(self.decoded_units()?.len()).ok()
     }
 
+    /// Initialized character-array extent. An incomplete flexible member
+    /// takes the literal's terminating zero without completing its type.
+    #[must_use]
+    pub fn initializer_element_count(&self, bound: &evocc_types::ArrayBound) -> Option<u64> {
+        let explicit = self.explicit_unit_count()?;
+        match bound {
+            evocc_types::ArrayBound::Fixed(count) if *count >= explicit => Some(*count),
+            evocc_types::ArrayBound::Unbounded => explicit.checked_add(1),
+            _ => None,
+        }
+    }
+
     /// Decode the explicit execution code units of this literal sequence.
     ///
     /// The terminating zero is deliberately excluded because C omits it when

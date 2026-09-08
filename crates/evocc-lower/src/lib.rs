@@ -30,7 +30,7 @@ use evocc_evoir::{
 use evocc_types::{
     canonical_marks, enum_integer_rank, AddressSpace, ArrayBound, BitFieldLayout, EvoIRType,
     FunctionParameters, LayoutError, ParamMark, RecordShape, Region, TagDefinition, TagState,
-    TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    TargetDataLayout, TypeId, TypeInterner, TypeKind, TypeLayout,
 };
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
@@ -1120,13 +1120,7 @@ fn lower_globals<'a>(
                             });
                         }
                         let destination =
-                            target
-                                .layout_of(unit.types(), actual_ty)
-                                .map_err(|source| LowerError::Layout {
-                                    ty: actual_ty,
-                                    span: action_span,
-                                    source,
-                                })?;
+                            initializer_destination_layout(unit, target, action, action_span)?;
                         object_size = object_size.max(
                             u64::try_from(offset)
                                 .ok()
@@ -1503,6 +1497,45 @@ fn symbolic_address(
     }
 }
 
+fn initializer_destination_layout(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    action: &InitAction<'_>,
+    span: SourceSpan,
+) -> Result<TypeLayout, LowerError> {
+    let ty = action.destination_type();
+    if let (
+        InitAction::StoreString { literal, .. },
+        Some(TypeKind::Array {
+            element,
+            bound: ArrayBound::Unbounded,
+        }),
+    ) = (
+        action,
+        unit.types().get(ty).map(|canonical| &canonical.kind),
+    ) {
+        let element_layout =
+            target
+                .layout_of(unit.types(), *element)
+                .map_err(|source| LowerError::Layout {
+                    ty: *element,
+                    span,
+                    source,
+                })?;
+        let size_bytes = literal
+            .initializer_element_count(&ArrayBound::Unbounded)
+            .and_then(|count| count.checked_mul(element_layout.size_bytes))
+            .ok_or(LowerError::UnsupportedStatement {
+                span,
+                feature: "invalid string initializer extent",
+            })?;
+        return Ok(TypeLayout::new(size_bytes, element_layout.align_bytes));
+    }
+    target
+        .layout_of(unit.types(), ty)
+        .map_err(|source| LowerError::Layout { ty, span, source })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_static_initializer(
     unit: &CHirUnit<'_>,
@@ -1556,13 +1589,7 @@ fn apply_static_initializer(
         }
         return Ok(());
     }
-    let layout = target
-        .layout_of(unit.types(), destination)
-        .map_err(|source| LowerError::Layout {
-            ty: destination,
-            span,
-            source,
-        })?;
+    let layout = initializer_destination_layout(unit, target, action, span)?;
     let end = offset
         .checked_add(usize::try_from(layout.size_bytes).map_err(|_| {
             LowerError::UnsupportedType {
@@ -1586,10 +1613,7 @@ fn apply_static_initializer(
     match action {
         InitAction::ZeroScalar { .. } => target_bytes.fill(0),
         InitAction::StoreString { literal, .. } => {
-            let TypeKind::Array {
-                element,
-                bound: ArrayBound::Fixed(count),
-            } = unit
+            let TypeKind::Array { element, ref bound } = unit
                 .types()
                 .get(destination)
                 .ok_or(LowerError::UnknownType {
@@ -1601,9 +1625,15 @@ fn apply_static_initializer(
                 return Err(LowerError::UnsupportedType {
                     ty: destination,
                     span,
-                    feature: "string initializer destination is not a fixed array",
+                    feature: "string initializer destination is not a character array",
                 });
             };
+            let count = literal.initializer_element_count(bound).ok_or(
+                LowerError::UnsupportedStatement {
+                    span,
+                    feature: "invalid string initializer extent",
+                },
+            )?;
             let width = usize::try_from(
                 target
                     .layout_of(unit.types(), element)

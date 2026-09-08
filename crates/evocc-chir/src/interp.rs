@@ -5567,25 +5567,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         literal: &StringLit,
         span: SourceSpan,
     ) -> Result<(AccessLayout, ByteSequence), InterpreterError> {
-        let (element, count) = match self
+        let Some(TypeKind::Array { element, bound }) = self
             .unit
             .types()
             .get(destination_type)
             .map(|canonical| &canonical.kind)
-        {
-            Some(TypeKind::Array {
-                element,
-                bound: ArrayBound::Fixed(count),
-            }) => (*element, *count),
-            _ => {
-                return Err(InterpreterError::UnsupportedType {
+        else {
+            return Err(InterpreterError::UnsupportedType {
+                ty: destination_type,
+                span,
+            });
+        };
+        let count =
+            literal
+                .initializer_element_count(bound)
+                .ok_or(InterpreterError::UnsupportedType {
                     ty: destination_type,
                     span,
-                });
-            }
+                })?;
+        let element = self.access_layout(*element, span)?;
+        let destination = if *bound == ArrayBound::Unbounded {
+            AccessLayout::new(
+                element
+                    .size_bytes
+                    .checked_mul(count)
+                    .ok_or(InterpreterError::UnsupportedType {
+                        ty: destination_type,
+                        span,
+                    })?,
+                element.align_bytes,
+            )
+        } else {
+            self.access_layout(destination_type, span)?
         };
-        let destination = self.access_layout(destination_type, span)?;
-        let element = self.access_layout(element, span)?;
         let width =
             usize::try_from(element.size_bytes).map_err(|_| InterpreterError::UnsupportedType {
                 ty: destination_type,
