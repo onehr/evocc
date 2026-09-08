@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout dba5385)
+EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout b504ee9)
 ═════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ───────────────┐
@@ -24,8 +24,8 @@ EvoCC ── (2026-09-08 UTC,EvoIR 1.9.79 / EvoMIR 0.22, checkout dba5385)
 │ K1 receipt: EvoCC 41 ; 52/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
-│ E0 c-testsuite 196/220 ███████░ torture 1186/1692 ██████░░ │
-│ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 2/11 toybox 191/203 musl 817/1339 │
+│ E0 c-testsuite 196/220 ███████░ torture 1189/1692 ██████░░ │
+│ Csmith 932/1000, 0;zlib 19/19 zstd 2/44 cjson 0/2 tinycc 2/11 toybox 191/203 musl 987/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -39,21 +39,21 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260908T005741.383578Z`; checkout `dba5385`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260908T014701.174683Z`; checkout `b504ee9`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
-| ctest | E0b | INCOMPLETE | 196/220 programs | 20260908T005741.383578Z | E3101: 14, E1003: 2, E2202: 2 |
-| torture | E0a | INCOMPLETE | 1186/1692 programs | 20260908T005741.383578Z | E3101: 140, E1001: 108, E2001: 42 |
+| ctest | E0b | INCOMPLETE | 196/220 programs | 20260908T005741.383578Z (previous) | E3101: 14, E1003: 2, E2202: 2 |
+| torture | E0a | INCOMPLETE | 1189/1692 programs | 20260908T014701.174683Z | E3101: 140, E1001: 108, E2001: 42 |
 | csmith | E0c | INCOMPLETE | 932/1000 programs | 20260907T141450.311159Z (previous) | original seeds; unavailable oracles are not passes |
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 2/44 units | 20260907T141450.311159Z (previous) | E1001: 38, E2921: 4 |
 | cjson | E3 | VALIDATION_GAP | 0/2 units | 20260907T141450.311159Z (previous) | E1001: 2 |
 | tinycc | E5 | INCOMPLETE | 2/11 units | 20260907T141450.311159Z (previous) | E3101: 3, E2102: 2, E0113: 1 |
 | toybox | E6 | INCOMPLETE | 191/203 units | 20260907T165020.113321Z (previous) | E3101: 12 |
-| musl | E7 | INCOMPLETE | 817/1339 units | 20260907T153648.272156Z (previous) | E3101: 242, E1006: 83, E2001: 14 |
+| musl | E7 | INCOMPLETE | 987/1339 units | 20260908T014701.174683Z | E3101: 240, E1006: 83, E2001: 14 |
 | kernel | K1/K5-K7 ramp | INCOMPLETE | 41/2799 units | 20260907T170640.283040Z (previous) | E3021: 2745, E3029: 1, E3031: 1 |
 | mbedtls | E4 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no benchmark adapter yet |
 | polybench | E8 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |

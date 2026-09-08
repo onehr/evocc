@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T005804Z",
-  "subject": "dba5385",
-  "driverSha256": "0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b",
+  "run": "20260908T014701Z",
+  "subject": "b504ee9",
+  "driverSha256": "eea68d679e70193687b8ecd61b6e92e2fff1aeae4fd7dbe92f3088d9fc24fff8",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -18,10 +18,10 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1186,
+     "pass": 1189,
      "refused": 469,
-     "fail": 34,
-     "link-fail": 3
+     "fail": 33,
+     "timeout": 1
     },
     "refusalsByCode": {
      "E3101": 140,
@@ -59,14 +59,13 @@
      "E3006 invalid-signed-left-shift": 13,
      "E3004 signed-integer-overflow": 7,
      "E3039 external-call-not-executable": 6,
-     "E3007 evoir-main-parameters-are-not-canonical": 3,
-     "E3021 not-lowered": 3,
-     "E3040 external-object-not-executable": 2,
      "E3008 interpreter-fuel-exhausted": 2,
+     "E3021 not-lowered": 2,
+     "E3007 evoir-main-parameters-are-not-canonical": 2,
      "E3001 read-of-uninitialized-object": 1
     }
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T005804Z"
+ "evidence": ".evidence/ladder/e0/20260908T014701Z"
 }

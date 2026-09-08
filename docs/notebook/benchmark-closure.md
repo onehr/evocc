@@ -24,8 +24,8 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | Alias identities and weak definitions implemented; original-program replay pending; unresolved weak address recipe fails natively | `torture musl` | OPEN: implementation gate green; weak-address contract exception pending |
-| 3 | Explicit register operands | Singleton `sigsetjmp_tail.lo` breaks two setjmp tests; syscall assembly does not preserve the specified register mapping; pin register/ABI semantics and native execution | `musl` | OPEN |
+| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; unresolved weak address recipe fails natively | `torture musl` | OPEN: `20260908T014701.174683Z`; weak-address contract exception pending |
+| 3 | Explicit register operands | Earlier `sigsetjmp_tail.lo` regression is absent in the latest mixed run, but no register-binding fix was made; pin the specified register mapping and native execution independently | `musl` | OPEN |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Six named units now verify using their own ELF extents; whole configuration replay, mixed boot PASS, zero mismatches | `kernel` | CLOSED: `measure-20260907T170640Z`; overall kernel coverage remains incomplete |
 | 6 | Assembly register alternatives | `Kr` or operand type rejects 2,745 kernel units; implement shared selection/validation and native operand tests | `kernel` | OPEN: authorized by revision 1.9.78, `5a42279` |
@@ -79,6 +79,32 @@ references to resolve to address zero; the measured linked address is 0x400000.
 The proposed exception is GOT-based address materialization only for weak
 extern/declare records, with no new EvoIR instruction; it is not implemented
 without authority. Alias/weak remains OPEN, irrespective of the green unit gate.
+
+`python3 tools/bench.py torture musl --no-build --jobs 4 --budget 40` finishes
+INCOMPLETE in wrapper `20260908T014701.174683Z`, subject `b504ee9`, compiler
+`eea68d679e70193687b8ecd61b6e92e2fff1aeae4fd7dbe92f3088d9fc24fff8`.
+The release executable was unchanged throughout both lanes.
+
+- Torture `20260908T014701Z` retains all 1,692 original identities and all
+  1,186 prior passes. `alias-2`, `alias-3` and `alias-4` change from link
+  failure to PASS: 1,189 pass, 469 refused, 33 runtime failures, zero link
+  failures and one emission timeout. `memclr` changed from runtime failure
+  to the 60-second emission timeout; this remains a measured failure, not
+  a cleared issue or a reason to increase the watchdog.
+- Musl `20260908T015031Z` retains all 1,339 original units and every prior
+  assembled unit. `intscan.lo` and `sigaction.lo` change from refusal to
+  assembled: 987 assembled, 352 refused. Symbol-parity exclusions fall from
+  167 to zero, and all 987 substituted units pass together against the same
+  17-failure reference baseline (previously 817 passed in the mixed build).
+  No subject-failing unit remains in this run. This does not establish
+  complete musl coverage or independently prove explicit register bindings.
+
+An additional RED checkpoint `f1ee3cf` pins an alias whose target definition
+was first declared by a block-scope extern. Fix `66a1f03` identifies actual
+top-level definition nodes rather than the first symbol scope. Its changed
+gate (`tools/gate-changed.sh f1ee3cf --quiet`, same offline/build settings)
+passes 939 tests, zero failures or ignored tests, Clippy and fmt PASS.
+This follow-up is not included in the benchmark compiler identified above.
 
 ### Macro definition restoration
 
