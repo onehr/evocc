@@ -113,6 +113,7 @@ PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 #: Options the front end consumes as written.
 PASSED_THROUGH = (
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
+    "-fbuiltin", "-fno-builtin",
 )
 
 

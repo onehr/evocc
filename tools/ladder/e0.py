@@ -161,7 +161,10 @@ def program_options(source: Path) -> dict[str, list[str]]:
     not a DejaGNU interpreter or an applicability filter. C string/character
     literals are skipped so text inside them cannot change compiler options.
     """
-    supported = {"-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow"}
+    supported = {
+        "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
+        "-fbuiltin", "-fno-builtin",
+    }
     base, additional, unhandled = [], [], []
     tokens = re.finditer(
         r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|/\*.*?\*/|//[^\n]*''',
