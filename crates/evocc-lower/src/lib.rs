@@ -5885,13 +5885,10 @@ impl<'a> FunctionLowerer<'a> {
                         integer: CIntegerType::ULONG,
                     });
                 }
-                if matches!(value.value.ty, EvoIRType::Bits(_))
-                    || matches!(
-                        (&value.value.ty, &expected),
-                        (EvoIRType::Ptr(_), EvoIRType::FnPtr { .. })
-                            | (EvoIRType::FnPtr { .. }, EvoIRType::Ptr(_))
-                    )
-                {
+                if matches!(
+                    value.value.ty,
+                    EvoIRType::Bits(_) | EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                ) {
                     let address = self.cast(value, CIntegerType::ULONG, state)?;
                     let result = self.fresh_value(expected);
                     self.emit(

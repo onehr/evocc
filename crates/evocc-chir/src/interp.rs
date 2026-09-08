@@ -9367,10 +9367,11 @@ fn cast_machine_value(
         {
             Ok(CValue::Pointer { value, ty: target })
         }
-        (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target))
-            if pointer_type_is_function(types, target)
-                && types.compatible_ignoring_top_qualifiers(ty.pointee(), target.pointee()) =>
+        (CValue::FunctionPointer { value, .. }, ValueType::Pointer(target))
+            if pointer_type_is_function(types, target) =>
         {
+            // A cast retags the interface; start_indirect_call checks it
+            // against the function identity after evaluating the arguments.
             Ok(CValue::FunctionPointer { value, ty: target })
         }
         (

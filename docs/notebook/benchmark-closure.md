@@ -116,6 +116,20 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Function-pointer casts and the reached-call boundary
+
+`b5837ce` contains two compiled RED tests: both interpreters/lowering refused
+the cast before its call could be reached. Casts now preserve the function
+identity while changing the static interface; lowering uses the existing
+pointer/integer round trip. Argument evaluation still precedes the unchanged
+dynamic E3019 check. The storage/cast-back fixture and argument-side goto
+pass both interpreters and native execution, while an actually reached
+incompatible call still reports E3019 in both interpreters. All 54 focused
+integration tests pass. The changed all-targets gate against `b5837ce`
+passes 1,273 tests, zero failures and three existing ignores; Clippy, fmt,
+Ruff and diff-check pass. The original `call-trap-1` replay is still required;
+this focused result is not a benchmark closure.
+
 ### Deallocation builtin and assembly spelling
 
 `b95f568` is the two-test compiled RED: E2001 for `__builtin_free`, E1001
@@ -1239,6 +1253,16 @@ but times out with that option. The option also removes its emitted
 domain, not a checksum that every oracle supplies; both original verdicts
 remain oracle-unusable. The compact commands, output and source reasoning are
 in `.evidence/builtin-probes/20260909-csmith-loops/results.txt`.
+
+Bitfields seed 457 has the same measured optimization dependence: Clang-19
+O2 prints `91a167a00`, but adding `-fno-finite-loops` to the separate diagnostic
+run times out at the unchanged ten-second limit. The source reaches
+`func_48`, where `lbl_267` resets `p_51`, its two-iteration loop leaves it
+two, and `if(p_51)` returns to the label without a possible return path.
+All three checksum-producing unavailable originals now have an identified
+repeating source path and bounded optimization probe; that is not three
+passing differential cases. The other unavailable originals still require
+individual classification.
 The other 65 unavailable inputs still need independent source classification;
 none of the 68 unavailable originals is counted as agreement.
 
