@@ -4334,27 +4334,42 @@ impl<'a> FunctionLowerer<'a> {
     fn lower_compound_items(
         &mut self,
         items: &'a [CHirBlockItem<'a>],
+        initial: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+        leave_scope: bool,
+    ) -> Result<Flow, LowerError> {
+        let items = items.iter().map(|item| match item {
+            CHirBlockItem::Declaration(declaration) => SwitchSegmentItem::Declaration(declaration),
+            CHirBlockItem::Statement(statement) => SwitchSegmentItem::Statement(statement),
+        });
+        self.lower_sequence(items, initial, live_after, control, leave_scope)
+    }
+
+    fn lower_sequence(
+        &mut self,
+        mut items: impl Iterator<Item = SwitchSegmentItem<'a>> + Clone,
         mut initial: State,
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
         leave_scope: bool,
     ) -> Result<Flow, LowerError> {
-        for item in items {
-            if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
+        for item in items.clone() {
+            if let SwitchSegmentItem::Declaration(CHirDecl::Object(object)) = item {
                 initial.locals.insert(object.symbol);
             }
         }
         let mut normal = vec![initial];
         let mut last_template = normal.first().cloned();
         let mut declared = Vec::new();
-        for (index, item) in items.iter().enumerate() {
+        while let Some(item) = items.next() {
             let mut future = live_after.clone();
-            for later in &items[index + 1..] {
-                collect_symbols_item(later, &mut future);
+            for later in items.clone() {
+                collect_symbols_switch_item(&later, &mut future);
             }
             let mut needed_now = future.clone();
-            collect_symbols_item(item, &mut needed_now);
-            if let CHirBlockItem::Statement(CHirStmt::Label(label, nested, _)) = item {
+            collect_symbols_switch_item(&item, &mut needed_now);
+            if let SwitchSegmentItem::Statement(CHirStmt::Label(label, nested, _)) = item {
                 let incoming = std::mem::take(&mut normal);
                 let template = incoming.first().cloned().or_else(|| last_template.clone());
                 normal = self
@@ -4373,7 +4388,7 @@ impl<'a> FunctionLowerer<'a> {
                 continue;
             }
             if normal.is_empty() {
-                let CHirBlockItem::Statement(statement) = item else {
+                let SwitchSegmentItem::Statement(statement) = item else {
                     continue;
                 };
                 if !contains_targeted_label(statement, &self.goto_names) {
@@ -4401,14 +4416,14 @@ impl<'a> FunctionLowerer<'a> {
             };
             last_template = Some(state.clone());
             normal = match item {
-                CHirBlockItem::Declaration(declaration) => {
+                SwitchSegmentItem::Declaration(declaration) => {
                     if let CHirDecl::Object(object) = declaration {
                         declared.push(object.symbol);
                     }
                     self.lower_declaration(declaration, &mut state)?;
                     vec![state]
                 }
-                CHirBlockItem::Statement(statement) => {
+                SwitchSegmentItem::Statement(statement) => {
                     self.lower_stmt(statement, state, &future, control)?.normal
                 }
             };
@@ -6933,34 +6948,24 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         for index in 0..segments.len() {
-            let mut normal = vec![entries[index].0.clone()];
-            for (item_index, item) in segments[index].items.iter().enumerate() {
-                let mut future = live_after.clone();
-                for later_item in &segments[index].items[item_index + 1..] {
+            let mut future = live_after.clone();
+            for later in &segments[index + 1..] {
+                for later_item in &later.items {
                     collect_symbols_switch_item(later_item, &mut future);
                 }
-                for later in &segments[index + 1..] {
-                    for later_item in &later.items {
-                        collect_symbols_switch_item(later_item, &mut future);
-                    }
-                }
-                let mut needed_now = future.clone();
-                collect_symbols_switch_item(item, &mut needed_now);
-                let pending = std::mem::take(&mut normal);
-                let Some(mut current) = self.merge_states(pending, &needed_now)? else {
-                    break;
-                };
-                normal = match item {
-                    SwitchSegmentItem::Declaration(declaration) => {
-                        self.lower_declaration(declaration, &mut current)?;
-                        vec![current]
-                    }
-                    SwitchSegmentItem::Statement(statement) => {
-                        self.lower_stmt(statement, current, &future, &control)?
-                            .normal
-                    }
-                };
             }
+            // A terminated segment can still contain goto targets. Use the
+            // same label, liveness and detached-entry handling as a compound,
+            // without inventing a lexical scope at each case label.
+            let normal = self
+                .lower_sequence(
+                    segments[index].items.iter().copied(),
+                    entries[index].0.clone(),
+                    &future,
+                    &control,
+                    false,
+                )?
+                .normal;
             if index + 1 < segments.len() {
                 let next = &entries[index + 1];
                 for current in normal {
