@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 106 E1001 refusals, not 106 proven instances of one cause; source locations now retained for classification | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 460 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 459 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Signed-wrapping modes now pass nine previously failing originals; 326 programs still carry unhandled requirements, recorded rather than guessed or removed | `torture` | PARTIAL: wrapping semantics and original replay CLOSED in `20260908T135846.118517Z`; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -135,8 +135,16 @@ tools/gate-changed.sh 4ca0c26 --all-targets --locked --offline --quiet`
 passes 1,986 tests across all 17 workspace crates, zero failures and four
 pre-existing standing-run ignores; Clippy and fmt pass. The shared merge changed
 Cargo.lock, so this is a full-workspace rather than five-crate gate.
-Original-program benchmark replay is still pending: the focused result alone
-does not close torture `20010924-1` or turn the nested oracle conflict into PASS.
+The repair is `b0da087`; wrapper `20260908T172546.081411Z` replays the exact
+original corpus using executable SHA-256
+`1c4c9532fa7d152b134e09a5a9b4e503e8c074a178d5187a2adc6f7927d35b25`.
+All identities are unchanged: torture `20010924-1` changes from REFUSED to
+PASS, while `pr28865` stays REFUSED and now reports the measured nested-form
+E2202 instead of E3101. No outcome regresses. Torture is 1,210 passes,
+459 refusals and 23 failures out of 1,692; ctest stays 206 passes, 13 refusals
+and one failure out of 220. Captures: `.evidence/ladder/e0/20260908T172546Z`
+and `20260908T172644Z`. The direct storage defect is closed; the retained
+oracle conflict is not counted as a success.
 
 ### Compatible function declarations and actual definition arity
 
