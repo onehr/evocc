@@ -6162,3 +6162,10 @@ One original torture refusal, `enum-3`, reaches this rule; full-campaign impact 
 Both sealed oracles agree on the valid macro, filename, decimal-leading-zero and GNU zero-line assertions in `.evidence/builtin-probes/20260908-line-control/valid.c` (`results.txt`); a number-only reset retains the presumed filename and included files have their own line-control state.
 Malformed line numbers and filenames are E2936 (`invalid-line-directive`); the number exceeding u32 in `invalid-range.c` is accepted with a warning by GCC and rejected by Clang, so the profile rejects it with the same code.
 One original c-testsuite refusal, `00152`, is caused by silently skipping `#line`; its original native replay remains the closure test.
+
+### Prototype-only array declarators
+
+An outermost `[*]` in a function-prototype parameter, named or abstract and optionally bracket-qualified, is adjusted to the corresponding pointer under Section 10.1.18; it creates no variable-length object and has no bound to evaluate.
+Both sealed oracles compile and run `.evidence/builtin-probes/20260908-prototype-array/valid.c` with exit zero, and reject the object, definition, attributed-definition, `static *` and inner-qualifier probes (`results.txt`); those malformed placements report E1005 (`invalid-declarator`).
+Inner variable array layers and actual variable-length objects retain the existing E2203 boundary, and `__STDC_NO_VLA__` remains one.
+One original c-testsuite refusal, `00162`, reaches this rule; its original replay determines closure rather than prototype acceptance alone.
