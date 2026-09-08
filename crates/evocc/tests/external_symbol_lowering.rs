@@ -389,6 +389,9 @@ fn alignment_specifiers_reject_invalid_requests_and_placements() {
         "_Alignas(1) int object __attribute__((aligned(16)));",
         "int main(void) { return sizeof(_Alignas(16) int); }",
         "struct S { _Alignas(1) int field; };",
+        "_Alignas(1) extern int values[];",
+        "_Alignas(536870912) char object;",
+        "#pragma pack(1)\nstruct S { char head; _Alignas(1) int member; };",
     ] {
         let output = run(source, "--parse-only");
         let diagnostic = String::from_utf8_lossy(&output.stderr);
@@ -397,6 +400,19 @@ fn alignment_specifiers_reject_invalid_requests_and_placements() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn alignment_specifiers_preserve_incomplete_declarations_and_pack_caps() {
+    for source in [
+        "_Alignas(16) extern struct S object; struct S { char member; };",
+        "_Alignas(16) extern struct S object; struct S { char member __attribute__((aligned(32))); };",
+        "#pragma pack(1)\nstruct S { char head; _Alignas(16) int member; }; _Static_assert(sizeof(struct S) == 5 && _Alignof(struct S) == 1, \"pack cap\");",
+        "_Alignas(void) char object; _Static_assert(__alignof__(object) == 1, \"void alignment\");",
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 #[test]
@@ -1006,6 +1022,12 @@ fn unresolved_runtime_symbols_fail_only_when_reached() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    let output = run(
+        "_Static_assert(_Alignof(int[]) == 4, \"incomplete array\");",
+        "--parse-only",
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("E2912"));
 }
 
 #[test]
