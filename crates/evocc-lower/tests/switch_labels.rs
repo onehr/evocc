@@ -170,3 +170,23 @@ fn nested_switches_own_their_cases_and_continue_targets() {
          }",
     );
 }
+
+#[test]
+fn dispatch_preserves_the_switch_block_compound_literal_storage() {
+    assert_execution(
+        "int f(int x) { int value = 0; switch (x) {
+           if (0) case 1: value = ((int[]){7})[0];
+         } return value; }
+         int main(void) { return f(1) != 7 || f(0) != 0; }",
+    );
+}
+
+#[test]
+fn case_constants_are_folded_without_runtime_arithmetic_obligations() {
+    assert_execution(
+        "int main(void) { int x = -2147483647 - 1; switch (x) {
+           case 1 << 31: return 0;
+           default: return 1;
+         } }",
+    );
+}
