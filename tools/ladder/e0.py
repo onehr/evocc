@@ -220,6 +220,10 @@ def emit(evocc: Path, work: Path, names: list[str], inc: list[str]) -> dict[str,
                 else ("panic" if "panicked" in p.stderr else "other"),
                 "message": (m.group(2) if m else p.stderr.strip()[-160:])[:160],
             }
+            if m:
+                rows[name]["firstDiagnostic"] = p.stderr[
+                    p.stderr.rfind("\n", 0, m.start()) + 1:m.end()
+                ]
     return rows
 
 
