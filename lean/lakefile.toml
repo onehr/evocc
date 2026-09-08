@@ -1,0 +1,11 @@
+name = "EvoIR"
+defaultTargets = ["EvoIR", "evoir-sem"]
+
+[[lean_lib]]
+name = "EvoIR"
+srcDir = "."
+
+[[lean_exe]]
+name = "evoir-sem"
+srcDir = "."
+root = "Main"

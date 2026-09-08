@@ -42,6 +42,11 @@ target-*/
 .DS_Store
 .claude/worktrees/
 
+# Lake's build tree for the Lean proof layer is derived from lean/ sources.
+lean/.lake/
+# Differential vectors and both sides' answers, written by tools/lean/vectors.py.
+lean/vectors/
+
 # Python bytecode caches.
 __pycache__/
 *.pyc

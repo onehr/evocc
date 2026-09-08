@@ -56,12 +56,49 @@ def canonical(value):
     return value
 
 
+def check_expect(path: Path, limit: int) -> int:
+    """One answered file against its own expectations; abstentions are failures here."""
+    checked = 0
+    failures = []
+    for number, record in load(path):
+        expected = record.get("expect")
+        if expected is None:
+            continue
+        checked += 1
+        if canonical(record.get("result")) != canonical(expected):
+            failures.append((number, record))
+    print("named expectations: %d checked, %d failed" % (checked, len(failures)))
+    for number, record in failures[:limit]:
+        print(
+            "  line %d: expected %s, answered %s -- %s"
+            % (
+                number,
+                json.dumps(record.get("expect")),
+                json.dumps(record.get("result")),
+                json.dumps(vector_of(record)),
+            )
+        )
+    return 1 if failures else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("left", type=Path)
-    parser.add_argument("right", type=Path)
+    parser.add_argument("right", type=Path, nargs="?")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    parser.add_argument(
+        "--expect",
+        action="store_true",
+        help="check the single given file against the expect field its named vectors carry",
+    )
     options = parser.parse_args()
+
+    if options.expect:
+        if options.right is not None:
+            parser.error("--expect takes one file")
+        return check_expect(options.left, options.limit)
+    if options.right is None:
+        parser.error("two files are needed unless --expect is given")
 
     left = list(load(options.left))
     right = list(load(options.right))
