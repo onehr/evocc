@@ -377,6 +377,7 @@ pub fn substitute<'a>(
         declarations.extend(pass.decl(declaration, &mut context)?);
     }
     pass.unit.declarations = declarations;
+    pass.unit.resolved_linkage.take();
     Ok(pass.unit)
 }
 

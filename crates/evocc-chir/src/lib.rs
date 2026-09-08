@@ -1358,6 +1358,9 @@ pub struct CHirUnit<'arena> {
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
+    // Declarations and their symbol inventory are immutable outside the
+    // substitution pass, which invalidates this result on its rewritten unit.
+    resolved_linkage: std::sync::OnceLock<Result<linkage::SymbolLinkage, linkage::LinkageError>>,
 }
 
 impl<'arena> CHirUnit<'arena> {
@@ -1375,6 +1378,7 @@ impl<'arena> CHirUnit<'arena> {
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
+            resolved_linkage: std::sync::OnceLock::new(),
         }
     }
 
@@ -1417,6 +1421,13 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn symbols(&self) -> &SymbolTable {
         &self.symbols
+    }
+
+    pub(crate) fn symbol_linkage(&self) -> Result<&linkage::SymbolLinkage, linkage::LinkageError> {
+        self.resolved_linkage
+            .get_or_init(|| linkage::SymbolLinkage::derive(self))
+            .as_ref()
+            .map_err(Clone::clone)
     }
 
     #[must_use]

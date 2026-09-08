@@ -867,8 +867,8 @@ pub fn interpret_scalar_function_with_target(
             span,
         }
     })?;
-    let linkage = crate::linkage::SymbolLinkage::derive(unit).map_err(InterpreterError::Linkage)?;
-    let requirements = reachable_memory_requirements(unit, function, &linkage);
+    let linkage = unit.symbol_linkage().map_err(InterpreterError::Linkage)?;
+    let requirements = reachable_memory_requirements(unit, function, linkage);
     let memory_mode = requirements.requires_memory;
     let mut interpreter = Interpreter::new(unit, target, limits, memory_mode)?;
     // The requested function is validated before any whole-unit work, so a
@@ -909,7 +909,7 @@ struct SymbolOrder {
 }
 
 struct Interpreter<'unit, 'arena> {
-    linkage: crate::linkage::SymbolLinkage,
+    linkage: &'unit crate::linkage::SymbolLinkage,
     argument_lists: evocc_memory::ArgumentLists<CValue>,
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
@@ -951,8 +951,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
-            linkage: crate::linkage::SymbolLinkage::derive(unit)
-                .map_err(InterpreterError::Linkage)?,
+            linkage: unit.symbol_linkage().map_err(InterpreterError::Linkage)?,
             argument_lists: evocc_memory::ArgumentLists::default(),
             unit,
             target: *target,
@@ -10327,18 +10326,6 @@ fn validate_function_gotos(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn repeated_evaluation_shares_the_immutable_units_linkage() {
-        let unit = CHirUnit::new(vec![], TypeInterner::new(), crate::SymbolTable::new());
-        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
-        let first = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
-        let second = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
-        assert!(
-            std::ptr::eq::<crate::linkage::SymbolLinkage>(&first.linkage, &second.linkage,),
-            "one immutable unit must not rebuild its declaration inventory for every initializer"
-        );
-    }
     use crate::{
         IntBase, IntLit, IntSuffix, SpannedName, TypeSpecifier, WrittenDeclarator,
         WrittenDeclaratorLayer,
@@ -10347,6 +10334,41 @@ mod tests {
     use evocc_memory::{AccessLayout, MemoryFault, ObjectId};
     use evocc_types::{CanonicalType, IntRank, Qualifiers};
 
+    #[test]
+    fn repeated_evaluation_shares_the_immutable_units_linkage() {
+        let unit = CHirUnit::new(vec![], TypeInterner::new(), crate::SymbolTable::new());
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let first = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
+        let second = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
+        assert!(
+            std::ptr::eq(first.linkage, second.linkage),
+            "one immutable unit must not rebuild its declaration inventory for every initializer"
+        );
+    }
+
+    #[test]
+    fn substitution_invalidates_only_the_rewritten_units_linkage() {
+        let arena = Arena::default();
+        let (mut unit, function, _) = scalar_program(&arena, false);
+        let scope = unit
+            .symbols
+            .create_scope(unit.symbols.file_scope(), crate::ScopeKind::Function, None)
+            .unwrap();
+        unit.symbols.bind_function_scope(scope, function).unwrap();
+        unit.symbol_linkage().unwrap();
+        let rewritten = crate::inline::substitute(
+            &unit,
+            &arena,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+        .unwrap();
+        assert!(unit.resolved_linkage.get().is_some());
+        assert!(rewritten.resolved_linkage.get().is_none());
+        let cached = rewritten.symbol_linkage().unwrap();
+        let derived = crate::linkage::SymbolLinkage::derive(&rewritten).unwrap();
+        assert_eq!(cached.aliases, derived.aliases);
+        assert_eq!(cached.weak, derived.weak);
+    }
     fn span(start: u32, end: u32) -> SourceSpan {
         SourceSpan::new(FileId::new(701), start, end, 1, start + 1)
     }
