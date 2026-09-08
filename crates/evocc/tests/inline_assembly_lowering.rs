@@ -19,6 +19,109 @@ fn run(source: &str, mode: &str) -> Output {
 
 const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alternative.c");
 const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c");
+const MEMORY_ALTERNATIVES: &str =
+    include_str!("../../../tests/fixtures/assembly-memory-alternatives.c");
+const LOCAL_ADDRESS: &str = include_str!("../../../tests/fixtures/inline-local-address.c");
+const INLINE_MEMORY: &str = r#"
+static inline __attribute__((always_inline)) int read_memory(int value) {
+    asm volatile("" : : "Q"(value) : "memory");
+    return value;
+}
+int main(void) { return read_memory(7) != 7; }
+"#;
+
+#[test]
+fn register_memory_alternatives_select_the_existing_register_representation() {
+    for source in [
+        MEMORY_ALTERNATIVES.to_owned(),
+        MEMORY_ALTERNATIVES
+            .replace("rm", "mr")
+            .replace("=&mr", "=&rm"),
+    ] {
+        let selected = source.replace("rm", "r").replace("mr", "r");
+        for mode in ["--emit=evoir", "--emit=asm"] {
+            let output = run(&source, mode);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = run(&selected, mode);
+            assert!(
+                expected.status.success(),
+                "{}",
+                String::from_utf8_lossy(&expected.stderr)
+            );
+            assert_eq!(output.stdout, expected.stdout, "{mode}");
+        }
+    }
+}
+
+#[test]
+fn inline_local_address_bindings_reach_symbolic_assembly_operands() {
+    let output = run(LOCAL_ADDRESS, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+        assert!(!assembly.contains("%c0"));
+    }
+}
+
+#[test]
+fn inline_memory_operands_keep_the_parameter_object() {
+    let output = run(INLINE_MEMORY, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn register_memory_alternatives_execute_places_effects_and_goto_edges() {
+    execute_native_assembly(MEMORY_ALTERNATIVES, "register-memory");
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn inline_local_addresses_and_memory_operands_execute_on_the_machine() {
+    execute_native_assembly(LOCAL_ADDRESS, "inline-local-address");
+    execute_native_assembly(INLINE_MEMORY, "inline-memory");
+}
+
+#[test]
+fn inline_local_bindings_do_not_replay_mutable_or_effectful_values() {
+    for body in [
+        r#"int k=1; k+=arg; asm(""::"i"(k)); return k;"#,
+        r#"volatile int k=1; asm(""::"i"(k)); return k;"#,
+        r#"int k=++calls; asm(""::"i"(k)); return k;"#,
+        r#"int k=1; asm("" : "+r"(k)); asm(""::"i"(k)); return k;"#,
+        r#"int k=1; int *p=&k; *p=arg; asm(""::"i"(k)); return k;"#,
+    ] {
+        let source = format!("static int calls; static inline __attribute__((always_inline)) int f(int arg){{{body}}} int entry(int arg){{return f(arg);}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success(), "{source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E3021"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = run("static inline __attribute__((always_inline)) int f(void){goto done; int k=5; done:return k;} int main(void){return f();}", "--interpret-evoir");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("E3001"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 #[test]
 fn register_aliases_preserve_the_physical_operand_binding() {
