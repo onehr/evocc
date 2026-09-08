@@ -50,6 +50,7 @@ enum DerivedDeclarator {
     },
     Array {
         bound: ArrayBound,
+        prototype_star: bool,
         parameter_qualifiers: Qualifiers,
         static_bound: bool,
         span: SourceSpan,
@@ -5977,14 +5978,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn validate_variable_array_bounds(&mut self, derived: &[DerivedDeclarator]) {
-        if let Some(span) = derived.iter().find_map(|layer| match layer {
-            DerivedDeclarator::Array {
-                bound: ArrayBound::Variable,
-                span,
-                ..
-            } => Some(*span),
-            _ => None,
-        }) {
+        if let Some(span) = derived
+            .iter()
+            .enumerate()
+            .find_map(|(index, layer)| match layer {
+                DerivedDeclarator::Array {
+                    bound: ArrayBound::Variable,
+                    prototype_star,
+                    span,
+                    ..
+                } if index != 0 || !prototype_star => Some(*span),
+                _ => None,
+            })
+        {
             self.report("E2203", "variable-length-object", span);
         }
     }
@@ -5996,19 +6002,41 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         (merge_qualifiers(before_static, after_static), static_bound)
     }
 
-    fn validate_array_parameter_modifiers(&mut self, derived: &[DerivedDeclarator], allowed: bool) {
-        if allowed {
-            return;
+    fn parse_prototype_array_star(&mut self, static_bound: bool) -> bool {
+        if self.peek_kind() != Some(TokenKind::Star) {
+            return false;
         }
-        if let Some(span) = derived.iter().find_map(|layer| match layer {
-            DerivedDeclarator::Array {
-                parameter_qualifiers,
-                static_bound,
-                span,
-                ..
-            } if *static_bound || *parameter_qualifiers != Qualifiers::default() => Some(*span),
-            _ => None,
-        }) {
+        let star = self.advance().expect("peeked array asterisk");
+        let scope = self
+            .symbols
+            .scope(self.current_scope)
+            .expect("current scope exists");
+        if static_bound || scope.kind() != ScopeKind::FunctionPrototype {
+            self.report("E1005", "invalid-declarator", star.span);
+        }
+        true
+    }
+
+    fn validate_array_parameter_modifiers(&mut self, derived: &[DerivedDeclarator], allowed: bool) {
+        if let Some(span) = derived
+            .iter()
+            .enumerate()
+            .find_map(|(index, layer)| match layer {
+                DerivedDeclarator::Array {
+                    parameter_qualifiers,
+                    static_bound,
+                    prototype_star,
+                    span,
+                    ..
+                } if ((!allowed || index != 0)
+                    && (*static_bound || *parameter_qualifiers != Qualifiers::default()))
+                    || (!allowed && *prototype_star) =>
+                {
+                    Some(*span)
+                }
+                _ => None,
+            })
+        {
             self.report("E1005", "invalid-declarator", span);
         }
     }
@@ -6081,7 +6109,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     let (parameter_qualifiers, static_bound) =
                         self.parse_array_parameter_modifiers();
-                    let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                    let prototype_star = self.parse_prototype_array_star(static_bound);
+                    let bound = if prototype_star {
+                        ArrayBound::Variable
+                    } else if self.peek_kind() == Some(TokenKind::RBracket) {
                         if static_bound {
                             self.report("E1005", "invalid-declarator", open.span);
                         }
@@ -6106,6 +6137,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let layer_span = self.merge_span(open.span, close.span);
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        prototype_star,
                         parameter_qualifiers,
                         static_bound,
                         span: layer_span,
@@ -6201,7 +6233,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     let (parameter_qualifiers, static_bound) =
                         self.parse_array_parameter_modifiers();
-                    let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                    let prototype_star = self.parse_prototype_array_star(static_bound);
+                    let bound = if prototype_star {
+                        ArrayBound::Variable
+                    } else if self.peek_kind() == Some(TokenKind::RBracket) {
                         if static_bound {
                             self.report("E1005", "invalid-declarator", open.span);
                         }
@@ -6213,6 +6248,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let close = self.expect(TokenKind::RBracket)?;
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        prototype_star,
                         parameter_qualifiers,
                         static_bound,
                         span: self.merge_span(open.span, close.span),
@@ -6276,10 +6312,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         index += 1;
                         // Parenthesized declarators may contribute closing
                         // parentheses between the parameter list and body.
-                        while self.tokens.get(index).map(|token| token.kind)
-                            == Some(TokenKind::RParen)
-                        {
-                            index += 1;
+                        loop {
+                            match self.tokens.get(index).map(|token| token.kind) {
+                                Some(TokenKind::RParen) => index += 1,
+                                Some(TokenKind::Attribute | TokenKind::Asm) => {
+                                    index += 1;
+                                    if self.tokens.get(index).map(|token| token.kind)
+                                        != Some(TokenKind::LParen)
+                                    {
+                                        break;
+                                    }
+                                    let mut attribute_depth = 0_usize;
+                                    while let Some(token) = self.tokens.get(index) {
+                                        index += 1;
+                                        match token.kind {
+                                            TokenKind::LParen => attribute_depth += 1,
+                                            TokenKind::RParen => {
+                                                attribute_depth -= 1;
+                                                if attribute_depth == 0 {
+                                                    break;
+                                                }
+                                            }
+                                            TokenKind::Eof => break,
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                _ => break,
+                            }
                         }
                         return if self.tokens.get(index).map(|token| token.kind)
                             == Some(TokenKind::LBrace)
@@ -6474,6 +6534,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ),
                     }
                 };
+            self.validate_array_parameter_modifiers(&derived, true);
             self.validate_variable_array_bounds(&derived);
             let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);
             let ty = self.adjust_parameter_type(unadjusted, &derived);
@@ -6639,6 +6700,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         parameter_qualifiers,
                         static_bound,
                         span,
+                        ..
                     } => WrittenDeclaratorLayer::Array {
                         bound: bound.clone(),
                         parameter_qualifiers: *parameter_qualifiers,
