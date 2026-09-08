@@ -6134,3 +6134,17 @@ A function definition may omit a parameter name while retaining its canonical pa
 Both sealed oracles execute `tests/fixtures/unnamed-definition-parameters.c` at O0/O2 with exit zero under gnu11, with Clang reporting C23-extension warnings (`.evidence/builtin-probes/20260908-unnamed-parameters/results.txt`).
 No diagnostic code is added, and a named parameter with a missing or inconsistent symbol, or a body referring to a nonexistent parameter binding, remains invalid.
 The original torture `pr103209` is one measured first-error refusal of this form; its end-to-end outcome must be remeasured rather than inferred from the reduced fixture.
+
+### Equality between function pointers and qualified void pointers
+
+Equality and inequality admit a function pointer and a pointer to qualified or unqualified void, comparing the represented function identity after each operand is evaluated exactly once; both operand orders and null values are included.
+Both sealed compilers execute `tests/fixtures/function-void-pointer-equality.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260908-pointer-equality/results.txt`).
+The existing pointer-compatibility predicate remains authoritative, no diagnostic code or IR instruction is added, and mixed-representation equality lowers through the existing pointer-to-integer form without authorizing new ordering or dereference rules.
+Two original torture first-error refusals, `20041212-1` and `pr17377`, reach this construct; only their subsequent original-program executions determine whether they pass.
+
+### Unprototyped function-pointer storage and calls
+
+A function pointer whose C parameter list is unspecified retains its address and provenance in storage, and a call through it applies the existing default argument promotions before forming its call interface; an unspecified list is not an empty prototype.
+Both sealed compilers execute `tests/fixtures/unprototyped-function-pointers.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260908-unprototyped-pointers/results.txt`).
+Lowering carries the unprototyped address as `ptr<generic>` and uses the existing integer round-trip conversion to a `fnptr` with the promoted call's actual signature at the call site, leaving the validator and dynamic `E3019` signature check unchanged and adding no instruction or diagnostic.
+Four original c-testsuite refusals (`00087`, `00088`, `00089`, `00209`) require unprototyped pointer storage or calls; their subsequent execution, not the reduced fixture, determines the passing count.

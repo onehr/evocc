@@ -124,6 +124,24 @@ fn unprototyped_function_pointers_recover_the_promoted_call_interface() {
 }
 
 #[test]
+fn unprototyped_calls_still_reject_a_mismatched_dynamic_interface() {
+    for arguments in ["7L", ""] {
+        let source = format!(
+            "int f(int x){{return x;}} int main(void){{int (*p)()=f; return p({arguments});}}"
+        );
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(&source, mode);
+            assert!(!output.status.success(), "{mode} accepted {source}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E3019"),
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn undefined_weak_object_and_function_addresses_are_zero_natively() {
     let source = "extern int value __attribute__((weak)); extern int optional(void) __attribute__((weak)); int main(void){return optional != 0 || &value != 0;}";

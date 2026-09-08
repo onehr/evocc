@@ -9355,31 +9355,36 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
-                    let variadic_fixed =
-                        self.converted_expression_type(expression)
-                            .and_then(|inferred| {
-                                let OperandTypeClass::Pointer(pointer) =
-                                    self.operand_type_class(inferred.ty)
-                                else {
-                                    return None;
-                                };
-                                match self.types.get(pointer.pointee).map(|ty| &ty.kind) {
-                                    Some(TypeKind::Function {
-                                        parameters:
-                                            FunctionParameters::Prototype {
-                                                types,
-                                                variadic: true,
-                                            },
-                                        ..
-                                    }) => Some(types.len()),
-                                    _ => None,
-                                }
-                            });
-                    if let Some(fixed) = variadic_fixed {
-                        if fixed < arguments.len() {
-                            self.promote_call_arguments(&mut arguments[fixed..])?;
+                    let default_promoted_from = self
+                        .converted_expression_type(expression)
+                        .and_then(|inferred| {
+                            let OperandTypeClass::Pointer(pointer) =
+                                self.operand_type_class(inferred.ty)
+                            else {
+                                return None;
+                            };
+                            match self.types.get(pointer.pointee).map(|ty| &ty.kind) {
+                                Some(TypeKind::Function {
+                                    parameters:
+                                        FunctionParameters::Prototype {
+                                            types,
+                                            variadic: true,
+                                        },
+                                    ..
+                                }) => Some(types.len()),
+                                Some(TypeKind::Function {
+                                    parameters: FunctionParameters::Unspecified,
+                                    ..
+                                }) => Some(0),
+                                _ => None,
+                            }
+                        });
+                    let promoted_parameters = match default_promoted_from {
+                        Some(fixed) if fixed <= arguments.len() => {
+                            self.promote_call_arguments(&mut arguments[fixed..])?
                         }
-                    }
+                        _ => Vec::new(),
+                    };
                     if let CHirExpr::Ident { symbol, facts, .. } = expression {
                         if matches!(
                             self.types.get(facts.ty()).map(|ty| &ty.kind),
@@ -9388,8 +9393,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 ..
                             })
                         ) {
-                            let parameters = self.promote_call_arguments(&mut arguments)?;
-                            self.unprototyped_calls.push((*symbol, parameters, span));
+                            self.unprototyped_calls
+                                .push((*symbol, promoted_parameters, span));
                         }
                     }
                     expression = self.alloc_node(CHirExpr::Call(expression, arguments, span));

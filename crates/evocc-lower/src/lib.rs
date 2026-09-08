@@ -2712,26 +2712,43 @@ fn function_pointer_ir_type(
             feature: "fnptr pointee is not a function",
         });
     };
-    let parameter_types = match parameters {
-        FunctionParameters::Prototype { types, .. } => types,
-        _ => {
-            return Err(LowerError::UnsupportedType {
-                ty: function_ty,
-                span,
-                feature: "fnptr requires a prototype",
-            });
-        }
+    let FunctionParameters::Prototype {
+        types: parameter_types,
+        variadic,
+    } = parameters
+    else {
+        // The address can be stored before a call interface is known. Recover
+        // an actual fnptr signature from promoted operands at an indirect call.
+        return Ok(EvoIRType::Ptr(AddressSpace::Generic));
     };
+    function_pointer_interface(
+        types,
+        target,
+        *return_type,
+        parameter_types,
+        *variadic,
+        span,
+    )
+}
+
+fn function_pointer_interface(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    return_type: TypeId,
+    parameter_types: &[TypeId],
+    variadic: bool,
+    span: SourceSpan,
+) -> Result<EvoIRType, LowerError> {
     let mut params = parameter_types
         .iter()
         .map(|ty| function_value_type(types, target, *ty, span).map(|value_type| value_type.ir))
         .collect::<Result<Vec<_>, _>>()?;
-    let returned = match types.get(*return_type).map(|ty| &ty.kind) {
+    let returned = match types.get(return_type).map(|ty| &ty.kind) {
         Some(TypeKind::Void) => None,
-        Some(_) => Some(function_value_type(types, target, *return_type, span)?),
+        Some(_) => Some(function_value_type(types, target, return_type, span)?),
         None => {
             return Err(LowerError::UnknownType {
-                ty: *return_type,
+                ty: return_type,
                 span,
             });
         }
@@ -2754,17 +2771,14 @@ fn function_pointer_ir_type(
         types,
         target,
         parameter_types,
-        Some(*return_type),
+        Some(return_type),
         params.len(),
         span,
     )?;
     Ok(EvoIRType::FnPtr {
         params,
         results,
-        variadic: matches!(
-            parameters,
-            FunctionParameters::Prototype { variadic: true, .. }
-        ),
+        variadic,
         marks,
     })
 }
@@ -4708,6 +4722,7 @@ impl<'a> FunctionLowerer<'a> {
     fn scalar_call_signature(
         &self,
         function_ty: TypeId,
+        arguments: &[&CHirExpr<'_>],
         span: SourceSpan,
     ) -> Result<(Vec<FunctionValueType>, Option<FunctionValueType>), LowerError> {
         let TypeKind::Function {
@@ -4734,13 +4749,18 @@ impl<'a> FunctionLowerer<'a> {
                 .iter()
                 .map(|ty| function_value_type(self.unit.types(), self.target, *ty, span))
                 .collect::<Result<Vec<_>, _>>()?,
-            _ => {
-                return Err(LowerError::UnsupportedType {
-                    ty: function_ty,
-                    span,
-                    feature: "call requires a prototype",
-                });
-            }
+            FunctionParameters::Unspecified => arguments
+                .iter()
+                .map(|argument| {
+                    let CHirExpr::Cast(ty, _, _) = argument else {
+                        return Err(LowerError::UnsupportedExpression {
+                            span: argument.span(),
+                            feature: "unprototyped argument lacks default promotion",
+                        });
+                    };
+                    function_value_type(self.unit.types(), self.target, *ty, argument.span())
+                })
+                .collect::<Result<Vec<_>, _>>()?,
         };
         let return_type = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
             Some(TypeKind::Void) => None,
@@ -7601,18 +7621,24 @@ impl<'a> FunctionLowerer<'a> {
         }
         if operator == UnaryOp::Deref {
             let pointer = self.lower_expr(operand, state)?;
-            if matches!(pointer.value.ty, EvoIRType::FnPtr { .. }) {
-                // Dereferencing a function pointer produces a designator;
-                // unlike an object dereference, it performs no memory load.
-                return Ok(pointer);
-            }
-            if !matches!(pointer.value.ty, EvoIRType::Ptr(_)) {
+            if !matches!(
+                pointer.value.ty,
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+            ) {
                 return Err(LowerError::UnsupportedExpression {
                     span,
                     feature: "dereference operand did not lower to a pointer",
                 });
             }
             let pointee = self.pointer_pointee_type(operand, span)?;
+            if matches!(
+                self.unit.types().get(pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            ) {
+                // Function designators do not load memory, including when an
+                // unspecified C prototype has an erased address representation.
+                return Ok(pointer);
+            }
             if self.is_aggregate_type(pointee) {
                 return Ok(ExprValue {
                     value: pointer.value,
@@ -8768,7 +8794,8 @@ impl<'a> FunctionLowerer<'a> {
                 Some(function.name.clone()),
             )
         } else {
-            let (parameters, returned) = self.scalar_call_signature(function_ty, span)?;
+            let (parameters, returned) =
+                self.scalar_call_signature(function_ty, arguments, span)?;
             (parameters, returned, None)
         };
         let variadic = matches!(
@@ -8809,13 +8836,44 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         let callee_key = if direct_name.is_none() {
-            let lowered = self.lower_expr(callee, state)?;
+            let mut lowered = self.lower_expr(callee, state)?;
             let expected = self.fnptr_type(function_ty, span)?;
             if lowered.value.ty != expected {
                 return Err(LowerError::UnsupportedExpression {
                     span: callee.span(),
                     feature: "indirect callee value disagrees with its fnptr signature",
                 });
+            }
+            if matches!(expected, EvoIRType::Ptr(_)) {
+                let Some(TypeKind::Function { return_type, .. }) =
+                    self.unit.types().get(function_ty).map(|ty| &ty.kind)
+                else {
+                    unreachable!("call designator was checked above")
+                };
+                let actual = function_pointer_interface(
+                    self.unit.types(),
+                    self.target,
+                    *return_type,
+                    &parameter_types
+                        .iter()
+                        .map(|ty| ty.source)
+                        .collect::<Vec<_>>(),
+                    false,
+                    span,
+                )?;
+                let address = self.cast(lowered, CIntegerType::ULONG, state)?;
+                let pointer = self.fresh_value(actual);
+                self.emit(
+                    state,
+                    Inst::PointerCast {
+                        result: pointer.clone(),
+                        operand: address.value,
+                    },
+                )?;
+                lowered = ExprValue {
+                    value: pointer,
+                    integer: CIntegerType::ULONG,
+                };
             }
             let key = EnvKey::Temporary(self.next_temporary);
             self.next_temporary += 1;

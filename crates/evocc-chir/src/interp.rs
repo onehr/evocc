@@ -4403,6 +4403,52 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if !self.function_types_compatible(entry.ty(), ty.pointee()) {
             return Err(InterpreterError::IndirectCallDynamicSignatureMismatch { span: call_span });
         }
+        if matches!(
+            self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
+            Some(TypeKind::Function {
+                parameters: FunctionParameters::Unspecified,
+                ..
+            })
+        ) {
+            let parameters = match self.unit.types().get(entry.ty()).map(|ty| &ty.kind) {
+                Some(TypeKind::Function {
+                    parameters: FunctionParameters::Prototype { types, .. },
+                    ..
+                }) => types.as_slice(),
+                _ => &[],
+            };
+            if arguments.len() != parameters.len() {
+                return Err(InterpreterError::IndirectCallDynamicSignatureMismatch {
+                    span: call_span,
+                });
+            }
+            for (argument, parameter) in arguments.iter().zip(parameters) {
+                let expected = self.value_type(*parameter, call_span)?;
+                let compatible = match (argument, expected) {
+                    (CValue::Integer(value), ValueType::Integer(integer)) => {
+                        value.ty().bits() == integer.bits()
+                    }
+                    (
+                        CValue::Pointer { ty, .. } | CValue::FunctionPointer { ty, .. },
+                        ValueType::Pointer(expected),
+                    ) => self
+                        .unit
+                        .types()
+                        .compatible_ignoring_top_qualifiers(ty.pointee(), expected.pointee()),
+                    (CValue::Aggregate { ty, .. }, ValueType::Aggregate(expected)) => self
+                        .unit
+                        .types()
+                        .compatible_ignoring_top_qualifiers(*ty, expected),
+                    (CValue::Uninitialized(_), _) => true,
+                    _ => false,
+                };
+                if !compatible {
+                    return Err(InterpreterError::IndirectCallDynamicSignatureMismatch {
+                        span: call_span,
+                    });
+                }
+            }
+        }
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == symbol && function.body.is_some())) {
             return self.external_library_call(symbol, entry.spelling(), &arguments, call_span).map(Some);
         }
@@ -9924,7 +9970,10 @@ fn cast_machine_value(
         {
             Ok(CValue::Pointer { value, ty: target })
         }
-        (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
+        (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target))
+            if pointer_type_is_function(types, target)
+                && types.compatible_ignoring_top_qualifiers(ty.pointee(), target.pointee()) =>
+        {
             Ok(CValue::FunctionPointer { value, ty: target })
         }
         (
