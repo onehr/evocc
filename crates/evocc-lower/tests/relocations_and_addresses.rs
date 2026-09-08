@@ -147,6 +147,11 @@ fn function_aliases_share_callable_identity_and_keep_internal_targets() {
         Ok(7),
         &["alias @a = @value", "func @value"],
     );
+    check(
+        "int install(void){extern int value(void);return 0;} int value(void){return 7;} int alternative(void) __attribute__((alias(\"value\"))); int main(void){return alternative();}",
+        Ok(7),
+        &["alias @alternative = @value"],
+    );
 }
 
 #[test]
