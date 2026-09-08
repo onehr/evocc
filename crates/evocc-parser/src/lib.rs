@@ -79,6 +79,7 @@ struct ParsedDeclarator {
 #[derive(Debug, Clone)]
 struct ParsedAbstractDeclarator {
     derived: Vec<DerivedDeclarator>,
+    attributes: Vec<Attribute>,
     span: SourceSpan,
 }
 
@@ -4662,10 +4663,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_type_specifier(&mut self) -> Option<ParsedSpecifier<'arena>> {
-        self.parse_type_specifier_inner(None, None, None)
-    }
-
     fn parse_type_specifier_with_attributes(
         &mut self,
         attributes: &mut Vec<Attribute>,
@@ -5921,20 +5918,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         vla_error_span: Option<SourceSpan>,
     ) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
-        let specifier = self.parse_type_specifier()?;
+        let mut type_attributes = Vec::new();
+        let specifier = self.parse_type_specifier_with_attributes(&mut type_attributes)?;
         let derived = if matches!(
             self.peek_kind(),
             Some(TokenKind::Star | TokenKind::LBracket | TokenKind::LParen)
         ) {
-            self.parse_abstract_declarator_with_vla_error(vla_error_span)?
-                .derived
+            let declarator = self.parse_abstract_declarator_with_vla_error(vla_error_span)?;
+            type_attributes.extend(declarator.attributes);
+            declarator.derived
         } else {
             Vec::new()
         };
         self.validate_array_parameter_modifiers(&derived, false);
-        let mut type_attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
+        type_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::TypeName));
+        for attribute in &mut type_attributes {
+            attribute.placement = AttributePlacement::TypeName;
+        }
         let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
         let ty = self.apply_attributes_to_type(ty, &mut type_attributes);
+        // A type name has no declaration carrying its written pointer layers.
+        // Preserve those attributes separately, without applying their layout.
+        for layer in &derived {
+            if let DerivedDeclarator::Pointer { attributes, .. } = layer {
+                self.detached_attributes.extend(attributes.iter().cloned());
+            }
+        }
         self.detached_attributes.extend(type_attributes);
         Some((ty, specifier.tag_event))
     }
@@ -6012,6 +6021,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         vla_error_span: Option<SourceSpan>,
     ) -> Option<ParsedAbstractDeclarator> {
+        let mut attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
@@ -6032,12 +6042,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let grouped = self.peek_kind() == Some(TokenKind::LParen)
             && matches!(
                 self.tokens.get(self.pos + 1).map(|token| token.kind),
-                Some(TokenKind::Star | TokenKind::LParen | TokenKind::LBracket)
+                Some(
+                    TokenKind::Star
+                        | TokenKind::LParen
+                        | TokenKind::LBracket
+                        | TokenKind::Attribute
+                )
             );
         let mut declarator = if grouped {
             let open = self.advance().expect("peeked abstract grouping");
             let mut inner = self.parse_abstract_declarator_with_vla_error(vla_error_span)?;
             let close = self.expect(TokenKind::RParen)?;
+            attributes.append(&mut inner.attributes);
+            inner.attributes = attributes;
             inner.span = self.merge_span(open.span, close.span);
             inner
         } else {
@@ -6047,6 +6064,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .unwrap_or_else(|| self.span());
             ParsedAbstractDeclarator {
                 derived: Vec::new(),
+                attributes,
                 span,
             }
         };
@@ -6396,6 +6414,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     match self.parse_abstract_declarator() {
                         Some(declarator) => {
                             let written = self.written_abstract_declarator(&declarator);
+                            specifier_attributes.extend(declarator.attributes);
                             (None, declarator.derived, written, declarator.span)
                         }
                         None => (
@@ -6430,6 +6449,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             self.pos = declarator_start;
                             if let Some(declarator) = self.parse_abstract_declarator() {
                                 let written = self.written_abstract_declarator(&declarator);
+                                specifier_attributes.extend(declarator.attributes);
                                 (None, declarator.derived, written, declarator.span)
                             } else {
                                 (
@@ -7379,7 +7399,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn token_starts_type_name(&self, token: &Token) -> bool {
         matches!(
             token.kind,
-            TokenKind::Const | TokenKind::Volatile | TokenKind::Restrict | TokenKind::Atomic
+            TokenKind::Const
+                | TokenKind::Volatile
+                | TokenKind::Restrict
+                | TokenKind::Atomic
+                | TokenKind::Attribute
         ) || self.is_type_specifier_kind(token.kind)
             || self.typedef_name(token).is_some()
     }
