@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 387 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 385 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Wrapping options and 75 explicit GNU89 modes consumed; 262 programs retain unhandled requirements. All 12 missing support-file first errors are zero after restoring original dependencies | `torture` | PARTIAL: source dependency repair benched; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -126,7 +126,22 @@ path. All 79 integration tests now pass, including native execution,
 byte-identical assembly/IR for the alternate spelling and the retained
 external-call and invalid-prototype diagnostics. The changed all-targets
 gate against `b95f568` passes 1,267 tests, zero failures and three existing
-ignores; Clippy, fmt, Ruff and diff-check pass. Original replay is pending.
+ignores; Clippy, fmt, Ruff and diff-check pass. Original replay
+`20260908T202104.952070Z`, subject `15b9d74`, preserves all 220 ctest and
+1,692 torture identities and every previous PASS. `pr84339` and `pr84478`
+change from E2001 to PASS: torture reaches 1,280 passes, 385 refusals,
+26 runtime failures and one link failure; ctest remains 206/220.
+Captures are `.evidence/ladder/e0/20260908T202105Z` and `20260908T202128Z`.
+The assembly spelling moves its original sites past parsing, but their
+remaining unsupported constraints are not passes or closure of that family.
+
+The next correctness repair is nested designator continuation: the valid
+`{ .inner.a = 11, 22 }` writes 22 into the outer following field rather than
+`inner.b`. Both interpreters return the same wrong value, while GCC-14 and
+Clang-19 at O0/O2 return zero from the value-checking reduction. Aggregate
+brace elision after a designator (`.m = 0` in `pr33631`) and inferred-array
+bounds need the same subobject cursor. This remains OPEN; sharing an
+initializer plan did not independently prove that the plan was correct.
 
 ### Alignment specifiers and non-object queries
 
