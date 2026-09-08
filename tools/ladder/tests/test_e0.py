@@ -31,6 +31,8 @@ class SourceIdentityTest(unittest.TestCase):
     def test_emission_consumes_only_supported_unconditional_options(self):
         for directive, applied, unhandled in [
             ('/* { dg-options "-fwrapv" } */', ["-fwrapv"], []),
+            ('/* { dg-options "-fno-builtin -fbuiltin" } */', ["-fno-builtin", "-fbuiltin"], []),
+            ('/* { dg-options "-fbuiltin -fno-builtin" } */', ["-fbuiltin", "-fno-builtin"], []),
             ('/* { dg-options { "-fwrapv" } } */', ["-fwrapv"], []),
             ('/* { dg-additional-options "-fno-strict-overflow" } */', ["-fno-strict-overflow"], []),
             ('/* { dg-options "-Wno-psabi -fwrapv" } */', ["-fwrapv"], ["-Wno-psabi"]),

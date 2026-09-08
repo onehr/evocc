@@ -137,6 +137,13 @@ class EvoccArgvTest(unittest.TestCase):
                 self.assertEqual([flag for flag in argv if flag in flags], written)
                 self.assertFalse(set(flags).intersection(omitted))
 
+    def test_builtin_selection_reaches_the_subject_in_written_order(self) -> None:
+        flags = ["-fno-builtin", "-fbuiltin"]
+        for written in (flags, flags[::-1]):
+            argv, omitted = self.command(f"gcc {' '.join(written)} -c -o a.o a.c\n")
+            self.assertEqual([flag for flag in argv if flag in flags], written)
+            self.assertFalse(set(flags).intersection(omitted))
+
     def test_a_separate_include_value_is_translated(self) -> None:
         argv, _ = self.command(f"gcc -include {TREE}/lib/zstd.h -c -o a.o a.c\n")
         self.assertIn("-include", argv)
