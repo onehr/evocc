@@ -154,6 +154,50 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
     let objects: Vec<_> = outcome.memory.objects().collect();
     assert_eq!(objects.len(), 1);
     assert!(!objects[0].lifetime.is_alive());
+
+    // Packing can lower the required alignment, but never change the byte
+    // extent or detach the guard from its following access.
+    for align_bytes in [1, 2, 4] {
+        let mut packed = module.clone();
+        for inst in &mut packed.functions[0].blocks[0].insts {
+            if let Inst::AccessInBounds { layout, .. } = inst {
+                layout.align_bytes = align_bytes;
+            }
+        }
+        evocc_evoir::validate_module(&packed).unwrap();
+        assert_eq!(
+            interpret_module(
+                &packed,
+                "main",
+                &entry_tokens(),
+                InterpreterLimits::new(100)
+            )
+            .unwrap()
+            .return_values[0],
+            RuntimeValue::bits(32, 42)
+        );
+    }
+    for layout in [
+        AccessLayout::new(1, 1),
+        AccessLayout::new(8, 4),
+        AccessLayout::new(4, 0),
+        AccessLayout::new(4, 3),
+        AccessLayout::new(4, 8),
+    ] {
+        let mut invalid = module.clone();
+        for inst in &mut invalid.functions[0].blocks[0].insts {
+            if let Inst::AccessInBounds {
+                layout: guarded, ..
+            } = inst
+            {
+                *guarded = layout;
+            }
+        }
+        assert!(
+            evocc_evoir::validate_module(&invalid).is_err(),
+            "{layout:?}"
+        );
+    }
 }
 
 #[test]

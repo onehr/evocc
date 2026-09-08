@@ -63,6 +63,61 @@ fn integer_mode_storage_and_call_values_agree_in_both_interpreters() {
 }
 
 #[test]
+fn packed_members_use_member_alignment_for_initializers_reads_and_updates() {
+    for source in [
+        "struct __attribute__((packed)) s { char pad; volatile long x; }; int main(void){struct s a={1, 5}; a.x+=2; ++a.x; return a.x!=8 || a.pad!=1;}",
+        "struct inner {long x;}; struct __attribute__((packed)) outer {char pad; struct inner a[2];}; int main(void){struct outer o={1, {{5}, {7}}}; o.a[1].x++; return o.a[0].x!=5 || o.a[1].x!=8;}",
+        "struct __attribute__((packed)) s {char pad;long x;}; int main(void){struct s a={.pad=1};return a.pad!=1 || a.x!=0;}",
+    ] {
+        check(source, 0);
+    }
+}
+
+#[test]
+fn ordinary_unaligned_pointer_dereferences_remain_runtime_errors() {
+    let source = "int main(void){long a[2]={0,0};return *(long *)((char *)a+1);}";
+    let arena = Arena::default();
+    let file = FileId::new(45_011);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error());
+    let main = unit
+        .symbols()
+        .resolve(unit.symbols().file_scope(), "main")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        interp::interpret_scalar_function(&unit, main, interp::InterpreterLimits::new(10000))
+            .unwrap_err()
+            .code(),
+        "E3012"
+    );
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let args = module
+        .functions
+        .iter()
+        .find(|f| f.name == "main")
+        .unwrap()
+        .params
+        .iter()
+        .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &args,
+            evocc_evoir::InterpreterLimits::new(10000)
+        )
+        .unwrap_err()
+        .code(),
+        "E3012"
+    );
+}
+
+#[test]
 fn static_local_updates_persist_across_calls() {
     check(
         "int f(void){ static int c = 5; c++; return c; } int main(void){ f(); return f(); }",

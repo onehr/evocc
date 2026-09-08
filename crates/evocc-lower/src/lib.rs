@@ -4969,6 +4969,21 @@ impl<'a> FunctionLowerer<'a> {
         Ok(AccessLayout::new(layout.size_bytes, layout.align_bytes))
     }
 
+    fn place_access_layout(
+        &self,
+        place: &MemoryPlace<'_>,
+        span: SourceSpan,
+    ) -> Result<AccessLayout, LowerError> {
+        place
+            .access_layout(self.unit.types(), self.target)
+            .map(AccessLayout::from_type_layout)
+            .ok_or(LowerError::UnsupportedType {
+                ty: place.value_ty(),
+                span,
+                feature: "place has no target access layout",
+            })
+    }
+
     fn pointer_arithmetic_scale(
         &self,
         pointee: TypeId,
@@ -5704,8 +5719,21 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        let (result_ty, integer) = self.c_value_type(ty, span)?;
         let layout = self.access_layout(ty, span)?;
+        self.emit_memory_load_with_layout(address, ty, volatile, span, state, layout)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn emit_memory_load_with_layout(
+        &mut self,
+        address: Value,
+        ty: TypeId,
+        volatile: bool,
+        span: SourceSpan,
+        state: &mut State,
+        layout: AccessLayout,
+    ) -> Result<ExprValue, LowerError> {
+        let (result_ty, integer) = self.c_value_type(ty, span)?;
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
         self.emit(
@@ -5751,6 +5779,17 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let layout = self.access_layout(ty, span)?;
+        self.emit_memory_store_with_layout(address, value, layout, volatile, state)
+    }
+
+    fn emit_memory_store_with_layout(
+        &mut self,
+        address: Value,
+        value: ExprValue,
+        layout: AccessLayout,
+        volatile: bool,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
         self.emit(
@@ -5844,6 +5883,7 @@ impl<'a> FunctionLowerer<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_zero_initializer_at(
         &mut self,
         address: Value,
@@ -5852,6 +5892,7 @@ impl<'a> FunctionLowerer<'a> {
         actions: &[InitAction<'a>],
         span: SourceSpan,
         state: &mut State,
+        alignment: u32,
     ) -> Result<(), LowerError> {
         if actions
             .iter()
@@ -5887,7 +5928,9 @@ impl<'a> FunctionLowerer<'a> {
                         self.constant(state, integer, 0)?
                     }
                 };
-                self.emit_memory_store(address, zero, ty, false, span, state)?;
+                let mut layout = self.access_layout(ty, span)?;
+                layout.align_bytes = layout.align_bytes.min(alignment);
+                self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
                 Ok(())
             }
             TypeKind::Array {
@@ -5912,6 +5955,7 @@ impl<'a> FunctionLowerer<'a> {
                         actions,
                         span,
                         state,
+                        alignment.min(element_layout.align_bytes),
                     )?;
                 }
                 Ok(())
@@ -6012,6 +6056,7 @@ impl<'a> FunctionLowerer<'a> {
                         actions,
                         span,
                         state,
+                        alignment.min(layout.layout.align_bytes),
                     )?;
                     if is_union {
                         break;
@@ -6133,6 +6178,7 @@ impl<'a> FunctionLowerer<'a> {
                 initializer.plan().actions(),
                 object_span,
                 state,
+                self.access_layout(object_ty, object_span)?.align_bytes,
             )?;
         }
         for action in initializer.plan().actions() {
@@ -6158,6 +6204,17 @@ impl<'a> FunctionLowerer<'a> {
                 })?,
                 state,
             )?;
+            // This is a verified initializer path into a known allocation,
+            // so packing can lower the scalar's alignment at this offset.
+            let mut action_layout = self.access_layout(actual_ty, action_span)?;
+            action_layout.align_bytes = action_layout
+                .align_bytes
+                .min(self.access_layout(object_ty, object_span)?.align_bytes);
+            if offset != 0 {
+                action_layout.align_bytes = action_layout
+                    .align_bytes
+                    .min(1u32 << offset.unsigned_abs().trailing_zeros().min(31));
+            }
             match action {
                 InitAction::StoreScalar {
                     destination_type,
@@ -6186,12 +6243,11 @@ impl<'a> FunctionLowerer<'a> {
                     if let Some(field) = bit_field {
                         self.emit_bit_field_store(action_address, lowered, field, state)?;
                     } else {
-                        self.emit_memory_store(
+                        self.emit_memory_store_with_layout(
                             action_address,
                             lowered,
-                            *destination_type,
+                            action_layout,
                             volatile,
-                            action_span,
                             state,
                         )?;
                     }
@@ -6222,12 +6278,11 @@ impl<'a> FunctionLowerer<'a> {
                     if let Some(field) = bit_field {
                         self.emit_bit_field_store(action_address, zero, field, state)?;
                     } else {
-                        self.emit_memory_store(
+                        self.emit_memory_store_with_layout(
                             action_address,
                             zero,
-                            *destination_type,
+                            action_layout,
                             false,
-                            action_span,
                             state,
                         )?;
                     }
@@ -7783,12 +7838,13 @@ impl<'a> FunctionLowerer<'a> {
                         integer: CIntegerType::ULONG,
                     });
                 }
-                self.emit_memory_load(
+                self.emit_memory_load_with_layout(
                     address,
                     place.value_ty(),
                     place.access_qualifiers().is_volatile,
                     *target_span,
                     state,
+                    self.place_access_layout(place, *target_span)?,
                 )
             }
         }
@@ -9924,6 +9980,7 @@ impl<'a> FunctionLowerer<'a> {
         let address = self.lower_place_address(place, target_span, state)?;
         let address_key = self.retain_temporary(address.clone(), state);
         let volatile = place.access_qualifiers().is_volatile;
+        let access_layout = self.place_access_layout(place, target_span)?;
         if self.is_aggregate_type(place.value_ty()) {
             if operator != AssignmentOp::Simple {
                 return Err(LowerError::UnsupportedExpression {
@@ -9970,12 +10027,13 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?)
         } else {
-            Some(self.emit_memory_load(
+            Some(self.emit_memory_load_with_layout(
                 address.clone(),
                 place.value_ty(),
                 volatile,
                 target_span,
                 state,
+                access_layout,
             )?)
         };
         let result = if operator == AssignmentOp::Simple {
@@ -10007,14 +10065,7 @@ impl<'a> FunctionLowerer<'a> {
         if let Some(field) = bit_field {
             return self.emit_bit_field_store(address, result, field, state);
         }
-        self.emit_memory_store(
-            address,
-            result,
-            place.value_ty(),
-            volatile,
-            target_span,
-            state,
-        )
+        self.emit_memory_store_with_layout(address, result, access_layout, volatile, state)
     }
 
     fn lower_memory_update(
@@ -10030,15 +10081,17 @@ impl<'a> FunctionLowerer<'a> {
         }
         let address = self.lower_place_address(place, target_span, state)?;
         let bit_field = self.place_bit_field(place, target_span)?;
+        let access_layout = self.place_access_layout(place, target_span)?;
         let original = if let Some(field) = bit_field {
             self.emit_bit_field_load(address.clone(), place.value_ty(), field, target_span, state)?
         } else {
-            self.emit_memory_load(
+            self.emit_memory_load_with_layout(
                 address.clone(),
                 place.value_ty(),
                 place.access_qualifiers().is_volatile,
                 target_span,
                 state,
+                access_layout,
             )?
         };
         if matches!(original.value.ty, EvoIRType::Ptr(_)) {
@@ -10055,12 +10108,11 @@ impl<'a> FunctionLowerer<'a> {
                 span,
                 state,
             )?;
-            self.emit_memory_store(
+            self.emit_memory_store_with_layout(
                 address,
                 updated.clone(),
-                place.value_ty(),
+                access_layout,
                 place.access_qualifiers().is_volatile,
-                target_span,
                 state,
             )?;
             return Ok(
@@ -10091,12 +10143,11 @@ impl<'a> FunctionLowerer<'a> {
         let updated = if let Some(field) = bit_field {
             self.emit_bit_field_store(address, updated, field, state)?
         } else {
-            self.emit_memory_store(
+            self.emit_memory_store_with_layout(
                 address,
                 updated.clone(),
-                place.value_ty(),
+                access_layout,
                 place.access_qualifiers().is_volatile,
-                target_span,
                 state,
             )?
         };

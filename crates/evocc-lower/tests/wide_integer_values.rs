@@ -77,23 +77,38 @@ fn unions_memory_and_assembly_halves_preserve_the_wide_value() {
         .iter()
         .any(|i| matches!(i, Inst::Store { value, .. } if value.ty == EvoIRType::Bits(128))));
     assert!(instructions.iter().any(|i| matches!(i, Inst::Copy { .. })));
-    let mut wrong_alignment = module.clone();
-    let mut changed = false;
-    for instruction in wrong_alignment
-        .functions
-        .iter_mut()
-        .flat_map(|f| &mut f.blocks)
-        .flat_map(|b| &mut b.insts)
-    {
-        if let Inst::AccessInBounds { layout, .. } = instruction {
-            if layout.size_bytes == 16 {
-                layout.align_bytes = 8;
-                changed = true;
+    for (alignment, valid) in [
+        (1, true),
+        (8, true),
+        (16, true),
+        (0, false),
+        (3, false),
+        (32, false),
+    ] {
+        let mut changed_module = module.clone();
+        let mut changed = false;
+        for instruction in changed_module
+            .functions
+            .iter_mut()
+            .flat_map(|f| &mut f.blocks)
+            .flat_map(|b| &mut b.insts)
+        {
+            if let Inst::AccessInBounds { layout, .. } = instruction {
+                if layout.size_bytes == 16 {
+                    // A packed subobject may have lower access alignment than
+                    // its type; zero, non-powers of two and excess remain invalid.
+                    layout.align_bytes = alignment;
+                    changed = true;
+                }
             }
         }
+        assert!(changed);
+        assert_eq!(
+            evocc_evoir::validate_module(&changed_module).is_ok(),
+            valid,
+            "alignment {alignment}"
+        );
     }
-    assert!(changed);
-    assert!(evocc_evoir::validate_module(&wrong_alignment).is_err());
 }
 
 #[test]

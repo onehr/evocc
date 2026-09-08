@@ -4497,7 +4497,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ty
     }
 
-    /// Apply `aligned` to a type, yielding the (possibly re-interned) type and
+    /// Apply integer representation and alignment attributes to a type,
+    /// yielding the (possibly re-interned) type and
     /// marking the attribute applied. `packed` on a record type is forwarded to
     /// the tag; on anything else it is preserved without effect, which is what
     /// GNU C does too.
@@ -4505,6 +4506,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut ty = ty;
         for attribute in attributes.iter_mut() {
             match attribute.name.as_str() {
+                "mode" => ty = self.apply_integer_mode(ty, attribute),
                 "aligned" => {
                     let Some(bytes) = self.aligned_bytes(attribute) else {
                         continue;
@@ -4550,6 +4552,49 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         ty
+    }
+
+    fn apply_integer_mode(&mut self, ty: TypeId, attribute: &mut Attribute) -> TypeId {
+        let Some(canonical) = self.types.get(ty).cloned() else {
+            return ty;
+        };
+        let source = match canonical.kind {
+            TypeKind::Int(rank) if rank != IntRank::Bool => Some(integer_type_for_rank(rank)),
+            TypeKind::GnuInt128(GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),
+            TypeKind::GnuInt128(GnuInt128Signedness::Unsigned) => Some(CIntegerType::UINT128),
+            _ => None,
+        };
+        let selected = attribute.arguments.first().and_then(|argument| {
+            let written = argument.text.trim();
+            let name = written
+                .strip_prefix("__")
+                .and_then(|name| name.strip_suffix("__"))
+                .unwrap_or(written);
+            match (name, source?.is_signed()) {
+                ("QI" | "byte", true) => Some(TypeKind::Int(IntRank::SChar)),
+                ("QI" | "byte", false) => Some(TypeKind::Int(IntRank::UChar)),
+                ("HI", true) => Some(TypeKind::Int(IntRank::Short)),
+                ("HI", false) => Some(TypeKind::Int(IntRank::UShort)),
+                ("SI", true) => Some(TypeKind::Int(IntRank::Int)),
+                ("SI", false) => Some(TypeKind::Int(IntRank::UInt)),
+                ("DI" | "word", true) => Some(TypeKind::Int(IntRank::Long)),
+                ("DI" | "word", false) => Some(TypeKind::Int(IntRank::ULong)),
+                ("TI", true) => Some(TypeKind::GnuInt128(GnuInt128Signedness::Signed)),
+                ("TI", false) => Some(TypeKind::GnuInt128(GnuInt128Signedness::Unsigned)),
+                _ => None,
+            }
+        });
+        if attribute.arguments.len() != 1 || attribute.placement == AttributePlacement::TypeName {
+            self.report("E2903", "malformed-attribute", attribute.span);
+            return ty;
+        }
+        let Some(kind) = selected else {
+            self.report("E2903", "malformed-attribute", attribute.span);
+            return ty;
+        };
+        let resolved = self.intern(kind, canonical.qualifiers);
+        attribute.applied = Some(AppliedAttribute::IntegerMode);
+        resolved
     }
 
     /// Pointer-position attributes are never applied, but an `aligned`
@@ -5298,6 +5343,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 member_attributes
                     .extend(self.parse_attribute_specifiers(AttributePlacement::Member));
+                // Representation changes use the same resolver as object,
+                // typedef and parameter declarations. Member alignment stays
+                // on the member, never on its canonical type identity.
+                let mut ty = ty;
+                for attribute in &mut member_attributes {
+                    if attribute.name == "mode" {
+                        ty = self.apply_integer_mode(ty, attribute);
+                    }
+                }
                 let member_layout = self.member_layout_attributes(&mut member_attributes);
                 let fallback = declarator
                     .as_ref()

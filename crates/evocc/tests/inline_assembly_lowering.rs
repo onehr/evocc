@@ -21,6 +21,15 @@ const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alte
 const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c");
 
 #[test]
+#[cfg(target_arch = "aarch64")]
+fn integer_modes_and_packed_storage_execute_on_the_machine() {
+    execute_native_assembly(
+        include_str!("../../../tests/fixtures/integer-mode-memory.c"),
+        "integer-mode-memory",
+    );
+}
+
+#[test]
 fn symbolic_immediates_preserve_symbols_offsets_and_ir_round_trips() {
     let source = include_str!("../../../tests/fixtures/symbolic-assembly-immediates.c");
     let output = run(source, "--emit=evoir");

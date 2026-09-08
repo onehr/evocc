@@ -1361,7 +1361,10 @@ fn validate_matching_access_guard(
 ) -> Result<(), String> {
     match access_guards.get(&mem_in.id) {
         Some((pointer, layout))
-            if *pointer == address.id && expected.is_none_or(|expected| *layout == expected) =>
+            if *pointer == address.id && expected.is_none_or(|expected|
+                layout.size_bytes == expected.size_bytes
+                && layout.align_bytes.is_power_of_two()
+                && layout.align_bytes <= expected.align_bytes) =>
         {
             Ok(())
         }

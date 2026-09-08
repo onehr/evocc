@@ -1036,15 +1036,16 @@ pub struct AttributeArgument {
     pub integer: Option<u64>,
 }
 
-/// The meaning this profile gave an attribute. Only two attributes have one;
-/// every other attribute is preserved with `None` here and is listed by name
-/// as not applied.
+/// A type/layout attribute applied while building the canonical type. Other
+/// applied attributes, such as linkage marks, have their own representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppliedAttribute {
     /// `aligned(N)` or bare `aligned`, resolved to bytes.
     Aligned(u32),
     /// `packed`.
     Packed,
+    /// Integer `mode`; the resulting canonical type is the value authority.
+    IntegerMode,
 }
 
 /// An attribute entry (or the equivalent C11 `_Noreturn` function specifier),
@@ -1758,6 +1759,7 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
         let applied = match attribute.applied {
             Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
             Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
+            Some(AppliedAttribute::IntegerMode) => "applied integer-mode".to_owned(),
             None => "preserved-not-applied".to_owned(),
         };
         let _ = writeln!(

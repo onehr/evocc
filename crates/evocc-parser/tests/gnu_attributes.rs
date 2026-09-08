@@ -131,6 +131,9 @@ fn unsupported_and_conflicting_integer_modes_do_not_silently_keep_int() {
         "typedef int t __attribute__((mode()));",
         "typedef int t __attribute__((mode(QI, HI)));",
         "typedef float t __attribute__((mode(QI)));",
+        "typedef _Bool t __attribute__((mode(QI)));",
+        "enum e { A, B }; typedef enum e t __attribute__((mode(QI)));",
+        "enum e { A, B }; struct s { enum e x __attribute__((mode(QI))); };",
         "int f(void){return sizeof(unsigned int __attribute__((mode(QI))));}",
     ] {
         rejects(source, "E2903");

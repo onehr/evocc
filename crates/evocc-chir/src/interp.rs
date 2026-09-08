@@ -597,6 +597,7 @@ enum MachineTask<'arena> {
     ApplyIndirectUpdate {
         operator: UpdateOp,
         bit_field: Option<BitFieldLayout>,
+        layout: AccessLayout,
         value_type: TypeId,
         qualifiers: Qualifiers,
         target_span: SourceSpan,
@@ -772,6 +773,7 @@ enum MachineTask<'arena> {
     ApplyIndirectAssignment {
         operator: AssignmentOp,
         bit_field: Option<BitFieldLayout>,
+        layout: AccessLayout,
         pointer_type: PointerTypeDesc,
         value_type: TypeId,
         qualifiers: Qualifiers,
@@ -1832,7 +1834,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     if let Some(field) = bit_field {
                         self.store_bit_field(address, ty, field, value, *span)?;
                     } else {
-                        self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
+                        self.store_initialized_value(address, ty, value, *span)?;
                     }
                     None
                 }
@@ -2169,6 +2171,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::ApplyIndirectUpdate {
                     operator,
                     bit_field,
+                    layout,
                     value_type,
                     qualifiers,
                     target_span,
@@ -2179,13 +2182,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let old = if let Some(field) = bit_field {
                         self.load_bit_field(address, value_type, field, target_span)?
                     } else {
-                        self.load_memory_value(address, value_type, qualifiers, target_span)?
+                        self.load_memory_value_with_layout(
+                            address,
+                            value_type,
+                            qualifiers,
+                            target_span,
+                            layout,
+                        )?
                     };
                     let stepped = self.step_update_value(old, operator, span)?;
                     let stepped = if let Some(field) = bit_field {
                         self.store_bit_field(address, value_type, field, stepped, span)?
                     } else {
-                        self.store_memory_value(address, value_type, qualifiers, stepped, span)?
+                        self.store_memory_value_with_layout(
+                            address, value_type, qualifiers, stepped, span, layout,
+                        )?
                     };
                     // A prefix form yields the updated object; a postfix form
                     // yields the value it held before the update.
@@ -2220,11 +2231,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let value = if let Some(field) = self.place_bit_field(place, span)? {
                         self.load_bit_field(address, place.value_ty(), field, span)?
                     } else {
-                        self.load_memory_value(
+                        self.load_memory_value_with_layout(
                             address,
                             place.value_ty(),
                             place.access_qualifiers(),
                             span,
+                            self.place_access_layout(place, span)?,
                         )?
                     };
                     values.push(value);
@@ -2240,6 +2252,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::ApplyIndirectAssignment {
                     operator,
                     bit_field,
+                    layout,
                     pointer_type,
                     value_type,
                     qualifiers,
@@ -2288,6 +2301,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             right,
                             target_span,
                             span,
+                            layout,
                         )?);
                     }
                     None
@@ -2833,7 +2847,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if let Some(field) = bit_field {
                     self.store_bit_field(address, ty, field, value, span)?;
                 } else {
-                    self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                    self.store_initialized_value(address, ty, value, span)?;
                 }
                 tasks.push(MachineTask::ContinueMemoryInitializer {
                     target,
@@ -3865,6 +3879,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::ApplyIndirectUpdate {
                     operator: *op,
                     bit_field: self.place_bit_field(place, *target_span)?,
+                    layout: self.place_access_layout(place, *target_span)?,
                     value_type: place.value_ty(),
                     qualifiers: place.access_qualifiers(),
                     target_span: *target_span,
@@ -3903,6 +3918,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::ApplyIndirectAssignment {
                     operator: *op,
                     bit_field: self.place_bit_field(place, *target_span)?,
+                    layout: self.place_access_layout(place, *target_span)?,
                     pointer_type,
                     value_type: place.value_ty(),
                     qualifiers: place.access_qualifiers(),
@@ -5426,7 +5442,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | TypeKind::Pointer(_)
             | TypeKind::BuiltinVaList => {
                 let value = self.zero_value(ty, span)?;
-                self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                self.store_initialized_value(address, ty, value, span)?;
                 Ok(())
             }
             TypeKind::Array {
@@ -6375,6 +6391,46 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         qualifiers: Qualifiers,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
+        // Decay of an incomplete array does not require its size.
+        let layout = if matches!(
+            self.unit.types().get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::Array { .. })
+        ) {
+            AccessLayout::new(0, 1)
+        } else {
+            self.access_layout(ty, span)?
+        };
+        self.load_memory_value_with_layout(address, ty, qualifiers, span, layout)
+    }
+
+    fn place_access_layout(
+        &self,
+        place: &MemoryPlace<'_>,
+        span: SourceSpan,
+    ) -> Result<AccessLayout, InterpreterError> {
+        if matches!(
+            self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+            Some(TypeKind::Array { .. })
+        ) {
+            return Ok(AccessLayout::new(0, 1));
+        }
+        place
+            .access_layout(self.unit.types(), &self.target)
+            .map(AccessLayout::from_type_layout)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: place.value_ty(),
+                span,
+            })
+    }
+
+    fn load_memory_value_with_layout(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        span: SourceSpan,
+        layout: AccessLayout,
+    ) -> Result<CValue, InterpreterError> {
         // Array-to-pointer conversion does not access the array object or
         // produce a volatile event, even when it is a projected subobject.
         if let Some(TypeKind::Array { element, .. }) = self.unit.types().get(ty).map(|ty| &ty.kind)
@@ -6392,7 +6448,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             });
         }
-        let layout = self.access_layout(ty, span)?;
         match self.value_type(ty, span)? {
             ValueType::Integer(integer_type) => {
                 let raw = if qualifiers.is_volatile {
@@ -6484,6 +6539,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn store_static_scalar(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        self.store_initialized_value(address, ty, value, span)
+    }
+
+    /// The initializer path has already verified the subobject's identity.
+    /// Its alignment follows the containing allocation and byte offset, not
+    /// an arbitrary pointer cast to the scalar type.
+    fn store_initialized_value(
         &mut self,
         address: Pointer,
         ty: TypeId,
@@ -7018,6 +7086,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             right,
             target_span,
             span,
+            self.access_layout(binding.ty, span)?,
         )
     }
 
@@ -7351,6 +7420,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         right: CValue,
         target_span: SourceSpan,
         span: SourceSpan,
+        layout: AccessLayout,
     ) -> Result<CValue, InterpreterError> {
         if operator == AssignmentOp::Simple {
             // Simple assignment converts its right operand to the type of the
@@ -7363,9 +7433,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unit.types(),
                 &mut self.memory,
             )?;
-            return self.store_memory_value(address, ty, qualifiers, right, span);
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, right, span, layout);
         }
-        let left = self.load_memory_value(address, ty, qualifiers, target_span)?;
+        let left =
+            self.load_memory_value_with_layout(address, ty, qualifiers, target_span, layout)?;
         if let CValue::Pointer {
             value,
             ty: pointer_type,
@@ -7383,7 +7455,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
             let index = expect_machine_integer(right, span)?;
             let result = self.offset_pointer_value(value, pointer_type, index, direction, span)?;
-            return self.store_memory_value(address, ty, qualifiers, result, span);
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
         }
         let left = expect_machine_integer(left, target_span)?;
         let right = expect_machine_integer(right, span)?;
@@ -7393,7 +7466,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             })?;
         let result = self.runtime_integer_binary(binary, left, right, span)?;
-        self.store_memory_value(address, ty, qualifiers, CValue::Integer(result), span)
+        self.store_memory_value_with_layout(
+            address,
+            ty,
+            qualifiers,
+            CValue::Integer(result),
+            span,
+            layout,
+        )
     }
 
     fn predeclare_stmt(

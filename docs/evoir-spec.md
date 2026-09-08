@@ -3603,7 +3603,7 @@ and Clang-19 oracles through the existing layout corpus, which this stage
 extends with attributed cases. An oracle disagreement is `ORACLE_CONFLICT` and
 is never resolved by choosing one.
 
-**Integer `mode` (revision 1.9.81).** On an integer declaration, typedef,
+**Integer `mode` (revision 1.9.81).** On a non-`_Bool` builtin integer declaration, typedef,
 member or parameter, `mode(QI)`, `mode(HI)`, `mode(SI)`, `mode(DI)` and
 `mode(TI)` select the signed or unsigned canonical integer type of 8, 16,
 32, 64 and 128 bits respectively. On this AArch64 target those types are
@@ -3616,6 +3616,9 @@ the original spelling. An unknown mode, wrong arity or non-integer target is
 `E2903`; pointer-declarator attributes keep the existing never-applied rule.
 An integer `mode` written in an abstract type name is also `E2903`: GCC-14
 applies it while Clang-19 ignores it, so accepting it would admit two layouts.
+`_Bool` and enumeration bases are refused with `E2903`: GCC rejects the
+former while Clang accepts it; for the latter both agree on the narrow
+layout but disagree on compatibility with its ordinary integer counterpart.
 Evidence: `.evidence/builtin-probes/20260908-integer-modes/probe.c` and
 `results.txt`, both sealed compilers at O0/O2; `sizeof(unsigned int
 __attribute__((mode(QI))))` is the explicit 1-versus-4 conflict.
@@ -4126,7 +4129,11 @@ function-local validator must enforce:
    the current token and advances it to a fresh identity
 9. Every load/store consumes a matching `access_in_bounds` output for the same
    pointer and exact target-derived size/alignment, with no intervening memory
-   effect
+   effect. The access alignment is a property of the designated subobject:
+   a packed member uses its target member layout, not the natural alignment
+   of its scalar type. Validation requires the exact scalar byte width and a
+   nonzero power-of-two alignment no greater than its natural alignment;
+   ordinary dereferences still carry their type's natural alignment.
 10. Every `ptr.offset.*.*` definition is immediately followed by
     `pointer_valid` on that exact pointer and the current memory token before
     any other use of the pointer
@@ -5848,10 +5855,17 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Packed members retain their access alignment
+
+The exact target-derived layout of a packed subobject can have lower alignment than its scalar type; load/store guards carry that access alignment while retaining exact width and pointer identity.
+Both sealed compilers at O0/O2 execute `tests/fixtures/integer-mode-memory.c` with exit zero; the complete measurement is in `.evidence/builtin-probes/20260908-integer-modes/results.txt`.
+No diagnostic is withdrawn: an ordinary misaligned pointer dereference remains E3012, and malformed guard widths, zero alignment or non-power-of-two alignment remain invalid EvoIR.
+This was exposed by the regression for the two original mode-attribute failures; no additional passing-unit count is inferred.
+
 ### Integer mode attributes select the storage type
 
 Section 10.1.9 now explicitly applies measured integer modes rather than silently preserving a different-width declaration; the user's non-floating-point closure authorizes this body amendment.
-Both sealed compilers agree on the declaration, member, parameter, qualifier, value and rank rows in `.evidence/builtin-probes/20260908-integer-modes/results.txt`; abstract type-name placement disagrees and is refused with existing E2903.
+Both sealed compilers agree on the declaration, member, parameter, qualifier, value and rank rows in `.evidence/builtin-probes/20260908-integer-modes/results.txt`; abstract type-name placement, boolean bases and enum compatibility disagree and are refused with existing E2903.
 The original torture `memclr` and `misalign` are two native failures with these ignored attributes; their complete replay, not the focused probe, determines closure.
 
 ### Alternate qualifier spellings

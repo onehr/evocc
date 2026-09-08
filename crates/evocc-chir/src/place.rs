@@ -708,6 +708,27 @@ impl<'arena> MemoryPlace<'arena> {
         self.access_qualifiers
     }
 
+    /// The designated subobject's access layout, including packing inherited
+    /// through its field path. A plain dereference retains natural alignment.
+    pub fn access_layout(
+        &self,
+        types: &TypeInterner,
+        target: &TargetDataLayout,
+    ) -> Option<evocc_types::TypeLayout> {
+        let mut layout = target.layout_of(types, self.value_ty).ok()?;
+        for projection in &self.projections {
+            if let PlaceProjection::Field(field) = projection {
+                let record = target.record_layout(types, field.tag()).ok()?;
+                let member = record
+                    .fields
+                    .iter()
+                    .find(|member| member.field_index == field.field_index())?;
+                layout.align_bytes = layout.align_bytes.min(member.layout.align_bytes);
+            }
+        }
+        Some(layout)
+    }
+
     #[must_use]
     pub const fn is_modifiable(&self) -> bool {
         self.modifiable
