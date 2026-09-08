@@ -90,6 +90,28 @@ denominator. An unclassified or unavailable reference blocks an "ALL passed"
 claim. Completion means closure of this measured inventory and final campaign,
 not a claim that no unknown compiler bug can exist.
 
+### Outstanding body amendments
+
+These requested decisions have not yet been granted. They do not replace the
+already authorized integer-vector, variable-length-object and remaining
+implementation work, and none of the affected programs is counted as a pass.
+
+| Requested amendment | Measured consequence retained |
+|---|---|
+| AArch64 `%a` address-operand modifier | 2,712 kernel first errors in `measure-20260908T141252Z`; the current constraint body rejects the unlisted modifier |
+| GNU signed-left-shift bit patterns | 13 torture failures plus the retained ctest and kernel `insn.o` cases; the existing signed runtime obligations cannot simply be dropped |
+| Real over-aligned stack frames | The aligned-256 recursive address fixture passes both oracles and fails natively; aligning an offset is insufficient when its base is only 16-byte aligned |
+| Explicit function alignment metadata | Original `align-3` executes and fails; neither its lost declaration alignment nor its actual code address is repaired by a query-only answer |
+| Machine lowering of 128-bit signed UB predicates | Five E4003 originals in `20260908T210929Z`: `pr122943`, `pr54471`, `pr61375`, `pr63302`, `pr85582-2`; EvoMIR Sections 5 and 10 explicitly refuse these predicates, independently of the permitted arithmetic instructions |
+
+The large-layout reduction for original `991014-1` also has an independently
+measured oracle split: GCC-14 accepts both byte-layout assertions at O0/O2,
+while Clang-19 rejects the array sizes. The secondary failed assertions are
+not Clang layout values. The current refusal remains visible; the source
+and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
+
+## Issue inventory
+
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
@@ -107,7 +129,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 383 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 382 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Wrapping options and 75 explicit GNU89 modes consumed; 262 programs retain unhandled requirements. All 12 missing support-file first errors are zero after restoring original dependencies | `torture` | PARTIAL: source dependency repair benched; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -129,7 +151,13 @@ corrected to check the operation and observable accesses instead.
 The eight-crate all-targets changed gate against `35e20cd`, Clippy, fmt,
 Ruff and diff-check pass. Part of the test listing exceeded the terminal
 output limit, so no exact aggregate test count is inferred from that run.
-The original `builtin-prefetch-3` replay remains required before closure.
+Original replay `20260908T213244.792960Z`, subject `9f6ad28`, preserves
+all 220 ctest and 1,692 torture identities and every prior PASS.
+`builtin-prefetch-3` changes from refusal to PASS: torture now has 1,283
+passes, 382 refusals, 26 runtime failures and one link failure; ctest stays
+206/220. Captures are `.evidence/ladder/e0/20260908T213244Z` and
+`20260908T213308Z`. This qualified-address refusal is closed; the overall
+benchmark remains INCOMPLETE and the final all-lane replay has not run.
 
 ### Function-pointer casts and the reached-call boundary
 
