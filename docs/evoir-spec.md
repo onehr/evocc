@@ -6426,5 +6426,12 @@ Three non-floating-point original torture refusals (`20030408-1`, `compndlit-1`,
 
 `_Alignas(type-name)` and `_Alignas(integer-constant-expression)` among declaration specifiers set object or member alignment, independently of type identity; zero is ignored, multiple nonzero specifiers take their maximum, and a non-power-of-two, unrepresentable or weaker-than-natural request is E2938 (`invalid-alignment-specifier`).
 The same code rejects alignment specifiers on parameters, functions, typedefs, register objects, bit-fields and type names; a specifier on a standalone tag declaration is preserved but does not alter its type.
-The sealed GCC-14/Clang-19 positive O0/O2 and placement probes are recorded in `.evidence/builtin-probes/20260909-alignment-specifiers/results.txt`; a weaker `_Alignas` with a stronger GNU `aligned` attribute is rejected because the oracles disagree, and the existing GCC-only attribute-query authority observes nonzero `_Alignas` as `aligned` but ignores zero.
+The sealed GCC-14/Clang-19 positive O0/O2 and placement probes are recorded in `.evidence/builtin-probes/20260909-alignment-specifiers/results.txt`; oracle disagreements on a weaker `_Alignas` combined with GNU `aligned`, a weaker request on an unbounded array, and requests exceeding 2^28 are rejected, and the existing GCC-only attribute-query authority observes nonzero `_Alignas` as `aligned` but ignores zero.
 Original torture `pr68532` reaches this missing declaration syntax; neither its passing outcome nor the separate, measured over-aligned-stack emission defect is inferred from front-end acceptance.
+
+### Alignment validation is not an incomplete-array query
+
+An unbounded array declaration's alignment request is checked against its element's target alignment, including the existing explicit type alignment, without requiring a bound or making that array allocatable.
+`_Alignof(int[])` itself remains invalid and is refused by its requesting context, because GCC rejects the expression while Clang accepts it; the validation rule must not silently widen expression-query acceptance.
+Both compilers accept an explicitly aligned external incomplete record declaration followed by either a weaker or stronger record definition, so the later definition does not retroactively invalidate the earlier declaration.
+These boundaries are measured in `complete.c` and `results.txt` under `.evidence/builtin-probes/20260909-alignment-specifiers/`; they add no diagnostic beyond E2938 and are regression edges rather than additional counted original-program gains.
