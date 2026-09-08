@@ -10327,6 +10327,18 @@ fn validate_function_gotos(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_evaluation_shares_the_immutable_units_linkage() {
+        let unit = CHirUnit::new(vec![], TypeInterner::new(), crate::SymbolTable::new());
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let first = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
+        let second = Interpreter::new(&unit, &target, InterpreterLimits::default(), false).unwrap();
+        assert!(
+            std::ptr::eq::<crate::linkage::SymbolLinkage>(&first.linkage, &second.linkage,),
+            "one immutable unit must not rebuild its declaration inventory for every initializer"
+        );
+    }
     use crate::{
         IntBase, IntLit, IntSuffix, SpannedName, TypeSpecifier, WrittenDeclarator,
         WrittenDeclaratorLayer,
