@@ -211,6 +211,62 @@ fn a_visible_object_is_not_an_implicit_function() {
 }
 
 #[test]
+fn legacy_external_calls_keep_their_block_declarations_in_the_body() {
+    for source in [
+        "main() { if (0) abort(); return 0; }",
+        "main() { { if (0) abort(); } return 0; }",
+        "main() { return 0 ? abort() : 0; }",
+        "main() { if (0) { exit(3); } return 0; }",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &["-std=gnu89"]);
+            assert!(
+                output.status.success(),
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, b"0\n");
+        }
+        #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+        assert_native_execution_with_options(source, "legacy-external-calls", &["-std=gnu89"]);
+    }
+}
+
+#[test]
+fn integer_sign_and_parity_counts_share_constant_and_runtime_semantics() {
+    let source = include_str!("../../../tests/fixtures/integer-bit-counts.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "integer-bit-counts");
+}
+
+#[test]
+fn integer_sign_and_parity_counts_keep_the_builtin_operand_contract() {
+    for (source, code) in [
+        ("int f(void) { return __builtin_clrsb(); }", "E2909"),
+        ("int f(void) { return __builtin_parityl(1, 2); }", "E2909"),
+        ("int f(void) { return __builtin_clrsbll; }", "E2910"),
+        ("int f(int *p) { return __builtin_parity(p); }", "E2913"),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "accepted {source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{code}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn flexible_string_initializers_execute_without_completing_the_record_type() {
     let source = include_str!("../../../tests/fixtures/flexible-string-initializers.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
