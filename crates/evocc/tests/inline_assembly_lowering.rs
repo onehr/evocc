@@ -18,17 +18,21 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alternative.c");
+const REGISTER_ALTERNATIVES: [&str; 12] = [
+    "Ir", "Jr", "Kr", "Lr", "ir", "nr", "rI", "rJ", "rK", "rL", "ri", "rn",
+];
 
 #[test]
 fn register_alternative_selects_the_existing_ir_and_machine_path() {
     let selected = REGISTER_ALTERNATIVE.replace("\"Ir\"", "\"r\"");
-    {
+    for constraint in REGISTER_ALTERNATIVES {
+        let source = REGISTER_ALTERNATIVE.replace("\"Ir\"", &format!("\"{constraint}\""));
         for mode in ["--emit=evoir", "--emit=asm"] {
-            let actual = run(REGISTER_ALTERNATIVE, mode);
+            let actual = run(&source, mode);
             let expected = run(&selected, mode);
             assert!(
                 actual.status.success(),
-                "{mode}: {}",
+                "{constraint} {mode}: {}",
                 String::from_utf8_lossy(&actual.stderr)
             );
             assert!(
@@ -58,7 +62,10 @@ fn register_alternative_selects_the_existing_ir_and_machine_path() {
 #[test]
 #[cfg(target_arch = "aarch64")]
 fn register_alternative_executes_after_native_assembly_and_linking() {
-    execute_native_assembly(REGISTER_ALTERNATIVE, "goto");
+    for constraint in REGISTER_ALTERNATIVES {
+        let source = REGISTER_ALTERNATIVE.replace("\"Ir\"", &format!("\"{constraint}\""));
+        execute_native_assembly(&source, &format!("goto-{constraint}"));
+    }
 }
 
 #[test]
@@ -68,6 +75,56 @@ fn ordinary_register_alternative_executes_after_native_assembly_and_linking() {
         &format!("#define ORDINARY_ASSEMBLY_ONLY\n{REGISTER_ALTERNATIVE}"),
         "ordinary",
     );
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn immediate_register_alternatives_match_the_measured_bit_operations() {
+    // The six values are the sealed GCC-14/Clang-19 kr.c observations.
+    execute_native_assembly(
+        r#"
+        static unsigned long andnot(unsigned long v, unsigned long i) {
+            unsigned long r; asm("bic %0, %1, %2" : "=r"(r) : "r"(v), "Kr"(i)); return r;
+        }
+        static unsigned long either(unsigned long v, unsigned long i) {
+            unsigned long r; asm("orr %0, %1, %2" : "=r"(r) : "r"(v), "Lr"(i)); return r;
+        }
+        static unsigned long add(unsigned long v, unsigned long i) {
+            unsigned long r; asm("add %0, %1, %2" : "=r"(r) : "r"(v), "ir"(i)); return r;
+        }
+        static unsigned long sub(unsigned long v, unsigned long i) {
+            unsigned long r; asm("sub %0, %1, %2" : "=r"(r) : "r"(v), "Jr"(i)); return r;
+        }
+        volatile unsigned long dyn = 0xf0f0;
+        int main(void) {
+            return andnot(0xffff, 0xff) != 0xff00 || andnot(0xffff, dyn) != 0xf0f
+                || either(1, 0xff00) != 0xff01 || add(5, 100) != 0x69
+                || sub(5, 3) != 2 || add(5, dyn) != 0xf0f5;
+        }
+        "#,
+        "logical-values",
+    );
+}
+
+#[test]
+fn register_alternatives_do_not_admit_outputs_or_wide_operands() {
+    for constraint in REGISTER_ALTERNATIVES {
+        for statement in [
+            format!("asm(\"\" : \"={constraint}\"(x));"),
+            format!("asm(\"\" : \"+{constraint}\"(x));"),
+            format!("asm(\"\" : : \"{constraint}\"(wide));"),
+        ] {
+            let source =
+                format!("void f(void){{unsigned long x=0;__uint128_t wide=1;{statement}}}");
+            let output = run(&source, "--emit=evoir");
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(!output.status.success(), "{constraint}: {source}");
+            assert!(
+                error.contains("E3021") && error.contains(constraint),
+                "{error}"
+            );
+        }
+    }
 }
 
 #[cfg(target_arch = "aarch64")]
