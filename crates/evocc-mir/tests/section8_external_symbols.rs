@@ -1,12 +1,7 @@
-//! EvoMIR Section 8, "External symbols" (revision 0.11).
+//! EvoMIR Section 8, "External symbols" (revision 0.23).
 //!
-//! "A `call @f` whose `@f` is an EvoIR `declare`, and a `global_addr @g` whose
-//! `@g` is an EvoIR `extern`, are emitted with exactly the spellings above for
-//! a defined symbol (`bl`, `adrp`/`add`, the `_` prefix on Darwin,
-//! `:pg_hi21:`/`:lo12:` on Linux); the object file carries an undefined symbol
-//! reference and the linker resolves it. Every such call is cross-boundary in
-//! the sense of Section 6, so the platform's extension rule applies to its
-//! narrow arguments."
+//! Calls retain the platform's symbol spelling. Undefined object addresses
+//! use the GOT so the same object file links both statically and in a PIE.
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{compile_module_for, Target};
@@ -55,15 +50,15 @@ fn emitted(target: Target, text: &str) -> String {
 }
 
 #[test]
-fn an_undefined_callee_and_object_take_the_defined_spellings_on_darwin() {
+fn an_undefined_object_uses_the_got_and_calls_keep_their_spelling_on_darwin() {
     let text = emitted(Target::Darwin, UNIT);
     assert!(
         text.contains("bl _helper"),
         "the call names the undefined symbol with the platform prefix:\n{text}"
     );
     assert!(
-        text.contains("_table_value@PAGE") && text.contains("_table_value@PAGEOFF"),
-        "the object address is the page-relative pair:\n{text}"
+        text.contains("_table_value@GOTPAGE") && text.contains("_table_value@GOTPAGEOFF"),
+        "the object address is loaded through the GOT:\n{text}"
     );
     assert!(
         !text.contains("_helper:"),
@@ -80,15 +75,15 @@ fn an_undefined_callee_and_object_take_the_defined_spellings_on_darwin() {
 }
 
 #[test]
-fn an_undefined_callee_and_object_take_the_defined_spellings_on_linux() {
+fn an_undefined_object_uses_the_got_and_calls_keep_their_spelling_on_linux() {
     let text = emitted(Target::Linux, UNIT);
     assert!(
         text.contains("bl helper"),
         "the call names the undefined symbol:\n{text}"
     );
     assert!(
-        text.contains(":pg_hi21:table_value") && text.contains(":lo12:table_value"),
-        "the object address is the page-relative pair:\n{text}"
+        text.contains(":got:table_value") && text.contains("#:got_lo12:table_value"),
+        "the object address is loaded through the GOT:\n{text}"
     );
     assert!(
         !text.contains("helper:") && !text.contains("table_value:"),

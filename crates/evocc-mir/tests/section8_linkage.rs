@@ -56,7 +56,7 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
 #[test]
-fn unresolved_weak_addresses_use_indirection_without_changing_strong_references() {
+fn external_object_and_weak_function_addresses_use_indirection() {
     let source = format!(
         "extern @value size=4 align=4 linkage=weak
 
@@ -111,7 +111,28 @@ func @function_address(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, wo
             );
         }
         let strong = emitted(target, &source.replace(" linkage=weak", ""));
-        assert!(!strong.contains(":got:") && !strong.contains("GOTPAGE"));
+        assert!(strong.contains(if target == Target::Linux {
+            ":got:value"
+        } else {
+            "_value@GOTPAGE"
+        }));
+        assert!(!strong.contains(":got:optional") && !strong.contains("_optional@GOTPAGE"));
+
+        // A definition in this module still takes the direct recipe, including
+        // a weak definition. Indirection is decided by the declaration table,
+        // not by a global spelling or a linkage flag alone.
+        for (visibility, linkage) in [
+            ("external", ""),
+            ("external", " linkage=weak"),
+            ("internal", ""),
+        ] {
+            let defined = source.replace(
+                "extern @value size=4 align=4 linkage=weak",
+                &format!("global @value origin=0 kind=file visibility={visibility}{linkage} size=4 align=4 bytes=07000000 initialized=1111"),
+            );
+            let defined = emitted(target, &defined);
+            assert!(!defined.contains(":got:value") && !defined.contains("_value@GOTPAGE"));
+        }
     }
 }
 
