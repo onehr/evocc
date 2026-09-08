@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.79** | **Authoritative reference** | **2026-09-08**
+**Revision 1.9.80** | **Authoritative reference** | **2026-09-08**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1050,7 +1050,8 @@ units containing 24,735 `asm` statements:
 | `I`, `J` | an immediate the add or subtract forms accept, and its negation | 876 |
 | `Ir`, `Jr`, `Kr`, `Lr`, `ir`, `nr` (source input, either letter order) | an admitted immediate letter or a general register; lowering selects the `r` alternative | `Ir` 2,726 first-error units in survey `20260907T043340Z-13363`; `Kr` 2,744 in `20260907T074335Z-32186` |
 | `K`, `L` | an immediate the 32-bit and 64-bit logical forms accept | 1,104 |
-| `i`, `n` | an integer constant | 113 |
+| `i` | an integer constant or a link-time symbol plus a signed byte addend (revision 1.9.80) | 113 |
+| `n` | an integer constant only | included above |
 | `p` | an address | 48 |
 
 For a source input whose constraint is exactly one of the admitted immediate
@@ -1070,12 +1071,36 @@ Measured with both GCC-14 and Clang-19: `Ir` in
 print `ff00 f0f ff01 69` and `2 f0f5`, and GCC-14 at `-O2` itself takes the
 register alternative for the dynamic operand (`bic x2, x2, x0`).
 
+**Symbolic immediates (revision 1.9.80).** An `i` input may name a static
+object, external object, function or function-local label, with a signed
+64-bit constant byte addend. It is represented by the existing
+`global_addr`/`func_addr`/`block_addr`, pointer casts, and constant
+`add.bits<64>`/`sub.bits<64>` forms, not a new instruction or an invented
+address. C lowering resolves the source address constant without evaluating
+an operand with effects and materializes it in the assembly's own block after
+the ordinary operands have been evaluated; numeric immediates follow the same
+local-definition rule. A dynamic address or an address under `n` remains
+`E3021` with the constraint named. The template modifier `%c0` or `%c[name]`
+prints an `i` or numeric immediate without an immediate prefix; it cannot name
+a register or memory operand. The machine emitter writes the symbol's target
+spelling and signed addend, preserving linkage and block identity.
+The sealed GCC-14 and Clang-19 probe
+`.evidence/builtin-probes/20260908-symbolic-assembly/immediates.c` executes
+with exit zero at `-O0` and `-O2` under the kernel's
+`-fno-pic -fno-pie -no-pie` configuration; both refuse `dynamic.c` and
+`numeric-only.c`. GCC refuses symbolic `i` under its default PIE configuration
+while Clang accepts it, as recorded in `results.txt`; this rule does not claim
+that arbitrary user-written assembly is position independent. It is the
+symbolic-immediate implementation authorized on 2026-09-08, not a relaxation
+of any memory, provenance or effect invariant.
+
 A constraint outside this table, or a constraint string combining letters
 this table does not combine, is `E3021` with the constraint named. Clobbers:
 `memory` (implied by the effects below and otherwise inert), `cc` (the flags),
 and a named physical register, which the allocator must treat as written.
 Template operand references: `%0` to `%9`, `%[name]`, a width modifier
-`%w0`/`%x0` before the number or name, `%l[label]` in an `asm.goto`, and
+`%w0`/`%x0` before the number or name, `%c0`/`%c[name]` for immediates,
+`%l[label]` in an `asm.goto`, and
 `%%` for a literal percent; any other reference is `E3021`. Every rule in
 this paragraph is measured in `p33-asm-constraints.out`, where both oracles
 compile the whole vocabulary and print the same values.
@@ -5709,6 +5734,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.80 | 2026-09-08 | Define authorized symbolic `i` operands and the `%c` modifier, retaining numeric-only `n`, the existing address/SSA forms and assembly effects. The sealed non-PIC oracle probe agrees; the default PIE disagreement is explicit. This revision changes the contract, not compiler code. |
 | 1.9.79 | 2026-09-08 | Admits `weak` and `alias` as linkage marks on module records: `linkage=weak` on globals, functions, externs and declarations, and an `alias @name = @target` record that is a second symbol of a definition in this module and one provenance with it; `E3060`, `E3061`; both oracles agree on the linkage probe. Emission in EvoMIR 0.22. |
 | 1.9.78 | 2026-09-08 | Generalizes the `Ir` ruling to any admitted immediate letter paired with `r` (`Jr`, `Kr`, `Lr`, `ir`, `nr`, either order), selecting the register alternative; measured with both oracles. `Kr` was the first error of 2,744 kernel units. |
 | 1.9.77 | 2026-09-08 | `push_macro` and `pop_macro` are applied as per-name stacks of definition states, since ignoring them is not safe; both oracles agree on nesting, the undefined state and the empty pop. |

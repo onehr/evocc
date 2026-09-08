@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.24** | **Authoritative reference** | **2026-09-08**
+**Revision 0.25** | **Authoritative reference** | **2026-09-08**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -467,6 +467,17 @@ adjacency. `memory` constrains nothing here; the maximal effects of the
 EvoIR instruction already order the `asm` against every other access.
 Defined at revision 0.6.
 
+For EvoIR 1.9.80, an `i` operand may instead be a symbol plus a signed
+64-bit addend. It occupies no register and allocates no object. Lowering
+derives it from the existing address definitions, pointer casts and constant
+64-bit additions/subtractions; an unresolvable immediate is refused, never
+replaced by a register or zero. EvoMIR text writes `@symbol+addend` (the
+addend includes its sign and is always present, including `+0`); a label
+target is `@function^bN+addend`. Emission uses the same platform symbol or
+block spelling as static relocations, and `%c` suppresses any immediate prefix.
+Only `i` admits symbolic operands. The interpreter's opaque-assembly refusal
+and the allocator's register constraints are unchanged (revision 0.25).
+
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
 its last use, extended across any block in which it is live on entry to
@@ -709,7 +720,8 @@ asm-goto-form   := "asm.goto" [".volatile"] " " string " outputs [...] inputs [.
                    " labels [^" ident "()" ("," " ^" ident "()")* "]"
                    " fallthrough ^" ident "()"
 asm-out         := string "(" ident ")"
-asm-in          := string "(" ident ")" ": " (reg | "#" int | "#zero:" class)
+asm-in          := string "(" ident ")" ": " (reg | "#" int | "#zero:" class | asm-symbol)
+asm-symbol      := "@" ident ["^b" int] ("+" int | "-" positive-int)
 symbol          := "@" ident "@PAGE" | "@" ident "@PAGEOFF" | "@" ident "@FUNCPAGE" | "@" ident "@FUNCPAGEOFF"
 ```
 
@@ -742,6 +754,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.25 | 2026-09-08 | Carry EvoIR 1.9.80 symbolic assembly immediates without a register, with canonical signed-addend text and target-correct symbol/block emission. This revision changes the contract, not compiler code. |
 | 0.24 | 2026-09-08 | Apply the measured PIE address rule to strong undefined functions as well as objects; direct calls and defined symbols remain unchanged. The original TinyCC replay exposed longjmp immediately after environ. This revision changes the contract, not compiler code. |
 | 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
 | 0.22 | 2026-09-08 | Emits `linkage=weak` as `.weak` (Darwin `.weak_definition`/`.weak_reference`) and `alias` records as `.set name, target` after the target, with the alias's own linkage directive and type (EvoIR 1.9.79). |
