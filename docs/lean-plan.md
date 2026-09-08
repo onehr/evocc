@@ -297,6 +297,26 @@ May not write: verified C compiler; kernel compilation correctness is proved; th
 6. The producer's `join` returns `Option`, and the checker's returns `Fact`: not observable on same-width vectors; recorded as an implementation difference.
 7. The instruction condition of L3b is empty on the checker's own table (the table records only block arguments): accepted. It acts only on a table that claims instruction results, and the negative test covers that case; extension to instruction results is left for later.
 
+### 2026-09-09: L1, L2 merged into main; segment C measured
+
+- Lean package `lean/` (`EvoIR`), toolchain v4.32.2; a clean `lake build` takes 233 seconds (`Proofs/Transfer` takes most of it); `tools/gate-lean.sh` passes on the merged tree.
+- Segment A: all 55 rules are `RuleCovered` (`RuleSound` for every width environment and result width), parametric and kernel-only (30 depend on `[propext, Quot.sound]`, 25 also on `Classical.choice`); the 18 `known_const` rules share the lemma `fullyKnownValue`, and the 12 `fold` rules are definitional equalities.
+- Segment B: 29 rows. 20 rows are parametric and kernel-only; among them, the three shift rows are parametric in both N and M (the comparison is `k.toNat < n`), and the casts are parametric in both widths. 9 rows (`add/sub/mul/icmp.eq/ne/slt/sle/ult/ule`) are enumerated over N ∈ 1..64: 576 `bv_decide` theorems, native-backed, with 960 reflection axioms in total, each named after its theorem, all of type `verifyBVExpr … = true` and all declared in `EvoIR.Proofs.Transfer`; no timeout.
+- The audit `tools/lean/audit.py` has six steps. The receipt `tests/contracts/lean-p0-receipt.json` binds the two digests of v4 and of its byte-for-byte prefix v3, spec revision 1.9.87 and its sha256, the `lean/` commit and the toolchain, and records the proposition text and the dependencies of each target. A change to one expected proposition causes a rejection. The proofs constrain the definitions (an and row with one clause fewer, or an add row with a mask one bit wider, each gives a counterexample).
+- Generator `tools/lean/registry_to_lean.py`: a check of both digests, a prefix check (rechecked inside Lean with `#guard`), a round-trip comparison; 15 Python tests. The evaluator `lake exe evoir-sem` answers all 1,157,725 vectors in 4.7 seconds. `denoteOp_capAmount` proves that the evaluator's cap on the shift amount does not change the answer of `denoteOp`.
+- Segment C (the architect ran `tools/lean/correspondence.py`; receipt `tests/contracts/lean-correspondence-receipt.json`): 1,325,045 comparisons in total of the Lean model against the producer, the checker and the interpreter, with 0 differences. By convention, abstentions are not counted: 6,571 each for the producer and the checker in random (5,997 value vectors outside their scope, 574 with M ∈ {65, 128}), and 14,212 for the interpreter (14,003 non-value vectors, 209 with M = 65). This is evidence for A7, not a proof.
+- Corrections at merge time: each of the two lanes wrote its own `tools/lean/vectors.py` and `diff.py`, and the lane B versions on main stay. `diff.py` gains an `--expect` single-file mode, and an abstention now counts as neither an agreement nor a difference. Segment C of the receipt that lane A brought came from its old generator (100,359 vectors); the audit rerun on the merged tree supersedes it.
+
+### Seven items of lane A for ruling, and the rulings
+
+1. `covers` when the widths do not match: the checker answers false, and Lean models it as a universal quantification over proofs of width equality (vacuously true on a mismatch), so the theorem is stronger. Ruling: keep it. `WellTyped` for `and`/`or` already forces the two operands to have the same width, so the two readings coincide on legal rules; a record is enough.
+2. `all_const` carries no information at the value level (`CondHolds = True`), so the twelve fold theorems hold unconditionally: accepted; the content goes to segment C.
+3. `width_min(?x,K)` is modeled as `K ≤ Γ ?x`, which agrees with the way the checker reads the sort of the matched node: accepted.
+4. `const_like` on a comparison result does not occur in v4; `bool(K)` is a `bits<1>` constant with the value `K mod 2`: accepted.
+5. `Fact.mk'` normalization changes no row (manual check plus vector evidence): accepted.
+6. A theorem guarantees the evaluator's `capAmount`: accepted.
+7. The segment B target table of the audit is written by hand in `audit.py` (8.10 is prose, not a machine-readable block): accepted, listed under A6. The receipt is 674 KB because it records each of the 960 reflection axioms: accepted.
+
 ## Appendix A: full text of `p0.scalar.v4` (from `docs/evoir-spec.md` 11.6)
 
 ```text
