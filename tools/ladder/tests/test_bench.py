@@ -53,7 +53,7 @@ class BenchmarkEntryTest(unittest.TestCase):
                 "kernel", "--reuse-kernel-survey", str(survey),
             ])
             command, env = bench.command("kernel", args, binary)
-            self.assertEqual(command[command.index("--reuse-survey") + 1], str(survey))
+            self.assertEqual(command[command.index("--reuse-survey") + 1], str(survey.resolve()))
             self.assertEqual(env["K1_EVOCC"], str(binary))
             metadata.write_text(json.dumps({"evoccSha256": "another compiler"}))
             with self.assertRaises(ValueError):

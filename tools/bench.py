@@ -60,6 +60,7 @@ def parser():
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
     p.add_argument("--budget", type=positive, default=40, help="toybox/musl bisection probes")
     p.add_argument("--allow-qemu-drift", action="store_true", help="acknowledge and record the installed QEMU digest")
+    p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     return p
 
 
@@ -90,7 +91,14 @@ def command(name, args, binary):
         env["K1_EVOCC"] = str(binary)
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
-        return [str(ROOT / "tools/k1/measure.sh"), "--jobs", str(args.jobs)], env
+        cmd = [str(ROOT / "tools/k1/measure.sh"), "--jobs", str(args.jobs)]
+        if args.reuse_kernel_survey:
+            survey = args.reuse_kernel_survey.resolve()
+            metadata = json.loads((survey / "substitution.json").read_text())
+            if metadata.get("evoccSha256") != sha256(binary):
+                raise ValueError("the reusable kernel survey belongs to another compiler")
+            cmd += ["--reuse-survey", str(survey)]
+        return cmd, env
     script = "e0" if name in ("ctest", "torture") else name
     cmd = [sys.executable, "-u", str(ROOT / f"tools/ladder/{script}.py"), "--evocc", str(binary)]
     if script == "e0":
@@ -293,11 +301,12 @@ def main(argv=None):
                     except (KeyError, TypeError, ValueError):
                         pass
                 started = time.monotonic()
-                cmd, env = command(name, args, binary)
-                summary["benchmarks"][name].update(status="RUNNING", command=cmd)
-                save(summary, directory)
+                cmd = []
                 code, tail = None, []
                 try:
+                    cmd, env = command(name, args, binary)
+                    summary["benchmarks"][name].update(status="RUNNING", command=cmd)
+                    save(summary, directory)
                     code, tail = execute(cmd, env)
                     if sha256(binary) != driver:
                         raise ValueError("compiler changed during evaluation")
