@@ -24,6 +24,15 @@ def record(cwd: str, *argv: str) -> bytes:
 
 
 class ParseCommands(unittest.TestCase):
+    def test_recorder_locks_the_entire_multi_write_record(self):
+        # O_APPEND makes individual writes atomic, not a shell printf group.
+        # The sealed image provides flock; the fd must span both writes.
+        script = mixed.RECORDER
+        self.assertIn('} 9>> "$EVO_CMDLOG"', script)
+        self.assertLess(script.index('flock -x 9'), script.index("printf"))
+        self.assertIn("|| exit", script)
+        self.assertIn(">&9", script)
+
     def log(self, *records: bytes) -> Path:
         handle = tempfile.NamedTemporaryFile(suffix=".log", delete=False)
         handle.write(b"".join(records))
