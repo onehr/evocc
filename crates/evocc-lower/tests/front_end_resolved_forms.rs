@@ -50,6 +50,23 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn digit_builtin_resolves_to_ordinary_integer_arithmetic() {
+    assert_pairs(
+        &[
+            (
+                "int f(int x){return __builtin_isdigit(x);}",
+                "int f(int x){return ((unsigned int)(int)x-48u)<=9u;}",
+            ),
+            (
+                "int f(int *p){return __builtin_isdigit((*p)++);}",
+                "int f(int *p){return ((unsigned int)(int)((*p)++)-48u)<=9u;}",
+            ),
+        ],
+        1800,
+    );
+}
+
+#[test]
 fn integer_mode_attributes_resolve_to_canonical_types_before_lowering() {
     assert_pairs(
         &[

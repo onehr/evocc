@@ -79,7 +79,11 @@ fn non_literal_length_is_an_ordinary_call_to_visible_strlen() {
         .unwrap(),
         1005
     );
-    assert_eq!(run("int isdigit(int value) { return value + 7; } int main(void) { return __builtin_isdigit(42); }").unwrap(), 49);
+}
+
+#[test]
+fn digit_builtin_is_not_replaced_by_a_visible_library_body() {
+    assert_eq!(run("int isdigit(int value) { return value + 7; } int main(void) { return __builtin_isdigit(42); }").unwrap(), 0);
 }
 
 #[test]

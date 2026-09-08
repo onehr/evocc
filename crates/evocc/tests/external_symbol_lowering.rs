@@ -20,6 +20,20 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+fn digit_builtin_executes_without_an_external_implementation() {
+    let source = include_str!("../../../tests/fixtures/builtin-digit.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+}
+
+#[test]
 fn external_function_addresses_are_position_independent() {
     let source = include_str!("../../../tests/fixtures/external-function-pie.c");
     let output = run(source, "--emit=asm");
@@ -389,7 +403,6 @@ fn unresolved_runtime_symbols_fail_only_when_reached() {
                 "extern int isdigit(int); int main(void){return isdigit(48);}",
                 "E3039",
             ),
-            ("int main(void){return __builtin_isdigit(48);}", "E3039"),
             (
                 "extern int g(void); int main(void){int (*p)(void)=g;return p();}",
                 "E3039",

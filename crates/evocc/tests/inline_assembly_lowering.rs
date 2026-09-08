@@ -21,6 +21,41 @@ const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alte
 const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c");
 
 #[test]
+fn register_aliases_preserve_the_physical_operand_binding() {
+    let source = FIXED_REGISTERS
+        .replace("__asm__(\"x8\")", "__asm__(\"r8\")")
+        .replace("__asm__(\"w8\")", "__asm__(\"r8\")");
+    let output = run(&source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(!text.contains("@r8"), "{text}");
+    assert!(text.contains("@x8"), "{text}");
+    evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn register_aliases_execute_inputs_outputs_and_both_goto_edges() {
+    let source = FIXED_REGISTERS
+        .replace("__asm__(\"x8\")", "__asm__(\"r8\")")
+        .replace("__asm__(\"w8\")", "__asm__(\"r8\")");
+    execute_native_assembly(&source, "register-aliases");
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn digit_builtin_needs_no_libc_definition_on_the_machine() {
+    execute_native_assembly(
+        include_str!("../../../tests/fixtures/builtin-digit.c"),
+        "builtin-digit",
+    );
+}
+
+#[test]
 #[cfg(target_arch = "aarch64")]
 fn integer_modes_and_packed_storage_execute_on_the_machine() {
     execute_native_assembly(
@@ -165,7 +200,9 @@ fn local_register_bindings_execute_inputs_outputs_and_both_goto_edges() {
 fn local_register_bindings_refuse_conflicts_instead_of_dropping_them() {
     for source in [
         r#"void f(long n){register long a asm("x8")=n;asm(""::"r"(a):"x8");}"#,
+        r#"void f(long n){register long a asm("r8")=n;asm(""::"r"(a):"x8");}"#,
         r#"void f(long n){register long a asm("x16")=n;asm(""::"r"(a));}"#,
+        r#"void f(long n){register long a asm("r16")=n;asm(""::"r"(a));}"#,
         r#"long f(long n){register long a asm("x8");register long b asm("x9")=n;asm("":"=r"(a):"0"(b));return a;}"#,
     ] {
         let output = run(source, "--emit=asm");
