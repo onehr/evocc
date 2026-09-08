@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.22** | **Authoritative reference** | **2026-09-08**
+**Revision 0.23** | **Authoritative reference** | **2026-09-08**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -517,12 +517,22 @@ block label, and `%%` by one percent. The template's own text is copied
 verbatim and never parsed. The emitted text is
 deterministic and is what the receipt digests.
 
-**External symbols (revision 0.11).** A `call @f` whose `@f` is an EvoIR
-`declare`, and a `global_addr @g` whose `@g` is an EvoIR `extern`, are
-emitted with exactly the spellings above for a defined symbol (`bl`,
-`adrp`/`add`, the `_` prefix on Darwin, `:pg_hi21:`/`:lo12:` on Linux); the
-object file carries an undefined symbol reference and the linker resolves
-it. Every such call is cross-boundary in the sense of Section 6, so the
+**External symbols (revision 0.23).** A `call @f` whose `@f` is an EvoIR
+`declare` uses the platform's `bl` symbol spelling. The address of an EvoIR
+`extern` object, whether strong or weak, uses GOT indirection: Linux emits
+`adrp reg, :got:symbol` followed by `ldr reg, [reg, #:got_lo12:symbol]`;
+Darwin uses `_symbol@GOTPAGE` and `_symbol@GOTPAGEOFF`. This reads the
+linker's address slot, not the C object's contents, and adds no EvoIR memory
+operation. Unresolved weak function addresses use the same recipe so an absent
+definition has address zero. Defined objects and strong function addresses keep
+the direct page-relative recipe; calls are unchanged. The object file carries
+undefined symbol references resolved by the linker, including in a PIE without
+requiring a direct relocation against external data. The minimal `environ`
+program is measured against GCC-14 and Clang-19 in
+`.evidence/builtin-probes/20260908-external-object-pie/results.txt`; both source
+builds run with exit zero, while the former direct-address subject fails PIE
+linking. This body change is authorized by the user's 2026-09-08 benchmark
+closure instruction. Every such call is cross-boundary in the sense of Section 6, so the
 platform's extension rule applies to its narrow arguments. The native lane
 of Section 9 may link a program against the host C library for the 10.1.14
 library set and against reference-compiled objects for anything else; the
@@ -725,6 +735,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
 | 0.22 | 2026-09-08 | Emits `linkage=weak` as `.weak` (Darwin `.weak_definition`/`.weak_reference`) and `alias` records as `.set name, target` after the target, with the alias's own linkage directive and type (EvoIR 1.9.79). |
 | 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |
 | 0.20 | 2026-09-07 | Zero data goes to the zero-filled section and zero runs are `.zero` (the record of the emitter's run encoding); notes the Darwin variadic gap. |

@@ -31,6 +31,14 @@ work, not reasons to label the non-floating-point objective complete. Existing
 specification-body restrictions remain visible until an authorized rule changes
 them; an implementation must not silently contradict the body.
 
+The user's follow-up authorization on 2026-09-08 covers the four previously
+blocked body changes: real variable-length objects, integer vectors, symbolic
+assembly immediates and PIE-safe strong external-data addressing. These are now
+implementation work, not pending questions. Each change must still specify and
+test its semantics across the consumers it affects; floating-point execution
+alone stays deferred. Closing this inventory does not close unmeasured roadmap
+milestones or turn unusable oracle programs into passes.
+
 The numbered rows remain the inventory authority; this checklist schedules
 their remaining closure work without creating a second set of measurements.
 
