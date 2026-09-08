@@ -21,6 +21,63 @@ Order is by correctness first, then shared-path reach. Small independent
 wrong-result fixes precede changes that require new machine constraint plumbing.
 Only one heavyweight benchmark invocation runs at once.
 
+## Completion checklist
+
+The unit of work is the complete issue inventory below, not the next individual
+repair. The user's 2026-09-08 instruction makes floating-point execution the
+only deferred implementation category. Non-floating-point vectors, variable
+length objects, unsupported syntax, linking failures and validation gaps remain
+work, not reasons to label the non-floating-point objective complete. Existing
+specification-body restrictions remain visible until an authorized rule changes
+them; an implementation must not silently contradict the body.
+
+The numbered rows remain the inventory authority; this checklist schedules
+their remaining closure work without creating a second set of measurements.
+
+- [x] Restore nested macro push/pop state; replay the original failures (row 1).
+- [ ] Finish native wrong-result classification and repairs; preserve runtime
+  obligations and consume required test options explicitly (rows 4, 17).
+- [ ] Repair goto-entered automatic storage, initialization and lifetime;
+  replay toybox cut/httpd/sed and control-flow regressions (rows 8, 12; next).
+- [ ] Finish aliases/weak symbols and register-binding original-program
+  validation, separating FP-dependent libc failures (rows 2, 3).
+- [ ] Correct strong external-data addressing for the original TinyCC PIE link,
+  then classify the other isolated relink failures (row 11).
+- [ ] Replay assembly register alternatives and kernel substitution with the
+  exact measured binary; close each substitution mismatch (rows 5, 6).
+- [ ] Resolve the remaining kernel assembly/symbol/control-flow constructs,
+  retaining explicit specification conflicts rather than bypassing them (row 7).
+- [ ] Repair remaining toybox function-value and object-subvalue forms (row 9).
+- [ ] Admit unused system-header types independently of FP execution (row 10).
+- [ ] Classify and implement admitted declaration/call forms, not a blanket
+  diagnostic-code exception (row 13).
+- [ ] Implement the required integer-vector behavior under a complete contract
+  and replay the original initializer/place failures (row 14).
+- [ ] Close the variable-length-object requirement under an authorized contract;
+  a current profile refusal is not a non-FP pass (row 15).
+- [ ] Reduce and repair every remaining non-FP diagnostic family, including
+  builtins, ABI, initializers and the remaining TinyCC compile refusals
+  (rows 11, 16).
+- [ ] Account for every original Csmith seed, including all 68 unavailable
+  references; never replace a seed or count a timeout as agreement (row 18).
+- [ ] Make cJSON tests execute the subject objects, not rebuilt reference C
+  sources (row 19).
+- [ ] Resolve or independently establish reference-baseline/environment failures;
+  retain them in the reported universe (row 20).
+- [ ] Implement missing non-FP milestone adapters when their prerequisites are
+  ready; FP-dependent milestones remain explicitly deferred (row 21).
+- [ ] Run one final full benchmark campaign after incremental closures, with
+  unchanged program identities and an explicit per-program FP classification.
+- [ ] Reconcile every outcome, update receipts and render status; report the
+  non-FP objective complete only with no unresolved non-FP compiler failures,
+  coverage refusals, regressions or unverified subject runs.
+
+Invalid or nonterminating reference programs are not compiler successes. Their
+disposition needs individual evidence and remains visible beside the original
+denominator. An unclassified or unavailable reference blocks an "ALL passed"
+claim. Completion means closure of this measured inventory and final campaign,
+not a claim that no unknown compiler bug can exist.
+
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
