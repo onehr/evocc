@@ -3,6 +3,10 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 fn run(source: &str, mode: &str) -> Output {
+    run_with_options(source, mode, &[])
+}
+
+fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
         "evocc-external-{}-{}.c",
@@ -12,11 +16,88 @@ fn run(source: &str, mode: &str) -> Output {
     fs::write(&path, source).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args(["--target=aarch64-unknown-linux-gnu", mode])
+        .args(options)
         .arg(&path)
         .output()
         .unwrap();
     fs::remove_file(path).unwrap();
     output
+}
+
+#[test]
+fn signed_wrapping_is_explicit_and_shared_by_execution_paths() {
+    let source = include_str!("../../../tests/fixtures/signed-wrapping.c");
+    for options in [
+        vec!["-fwrapv"],
+        vec!["-fno-strict-overflow"],
+        vec!["-fstrict-overflow", "-fwrapv"],
+        vec!["-fno-wrapv", "-fno-strict-overflow"],
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &options);
+            assert!(
+                output.status.success(),
+                "{mode} {options:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, b"0\n", "{mode} {options:?}");
+        }
+    }
+    let output = run_with_options(source, "--interpret-evoir", &["-fwrapv", "-Oeq-scalar"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"0\n");
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution_with_options(source, "signed-wrapping", &["-fwrapv"]);
+}
+
+#[test]
+fn signed_wrapping_can_be_disabled_without_changing_the_default() {
+    let source = include_str!("../../../tests/fixtures/signed-wrapping.c");
+    for options in [
+        vec![],
+        vec!["-fno-wrapv"],
+        vec!["-fwrapv", "-fno-wrapv"],
+        vec!["-fno-strict-overflow", "-fstrict-overflow"],
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &options);
+            assert_eq!(output.status.code(), Some(1), "{mode} {options:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E3004"),
+                "{mode} {options:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
+fn signed_wrapping_does_not_waive_other_runtime_obligations() {
+    for (source, code) in [
+        ("int main(void){int x=1;return x<<31;}", "E3006"),
+        ("int main(void){int x=1;return x<<32;}", "E3005"),
+        ("int main(void){int x=1,y=0;return x/y;}", "E3002"),
+        ("int main(void){int x=1,y=0;return x%y;}", "E3003"),
+        (
+            "int main(void){int x=(-2147483647-1),y=-1;return x/y;}",
+            "E3004",
+        ),
+        ("int main(void){int a[2]={0};return *(a+3);}", "E3011"),
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run_with_options(source, mode, &["-fwrapv"]);
+            assert_eq!(output.status.code(), Some(1), "{mode}: {source}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains(code),
+                "{mode}: {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 }
 
 #[test]
@@ -128,7 +209,12 @@ fn function_and_void_pointer_equality_preserves_addresses_and_effects() {
 
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 fn assert_native_execution(source: &str, case: &str) {
-    let output = run(source, "--emit=evoir");
+    assert_native_execution_with_options(source, case, &[]);
+}
+
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+fn assert_native_execution_with_options(source: &str, case: &str, options: &[&str]) {
+    let output = run_with_options(source, "--emit=evoir", options);
     assert!(
         output.status.success(),
         "{}",
