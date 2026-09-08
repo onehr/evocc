@@ -190,3 +190,31 @@ fn case_constants_are_folded_without_runtime_arithmetic_obligations() {
          } }",
     );
 }
+
+#[test]
+fn constant_condition_removes_only_the_ordinary_entry_not_targeted_labels() {
+    let source = "extern void link_error(void); int ok;
+        void f(int x) { switch (x) { case 0: if (0) {
+          link_error(); case 1: ok = 1;
+        } } }
+        int main(void) { f(1); return ok != 1; }";
+    assert_execution(source);
+    let arena = Arena::default();
+    let file = FileId::new(45031);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error());
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    assert!(
+        !module
+            .functions
+            .iter()
+            .flat_map(|f| &f.blocks)
+            .flat_map(|b| &b.insts)
+            .any(|i| matches!(i, evocc_evoir::Inst::Call { callee, .. } if callee == "link_error")),
+        "unreachable call prevents the native program from linking"
+    );
+}
