@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T202128Z",
-  "subject": "15b9d74",
-  "driverSha256": "9e64c5dae9ebedbd8e3d784a509e3382f39ef831ab646c2a29c64949ebc9df5c",
+  "run": "20260908T204820Z",
+  "subject": "2bfe5f4",
+  "driverSha256": "260760635da4de7ae3c0a586fed9982717d3bbd4d1260b2cf28082b69de04057",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "supported unconditional language-mode, signed-wrapping and builtin options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
   "target": "aarch64-unknown-linux-gnu",
@@ -21,8 +21,8 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1280,
-     "refused": 385,
+     "pass": 1281,
+     "refused": 384,
      "fail": 26,
      "link-fail": 1
     },
@@ -42,8 +42,8 @@
      "E2920": 6,
      "E4003": 5,
      "E2913": 4,
-     "E2202": 4,
      "E2903": 3,
+     "E2202": 3,
      "E2933": 2,
      "E1006": 2,
      "E1007": 2,
@@ -75,5 +75,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T202128Z"
+ "evidence": ".evidence/ladder/e0/20260908T204820Z"
 }

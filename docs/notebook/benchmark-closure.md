@@ -107,7 +107,7 @@ not a claim that no unknown compiler bug can exist.
 | 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 385 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 384 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
 | 17 | Torture applicability/options | Wrapping options and 75 explicit GNU89 modes consumed; 262 programs retain unhandled requirements. All 12 missing support-file first errors are zero after restoring original dependencies | `torture` | PARTIAL: source dependency repair benched; remaining requirements OPEN |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
@@ -145,8 +145,12 @@ compiled failures and 48 passes. The shared full-path cursor now makes all
 three value fixtures pass in both interpreters and natively; the dependency
 gate against that checkpoint passes 1,271 tests, zero failures and three
 existing ignores, with Clippy, fmt, Ruff and diff-check green. Original
-replay remains pending; sharing an initializer plan did not independently
-prove that the plan was correct.
+replay `20260908T204756.423848Z`, subject `2bfe5f4`, retains all identities
+and prior passes: `pr33631` changes from refusal to PASS. Torture now has
+1,281 passes, 384 refusals, 26 runtime failures and one link failure;
+ctest remains 206/220. Captures are `.evidence/ladder/e0/20260908T204756Z`
+and `20260908T204820Z`. The identified continuation and brace-elision
+defects are repaired and benched; the other initializer families stay OPEN.
 
 ### Alignment specifiers and non-object queries
 
