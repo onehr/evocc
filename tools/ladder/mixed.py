@@ -384,12 +384,17 @@ def _in_literal(line: str, index: int) -> bool:
 # --------------------------------------------------------------------------
 
 #: A recording compiler. It writes its argv NUL-separated with a record
-#: terminator, under ``>>`` so concurrent ``make -j`` writers append whole
-#: records, and then becomes the real compiler, so the build it records is
+#: terminator, holding one file lock across both writes so concurrent
+#: ``make -j`` writers append whole records, and then becomes the real compiler,
+#: so the build it records is
 #: byte-for-byte the build that would have happened without it.
 RECORDER = r"""#!/bin/sh
 : "${EVO_CMDLOG:=/dev/null}"
-{ printf '%s\0' "$PWD" "$@"; printf '\1\n'; } >> "$EVO_CMDLOG"
+{
+    flock -x 9 || exit 1
+    printf '%s\0' "$PWD" "$@" >&9
+    printf '\1\n' >&9
+} 9>> "$EVO_CMDLOG"
 exec {real} "$@"
 """
 
