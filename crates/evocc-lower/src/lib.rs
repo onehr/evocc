@@ -9237,6 +9237,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.scalar_call_signature(function_ty, arguments, span)?;
             (parameters, returned, None)
         };
+        let fixed_parameter_count = parameter_types.len();
         let variadic = matches!(
             self.unit.types().get(function_ty).map(|ty| &ty.kind),
             Some(TypeKind::Function {
@@ -9391,7 +9392,9 @@ impl<'a> FunctionLowerer<'a> {
                 .expect("aggregate return predicate requires a return type");
             let origin = self.synthetic_origin()?;
             let destination = self.emit_alloca(value_type.source, span, origin, state)?;
-            args.push(destination.clone());
+            // The return destination is a fixed parameter. Anonymous
+            // arguments follow the entire fixed signature, including it.
+            args.insert(fixed_parameter_count, destination.clone());
             Some(destination)
         } else {
             None

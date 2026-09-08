@@ -3934,6 +3934,7 @@ fn call_arguments(
     }
     let mut registers: Vec<VReg> = Vec::new();
     let mut returned = None;
+    let mut indirect_destination = None;
     let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
     for (value, placed) in ordinary.zip(&plan.items) {
         for _ in 0..placed.fillers {
@@ -3959,15 +3960,19 @@ fn call_arguments(
             Passing::Pointer => registers.push(lowerer.reg(value)?),
             Passing::Destination(shape) => {
                 if shape.size > RECORD_REGISTER_LIMIT {
-                    // Above sixteen bytes the destination travels in `x8`, as
-                    // the call's last argument, which the marker names.
-                    registers.push(lowerer.reg(value)?);
+                    // The IR's fixed sret slot can precede anonymous
+                    // arguments. Keep it out of their ordinary placement;
+                    // the machine call's final slot always names x8.
+                    indirect_destination = Some(lowerer.reg(value)?);
                 } else {
                     returned = Some((*shape, lowerer.reg(value)?));
                 }
             }
             Passing::Value => registers.extend(lowerer.registers(value)?),
         }
+    }
+    if let Some(destination) = indirect_destination {
+        registers.push(destination);
     }
     Ok((registers, returned))
 }

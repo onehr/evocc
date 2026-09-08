@@ -116,6 +116,22 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Variadic record return placement
+
+`f065b94` is the tests-only RED for the original `920726-1` call mismatch.
+The IR return destination is now placed before anonymous arguments, while
+the machine's indirect return address is placed last in its call operand
+list so it goes to x8. Fixing only the first exposed a native write to
+address 30, the final anonymous argument, rather than closing the case.
+Both interpreters and native Darwin now pass the direct/indirect small and
+large record regression; both Linux cross-link directions pass with GCC-14
+and Clang-19 at O0/O2 (eight executions). The changed all-targets gate against
+`f065b94` passes 764 tests, zero failures and four pre-existing standing-run
+ignores; Clippy, fmt, Ruff and diff-check pass. Original replay is pending.
+Evidence: `.evidence/builtin-probes/20260908-variadic-record/results.txt`.
+The subject assembly uses the specified GNU assembler; the initial Clang
+integrated-assembler refusal of `:pg_hi21:` is recorded, not called a pass.
+
 ### Kernel replay and linked object definitions
 
 `python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
