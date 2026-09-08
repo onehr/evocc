@@ -6421,3 +6421,10 @@ Within an initializer list, `member: value` is an alternative spelling of `.memb
 Both sealed compilers execute `tests/fixtures/obsolete-designators.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260909-obsolete-designators/results.txt`), including anonymous members and side effects.
 No diagnostic or representation is added: an unknown member or out-of-bounds designator retains E2906, and this rule does not admit a missing `=` after a multi-component designation.
 Three non-floating-point original torture refusals (`20030408-1`, `compndlit-1`, `struct-ini-4`) reach the field-colon form; their full executions, not the reduced fixture, determine passing counts.
+
+### C11 alignment specifiers
+
+`_Alignas(type-name)` and `_Alignas(integer-constant-expression)` among declaration specifiers set object or member alignment, independently of type identity; zero is ignored, multiple nonzero specifiers take their maximum, and a non-power-of-two, unrepresentable or weaker-than-natural request is E2938 (`invalid-alignment-specifier`).
+The same code rejects alignment specifiers on parameters, functions, typedefs, register objects, bit-fields and type names; a specifier on a standalone tag declaration is preserved but does not alter its type.
+The sealed GCC-14/Clang-19 positive O0/O2 and placement probes are recorded in `.evidence/builtin-probes/20260909-alignment-specifiers/results.txt`; a weaker `_Alignas` with a stronger GNU `aligned` attribute is rejected because the oracles disagree, and the existing GCC-only attribute-query authority observes nonzero `_Alignas` as `aligned` but ignores zero.
+Original torture `pr68532` reaches this missing declaration syntax; neither its passing outcome nor the separate, measured over-aligned-stack emission defect is inferred from front-end acceptance.
