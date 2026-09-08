@@ -230,6 +230,8 @@ pub enum TypeKind {
     /// Day 5 needs its identity for declarations and typedefs. Layout and
     /// varargs operations fail closed instead of guessing a target ABI shape.
     BuiltinVaList,
+    /// Measured target-header identity, without admitted value execution.
+    TargetBuiltin(TargetBuiltinType),
     /// GNU `__int128`, retained as an opaque signed or unsigned type.
     ///
     /// Its target layout is known, but Day 5 intentionally provides no value
@@ -250,6 +252,60 @@ pub enum TypeKind {
     Struct(TagId),
     Union(TagId),
     Enum(TagId),
+}
+
+/// GNU target types needed by otherwise unused system-header prototypes.
+/// These are nominal builtins, not aliases of equal-sized scalar types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TargetBuiltinType {
+    GnuFloat16,
+    GnuFloat32,
+    GnuFloat64,
+    GnuFloat128,
+    GnuFloat32x,
+    GnuFloat64x,
+    ArmFp16,
+    ArmFloat32x4,
+    ArmFloat64x2,
+    SvFloat32,
+    SvFloat64,
+    SvBool,
+}
+
+impl TargetBuiltinType {
+    const SPELLINGS: [(Self, &'static str); 12] = [
+        (Self::GnuFloat16, "_Float16"),
+        (Self::GnuFloat32, "_Float32"),
+        (Self::GnuFloat64, "_Float64"),
+        (Self::GnuFloat128, "_Float128"),
+        (Self::GnuFloat32x, "_Float32x"),
+        (Self::GnuFloat64x, "_Float64x"),
+        (Self::ArmFp16, "__fp16"),
+        (Self::ArmFloat32x4, "__Float32x4_t"),
+        (Self::ArmFloat64x2, "__Float64x2_t"),
+        (Self::SvFloat32, "__SVFloat32_t"),
+        (Self::SvFloat64, "__SVFloat64_t"),
+        (Self::SvBool, "__SVBool_t"),
+    ];
+
+    #[must_use]
+    pub fn from_spelling(spelling: &str) -> Option<Self> {
+        Self::SPELLINGS
+            .iter()
+            .find_map(|&(ty, name)| (name == spelling).then_some(ty))
+    }
+
+    #[must_use]
+    pub const fn layout(self) -> Option<TypeLayout> {
+        let bytes = match self {
+            Self::GnuFloat16 | Self::ArmFp16 => 2,
+            Self::GnuFloat32 => 4,
+            Self::GnuFloat64 | Self::GnuFloat32x => 8,
+            Self::GnuFloat128 | Self::GnuFloat64x | Self::ArmFloat32x4 | Self::ArmFloat64x2 => 16,
+            Self::SvFloat32 | Self::SvFloat64 | Self::SvBool => return None,
+        };
+        Some(TypeLayout::new(bytes as u64, bytes))
+    }
 }
 
 /// Parameter-list form is part of a C function type.
@@ -675,6 +731,7 @@ impl TypeInterner {
             (TypeKind::Void, TypeKind::Void)
             | (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => true,
             (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) => left == right,
+            (TypeKind::TargetBuiltin(left), TypeKind::TargetBuiltin(right)) => left == right,
             (TypeKind::Int(left), TypeKind::Int(right)) => left == right,
             (TypeKind::Enum(tag), TypeKind::Int(rank))
             | (TypeKind::Int(rank), TypeKind::Enum(tag)) => {
@@ -793,6 +850,7 @@ impl TypeInterner {
                     | TypeKind::Void
                     | TypeKind::BuiltinVaList => true,
                     TypeKind::Int(_)
+                    | TypeKind::TargetBuiltin(_)
                     | TypeKind::Float(_)
                     | TypeKind::Complex(_)
                     | TypeKind::Enum(_)
@@ -952,6 +1010,7 @@ impl TypeInterner {
             TypeKind::Enum(tag) => self.require_tag(*tag, TagKind::Enum),
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
             | TypeKind::Float(_)
@@ -1421,6 +1480,9 @@ impl<'a> LayoutContext<'a> {
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
             TypeKind::BuiltinVaList => Ok(TypeLayout::new(32, 8)),
+            TypeKind::TargetBuiltin(kind) => {
+                kind.layout().ok_or(LayoutError::UnsupportedBuiltinType(ty))
+            }
             TypeKind::GnuInt128(_) => Ok(TypeLayout::new(16, 16)),
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),

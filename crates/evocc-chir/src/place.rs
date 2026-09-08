@@ -1246,6 +1246,7 @@ pub fn is_modifiable_object_type(types: &TypeInterner, ty: TypeId) -> bool {
     }
     match canonical.kind {
         TypeKind::Void | TypeKind::Array { .. } | TypeKind::Function { .. } => false,
+        TypeKind::TargetBuiltin(kind) => kind.layout().is_some(),
         TypeKind::Struct(tag) | TypeKind::Union(tag) => {
             record_is_complete_without_const_subobjects(types, tag, &mut HashSet::new())
         }
@@ -1301,6 +1302,7 @@ fn type_contains_const_subobject(
         }
         TypeKind::Void
         | TypeKind::BuiltinVaList
+        | TypeKind::TargetBuiltin(_)
         | TypeKind::GnuInt128(_)
         | TypeKind::Int(_)
         | TypeKind::Float(_)

@@ -155,6 +155,7 @@ pub enum TokenKind {
     // promoted only at the parser boundary when their exact spelling survives.
     GnuExtension,
     BuiltinVaList,
+    TargetBuiltinType,
     GnuInt128,
     // Identifiers (including GNU `$`-containing identifiers).
     Identifier,

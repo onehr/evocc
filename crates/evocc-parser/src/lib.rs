@@ -30,8 +30,8 @@ use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
     enum_integer_rank, ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant,
     FieldLayoutAttributes, FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers,
-    RecordField, TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetDataLayout,
-    TypeId, TypeInterner, TypeKind,
+    RecordField, TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetBuiltinType,
+    TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 #[derive(Debug, Clone)]
@@ -335,6 +335,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__restrict" | "__restrict__") => TokenKind::Restrict,
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
+                    Some(name) if TargetBuiltinType::from_spelling(name).is_some() => {
+                        TokenKind::TargetBuiltinType
+                    }
                     Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
                     Some("__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
@@ -1179,6 +1182,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let kind = match (left_type.kind, right_type.kind) {
             (TypeKind::Void, TypeKind::Void) => TypeKind::Void,
             (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => TypeKind::BuiltinVaList,
+            (TypeKind::TargetBuiltin(left), TypeKind::TargetBuiltin(right)) if left == right => {
+                TypeKind::TargetBuiltin(right)
+            }
             (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) if left == right => {
                 TypeKind::GnuInt128(right)
             }
@@ -2871,9 +2877,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(())
             }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
+            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -2952,9 +2959,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(0),
-            (TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. }, _) => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            (
+                TypeKind::Void
+                | TypeKind::BuiltinVaList
+                | TypeKind::TargetBuiltin(_)
+                | TypeKind::Function { .. },
+                _,
+            ) => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -3052,6 +3063,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Enum(_)
             | TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_)
             | TypeKind::Function { .. } => {
                 return Err(InitializerPreflightError::InvalidObject);
@@ -3158,9 +3170,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(count)
             }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
+            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -3834,6 +3847,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
             | TypeKind::Float(_)
@@ -4917,6 +4931,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 words.push(BuiltinTypeWord {
                     kind,
                     forced_int128_signedness,
+                    target_builtin: TargetBuiltinType::from_spelling(self.token_text(&token)),
                 });
                 end = Some(token.span);
                 continue;
@@ -5460,6 +5475,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return false;
         };
         match kind {
+            TypeKind::TargetBuiltin(kind) => kind.layout().is_some(),
             TypeKind::BuiltinVaList
             | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
@@ -5572,6 +5588,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) => Some(64),
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
@@ -5612,6 +5629,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -7542,6 +7560,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Union
                 | TokenKind::Enum
                 | TokenKind::BuiltinVaList
+                | TokenKind::TargetBuiltinType
                 | TokenKind::GnuInt128
                 | TokenKind::Typeof
                 | TokenKind::TypeofUnqual
@@ -8277,6 +8296,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Function { .. }
             | TypeKind::Enum(_)
             | TypeKind::BuiltinVaList
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_) => false,
         }
     }
@@ -8970,6 +8990,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     TypeKind::Array { .. }
                     | TypeKind::Function { .. }
+                    | TypeKind::TargetBuiltin(_)
                     | TypeKind::BuiltinVaList => OperandTypeClass::Other,
                 }
             }
@@ -11908,6 +11929,7 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
         kind,
         TokenKind::Void
             | TokenKind::BuiltinVaList
+            | TokenKind::TargetBuiltinType
             | TokenKind::GnuInt128
             | TokenKind::Bool
             | TokenKind::Char
@@ -11926,6 +11948,7 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
 struct BuiltinTypeWord {
     kind: TokenKind,
     forced_int128_signedness: Option<GnuInt128Signedness>,
+    target_builtin: Option<TargetBuiltinType>,
 }
 
 /// Resolve the order-independent builtin declaration-specifier multiset.
@@ -11935,6 +11958,9 @@ struct BuiltinTypeWord {
 /// accepts exactly the standard integer, real, and complex families and
 /// rejects contradictory or duplicate words.
 fn resolve_builtin_type(words: &[BuiltinTypeWord]) -> Option<TypeKind> {
+    if let Some(target) = words.iter().find_map(|word| word.target_builtin) {
+        return (words.len() == 1).then_some(TypeKind::TargetBuiltin(target));
+    }
     let count = |needle| words.iter().filter(|word| word.kind == needle).count();
     let void = count(TokenKind::Void);
     let builtin_va_list = count(TokenKind::BuiltinVaList);

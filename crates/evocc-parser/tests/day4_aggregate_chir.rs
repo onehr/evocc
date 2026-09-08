@@ -437,6 +437,7 @@ fn type_fingerprint(
         }
         TypeKind::Float(kind) => format!("float:{kind:?}"),
         TypeKind::Complex(kind) => format!("complex:{kind:?}"),
+        TypeKind::TargetBuiltin(kind) => format!("builtin:{kind:?}"),
     };
     let qualifiers = canonical.qualifiers;
     if qualifiers == Default::default() {

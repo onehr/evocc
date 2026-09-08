@@ -1686,6 +1686,7 @@ fn types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
             (TypeKind::Void, TypeKind::Void)
             | (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => {}
             (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) if left == right => {}
+            (TypeKind::TargetBuiltin(left), TypeKind::TargetBuiltin(right)) if left == right => {}
             (TypeKind::Int(left), TypeKind::Int(right)) if left == right => {}
             (TypeKind::Enum(tag), TypeKind::Int(rank))
             | (TypeKind::Int(rank), TypeKind::Enum(tag))
@@ -1794,6 +1795,7 @@ fn prototype_survives_default_promotions(
                             | IntRank::ULongLong
                     ),
                     TypeKind::Float(FloatKind::F16 | FloatKind::F32) => false,
+                    TypeKind::TargetBuiltin(_) => false,
                     TypeKind::Complex(ComplexBase::CF16 | ComplexBase::CF32) => false,
                     TypeKind::Enum(_) => false,
                     _ => true,

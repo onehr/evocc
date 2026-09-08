@@ -481,6 +481,7 @@ fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
         TypeKind::Struct(tag) => format!("struct#{}", tag.raw()),
         TypeKind::Union(tag) => format!("union#{}", tag.raw()),
         TypeKind::Enum(tag) => format!("enum#{}", tag.raw()),
+        TypeKind::TargetBuiltin(kind) => format!("builtin({kind:?})"),
     }
 }
 

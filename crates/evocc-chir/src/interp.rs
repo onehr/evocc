@@ -5445,6 +5445,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
+            | TypeKind::TargetBuiltin(_)
             | TypeKind::BuiltinVaList => {
                 let value = self.zero_value(ty, span)?;
                 self.store_initialized_value(address, ty, value, span)?;
@@ -9561,7 +9562,10 @@ fn default_argument_promotion_preserves_type(types: &TypeInterner, ty: TypeId) -
             kind,
             evocc_types::FloatKind::F64 | evocc_types::FloatKind::F128
         ),
-        TypeKind::Void | TypeKind::Array { .. } | TypeKind::Function { .. } => false,
+        TypeKind::Void
+        | TypeKind::TargetBuiltin(_)
+        | TypeKind::Array { .. }
+        | TypeKind::Function { .. } => false,
         TypeKind::BuiltinVaList
         | TypeKind::GnuInt128(_)
         | TypeKind::Complex(_)

@@ -5866,6 +5866,11 @@ impl<'a> FunctionLowerer<'a> {
             .kind
             .clone();
         match kind {
+            TypeKind::TargetBuiltin(_) => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "target header type has no admitted value execution",
+            }),
             TypeKind::Int(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_)
