@@ -11,9 +11,9 @@
       "registry_rules": 51,
       "relation": "byte prefix of p0.scalar.v4: the first 51 rules and their exact bytes are the same, so a certificate naming p0.scalar.v3 fires only rules this receipt covers"
     },
-    "spec_revision": "**Revision 1.9.85** | **Authoritative reference** | **2026-09-08**",
-    "spec_sha256": "e21499ddf9d9efcd98f1b595e8b861fc408bd1f8557e51b8791b7e1c1e429fea",
-    "lean_commit": "0995ec9996a5d0a537c21f7a201fded42602b40f",
+    "spec_revision": "**Revision 1.9.87** | **Authoritative reference** | **2026-09-09**",
+    "spec_sha256": "ead195e1502023d43a8cff4bbf0db6e0cfa199fa5195f27cc468181ceb600e81",
+    "lean_commit": "8cff4de865d152a0081c8294b51d988fc5690f9d",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -14691,25 +14691,25 @@
       "status": "differential evidence only; this side's answers are counted here, and the comparison against the Rust runners' <name>.rust.jsonl is tools/lean/diff.py, not this receipt",
       "vectors": {
         "transfers-small": {
-          "answered": 100359,
+          "answered": 132534,
           "abstained": 0
         },
         "lattice-small": {
-          "answered": 19683,
+          "answered": 22140,
           "abstained": 0
         },
         "values-width8": {
-          "answered": 786432,
+          "answered": 983040,
           "abstained": 0
         },
         "random": {
-          "answered": 50000,
+          "answered": 20000,
           "abstained": 0
         },
         "named": {
-          "answered": 18,
+          "answered": 11,
           "abstained": 0,
-          "named_checked": 18,
+          "named_checked": 11,
           "named_wrong": 0
         }
       }

@@ -126,11 +126,19 @@ def main() -> int:
             continue
         answer = first.get("result")
         other = second.get("result")
+        abstained = False
         if answer in ABSTENTIONS:
             abstentions["left"] += 1
+            abstained = True
         if other in ABSTENTIONS:
             abstentions["right"] += 1
-        if canonical(answer) == canonical(other):
+            abstained = True
+        if abstained:
+            # An abstention is a stated limit, not an answer: the line is
+            # neither an agreement nor a difference. Two sides abstaining on
+            # the same line agree about nothing except their limits.
+            pass
+        elif canonical(answer) == canonical(other):
             agreements += 1
         else:
             differences.append((number, first, second, "the answers differ"))
@@ -144,6 +152,7 @@ def main() -> int:
                     expectation_failures.append((number, side, record))
 
     print("vectors: %d" % vectors)
+    print("compared: %d" % (agreements + len(differences)))
     print("agreements: %d" % agreements)
     print("differences: %d" % len(differences))
     if mismatched_inputs:
