@@ -50,6 +50,53 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn unused_target_header_prototypes_do_not_require_floating_execution() {
+    for spelling in [
+        "_Float16",
+        "_Float32",
+        "_Float64",
+        "_Float128",
+        "_Float32x",
+        "_Float64x",
+        "__fp16",
+        "__Float32x4_t",
+        "__Float64x2_t",
+        "__SVFloat32_t",
+        "__SVFloat64_t",
+        "__SVBool_t",
+    ] {
+        assert_pairs(
+            &[(
+                &format!("typedef {spelling} header_type; extern header_type unused(header_type); int main(void){{return 0;}}"),
+                "int main(void){return 0;}",
+            )],
+            1900,
+        );
+    }
+}
+
+#[test]
+fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_aliases() {
+    for spelling in ["_Float32", "__Float32x4_t", "__SVFloat32_t"] {
+        let source = format!("{spelling} identity({spelling} x){{return x;}}");
+        let arena = Arena::default();
+        let file = FileId::new(11_900);
+        let mut lexer = Lexer::new(file, &source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            assert_ne!(token.kind, TokenKind::Error);
+            tokens.push(token);
+        }
+        let mut parser = Parser::new(tokens, file, &source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect_err("header admission must not invent execution support");
+        assert_eq!(error.code(), "E3101", "{source}: {error}");
+    }
+}
+
+#[test]
 fn digit_builtin_resolves_to_ordinary_integer_arithmetic() {
     assert_pairs(
         &[

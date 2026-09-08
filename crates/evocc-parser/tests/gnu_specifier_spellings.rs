@@ -40,6 +40,70 @@ fn accepts(source: &str) {
 }
 
 #[test]
+fn target_header_types_have_their_measured_layout_and_distinct_identity() {
+    for (spelling, size, align) in [
+        ("_Float16", 2, 2),
+        ("_Float32", 4, 4),
+        ("_Float64", 8, 8),
+        ("_Float128", 16, 16),
+        ("_Float32x", 8, 8),
+        ("_Float64x", 16, 16),
+        ("__fp16", 2, 2),
+        ("__Float32x4_t", 16, 16),
+        ("__Float64x2_t", 16, 16),
+    ] {
+        accepts(&format!(
+            "typedef {spelling} header_type; \
+             extern header_type declared(const header_type); \
+             _Static_assert(sizeof(header_type)=={size}, \"size\"); \
+             _Static_assert(__alignof__(header_type)=={align}, \"alignment\"); \
+             _Static_assert(__builtin_types_compatible_p(header_type,{spelling}), \"identity\"); \
+             _Static_assert(__builtin_types_compatible_p(const header_type,{spelling}), \"qualifiers\"); \
+             _Static_assert(!__builtin_types_compatible_p(header_type,float), \"not float\"); \
+             _Static_assert(!__builtin_types_compatible_p(header_type,double), \"not double\"); \
+             _Static_assert(!__builtin_types_compatible_p(header_type,long double), \"not long double\");"
+        ));
+    }
+}
+
+#[test]
+fn scalable_header_types_are_declarable_but_have_no_fixed_layout() {
+    for spelling in ["__SVFloat32_t", "__SVFloat64_t", "__SVBool_t"] {
+        let arena = Arena::default();
+        let unit = parse(
+            &format!("typedef {spelling} header_type; extern header_type declared(header_type);"),
+            &arena,
+        )
+        .expect("a sizeless prototype must parse");
+        let evocc_chir::CHirDecl::Typedef(alias) = unit.declarations()[0] else {
+            panic!("preserved typedef");
+        };
+        assert!(matches!(
+            evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu()
+                .layout_of(unit.types(), alias.ty),
+            Err(evocc_types::LayoutError::UnsupportedBuiltinType(_))
+        ));
+        let arena = Arena::default();
+        assert_eq!(
+            parse(
+                &format!("_Static_assert(sizeof({spelling})>0, \"no fabricated layout\");"),
+                &arena,
+            )
+            .unwrap_err()
+            .code,
+            "E2912"
+        );
+    }
+}
+
+#[test]
+fn target_header_type_spellings_expand_before_type_resolution() {
+    accepts("#define _Float32 int\n_Float32 value=1; _Static_assert(sizeof(value)==4, \"macro first\");");
+    let arena = Arena::default();
+    assert!(parse("unsigned _Float32 wrong;", &arena).is_err());
+}
+
+#[test]
 fn pragma_operator_is_valid_at_file_scope_and_after_macro_expansion() {
     accepts(concat!(
         "#define PUSH() _Pragma(\"GCC diagnostic push\")\n",
