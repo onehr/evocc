@@ -56,6 +56,66 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
 #[test]
+fn unresolved_weak_addresses_use_indirection_without_changing_strong_references() {
+    let source = format!(
+        "extern @value size=4 align=4 linkage=weak
+
+declare @optional(mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default linkage=weak
+
+func @object_address(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
+{PURE}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = global_addr @value : ptr<generic>
+    %v3 = ptr.to_int %v2
+    ret %v3, %v0, %v1
+}}
+
+func @function_address(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
+{PURE}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = func_addr @optional : fnptr<(mem<all>, world)->(bits<32>, mem<all>, world)>
+    %v3 = ptr.to_int %v2
+    ret %v3, %v0, %v1
+}}
+"
+    );
+    for (target, page, offset) in [
+        (Target::Linux, ":got:", "#:got_lo12:"),
+        (Target::Darwin, "@GOTPAGE", "@GOTPAGEOFF"),
+    ] {
+        let assembly = emitted(target, &source);
+        for symbol in ["value", "optional"] {
+            let name = if target == Target::Darwin {
+                format!("_{symbol}")
+            } else {
+                symbol.to_owned()
+            };
+            let page = if target == Target::Darwin {
+                format!("{name}{page}")
+            } else {
+                format!("{page}{name}")
+            };
+            let offset = if target == Target::Darwin {
+                format!("{name}{offset}")
+            } else {
+                format!("{offset}{name}")
+            };
+            assert!(assembly.contains(&page), "missing {page}: {assembly}");
+            assert!(
+                assembly
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("ldr ") && line.contains(&offset)),
+                "missing GOT load {offset}: {assembly}"
+            );
+        }
+        let strong = emitted(target, &source.replace(" linkage=weak", ""));
+        assert!(!strong.contains(":got:") && !strong.contains("GOTPAGE"));
+    }
+}
+
+#[test]
 fn weak_symbols_and_aliases_emit_linkage_without_copying_definitions() {
     let source = format!(
         "global @value origin=0 kind=file visibility=external linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @absent size=4 align=4 linkage=weak\n\ndeclare @optional(bits<32>, mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default linkage=weak\n\nalias @alternative = @helper\nalias @other_value = @value linkage=weak\n\n{}\n{}",
