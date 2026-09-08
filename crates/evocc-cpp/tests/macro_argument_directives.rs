@@ -54,10 +54,7 @@ fn expected(source: &str) -> Vec<String> {
 #[test]
 fn ordinary_function_parentheses_do_not_open_macro_argument_contexts() {
     for (source, output) in [
-        (
-            "ordinary(\n#line 40\n1);",
-            "ordinary(1);",
-        ),
+        ("ordinary(\n#line 40\n1);", "ordinary(1);"),
         (
             "void function(int a,\n#line 40\nint b);",
             "void function(int a, int b);",

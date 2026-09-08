@@ -1668,8 +1668,13 @@ impl Preprocessor {
                             i += 1 + consumed;
                             continue;
                         }
-                        // Try function-like macro: name followed by '('
-                        if i + 1 < len && raw[i + 1].kind == TokenKind::LParen {
+                        // Collection processes directives and changes macro
+                        // state. An ordinary C call must not enter this path,
+                        // even if a later directive defines its spelling.
+                        if i + 1 < len
+                            && raw[i + 1].kind == TokenKind::LParen
+                            && self.macros.get(&name).is_some_and(|m| m.is_function)
+                        {
                             let saved_i = i;
                             i += 2; // skip name and '('
                             let (mut args, current_arg, j) = self.collect_macro_arguments(
