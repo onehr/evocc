@@ -106,6 +106,42 @@ fn observe(source: &str, ordinal: u32) -> (i128, i128) {
 }
 
 #[test]
+fn discarded_conditionals_keep_only_their_normal_continuations() {
+    assert_eq!(
+        observe(
+            "int total; void f(int c) { c ? ({ return; }) : (void)(total += 3); total += 5; }
+             int main(void) { f(1); f(0); return total != 8; }",
+            40,
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
+fn unselected_looping_statement_expression_does_not_require_a_value() {
+    assert_eq!(
+        observe(
+            "int main(void) { int x = 0; (1 ? (void)(x = 7) :
+               ({ int i = 1; while (1) while (i--) again: x++; goto again; }));
+             return x != 7; }",
+            41,
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
+fn discarded_statement_expression_exits_keep_control_and_effects() {
+    assert_eq!(
+        observe(
+            include_str!("../../../tests/fixtures/discarded-expression-exits.c"),
+            42
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
 fn straight_line_expression_adds_no_control_flow_block() {
     let module = lower("int main(void) { return ({ int t = 1; t + 1; }); }\n", 0);
     let main = module
