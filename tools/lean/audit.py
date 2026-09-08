@@ -362,6 +362,10 @@ def check_scope(repo: Path) -> dict:
         "imports": imports,
         "toolchain": toolchain,
         "external_requirements": [],
+        "lakefile_sha256": hashlib.sha256(lakefile.encode("utf-8")).hexdigest(),
+        "note": "the package declares one library rooted at EvoIR and one "
+        "executable rooted at Main, so lake builds exactly the modules listed "
+        "here and their Lean core imports",
     }
 
 
@@ -391,7 +395,14 @@ def classify_axioms(dump: dict) -> list[dict]:
                 f"axiom {name} is declared in {module}, outside the audited modules "
                 "and outside Lean core"
             )
-        rows.append({"name": name, "module": module, "type": entry["type"], "class": kind})
+        rows.append(
+            {
+                "name": name,
+                "module": module,
+                "type": " ".join(entry["type"].split()),
+                "class": kind,
+            }
+        )
     for entry in rows:
         if entry["class"] == "native-reflection":
             continue
@@ -434,6 +445,54 @@ def target_entry(byname: dict, name: str, expected: str) -> dict:
         "core_axioms": sorted(a for a in axioms if a in CORE_AXIOMS),
         "native_axioms": sorted(a for a in axioms if a not in CORE_AXIOMS),
     }
+
+
+VECTOR_FILES = [
+    "transfers-small",
+    "lattice-small",
+    "values-width8",
+    "random",
+    "named",
+]
+
+
+def vector_evidence(repo: Path) -> dict:
+    """What this side answered, for segment C.  The files are written by
+    `tools/lean/vectors.py` and are not tracked, so an absent file is recorded
+    as absent rather than as a pass."""
+    out: dict = {}
+    for name in VECTOR_FILES:
+        path = repo / "lean" / "vectors" / f"{name}.lean.jsonl"
+        if not path.exists():
+            out[name] = {"status": "not run"}
+            continue
+        answered = 0
+        abstained = 0
+        wrong = 0
+        checked = 0
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            result = row.get("result")
+            if result in ("unsupported", "skipped"):
+                abstained += 1
+            else:
+                answered += 1
+            if "expect" in row:
+                checked += 1
+                if result != row["expect"]:
+                    wrong += 1
+        entry = {"answered": answered, "abstained": abstained}
+        if checked:
+            entry["named_checked"] = checked
+            entry["named_wrong"] = wrong
+            if wrong:
+                raise AuditFailure(
+                    f"{path} disagrees with {wrong} of its own expected values"
+                )
+        out[name] = entry
+    return out
 
 
 def git(repo: Path, *args: str) -> str:
@@ -642,7 +701,10 @@ def main(argv: list[str]) -> int:
             },
             "C": {
                 "claim": "the Rust implementation agrees with these definitions",
-                "status": "differential evidence only, not part of this receipt",
+                "status": "differential evidence only; this side's answers are "
+                "counted here, and the comparison against the Rust runners' "
+                "<name>.rust.jsonl is tools/lean/diff.py, not this receipt",
+                "vectors": vector_evidence(repo),
             },
         },
         "evaluator": evaluator,
