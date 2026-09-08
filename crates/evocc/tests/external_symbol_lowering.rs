@@ -57,7 +57,11 @@ fn prefetch_accepts_qualified_addresses_without_loading_the_object() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     let output = run(source, "--emit=evoir");
     assert!(output.status.success());
-    assert!(!String::from_utf8_lossy(&output.stdout).contains("@__builtin_prefetch"));
+    let text = String::from_utf8_lossy(&output.stdout);
+    // An unused declaration is not an executed call or a pointee load.
+    assert!(!text.contains("call @__builtin_prefetch"), "{text}");
+    assert_eq!(text.matches("load volatile").count(), 2, "{text}");
+    assert_eq!(text.matches("store volatile").count(), 1, "{text}");
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     assert_native_execution(source, "qualified-prefetch");
 

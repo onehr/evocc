@@ -10572,6 +10572,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
         }
+        if variable_prefetch_arity
+            && self
+                .converted_expression_type(arguments[0])
+                .is_some_and(|inferred| match self.operand_type_class(inferred.ty) {
+                    OperandTypeClass::Pointer(pointer) => self
+                        .types
+                        .get(pointer.pointee)
+                        .is_some_and(|ty| !matches!(ty.kind, TypeKind::Function { .. })),
+                    _ => false,
+                })
+        {
+            // A hint consumes the address, not a qualified access to the
+            // object. Normalize only this operand; ordinary calls keep their
+            // implicit qualifier checks and the address is evaluated once.
+            arguments[0] = self.alloc_node(CHirExpr::Cast(
+                parameter_types[0],
+                arguments[0],
+                arguments[0].span(),
+            ));
+        }
         let validation_types = if variable_prefetch_arity {
             &parameter_types[..arguments.len()]
         } else {

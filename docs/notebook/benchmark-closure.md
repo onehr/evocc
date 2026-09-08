@@ -116,6 +116,21 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Qualified prefetch addresses
+
+`35e20cd` is a compiled single-test RED: both interpreter CLI paths report
+E2913 for a volatile-qualified object address. The parser now normalizes
+only the hint's address operand to its existing prototype; ordinary calls
+retain qualifier validation. All 55 focused integration tests pass, including
+native execution, exactly two volatile pointer loads and one update store,
+no hint call, and the existing arity/non-pointer refusals. The unused external
+declaration is not an executed call; the initial name-absence assertion was
+corrected to check the operation and observable accesses instead.
+The eight-crate all-targets changed gate against `35e20cd`, Clippy, fmt,
+Ruff and diff-check pass. Part of the test listing exceeded the terminal
+output limit, so no exact aggregate test count is inferred from that run.
+The original `builtin-prefetch-3` replay remains required before closure.
+
 ### Function-pointer casts and the reached-call boundary
 
 `b5837ce` contains two compiled RED tests: both interpreters/lowering refused
