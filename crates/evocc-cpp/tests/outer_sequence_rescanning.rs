@@ -61,3 +61,40 @@ fn substituted_object_macro_rescans_with_outer_parentheses() {
 fn nested_argument_rescans_across_lines() {
     assert_eq!(preprocess_tail("L K(G\n)() M"), ["L", "Z", "M"]);
 }
+
+#[test]
+fn argument_prescan_preserves_self_reference_inhibition() {
+    assert_eq!(
+        preprocess_tail(
+            "#define field p->field\n#define ID(x) x\n#define WRAP(x) ID(x)\nWRAP(field)"
+        ),
+        ["p", "->", "field"]
+    );
+}
+
+#[test]
+fn disabled_function_name_does_not_reactivate_at_an_outer_invocation() {
+    assert_eq!(
+        preprocess_tail("#define ID(x) x\nID(ID)(7)"),
+        ["ID", "(", "7", ")"]
+    );
+}
+
+#[test]
+fn recursive_rescan_cases_match_both_pinned_preprocessors() {
+    let source = include_str!("../../../tests/fixtures/macro-rescan-inhibition.c");
+    assert_eq!(
+        preprocess_tail(source),
+        [
+            "\"state->slot\"",
+            "\"state->slot\"",
+            "\"LEFT\"",
+            "\"F(1)\"",
+            "\"state->slot\"",
+            "\"state->slot state->slot\"",
+            "\"state->slot\"",
+            "\"ID(7)\"",
+            "\"F(F(1))\"",
+        ]
+    );
+}
