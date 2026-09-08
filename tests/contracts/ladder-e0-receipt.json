@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260908T014701Z",
-  "subject": "b504ee9",
-  "driverSha256": "eea68d679e70193687b8ecd61b6e92e2fff1aeae4fd7dbe92f3088d9fc24fff8",
+  "run": "20260908T034747Z",
+  "subject": "8a9f19d",
+  "driverSha256": "c924c4bd076a1056136f8a3206324c31449b32fdd34ad746eff89fb0b713943d",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "target": "aarch64-unknown-linux-gnu",
   "suites": {
@@ -20,8 +20,7 @@
     "outcomes": {
      "pass": 1189,
      "refused": 469,
-     "fail": 33,
-     "timeout": 1
+     "fail": 34
     },
     "refusalsByCode": {
      "E3101": 140,
@@ -59,13 +58,13 @@
      "E3006 invalid-signed-left-shift": 13,
      "E3004 signed-integer-overflow": 7,
      "E3039 external-call-not-executable": 6,
+     "E3021 not-lowered": 3,
      "E3008 interpreter-fuel-exhausted": 2,
-     "E3021 not-lowered": 2,
      "E3007 evoir-main-parameters-are-not-canonical": 2,
      "E3001 read-of-uninitialized-object": 1
     }
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260908T014701Z"
+ "evidence": ".evidence/ladder/e0/20260908T034747Z"
 }

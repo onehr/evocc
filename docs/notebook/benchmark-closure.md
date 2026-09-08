@@ -24,8 +24,8 @@ Only one heavyweight benchmark invocation runs at once.
 | Order | Issue family | Baseline and closure requirement | Incremental bench | State |
 |---|---|---|---|---|
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
-| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0, mixed passing units 817 to 987; weak GOT repair passes native probes and changed gate; original memclr now emits in 1.397 seconds | `torture musl` | OPEN: original-program execution replay pending |
-| 3 | Explicit register operands | Binding now reaches IR, allocation and all output edges; 30 focused tests include native execution, spills and independent binding validation | `musl` | OPEN: changed gate and original-unit replay pending |
+| 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; its claimed 987-unit passing build is withdrawn for missing test output; weak GOT native probes and changed gate pass | `torture musl` | OPEN: original-program execution replay pending |
+| 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; changed gate 843/0, including native spills and binding validation | `musl` | OPEN: original-unit replay invalidated by incomplete command capture; rerun required |
 | 4 | Remaining native failures | ctest 2 failures; torture 35 runtime and 3 link failures remain; the one assembly failure now passes natively | `ctest torture` | PARTIAL: static label relocation CLOSED; other failures OPEN |
 | 5 | Kernel substitution mismatches | Original six extent defects fixed in `measure-20260907T170640Z`; new replay booted but retained overwritten cached assembly and could not verify zero-storage objects | `kernel` | REOPENED: cache-content guard fixed; original replay and zero-storage classification required |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, kernel measurement pending | `kernel` | OPEN: implementation green; awaiting original-corpus replay |
@@ -46,6 +46,52 @@ Only one heavyweight benchmark invocation runs at once.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Original-program replay and capture correction
+
+The frozen `8a9f19d` executable was measured through
+`python3 tools/bench.py torture musl --jobs 4 --budget 40`.
+Torture `20260908T034747Z` retains the identical 1,692 program identities:
+1,189 pass, 469 refused, 34 runtime failures, zero emission timeouts or link
+failures. All formerly passing programs still pass; only `memclr` changed,
+from emission timeout to runtime failure, so no extra PASS is claimed.
+
+Musl `20260908T035026Z` is invalid as a full-denominator comparison: a
+parallel recorder merged `sysconf.lo` and `crypt.lo`, silently reducing
+1,339 units to 1,337. Its partial bisection identified `fprintf.lo`, and
+the substituted test report includes failed floating-point formatting;
+Section 6's GPR-only varargs ABI does not preserve FP arguments. The run
+was interrupted after 25 probes, not reported as a passing mixed build.
+`a86454c` holds one lock across the complete command record; 95 Python
+tests and a 16-writer sealed stress test preserving 512/512 identities pass.
+The fix requires a fresh original-unit replay, not relabeling this run.
+
+The earlier musl run `20260908T015031Z` also lacks `substituted-REPORT`:
+the adapter treated an absent report as an empty failure set. Its claimed
+987-unit passing build is withdrawn in the derived receipt, with the
+historical number retained under `invalidatedUnitsInPassingBuild`; it is
+not replaced by a made-up zero. `6cdc159` removes that fallback, with a
+missing-versus-empty regression and 96/96 Python tests. Fresh FP failures
+therefore cannot yet be called regressions from a proven old passing build.
+
+The two `arith-rand` originals also contain signed `-INT_MIN` at line 86:
+both sealed compilers' O0/O2 UBSan instrumentation refuses that operation.
+Clang's bundled runtime is absent, so its successful diagnostic runs use
+the explicitly named system `libubsan`; the failed initial links remain
+recorded in `.evidence/builtin-probes/20260908-arithmetic-torture/results.txt`.
+This diagnoses an applicability issue without changing either original or
+their native FAIL outcomes into PASS.
+
+### Positional parameters without source names
+
+Tests-only `a316754` fails semantically with C-HIR E3007 and lowering
+E3101, with no build errors. `a26bb02` retains all ABI slots and argument
+effects while making only the C identifier binding optional. Both
+interpreters and native execution pass the fixture, including an unnamed
+aggregate parameter; the original `pr103209` now returns zero in both
+interpreters. The changed-crate gate against `a316754` passes 950 tests
+with zero failures or ignored tests, plus Clippy/fmt; original native
+torture replay still determines the benchmark outcome.
 
 ### Explicit local-register operand binding
 

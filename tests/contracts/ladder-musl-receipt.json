@@ -43,7 +43,8 @@
  },
  "units": 1339,
  "unitsCompiledByEvocc": 987,
- "unitsInPassingBuild": 987,
+ "invalidatedUnitsInPassingBuild": 987,
+ "invalidation": "The sealed directory has no substituted-REPORT. report_failures previously treated absence as an empty failure set; the passing-build claim is withdrawn pending replay. Original sealed records are unchanged.",
  "refusalsByCode": {
   "E3101": 240,
   "E1006": 83,
@@ -53,7 +54,7 @@
   "E1005": 1,
   "E3030": 1
  },
- "testResult": "libc-test-clean",
+ "testResult": "invalidated-missing-report",
  "failingUnits": [],
  "excludedForSymbolParity": {},
  "symbolParity": {},
