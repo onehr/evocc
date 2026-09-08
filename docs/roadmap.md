@@ -923,6 +923,8 @@ That is an attractive use of persistent equivalences: the alternatives still exi
 
 EqSat gives EvoCC an opportunity to be considerably more verifiable than a conventional experimental compiler.
 
+**Machine-checked rules (added 2026-09-09).** The rewrite rules of the scalar registry `p0.scalar.v4` (with `p0.scalar.v3` as its verified prefix) and the known-bits transfer table, merge, join and side-condition predicates of EvoIR Section 8.10 are proved in Lean 4 against a single model of the Section 3 scalar semantics, for every width the P0 profile admits. An audit records the axioms every theorem depends on (the 55 rule theorems are kernel-only; the enumerated `add`, `sub`, `mul` and comparison rows are SAT-backed through `bv_decide` and carry per-theorem reflection axioms) and writes `tests/contracts/lean-p0-receipt.json`; `tests/contracts/lean-correspondence-receipt.json` records that the producer's analysis, the checker's facts and the interpreter agree with the Lean model on 1,325,045 vectors. What this replaces is the human review of the registry and of the transfer table; what it does not touch is listed in EvoIR Section 11.7: eligibility, the seed-fact fixed point, the checker's replay, the parser, the front end, the backend and the memory model. The plan and its two rounds of external review are in `docs/lean-plan.md`.
+
 The stack should be:
 
 ```text

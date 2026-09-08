@@ -100,6 +100,7 @@ $ target/release/evocc --emit=evoir -Oeq-scalar opt.c | tail -4
 - C lowers to EvoIR, a block-argument SSA in which memory and observable effects are explicit `mem` and `world` tokens, undefined behaviour is an `ub.assume` obligation, and pointers carry provenance. The e-graph only sees programs whose dangerous parts are already explicit.
 - Rewrites merge e-classes instead of replacing nodes. Pass order stops mattering; the cost model chooses at extraction from everything the rules proved equal.
 - Each union records why it was allowed. `evo-proofcheck` replays the record against the before and after programs and shares no code with the optimizer.
+- The rewrite rules themselves are machine-checked. Every rule of the scalar registry and every row of the known-bits analysis it relies on is proved in Lean 4 against one model of the EvoIR scalar semantics, for every width the profile admits; an audit lists the axioms each proof uses and writes a receipt, and the Rust implementations are compared with the Lean model on 1.3 million vectors. This checks the rules, not the whole compiler: the front end, the backend and the memory model are not proved.
 - EvoMIR's register allocation is checked by an independent verifier. A randomized gate runs 21,000 generated programs as source IR, optimized IR, machine IR and native binary on both targets.
 - The kernel is measured the way a compiler bring-up is done: GCC builds it, EvoCC replaces translation units one at a time, kbuild relinks, QEMU boots, and a failure bisects to one unit.
 
@@ -110,6 +111,7 @@ crates/evocc            driver                      crates/evocc-egraph      e-g
 crates/evocc-cpp        preprocessor                crates/evocc-eqopt       rewrites, certificates
 crates/evocc-lex        lexer                       crates/evocc-proof       certificate format
 crates/evocc-parser     C11 + GNU parser            crates/evocc-proofcheck  evo-proofcheck
+lean/                   Lean 4 proofs of the rules  tools/lean               proof audit, vectors
 crates/evocc-types      types and layout            crates/evocc-policy      cost and schedule policies
 crates/evocc-chir       checked IR, interpreter     crates/evocc-randgate    randomized semantic gate
 crates/evocc-lower      C-HIR -> EvoIR              crates/evocc-mir         EvoMIR, allocation, emission
