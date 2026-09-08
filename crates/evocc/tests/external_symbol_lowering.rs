@@ -20,6 +20,22 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+fn external_object_addresses_are_position_independent() {
+    let source = include_str!("../../../tests/fixtures/external-object-pie.c");
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    assert!(assembly.contains(":got:environ"));
+    assert!(assembly.contains("#:got_lo12:environ"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "external-object-address");
+}
+
+#[test]
 fn unnamed_definition_parameters_preserve_call_positions_and_argument_effects() {
     let source = include_str!("../../../tests/fixtures/unnamed-definition-parameters.c");
     let mut failures = Vec::new();

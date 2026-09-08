@@ -324,7 +324,7 @@ fn emit_unit(
     text.push('\n');
     let mut aliases: BTreeMap<&str, Vec<&SymbolAlias>> = BTreeMap::new();
     let mut weak_functions = BTreeSet::new();
-    let mut weak_references = BTreeSet::new();
+    let mut indirect_addresses = BTreeSet::new();
     if let Some(module) = module {
         for alias in &module.aliases {
             aliases.entry(&alias.target).or_default().push(alias);
@@ -356,11 +356,10 @@ fn emit_unit(
             };
             let _ = writeln!(text, "{directive} {prefix}{name}");
         }
-        weak_references.extend(
+        indirect_addresses.extend(
             module
                 .extern_objects
                 .iter()
-                .filter(|g| g.linkage == Linkage::Weak)
                 .map(|g| (SymbolKind::Global, g.symbol.as_str()))
                 .chain(
                     module
@@ -384,7 +383,7 @@ fn emit_unit(
             function,
             static_blocks.get(function.name.as_str()),
             weak_functions.contains(function.name.as_str()),
-            &weak_references,
+            &indirect_addresses,
         );
         emit_aliases(
             &mut text,
@@ -659,12 +658,12 @@ fn instructions_in(body: &str) -> usize {
     body.lines().filter(|line| line.starts_with(' ')).count()
 }
 
-/// Address recipes retain the symbol's table and linkage. Only an unresolved
-/// weak reference needs the GOT: a direct page pair can resolve to the image
-/// base instead of zero. No abstract C memory operation is introduced.
+/// Undefined objects need GOT indirection for PIE linking. Unresolved weak
+/// functions need it to preserve the null address of an absent definition.
+/// The address slot is linker storage, not an abstract C memory operation.
 struct SymbolEmission<'a> {
     target: Target,
-    weak_references: &'a BTreeSet<(SymbolKind, &'a str)>,
+    indirect_addresses: &'a BTreeSet<(SymbolKind, &'a str)>,
 }
 
 fn emit_function(
@@ -673,7 +672,7 @@ fn emit_function(
     allocated: &Allocated,
     static_blocks: Option<&BTreeSet<u32>>,
     weak: bool,
-    weak_references: &BTreeSet<(SymbolKind, &str)>,
+    indirect_addresses: &BTreeSet<(SymbolKind, &str)>,
 ) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
@@ -720,7 +719,7 @@ fn emit_function(
         &mut body,
         &SymbolEmission {
             target,
-            weak_references,
+            indirect_addresses,
         },
         allocated,
         &frame,
@@ -734,7 +733,7 @@ fn emit_function(
             &mut body,
             &SymbolEmission {
                 target,
-                weak_references,
+                indirect_addresses,
             },
             allocated,
             &frame,
@@ -1146,7 +1145,10 @@ fn emit_inst(
             );
         }
         MInst::Adrp { dst, symbol, kind } => {
-            if symbols.weak_references.contains(&(*kind, symbol.as_str())) {
+            if symbols
+                .indirect_addresses
+                .contains(&(*kind, symbol.as_str()))
+            {
                 let operand = match target {
                     Target::Linux => format!(":got:{symbol}"),
                     Target::Darwin => format!("_{symbol}@GOTPAGE"),
@@ -1170,7 +1172,10 @@ fn emit_inst(
             symbol,
             kind,
         } => {
-            if symbols.weak_references.contains(&(*kind, symbol.as_str())) {
+            if symbols
+                .indirect_addresses
+                .contains(&(*kind, symbol.as_str()))
+            {
                 let operand = match target {
                     Target::Linux => format!("#:got_lo12:{symbol}"),
                     Target::Darwin => format!("_{symbol}@GOTPAGEOFF"),
