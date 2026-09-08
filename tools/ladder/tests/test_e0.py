@@ -15,6 +15,49 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_original_support_directory_reaches_emission_and_diagnosis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "run"
+            inputs = Path(tmp) / "upstream/gcc/testsuite/gcc.c-torture/execute"
+            inputs.mkdir(parents=True)
+            (inputs / "helper.h").write_bytes(b"#define RESULT 7\n")
+            (inputs / "probe.c").write_bytes(b'#include "helper.h"\nint main(void){return RESULT != 7;}\n')
+            subject = Path(tmp) / "evocc"
+            subject.write_bytes(b"subject")
+            options = {"applied": [], "unhandled": []}
+            with (
+                patch.object(e0, "BUILD", work.parent),
+                patch.object(e0, "EVIDENCE", Path(tmp) / "evidence"),
+                patch.object(e0, "RECEIPT", Path(tmp) / "receipt.json"),
+                patch.object(e0, "ROOT", Path(tmp)),
+                patch.object(e0, "fetch", return_value=inputs),
+                patch.object(e0, "sysroot", return_value=Path("/sysroot")),
+                patch.object(e0, "sh", return_value=SimpleNamespace(stdout="source-commit")),
+                patch.object(e0, "emit", return_value={"probe": {"emit": "emitted", "options": options}}) as emit,
+                patch.object(e0, "run_in_container", return_value={"probe": {"run": "fail", "exit": 1}}),
+                patch.object(e0, "interpreter_verdict", return_value="diagnostic") as diagnose,
+                patch("sys.argv", ["e0", "--suite", "torture", "--evocc", str(subject)]),
+            ):
+                e0.main()
+                self.assertIn(f"-I{inputs}", emit.call_args.args[3])
+                self.assertIn(f"-I{inputs}", diagnose.call_args.args[3])
+            work = work.parent / "run-torture"
+            self.assertEqual((work / "src/probe.c").read_bytes(), (inputs / "probe.c").read_bytes())
+
+    def test_sparse_checkout_supplies_quoted_cross_directory_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "torture"
+            (root / e0.PINS["torture"]["subdir"]).mkdir(parents=True)
+            payload = b"/* same pinned repository, exact bytes */\nint helper;\n"
+            with (
+                patch.object(e0, "BUILD", Path(tmp)),
+                patch.object(e0.subprocess, "run", return_value=SimpleNamespace(stdout=payload)),
+            ):
+                e0.fetch("torture")
+            helper = root / "gcc/testsuite/gcc.dg/tree-ssa/pr105777.c"
+            self.assertTrue(helper.is_file(), "the included file is outside the sparse subtree")
+            self.assertEqual(helper.read_bytes(), payload)
+
     def test_language_mode_is_preserved_for_emission_and_diagnosis(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
