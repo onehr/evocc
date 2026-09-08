@@ -18,6 +18,31 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alternative.c");
+const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c");
+
+#[test]
+fn local_register_bindings_survive_ir_round_trip() {
+    let output = run(FIXED_REGISTERS, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for constraint in ["r@x8", "=r@x8", "+r@x8", "+&r@x8"] {
+        assert!(text.contains(constraint), "missing {constraint}: {text}");
+    }
+    let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(evocc_evoir::render_module(&module), text);
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn local_register_bindings_execute_inputs_outputs_and_both_goto_edges() {
+    // Sealed GCC-14 and Clang-19, at both -O0 and -O2: exit 0.
+    execute_native_assembly(FIXED_REGISTERS, "fixed-registers");
+}
+
 const REGISTER_ALTERNATIVES: [&str; 12] = [
     "Ir", "Jr", "Kr", "Lr", "ir", "nr", "rI", "rJ", "rK", "rL", "ri", "rn",
 ];
