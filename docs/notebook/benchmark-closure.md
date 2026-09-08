@@ -102,7 +102,7 @@ not a claim that no unknown compiler bug can exist.
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | zstd 31 vector-type declarations, 7 `_Float32`, 4 pretty-function; cJSON 2 vector declarations; separate declaration admission from SIMD/FP execution | `zstd cjson` | OPEN |
-| 11 | TinyCC compiler build | 7/11 assemble, 4/11 enter a passing build; three relink failures and four compile refusals remain; external-data PIE is independently reduced for tccrun | `tinycc` | PARTIAL: macro-rescan failures in tccdbg/tccelf CLOSED by original replay |
+| 11 | TinyCC compiler build | 7/11 assemble, 6/11 enter a passing build; tccrun retains a function-address PIE link failure and four compile refusals remain | `tinycc` | PARTIAL: macro rescanning and external-data PIE addressing benched; external function addresses remain |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
 | 13 | Torture declaration coverage | 108 E1001 refusals, not 108 proven instances of one cause; classify source forms and fix admitted forms | `torture` | OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
@@ -117,6 +117,22 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+External-data GOT addressing `9065012` is measured in
+`20260908T093536.969536Z` (`python3 tools/bench.py tinycc --jobs 4`), native
+run `20260908T093537Z`: TinyCC rises from 4/11 to 6/11 units in a passing
+mixed build. All eleven identities and all seven assembly outcomes remain;
+`arm64-link.o` and `tcc.o` join the previously passing four. The remaining
+`tccrun.o` link now reports a direct relocation against `longjmp`, a function
+address rather than the earlier `environ` object. It remains OPEN, not hidden
+behind the passing data-address probe. Capture `9065012` is clean, binary
+SHA-256 `5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc`.
+The changed gate against `3b0065a` passes 518 tests, zero failures, with four
+pre-existing ignored tests; Clippy, Rust fmt, Ruff lint and diff-check pass.
+The sealed GCC-14/Clang-19 static/PIE source and subject probe has eight
+build/run successes, and the Darwin native regression passes. Ruff formatting
+of the untouched Python tree was also inspected: 43 existing files do not
+match `ruff format`; no unrelated formatter rewrite was made or claimed green.
 
 The prototype-array repair `858b8c2` is measured in
 `20260908T090630.550681Z` (`python3 tools/bench.py ctest torture --jobs 4`):

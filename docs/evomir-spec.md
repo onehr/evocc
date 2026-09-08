@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.23** | **Authoritative reference** | **2026-09-08**
+**Revision 0.24** | **Authoritative reference** | **2026-09-08**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -517,15 +517,14 @@ block label, and `%%` by one percent. The template's own text is copied
 verbatim and never parsed. The emitted text is
 deterministic and is what the receipt digests.
 
-**External symbols (revision 0.23).** A `call @f` whose `@f` is an EvoIR
+**External symbols (revision 0.24).** A `call @f` whose `@f` is an EvoIR
 `declare` uses the platform's `bl` symbol spelling. The address of an EvoIR
-`extern` object, whether strong or weak, uses GOT indirection: Linux emits
+`extern` object or `declare` function, whether strong or weak, uses GOT indirection: Linux emits
 `adrp reg, :got:symbol` followed by `ldr reg, [reg, #:got_lo12:symbol]`;
 Darwin uses `_symbol@GOTPAGE` and `_symbol@GOTPAGEOFF`. This reads the
 linker's address slot, not the C object's contents, and adds no EvoIR memory
-operation. Unresolved weak function addresses use the same recipe so an absent
-definition has address zero. Defined objects and strong function addresses keep
-the direct page-relative recipe; calls are unchanged. The object file carries
+operation. An absent weak definition has address zero. Defined objects and
+functions keep the direct page-relative recipe; calls are unchanged. The object file carries
 undefined symbol references resolved by the linker, including in a PIE without
 requiring a direct relocation against external data. The minimal `environ`
 program is measured against GCC-14 and Clang-19 in
@@ -538,6 +537,14 @@ of Section 9 may link a program against the host C library for the 10.1.14
 library set and against reference-compiled objects for anything else; the
 interpreter lanes report the EvoIR codes `E3039`/`E3040` and the native
 result decides, exactly as for assembly (revision 0.6).
+
+The first replay exposed the same relocation defect for an external function
+address (`longjmp` in TinyCC). Both sealed source builds of
+`tests/fixtures/external-function-pie.c` pass PIE linking and execution, whereas
+the direct subject reference to `puts` fails linking under both; see
+`.evidence/builtin-probes/20260908-external-object-pie/function-results.txt`.
+The address rule is consequently shared by both undefined-symbol tables,
+not specialized to the first failing symbol kind.
 
 **Linkage (revision 0.16).** An EvoIR function or global whose
 `visibility` is `internal` is emitted without `.globl`, so its symbol is
@@ -735,6 +742,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.24 | 2026-09-08 | Apply the measured PIE address rule to strong undefined functions as well as objects; direct calls and defined symbols remain unchanged. The original TinyCC replay exposed longjmp immediately after environ. This revision changes the contract, not compiler code. |
 | 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
 | 0.22 | 2026-09-08 | Emits `linkage=weak` as `.weak` (Darwin `.weak_definition`/`.weak_reference`) and `alias` records as `.set name, target` after the target, with the alias's own linkage directive and type (EvoIR 1.9.79). |
 | 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |

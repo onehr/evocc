@@ -1,22 +1,20 @@
 {
   "schemaVersion": 1,
-  "run": "20260908T090630.550681Z",
-  "subject": "91158d1760b702a19d914ba009258859634c3057",
+  "run": "20260908T093536.969536Z",
+  "subject": "9065012d1600f03751074fd4206e46ed15e01080",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "384941528b53ad45a9c9ff1ae2879476bf01e017db673e28d31ffb02892e5f31",
+  "driverSha256": "5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "ctest",
-    "torture",
+    "tinycc",
     "--jobs",
     "4"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
-    "torture"
+    "tinycc"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -839,12 +837,10 @@
       },
       "baselineFailures": 0,
       "failingUnits": [
-        "arm64-link.o",
-        "tcc.o",
         "tccrun.o"
       ],
       "total": 11,
-      "passed": 4,
+      "passed": 6,
       "kind": "units",
       "compiled": 7,
       "excluded": 0,
@@ -891,8 +887,8 @@
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260908T064014Z",
-      "evidence": ".evidence/ladder/tinycc/20260908T064014Z",
+      "run": "20260908T093537Z",
+      "evidence": ".evidence/ladder/tinycc/20260908T093537Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -904,13 +900,12 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 92.6,
+      "seconds": 59.2,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
         "outcomes": {},
         "refusals": {
-          "E2102": 2,
           "E3101": 2,
           "E0113": 1,
           "E2921": 1
@@ -922,9 +917,9 @@
           "tccrun.o"
         ],
         "total": 11,
-        "passed": 2,
+        "passed": 4,
         "kind": "units",
-        "compiled": 5,
+        "compiled": 7,
         "excluded": 0,
         "testVerdict": "tests-passed-after-exclusions",
         "adjustments": {
@@ -969,13 +964,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260908T055028Z",
-        "evidence": ".evidence/ladder/tinycc/20260908T055028Z"
+        "run": "20260908T064014Z",
+        "evidence": ".evidence/ladder/tinycc/20260908T064014Z"
       },
       "measurement": {
-        "run": "20260908T061410.809670Z",
-        "subject": "a1393e9ebe90cbf3aa0a2b6db1e95dc9f2461c1f",
-        "driverSha256": "2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b"
+        "run": "20260908T093536.969536Z",
+        "subject": "9065012d1600f03751074fd4206e46ed15e01080",
+        "driverSha256": "5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc"
       }
     },
     "toybox": {
