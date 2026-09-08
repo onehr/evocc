@@ -55,6 +55,16 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn expression_scopes_keep_their_static_objects_in_the_module() {
+    for source in [
+        "int f(void){if(({static int n=0; ++n;})) return 7;return 0;} int main(void){return f()!=7 || f()!=7;}",
+        "int f(void){return ({static int n=0; ++n;});} int main(void){int a=f();int b=f();return a!=1 || b!=2;}",
+        "int f(void){int x=({static int n=5; n++;});return x;} int main(void){int a=f();int b=f();return a!=5 || b!=6;}",
+        "int main(void){int count=0;for(;({static int n=0; n++<3;});) ++count;return count!=3;}",
+    ] { check(source, 0); }
+}
+
+#[test]
 fn integer_mode_storage_and_call_values_agree_in_both_interpreters() {
     check(
         include_str!("../../../tests/fixtures/integer-mode-memory.c"),
