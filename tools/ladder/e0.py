@@ -32,6 +32,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -153,25 +154,67 @@ def prepare(
     return names, 0
 
 
+def program_options(source: Path) -> dict[str, list[str]]:
+    """Consume the supported unconditional subset, never guess a Tcl selector.
+
+    Unhandled options/directives remain visible per original program. This is
+    not a DejaGNU interpreter or an applicability filter. C string/character
+    literals are skipped so text inside them cannot change compiler options.
+    """
+    supported = {"-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow"}
+    base, additional, unhandled = [], [], []
+    tokens = re.finditer(
+        r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|/\*.*?\*/|//[^\n]*''',
+        source.read_bytes().decode("utf-8", errors="surrogateescape"), re.S,
+    )
+    for token in tokens:
+        comment = token.group()
+        if not comment.startswith(("/*", "//")):
+            continue
+        for directive in re.findall(r"\{\s*dg-[^\r\n]*", comment):
+            directive = directive.removesuffix("*/").strip()
+            match = re.fullmatch(
+                r'\{\s*dg-(options|additional-options)\s+(?:"([^"\n]*)"|\{\s*"([^"\n]*)"\s*\})\s*\}',
+                directive,
+            )
+            if not match:
+                unhandled.append(directive)
+                continue
+            try:
+                flags = shlex.split(match[2] if match[2] is not None else match[3])
+            except ValueError:
+                unhandled.append(directive)
+                continue
+            admitted = [flag for flag in flags if flag in supported]
+            unhandled.extend(flag for flag in flags if flag not in supported)
+            if match[1] == "options":
+                base = admitted
+            else:
+                additional.extend(admitted)
+    return {"applied": base + additional, "unhandled": unhandled}
+
+
 def emit(evocc: Path, work: Path, names: list[str], inc: list[str]) -> dict[str, dict]:
     rows = {}
     for name in names:
         src = work / "src" / f"{name}.c"
+        options = program_options(src)
         try:
             p = sh(
-                [str(evocc), f"--target={TARGET}", *inc, "--emit=asm", str(src)],
+                [str(evocc), f"--target={TARGET}", *inc, *options["applied"], "--emit=asm", str(src)],
                 timeout=60,
             )
         except subprocess.TimeoutExpired:
-            rows[name] = {"emit": "timeout"}
+            rows[name] = {"emit": "timeout", "options": options}
             continue
         if p.returncode == 0 and p.stdout.strip():
             (work / "asm" / f"{name}.s").write_text(p.stdout)
-            rows[name] = {"emit": "emitted"}
+            rows[name] = {"emit": "emitted", "options": options}
         else:
             m = re.search(r"error\[(E\d+)\]: ([^\n]*)", p.stderr)
             rows[name] = {
                 "emit": "refused",
+                "options": options,
                 "code": m.group(1)
                 if m
                 else ("panic" if "panicked" in p.stderr else "other"),
@@ -228,14 +271,16 @@ def run_in_container(work: Path) -> dict[str, dict]:
 
 
 def interpreter_verdict(evocc: Path, work: Path, name: str, inc: list[str]) -> str:
+    source = work / "src" / f"{name}.c"
     try:
         p = sh(
             [
                 str(evocc),
                 f"--target={TARGET}",
                 *inc,
+                *program_options(source)["applied"],
                 "--interpret-evoir",
-                str(work / "src" / f"{name}.c"),
+                str(source),
             ],
             timeout=30,
         )
@@ -270,6 +315,7 @@ def main() -> int:
         "subject": head,
         "driverSha256": sha256(evocc),
         "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
+        "optionPolicy": "supported unconditional signed-wrapping options applied to both compilation and diagnosis; all unhandled options/directives retained per program, never used to filter the corpus",
         "target": TARGET,
         "suites": {},
     }
@@ -284,6 +330,8 @@ def main() -> int:
             counts = collections.Counter()
             refusals = collections.Counter()
             verdicts = collections.Counter()
+            applied_options = collections.Counter()
+            unhandled_programs = 0
             for name in names:
                 row = {
                     "suite": suite,
@@ -298,6 +346,8 @@ def main() -> int:
                 )
                 row["outcome"] = outcome
                 counts[outcome] += 1
+                applied_options.update(row["options"]["applied"])
+                unhandled_programs += bool(row["options"]["unhandled"])
                 if outcome == "refused":
                     refusals[row["code"]] += 1
                 elif outcome in ("fail", "asm-fail", "link-fail"):
@@ -311,6 +361,8 @@ def main() -> int:
                 "outcomes": dict(counts),
                 "refusalsByCode": dict(refusals.most_common()),
                 "failuresByInterpreterVerdict": dict(verdicts.most_common()),
+                "appliedOptions": dict(applied_options),
+                "programsWithUnhandledRequirements": unhandled_programs,
             }
             print(f"{suite}: {dict(counts)}")
     json.dump(summary, open(out_dir / "summary.json", "w"), indent=1)

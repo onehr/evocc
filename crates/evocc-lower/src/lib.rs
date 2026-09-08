@@ -8435,7 +8435,7 @@ impl<'a> FunctionLowerer<'a> {
         integer: CIntegerType,
     ) -> Result<ExprValue, LowerError> {
         let result = self.fresh_value(bits(integer));
-        if integer.is_signed() {
+        if integer.is_signed() && !self.unit.signed_wrapping() {
             let defined = self.fresh_value(EvoIRType::Bits(1));
             let predicate = match operator {
                 BinaryOp::Add => {

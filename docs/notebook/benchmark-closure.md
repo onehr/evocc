@@ -108,7 +108,7 @@ not a claim that no unknown compiler bug can exist.
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
 | 16 | Remaining diagnostic classes | Torture 464 total refusals and musl 352 remain listed in raw results; the three added enum-mode refusals replace ignored attributes and remain explicit oracle conflicts, not passes | `torture musl` | OPEN |
-| 17 | Torture applicability/options | `dg-options`, target requirements and timeout factors are not consumed; define explicit applicability, preserve excluded outcomes, never claim ALL non-FP from a filtered success count | `torture` | OPEN |
+| 17 | Torture applicability/options | Supported unconditional signed-wrapping options now reach both compilation and diagnosis; other options and target/timeout directives remain recorded, not guessed or used to remove programs | `torture` | PARTIAL: nine option-dependent originals confirmed by both oracles; subject corpus replay pending |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
@@ -117,6 +117,17 @@ not a claim that no unknown compiler bug can exist.
 ## Progress
 
 ### Latest completed incremental replay
+
+Signed-wrapping options now pass the CLI/native regression and
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true
+tools/gate-changed.sh dbd89ee --all-targets --quiet -- --test-threads=1`:
+1,018 tests, zero failures or ignored tests in the five selected crates,
+Clippy and fmt green. The three option/preparation Python tests and thirteen
+benchmark-entry tests pass, as do Ruff lint and diff-check. The default and
+explicitly disabled modes still report E3004; shift, division and pointer
+checks remain tested. This is not yet an original torture replay: the kernel
+measurement is still consuming the preceding fixed executable, which must
+not be overwritten during its run.
 
 The digit-builtin, register-alias and expression-scope static fixes pass
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true

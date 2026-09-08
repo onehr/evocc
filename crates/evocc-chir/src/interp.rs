@@ -1955,14 +1955,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         pop_machine_value(&mut values, expression_span)?,
                         expression_span,
                     )?;
-                    let value = eval_unary_integer(operator, operand).map_err(|error| {
-                        let error_span = if operator == crate::UnaryOp::Neg {
-                            unary_operator_span(expression_span, operand_span)
-                        } else {
-                            expression_span
-                        };
-                        self.integer_error(error, error_span)
-                    })?;
+                    let value = self
+                        .runtime_integer_unary(operator, operand)
+                        .map_err(|error| {
+                            let error_span = if operator == crate::UnaryOp::Neg {
+                                unary_operator_span(expression_span, operand_span)
+                            } else {
+                                expression_span
+                            };
+                            self.integer_error(error, error_span)
+                        })?;
                     values.push(CValue::Integer(value));
                     None
                 }
@@ -6963,9 +6965,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } else {
                     BinaryOp::Sub
                 };
-                eval_binary_integer(binary, previous, CInteger::int(1))
+                self.runtime_integer_binary(binary, previous, CInteger::int(1), span)
                     .map(|updated| CValue::Integer(updated.cast(previous.ty())))
-                    .map_err(|error| self.integer_error(error, span))
             }
             CValue::Pointer { value, ty } => {
                 self.offset_pointer_value(value, ty, CInteger::int(1), direction, span)
@@ -7093,6 +7094,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         )
     }
 
+    fn runtime_integer_unary(
+        &self,
+        operator: UnaryOp,
+        operand: CInteger,
+    ) -> Result<CInteger, IntegerError> {
+        if self.unit.signed_wrapping() {
+            eval_constant_unary_integer(operator, operand)
+        } else {
+            eval_unary_integer(operator, operand)
+        }
+    }
+
     fn runtime_integer_binary(
         &self,
         operator: BinaryOp,
@@ -7105,7 +7118,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         {
             return Err(InterpreterError::WideInteger { span });
         }
-        eval_binary_integer(operator, left, right).map_err(|error| self.integer_error(error, span))
+        let result = if self.unit.signed_wrapping()
+            && matches!(operator, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul)
+        {
+            eval_constant_binary_integer(operator, left, right)
+        } else {
+            eval_binary_integer(operator, left, right)
+        };
+        result.map_err(|error| self.integer_error(error, span))
     }
 
     fn apply_machine_binary(
@@ -7909,7 +7929,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let result = if self.static_integer_evaluation {
                     eval_constant_unary_integer(*operator, operand)
                 } else {
-                    eval_unary_integer(*operator, operand)
+                    self.runtime_integer_unary(*operator, operand)
                 };
                 result.map_err(|error| {
                     let error_span = if *operator == crate::UnaryOp::Neg {
@@ -8406,8 +8426,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             UpdateOp::PreIncrement | UpdateOp::PostIncrement => BinaryOp::Add,
             UpdateOp::PreDecrement | UpdateOp::PostDecrement => BinaryOp::Sub,
         };
-        let updated = eval_binary_integer(binary, previous, CInteger::int(1))
-            .map_err(|error| self.integer_error(error, span))?
+        let updated = self
+            .runtime_integer_binary(binary, previous, CInteger::int(1), span)?
             .cast(slot.ty);
         self.slots
             .get_mut(&symbol)

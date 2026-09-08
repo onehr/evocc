@@ -1359,6 +1359,7 @@ pub struct CHirUnit<'arena> {
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
+    signed_wrapping: bool,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
     resolved_linkage: std::sync::OnceLock<Result<linkage::SymbolLinkage, linkage::LinkageError>>,
@@ -1379,6 +1380,7 @@ impl<'arena> CHirUnit<'arena> {
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
+            signed_wrapping: false,
             resolved_linkage: std::sync::OnceLock::new(),
         }
     }
@@ -1388,6 +1390,17 @@ impl<'arena> CHirUnit<'arena> {
         parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     ) {
         self.unprototyped_parameters = parameters;
+    }
+
+    /// Select source arithmetic semantics before interpretation or lowering.
+    /// Cloning the unit for substitution preserves this compilation option.
+    pub fn set_signed_wrapping(&mut self, enabled: bool) {
+        self.signed_wrapping = enabled;
+    }
+
+    #[must_use]
+    pub fn signed_wrapping(&self) -> bool {
+        self.signed_wrapping
     }
 
     #[must_use]

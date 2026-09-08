@@ -68,6 +68,7 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+    signed_wrapping: bool,
     /// Report every diagnostic rather than the first.
     ///
     /// A build wants one unambiguous first-error site. Surveying a body of
@@ -201,6 +202,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
+    let mut signed_wrapping = false;
     let mut survey = false;
     let mut index = 0;
 
@@ -215,6 +217,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
+            "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
+            "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
             "--target" => {
                 index += 1;
                 let value = args
@@ -306,6 +310,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         optimize_scalar_evoir,
+        signed_wrapping,
         survey,
     })
 }
@@ -571,7 +576,8 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     if !options.survey {
         parser.set_error_limit(NonZeroUsize::MIN);
     }
-    let unit = parser.parse_translation_unit_in(&arena);
+    let mut unit = parser.parse_translation_unit_in(&arena);
+    unit.set_signed_wrapping(options.signed_wrapping);
     if parser.had_error() {
         // A build reports the first diagnostic only. The error limit bounds the
         // declaration loop, not the reports made while parsing one
