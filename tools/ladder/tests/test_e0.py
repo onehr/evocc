@@ -15,6 +15,19 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_refusals_preserve_the_first_error_source_location(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / "src").mkdir()
+            (work / "asm").mkdir()
+            (work / "src/probe.c").write_text("int main(void){return 0;}\n")
+            first = "/sysroot/include/header.h:12:9: error[E1001]: expected-declaration"
+            stderr = "warning: unrelated\n" + first + "\nprobe.c:3:2: error[E2001]: later\n"
+            with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=1, stdout="", stderr=stderr)):
+                row = e0.emit(Path("/compiler"), work, ["probe"], [])["probe"]
+            self.assertEqual(row["code"], "E1001")
+            self.assertEqual(row.get("firstDiagnostic"), first)
+
     def test_emission_consumes_only_supported_unconditional_options(self):
         for directive, applied, unhandled in [
             ('/* { dg-options "-fwrapv" } */', ["-fwrapv"], []),
