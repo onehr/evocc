@@ -6381,3 +6381,10 @@ On the AArch64 target, `_Alignof` and `__alignof__` of `void` are one, and of an
 Both sealed compilers at O0/O2 agree on `.evidence/builtin-probes/20260909-nonobject-alignment/align.c`, recorded in `results.txt`, including the distinct existing `sizeof` result of one for either type.
 This is a query rule only: it does not make a void or function type an allocatable object, and adds no diagnostic code or IR instruction.
 Original torture `20000223-1` reaches the missing void query; `align-3` also requires an explicit function alignment and is not covered by the unattributed-function probe, so neither full-program outcome is inferred.
+
+### Flexible-member initialization stays on the declared record
+
+The file-scope extension in 10.1.3 initializes the declared record's own final flexible member, not a flexible member reached through a nested record or union subobject; nested initialization reports the existing E2202 (`invalid-initializer-type`).
+In `.evidence/builtin-probes/20260909-flexible-strings/`, both sealed oracles reject `nested-list.c`, while GCC accepts the nested strings in `strings.c` and `nested-record.c` and Clang rejects them, so the profile takes the refusing result (`results.txt`).
+Both accept and execute `direct.c` at O0/O2, including the narrow, wide and empty strings, their terminating zero and unchanged record `sizeof`; automatic-object initialization still reports E2919.
+This distinguishes the direct string in original torture `20010924-1` from the oracle-conflicting nested form in `pr28865`, and neither original outcome is inferred from the probes.
