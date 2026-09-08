@@ -116,6 +116,20 @@ not a claim that no unknown compiler bug can exist.
 
 ## Progress
 
+### Obsolete initializer designators
+
+`f6338a5` is the compiled tests-only RED: the field-colon fixture reports
+E2001 before implementation. The parser now normalizes the obsolete field,
+single-index and range spellings into the existing designation representation;
+subobject resolution and initializer execution are unchanged. Both
+interpreters and native Darwin pass the fixture, and out-of-object
+designators retain E2906. Both sealed compilers pass all four O0/O2 runs
+and reject the three malformed/multi-component omissions of `=`.
+The all-targets changed gate against `f6338a5` passes 1,261 tests, zero
+failures and three pre-existing standing-run ignores across eight crates;
+Clippy, fmt, Ruff and diff-check pass. Original-program replay is pending.
+Evidence: `.evidence/builtin-probes/20260909-obsolete-designators/results.txt`.
+
 ### Block-local implicit calls, remaining bit counts and source dependencies
 
 `0c6e054` contains compiled RED regressions for the block-only external
@@ -152,6 +166,24 @@ against a missing `alloca`. They are failures, not successes. Ctest remains
 `.evidence/ladder/e0/20260908T184344Z` and `20260908T184409Z`.
 The declaration-placement and measured bit-count families are closed on this
 replay; other GNU89, syntax, arithmetic and dynamic-storage work remains open.
+
+The two new E3004 failures are not one rule. Both sealed compilers run both
+originals successfully at O0/O2. GCC UBSan also accepts `920730-1`, whose
+`INT_MAX + 2` is a compile-time fold, but diagnoses the original runtime
+`i * 4` in `loop-3b` at line 18. Clang's sanitizer runtime is missing from
+the sealed image, so that diagnostic check is NOT RUN, not agreement.
+Section 10.1.19 currently keeps runtime obligations even for a literal
+expression; the constant-folding difference must not be hidden by removing
+the check. Evidence: `.evidence/builtin-probes/20260909-new-overflow-failures/results.txt`.
+
+The alignment investigation exposes a separate existing native error:
+`aligned(256)` stack objects are emitted at a merely 16-byte-aligned `sp`
+offset. A recursive address-and-live-byte probe returns zero for both sealed
+compilers at O0/O2, but the subject assembly returns one. This remains OPEN
+under rows 4/16; admitting `_Alignas` syntax alone cannot close stack
+alignment. The necessary exception to EvoMIR Section 6's fixed-offset frame
+rule has been submitted for authority rather than silently changing the body.
+Evidence: `.evidence/builtin-probes/20260909-alignment-specifiers/results.txt`.
 
 ### Explicit legacy integer declarations
 

@@ -2116,12 +2116,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut designations = Vec::new();
         if self.peek_kind() != Some(TokenKind::RBrace) {
             loop {
-                let designation =
-                    if matches!(self.peek_kind(), Some(TokenKind::Dot | TokenKind::LBracket)) {
-                        Some(self.parse_initializer_designation()?)
-                    } else {
-                        None
-                    };
+                let field_colon = self.peek_kind() == Some(TokenKind::Identifier)
+                    && self.tokens.get(self.pos + 1).map(|token| token.kind)
+                        == Some(TokenKind::Colon);
+                let designation = if field_colon
+                    || matches!(self.peek_kind(), Some(TokenKind::Dot | TokenKind::LBracket))
+                {
+                    Some(self.parse_initializer_designation()?)
+                } else {
+                    None
+                };
                 elements.push(self.parse_written_initializer()?);
                 designations.push(designation);
                 if !self.match_kind(TokenKind::Comma) {
@@ -2142,6 +2146,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_initializer_designation(&mut self) -> Option<InitializerDesignation<'arena>> {
         let start = self.span();
+        if self.peek_kind() == Some(TokenKind::Identifier) {
+            let token = self.advance().expect("peeked field designator");
+            let colon = self.expect(TokenKind::Colon)?;
+            return Some(InitializerDesignation {
+                designators: vec![WrittenDesignator::Field(SpannedName {
+                    spelling: self.token_text(&token).to_owned(),
+                    span: token.span,
+                })],
+                span: self.merge_span(start, colon.span),
+            });
+        }
         let mut designators = Vec::new();
         loop {
             match self.peek_kind() {
@@ -2175,10 +2190,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => break,
             }
         }
-        let assign = self.expect(TokenKind::Assign)?;
+        let end = if self.peek_kind() != Some(TokenKind::Assign) {
+            match designators.as_slice() {
+                [WrittenDesignator::Index { span, .. } | WrittenDesignator::Range { span, .. }] => {
+                    *span
+                }
+                _ => self.expect(TokenKind::Assign)?.span,
+            }
+        } else {
+            self.advance().expect("peeked designation assignment").span
+        };
         Some(InitializerDesignation {
             designators,
-            span: self.merge_span(start, assign.span),
+            span: self.merge_span(start, end),
         })
     }
 
