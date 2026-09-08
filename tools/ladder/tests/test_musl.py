@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 path = Path(__file__).resolve().parents[1] / "musl.py"
@@ -13,6 +14,14 @@ spec.loader.exec_module(musl)
 
 
 class SupervisorTest(unittest.TestCase):
+    def test_missing_report_is_not_an_empty_failure_set(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "REPORT"
+            with self.assertRaises(FileNotFoundError):
+                musl.report_failures(report)
+            report.write_text("")
+            self.assertEqual(musl.report_failures(report), set())
+
     def test_reference_build_preserves_the_supervisor(self):
         self.assertIn("cp src/common/runtest.exe reference-runtest", musl.BUILD_SCRIPT)
 
