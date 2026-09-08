@@ -56,7 +56,7 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
 #[test]
-fn external_object_and_weak_function_addresses_use_indirection() {
+fn undefined_symbol_addresses_use_indirection_without_changing_definitions() {
     let source = format!(
         "extern @value size=4 align=4 linkage=weak
 
@@ -116,7 +116,11 @@ func @function_address(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, wo
         } else {
             "_value@GOTPAGE"
         }));
-        assert!(!strong.contains(":got:optional") && !strong.contains("_optional@GOTPAGE"));
+        assert!(strong.contains(if target == Target::Linux {
+            ":got:optional"
+        } else {
+            "_optional@GOTPAGE"
+        }));
 
         // A definition in this module still takes the direct recipe, including
         // a weak definition. Indirection is decided by the declaration table,

@@ -38,6 +38,33 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn symbolic_address_operands_and_constant_modifiers_preserve_opaque_effects() {
+    let source = concat!(
+        "global @object origin=0 kind=file visibility=internal size=4 align=4 bytes=00000000 initialized=1111\n\n",
+        "func @main(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n",
+        "    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }\n",
+        "{\n^entry(%v0: mem<all>, %v1: world):\n",
+        "    %v2 = global_addr @object : ptr<generic>\n",
+        "    (%v3, %v4) = asm \"// %c[address]\" %v0, %v1 outputs [] inputs [(\"i\", \"address\", %v2)] clobbers []\n",
+        "    ret %v3, %v4\n}\n",
+    );
+    let module = parse_section9_module(source.as_bytes()).expect("symbolic i input");
+    assert_eq!(render_module(&module), source);
+    let error =
+        interpret_module(&module, "main", &tokens(), InterpreterLimits::new(100)).unwrap_err();
+    assert_eq!(error.code(), "E3021");
+    for invalid in [
+        source.replace("\"i\"", "\"n\""),
+        source.replace("\"i\"", "\"r\""),
+    ] {
+        assert!(
+            parse_section9_module(invalid.as_bytes()).is_err(),
+            "{invalid}"
+        );
+    }
+}
+
+#[test]
 fn opaque_assembly_has_canonical_lossless_text_and_exact_effects() {
     for template in [
         r#""nop""#,

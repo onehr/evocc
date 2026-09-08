@@ -20,6 +20,18 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+fn external_function_addresses_are_position_independent() {
+    let source = include_str!("../../../tests/fixtures/external-function-pie.c");
+    let output = run(source, "--emit=asm");
+    assert!(output.status.success());
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    assert!(assembly.contains(":got:puts"), "{assembly}");
+    assert!(assembly.contains("#:got_lo12:puts"), "{assembly}");
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "external-function-address");
+}
+
+#[test]
 fn external_object_addresses_are_position_independent() {
     let source = include_str!("../../../tests/fixtures/external-object-pie.c");
     let output = run(source, "--emit=asm");

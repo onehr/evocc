@@ -21,6 +21,73 @@ const REGISTER_ALTERNATIVE: &str = include_str!("fixtures/assembly_register_alte
 const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c");
 
 #[test]
+fn symbolic_immediates_preserve_symbols_offsets_and_ir_round_trips() {
+    let source = include_str!("../../../tests/fixtures/symbolic-assembly-immediates.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert_eq!(
+        evocc_evoir::render_module(&module).as_bytes(),
+        output.stdout
+    );
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let mir = evocc_mir::lower_module_for(target, &module, &|_| true).unwrap();
+        let text = evocc_mir::render_module(&mir);
+        assert_eq!(evocc_mir::parse_module(&text).unwrap(), mir);
+        assert!(text.contains("@words+8"), "{text}");
+        let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+        let prefix = if target == evocc_mir::Target::Darwin {
+            "_"
+        } else {
+            ""
+        };
+        for symbol in ["words+8", "external_word", "target"] {
+            assert!(
+                assembly.contains(&format!("{prefix}{symbol}")),
+                "{assembly}"
+            );
+        }
+        assert!(!assembly.contains("%c"), "{assembly}");
+    }
+}
+
+#[test]
+fn assembly_immediates_rematerialize_after_effectful_operand_control_flow() {
+    for source in [
+        r#"static int object; int effects; int f(int x){asm volatile("// %c0 %w1"::"i"(&object),"r"(x?++effects:--effects));return effects;}"#,
+        r#"int effects; int f(int x){asm volatile("// %c0 %w1"::"i"(7),"r"(x?++effects:--effects));return effects;}"#,
+        r#"static int object; int f(void){asm goto("// %c0 %l[done]"::"i"(&object): :done);return 0;done:return 1;}"#,
+        r#"int f(void){asm volatile("// %c0"::"i"(&&done));done:return 0;}"#,
+        r#"static int key; static inline __attribute__((always_inline)) int test(int *p){asm goto("// %c0 %l[done]"::"i"(p): :done);return 0;done:return 1;} int f(void){return test(&key);}"#,
+    ] {
+        let output = run(source, "--emit=asm");
+        assert!(
+            output.status.success(),
+            "{source}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("%c"));
+    }
+}
+
+#[test]
+fn symbolic_immediates_do_not_admit_dynamic_addresses_or_numeric_only_constraints() {
+    for source in [
+        r#"void f(long *p){asm volatile(""::"i"(p));}"#,
+        r#"extern long object; void f(void){asm volatile(""::"n"(&object));}"#,
+        r#"void f(long x){asm volatile("// %c0"::"r"(x));}"#,
+    ] {
+        let output = run(source, "--emit=asm");
+        assert!(!output.status.success(), "{source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+}
+
+#[test]
 fn local_register_bindings_survive_ir_round_trip() {
     let output = run(FIXED_REGISTERS, "--emit=evoir");
     assert!(
