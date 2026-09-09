@@ -6,6 +6,16 @@
     "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
   },
   "programs": {
+    "torture:pr115033": {
+      "disposition": "not-applicable",
+      "reason": "reviewed F09 excludes __builtin_exit; both Clang-19 O0/O2 original compilations reject it while GCC-14 O0/O2 execute successfully",
+      "sourceSha256": "74b9fdb37a0200d3bc693e5edfbfef811db197ed0e700e9079b472d6a9da1ee4",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-builtin-trap/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr115033.c"
+      ]
+    },
     "torture:pr124358": {
       "disposition": "not-applicable",
       "reason": "unchanged source passes GCC-14 O0 and Clang-19 O0/O2 but aborts with GCC-14 O2",

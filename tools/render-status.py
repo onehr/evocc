@@ -223,7 +223,7 @@ def main() -> int:
             f" K1 receipt: EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
             latest_k1_note,
             f"fail-closed {len(debts)} :{' '.join(debts)}",
-            f" E0 c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
+            f" E0 (): c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
             f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {record_count(cs.get('miscompiles'))};"
             + " ".join(f"{name} {r.get('unitsInPassingBuild', '?')}/{r.get('unitsTotal', r.get('units', 0))}" for name, r in subjects),
             "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",

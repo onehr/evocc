@@ -100,12 +100,19 @@ The same review explicitly excludes these builtin contracts:
 | pr47237 | `__builtin_apply` and `__builtin_apply_args`. |
 | va-arg-pack-1 | Inline forwarding with `__builtin_va_arg_pack`. |
 | pr105777, pr105984, pr30314 | `__builtin_mul_overflow_p`, including the two pinned gcc.dg sibling includes. |
-| 20001111-1, pr103052 | `__builtin_exit`, distinct from ordinary supported library calls. |
+| 20001111-1, pr103052, pr115033 | `__builtin_exit`, distinct from ordinary supported library calls. |
 
 The exact original sources and relevant included sibling sources accompany
 each contract entry. Existing raw refusals are recorded by
 `.evidence/ladder/e0/20260909T062923Z/results.jsonl`; the classification
 applies to those identities, not every diagnostic with the same code.
+
+`pr115033` was previously blocked by the independently missing trap builtin.
+Its unchanged original now has a separate reference measurement in
+`.evidence/builtin-probes/20260910-builtin-trap/results.txt`: GCC-14 O0/O2
+compile and execute successfully, while Clang-19 O0/O2 refuse the
+`__builtin_exit` at line 34. The F09 disposition applies on the next actual
+subject replay, not retroactively to the earlier sealed failure or as a PASS.
 
 `991014-1` is the separately reviewed extreme-type oracle conflict:
 GCC-14 admits its huge array types and Clang-19 refuses them. Its structure

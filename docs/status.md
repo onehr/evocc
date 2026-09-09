@@ -26,7 +26,7 @@ EvoCC ── (2026-09-09 UTC,EvoIR 1.9.90 / EvoMIR 0.28, checkout 0775488)
 │ K1 receipt: EvoCC 76 ; 90/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
-│ E0 c-testsuite 209/220 ████████ torture 1267/1692 ██████░░ │
+│ E0 (): c-testsuite 209/220 ████████ torture 1267/1692 ██████░░ │
 │ Csmith 932/1000, 0;zlib 19/19 zstd 6/44 cjson 0/2 tinycc 8/11 toybox 195/203 musl 1010/1339 │
 │ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
