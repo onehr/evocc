@@ -146,6 +146,27 @@ size is still below PTRDIFF_MAX; it must not be described as an overflow of
 that limit. The probe in `20260909-large-layout/results.txt` supports the
 oracle-conflict disposition, not an invented smaller numeric layout limit.
 
+## Unevaluated type queries and actual floating execution
+
+`20040709-1` and `20040709-2` initially stopped at the integer-only `T(A)`:
+lowering still visited the unselected `5.25` assignment after resolving
+`__builtin_classify_type`. That was a compiler defect, not an FP exclusion.
+After the branch repair, both untouched originals reach `T(W)` at line 114;
+their mains call `testW`, which stores and compares a long-double member.
+Both references execute each original at O0/O2 with exit zero. Diagnostic
+reductions retaining all A–V integer tests also execute correctly under
+both references and the subject's emitted machine code. The reductions do
+not replace either original benchmark input or count as original passes.
+Evidence: `.evidence/builtin-probes/20260910-type-classification/results.txt`.
+
+Three additional originals require executed FP, not merely a floating
+declaration: `20000603-1` performs double addition, `20000731-1` uses a double
+loop variable, and `20001017-1` passes double arguments. All twelve unchanged
+reference compile/run pairs succeed, recorded in
+`.evidence/builtin-probes/20260910-floating-execution/results.txt`.
+The five source-bound FP-deferred entries apply to the next replay; they
+neither change previous captures nor add any subject PASS.
+
 ## New refusals of formerly passing originals
 
 Capture `.evidence/ladder/e0/20260909T074333Z` has six fewer raw torture

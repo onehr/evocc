@@ -6,6 +6,51 @@
     "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
   },
   "programs": {
+    "torture:20040709-1": {
+      "disposition": "FP-deferred",
+      "reason": "after the integer A-V path repair, the first refusal is T(W): main calls testW, which stores and compares long double; A-V diagnostic reductions execute correctly",
+      "sourceSha256": "847815685fbf49bfa25f2a5c3fcd71f7a5b791f855138b2fe582b377bc5c592a",
+      "evidence": [
+        ".evidence/builtin-probes/20260910-type-classification/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c"
+      ]
+    },
+    "torture:20040709-2": {
+      "disposition": "FP-deferred",
+      "reason": "after the integer A-V path repair, the first refusal is T(W): main calls testW, which stores and compares long double; A-V diagnostic reductions execute correctly",
+      "sourceSha256": "e7053c30dcf6effda4a98f7060d3587aea9a6433289236a4c1d661620331c849",
+      "evidence": [
+        ".evidence/builtin-probes/20260910-type-classification/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c"
+      ]
+    },
+    "torture:20000603-1": {
+      "disposition": "FP-deferred",
+      "reason": "main calls f, which stores, adds and returns double values; all four sealed original reference runs pass",
+      "sourceSha256": "bb432b670b6713008c4bd880e5efdd5c7944334d52a92caaf13b11ca462875d0",
+      "evidence": [
+        ".evidence/builtin-probes/20260910-floating-execution/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000603-1.c"
+      ]
+    },
+    "torture:20000731-1": {
+      "disposition": "FP-deferred",
+      "reason": "main increments and compares a double loop variable; all four sealed original reference runs pass",
+      "sourceSha256": "476361fed8a09c4236a8f1513a036c4c9f9318ff00374adc98af3c6041eb2cd0",
+      "evidence": [
+        ".evidence/builtin-probes/20260910-floating-execution/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000731-1.c"
+      ]
+    },
+    "torture:20001017-1": {
+      "disposition": "FP-deferred",
+      "reason": "main passes the double values 4.0 and 7.0 to bug; all four sealed original reference runs pass",
+      "sourceSha256": "24686eb61a08cb232ae4b2c232eed5a54cd754fec9f8ffd69667219359ae8bd2",
+      "evidence": [
+        ".evidence/builtin-probes/20260910-floating-execution/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20001017-1.c"
+      ]
+    },
     "torture:pr115033": {
       "disposition": "not-applicable",
       "reason": "reviewed F09 excludes __builtin_exit; both Clang-19 O0/O2 original compilations reject it while GCC-14 O0/O2 execute successfully",
