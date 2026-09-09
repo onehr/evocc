@@ -6739,6 +6739,32 @@ impl<'a> FunctionLowerer<'a> {
             known_truth = None;
         }
         let condition = self.lower_condition(condition, &mut state)?;
+        if let Some(take_then) = known_truth {
+            let unselected = if take_then {
+                else_branch
+            } else {
+                Some(then_branch)
+            };
+            if !unselected.is_some_and(|branch| {
+                contains_targeted_label(branch, &self.goto_names, &self.case_labels)
+            }) {
+                // Only the condition's ordinary edge could enter this arm.
+                // Do not require execution support for its unselected values.
+                // The condition above still retains its runtime obligations.
+                let selected = if take_then {
+                    Some(then_branch)
+                } else {
+                    else_branch
+                };
+                return if let Some(branch) = selected {
+                    self.lower_stmt(branch, state, live_after, control)
+                } else {
+                    Ok(Flow {
+                        normal: vec![state],
+                    })
+                };
+            }
+        }
         let mut then_symbols = live_after.clone();
         collect_symbols_stmt(then_branch, &mut then_symbols);
         let then_keys = self.keys_for(&state, &then_symbols, &[]);
@@ -6789,9 +6815,8 @@ impl<'a> FunctionLowerer<'a> {
             })?;
             (target.block, self.edge_values(&state, &else_keys)?)
         };
-        // Keep lowering both arms so labels remain available to other
-        // entries. Only the ordinary conditional edge is constant-folded;
-        // the existing reachability pass then removes truly unreachable code.
+        // An unknown condition or another entry requires both arms. Fold only
+        // the ordinary conditional edge; keep the independently targeted labels.
         let terminator = match known_truth {
             Some(true) => Inst::Br(then_target, then_args),
             Some(false) => Inst::Br(else_target, else_args),

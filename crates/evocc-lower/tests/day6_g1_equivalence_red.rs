@@ -46,18 +46,14 @@ const CASES: &[Case] = &[
     %v0 = const.bits<32> 1
     %v1 = const.bits<32> 0
     %v2 = icmp.ne %v0, %v1
-    cond_br %v2, ^b1(), ^b2()
+    br ^b1()
 
 ^b1():
     %v3 = const.bits<32> 7
-    br ^b3(%v3)
+    br ^b2(%v3)
 
-^b2():
-    %v4 = const.bits<32> 9
-    br ^b3(%v4)
-
-^b3(%v5: bits<32>):
-    ret %v5
+^b2(%v4: bits<32>):
+    ret %v4
 }
 "#,
     },
@@ -292,52 +288,40 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     %v1 = const.bits<32> 0
     %v2 = const.bits<32> 0
     %v3 = icmp.ne %v1, %v2
-    cond_br %v3, ^b1(%v0), ^b2(%v0)
+    br ^b1(%v0)
 
 ^b1(%v4: bits<32>):
-    %v5 = const.bits<32> 99
-    %v6 = const.bits<32> 0
-    %v7 = icmp.ne %v5, %v6
-    br ^b3(%v5, %v7)
+    %v5 = const.bits<1> 0
+    br ^b2(%v4, %v5)
 
-^b2(%v8: bits<32>):
-    %v9 = const.bits<1> 0
-    br ^b3(%v8, %v9)
+^b2(%v6: bits<32>, %v7: bits<1>):
+    %v8 = zext.bits<32> %v7
+    %v9 = const.bits<32> 1
+    %v10 = const.bits<32> 0
+    %v11 = icmp.ne %v9, %v10
+    br ^b3(%v6, %v8)
 
-^b3(%v10: bits<32>, %v11: bits<1>):
-    %v12 = zext.bits<32> %v11
-    %v13 = const.bits<32> 1
-    %v14 = const.bits<32> 0
-    %v15 = icmp.ne %v13, %v14
-    cond_br %v15, ^b5(%v10, %v12), ^b4(%v10, %v12)
+^b3(%v12: bits<32>, %v13: bits<32>):
+    %v14 = const.bits<1> 1
+    br ^b4(%v12, %v13, %v14)
 
-^b4(%v16: bits<32>, %v17: bits<32>):
-    %v18 = const.bits<32> 88
-    %v19 = const.bits<32> 0
-    %v20 = icmp.ne %v18, %v19
-    br ^b6(%v18, %v17, %v20)
-
-^b5(%v21: bits<32>, %v22: bits<32>):
-    %v23 = const.bits<1> 1
-    br ^b6(%v21, %v22, %v23)
-
-^b6(%v24: bits<32>, %v25: bits<32>, %v26: bits<1>):
-    %v27 = zext.bits<32> %v26
-    %v28 = const.bits<32> 100
-    %v29 = signed_mul_defined %v24, %v28
-    ub.assume.signed_overflow %v29
-    %v30 = mul.bits<32> %v24, %v28
-    %v31 = const.bits<32> 10
-    %v32 = signed_mul_defined %v25, %v31
-    ub.assume.signed_overflow %v32
-    %v33 = mul.bits<32> %v25, %v31
-    %v34 = signed_add_defined %v30, %v33
-    ub.assume.signed_overflow %v34
-    %v35 = add.bits<32> %v30, %v33
-    %v36 = signed_add_defined %v35, %v27
-    ub.assume.signed_overflow %v36
-    %v37 = add.bits<32> %v35, %v27
-    ret %v37
+^b4(%v15: bits<32>, %v16: bits<32>, %v17: bits<1>):
+    %v18 = zext.bits<32> %v17
+    %v19 = const.bits<32> 100
+    %v20 = signed_mul_defined %v15, %v19
+    ub.assume.signed_overflow %v20
+    %v21 = mul.bits<32> %v15, %v19
+    %v22 = const.bits<32> 10
+    %v23 = signed_mul_defined %v16, %v22
+    ub.assume.signed_overflow %v23
+    %v24 = mul.bits<32> %v16, %v22
+    %v25 = signed_add_defined %v21, %v24
+    ub.assume.signed_overflow %v25
+    %v26 = add.bits<32> %v21, %v24
+    %v27 = signed_add_defined %v26, %v18
+    ub.assume.signed_overflow %v27
+    %v28 = add.bits<32> %v26, %v18
+    ret %v28
 }
 "#,
         },
@@ -1790,7 +1774,7 @@ fn golden_ssa_guard_rejects_false_green_ruling_violations() {
 
     let cross_block_use = CASES[1]
         .golden_evoir
-        .replacen("    ret %v5", "    ret %v3", 1);
+        .replacen("    ret %v4", "    ret %v3", 1);
     assert!(
         validate_golden_text(&cross_block_use).is_err(),
         "a value from another block must be passed through a block argument"
@@ -1808,7 +1792,7 @@ fn golden_ssa_guard_rejects_false_green_ruling_violations() {
     let wrong_edge_type =
         CASES[1]
             .golden_evoir
-            .replacen("^b3(%v5: bits<32>)", "^b3(%v5: bits<1>)", 1);
+            .replacen("^b2(%v4: bits<32>)", "^b2(%v4: bits<1>)", 1);
     assert!(
         validate_golden_text(&wrong_edge_type).is_err(),
         "edge operand types must match target block argument types"
