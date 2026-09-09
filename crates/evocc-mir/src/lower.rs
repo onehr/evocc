@@ -945,6 +945,27 @@ impl Lowerer {
         amount_signed: bool,
     ) -> Result<VReg, String> {
         let bound = significant_bits(&shifted.ty);
+        if is_pair(&amount.ty) {
+            // A high half of zero is necessary for every legal count,
+            // regardless of whether the full source value is signed.
+            let (low, high) = self.pair(amount)?;
+            let flags = self.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: low,
+                imm: u64::from(bound),
+                width: Width::X,
+            });
+            let below = self.fresh(RegClass::Gpr32);
+            insts.push(MInst::Cset {
+                dst: below,
+                flags,
+                cond: Cond::Lo,
+            });
+            let zero = self.word(insts, 0);
+            let high_zero = self.compare_into(insts, high, zero, Width::X, Cond::Eq);
+            return Ok(self.both(insts, below, high_zero));
+        }
         let bits = significant_bits(&amount.ty);
         let class = class_of(&amount.ty).map_err(|(code, _)| code.to_owned())?;
         let width = width_of(class);
@@ -3176,21 +3197,14 @@ fn round_to_sixteen(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, value: VReg) 
 
 /// The forms Section 10 keeps refused at width 128.
 ///
-/// Every one of them needs an arithmetic wider than the value to answer, which
-/// the machine has no register pair for: a 128-bit quotient, and the signed
-/// predicates whose definition compares a product or a sum against the range
-/// of the type it was computed in.
+/// Division and remainder still require a runtime library. The total
+/// predicates use carry chains and limb arithmetic and no longer belong here.
 fn unlowered_at_the_widest_scalar(inst: &Inst) -> Option<String> {
     let (name, ty) = match inst {
         Inst::SDiv(_, lhs, _) => ("sdiv", &lhs.ty),
         Inst::UDiv(_, lhs, _) => ("udiv", &lhs.ty),
         Inst::SRem(_, lhs, _) => ("srem", &lhs.ty),
         Inst::URem(_, lhs, _) => ("urem", &lhs.ty),
-        Inst::SignedAddDefined(_, lhs, _) => ("signed_add_defined", &lhs.ty),
-        Inst::SignedSubDefined(_, lhs, _) => ("signed_sub_defined", &lhs.ty),
-        Inst::SignedMulDefined(_, lhs, _) => ("signed_mul_defined", &lhs.ty),
-        Inst::SignedDivRemNoOverflow(_, lhs, _) => ("signed_div_rem_no_overflow", &lhs.ty),
-        Inst::SignedShlDefined { shifted, .. } => ("signed_shl_defined", &shifted.ty),
         _ => return None,
     };
     is_pair(ty).then(|| format!("{name} at bits<128>"))
@@ -3207,6 +3221,98 @@ fn unlowered_at_the_widest_scalar(inst: &Inst) -> Option<String> {
 /// `.evidence/builtin-probes/20260905-b6/b6-probes.out`.
 fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Result<bool, String> {
     match inst {
+        Inst::SignedAddDefined(result, lhs, rhs) | Inst::SignedSubDefined(result, lhs, rhs)
+            if is_pair(&lhs.ty) =>
+        {
+            let (a_low, a_high) = lowerer.pair(lhs)?;
+            let (b_low, b_high) = lowerer.pair(rhs)?;
+            let subtract = matches!(inst, Inst::SignedSubDefined(..));
+            let scratch = lowerer.fresh(RegClass::Gpr64);
+            let carry = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::FlagBinary {
+                op: if subtract { FlagOp::Subs } else { FlagOp::Adds },
+                dst: scratch,
+                flags: carry,
+                lhs: a_low,
+                rhs: b_low,
+                width: Width::X,
+            });
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(if subtract {
+                MInst::SubCarryFlags {
+                    dst: flags,
+                    flags_in: carry,
+                    lhs: a_high,
+                    rhs: b_high,
+                    width: Width::X,
+                }
+            } else {
+                MInst::AddCarryFlags {
+                    dst: flags,
+                    flags_in: carry,
+                    lhs: a_high,
+                    rhs: b_high,
+                    width: Width::X,
+                }
+            });
+            let dst = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::Cset {
+                dst,
+                flags,
+                cond: Cond::Vc,
+            });
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedMulDefined(result, lhs, rhs) if is_pair(&lhs.ty) => {
+            let left = lowerer.pair(lhs)?;
+            let right = lowerer.pair(rhs)?;
+            let dst = pair_product_defined(lowerer, insts, left, right);
+            lowerer.bind(result, dst);
+        }
+        Inst::DivisorNonZero(result, divisor) if is_pair(&divisor.ty) => {
+            let (low, high) = lowerer.pair(divisor)?;
+            let bits = lowerer.word_binary(insts, BinOp::Orr, low, high);
+            let zero = lowerer.word(insts, 0);
+            let dst = lowerer.compare_into(insts, bits, zero, Width::X, Cond::Ne);
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedDivRemNoOverflow(result, lhs, rhs) if is_pair(&lhs.ty) => {
+            let (a_low, a_high) = lowerer.pair(lhs)?;
+            let (b_low, b_high) = lowerer.pair(rhs)?;
+            // OR the four differences from (MIN, -1), then make one boolean.
+            let high_difference = lowerer.word_binary_imm(insts, BinOp::Eor, a_high, 1 << 63);
+            let left = lowerer.word_binary(insts, BinOp::Orr, a_low, high_difference);
+            // All-ones is not an AArch64 logical immediate.
+            let ones = lowerer.word(insts, u64::MAX);
+            let low_difference = lowerer.word_binary(insts, BinOp::Eor, b_low, ones);
+            let high_difference = lowerer.word_binary(insts, BinOp::Eor, b_high, ones);
+            let right = lowerer.word_binary(insts, BinOp::Orr, low_difference, high_difference);
+            let difference = lowerer.word_binary(insts, BinOp::Orr, left, right);
+            let zero = lowerer.word(insts, 0);
+            let dst = lowerer.compare_into(insts, difference, zero, Width::X, Cond::Ne);
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } if is_pair(&shifted.ty) => {
+            let count_ok = lowerer.count_defined(insts, shifted, amount, *amount_signed)?;
+            let value = lowerer.pair(shifted)?;
+            let zero = lowerer.word(insts, 0);
+            let nonnegative = lowerer.compare_into(insts, value.1, zero, Width::X, Cond::Ge);
+            let count = lowerer.shift_amount(insts, amount)?;
+            let left = pair_shift(lowerer, insts, value, count, PairShift::Left);
+            let back = pair_shift(lowerer, insts, left, count, PairShift::Arithmetic);
+            let low = lowerer.word_binary(insts, BinOp::Eor, back.0, value.0);
+            let high = lowerer.word_binary(insts, BinOp::Eor, back.1, value.1);
+            let difference = lowerer.word_binary(insts, BinOp::Orr, low, high);
+            let same = lowerer.compare_into(insts, difference, zero, Width::X, Cond::Eq);
+            let dst = lowerer.both(insts, count_ok, nonnegative);
+            let dst = lowerer.both(insts, dst, same);
+            lowerer.bind(result, dst);
+        }
         // A `bits<128>` constant carries its immediate in the same 64-bit
         // field every other constant does, so the high half is zero.
         Inst::Const(result, bits) if is_pair(&result.ty) => {
@@ -3339,30 +3445,6 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
             let (low, high) = lowerer.pair(source)?;
             lowerer.bind_pair(result, low, high);
         }
-        // "`shift_count_defined` compares the amount with `#128`."
-        Inst::ShiftCountDefined {
-            result,
-            shifted,
-            amount,
-            ..
-        } if is_pair(&shifted.ty) => {
-            let amount = lowerer.reg(amount)?;
-            let flags = lowerer.fresh(RegClass::Flags);
-            insts.push(MInst::CmpImm {
-                dst: flags,
-                lhs: amount,
-                imm: 128,
-                width: Width::X,
-            });
-            let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
-            let dst = lowerer.fresh(class);
-            insts.push(MInst::Cset {
-                dst,
-                flags,
-                cond: Cond::Lo,
-            });
-            lowerer.bind(result, dst);
-        }
         // "`load`/`store`: `ldp`/`stp` of the halves at the address, which is
         // not single-copy atomic, exactly as both oracles emit for a
         // `volatile u128`."
@@ -3406,6 +3488,117 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
     Ok(true)
 }
 
+/// Magnitude without signed overflow, including the signed minimum.
+fn pair_magnitude(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    (low, high): (VReg, VReg),
+) -> ((VReg, VReg), VReg) {
+    let sign = lowerer.word_binary_imm(insts, BinOp::Asr, high, 63);
+    let low = lowerer.word_binary(insts, BinOp::Eor, low, sign);
+    let high = lowerer.word_binary(insts, BinOp::Eor, high, sign);
+    let magnitude_low = lowerer.fresh(RegClass::Gpr64);
+    let flags = lowerer.fresh(RegClass::Flags);
+    insts.push(MInst::FlagBinary {
+        op: FlagOp::Subs,
+        dst: magnitude_low,
+        flags,
+        lhs: low,
+        rhs: sign,
+        width: Width::X,
+    });
+    let magnitude_high = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::CarryBinary {
+        op: CarryOp::Sbc,
+        dst: magnitude_high,
+        flags,
+        lhs: high,
+        rhs: sign,
+        width: Width::X,
+    });
+    ((magnitude_low, magnitude_high), sign)
+}
+
+/// A limb addition and its carry materialized before any later flags producer.
+fn limb_add(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, lhs: VReg, rhs: VReg) -> (VReg, VReg) {
+    let dst = lowerer.fresh(RegClass::Gpr64);
+    let flags = lowerer.fresh(RegClass::Flags);
+    insts.push(MInst::FlagBinary {
+        op: FlagOp::Adds,
+        dst,
+        flags,
+        lhs,
+        rhs,
+        width: Width::X,
+    });
+    let carry = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::Cset {
+        dst: carry,
+        flags,
+        cond: Cond::Hs,
+    });
+    (dst, carry)
+}
+
+/// The exact unsigned 128-by-128 product, accumulated into four 64-bit limbs.
+fn pair_product_defined(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    left: (VReg, VReg),
+    right: (VReg, VReg),
+) -> VReg {
+    let ((a_low, a_high), a_sign) = pair_magnitude(lowerer, insts, left);
+    let ((b_low, b_high), b_sign) = pair_magnitude(lowerer, insts, right);
+    let mut products = Vec::with_capacity(4);
+    for (lhs, rhs) in [
+        (a_low, b_low),
+        (a_low, b_high),
+        (a_high, b_low),
+        (a_high, b_high),
+    ] {
+        let low = lowerer.word_binary(insts, BinOp::Mul, lhs, rhs);
+        let high = lowerer.fresh(RegClass::Gpr64);
+        insts.push(MInst::WideMultiply {
+            op: WideMul::Umulh,
+            dst: high,
+            lhs,
+            rhs,
+        });
+        products.push((low, high));
+    }
+    let low = products[0].0;
+    let (middle, carry_a) = limb_add(lowerer, insts, products[0].1, products[1].0);
+    let (middle, carry_b) = limb_add(lowerer, insts, middle, products[2].0);
+    let carry = lowerer.word_binary(insts, BinOp::Add, carry_a, carry_b);
+    let (upper, carry_a) = limb_add(lowerer, insts, products[1].1, products[2].1);
+    let (upper, carry_b) = limb_add(lowerer, insts, upper, products[3].0);
+    let (upper, carry_c) = limb_add(lowerer, insts, upper, carry);
+    let top = lowerer.word_binary(insts, BinOp::Add, products[3].1, carry_a);
+    let top = lowerer.word_binary(insts, BinOp::Add, top, carry_b);
+    let top = lowerer.word_binary(insts, BinOp::Add, top, carry_c);
+    let upper = lowerer.word_binary(insts, BinOp::Orr, upper, top);
+    let zero = lowerer.word(insts, 0);
+    let upper_zero = lowerer.compare_into(insts, upper, zero, Width::X, Cond::Eq);
+
+    // Below 2^127 fits either sign. Exactly 2^127 fits only a negative result.
+    let boundary = lowerer.word(insts, 1 << 63);
+    let below = lowerer.compare_into(insts, middle, boundary, Width::X, Cond::Lo);
+    let at_boundary = lowerer.compare_into(insts, middle, boundary, Width::X, Cond::Eq);
+    let low_zero = lowerer.compare_into(insts, low, zero, Width::X, Cond::Eq);
+    let different_signs = lowerer.compare_into(insts, a_sign, b_sign, Width::X, Cond::Ne);
+    let at_boundary = lowerer.both(insts, at_boundary, low_zero);
+    let at_boundary = lowerer.both(insts, at_boundary, different_signs);
+    let within = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::Binary {
+        op: BinOp::Orr,
+        dst: within,
+        lhs: below,
+        rhs: at_boundary,
+        width: Width::W,
+    });
+    lowerer.both(insts, within, upper_zero)
+}
+
 /// Which of the three shifts a pair is being given.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PairShift {
@@ -3433,8 +3626,18 @@ fn lower_pair_shift(
     amount: &Value,
     kind: PairShift,
 ) -> Result<(VReg, VReg), String> {
-    let (low, high) = lowerer.pair(value)?;
-    let count = lowerer.reg(amount)?;
+    let pair = lowerer.pair(value)?;
+    let count = lowerer.shift_amount(insts, amount)?;
+    Ok(pair_shift(lowerer, insts, pair, count, kind))
+}
+
+fn pair_shift(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    (low, high): (VReg, VReg),
+    count: VReg,
+    kind: PairShift,
+) -> (VReg, VReg) {
     let bound = lowerer.word(insts, 63);
     let complement = lowerer.word_binary(insts, BinOp::Sub, bound, count);
 
@@ -3447,7 +3650,7 @@ fn lower_pair_shift(
         let zero = lowerer.word(insts, 0);
         let result_high = lowerer.select_on_wide_amount(insts, count, combined, shifted_low);
         let result_low = lowerer.select_on_wide_amount(insts, count, shifted_low, zero);
-        return Ok((result_low, result_high));
+        return (result_low, result_high);
     }
 
     let arithmetic = kind == PairShift::Arithmetic;
@@ -3468,7 +3671,7 @@ fn lower_pair_shift(
     };
     let result_low = lowerer.select_on_wide_amount(insts, count, combined, shifted_high);
     let result_high = lowerer.select_on_wide_amount(insts, count, shifted_high, beyond);
-    Ok((result_low, result_high))
+    (result_low, result_high)
 }
 
 /// Section 5's comparison of two pairs.

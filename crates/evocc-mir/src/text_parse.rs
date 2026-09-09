@@ -1094,13 +1094,22 @@ fn parse_defining(
                 width,
             })
         }
-        "sbcs" => {
+        "adcs" | "sbcs" => {
             let flags_in = scan.use_of()?;
             scan.expect(", ")?;
             let lhs = scan.use_of()?;
             scan.expect(", ")?;
             let rhs = scan.use_of()?;
             scan.finish()?;
+            if head == "adcs" {
+                return Ok(MInst::AddCarryFlags {
+                    dst,
+                    flags_in,
+                    lhs,
+                    rhs,
+                    width,
+                });
+            }
             Ok(MInst::SubCarryFlags {
                 dst,
                 flags_in,

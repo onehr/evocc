@@ -381,15 +381,27 @@ pub fn render_inst(inst: &MInst) -> String {
             use_of(*lhs),
             use_of(*rhs)
         ),
-        MInst::SubCarryFlags {
+        MInst::AddCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            width,
+        }
+        | MInst::SubCarryFlags {
             dst,
             flags_in,
             lhs,
             rhs,
             width,
         } => format!(
-            "{}sbcs.{} {}, {}, {}",
+            "{}{}.{} {}, {}, {}",
             defined(*dst),
+            if matches!(inst, MInst::AddCarryFlags { .. }) {
+                "adcs"
+            } else {
+                "sbcs"
+            },
             width.mnemonic(),
             use_of(*flags_in),
             use_of(*lhs),

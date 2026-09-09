@@ -744,6 +744,15 @@ pub enum MInst {
         rhs: VReg,
         width: Width,
     },
+    /// `adcs xzr, rn, rm`: add with carry, retaining only the final flags.
+    /// Its input and output flags obey the usual single-use adjacency rule.
+    AddCarryFlags {
+        dst: VReg,
+        flags_in: VReg,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+    },
     /// `sbcs xzr, rn, rm`: the flag-setting subtract-with-borrow whose result
     /// is discarded.
     ///
@@ -1445,6 +1454,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::Msub { dst, .. }
         | MInst::Madd { dst, .. }
         | MInst::CarryBinary { dst, .. }
+        | MInst::AddCarryFlags { dst, .. }
         | MInst::SubCarryFlags { dst, .. }
         | MInst::TstImm { dst, .. }
         | MInst::Extend { dst, .. }
@@ -1507,6 +1517,12 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         MInst::Msub { n, m, a, .. } | MInst::Madd { n, m, a, .. } => vec![*n, *m, *a],
         MInst::CarryBinary {
             flags, lhs, rhs, ..
+        }
+        | MInst::AddCarryFlags {
+            flags_in: flags,
+            lhs,
+            rhs,
+            ..
         }
         | MInst::SubCarryFlags {
             flags_in: flags,
@@ -1633,6 +1649,7 @@ pub fn writes_flags(inst: &MInst) -> bool {
         MInst::Cmp { .. }
         | MInst::CmpImm { .. }
         | MInst::FlagBinary { .. }
+        | MInst::AddCarryFlags { .. }
         | MInst::SubCarryFlags { .. }
         | MInst::TstImm { .. } => true,
         // Section 7: "`cc` clobbers the flags, which ends any `flags` value's
