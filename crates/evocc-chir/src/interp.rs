@@ -132,6 +132,7 @@ pub struct InterpretOutcome {
 /// A fail-closed scalar interpreter error.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterpreterError {
+    Profile(crate::ProfileRefusal),
     Linkage(crate::linkage::LinkageError),
     IndirectCallDynamicSignatureMismatch {
         span: SourceSpan,
@@ -261,6 +262,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
             Self::ReadOfUninitializedObject { .. } | Self::UninitializedValue { .. } => "E3001",
             Self::Integer {
@@ -324,6 +326,7 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::Profile(error) => error.message.to_owned(),
             Self::Linkage(error) => error.message.to_owned(),
             Self::UninitializedValue { .. } => "read-of-uninitialized-object".to_owned(),
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
@@ -422,6 +425,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::Profile(error) => Some(error.span),
             Self::Linkage(error) => Some(error.span),
             Self::UnknownFunction { .. }
             | Self::MemorySetup { .. }
@@ -4418,6 +4422,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
         let declaration = self.function_definition(function)?;
+        if let Some(refusal) = self
+            .unit
+            .profile_refusals()
+            .iter()
+            .find(|r| r.function == function)
+        {
+            return Err(InterpreterError::Profile(refusal.clone()));
+        }
         let signature = self.validate_function_signature(declaration, arguments.len())?;
         let return_type = signature.return_type;
         let return_value_type = signature.return_value_type;

@@ -292,6 +292,7 @@ pub struct Parser<'src, 'arena> {
     builtin_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     current_function_parameters: Option<ParameterSyntax>,
+    profile_refusals: Vec<(evocc_chir::ProfileRefusal, usize)>,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -459,6 +460,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             unprototyped_calls: Vec::new(),
             loop_depth: 0,
             current_function_parameters: None,
+            profile_refusals: Vec::new(),
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
@@ -567,6 +569,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
         unit.set_unprototyped_parameters(observed);
+        let refusals = std::mem::take(&mut self.profile_refusals);
+        unit.set_profile_refusals(
+            refusals
+                .iter()
+                .map(|(refusal, _)| refusal.clone())
+                .collect(),
+        );
+        if !refusals.is_empty() {
+            let retained = evocc_chir::inline::retained_functions(&unit);
+            let active = refusals.into_iter().filter(|(refusal, _)| {
+                // A malformed definition/linkage is not proof of disuse.
+                !definitions.contains(&refusal.function)
+                    || retained
+                        .as_ref()
+                        .map_or(true, |functions| functions.contains(&refusal.function))
+            });
+            for (inserted, (refusal, preceding)) in active.enumerate() {
+                self.report(refusal.code, refusal.message, refusal.span);
+                let diagnostic = self.diagnostics.pop().expect("just reported diagnostic");
+                // This is parse encounter order, not a comparison of spans
+                // from different headers or macro expansion locations.
+                self.diagnostics.insert(preceding + inserted, diagnostic);
+            }
+        }
         unit
     }
 
@@ -676,6 +702,37 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 message: message.into(),
             });
         }
+    }
+
+    /// Execution-only profile refusals must wait until unit references are
+    /// known. Ordinary syntax/type errors continue through `report` unchanged.
+    fn defer_profile_refusal(
+        &mut self,
+        code: &'static str,
+        message: &'static str,
+        span: SourceSpan,
+    ) -> bool {
+        let mut scope = Some(self.current_scope);
+        while let Some(id) = scope {
+            let Ok(entry) = self.symbols.scope(id) else {
+                break;
+            };
+            if let Some(function) = entry.function_owner() {
+                self.profile_refusals.push((
+                    evocc_chir::ProfileRefusal {
+                        function,
+                        code,
+                        message,
+                        span,
+                    },
+                    self.diagnostics.len(),
+                ));
+                return true;
+            }
+            scope = entry.parent();
+        }
+        self.report(code, message, span);
+        false
     }
 
     fn token_text<'a>(&'a self, tok: &'a Token) -> &'a str {
@@ -4517,7 +4574,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let written = self.token_text(&name_token).to_owned();
                 let name = Attribute::canonical_name(&written);
                 if name == "scalar_storage_order" {
-                    self.report("E2940", "unsupported-scalar-storage-order", name_token.span);
+                    self.defer_profile_refusal(
+                        "E2940",
+                        "unsupported-scalar-storage-order",
+                        name_token.span,
+                    );
                 }
                 let mut span = name_token.span;
                 let mut arguments = Vec::new();
@@ -9018,12 +9079,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self
             .expression_bit_field_width(expression)
             .is_some_and(|width| width > u16::from(CIntegerType::INT.bits()))
-        {
-            self.report(
+            && !self.defer_profile_refusal(
                 "E2939",
                 "unsupported-wide-bit-field-promotion",
                 expression.span(),
-            );
+            )
+        {
             return None;
         }
         Some(())
@@ -10849,8 +10910,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 vec![char_pointer, size_ty, const_char_pointer],
             ),
             "__builtin_puts" => {
-                self.report("E2935", "unsupported-library-builtin", span);
-                return None;
+                if !self.defer_profile_refusal("E2935", "unsupported-library-builtin", span) {
+                    return None;
+                }
+                ("puts", int_ty, vec![const_char_pointer])
             }
             "__builtin_strchr" => ("strchr", char_pointer, vec![const_char_pointer, int_ty]),
             "__builtin_strncpy" => (
@@ -10866,8 +10929,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 vec![char_pointer, const_char_pointer],
             ),
             "__builtin_exit" | "__builtin__Exit" => {
-                self.report("E2933", "unsupported-termination-builtin", span);
-                return None;
+                if !self.defer_profile_refusal("E2933", "unsupported-termination-builtin", span) {
+                    return None;
+                }
+                (
+                    if builtin == "__builtin_exit" {
+                        "exit"
+                    } else {
+                        "_Exit"
+                    },
+                    void_ty,
+                    vec![int_ty],
+                )
             }
             "__builtin_memset" => ("memset", void_pointer, vec![void_pointer, int_ty, size_ty]),
             "__builtin_memcpy" => (

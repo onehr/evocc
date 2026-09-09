@@ -1326,6 +1326,18 @@ pub struct FunctionDecl<'arena> {
     pub span: SourceSpan,
 }
 
+impl FunctionDecl<'_> {
+    /// A later `extern` or storage-less definition inherits a visible static
+    /// declaration's linkage; the written storage specifier is not authority.
+    #[must_use]
+    pub fn has_internal_linkage(&self, symbols: &SymbolTable) -> bool {
+        self.storage == StorageClass::Static
+            || symbols
+                .symbol(self.symbol)
+                .is_ok_and(|symbol| symbol.storage_class() == Some(StorageClass::Static))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TypedefDecl {
     pub symbol: SymbolId,
@@ -1405,6 +1417,17 @@ impl CHirDecl<'_> {
 // CHirUnit — top-level translation unit
 // ---------------------------------------------------------------------------
 
+/// A parsed, typed body whose execution semantics are outside the profile.
+/// Retaining this on the source unit prevents direct interpreter callers from
+/// executing a body that ordinary compilation was allowed to omit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileRefusal {
+    pub function: SymbolId,
+    pub code: &'static str,
+    pub message: &'static str,
+    pub span: SourceSpan,
+}
+
 #[derive(Debug, Clone)]
 pub struct CHirUnit<'arena> {
     declarations: Vec<&'arena CHirDecl<'arena>>,
@@ -1415,6 +1438,7 @@ pub struct CHirUnit<'arena> {
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
+    profile_refusals: Vec<ProfileRefusal>,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
     resolved_linkage: std::sync::OnceLock<Result<linkage::SymbolLinkage, linkage::LinkageError>>,
@@ -1436,6 +1460,7 @@ impl<'arena> CHirUnit<'arena> {
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
+            profile_refusals: Vec::new(),
             resolved_linkage: std::sync::OnceLock::new(),
         }
     }
@@ -1445,6 +1470,15 @@ impl<'arena> CHirUnit<'arena> {
         parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     ) {
         self.unprototyped_parameters = parameters;
+    }
+
+    pub fn set_profile_refusals(&mut self, refusals: Vec<ProfileRefusal>) {
+        self.profile_refusals = refusals;
+    }
+
+    #[must_use]
+    pub fn profile_refusals(&self) -> &[ProfileRefusal] {
+        &self.profile_refusals
     }
 
     /// Select source arithmetic semantics before interpretation or lowering.

@@ -100,6 +100,52 @@ fn internal_bodies_still_receive_ordinary_front_end_checks() {
 }
 
 #[test]
+fn function_linkage_is_inherited_from_its_first_declaration() {
+    let mut failures = Vec::new();
+    for prefix in ["", "extern "] {
+        let source = format!(
+            "static int hidden(int); {prefix}int hidden(int n){{asm(\"\"::\"i\"(n));return n;}}int main(void){{return 0;}}"
+        );
+        let output = run(&source, "--emit=evoir");
+        if !output.status.success() {
+            failures.push(String::from_utf8_lossy(&output.stderr).into_owned());
+        }
+        let source = format!(
+            "static int hidden(int); {prefix}int hidden(int n){{return n;}}int main(void){{return hidden(0);}}"
+        );
+        let output = run(&source, "--emit=evoir");
+        assert!(output.status.success(), "{:?}", output.stderr);
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        if module
+            .functions
+            .iter()
+            .find(|f| f.name == "hidden")
+            .unwrap()
+            .visibility
+            != evocc_evoir::GlobalVisibility::Internal
+        {
+            failures.push(format!("{prefix:?} definition lost its internal linkage"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn deferred_profile_diagnostics_keep_their_source_order() {
+    let body = "long selected(void){struct S{unsigned long x:40;}s={3};return s.x<<1;}";
+    let tail = "int broken(void){return missing;}";
+    let output = run(&format!("{body}{tail}"), "--parse-only");
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(text.lines().next().unwrap().contains("E2939"), "{text}");
+    let output = run(&format!("static {body}{tail}"), "--parse-only");
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(text.lines().next().unwrap().contains("E2001"), "{text}");
+    assert!(!text.contains("E2939"), "{text}");
+}
+
+#[test]
 fn directly_interpreting_an_unused_body_preserves_its_profile_refusal() {
     use evocc_chir::{interp, CHirDecl};
     use evocc_common::{Arena, FileId};

@@ -25,6 +25,8 @@ enum Node<'a> {
 
 #[derive(Default)]
 struct Uses<'a> {
+    references: BTreeSet<SymbolId>,
+    assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
@@ -150,6 +152,7 @@ fn inspect_with_declarations<'a>(
                         }
                     }
                     CHirDecl::Asm(a) => {
+                        uses.assembly.push(&a.template);
                         for o in a.inputs.iter().chain(&a.outputs) {
                             work.push(Node::Expr(o.expression, false));
                         }
@@ -211,6 +214,7 @@ fn inspect_with_declarations<'a>(
                     work.push(Node::Stmt(s));
                 }
                 CHirStmt::Asm(a) => {
+                    uses.assembly.push(&a.template);
                     for o in &a.outputs {
                         if let CHirExpr::Ident { symbol, .. } = o.expression {
                             uses.mutable.insert(*symbol);
@@ -237,6 +241,9 @@ fn inspect_with_declarations<'a>(
                 | CHirStmt::AttributedNull(..) => {}
             },
             Node::Expr(e, callee) => {
+                if let CHirExpr::Ident { symbol, .. } = e {
+                    uses.references.insert(*symbol);
+                }
                 match e {
                     CHirExpr::Ident { symbol, .. } if !callee => {
                         uses.addresses.insert(*symbol);
@@ -332,6 +339,88 @@ fn inspect_with_declarations<'a>(
         }
     }
     uses
+}
+
+/// Source-reference closure, without branch pruning or assumptions about
+/// traps. The same graph controls deferred profile diagnostics and lowering.
+pub fn retained_functions(
+    unit: &CHirUnit<'_>,
+) -> Result<BTreeSet<SymbolId>, crate::linkage::LinkageError> {
+    let linkage = unit.symbol_linkage()?;
+    let definitions: BTreeMap<_, _> = unit
+        .iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.body.is_some() => {
+                Some((function.symbol, function))
+            }
+            _ => None,
+        })
+        .collect();
+    let mut assembly_names = BTreeMap::new();
+    let mut pending = Vec::new();
+    for (&symbol, function) in &definitions {
+        if !function.has_internal_linkage(unit.symbols()) {
+            pending.push(symbol);
+        }
+        let name = linkage.function_name(symbol, &function.name.spelling);
+        assembly_names.insert(name.to_owned(), symbol);
+        // Darwin assembly spells an ordinary C symbol with this prefix.
+        assembly_names.insert(format!("_{name}"), symbol);
+    }
+    pending.extend(linkage.aliases.values().copied());
+    let add_uses = |uses: Uses<'_>, pending: &mut Vec<SymbolId>| {
+        pending.extend(
+            uses.references
+                .into_iter()
+                .map(|symbol| linkage.target(symbol)),
+        );
+        for assembly in uses.assembly {
+            for name in assembly
+                .split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$')))
+            {
+                if let Some(&symbol) = assembly_names.get(name) {
+                    pending.push(symbol);
+                }
+            }
+        }
+    };
+    add_uses(
+        inspect(
+            unit.iter()
+                .filter(|d| !matches!(d, CHirDecl::Function(_)))
+                .map(Node::Decl),
+        ),
+        &mut pending,
+    );
+    let mut retained = BTreeSet::new();
+    while let Some(symbol) = pending.pop() {
+        let Some(function) = definitions.get(&symbol) else {
+            continue;
+        };
+        if retained.insert(symbol) {
+            add_uses(inspect([Node::Stmt(function.body.unwrap())]), &mut pending);
+        }
+    }
+    Ok(retained)
+}
+
+/// Keep the original unit intact for interpretation and source diagnostics.
+/// Only declaration references change; surviving object/node identities do not.
+pub fn without_unreferenced_functions<'u, 'a>(
+    unit: &'u CHirUnit<'a>,
+) -> Result<std::borrow::Cow<'u, CHirUnit<'a>>, crate::linkage::LinkageError> {
+    let retained = retained_functions(unit)?;
+    let keep = |declaration: &&CHirDecl<'_>| {
+        !matches!(declaration, CHirDecl::Function(function)
+            if function.body.is_some() && !retained.contains(&function.symbol))
+    };
+    if unit.declarations.iter().all(keep) {
+        return Ok(std::borrow::Cow::Borrowed(unit));
+    }
+    let mut rewritten = unit.clone();
+    rewritten.declarations.retain(keep);
+    rewritten.resolved_linkage.take();
+    Ok(std::borrow::Cow::Owned(rewritten))
 }
 
 pub fn has_inline_definitions(unit: &CHirUnit<'_>) -> bool {
@@ -440,7 +529,9 @@ pub fn substitute<'a>(
                 pass.active.push(f.symbol);
                 let mut rewritten = pass.stmt(body, &mut c)?;
                 pass.active.pop();
-                if f.storage == StorageClass::Static && pass.eligible.contains_key(&f.symbol) {
+                if f.has_internal_linkage(pass.unit.symbols())
+                    && pass.eligible.contains_key(&f.symbol)
+                {
                     continue;
                 }
                 if !pass.temporaries.is_empty() {

@@ -88,6 +88,7 @@ fn source_assembly_template(source: &AsmStmt<'_>) -> Result<String, LowerError> 
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LowerError {
+    Profile(evocc_chir::ProfileRefusal),
     Linkage(evocc_chir::linkage::LinkageError),
     Inline {
         span: SourceSpan,
@@ -171,6 +172,7 @@ pub enum LowerError {
 impl fmt::Display for LowerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Profile(error) => formatter.write_str(error.message),
             Self::Linkage(error) => formatter.write_str(error.message),
             Self::Inline { reason, .. } => formatter.write_str(reason),
             Self::UnknownSymbol { symbol, .. } => {
@@ -218,6 +220,7 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
             Self::Inline { cycle: true, .. } => "E2932",
             Self::Asm { .. } => "E3021",
@@ -242,6 +245,7 @@ impl LowerError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::Profile(error) => Some(error.span),
             Self::Linkage(error) => Some(error.span),
             Self::Inline { span, .. }
             | Self::UnknownSymbol { span, .. }
@@ -401,13 +405,25 @@ struct FunctionLowerer<'a> {
 /// explicit input and is consulted for every scalar type admitted by this
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
-    if evocc_chir::inline::has_inline_definitions(unit) {
-        unit.symbol_linkage().map_err(LowerError::Linkage)?;
-        // Validate the source representation before removing or rewriting
-        // anything, as well as validating the rewritten representation below.
-        AllocationSiteManifest::derive(unit).map_err(|e| LowerError::InvalidGeneratedSsa {
-            message: e.to_string(),
+    unit.symbol_linkage().map_err(LowerError::Linkage)?;
+    // Check the entire source inventory before selecting emitted bodies. Its
+    // allocation identities must remain stable for cross-interpreter traces.
+    let source_manifest =
+        AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
+            message: error.to_string(),
         })?;
+    let retained =
+        evocc_chir::inline::without_unreferenced_functions(unit).map_err(LowerError::Linkage)?;
+    let unit = retained.as_ref();
+    if let Some(refusal) = unit.profile_refusals().iter().find(|refusal| {
+        unit.iter().any(|declaration| {
+            matches!(declaration, CHirDecl::Function(f)
+            if f.body.is_some() && f.symbol == refusal.function)
+        })
+    }) {
+        return Err(LowerError::Profile(refusal.clone()));
+    }
+    if evocc_chir::inline::has_inline_definitions(unit) {
         let arena = evocc_common::Arena::default();
         let rewritten = evocc_chir::inline::substitute(unit, &arena, target).map_err(|e| {
             LowerError::Inline {
@@ -416,14 +432,15 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 reason: e.message,
             }
         })?;
-        return lower_resolved_unit(&rewritten, target);
+        return lower_resolved_unit(&rewritten, target, None);
     }
-    lower_resolved_unit(unit, target)
+    lower_resolved_unit(unit, target, Some(&source_manifest))
 }
 
 fn lower_resolved_unit(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
+    source_manifest: Option<&AllocationSiteManifest<'_>>,
 ) -> Result<Module, LowerError> {
     let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let global_register_symbols = collect_global_register_symbols(unit);
@@ -443,13 +460,33 @@ fn lower_resolved_unit(
         AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
             message: format!("cannot derive the authoritative allocation-site manifest: {error:?}"),
         })?;
+    let origin_of = |site: &evocc_chir::AllocationSite<'_>| {
+        let Some(source) = source_manifest else {
+            return site.ordinal().raw();
+        };
+        // Selection clones no syntax nodes and creates no objects; each site
+        // is therefore an exact member of the already validated source unit.
+        let original = match site.kind() {
+            evocc_chir::AllocationSiteKind::Object(symbol) => source.object_site(symbol),
+            evocc_chir::AllocationSiteKind::StringLiteral(expression) => {
+                source.string_literal_site(expression)
+            }
+            evocc_chir::AllocationSiteKind::CompoundLiteral { expression, .. } => {
+                source.compound_literal_site(expression)
+            }
+        };
+        original
+            .expect("retained allocation site belongs to the source unit")
+            .ordinal()
+            .raw()
+    };
     let allocation_origins = manifest
         .sites()
         .iter()
         .filter_map(|site| {
             site.kind()
                 .object_symbol()
-                .map(|symbol| (symbol, site.ordinal().raw()))
+                .map(|symbol| (symbol, origin_of(site)))
         })
         .collect::<BTreeMap<_, _>>();
     let compound_origins = manifest
@@ -461,7 +498,7 @@ fn lower_resolved_unit(
                 .map(|(expression, static_storage)| {
                     (
                         expression as *const CHirExpr<'_> as usize,
-                        (site.ordinal().raw(), static_storage),
+                        (origin_of(site), static_storage),
                     )
                 })
         })
@@ -510,7 +547,7 @@ fn lower_resolved_unit(
                     span: *span,
                     feature: "invalid string representation",
                 })?;
-        let origin = site.ordinal().raw();
+        let origin = origin_of(site);
         string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
         globals.push(GlobalObject {
             relocs: Vec::new(),
@@ -527,10 +564,8 @@ fn lower_resolved_unit(
     let mut static_literal_origins = string_origins.clone();
     for site in manifest.sites() {
         if let Some((expression, true)) = site.kind().compound_literal() {
-            static_literal_origins.insert(
-                expression as *const CHirExpr<'_> as usize,
-                site.ordinal().raw(),
-            );
+            static_literal_origins
+                .insert(expression as *const CHirExpr<'_> as usize, origin_of(site));
         }
     }
     let mut lowered = Vec::new();
@@ -599,8 +634,8 @@ fn lower_resolved_unit(
         }
         relocs.sort_by_key(|relocation| relocation.offset);
         globals.push(GlobalObject {
-            symbol: format!("__evocc.compound.{}", site.ordinal().raw()),
-            origin: site.ordinal().raw(),
+            symbol: format!("__evocc.compound.{}", origin_of(site)),
+            origin: origin_of(site),
             kind: GlobalKind::CompoundLiteral,
             linkage: evocc_evoir::Linkage::Strong,
             visibility: GlobalVisibility::Internal,
@@ -3575,7 +3610,7 @@ impl<'a> FunctionLowerer<'a> {
             ret_tys: self.return_types(),
             effects: Default::default(),
             linkage: evocc_evoir::Linkage::Strong,
-            visibility: if declaration.storage == StorageClass::Static {
+            visibility: if declaration.has_internal_linkage(self.unit.symbols()) {
                 evocc_evoir::GlobalVisibility::Internal
             } else {
                 evocc_evoir::GlobalVisibility::External
