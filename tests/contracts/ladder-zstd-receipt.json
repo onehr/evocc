@@ -3,12 +3,12 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T140139Z",
+ "run": "20260909T070008Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36",
+ "driverSha256": "57af3d4c871e82142618d9274a5fe77b0781bf24b6f54d78488a7d7f522b014d",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
  "unitsEvoccCompiled": 2,
@@ -315,9 +315,9 @@
    "includeNext": "`#include_next <x>` resolved to the next header in the search order"
   },
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
+   "-I.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I.build/ladder/sysroot-adjusted/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -498,6 +498,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260908T140139Z",
+ "evidence": ".evidence/ladder/zstd/20260909T070008Z",
  "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 37, 'E2921': 5}"
 }

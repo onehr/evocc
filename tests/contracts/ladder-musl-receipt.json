@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260908T042300Z",
+ "run": "20260909T070307Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710",
+ "driverSha256": "57af3d4c871e82142618d9274a5fe77b0781bf24b6f54d78488a7d7f522b014d",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 17,
@@ -42,21 +42,22 @@
   ]
  },
  "units": 1339,
- "unitsCompiledByEvocc": 987,
- "unitsInPassingBuild": 494,
+ "unitsCompiledByEvocc": 995,
+ "unitsInPassingBuild": 498,
  "refusalsByCode": {
-  "E3101": 240,
+  "E3101": 227,
   "E1006": 83,
   "E2001": 14,
   "E2203": 8,
-  "E2102": 5,
+  "E2939": 6,
+  "E2102": 3,
   "E1005": 1,
+  "E3021": 1,
   "E3030": 1
  },
  "testResult": "bisection-budget-exhausted",
  "failingUnits": [
-  "obj/src/stdio/fprintf.lo",
-  "obj/src/stdio/snprintf.lo"
+  "obj/src/stdio/fprintf.lo"
  ],
  "excludedForSymbolParity": {},
  "symbolParity": {},
@@ -137,5 +138,5 @@
   "-fno-stack-protector": 7,
   "-fno-tree-loop-distribute-patterns": 2
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260908T042300Z"
+ "evidence": ".evidence/ladder/musl/20260909T070307Z"
 }
