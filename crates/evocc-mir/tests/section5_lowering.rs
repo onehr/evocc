@@ -68,6 +68,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::OutgoingArg { .. } => "arg.outgoing".to_owned(),
                     MInst::CarryBinary { op, .. } => op.mnemonic().to_owned(),
                     MInst::SubCarryFlags { .. } => "sbcs".to_owned(),
+                    MInst::AddCarryFlags { .. } => "adcs".to_owned(),
                     MInst::TstImm { .. } => "tst".to_owned(),
                     MInst::Extend { op, .. } => op.mnemonic().to_owned(),
                     MInst::Unary { op, .. } => op.mnemonic().to_owned(),

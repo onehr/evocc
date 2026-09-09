@@ -1099,7 +1099,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let (value, _) = arithmetic_flags(left, right, *width, subtract, carry);
             write(frame, *dst, MirValue::Int(value));
         }
-        MInst::SubCarryFlags {
+        MInst::AddCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            width,
+        }
+        | MInst::SubCarryFlags {
             dst,
             flags_in,
             lhs,
@@ -1109,7 +1116,8 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let carry = evaluate(read_flags(frame, *flags_in)?, Cond::Cs)?;
             let left = read_bits(frame, *lhs)?;
             let right = read_bits(frame, *rhs)?;
-            let (_, set) = arithmetic_flags(left, right, *width, true, carry);
+            let subtract = matches!(inst, MInst::SubCarryFlags { .. });
+            let (_, set) = arithmetic_flags(left, right, *width, subtract, carry);
             frame.regs.insert(dst.id, Slot::Flags(set));
         }
         // `tst rn, #imm` is `ands` into the zero register: the logical flags

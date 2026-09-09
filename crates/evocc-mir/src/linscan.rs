@@ -1255,6 +1255,13 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
             lhs,
             rhs,
             ..
+        }
+        | MInst::AddCarryFlags {
+            dst,
+            flags_in: flags,
+            lhs,
+            rhs,
+            ..
         } => {
             if definitions {
                 vec![dst]

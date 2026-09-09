@@ -241,7 +241,7 @@ fn native_predicates_agree_with_independent_magnitude_bounds() {
     } else {
         Target::Linux
     };
-    let assembly = compile_module_for(target, &source, &|_| false)
+    let assembly = compile_module_for(target, &source, &|_| true)
         .expect("every predicate must lower, allocate, verify and emit");
     let work = std::env::temp_dir().join(format!("evocc-wide-predicates-{}", std::process::id()));
     std::fs::create_dir_all(&work).expect("private test directory");

@@ -295,17 +295,24 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_general(name, block, *lhs, "an adc/sbc operand")?;
             expect_general(name, block, *rhs, "an adc/sbc operand")
         }
-        MInst::SubCarryFlags {
+        MInst::AddCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            ..
+        }
+        | MInst::SubCarryFlags {
             dst,
             flags_in,
             lhs,
             rhs,
             ..
         } => {
-            expect_flags(name, block, *dst, "an sbcs flags result")?;
-            expect_flags(name, block, *flags_in, "an sbcs carry source")?;
-            expect_general(name, block, *lhs, "an sbcs operand")?;
-            expect_general(name, block, *rhs, "an sbcs operand")
+            expect_flags(name, block, *dst, "an adcs/sbcs flags result")?;
+            expect_flags(name, block, *flags_in, "an adcs/sbcs carry source")?;
+            expect_general(name, block, *lhs, "an adcs/sbcs operand")?;
+            expect_general(name, block, *rhs, "an adcs/sbcs operand")
         }
         MInst::TstImm { dst, lhs, .. } => {
             expect_flags(name, block, *dst, "a tst result")?;

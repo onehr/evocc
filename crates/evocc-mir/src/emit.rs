@@ -1338,9 +1338,11 @@ fn emit_inst(
                 at(*rhs, *width)
             );
         }
-        // Section 5: the ordered comparison discards the difference, so the
-        // destination is the zero register.
-        MInst::SubCarryFlags {
+        // The final carry chain keeps flags, not its arithmetic result.
+        MInst::AddCarryFlags {
+            lhs, rhs, width, ..
+        }
+        | MInst::SubCarryFlags {
             lhs, rhs, width, ..
         } => {
             let zero = if matches!(width, Width::X) {
@@ -1350,7 +1352,12 @@ fn emit_inst(
             };
             let _ = writeln!(
                 text,
-                "    sbcs {zero}, {}, {}",
+                "    {} {zero}, {}, {}",
+                if matches!(inst, MInst::AddCarryFlags { .. }) {
+                    "adcs"
+                } else {
+                    "sbcs"
+                },
                 at(*lhs, *width),
                 at(*rhs, *width)
             );
