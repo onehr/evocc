@@ -46,14 +46,14 @@ pub struct Frame {
     /// registers its named parameters consumed, and the area's offset above
     /// `sp`.
     ///
-    /// Section 6 puts it "then the register save area of a variadic function
-    /// (Section 6, 64 bytes), then outgoing stack arguments", so it sits
-    /// directly above the outgoing area and below every spill.
+    /// The 64-byte general-register area is followed by the 128-byte vector
+    /// area. Both sit above outgoing arguments and below every spill.
     pub register_save: Option<(u8, u64)>,
 }
 
 /// Section 6: the area is "64-byte, 16-byte-aligned".
 const REGISTER_SAVE_BYTES: u64 = 64;
+const VECTOR_SAVE_BYTES: u64 = 128;
 
 const fn align_up(value: u64, alignment: u64) -> u64 {
     if alignment == 0 {
@@ -96,9 +96,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the area and a call writes its arguments at `[sp, #8 * i]`.
     let outgoing = allocated.outgoing;
 
-    // "then the register save area of a variadic function (Section 6, 64
-    // bytes), then outgoing stack arguments". `sp` is sixteen-byte aligned
-    // after the prologue, so an offset a multiple of sixteen aligns the area.
+    // Section 6's two save areas are adjacent and sixteen-byte aligned.
     let named = allocated.blocks.iter().find_map(|block| {
         block.insts.iter().find_map(|inst| match inst {
             MInst::VaSaveArea { named } => Some(*named),
@@ -106,7 +104,9 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         })
     });
     let register_save = named.map(|named| (named, align_up(outgoing, 16)));
-    let above_save = register_save.map_or(outgoing, |(_, base)| base + REGISTER_SAVE_BYTES);
+    let above_save = register_save.map_or(outgoing, |(_, base)| {
+        base + REGISTER_SAVE_BYTES + VECTOR_SAVE_BYTES
+    });
 
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
@@ -844,6 +844,19 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
                 "str",
                 &format!("x{number}"),
                 base + u64::from(number) * 8,
+            );
+        }
+        // Reference-built callers may pass anonymous values in q0-q7 even
+        // when this function only forwards the list. Use the reserved
+        // scratch register so large outgoing areas cannot overflow stp's
+        // signed, scaled offset; no argument register is clobbered.
+        emit_add_immediate(text, "add", "x16", "sp", base + REGISTER_SAVE_BYTES);
+        for number in (0..8).step_by(2) {
+            let _ = writeln!(
+                text,
+                "    stp q{number}, q{}, [x16, #{}]",
+                number + 1,
+                number * 16
             );
         }
     }

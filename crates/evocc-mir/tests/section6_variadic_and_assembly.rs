@@ -7,7 +7,8 @@
 //! `x_k` to `x7` into it at offsets `8 * k` to `56` in the prologue ...
 //! With no named stack arguments, `va_start` stores `stack = x29 + 16`,
 //! `gr_top = save area + 64`,
-//! `vr_top = gr_top` ..., `gr_offs = -8 * (8 - k)` and `vr_offs = 0` ...
+//! `gr_offs = -8 * (8 - k)`. Revision 0.28 adds the adjacent vector save
+//! area: `vr_top = gr_top + 128`, `vr_offs = -128`.
 //! `va_end` emits nothing."
 
 use evocc_evoir::parse_section9_module;

@@ -3111,8 +3111,8 @@ const VA_GR_OFFS: i64 = 24;
 const VA_VR_OFFS: i64 = 28;
 
 /// `va_start`: skips named incoming stack slots, then stores
-/// `gr_top = save area + 64`, `vr_top = gr_top` (never read ...), `gr_offs =
-/// -8 * (8 - k)` and `vr_offs = 0`".
+/// `gr_top = save area + 64`, `vr_top = gr_top + 128`, `gr_offs =
+/// -8 * (8 - k)` and `vr_offs = -128` (Section 6, revision 0.28).
 fn lower_va_start(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -3146,9 +3146,10 @@ fn lower_va_start(
         dst: top,
         place: FramePlace::RegisterSaveTop,
     });
-    for offset in [VA_GR_TOP, VA_VR_TOP] {
+    let vector_top = lowerer.binary_imm(insts, BinOp::Add, top, 128, Width::X);
+    for (offset, address) in [(VA_GR_TOP, top), (VA_VR_TOP, vector_top)] {
         insts.push(MInst::Store {
-            src: top,
+            src: address,
             base: ap,
             offset,
             kind: StoreKind::P,
@@ -3172,7 +3173,7 @@ fn lower_va_start(
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
     insts.push(MInst::MovImm {
         dst: vr_offs,
-        imm: 0,
+        imm: u64::from((-128_i32) as u32),
     });
     insts.push(MInst::Store {
         src: vr_offs,

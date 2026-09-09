@@ -935,10 +935,10 @@ pub enum MInst {
     /// The register save area of a variadic callee (Section 6): a marker the
     /// frame layout reads and the prologue expands.
     ///
-    /// "A variadic **callee** reserves a 64-byte, 16-byte-aligned **register
-    /// save area** in its frame and stores `x_k` to `x7` into it at offsets
-    /// `8 * k` to `56` in the prologue, where `k` is the number of argument
-    /// registers its named parameters consumed."
+    /// A variadic callee saves the unnamed general-register arguments in a
+    /// 64-byte area and all eight incoming vector registers in an adjacent
+    /// 128-byte area. Both areas are 16-byte aligned; the vector bytes are
+    /// preserved for a reference-built consumer of a forwarded va_list.
     VaSaveArea {
         named: u8,
     },
