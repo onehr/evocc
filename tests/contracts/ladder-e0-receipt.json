@@ -3,12 +3,58 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T050507Z",
-  "subject": "67c4fdd",
-  "driverSha256": "27f50dab8cd70afc518a44fa79c81d1b87c8145f2306c51e111ae207ff9c5813",
+  "run": "20260909T062923Z",
+  "subject": "48f8da4",
+  "driverSha256": "b2c501508dc33daf6009ee78c17d3ac404a6734aab03f2be075a822fc33eef32",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
+  "targetRequirements": {
+   "evidence": ".evidence/builtin-probes/20260909-torture-requirements/results.txt",
+   "predicates": {
+    "int32": true,
+    "int32plus": true,
+    "size20plus": true,
+    "size32plus": true,
+    "long_long": true,
+    "longlong64": true,
+    "int128": true,
+    "lp64": true,
+    "hosted": true,
+    "freestanding": false,
+    "ia32": false,
+    "label_values": true,
+    "indirect_jumps": true,
+    "indirect_calls": true,
+    "return_address": true,
+    "untyped_assembly": true,
+    "trampolines": true,
+    "fileio": true,
+    "mmap": true,
+    "signal": true,
+    "fpic": true,
+    "c99_runtime": true,
+    "stdint_types": true,
+    "double64plus": true,
+    "unwrapped": true,
+    "run_expensive_tests": true,
+    "dfp": true,
+    "dfprt": true,
+    "newlib_nano_io": false,
+    "stack_size": false,
+    "vxworks_kernel": false
+   },
+   "stackBytes": 8388608,
+   "boardStackSizeOption": null,
+   "expensiveTests": true,
+   "statusWrapper": false,
+   "defaultTimeoutsSeconds": {
+    "emit": 60,
+    "interpret": 30,
+    "run": 10
+   },
+   "timeoutPolicy": "multiply only by the original dg-timeout-factor"
+  },
   "suites": {
    "torture": {
     "pin": {
@@ -21,32 +67,30 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1228,
-     "refused": 296,
-     "not-applicable": 83,
-     "requirement-unresolved": 72,
-     "fail": 12,
+     "pass": 1265,
+     "refused": 326,
+     "not-applicable": 89,
+     "fail": 11,
      "link-fail": 1
     },
     "refusalsByCode": {
-     "E3101": 115,
-     "E2001": 22,
-     "E2201": 20,
-     "E2203": 19,
+     "E3101": 128,
+     "E2001": 24,
+     "E2201": 22,
+     "E2203": 20,
      "E2102": 18,
+     "E1205": 17,
      "E3021": 17,
      "E3030": 15,
-     "E1205": 10,
+     "E1001": 10,
+     "E0112": 10,
      "E3029": 9,
-     "E0112": 9,
-     "E1001": 8,
-     "E3046": 5,
+     "E3046": 6,
+     "E2920": 6,
      "E2913": 3,
      "E2903": 3,
-     "E4003": 3,
      "E2933": 2,
      "E1006": 2,
-     "E2920": 2,
      "E1007": 2,
      "E2202": 2,
      "E0002": 1,
@@ -61,7 +105,7 @@
      "E2929": 1
     },
     "failuresByInterpreterVerdict": {
-     "E3039 external-call-not-executable": 7,
+     "E3039 external-call-not-executable": 6,
      "E3004 signed-integer-overflow": 2,
      "E3008 interpreter-fuel-exhausted": 2,
      "E3021 not-lowered": 1,
@@ -72,9 +116,9 @@
      "-fwrapv": 12,
      "-fno-strict-overflow": 1
     },
-    "programsWithUnhandledRequirements": 154
+    "programsWithUnhandledRequirements": 88
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T050507Z"
+ "evidence": ".evidence/ladder/e0/20260909T062923Z"
 }

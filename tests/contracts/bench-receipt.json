@@ -1,21 +1,22 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T053908.023962Z",
-  "subject": "ed38a72441daf60aeb6c65c1e580dfed0dc60093",
+  "run": "20260909T062900.006209Z",
+  "subject": "48f8da4003cae6eaf4edd57ab6f68c0a1002b914",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd",
+  "driverSha256": "b2c501508dc33daf6009ee78c17d3ac404a6734aab03f2be075a822fc33eef32",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel",
+    "ctest",
+    "torture",
     "--jobs",
-    "4",
-    "--allow-qemu-drift"
+    "4"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel"
+    "ctest",
+    "torture"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -40,8 +41,8 @@
       "kind": "programs",
       "runtimeDiagnostics": {},
       "status": "INCOMPLETE",
-      "run": "20260909T050443Z",
-      "evidence": ".evidence/ladder/e0/20260909T050443Z",
+      "run": "20260909T062900Z",
+      "evidence": ".evidence/ladder/e0/20260909T062900Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -53,44 +54,42 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 23.9,
+      "seconds": 23.8,
       "previous": null,
       "measurement": {
-        "run": "20260909T050443.696884Z",
-        "subject": "67c4fdda2eb30cec693d5a9e83038125b10d1206",
-        "driverSha256": "27f50dab8cd70afc518a44fa79c81d1b87c8145f2306c51e111ae207ff9c5813"
+        "run": "20260909T062900.006209Z",
+        "subject": "48f8da4003cae6eaf4edd57ab6f68c0a1002b914",
+        "driverSha256": "b2c501508dc33daf6009ee78c17d3ac404a6734aab03f2be075a822fc33eef32"
       }
     },
     "torture": {
       "rung": "E0a",
       "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
       "outcomes": {
-        "pass": 1228,
-        "refused": 296,
-        "not-applicable": 83,
-        "requirement-unresolved": 72,
-        "fail": 12,
+        "pass": 1265,
+        "refused": 326,
+        "not-applicable": 89,
+        "fail": 11,
         "link-fail": 1
       },
       "refusals": {
-        "E3101": 115,
-        "E2001": 22,
-        "E2201": 20,
-        "E2203": 19,
+        "E3101": 128,
+        "E2001": 24,
+        "E2201": 22,
+        "E2203": 20,
         "E2102": 18,
+        "E1205": 17,
         "E3021": 17,
         "E3030": 15,
-        "E1205": 10,
+        "E1001": 10,
+        "E0112": 10,
         "E3029": 9,
-        "E0112": 9,
-        "E1001": 8,
-        "E3046": 5,
+        "E3046": 6,
+        "E2920": 6,
         "E2913": 3,
         "E2903": 3,
-        "E4003": 3,
         "E2933": 2,
         "E1006": 2,
-        "E2920": 2,
         "E1007": 2,
         "E2202": 2,
         "E0002": 1,
@@ -107,18 +106,18 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1228,
+      "passed": 1265,
       "kind": "programs",
       "runtimeDiagnostics": {
-        "E3039 external-call-not-executable": 7,
+        "E3039 external-call-not-executable": 6,
         "E3004 signed-integer-overflow": 2,
         "E3008 interpreter-fuel-exhausted": 2,
         "E3021 not-lowered": 1,
         "E3001 read-of-uninitialized-object": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260909T050507Z",
-      "evidence": ".evidence/ladder/e0/20260909T050507Z",
+      "run": "20260909T062923Z",
+      "evidence": ".evidence/ladder/e0/20260909T062923Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -130,12 +129,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 137.8,
+      "seconds": 161.3,
       "previous": null,
       "measurement": {
-        "run": "20260909T050443.696884Z",
-        "subject": "67c4fdda2eb30cec693d5a9e83038125b10d1206",
-        "driverSha256": "27f50dab8cd70afc518a44fa79c81d1b87c8145f2306c51e111ae207ff9c5813"
+        "run": "20260909T062900.006209Z",
+        "subject": "48f8da4003cae6eaf4edd57ab6f68c0a1002b914",
+        "driverSha256": "b2c501508dc33daf6009ee78c17d3ac404a6734aab03f2be075a822fc33eef32"
       }
     },
     "csmith": {

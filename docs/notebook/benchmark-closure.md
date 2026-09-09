@@ -113,8 +113,8 @@ memory/ABI rules still awaiting body revisions have measured probes ready.
 | AArch64 `%a` address-operand modifier | Implemented; the sealed 90/2,798 lowering result exposes a different tied pointer/integer input. That representation fix is also implemented, with original full-kernel remeasurement pending. |
 | GNU signed-left-shift bit patterns | Implemented without removing count or other arithmetic obligations. Eleven original torture runtime failures and the ctest runtime failure now pass; `insn.o` remains in the 90-object combination that boots on the first attempt. |
 | Real over-aligned stack frames | Implemented through reserved `x16`; recursive aligned-256/spill fixture passes both interpreters and Darwin/Linux native execution. |
-| Explicit function alignment metadata | Implemented and merged; original `align-3` passes both interpreters and native Linux; changed gate 3,348 passed / 0 failed, eight existing ignored. Full benchmark replay pending. |
-| Machine lowering of 128-bit signed UB predicates | Implemented; 27 focused tests and 21,074 native boundary checks pass. All five E4003 originals emit and execute through both Linux toolchains; changed gate 599 passed / 0 failed, four existing ignored. Full benchmark replay pending. |
+| Explicit function alignment metadata | Implemented and merged; original `align-3` passes both interpreters, native Linux and full replay `20260909T062923Z`; changed gate 3,348 passed / 0 failed, eight existing ignored. |
+| Machine lowering of 128-bit signed UB predicates | Implemented; 27 focused tests and 21,074 native boundary checks pass. All five E4003 originals also PASS in full replay `20260909T062923Z`; changed gate 599 passed / 0 failed, four existing ignored. |
 
 The large-layout reduction for original `991014-1` also has an independently
 measured oracle split: GCC-14 accepts both byte-layout assertions at O0/O2,
@@ -129,7 +129,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | `20260909T050443.696884Z`: ctest runtime failures zero; torture 12 runtime failures and one alloca link failure, with every identity retained | `ctest torture` | PARTIAL: eleven original torture runtime failures now pass; remaining failures OPEN |
+| 4 | Remaining native failures | `20260909T062900.006209Z`: ctest runtime failures zero; torture 11 runtime failures and one alloca link failure, with every identity retained | `ctest torture` | PARTIAL: every prior PASS retained; original `align-3` now PASS; remaining failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | `20260909T053908.023962Z`: 2,419 E3021 on numeric asm labels, 286 E3101 layout/identity cases, two E3026, one computed goto and one frame address | `kernel` | OPEN: 90 assemble and substitute, first boot passes, 76 proven included; shift/tie repairs are measured, subsequent full-width predicate lowering is not part of this subject |
@@ -141,14 +141,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 382 total refusals and musl 352 remain listed in raw results; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
-| 17 | Torture applicability/options | `20260909T050507Z`: 83 evidenced not-applicable rows, 72 unresolved requirements kept as compiler failures, 1,692 unchanged identities | `torture` | PARTIAL: target selectors and selected options consumed; full reviewed five-way classification remains OPEN |
+| 16 | Remaining diagnostic classes | Torture 326 total refusals in `20260909T062923Z`; musl 352 in its earlier run; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
+| 17 | Torture applicability/options | `20260909T062923Z`: 89 evidenced not-applicable rows, zero unresolved requirements, 1,692 unchanged identities | `torture` | PARTIAL: original requirements replayed; reviewed five-way classification implemented afterward and still awaits its own measured run |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Aligned-function and full-width original-program replay
+
+`python3 tools/bench.py ctest torture --jobs 4`, subject `48f8da4`, wrapper
+`20260909T062900.006209Z`: ctest is 207 PASS / 13 refused; torture is 1,265
+PASS / 326 refused / 11 runtime failures / 1 link failure / 89 not-applicable.
+Captures are `.evidence/ladder/e0/20260909T062900Z` and
+`.evidence/ladder/e0/20260909T062923Z`. All 220 and 1,692 identities remain;
+every one of the previous 1,228 torture PASS rows still passes. Of the 37
+additional passes, 33 are now correctly executed after resolving original
+requirements, and four are compiler repairs: `align-3`, `pr122943`,
+`pr54471`, `pr85582-2`. `pr61375` and `pr63302` also remain PASS.
+There are zero unresolved requirements. This run predates both the new
+reviewed-disposition classifier and the typed wide-field/storage-order
+refusals; it cannot serve as their execution evidence.
+
+`9ba7b87` is the compiled semantic RED for wide-field promotions and scalar
+storage order; `bc2916c` implements E2939 and E2940 without changing storage
+or explicit conversions. Focused tests passed 85/85; the changed gate against
+`d11b20e` passed tests, Clippy and fmt (the aggregate test listing was truncated,
+so no total is inferred). Replaying the six original preprocessed programs
+with `target/frontend/debug/evocc --parse-only` reports E2939 for `bitfld-3`,
+`bitfld-5`, `pr32244-1`, `pr34971`, and E2940 for `20230630-2` and `20230630-4`.
+These are deliberate refusals with separate oracle evidence, never passes.
 
 ### Signed-shift original-program replay
 
