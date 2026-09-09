@@ -150,6 +150,34 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Variadic register preservation and internal-body original-program replay
+
+`CARGO_TARGET_DIR=target/frontend python3 -u tools/bench.py musl --no-build
+--budget 45 --jobs 2` measured `7f91fd2`, executable
+`45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823`, in
+wrapper run `20260909T112011.563321Z` and musl capture
+`.evidence/ladder/musl/20260909T112011Z/`. All 1,007 assembled units
+substitute together and the first libc-test round has no new failures.
+The original 17 reference failures remain; none becomes a subject PASS.
+Compared with the previous receipt (`20260909T070307Z`), assembly rises
+995 to 1,007 and units in a passing build rise 498 to 1,007, without
+symbol-parity exclusions or exhausting the bisection budget.
+
+This measures the vector-register save repair, incomplete external-object
+addresses, array alignment and internal-function retention together. The
+earlier sealed wrapper probe isolates the variadic ABI defect; the full
+libc replay now verifies its integration. Retention keeps ordinary source
+checks, transitive calls, addresses, aliases and assembly references, and
+preserves surviving allocation origins. Static linkage is inherited from
+the canonical symbol even when a later definition omits `static`.
+
+The lane remains INCOMPLETE: 332 units are refused (219 E3101, 83 E1006,
+14 E2001, eight E2203, five E2939, and one each E1005/E3021/E3030).
+E3101 includes two canonical-call-arity mismatches and a VLA layout refusal;
+it is not a floating-point disposition by itself. The broad changed gate
+still has its declared constant-evaluation failure, not a full-green claim.
+The pending wide-field narrowing is not in this measured executable.
+
 ### Full-width shift-count edge awaiting body correction
 
 `width-edges.c` in `.evidence/builtin-probes/20260909-wide-bitfield-shapes/`
