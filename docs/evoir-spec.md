@@ -6675,3 +6675,10 @@ Per F07, `__builtin_trap()` has type `void`, takes no arguments, has no constant
 When reached, both interpreters report E3047 `builtin-trap-reached` (explicit termination, not a failed UB assumption), and the AArch64 emitter uses `brk #1000`; an unevaluated or unselected occurrence does not terminate execution.
 The sealed GCC-14/Clang-19 O0/O2 runs of `.evidence/builtin-probes/20260910-builtin-trap/trap.c` all return zero on the ordinary path and SIGTRAP (133) on the reached path (`results.txt`); GCC uses immediate 1000 and Clang uses 1, which are not an observable termination disagreement.
 Three original torture first-error programs in `20260909T182954Z` reach this missing builtin; the next original-program replay determines gains rather than this probe.
+
+### Unevaluated expression type classification
+
+Per F09, `__builtin_classify_type(expr)` resolves to an `int` integer constant without evaluating its single expression operand: integer/enum values classify as 1, pointers including decayed arrays/functions as 5, real floating types as 8, complex types as 9, structures and the target `__builtin_va_list` as 12, and unions as 13.
+The sealed GCC-14/Clang-19 O0/O2 probe `.evidence/builtin-probes/20260910-type-classification/classify.c` measures these values and unchanged side effects, and all four runs of `tests/fixtures/type-classification.c` return zero (`results.txt`).
+The `_Bool` result conflicts (GCC 1, Clang 4), so it reports E2941 `unsupported-type-classification`, also used for opaque target-header types with no agreed category; the conflicting void, zero/multiple-argument and type-name forms remain refused with the existing E2913, E2909 or E1003 diagnostics, respectively.
+This rule requires no floating execution or new IR node; two original torture first-error programs in `20260909T201535Z` name this builtin, and their next original-source replay, not type-query acceptance, determines their outcomes.

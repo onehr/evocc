@@ -350,6 +350,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
                     Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
+                    Some("__builtin_classify_type") => TokenKind::BuiltinClassifyType,
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
                     Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
@@ -10383,6 +10384,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::BuiltinTypesCompatibleP => {
                 return self.parse_builtin_types_compatible_p(tok);
             }
+            TokenKind::BuiltinClassifyType => return self.parse_builtin_classify_type(tok),
             TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
             TokenKind::BuiltinObjectSize => return self.parse_builtin_object_size(tok),
             TokenKind::BuiltinHasAttribute => return self.parse_builtin_has_attribute(tok),
@@ -10581,6 +10583,53 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(self.alloc_node(CHirExpr::Lit(
             IntLit {
                 value: u64::from(value),
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        )))
+    }
+
+    fn parse_builtin_classify_type(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if !self.match_kind(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let operand = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let ty = self.generic_controlling_type(operand)?;
+        let value = match &self.types.get(ty)?.kind {
+            TypeKind::Int(IntRank::Bool) | TypeKind::TargetBuiltin(_) => {
+                // GCC and Clang disagree on _Bool; opaque target header types
+                // have no agreed classification in this execution profile.
+                self.report("E2941", "unsupported-type-classification", operand.span());
+                return None;
+            }
+            TypeKind::Void => {
+                self.report("E2913", "builtin-operand-not-convertible", operand.span());
+                return None;
+            }
+            TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_) => 1,
+            TypeKind::Pointer(_) | TypeKind::Array { .. } | TypeKind::Function { .. } => 5,
+            TypeKind::Float(_) => 8,
+            TypeKind::Complex(_) => 9,
+            TypeKind::Struct(_) | TypeKind::BuiltinVaList => 12,
+            TypeKind::Union(_) => 13,
+        };
+        // Like types_compatible_p, this is resolved by the front end. Keeping
+        // only the int constant makes downstream operand execution impossible.
+        let span = self.merge_span(keyword.span, close.span);
+        Some(self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value,
                 suffix: IntSuffix::None,
                 base: IntBase::Dec,
             },
@@ -12142,6 +12191,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinConstantP
             | TokenKind::BuiltinChooseExpr
             | TokenKind::BuiltinTypesCompatibleP
+            | TokenKind::BuiltinClassifyType
             | TokenKind::BuiltinOffsetof
             | TokenKind::BuiltinObjectSize
             | TokenKind::BuiltinHasAttribute

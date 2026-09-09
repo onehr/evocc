@@ -111,6 +111,7 @@ pub enum TokenKind {
     /// after preprocessing.
     BuiltinChooseExpr,
     BuiltinTypesCompatibleP,
+    BuiltinClassifyType,
     BuiltinOffsetof,
     BuiltinObjectSize,
     BuiltinHasAttribute,
