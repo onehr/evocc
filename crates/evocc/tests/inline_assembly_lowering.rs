@@ -427,6 +427,24 @@ fn symbolic_inline_arguments_preserve_one_evaluation_on_the_machine() {
 }
 
 #[test]
+fn symbolic_inline_immediates_discard_unselected_statement_ownership() {
+    for argument in ["1 ? &object : inner()", "(1 ? &object : inner()) + 0"] {
+        let source = format!(
+            r#"static int object;
+            static inline __attribute__((always_inline)) int *inner(void) {{ return &object; }}
+            static inline __attribute__((always_inline)) int f(int *p) {{ asm volatile("// %c0"::"i"(p)); return 0; }}
+            int main(void) {{ return f({argument}); }}"#,
+        );
+        let output = run(&source, "--emit=asm");
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 #[cfg(target_arch = "aarch64")]
 fn symbolic_immediates_do_not_create_runtime_symbol_references() {
     execute_native_assembly(
