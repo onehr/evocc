@@ -8221,10 +8221,10 @@ impl<'a> FunctionLowerer<'a> {
             let pointee = self.pointer_pointee_type(operand, span)?;
             if matches!(
                 self.unit.types().get(pointee).map(|ty| &ty.kind),
-                Some(TypeKind::Function { .. })
+                Some(TypeKind::Function { .. } | TypeKind::Array { .. })
             ) {
-                // Function designators do not load memory, including when an
-                // unspecified C prototype has an erased address representation.
+                // Arrays decay and function designators keep their address;
+                // neither conversion loads an object value.
                 return Ok(pointer);
             }
             if self.is_aggregate_type(pointee) {
