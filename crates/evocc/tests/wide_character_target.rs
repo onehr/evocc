@@ -31,6 +31,7 @@ _Static_assert(__WCHAR_WIDTH__ == EXPECT_BYTES * 8, "predefined width");
 _Static_assert(__ARM_SIZEOF_WCHAR_T == EXPECT_BYTES, "ABI predefined size");
 _Static_assert(__WCHAR_MIN__ == 0, "unsigned target wchar");
 _Static_assert(sizeof(*L"x") == EXPECT_BYTES, "literal element");
+_Static_assert(sizeof(*"x") == 1, "ordinary literal decay uses the same rule");
 _Static_assert(sizeof(L'x') == EXPECT_BYTES, "character constant");
 _Static_assert(__builtin_types_compatible_p(typeof(L'x'), wchar_t), "character type");
 _Static_assert(__builtin_types_compatible_p(typeof(*L"x"), wchar_t), "string element type");
@@ -50,6 +51,7 @@ int main(void) {
   if (local_exact[0] != 'a' || local_exact[1] != 'b') return 2;
   if (exact[0] != 'a' || exact[1] != 'b' || *pointer != L'\u4f60') return 3;
   if (text[0] != 0x4f60) return 4;
+  if (*"x" != 'x' || *L"x" != L'x') return 5;
 #if EXPECT_BYTES == 2
   return text[1] != 0xd83d || text[2] != 0xde42 || text[3] != '!' || text[4] != 0;
 #else

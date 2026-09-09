@@ -246,6 +246,7 @@ struct SwitchCaseContext {
 }
 
 pub struct Parser<'src, 'arena> {
+    target_layout: TargetDataLayout,
     standard_builtins: bool,
     legacy_declarations: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
@@ -437,6 +438,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
+            target_layout: TargetDataLayout::aarch64_unknown_linux_gnu(),
             types: TypeInterner::new(),
             symbols,
             current_scope,
@@ -477,6 +479,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// when only a bounded diagnostic prefix is required.
     pub fn set_error_limit(&mut self, limit: NonZeroUsize) {
         self.error_limit = Some(limit);
+    }
+
+    /// Select target-dependent literal types before parsing the unit.
+    pub fn set_target_layout(&mut self, layout: TargetDataLayout) {
+        self.target_layout = layout;
     }
 
     /// Control recognition of ordinary externally linked standard names.
@@ -2241,7 +2248,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     WrittenInitializer::Expression(CHirExpr::StringLit(literal, span)) => {
                         if !matches!(
                             literal.prefix,
-                            StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+                            StringPrefix::None
+                                | StringPrefix::U8
+                                | StringPrefix::L
+                                | StringPrefix::L16
                         ) {
                             self.report(
                                 "E2205",
@@ -2272,7 +2282,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         {
                             if !matches!(
                                 literal.prefix,
-                                StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+                                StringPrefix::None
+                                    | StringPrefix::U8
+                                    | StringPrefix::L
+                                    | StringPrefix::L16
                             ) {
                                 self.report(
                                     "E2205",
@@ -3917,7 +3930,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<()> {
         if !matches!(
             literal.prefix,
-            StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+            StringPrefix::None | StringPrefix::U8 | StringPrefix::L | StringPrefix::L16
         ) {
             self.report("E2205", "not-covered-day5: wide-string-initializer", span);
             return None;
@@ -4065,10 +4078,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn string_literal_element_matches(&self, target: TypeId, prefix: StringPrefix) -> bool {
         match prefix {
             StringPrefix::None | StringPrefix::U8 => self.is_narrow_character_type(target),
-            StringPrefix::L => self.types.get(target).is_some_and(|canonical| {
-                !canonical.qualifiers.is_atomic
-                    && matches!(canonical.kind, TypeKind::Int(IntRank::UShort))
-            }),
+            StringPrefix::L | StringPrefix::L16 => {
+                self.types.get(target).is_some_and(|canonical| {
+                    !canonical.qualifiers.is_atomic
+                        && canonical.kind == TypeKind::Int(prefix.element_rank())
+                })
+            }
             StringPrefix::U16 | StringPrefix::U => false,
         }
     }
@@ -5971,9 +5986,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match expression {
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
             CHirExpr::MemoryRead { .. } => Err(()),
-            CHirExpr::CharLit(literal, _) => {
-                Ok(CInteger::int(i32::try_from(literal.value).map_err(|_| ())?))
-            }
+            CHirExpr::CharLit(literal, _) => Ok(literal.integer_value()),
             CHirExpr::Ident { symbol, .. } => {
                 let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
                 let SymbolData::Enumerator { value } = symbol.data() else {
@@ -6087,7 +6100,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match expression {
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
             CHirExpr::MemoryRead { .. } => Err(()),
-            CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
+            CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
             CHirExpr::Ident { symbol, .. } => {
                 let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
                 if symbol.kind() != SymbolKind::Enumerator {
@@ -8696,12 +8709,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn string_element_type(&mut self, prefix: StringPrefix) -> TypeId {
-        let rank = match prefix {
-            StringPrefix::None | StringPrefix::U8 => IntRank::Char,
-            StringPrefix::L => IntRank::UShort,
-            StringPrefix::U16 => IntRank::UShort,
-            StringPrefix::U => IntRank::UInt,
-        };
+        let rank = prefix.element_rank();
         self.intern(TypeKind::Int(rank), Qualifiers::default())
     }
 
@@ -8755,8 +8763,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }),
                 ExprCategory::Value,
             ),
-            CHirExpr::CharLit(_, _) => (
-                InferredType::Integer(CIntegerType::INT),
+            CHirExpr::CharLit(literal, _) => (
+                InferredType::Integer(literal.integer_value().ty()),
                 ExprCategory::Value,
             ),
             CHirExpr::Ident { facts, .. } => {
@@ -8946,12 +8954,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 {
                     OperandTypeClass::Pointer(pointer) => InferredType::Canonical(pointer.pointee),
                     OperandTypeClass::StringPointer(prefix) => {
-                        InferredType::Integer(integer_type_for_rank(match prefix {
-                            StringPrefix::None | StringPrefix::U8 => IntRank::Char,
-                            StringPrefix::L => IntRank::UShort,
-                            StringPrefix::U16 => IntRank::UShort,
-                            StringPrefix::U => IntRank::UInt,
-                        }))
+                        InferredType::Integer(integer_type_for_rank(prefix.element_rank()))
                     }
                     _ => return None,
                 };
@@ -8981,7 +8984,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => {}
             }
         } else if let InferredType::StringArray(prefix) = inferred.ty {
-            inferred.ty = InferredType::StringPointer(prefix);
+            // Once it decays, a literal is an ordinary pointer. Keeping a
+            // separate string-pointer class here made unary dereference miss
+            // the rule already used by array subscripts and named pointers.
+            let element = self.types.find(&CanonicalType {
+                kind: TypeKind::Int(prefix.element_rank()),
+                qualifiers: Qualifiers::default(),
+            })?;
+            inferred.ty = InferredType::Pointer(self.inferred_pointer_type(element)?);
         }
         if inferred.category != ExprCategory::Value {
             inferred.category = ExprCategory::Value;
@@ -9373,10 +9383,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     (
                         StringPrefix::None | StringPrefix::U8,
                         TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
-                    ) | (StringPrefix::L, TypeKind::Int(IntRank::UShort))
-                        | (StringPrefix::U16, TypeKind::Int(IntRank::UShort))
-                        | (StringPrefix::U, TypeKind::Int(IntRank::UInt))
+                    )
                 )
+                || pointee.kind == TypeKind::Int(prefix.element_rank())
         })
     }
 
@@ -10082,7 +10091,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 CHirExpr::FloatLit(literal, tok.span)
             }
             TokenKind::CharLiteral => {
-                let Some(literal) = parse_char_literal(self.token_text(&tok)) else {
+                let Some(literal) = parse_char_literal(self.token_text(&tok), self.target_layout)
+                else {
                     self.report("E1006", "invalid-character-literal", tok.span);
                     return None;
                 };
@@ -10111,6 +10121,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     end = next.span;
                 }
                 let span = self.merge_span(tok.span, end);
+                if literal.prefix == StringPrefix::L
+                    && self.target_layout.wide_character_rank() == IntRank::UShort
+                {
+                    literal.prefix = StringPrefix::L16;
+                }
                 if literal.explicit_unit_count().is_none() {
                     self.report("E1006", "invalid-string-literal", span);
                     return None;
@@ -12710,16 +12725,19 @@ fn concatenate_string_prefix(left: StringPrefix, right: StringPrefix) -> Option<
     }
 }
 
-fn parse_char_literal(text: &str) -> Option<CharLit> {
+fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
     let (value, prefix) = evocc_lex::decode_character_literal(text)?;
     let prefix = match prefix {
         "u8" => CharPrefix::U8,
-        "u" | "U" => CharPrefix::U,
+        "u" => CharPrefix::U16,
+        "U" => CharPrefix::U,
+        "L" if target.wide_character_rank() == IntRank::UShort => CharPrefix::L16,
         "L" => CharPrefix::L,
         "" => CharPrefix::None,
         _ => return None,
     };
-    Some(CharLit { value, prefix })
+    let literal = CharLit { value, prefix };
+    (literal.integer_value().raw_bits() == u128::from(value)).then_some(literal)
 }
 
 /// When a parenthesized expression appears, preserve its original span.

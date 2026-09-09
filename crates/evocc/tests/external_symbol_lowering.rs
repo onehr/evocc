@@ -384,7 +384,7 @@ fn flexible_string_initializers_execute_without_completing_the_record_type() {
     assert_native_execution(source, "flexible-string-initializers");
     for invalid in [
         "struct S { char head; char data[]; }; int main(void) { struct S s = { 'o', \"wx\" }; return s.data[1]; }",
-        "struct S { int head; unsigned short data[]; }; int main(void) { struct S s = { 7, L\"wx\" }; return s.data[1]; }",
+        "struct S { int head; unsigned int data[]; }; int main(void) { struct S s = { 7, L\"wx\" }; return s.data[1]; }",
     ] {
         let output = run(invalid, "--parse-only");
         assert!(!output.status.success());

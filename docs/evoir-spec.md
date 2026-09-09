@@ -6066,6 +6066,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Target-selected wide characters
+
+The reviewed hosted target uses unsigned 32-bit `wchar_t`, while `-fshort-wchar` selects unsigned 16-bit `wchar_t`; `TargetDataLayout` controls character values, string element types, decoding, initialization and predefined macros, and replay preserves the original option.
+The two compilers at O0/O2 agree on `.evidence/builtin-probes/20260909-wide-character-target/{wide.c,results.txt}`: the mixed literal has four UTF-32 units (16 bytes) or five UTF-16 units (10 bytes), including the terminator, and an exact two-element `L"ab"` initializer omits the terminator.
+In `character.c` and `character-results.txt`, the hosted non-BMP character is 0x1f642 in both compilers, while short GCC keeps a trailing surrogate and Clang refuses; the profile refuses that short scalar character with existing E1006 rather than truncating it.
+The original-program acceptance targets are c-testsuite `00220` and the two previously measured short-wide-string kernel sites; their replay is separate from the literal regression tests, and no new diagnostic or floating execution is introduced.
+
 ### Pending body revision: numeric assembly label references
 
 The current §3.11 reference vocabulary admits named `%l[label]`, not numbered `%lN`; the latest mixed-link survey records 2,419 original units refused at the numbered form.

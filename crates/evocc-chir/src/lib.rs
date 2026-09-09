@@ -133,8 +133,25 @@ pub struct CharLit {
 pub enum CharPrefix {
     None,
     L,
+    /// Written `L`, resolved under the target's short-wchar option.
+    L16,
+    U16,
     U,
     U8,
+}
+
+impl CharLit {
+    #[must_use]
+    pub fn integer_value(self) -> integer::CInteger {
+        let rank = match self.prefix {
+            CharPrefix::None | CharPrefix::U8 => evocc_types::IntRank::Int,
+            CharPrefix::L => StringPrefix::L.element_rank(),
+            CharPrefix::L16 => StringPrefix::L16.element_rank(),
+            CharPrefix::U16 => evocc_types::IntRank::UShort,
+            CharPrefix::U => evocc_types::IntRank::UInt,
+        };
+        integer::CInteger::new(u64::from(self.value), integer::integer_type_for_rank(rank))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -203,11 +220,7 @@ impl StringLit {
     /// A string object's target representation, including its terminating zero.
     #[must_use]
     pub fn object_bytes(&self, target: &evocc_types::TargetDataLayout) -> Option<(Vec<u8>, u32)> {
-        let width = match self.prefix {
-            StringPrefix::None | StringPrefix::U8 => 1,
-            StringPrefix::L | StringPrefix::U16 => 2,
-            StringPrefix::U => 4,
-        };
+        let width = self.prefix.code_unit_bytes();
         let mut units = self.decoded_units()?;
         units.push(0);
         let mut bytes = Vec::new();
@@ -229,11 +242,34 @@ impl StringLit {
 pub enum StringPrefix {
     None,
     L,
+    /// Written `L`, resolved under the target's short-wchar option. Recording
+    /// this at parsing makes initializer extents and later decoding agree.
+    L16,
     /// C11 `u` prefix (`char16_t` code units).
     U16,
     /// C11 `U` prefix (`char32_t` code units).
     U,
     U8,
+}
+
+impl StringPrefix {
+    #[must_use]
+    pub fn element_rank(self) -> evocc_types::IntRank {
+        use evocc_types::{IntRank, TargetDataLayout};
+        match self {
+            Self::None | Self::U8 => IntRank::Char,
+            Self::L => TargetDataLayout::aarch64_unknown_linux_gnu().wide_character_rank(),
+            Self::L16 => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .with_short_wchar(true)
+                .wide_character_rank(),
+            Self::U16 => IntRank::UShort,
+            Self::U => IntRank::UInt,
+        }
+    }
+
+    fn code_unit_bytes(self) -> usize {
+        usize::from(integer::integer_type_for_rank(self.element_rank()).bits() / 8)
+    }
 }
 
 fn decode_c_string_units(contents: &str, prefix: StringPrefix) -> Option<Vec<u32>> {
@@ -329,8 +365,8 @@ fn decode_c_string_units(contents: &str, prefix: StringPrefix) -> Option<Vec<u32
 }
 
 fn push_encoded_character(output: &mut Vec<u32>, character: char, prefix: StringPrefix) {
-    match prefix {
-        StringPrefix::None | StringPrefix::U8 => {
+    match prefix.code_unit_bytes() {
+        1 => {
             let mut bytes = [0_u8; 4];
             output.extend(
                 character
@@ -341,32 +377,21 @@ fn push_encoded_character(output: &mut Vec<u32>, character: char, prefix: String
                     .map(u32::from),
             );
         }
-        StringPrefix::U16 => output.extend(
+        2 => output.extend(
             character
                 .encode_utf16(&mut [0_u16; 2])
                 .iter()
                 .copied()
                 .map(u32::from),
         ),
-        StringPrefix::L => output.extend(
-            character
-                .encode_utf16(&mut [0_u16; 2])
-                .iter()
-                .copied()
-                .map(u32::from),
-        ),
-        StringPrefix::U => output.push(u32::from(character)),
+        4 => output.push(u32::from(character)),
+        _ => unreachable!("literal element ranks have 8, 16 or 32 bits"),
     }
 }
 
 fn push_numeric_unit(output: &mut Vec<u32>, value: u32, prefix: StringPrefix) -> Option<()> {
-    let maximum = match prefix {
-        StringPrefix::None | StringPrefix::U8 => u32::from(u8::MAX),
-        StringPrefix::U16 => u32::from(u16::MAX),
-        StringPrefix::L => u32::from(u16::MAX),
-        StringPrefix::U => u32::MAX,
-    };
-    if value > maximum {
+    let bits = prefix.code_unit_bytes() * 8;
+    if u64::from(value) >= 1_u64 << bits {
         return None;
     }
     output.push(value);

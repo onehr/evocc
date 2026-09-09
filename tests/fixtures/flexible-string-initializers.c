@@ -1,7 +1,7 @@
 struct text { char head; char data[]; } text = { 'o', "wx" };
 struct text listed = { 'l', { 'w', 'x', 0 } };
 struct text empty = { 'e', "" };
-struct wide { int head; unsigned short data[]; } wide = { 7, L"wx" };
+struct wide { int head; unsigned int data[]; } wide = { 7, L"wx" };
 char terminated[5] = "wx";
 char exact[2] = "wx";
 int main(void) {

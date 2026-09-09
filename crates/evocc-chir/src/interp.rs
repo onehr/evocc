@@ -3576,10 +3576,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Lit(literal, _) => values.push(CValue::Integer(
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))?,
             )),
-            CHirExpr::CharLit(literal, _) => values.push(CValue::Integer(CInteger::new(
-                u64::from(literal.value),
-                CIntegerType::INT,
-            ))),
+            CHirExpr::CharLit(literal, _) => values.push(CValue::Integer(literal.integer_value())),
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -8033,9 +8030,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }),
             CHirExpr::BuiltinVarArgs { .. } => Err(InterpreterError::VarArgs { span }),
             CHirExpr::LabelAddress { .. } => Err(InterpreterError::ComputedGoto { span }),
-            CHirExpr::CharLit(literal, _) => {
-                Ok(CInteger::new(u64::from(literal.value), CIntegerType::INT))
-            }
+            CHirExpr::CharLit(literal, _) => Ok(literal.integer_value()),
             CHirExpr::Cast(ty, value, _) => {
                 let target = self.integer_type(*ty, span)?;
                 Ok(self.eval_expr(value, allow_root_mutation)?.cast(target))
@@ -8124,7 +8119,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal)
                 .map(|value| value.ty())
                 .map_err(|error| self.integer_error(error, span)),
-            CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
+            CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
             CHirExpr::Ident { facts, .. }
             | CHirExpr::CheckedArithmetic { facts, .. }
             | CHirExpr::BitBuiltin { facts, .. }
