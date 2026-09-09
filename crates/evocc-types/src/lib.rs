@@ -1466,6 +1466,11 @@ impl TargetDataLayout {
             // A designator query carries its declaration's alignment on the
             // query type, while the canonical function type remains unaligned.
             TypeKind::Function { .. } => Ok(canonical.qualifiers.aligned.unwrap_or(4).max(4)),
+            // Alignment is defined by the element even when no array bound is
+            // known. This query must not manufacture an allocatable layout.
+            TypeKind::Array { element, .. } => self
+                .alignof_type(types, *element)
+                .map(|alignment| alignment.max(canonical.qualifiers.aligned.unwrap_or(1))),
             _ => self.layout_of(types, ty).map(|layout| layout.align_bytes),
         }
     }

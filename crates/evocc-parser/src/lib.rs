@@ -9030,6 +9030,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn expression_bit_field_width(&self, expression: &CHirExpr<'_>) -> Option<u16> {
+        Some(
+            self.expression_record_field(expression)?
+                .bit_field?
+                .width_bits,
+        )
+    }
+
+    fn expression_record_field(&self, expression: &CHirExpr<'_>) -> Option<&RecordField> {
         let field = match expression {
             CHirExpr::MemoryRead { place, .. } => match place.projections().last()? {
                 PlaceProjection::Field(field) => *field,
@@ -9049,7 +9057,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 *self.record_member_path(pointer.pointee, name)?.last()?
             }
-            CHirExpr::EvaluateOnce(operand, _) => return self.expression_bit_field_width(operand),
+            CHirExpr::EvaluateOnce(operand, _) => return self.expression_record_field(operand),
             _ => return None,
         };
         let TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) =
@@ -9057,7 +9065,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         else {
             return None;
         };
-        Some(fields.get(field.field_index())?.bit_field?.width_bits)
+        fields.get(field.field_index())
     }
 
     fn promoted_arithmetic_type(&self, ty: InferredType) -> Option<InferredType> {
@@ -9757,20 +9765,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     None
                 })?;
                 let mut ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
-                if let CHirExpr::Ident { symbol, .. } = operand {
-                    let alignment = self.symbols.symbol(*symbol).ok()?.declared_alignment();
-                    if alignment > 1 {
-                        let canonical = self.types.get(ty)?.clone();
-                        ty = self.intern(
-                            canonical.kind,
-                            Qualifiers {
-                                aligned: Some(
-                                    canonical.qualifiers.aligned.unwrap_or(1).max(alignment),
-                                ),
-                                ..canonical.qualifiers
-                            },
-                        );
-                    }
+                let alignment = if let CHirExpr::Ident { symbol, .. } = operand {
+                    self.symbols.symbol(*symbol).ok()?.declared_alignment()
+                } else {
+                    self.expression_record_field(operand)
+                        .and_then(|field| field.layout.aligned)
+                        .unwrap_or(1)
+                };
+                if alignment > 1 {
+                    let canonical = self.types.get(ty)?.clone();
+                    ty = self.intern(
+                        canonical.kind,
+                        Qualifiers {
+                            aligned: Some(canonical.qualifiers.aligned.unwrap_or(1).max(alignment)),
+                            ..canonical.qualifiers
+                        },
+                    );
                 }
                 Some((ty, None))
             }?;

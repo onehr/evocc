@@ -1434,7 +1434,7 @@ fn unresolved_runtime_symbols_fail_only_when_reached() {
         );
     }
     let output = run(
-        "_Static_assert(_Alignof(int[]) == 4, \"incomplete array\");",
+        "_Static_assert(sizeof(int[]) == 4, \"incomplete array\");",
         "--parse-only",
     );
     assert!(!output.status.success());
