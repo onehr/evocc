@@ -2587,9 +2587,9 @@ fn function_info(
     }
     let canonical = unit
         .types()
-        .get(function.ty)
+        .get(symbol.ty())
         .ok_or(LowerError::UnknownType {
-            ty: function.ty,
+            ty: symbol.ty(),
             span: function.span,
         })?;
     let TypeKind::Function {
