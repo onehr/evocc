@@ -179,7 +179,8 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(
             argv,
             [
-                "gcc-14", "-Wa,-march=armv8.5-a", "-c", "-x", "assembler",
+                "gcc-14", "-Wa,-march=armv8.5-a", "-Wa,-I,/work/build",
+                "-c", "-x", "assembler",
                 "lib/bitrev.s", "-o", "lib/bitrev.o",
             ],
         )
