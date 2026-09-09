@@ -291,3 +291,38 @@ fn constant_expression_edges_keep_selected_values_and_effects() {
     assert_execution("int main(void){int n=0;int v=(n++ ? 9 : ++n);return v!=2 || n!=2;}");
     assert_execution("int main(void){int n=0;int v=(++n ?: ++n);return v!=1 || n!=1;}");
 }
+
+#[test]
+fn constant_branch_selection_uses_the_conditional_common_type() {
+    assert_execution(include_str!(
+        "../../../tests/fixtures/conditional-common-type.c"
+    ));
+    for condition in [
+        "(1 ? -1 : 0U) < 0",
+        "(0 ? 0U : -1) < 0",
+        "(1 ? -1L : 0UL) < 0",
+        "(0 ? 0ULL : -1LL) < 0",
+        "(1 ? -1 : (0 ? 1 : 0U)) < 0",
+        "(1 ? -1 : (unsigned __int128)0) < 0",
+        "(-1 ?: 0U) < 0",
+    ] {
+        for statement in [
+            format!("if ({condition}) return 1;"),
+            format!("switch ({condition}) {{case 0:break;default:return 1;}}"),
+            format!("int n=({condition}) ? 1 : 0; if(n) return 1;"),
+            format!("int n=({condition}) && 1; if(n) return 1;"),
+            format!("int n=({condition}) || 0; if(n) return 1;"),
+            format!("int n=({condition}) ?: 0; if(n) return 1;"),
+        ] {
+            assert_execution(&format!("int main(void){{ {statement} return 0;}}"));
+        }
+    }
+    assert_execution(
+        "extern unsigned int absent(void);int main(void){if((1?-1:absent())<0)return 1;return 0;}",
+    );
+}
+
+#[test]
+fn static_address_selection_uses_the_conditional_common_type() {
+    assert_execution("int a=3,b=7;static int *p=((1?-1:0U)<0)?&a:&b;int main(void){return *p!=7;}");
+}
