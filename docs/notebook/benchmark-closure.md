@@ -150,6 +150,35 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Bracket attributes and original-program replay
+
+`b932d53` adds the tests-only attribute RED (five declared failures, no
+build errors); `790db6d` shares GNU attribute handling while retaining
+bracket namespaces and attachment to declarations or derived types.
+Unknown namespaces cannot silently enable GNU layout, aliases or inlining.
+Sealed layout conflicts remain refused. A further malformed-name regression
+first fails on `[[u8"bad"]]`, then passes after the complete spelling is checked.
+The parser/C-HIR component command recorded below passes 669 tests before that
+last guard; the final seven focused targets pass 134 tests, zero failures.
+Library Clippy, fmt, Ruff and the 14 benchmark-tool tests pass. This is not a
+fresh full workspace gate: the separately recorded constant-width RED remains open.
+
+Release subject `0775488`, SHA-256
+`414bb8358a4bea82b793bdd0bae2aa77774ed651f44094e037ba36d1bc1217c2`,
+passes `tests/fixtures/bracket-attributes.c` through both interpreters and
+both sealed native assembly/link/execution paths. The unchanged full torture
+replay (`python3 -u tools/bench.py torture --no-build --jobs 2`,
+`CARGO_TARGET_DIR=target/frontend`) is `20260909T182954Z`, wrapper
+`20260909T182954.542810Z`: 1,692 identities and options unchanged, zero lost PASS.
+Raw outcomes are 1,267 pass / 330 refused / 89 not-applicable / 5 runtime fail /
+1 link fail. The only raw transitions are `pr123978` and `pr124358`, both
+refused to pass. R01 excludes the independently measured oracle conflict on
+`pr124358`; the source-bound `stdarg-4` disposition now records reached FP.
+Thus the five-way result is 1,266 PASS / 276 compiler failure / 144 not-applicable /
+6 FP-deferred / 0 oracle-unusable, not 1,267 validated PASS. `pr125291` clears
+bracket parsing and now exposes the still-unimplemented `__builtin_trap`.
+No Csmith, kernel or library result is refreshed by this torture-only run.
+
 ### Variadic inline objects and qualified character pointers
 
 `1ee0d18` records the integer-only inline `va_list` regression: lowering

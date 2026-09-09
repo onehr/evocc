@@ -1,14 +1,13 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T171506.687331Z",
-  "subject": "9a69f0efc9b137d36d959072e6b37243f18298cb",
-  "dirty": true,
+  "run": "20260909T182954.542810Z",
+  "subject": "07754883c68b9af0c40ef3ac330e45138b180e2b",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00",
+  "driverSha256": "414bb8358a4bea82b793bdd0bae2aa77774ed651f44094e037ba36d1bc1217c2",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "ctest",
     "torture",
     "--no-build",
     "--jobs",
@@ -16,7 +15,6 @@
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
     "torture"
   ],
   "status": "INCOMPLETE",
@@ -73,25 +71,25 @@
       "rung": "E0a",
       "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
       "outcomes": {
-        "pass": 1265,
-        "refused": 332,
+        "pass": 1267,
+        "refused": 330,
         "not-applicable": 89,
         "fail": 5,
         "link-fail": 1
       },
       "refusals": {
         "E3101": 126,
-        "E2001": 24,
+        "E2001": 26,
         "E2201": 22,
         "E2203": 20,
         "E1205": 17,
         "E3021": 17,
         "E2102": 17,
         "E3030": 15,
-        "E1001": 10,
         "E0112": 10,
         "E3029": 8,
         "E2939": 7,
+        "E1001": 6,
         "E3046": 6,
         "E2920": 6,
         "E2940": 5,
@@ -114,7 +112,7 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1265,
+      "passed": 1266,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3004 signed-integer-overflow": 2,
@@ -123,15 +121,15 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "dispositions": {
-        "PASS": 1265,
-        "compiler-failure": 279,
-        "FP-deferred": 5,
-        "not-applicable": 143,
+        "PASS": 1266,
+        "compiler-failure": 276,
+        "FP-deferred": 6,
+        "not-applicable": 144,
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T171533Z",
-      "evidence": ".evidence/ladder/e0/20260909T171533Z",
+      "run": "20260909T182954Z",
+      "evidence": ".evidence/ladder/e0/20260909T182954Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -143,12 +141,75 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 190.8,
-      "previous": null,
+      "seconds": 273.5,
+      "previous": {
+        "rung": "E0a",
+        "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
+        "outcomes": {
+          "pass": 1265,
+          "refused": 332,
+          "not-applicable": 89,
+          "fail": 5,
+          "link-fail": 1
+        },
+        "refusals": {
+          "E3101": 126,
+          "E2001": 24,
+          "E2201": 22,
+          "E2203": 20,
+          "E1205": 17,
+          "E3021": 17,
+          "E2102": 17,
+          "E3030": 15,
+          "E1001": 10,
+          "E0112": 10,
+          "E3029": 8,
+          "E2939": 7,
+          "E3046": 6,
+          "E2920": 6,
+          "E2940": 5,
+          "E2913": 3,
+          "E2903": 3,
+          "E2933": 2,
+          "E1006": 2,
+          "E1007": 2,
+          "E0002": 1,
+          "E3026": 1,
+          "E2935": 1,
+          "E1002": 1,
+          "E2202": 1,
+          "E2101": 1,
+          "E2208": 1,
+          "E3033": 1,
+          "E2204": 1,
+          "E2929": 1
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 1692,
+        "passed": 1265,
+        "kind": "programs",
+        "runtimeDiagnostics": {
+          "E3004 signed-integer-overflow": 2,
+          "E3008 interpreter-fuel-exhausted": 2,
+          "E3039 external-call-not-executable": 1,
+          "E3001 read-of-uninitialized-object": 1
+        },
+        "dispositions": {
+          "PASS": 1265,
+          "compiler-failure": 279,
+          "FP-deferred": 5,
+          "not-applicable": 143,
+          "oracle-unusable": 0
+        },
+        "status": "INCOMPLETE",
+        "run": "20260909T171533Z",
+        "evidence": ".evidence/ladder/e0/20260909T171533Z"
+      },
       "measurement": {
-        "run": "20260909T171506.687331Z",
-        "subject": "9a69f0efc9b137d36d959072e6b37243f18298cb",
-        "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00"
+        "run": "20260909T182954.542810Z",
+        "subject": "07754883c68b9af0c40ef3ac330e45138b180e2b",
+        "driverSha256": "414bb8358a4bea82b793bdd0bae2aa77774ed651f44094e037ba36d1bc1217c2"
       }
     },
     "csmith": {

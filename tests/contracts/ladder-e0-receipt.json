@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T171533Z",
-  "subject": "9a69f0e",
-  "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00",
+  "run": "20260909T182954Z",
+  "subject": "0775488",
+  "driverSha256": "414bb8358a4bea82b793bdd0bae2aa77774ed651f44094e037ba36d1bc1217c2",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -67,32 +67,32 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1265,
-     "refused": 332,
+     "pass": 1267,
+     "refused": 330,
      "not-applicable": 89,
      "fail": 5,
      "link-fail": 1
     },
     "dispositionCounts": {
-     "PASS": 1265,
-     "compiler-failure": 279,
-     "FP-deferred": 5,
-     "not-applicable": 143,
+     "PASS": 1266,
+     "compiler-failure": 276,
+     "FP-deferred": 6,
+     "not-applicable": 144,
      "oracle-unusable": 0
     },
     "refusalsByCode": {
      "E3101": 126,
-     "E2001": 24,
+     "E2001": 26,
      "E2201": 22,
      "E2203": 20,
      "E1205": 17,
      "E3021": 17,
      "E2102": 17,
      "E3030": 15,
-     "E1001": 10,
      "E0112": 10,
      "E3029": 8,
      "E2939": 7,
+     "E1001": 6,
      "E3046": 6,
      "E2920": 6,
      "E2940": 5,
@@ -127,5 +127,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T171533Z"
+ "evidence": ".evidence/ladder/e0/20260909T182954Z"
 }
