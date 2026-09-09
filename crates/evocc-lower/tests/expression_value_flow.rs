@@ -390,6 +390,28 @@ fn inline_calls_preserve_parameters_returns_labels_and_static_identity() {
 }
 
 #[test]
+fn inline_constant_arguments_do_not_duplicate_control_flow_identities() {
+    let prefix = "static __attribute__((always_inline)) int inner(int n){return n;} static __attribute__((always_inline)) int outer(int n){return n+n;}";
+    for (argument, expected) in [
+        ("1 ? 7 : inner(3)", 14),
+        ("1 || inner(3)", 2),
+        ("0 && inner(3)", 0),
+        ("(1 ? -1 : 1U) > 0", 2),
+        ("(1 ? -1 : (0 ? 1U : inner(3))) > 0", 2),
+    ] {
+        agrees(&format!(
+            "{prefix} int main(void){{return outer({argument})!={expected};}}"
+        ));
+    }
+    agrees("static int x;static __attribute__((always_inline)) int *inner(void){return &x;}static __attribute__((always_inline)) int *outer(int *p){return p;}int main(void){return outer(1 ? &x : inner())!=&x;}");
+}
+
+#[test]
+fn inline_constant_replacements_do_not_elide_original_argument_obligations() {
+    evaluates("static __attribute__((always_inline)) int f(int n){return n;}int main(void){return f(2147483647+1);}", Some("E3004"));
+}
+
+#[test]
 fn dereferenced_function_pointers_remain_function_designators() {
     agrees("int f(int n){return n+1;} int main(void){int (*p)(int)=f;return (*p)(6)!=7;}");
 }
