@@ -9439,12 +9439,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: InferredPointerType,
         source: InferredPointerType,
     ) -> bool {
+        // GNU character-pointer conversions may discard immediate const or
+        // volatile qualification. This does not change a const place, an
+        // atomic pointee, or qualifiers nested inside another pointer type.
+        let character = |pointer: InferredPointerType| {
+            !pointer.qualifiers.is_atomic
+                && self.types.get(pointer.pointee).is_some_and(|ty| {
+                    matches!(
+                        ty.kind,
+                        TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                    )
+                })
+        };
         self.function_and_void_pointer_pair(target, source)
             || (self.pointer_conversion_types_compatible(target, source)
-                && qualifiers_include(
-                    target.qualifiers.compatibility(),
-                    source.qualifiers.compatibility(),
-                ))
+                && ((character(target) && character(source))
+                    || qualifiers_include(
+                        target.qualifiers.compatibility(),
+                        source.qualifiers.compatibility(),
+                    )))
     }
 
     fn function_and_void_pointer_pair(
