@@ -1,24 +1,25 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T133504.882775Z",
-  "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+  "run": "20260909T171506.687331Z",
+  "subject": "9a69f0efc9b137d36d959072e6b37243f18298cb",
   "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
+  "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel",
+    "ctest",
+    "torture",
     "--no-build",
     "--jobs",
-    "2",
-    "--allow-qemu-drift"
+    "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel"
+    "ctest",
+    "torture"
   ],
-  "status": "ERROR",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -47,8 +48,8 @@
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T133247Z",
-      "evidence": ".evidence/ladder/e0/20260909T133247Z",
+      "run": "20260909T171506Z",
+      "evidence": ".evidence/ladder/e0/20260909T171506Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -60,65 +61,36 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 25.6,
-      "previous": {
-        "rung": "E0b",
-        "note": "self-checking programs and expected stdout",
-        "outcomes": {
-          "not-run": 209,
-          "refused": 11
-        },
-        "refusals": {
-          "E3101": 8,
-          "E3030": 1,
-          "E2102": 1,
-          "E2203": 1
-        },
-        "baselineFailures": 0,
-        "failingUnits": [],
-        "total": 220,
-        "passed": 0,
-        "kind": "programs",
-        "runtimeDiagnostics": {},
-        "dispositions": {
-          "PASS": 0,
-          "compiler-failure": 213,
-          "FP-deferred": 7,
-          "not-applicable": 0,
-          "oracle-unusable": 0
-        },
-        "status": "INCOMPLETE",
-        "run": "20260909T132247Z",
-        "evidence": ".evidence/ladder/e0/20260909T132247Z"
-      },
+      "seconds": 26.8,
+      "previous": null,
       "measurement": {
-        "run": "20260909T132841.817643Z",
-        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
-        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
+        "run": "20260909T171506.687331Z",
+        "subject": "9a69f0efc9b137d36d959072e6b37243f18298cb",
+        "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00"
       }
     },
     "torture": {
       "rung": "E0a",
       "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
       "outcomes": {
-        "pass": 1259,
-        "refused": 338,
+        "pass": 1265,
+        "refused": 332,
         "not-applicable": 89,
         "fail": 5,
         "link-fail": 1
       },
       "refusals": {
-        "E3101": 128,
+        "E3101": 126,
         "E2001": 24,
         "E2201": 22,
         "E2203": 20,
-        "E2102": 18,
         "E1205": 17,
         "E3021": 17,
+        "E2102": 17,
         "E3030": 15,
         "E1001": 10,
         "E0112": 10,
-        "E3029": 9,
+        "E3029": 8,
         "E2939": 7,
         "E3046": 6,
         "E2920": 6,
@@ -128,13 +100,12 @@
         "E2933": 2,
         "E1006": 2,
         "E1007": 2,
-        "E2202": 2,
         "E0002": 1,
         "E3026": 1,
         "E2935": 1,
         "E1002": 1,
+        "E2202": 1,
         "E2101": 1,
-        "E1003": 1,
         "E2208": 1,
         "E3033": 1,
         "E2204": 1,
@@ -143,7 +114,7 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1259,
+      "passed": 1265,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3004 signed-integer-overflow": 2,
@@ -152,15 +123,15 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "dispositions": {
-        "PASS": 1259,
-        "compiler-failure": 293,
-        "FP-deferred": 0,
-        "not-applicable": 140,
+        "PASS": 1265,
+        "compiler-failure": 279,
+        "FP-deferred": 5,
+        "not-applicable": 143,
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T074333Z",
-      "evidence": ".evidence/ladder/e0/20260909T074333Z",
+      "run": "20260909T171533Z",
+      "evidence": ".evidence/ladder/e0/20260909T171533Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -172,12 +143,12 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 448.6,
+      "seconds": 190.8,
       "previous": null,
       "measurement": {
-        "run": "20260909T074238.247563Z",
-        "subject": "c461caf947738d9fb63beae8d307db5099a64ecc",
-        "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e"
+        "run": "20260909T171506.687331Z",
+        "subject": "9a69f0efc9b137d36d959072e6b37243f18298cb",
+        "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00"
       }
     },
     "csmith": {
@@ -194,8 +165,8 @@
       "passed": 932,
       "kind": "programs",
       "status": "INCOMPLETE",
-      "run": "20260908T080716Z",
-      "evidence": ".evidence/ladder/csmith/20260908T080716Z",
+      "run": "20260909T162714Z",
+      "evidence": ".evidence/ladder/csmith/20260909T162714Z",
       "receipt": "tests/contracts/ladder-csmith-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -208,10 +179,10 @@
         "--programs",
         "500",
         "--jobs",
-        "4"
+        "2"
       ],
       "exitCode": 0,
-      "seconds": 1384.6,
+      "seconds": 2690.5,
       "previous": {
         "rung": "E0c",
         "note": "original seeds; unavailable oracles are not passes",
@@ -226,13 +197,13 @@
         "passed": 932,
         "kind": "programs",
         "status": "INCOMPLETE",
-        "run": "20260908T061706Z",
-        "evidence": ".evidence/ladder/csmith/20260908T061706Z"
+        "run": "20260908T080716Z",
+        "evidence": ".evidence/ladder/csmith/20260908T080716Z"
       },
       "measurement": {
-        "run": "20260908T080325.213428Z",
-        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
-        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
+        "run": "20260909T162714.692264Z",
+        "subject": "7de9b39225518f254406dcd76ca862fa14122cb7",
+        "driverSha256": "de76e7d611b6fa7660922b8f78f7a56793fba973b6abb40aeaf2235de9b3b46b"
       }
     },
     "zlib": {

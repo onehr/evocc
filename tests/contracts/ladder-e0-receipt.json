@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T133247Z",
-  "subject": "33bc3d4",
-  "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
+  "run": "20260909T171533Z",
+  "subject": "9a69f0e",
+  "driverSha256": "120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -56,38 +56,76 @@
    "timeoutPolicy": "multiply only by the original dg-timeout-factor"
   },
   "suites": {
-   "ctest": {
+   "torture": {
     "pin": {
-     "repo": "https://github.com/c-testsuite/c-testsuite.git",
-     "commit": "5c7275656d75",
-     "subdir": "tests/single-exec"
+     "repo": "https://github.com/gcc-mirror/gcc.git",
+     "ref": "releases/gcc-16.2.0",
+     "subdir": "gcc/testsuite/gcc.c-torture/execute"
     },
-    "sourceDirectory": ".build/ladder/ctest/tests/single-exec",
-    "sourceCommit": "5c7275656d751de0e68b2d340a95b5681858ed07",
-    "programs": 220,
+    "sourceDirectory": ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute",
+    "sourceCommit": "78d4ac73dd391005b895a6148cd9831e28e1208b",
+    "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 209,
-     "refused": 11
+     "pass": 1265,
+     "refused": 332,
+     "not-applicable": 89,
+     "fail": 5,
+     "link-fail": 1
     },
     "dispositionCounts": {
-     "PASS": 209,
-     "compiler-failure": 4,
-     "FP-deferred": 7,
-     "not-applicable": 0,
+     "PASS": 1265,
+     "compiler-failure": 279,
+     "FP-deferred": 5,
+     "not-applicable": 143,
      "oracle-unusable": 0
     },
     "refusalsByCode": {
-     "E3101": 8,
-     "E3030": 1,
-     "E2102": 1,
-     "E2203": 1
+     "E3101": 126,
+     "E2001": 24,
+     "E2201": 22,
+     "E2203": 20,
+     "E1205": 17,
+     "E3021": 17,
+     "E2102": 17,
+     "E3030": 15,
+     "E1001": 10,
+     "E0112": 10,
+     "E3029": 8,
+     "E2939": 7,
+     "E3046": 6,
+     "E2920": 6,
+     "E2940": 5,
+     "E2913": 3,
+     "E2903": 3,
+     "E2933": 2,
+     "E1006": 2,
+     "E1007": 2,
+     "E0002": 1,
+     "E3026": 1,
+     "E2935": 1,
+     "E1002": 1,
+     "E2202": 1,
+     "E2101": 1,
+     "E2208": 1,
+     "E3033": 1,
+     "E2204": 1,
+     "E2929": 1
     },
-    "failuresByInterpreterVerdict": {},
-    "appliedOptions": {},
-    "programsWithUnhandledRequirements": 0
+    "failuresByInterpreterVerdict": {
+     "E3004 signed-integer-overflow": 2,
+     "E3008 interpreter-fuel-exhausted": 2,
+     "E3039 external-call-not-executable": 1,
+     "E3001 read-of-uninitialized-object": 1
+    },
+    "appliedOptions": {
+     "-std=gnu89": 75,
+     "-fwrapv": 12,
+     "-fno-strict-overflow": 1
+    },
+    "programsWithUnhandledRequirements": 88
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T133247Z"
+ "evidence": ".evidence/ladder/e0/20260909T171533Z"
 }

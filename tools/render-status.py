@@ -28,7 +28,7 @@ OUT = ROOT / "docs" / "status.md"
 
 # A reading of the evidence, not a measurement: ten steps, set by hand.
 QUESTIONS = [
-    ("Q0 ", 9, "{revisions} , 40 ,0 "),
+    ("Q0 ", 9, "{revisions} ,"),
     ("Q1 kernel ", 4, " {parse}, {lower}, 384/384"),
     ("Q2 e-graph pipeline", 3, ", GCC -O2 "),
     ("Q3 ", 3, ",(13 3 )"),

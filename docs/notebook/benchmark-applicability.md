@@ -52,10 +52,17 @@ Commands and outcomes are in
 
 These identities receive FP-deferred, never PASS. Their existing raw failures
 are retained, and the new labels are measured only by the next real replay.
-`stdarg-4` is deliberately not included: its first refusal exposed an
+`stdarg-4` was deliberately not included: its first refusal exposed an
 integer-only always-inline list-copy defect, reproduced separately by
 `tests/fixtures/inline-variadic-copy.c`; floating syntax is not permission to
-hide that defect. Integer `_Complex` cases remain separate open coverage.
+hide that defect. After repair, original replay `20260909T171533Z` advances
+from the line-19 list initializer to line 9's `va_arg(ap, double)`, called
+from `main -> f1 -> f1i`. The full original passes sealed GCC-14/Clang-19
+at O0/O2, and the integer-only reduction passes both interpreters and both
+native links (`20260910-inline-variadic/results.txt` under the probe directory).
+This identifies reached FP execution for its next classification; it does
+not relabel the frozen run or claim the original passes. Integer `_Complex`
+cases remain separate open coverage.
 
 ## Explicitly excluded GNU function extensions
 
@@ -117,3 +124,28 @@ storage-order attributes remain reviewed-profile exclusions; the other three
 must not be relabelled to hide the over-broad refusal. New classification
 entries apply on the next actual replay, not retroactively to this sealed
 run's counts or raw outcomes.
+
+## Reference-baseline failures, not subject regressions
+
+The 17 musl failures in `20260909T132842Z/baseline-REPORT` and toybox's one
+failure in `20260909T133141Z/baseline-tests.log` remain failures in their
+original captures. The following groups partition those 18 test identities;
+they are not additional compiler program counts or newly passing tests.
+
+| Cases | Count | Observed baseline stop |
+|---|---:|---|
+| musl `api/main` | 1 | The pinned libc-test requests `_PC_TIMESTAMP_RESOLUTION` and `_SC_XOPEN_UUCP`, absent from the reference musl headers; its executable is not built. |
+| musl `dlopen`, `tls_align`, `tls_align_dlopen`, `tls_init_dlopen`, `tls_get_new-dtv` | 5 | The recorded lane uses `--disable-shared` and static test linkage; these tests require dynamic loading or link a shared object. |
+| musl `strptime`, normal and static | 2 | Reference parsing disagrees for `%s` and abbreviated `%z`. |
+| musl `strtold`, normal and static; `powf` | 3 | Reference floating rounding/exception mismatches. |
+| musl `wordexp`, normal and static | 2 | Reference word expansion and shell diagnostics disagree with the test expectations; library-versus-shell attribution remains open. |
+| musl `daemon-failure`, normal and static | 2 | Timeout while the test fills the descriptor table; the observed 1,048,576 descriptor limit is a hypothesis for cost, not a proved cause. |
+| musl `pthread_atfork-errno-clobber`, normal and static | 2 | The test expects `RLIMIT_NPROC=0` to prevent a fork, but the container runs as root. |
+| toybox `chattr immutable` | 1 | The mounted filesystem rejects the initial flag query with ENOTTY. |
+
+The last two rows have an independent, bounded environment reproduction in
+`.evidence/builtin-probes/20260910-baseline-context/results.txt`: a read-only
+flag query returns ENOTTY; a single root fork succeeds at NPROC=0, while the
+same process after dropping to UID 65534 receives EAGAIN. This changes no
+benchmark timeout, source, denominator or receipt. No full baseline-clean
+claim is made, and the remaining runtime causes still require investigation.
