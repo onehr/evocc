@@ -25,6 +25,42 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn dereferenced_arrays_decay_without_loading_the_array_object() {
+    let source = r#"
+        typedef char Row[4];
+        int evaluations;
+        Row *once(Row *p) { evaluations++; return p; }
+        char *first(Row *p) { return *p; }
+        int main(void) {
+            Row rows[2] = {{1, 2, 3, 4}, {5, 6, 7, 8}};
+            Row *p = rows;
+            char *a = *once(p++);
+            if (evaluations != 1 || a[2] != 3 || p != &rows[1]) return 1;
+            char *b = *(evaluations ? p : p - 1);
+            b[3] = 42;
+            if (first(p)[3] != 42) return 2;
+            int cube[1][2][3] = {{{9, 10, 11}, {12, 13, 14}}};
+            int (*q)[1][2][3] = &cube;
+            return (*q)[0][1][2] != 14;
+        }
+    "#;
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {} {:?}",
+                String::from_utf8_lossy(&output.stderr),
+                output.stdout
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "dereferenced-arrays");
+}
+
+#[test]
 fn unspecified_declarations_use_the_composite_call_interface() {
     let mut failures = Vec::new();
     for declarations in [
