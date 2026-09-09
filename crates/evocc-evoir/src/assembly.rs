@@ -199,7 +199,7 @@ impl InlineAssembly {
             let valid = match constraint {
                 "r" | "rZ" => assembly_register_type(&input.value.ty),
                 "Q" | "Qo" => matches!(input.value.ty, EvoIRType::Ptr(_)),
-                "p" => matches!(input.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }),
+                "p" => assembly_address_type(&input.value.ty),
                 "i" => matches!(
                     input.value.ty,
                     EvoIRType::Bits(_) | EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
@@ -239,12 +239,14 @@ impl InlineAssembly {
         let operands = self
             .outputs
             .iter()
-            .map(|output| (output.name.as_str(), output.constraint.as_str()))
-            .chain(
-                self.inputs
-                    .iter()
-                    .map(|input| (input.name.as_str(), input.constraint.as_str())),
-            )
+            .map(|output| (output.name.as_str(), output.constraint.as_str(), &output.ty))
+            .chain(self.inputs.iter().map(|input| {
+                (
+                    input.name.as_str(),
+                    input.constraint.as_str(),
+                    &input.value.ty,
+                )
+            }))
             .collect::<Vec<_>>();
         let bytes = self.template.as_bytes();
         let mut position = 0;
@@ -262,7 +264,7 @@ impl InlineAssembly {
             let modifier = bytes
                 .get(position)
                 .copied()
-                .filter(|byte| matches!(byte, b'w' | b'x' | b'l' | b'c'));
+                .filter(|byte| matches!(byte, b'w' | b'x' | b'l' | b'c' | b'a'));
             position += usize::from(modifier.is_some());
             let operand = if bytes.get(position) == Some(&b'[') {
                 position += 1;
@@ -286,7 +288,7 @@ impl InlineAssembly {
                 }
                 operands
                     .iter()
-                    .position(|(candidate, _)| !name.is_empty() && *candidate == name)
+                    .position(|(candidate, _, _)| !name.is_empty() && *candidate == name)
             } else if let Some(digit) = bytes.get(position).filter(|byte| byte.is_ascii_digit()) {
                 position += 1;
                 if modifier == Some(b'l') || bytes.get(position).is_some_and(u8::is_ascii_digit) {
@@ -299,21 +301,41 @@ impl InlineAssembly {
             } else {
                 None
             };
-            let Some((_, constraint)) = operand.and_then(|index| operands.get(index)) else {
+            let Some((_, constraint, ty)) = operand.and_then(|index| operands.get(index)) else {
                 return Err(format!(
                     "unsupported assembly reference {}",
                     &self.template[start..]
                 ));
             };
-            if *constraint == "rZ" && !matches!(modifier, Some(b'w' | b'x')) {
+            let (constraint, _) = assembly_register_binding(constraint)?;
+            if modifier == Some(b'a')
+                && !(operand.is_some_and(|index| index >= self.outputs.len())
+                    && matches!(constraint, "r" | "p")
+                    && assembly_address_type(ty))
+            {
+                return Err(format!(
+                    "assembly {} reference requires a p or r pointer/64-bit input",
+                    &self.template[start..position]
+                ));
+            }
+            if constraint == "rZ" && !matches!(modifier, Some(b'w' | b'x')) {
                 return Err("assembly rZ reference requires %w or %x".into());
             }
-            if modifier == Some(b'c') && !matches!(*constraint, "I" | "J" | "K" | "L" | "i" | "n") {
+            if modifier == Some(b'c') && !matches!(constraint, "I" | "J" | "K" | "L" | "i" | "n") {
                 return Err("assembly %c reference requires an immediate constraint".into());
             }
         }
         Ok(())
     }
+}
+
+/// Address operands occupy a full target general-purpose register.
+#[must_use]
+pub fn assembly_address_type(ty: &EvoIRType) -> bool {
+    matches!(
+        ty,
+        EvoIRType::Bits(64) | EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+    )
 }
 
 /// Values which the existing general-register assembly constraint can carry.

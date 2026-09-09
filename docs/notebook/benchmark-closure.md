@@ -23,6 +23,17 @@ Only one heavyweight benchmark invocation runs at once.
 
 ## Completion checklist
 
+The 2026-09-09 reviewed disposition supersedes the earlier "only FP may be
+deferred" acceptance wording below. Keep every original identity in exactly
+one of five categories: PASS, compiler failure, FP deferred, evidenced not
+applicable, or oracle-unusable. Closure requires zero compiler failures and
+evidence for every non-PASS; an unsupported implementation is not by itself
+evidence of inapplicability. Default execution is gnu11 on aarch64-linux;
+required test options and target selectors must be consumed explicitly.
+The approved review schedules address operands, GNU signed shifts, stack and
+function alignment, and 128-bit predicates first, followed by the reviewed
+memory/ABI and type coverage work. The final campaign remains sequential.
+
 The unit of work is the complete issue inventory below, not the next individual
 repair. The user's 2026-09-08 instruction makes floating-point execution the
 only deferred implementation category. Non-floating-point vectors, variable

@@ -927,7 +927,7 @@ fn emit_assembly(
     let operands = body.numbered();
     // The reference is resolved against the operand it names, at the width the
     // modifier asks for or the operand's own.
-    let render = |operand: &AsmOperand, width: Option<RegClass>| -> String {
+    let render = |operand: &AsmOperand, width: Option<RegClass>, address: bool| -> String {
         match &operand.value {
             AsmValue::Imm(value) => format!("{value}"),
             AsmValue::Symbol { name, addend } => {
@@ -952,7 +952,7 @@ fn emit_assembly(
             }
             AsmValue::Reg(reg) => {
                 let spelled = spell(*reg, width.unwrap_or(reg.class));
-                if matches!(operand.constraint, AsmConstraint::Memory { .. }) {
+                if address || matches!(operand.constraint, AsmConstraint::Memory { .. }) {
                     format!("[{spelled}]")
                 } else {
                     spelled
@@ -1008,10 +1008,11 @@ fn emit_assembly(
                 }
             }
         }
-        // A width modifier before the number or the name.
+        // Address operands print a bracketed full-width register.
+        let address = characters[index] == 'a';
         let width = match characters[index] {
             'w' => Some(RegClass::Gpr32),
-            'x' => Some(RegClass::Gpr64),
+            'x' | 'a' => Some(RegClass::Gpr64),
             _ => None,
         };
         let at = if width.is_some() || characters[index] == 'c' {
@@ -1037,7 +1038,7 @@ fn emit_assembly(
                     .iter()
                     .find(|operand| operand.name.as_deref() == Some(name.as_str()))
                 {
-                    rendered.push_str(&render(operand, width));
+                    rendered.push_str(&render(operand, width, address));
                     index = close + 1;
                     continue;
                 }
@@ -1046,7 +1047,7 @@ fn emit_assembly(
         // `%0` to `%9`.
         if let Some(digit) = characters[at].to_digit(10) {
             if let Some(operand) = operands.get(digit as usize) {
-                rendered.push_str(&render(operand, width));
+                rendered.push_str(&render(operand, width, address));
                 index = at + 1;
                 continue;
             }

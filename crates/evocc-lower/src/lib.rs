@@ -4215,7 +4215,12 @@ impl<'a> FunctionLowerer<'a> {
                 [b'I' | b'J' | b'K' | b'L' | b'i' | b'n' | b'm', b'r']
                     | [b'r', b'I' | b'J' | b'K' | b'L' | b'i' | b'n' | b'm']
             );
-            let constraint = if register_alternative {
+            let constraint = if operand.constraint == "p" {
+                if !evocc_evoir::assembly_address_type(&value.ty) {
+                    return Err(refuse(operand.constraint.clone()));
+                }
+                "r".to_owned()
+            } else if register_alternative {
                 if !evocc_evoir::assembly_register_type(&value.ty) {
                     return Err(refuse(operand.constraint.clone()));
                 }

@@ -21,7 +21,7 @@ mod variadic;
 pub use variadic::{VariadicAccess, VariadicOp};
 
 pub use assembly::{
-    assembly_clobber, assembly_memory_constraint, assembly_register_binding,
+    assembly_address_type, assembly_clobber, assembly_memory_constraint, assembly_register_binding,
     assembly_register_type, AssemblyEdge, AssemblyInput, AssemblyLabel, AssemblyOutput,
     InlineAssembly,
 };
