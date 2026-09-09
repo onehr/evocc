@@ -13,10 +13,14 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import mixed  # noqa: E402
+import musl  # noqa: E402
+import tinycc  # noqa: E402
+import toybox  # noqa: E402
 
 
 def record(cwd: str, *argv: str) -> bytes:
@@ -158,6 +162,46 @@ class Specifiers(unittest.TestCase):
             self.assertTrue(text.startswith(" void die(void);"))
             self.assertIn('"_Noreturn"', text)
             self.assertIn("#define _Noreturn __attribute__", text)
+
+
+class PreparationPreservesSource(unittest.TestCase):
+    def test_exported_headers_keep_include_next_and_whitespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wrapper = root / "gccinc/stdint.h"
+            header = root / "usr/include/example.h"
+            wrapper.parent.mkdir(parents=True)
+            header.parent.mkdir(parents=True)
+            wrapper.write_bytes(b'#include_next <stdint.h>\n')
+            header.write_bytes(b'unsigned\flong number;\n')
+            mixed._adjust_sysroot(root)
+            self.assertTrue(wrapper.is_file())
+            self.assertEqual(wrapper.read_bytes(), b'#include_next <stdint.h>\n')
+            self.assertEqual(header.read_bytes(), b'unsigned\flong number;\n')
+
+    def test_variable_length_profile_macro_comes_from_the_compiler(self):
+        self.assertFalse(any('__STDC_NO_VLA__' in flag for flag in mixed.SYSROOT_DEFINES))
+
+    def test_supported_specifiers_and_whitespace_are_not_deleted(self):
+        contents = (
+            b'_Noreturn void stop(void);\n'
+            b'unsigned\flong number;\n'
+            b'const char *spelling = "_Noreturn";\n'
+            b'int function(void) {\v return 0; }\n'
+        )
+        for adapter in [musl, tinycc, toybox]:
+            with self.subTest(adapter=adapter.__name__):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    source, build, tests = root / "source", root / "build", root / "tests"
+                    for path in [source, build, tests]:
+                        path.mkdir()
+                    (source / "fixture.c").write_bytes(contents)
+                    with patch.object(mixed, "install_recorder"):
+                        args = (build, source, tests) if adapter is musl else (build, source)
+                        prepared = adapter.prepare(*args)[0]
+                    self.assertEqual((prepared / "fixture.c").read_bytes(), contents)
+                    self.assertEqual((source / "fixture.c").read_bytes(), contents)
 
 
 class Substitution(unittest.TestCase):
