@@ -32,6 +32,7 @@ import datetime as dt
 import fnmatch
 import hashlib
 import json
+import math
 import re
 import shlex
 import shutil
@@ -45,6 +46,8 @@ EVIDENCE = ROOT / ".evidence" / "ladder" / "e0"
 RECEIPT = ROOT / "tests" / "contracts" / "ladder-e0-receipt.json"
 IMAGE = "evo-flight-lab:sealed"
 TARGET = "aarch64-unknown-linux-gnu"
+TARGET_EVIDENCE = ".evidence/builtin-probes/20260909-torture-requirements/results.txt"
+STACK_BYTES = 8388608
 # gcc/testsuite/lib/target-supports.exp from the pinned torture source:
 # these predicates describe the target, not the subject's implementation.
 # In particular, missing computed-goto lowering cannot make indirect_jumps
@@ -55,6 +58,12 @@ TARGET_PREDICATES = {
     'hosted': True, 'freestanding': False, 'ia32': False,
     'label_values': True, 'indirect_jumps': True, 'indirect_calls': True,
     'return_address': True, 'untyped_assembly': True,
+    # Pinned target-supports.exp and the sealed probe above. These are
+    # properties of the GCC test target, not excuses to omit subject failures.
+    'trampolines': True, 'fileio': True, 'mmap': True, 'signal': True,
+    'fpic': True, 'c99_runtime': True, 'stdint_types': True, 'double64plus': True,
+    'unwrapped': True, 'run_expensive_tests': True, 'dfp': True, 'dfprt': True,
+    'newlib_nano_io': False, 'stack_size': False, 'vxworks_kernel': False,
 }
 PINS = {
     "ctest": {
@@ -234,8 +243,9 @@ def selector_words_match(words: list[str]) -> bool:
         if operator in words:
             split = words.index(operator)
             left = selector_words_match(words[:split])
-            right = selector_words_match(words[split + 1:])
-            return left or right if operator == '||' else left and right
+            if (operator == '||' and left) or (operator == '&&' and not left):
+                return left
+            return selector_words_match(words[split + 1:])
     if words[0] == '!':
         return not selector_words_match(words[1:])
     if len(words) > 1:
@@ -251,6 +261,27 @@ def selector_words_match(words: list[str]) -> bool:
     raise ValueError(f"unsupported target predicate: {word}")
 
 
+def required_stack_bytes(expression: str) -> int:
+    """The pinned tests use integer sums/products, not arbitrary Tcl code."""
+    number = r'(?:0x[0-9a-fA-F]+|[0-9]+)'
+    if not re.fullmatch(rf'\s*{number}(?:\s*[+*]\s*{number})*\s*', expression):
+        raise ValueError('unsupported stack requirement expression')
+    return sum(math.prod(int(n.strip(), 0) for n in term.split('*')) for term in expression.split('+'))
+
+
+def conditional_requirement_matches(arguments: list[str], flags: list[str]) -> bool:
+    if not target_matches(arguments[1]):
+        return False
+    includes = directive_words(arguments[2]) if len(arguments) > 2 else []
+    excludes = directive_words(arguments[3]) if len(arguments) > 3 else []
+
+    def matches(pattern):
+        return any(fnmatch.fnmatchcase(flag, pattern) for flag in flags)
+
+    return ((not includes or includes == [''] or any(matches(p) for p in includes))
+            and not any(matches(p) for p in excludes if p))
+
+
 def program_options(source: Path) -> dict:
     """Apply selected options; unknown applicability is never an exclusion."""
     supported = {
@@ -259,6 +290,8 @@ def program_options(source: Path) -> dict:
         "-std=gnu89", "-std=gnu11",
     }
     base, additional, unhandled, applicability, skips = [], [], [], [], []
+    annotations, expected_failures = [], []
+    timeout_factor = 1
     tokens = re.finditer(
         r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|/\*.*?\*/|//[^\n]*''',
         source.read_bytes().decode("utf-8", errors="surrogateescape"), re.S,
@@ -273,6 +306,7 @@ def program_options(source: Path) -> dict:
                 # The first braced word is this directive; later comments or
                 # directives are not part of its argument list.
                 body = directive_words(directive)[0]
+                directive = '{ ' + body + ' }'
                 words = directive_words(body)
                 command, arguments = words[0], words[1:]
                 selected = True
@@ -297,6 +331,29 @@ def program_options(source: Path) -> dict:
                         applicability.append({'reason': 'required target feature absent', 'directive': body})
                 elif command == 'dg-skip-if' and 2 <= len(arguments) <= 4:
                     skips.append((body, arguments))
+                elif command in ('dg-xfail-if', 'dg-xfail-run-if') and 2 <= len(arguments) <= 4:
+                    expected_failures.append((body, arguments))
+                elif command == 'dg-add-options' and arguments in (['stack_size'], ['ieee']):
+                    # Neither helper adds a flag on this Linux board:
+                    # no board gcc,stack_size setting and no Alpha/SH/RX ISA.
+                    annotations.append({'directive': body, 'appliedOptions': []})
+                elif command in ('dg-require-weak', 'dg-require-alias') and arguments == ['']:
+                    annotations.append({'directive': body, 'satisfied': True, 'evidence': TARGET_EVIDENCE})
+                elif command == 'dg-require-stack-size' and len(arguments) == 1:
+                    required = required_stack_bytes(arguments[0])
+                    annotations.append({'directive': body, 'requiredBytes': required, 'availableBytes': STACK_BYTES, 'evidence': TARGET_EVIDENCE})
+                    if required > STACK_BYTES:
+                        applicability.append({'reason': 'required stack size exceeds target limit', 'directive': body})
+                elif command == 'dg-prune-output' and len(arguments) == 1:
+                    # This filters compiler diagnostics in DejaGNU. Our
+                    # success criterion is exit status, never warning text;
+                    # in particular it must not filter program stdout.
+                    annotations.append({'directive': body, 'compileDiagnosticsOnly': True})
+                elif command == 'dg-timeout-factor' and len(arguments) == 1:
+                    timeout_factor = int(arguments[0])
+                    if timeout_factor <= 0:
+                        raise ValueError('nonpositive timeout factor')
+                    annotations.append({'directive': body, 'factor': timeout_factor})
                 else:
                     raise ValueError('unsupported requirement')
             except (ValueError, IndexError) as error:
@@ -308,18 +365,23 @@ def program_options(source: Path) -> dict:
     applicability.extend({'reason': 'unsupported option', 'option': flag} for flag in unsupported)
     for body, arguments in skips:
         try:
-            includes = directive_words(arguments[2]) if len(arguments) > 2 else []
-            excludes = directive_words(arguments[3]) if len(arguments) > 3 else []
-            def matches(pattern):
-                return any(fnmatch.fnmatchcase(flag, pattern) for flag in flags)
-            if (target_matches(arguments[1])
-                    and (not includes or includes == [''] or any(matches(p) for p in includes))
-                    and not any(matches(p) for p in excludes if p)):
+            if conditional_requirement_matches(arguments, flags):
                 applicability.append({'reason': arguments[0], 'directive': body})
         except ValueError as error:
             unhandled.append(body)
             applicability.append({'reason': str(error), 'directive': body, 'unresolved': True})
+    for body, arguments in expected_failures:
+        try:
+            selected = conditional_requirement_matches(arguments, flags)
+            annotations.append({'directive': body, 'expectedFailure': selected, 'verdictPolicy': 'actual exit status and original expected output remain decisive'})
+        except ValueError as error:
+            # An xfail annotation changes neither applicability nor execution.
+            annotations.append({'directive': body, 'expectedFailure': 'unresolved', 'reason': str(error)})
     result = {"applied": [flag for flag in flags if flag in supported], "unhandled": unhandled}
+    if annotations:
+        result['annotations'] = annotations
+    if timeout_factor != 1:
+        result['timeoutFactor'] = timeout_factor
     if applicability:
         result['applicability'] = applicability
     return result
@@ -340,7 +402,7 @@ def emit(evocc: Path, work: Path, names: list[str], inc: list[str]) -> dict[str,
         try:
             p = sh(
                 [str(evocc), f"--target={TARGET}", *inc, *options["applied"], "--emit=asm", str(src)],
-                timeout=60,
+                timeout=60 * options.get('timeoutFactor', 1),
             )
         except subprocess.TimeoutExpired:
             rows[name] = {"emit": "timeout", "options": options}
@@ -371,13 +433,18 @@ for s in asm/*.s; do b=$(basename $s .s)
   [ -f "$s" ] || continue
   if ! gcc -c $s -o bin/$b.o 2>out/$b.asm.err; then echo "$b asm-fail"; continue; fi
   if ! gcc -static -o bin/$b bin/$b.o 2>out/$b.link.err; then echo "$b link-fail $(grep -m1 -o 'undefined reference to [^ ]*' out/$b.link.err | cut -d' ' -f4)"; continue; fi
-  timeout 10 ./bin/$b > out/$b.stdout 2>out/$b.stderr; rc=$?
+  limit=10
+  if [ -f src/$b.timeout ]; then read -r limit < src/$b.timeout; fi
+  timeout "$limit" ./bin/$b > out/$b.stdout 2>out/$b.stderr; rc=$?
   if [ $rc -eq 0 ] && { [ ! -s src/$b.expected ] || cmp -s out/$b.stdout src/$b.expected; }; then echo "$b pass"; else echo "$b fail rc=$rc"; fi
 done
 """
 
 
 def run_in_container(work: Path) -> dict[str, dict]:
+    for source in (work / 'src').glob('*.c'):
+        factor = program_options(source).get('timeoutFactor', 1)
+        source.with_suffix('.timeout').write_text(str(10 * factor) + '\n')
     (work / "run.sh").write_text(RUNNER)
     p = sh(
         [
@@ -415,17 +482,18 @@ def run_in_container(work: Path) -> dict[str, dict]:
 
 def interpreter_verdict(evocc: Path, work: Path, name: str, inc: list[str]) -> str:
     source = work / "src" / f"{name}.c"
+    options = program_options(source)
     try:
         p = sh(
             [
                 str(evocc),
                 f"--target={TARGET}",
                 *inc,
-                *program_options(source)["applied"],
+                *options["applied"],
                 "--interpret-evoir",
                 str(source),
             ],
-            timeout=30,
+            timeout=30 * options.get('timeoutFactor', 1),
         )
     except subprocess.TimeoutExpired:
         return "interpreter-timeout"
@@ -460,6 +528,13 @@ def main() -> int:
         "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
         "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
         "target": TARGET,
+        "targetRequirements": {
+            "evidence": TARGET_EVIDENCE, "predicates": TARGET_PREDICATES,
+            "stackBytes": STACK_BYTES, "boardStackSizeOption": None,
+            "expensiveTests": True, "statusWrapper": False,
+            "defaultTimeoutsSeconds": {"emit": 60, "interpret": 30, "run": 10},
+            "timeoutPolicy": "multiply only by the original dg-timeout-factor",
+        },
         "suites": {},
     }
     applicability_evidence = {}
