@@ -111,6 +111,20 @@ fn computed_goto_is_preserved_but_execution_and_lowering_fail_closed() {
 }
 
 #[test]
+fn addressed_expression_labels_keep_their_conditional_entry_edges() {
+    for body in [
+        "if(0) note(({__label__ here; here: (unsigned long)&&here;}));",
+        "if(0) {unsigned long p=({__label__ here; here: (unsigned long)&&here;}); note(p);}",
+        "if(1) {} else note(({__label__ here; here: (unsigned long)&&here;}));",
+    ] {
+        let source = format!(
+            "int called; void note(unsigned long p){{called++;}} int main(void){{{body} return called;}}"
+        );
+        check_label_address(&source, Ok(0), &["block_addr", "cond_br"]);
+    }
+}
+
+#[test]
 fn an_address_only_dead_label_keeps_the_reachability_boundary() {
     // Section 3.7 admits the address, but 2.5 still forbids a validated
     // block without a terminator-edge path from entry. Do not weaken SSA.
