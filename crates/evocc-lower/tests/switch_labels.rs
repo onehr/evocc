@@ -4,7 +4,7 @@ use evocc_lex::Lexer;
 use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
-fn assert_execution(source: &str) {
+fn assert_execution(source: &str) -> evocc_evoir::Module {
     let arena = Arena::default();
     let file = FileId::new(45030);
     let mut lexer = Lexer::new(file, source);
@@ -41,6 +41,7 @@ fn assert_execution(source: &str) {
     )
     .unwrap();
     assert_eq!(result.return_values[0].raw_bits, 0);
+    module
 }
 
 #[test]
@@ -226,4 +227,31 @@ fn constant_condition_removes_only_the_ordinary_entry_not_targeted_labels() {
             .any(|i| matches!(i, evocc_evoir::Inst::Call { callee, .. } if callee == "link_error")),
         "unreachable call prevents the native program from linking"
     );
+}
+
+#[test]
+fn constant_switch_dispatch_does_not_emit_unselected_external_calls() {
+    for source in [
+        include_str!("../../../tests/fixtures/constant-switch-linkage.c"),
+        "extern void __bad_size_call_parameter(void); int main(void){int n=0; switch(3){case 1 ... 3:n=7; case 4:n+=2;break;default:__bad_size_call_parameter();}return n!=9;}",
+        "extern void __bad_size_call_parameter(void); int main(void){int n=0; switch(sizeof(int)){if(0){case 4:n=7;break;}default:__bad_size_call_parameter();}return n!=7;}",
+        "extern void __bad_size_call_parameter(void); int main(void){switch((unsigned char)255){case -1:__bad_size_call_parameter();break;case 255:return 0;default:return 1;}return 2;}",
+        "extern void __bad_size_call_parameter(void); int main(void){switch(9){case 1:__bad_size_call_parameter();break;default:return 0;}return 2;}",
+    ] {
+        let module = assert_execution(source);
+        assert!(
+            !module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call { callee, .. } if callee == "__bad_size_call_parameter")),
+            "constant dispatch leaves an unresolved external call: {source}"
+        );
+    }
+}
+
+#[test]
+fn constant_switch_preserves_label_entry_and_selector_effects() {
+    assert_execution("int main(void){int n=0;goto enter;switch(4){case 3:enter:n+=7;break;case 4:n=2;break;}return n!=7;}");
+    assert_execution(
+        "int main(void){int n=0;switch((n++,4)){case 4:n+=7;break;default:n=99;}return n!=8;}",
+    );
+    assert_execution("int main(void){int n=0;switch(4){case 4:switch(7){case 7:n=5;break;default:n=99;}n+=2;break;default:n=88;}return n!=7;}");
 }
