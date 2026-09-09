@@ -264,7 +264,9 @@ def emit_assembly(
     }
 
 
-def assemble_batch(rows: list[dict], records: dict[str, Record], asm_root: Path) -> None:
+def assemble_batch(
+    rows: list[dict], records: dict[str, Record], asm_root: Path, pristine: Path
+) -> None:
     """Assemble every emitted unit in one container run with the reference GCC."""
     emitted = [row for row in rows if row["outcome"] == "emitted"]
     if not emitted:
@@ -286,7 +288,9 @@ def assemble_batch(rows: list[dict], records: dict[str, Record], asm_root: Path)
     completed = subprocess.run(
         [
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-            "-v", f"{asm_root}:/work/asm", "evo-flight-lab:sealed", "/work/asm/assemble.sh",
+            "-v", f"{asm_root}:/work/asm",
+            "-v", f"{pristine}:/work/build:ro",
+            "evo-flight-lab:sealed", "/work/asm/assemble.sh",
         ],
         capture_output=True,
         text=True,
@@ -604,7 +608,7 @@ def main() -> int:
     rows.extend(reused)
 
     print("k1: assembling with the reference GCC in the sealed container", flush=True)
-    assemble_batch(rows, records, asm_root)
+    assemble_batch(rows, records, asm_root, pristine)
     print("k1: comparing defined symbols against the reference objects", flush=True)
     check_symbol_parity(rows, asm_root, pristine, args.k1_root / "symbols")
 

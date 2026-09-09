@@ -205,6 +205,7 @@ def assemble_argv(
     return [
         compiler,
         *assembler_flags(record),
+        "-Wa,-I,/work/build",
         "-c",
         "-x",
         "assembler",
