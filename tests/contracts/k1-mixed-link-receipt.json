@@ -1,51 +1,42 @@
 {
-  "bisection": {
-    "allowlistSize": 90,
-    "minimalFailingSet": [
-      "arch/arm64/lib/insn.o"
-    ],
-    "result": "minimal-failing-set",
-    "rounds": 9,
-    "runDirectory": ".evidence/k1/measure-20260909T035847Z/bisection-1"
-  },
+  "bisection": null,
   "emulator": {
     "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
     "matchesContract": false,
     "path": "/opt/homebrew/bin/qemu-system-aarch64",
     "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
   },
-  "failingUnits": [
-    "arch/arm64/lib/insn.o"
-  ],
+  "failingUnits": [],
   "failingUnitsByReason": {
     "multiple-definition": 0,
-    "other": 1
+    "other": 0
   },
-  "generatedAt": "2026-09-09T05:01:07Z",
+  "generatedAt": "2026-09-09T06:26:53Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "a09fc8e3c098408a720159e9a89b22c84c5b08ddda4606c7077b784ba9a7e729",
-      "nonce": "k1-20260909T050040Z-0dc5b1c0",
-      "runDirectory": ".evidence/k1/measure-20260909T035847Z/attempt-02/boot",
-      "serialLog": ".evidence/k1/measure-20260909T035847Z/attempt-02/boot/boot.log",
-      "serialLogSha256": "3c7c87d70ce2df18e997bf69e17f2a03236b0eeeb55cb8db77f230031634c83b",
+      "imageSha256": "7cc2381683dc6238f62c8519e35de993cf2acbed0b51bf91e981222cf76b6bb3",
+      "nonce": "k1-20260909T062636Z-8541e8f8",
+      "runDirectory": ".evidence/k1/measure-20260909T053908Z/attempt-01/boot",
+      "serialLog": ".evidence/k1/measure-20260909T053908Z/attempt-01/boot/boot.log",
+      "serialLogSha256": "0904ec05e343f425cfcbfe660ec0a8082be8191676140cc2cabbb11fc5c5cba3",
       "verdict": "PASS"
     },
-    "imageSha256": "a09fc8e3c098408a720159e9a89b22c84c5b08ddda4606c7077b784ba9a7e729",
+    "imageSha256": "7cc2381683dc6238f62c8519e35de993cf2acbed0b51bf91e981222cf76b6bb3",
     "outcomeCounts": {
-      "substituted": 89
+      "substituted": 90
     },
-    "provenVmlinuxSha256": "6a81679ebbe6b2c4728b1478655452de4733c3bf9445e5c3ef3230a5b68f4e56",
+    "provenVmlinuxSha256": "0fd4f3fec627efb2c5adc3357f922e5716e8c72ac1d4fb38af908c816b95bdbd",
     "relinkExitCode": 0,
-    "requestedUnits": 89,
-    "runDirectory": ".evidence/k1/measure-20260909T035847Z/attempt-02/substitution",
+    "requestedUnits": 90,
+    "runDirectory": ".evidence/k1/measure-20260909T053908Z/attempt-01/substitution",
     "substitutedUnits": [
       "arch/arm64/kernel/jump_label.o",
       "arch/arm64/kernel/kaslr.o",
       "arch/arm64/kernel/pi/lib-fdt.o",
       "arch/arm64/kernel/pi/lib-fdt_ro.o",
+      "arch/arm64/lib/insn.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -132,7 +123,7 @@
       "lib/zstd/decompress/zstd_decompress_block.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "6a81679ebbe6b2c4728b1478655452de4733c3bf9445e5c3ef3230a5b68f4e56"
+    "vmlinuxSha256": "0fd4f3fec627efb2c5adc3357f922e5716e8c72ac1d4fb38af908c816b95bdbd"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -149,6 +140,7 @@
     "unitsLinkedIntoVmlinux": [
       "arch/arm64/kernel/jump_label.o",
       "arch/arm64/kernel/kaslr.o",
+      "arch/arm64/lib/insn.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -242,6 +234,7 @@
     "unitsProvenByteIdenticalInVmlinux": [
       "arch/arm64/kernel/jump_label.o",
       "arch/arm64/kernel/kaslr.o",
+      "arch/arm64/lib/insn.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -317,7 +310,7 @@
       "no-symbols": 3,
       "not-linked": 14,
       "proven": 15,
-      "proven-modulo-relocations": 57
+      "proven-modulo-relocations": 58
     }
   },
   "reference": {
@@ -345,14 +338,20 @@
       "refused": 2709
     },
     "refusalCodeCounts": {
-      "E3021": 2707,
+      "E3021": 2419,
+      "E3026": 2,
       "E3029": 1,
-      "E3031": 1
+      "E3031": 1,
+      "E3101": 286
     },
     "refusalsByCode": {
       "E3021": {
         "owner": "front-end",
-        "units": 2707
+        "units": 2419
+      },
+      "E3026": {
+        "owner": "front-end",
+        "units": 2
       },
       "E3029": {
         "owner": "front-end",
@@ -361,21 +360,27 @@
       "E3031": {
         "owner": "front-end",
         "units": 1
+      },
+      "E3101": {
+        "owner": "front-end",
+        "units": 286
       }
     },
     "refusalsByFirstCode": {
-      "E3021": 2707,
+      "E3021": 2419,
+      "E3026": 2,
       "E3029": 1,
-      "E3031": 1
+      "E3031": 1,
+      "E3101": 286
     },
     "refusalsByOwner": {
       "front-end": 2709
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/measure-20260909T035847Z/survey"
+    "runDirectory": ".evidence/k1/measure-20260909T053908Z/survey"
   },
-  "unitsCompiledByEvoccInABootingKernel": 75,
+  "unitsCompiledByEvoccInABootingKernel": 76,
   "unitsExcludedForMultipleDefinition": 0,
-  "unitsProvenPresentInVmlinux": 72,
-  "unitsSubstituted": 89
+  "unitsProvenPresentInVmlinux": 73,
+  "unitsSubstituted": 90
 }

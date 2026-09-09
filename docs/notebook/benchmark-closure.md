@@ -111,10 +111,10 @@ memory/ABI rules still awaiting body revisions have measured probes ready.
 | Approved rule | Current implementation and measured boundary |
 |---|---|
 | AArch64 `%a` address-operand modifier | Implemented; the sealed 90/2,798 lowering result exposes a different tied pointer/integer input. That representation fix is also implemented, with original full-kernel remeasurement pending. |
-| GNU signed-left-shift bit patterns | Implemented without removing the count or other arithmetic obligations. Eleven original torture runtime failures and the ctest runtime failure now pass; `insn.o` boot replay with this fix remains pending. |
+| GNU signed-left-shift bit patterns | Implemented without removing count or other arithmetic obligations. Eleven original torture runtime failures and the ctest runtime failure now pass; `insn.o` remains in the 90-object combination that boots on the first attempt. |
 | Real over-aligned stack frames | Implemented through reserved `x16`; recursive aligned-256/spill fixture passes both interpreters and Darwin/Linux native execution. |
-| Explicit function alignment metadata | RED and implementation in the working branch; focused execution of original `align-3` passes, full changed gate and published-subject replay pending. |
-| Machine lowering of 128-bit signed UB predicates | OPEN: five E4003 originals (`pr122943`, `pr54471`, `pr61375`, `pr63302`, `pr85582-2`); the approved machine sequences have not yet been implemented. |
+| Explicit function alignment metadata | Implemented and merged; original `align-3` passes both interpreters and native Linux; changed gate 3,348 passed / 0 failed, eight existing ignored. Full benchmark replay pending. |
+| Machine lowering of 128-bit signed UB predicates | Implemented; 27 focused tests and 21,074 native boundary checks pass. All five E4003 originals emit and execute through both Linux toolchains; changed gate 599 passed / 0 failed, four existing ignored. Full benchmark replay pending. |
 
 The large-layout reduction for original `991014-1` also has an independently
 measured oracle split: GCC-14 accepts both byte-layout assertions at O0/O2,
@@ -132,7 +132,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 4 | Remaining native failures | `20260909T050443.696884Z`: ctest runtime failures zero; torture 12 runtime failures and one alloca link failure, with every identity retained | `ctest torture` | PARTIAL: eleven original torture runtime failures now pass; remaining failures OPEN |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
-| 7 | Remaining kernel refusals | `20260909T035847.646343Z`: 2,707 tied-input E3021, one computed goto and one frame address; the `%a` modifier is no longer the first error | `kernel` | OPEN: 90 assemble, 89 substitute and boot, 75 proven included; `insn.o` failure retained, later shift/tie fixes not measured in that subject |
+| 7 | Remaining kernel refusals | `20260909T053908.023962Z`: 2,419 E3021 on numeric asm labels, 286 E3101 layout/identity cases, two E3026, one computed goto and one frame address | `kernel` | OPEN: 90 assemble and substitute, first boot passes, 76 proven included; shift/tie repairs are measured, subsequent full-width predicate lowering is not part of this subject |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
@@ -1376,3 +1376,55 @@ The command `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2
 tools/gate-changed.sh a53b3c0 --offline` completed with exit 0 (tests, Clippy
 and fmt) for evocc, evocc-mir, evocc-policy, evocc-proofcheck and evocc-randgate;
 the worktree run used the same target directory by its absolute path.
+
+### 2026-09-09: aligned functions and full-width predicates
+
+`5438c94` implements canonical function `align=N`, maximum alignment across
+redeclarations, emitted `.p2align`, and alignment-aware function addresses
+in both interpreters. Original `align-3` returns zero through both
+interpreters and through GCC-14 / Clang-19 with GNU `as` on Linux.
+The changed gate against `4dc50da` passed 3,348 tests, zero failed and eight
+pre-existing ignored; Clippy and fmt passed. The focused set passed 66 tests.
+Evidence: `.evidence/builtin-probes/20260909-function-alignment/`.
+
+`e71ad8d` records the semantic RED for full-width predicates;
+`d11b20e` implements the carry chains, four-limb magnitude product and
+full-width divisor/count checks without relaxing the validator or admitting
+128-bit division. The focused command `cargo test -p evocc-mir --test
+wide_predicates --test section5_wide_integers --offline --no-fail-fast`
+passed 27 tests; native execution also checked 21,074 independent bounds.
+`tools/gate-changed.sh ed38a72 --offline` passed 599 tests, zero failed,
+four pre-existing ignored, Clippy and fmt (same shared frontend target).
+The five original programs `pr122943`, `pr54471`, `pr61375`, `pr63302`,
+and `pr85582-2` emitted and executed successfully through both Linux
+toolchains. Of their 20 reference O0/O2 executions, GCC-14 O2 `pr122943`
+aborted; the other 19 passed. That reference failure remains distinct from
+the ten passing subject executions. Evidence:
+`.evidence/builtin-probes/20260909-wide-predicates/results.txt`.
+Neither focused measurement is a new full-benchmark result.
+
+`f9e4696` resolves the original target/board requirements for all 1,692
+torture identities: zero unresolved, 89 inapplicable by original options or
+selectors. These are preparation counts, not executed passes. The 114
+ladder tests and Ruff pass; expected-failure annotations never change a
+native verdict, and only the original `dg-timeout-factor` changes a
+program's default limits. Target evidence is
+`.evidence/builtin-probes/20260909-torture-requirements/results.txt`.
+
+### 2026-09-09: mixed-link replay after shifts and alignment
+
+`python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift` finished run
+`20260909T053908.023962Z`, capture
+`.evidence/k1/measure-20260909T053908Z/`, measuring `ed38a72` and executable
+`49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd`.
+The executable was not rebuilt during the run. All 90 assembled objects
+were substituted; relink returned zero and the first boot passed, without
+removing `insn.o`. Substitution proves 73 units present in vmlinux and 76
+in the booting kernel in total (previously 75), not all 2,799 target units.
+Image `7cc2381683dc6238f62c8519e35de993cf2acbed0b51bf91e981222cf76b6bb3`
+and serial `0904ec05e343f425cfcbfe660ec0a8082be8191676140cc2cabbb11fc5c5cba3`
+are recorded by the existing lane. Its INCOMPLETE exit is correct.
+The 2,709 refusals are 2,419 E3021 numeric asm-label references, 286 E3101,
+two E3026, one E3029 and one E3031. Of E3101, 238 say external object layout,
+47 say incomplete-array layout and one says no live address binding.
+These are new measured frontiers, not a prediction of the next pass count.

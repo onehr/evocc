@@ -1,22 +1,21 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T050443.696884Z",
-  "subject": "67c4fdda2eb30cec693d5a9e83038125b10d1206",
+  "run": "20260909T053908.023962Z",
+  "subject": "ed38a72441daf60aeb6c65c1e580dfed0dc60093",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "27f50dab8cd70afc518a44fa79c81d1b87c8145f2306c51e111ae207ff9c5813",
+  "driverSha256": "49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "ctest",
-    "torture",
+    "kernel",
     "--jobs",
-    "4"
+    "4",
+    "--allow-qemu-drift"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
-    "torture"
+    "kernel"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -1206,16 +1205,16 @@
       "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
       "outcomes": {},
       "refusals": {
-        "E3021": 2707,
+        "E3021": 2419,
+        "E3026": 2,
         "E3029": 1,
-        "E3031": 1
+        "E3031": 1,
+        "E3101": 286
       },
       "baselineFailures": 0,
-      "failingUnits": [
-        "arch/arm64/lib/insn.o"
-      ],
+      "failingUnits": [],
       "total": 2799,
-      "passed": 75,
+      "passed": 76,
       "kind": "units",
       "compiled": 90,
       "testVerdict": "PASS",
@@ -1223,11 +1222,11 @@
         "no-symbols": 3,
         "not-linked": 14,
         "proven": 15,
-        "proven-modulo-relocations": 57
+        "proven-modulo-relocations": 58
       },
       "status": "INCOMPLETE",
-      "run": "2026-09-09T05:01:07Z",
-      "evidence": ".evidence/k1/measure-20260909T035847Z/survey",
+      "run": "2026-09-09T06:26:53Z",
+      "evidence": ".evidence/k1/measure-20260909T053908Z/survey",
       "receipt": "tests/contracts/k1-mixed-link-receipt.json",
       "command": [
         "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
@@ -1235,40 +1234,39 @@
         "4"
       ],
       "exitCode": 0,
-      "seconds": 3739.5,
+      "seconds": 2864.9,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
         "outcomes": {},
         "refusals": {
-          "E3021": 2712,
+          "E3021": 2707,
           "E3029": 1,
           "E3031": 1
         },
         "baselineFailures": 0,
         "failingUnits": [
-          "arch/arm64/kernel/kaslr.o",
           "arch/arm64/lib/insn.o"
         ],
         "total": 2799,
-        "passed": 69,
+        "passed": 75,
         "kind": "units",
-        "compiled": 85,
+        "compiled": 90,
         "testVerdict": "PASS",
         "proof": {
           "no-symbols": 3,
           "not-linked": 14,
           "proven": 15,
-          "proven-modulo-relocations": 51
+          "proven-modulo-relocations": 57
         },
         "status": "INCOMPLETE",
-        "run": "2026-09-08T15:15:11Z",
-        "evidence": ".evidence/k1/measure-20260908T141252Z/survey"
+        "run": "2026-09-09T05:01:07Z",
+        "evidence": ".evidence/k1/measure-20260909T035847Z/survey"
       },
       "measurement": {
-        "run": "20260909T035847.646343Z",
-        "subject": "ce8198072a947dfe620713509811b5d751c0d2da",
-        "driverSha256": "256036c08ef66f493dff435d4504eea6ec3ea988745a237c7b5cea36c3b9fded"
+        "run": "20260909T053908.023962Z",
+        "subject": "ed38a72441daf60aeb6c65c1e580dfed0dc60093",
+        "driverSha256": "49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd"
       }
     },
     "mbedtls": {
