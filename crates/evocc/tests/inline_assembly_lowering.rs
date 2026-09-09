@@ -31,6 +31,72 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn numbered_labels_share_named_label_lowering_and_native_edges() {
+    let source = include_str!("../../../tests/fixtures/assembly-numbered-labels.c");
+    let named = source
+        .replace("cbnz %w0, %l1", "cbnz %w0, %l[hit]")
+        .replace("cbnz %w1, %l3\\n\\tadd", "cbnz %w1, %l[hit]\\n\\tadd")
+        .replace(
+            "cbnz %w0, %l2\\n\\tcbnz %w1, %l3",
+            "cbnz %w0, %l[first]\\n\\tcbnz %w1, %l[second]",
+        )
+        .replace("b %l10", "b %l[hit]");
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let actual = run(source, mode);
+        let expected = run(&named, mode);
+        assert!(
+            actual.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert!(
+            expected.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&expected.stderr)
+        );
+        assert_eq!(actual.stdout, expected.stdout);
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "numbered-labels");
+}
+
+#[test]
+fn invalid_numbered_label_references_fail_closed() {
+    for template in ["b %l0", "b %l2", "b %l999999999999999999999999"] {
+        let source = format!(
+            "int f(int n) {{asm goto(\"{template}\" : : \"r\"(n) : : hit);return 0;hit:return 1;}}"
+        );
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+}
+
+#[test]
+fn numbered_ir_labels_reach_the_same_machine_edges() {
+    let output = run(
+        r#"int f(int n) {asm goto("cbnz %w0, %l[hit]" : : "r"(n) : : hit);return 0;hit:return 1;}"#,
+        "--emit=evoir",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let named = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    let numbered_text = String::from_utf8(output.stdout)
+        .unwrap()
+        .replace("%l[hit]", "%l1");
+    let numbered =
+        evocc_evoir::parse_section9_module(numbered_text.as_bytes()).expect("numbered IR label");
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let actual = evocc_mir::compile_module_for(target, &numbered, &|_| true).unwrap();
+        let expected = evocc_mir::compile_module_for(target, &named, &|_| true).unwrap();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
 fn tied_address_operands_preserve_bits_and_single_evaluation() {
     let source = include_str!("../../../tests/fixtures/assembly-tied-addresses.c");
     for mode in ["--emit=evoir", "--emit=asm"] {

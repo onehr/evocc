@@ -38,6 +38,27 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn numbered_labels_count_explicit_operands_and_round_trip() {
+    // A read-write output remains one IR operand. Its incoming value is
+    // not an extra explicit input; the first label here has index two.
+    let source = EDGES.replace("%l[taken]", "%l2");
+    let module = parse_section9_module(source.as_bytes()).expect("numbered IR label");
+    assert_eq!(render_module(&module), source);
+    for invalid in ["%l0", "%l1", "%l3", "%l999999999999999999999999"] {
+        assert!(parse_section9_module(EDGES.replace("%l[taken]", invalid).as_bytes()).is_err());
+    }
+    let inputs = (0..10)
+        .map(|n| format!("(\"r\", \"input{n}\", %v1)"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = EDGES
+        .replace("%l[taken]", "%l11")
+        .replace("(\"r\", \"branch\", %v1)", &inputs);
+    let module = parse_section9_module(source.as_bytes()).expect("multi-digit label");
+    assert_eq!(render_module(&module), source);
+}
+
+#[test]
 fn address_references_round_trip_and_validate_the_named_input_type() {
     for ty in ["ptr<generic>", "bits<64>"] {
         for constraint in ["r", "p"] {
