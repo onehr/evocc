@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T085126Z",
-  "subject": "b54ae63",
-  "driverSha256": "b9ed7b58d1e67f1eea525f54178bd959d0f89209adfc85c062a9510f0f7bcf83",
+  "run": "20260909T133247Z",
+  "subject": "33bc3d4",
+  "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -78,11 +78,10 @@
      "oracle-unusable": 0
     },
     "refusalsByCode": {
-     "E3101": 7,
+     "E3101": 8,
      "E3030": 1,
      "E2102": 1,
-     "E2203": 1,
-     "E2202": 1
+     "E2203": 1
     },
     "failuresByInterpreterVerdict": {},
     "appliedOptions": {},
@@ -90,5 +89,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T085126Z"
+ "evidence": ".evidence/ladder/e0/20260909T133247Z"
 }

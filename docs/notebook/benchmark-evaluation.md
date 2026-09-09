@@ -225,3 +225,34 @@ Subject `ce81980`, release SHA-256
 These measurements precede the signed-shift, stack-realignment and tied-input
 fixes. They are not closure evidence for those later commits. Raw lowering
 and mixed-link unit denominators are distinct and are never added together.
+
+## Native replay on `33bc3d4`
+
+The release driver digest is
+`8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84`.
+`python3 tools/bench.py musl tinycc toybox ctest --no-build --budget 45 --jobs 2`
+completed as `INCOMPLETE` in wrapper run `20260909T132841.817643Z`:
+musl 1,010/1,339 assembled and included in the passing mixed build, TinyCC 8/11,
+Toybox 195/203, and c-testsuite 209/220 native passes with 11 refusals.
+Musl gained three original units (`__syscall_cp`, `pthread_cancel`, `strftime`),
+with no other per-unit outcome changes; its 17 reference-test failures remain
+visible. The earlier sandbox invocation failed to start the container and is
+not a compiler regression or a passing run. Torture and Csmith were not rerun.
+
+`python3 tools/bench.py kernel --no-build --jobs 2 --allow-qemu-drift` finished
+unsuccessfully in wrapper run `20260909T133504.882775Z`, capture
+`.evidence/k1/measure-20260909T133504Z/`: 2,193 assembled, 605 refused, one
+assembler-refused, zero timeouts, out of 2,799. The original tools excluded
+118 units for reported symbol collisions and attempted 2,075 substitutions;
+the mixed link failed. Three reductions isolated `cpuinfo.o` (boot timeout),
+`debug-monitors.o` and `entry-common.o` (link failures), and the fourth attempt
+with 2,072 substitutions still failed. The previous passing K1 receipt was
+not replaced; the unified wrapper correctly reports `ERROR`, not a fresh pass.
+
+The single assembler failure is a missing search path for the unchanged
+`.incbin "kernel/config_data.gz"`, not missing compiler output. Collision
+classification also conflates weak definitions with strong ones and misses
+the nVHE/vDSO link namespaces; corrections do not retroactively change this
+run. Link logs additionally expose references to `__bad_size_call_parameter`
+and `uprobe_brk_handler`, and forbidden vDSO GOT relocations for hidden
+external objects. These are newly measured work items, not closed milestones.

@@ -1,25 +1,24 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T112011.563321Z",
-  "subject": "7f91fd2e4eefe2e70f3ada9ef5b1a84077ead728",
-  "dirty": false,
+  "run": "20260909T133504.882775Z",
+  "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+  "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823",
+  "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "musl",
+    "kernel",
     "--no-build",
-    "--budget",
-    "45",
     "--jobs",
-    "2"
+    "2",
+    "--allow-qemu-drift"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "musl"
+    "kernel"
   ],
-  "status": "INCOMPLETE",
+  "status": "ERROR",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -29,11 +28,10 @@
         "refused": 11
       },
       "refusals": {
-        "E3101": 7,
+        "E3101": 8,
         "E3030": 1,
         "E2102": 1,
-        "E2203": 1,
-        "E2202": 1
+        "E2203": 1
       },
       "baselineFailures": 0,
       "failingUnits": [],
@@ -49,8 +47,8 @@
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T085126Z",
-      "evidence": ".evidence/ladder/e0/20260909T085126Z",
+      "run": "20260909T133247Z",
+      "evidence": ".evidence/ladder/e0/20260909T133247Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -62,12 +60,41 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 25.8,
-      "previous": null,
+      "seconds": 25.6,
+      "previous": {
+        "rung": "E0b",
+        "note": "self-checking programs and expected stdout",
+        "outcomes": {
+          "not-run": 209,
+          "refused": 11
+        },
+        "refusals": {
+          "E3101": 8,
+          "E3030": 1,
+          "E2102": 1,
+          "E2203": 1
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 220,
+        "passed": 0,
+        "kind": "programs",
+        "runtimeDiagnostics": {},
+        "dispositions": {
+          "PASS": 0,
+          "compiler-failure": 213,
+          "FP-deferred": 7,
+          "not-applicable": 0,
+          "oracle-unusable": 0
+        },
+        "status": "INCOMPLETE",
+        "run": "20260909T132247Z",
+        "evidence": ".evidence/ladder/e0/20260909T132247Z"
+      },
       "measurement": {
-        "run": "20260909T085125.845803Z",
-        "subject": "b54ae6318bfbb17a4b48202155657d6438c06069",
-        "driverSha256": "b9ed7b58d1e67f1eea525f54178bd959d0f89209adfc85c062a9510f0f7bcf83"
+        "run": "20260909T132841.817643Z",
+        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
       }
     },
     "torture": {
@@ -866,12 +893,7 @@
       "excluded": 0,
       "testVerdict": "tests-passed",
       "adjustments": {
-        "sourcePageBreaksStripped": [
-          "coff.h",
-          "stab.def",
-          "tests/tcctest.c",
-          "tests/tests2/90_struct-init.c"
-        ],
+        "sourcePageBreaksStripped": [],
         "noreturnSpecifiersRemoved": [],
         "highBytesReEscaped": [],
         "sysroot": [
@@ -889,26 +911,13 @@
             "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
             "change": "the AdvSIMD and SVE guards are forced closed",
             "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
-          },
-          {
-            "file": "every exported header",
-            "change": "form feeds and vertical tabs are deleted",
-            "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
-          },
-          {
-            "file": "gccinc/stdint.h",
-            "change": "renamed out of the search path",
-            "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
           }
         ],
-        "defines": [
-          "-D__extension__=",
-          "-D__STDC_NO_VLA__=1"
-        ]
+        "defines": []
       },
       "status": "INCOMPLETE",
-      "run": "20260909T075341Z",
-      "evidence": ".evidence/ladder/tinycc/20260909T075341Z",
+      "run": "20260909T133104Z",
+      "evidence": ".evidence/ladder/tinycc/20260909T133104Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -920,21 +929,20 @@
         "2"
       ],
       "exitCode": 0,
-      "seconds": 80.3,
+      "seconds": 37.2,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
         "outcomes": {},
         "refusals": {
-          "E3101": 3,
-          "E2921": 1
+          "E3101": 3
         },
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 11,
-        "passed": 7,
+        "passed": 8,
         "kind": "units",
-        "compiled": 7,
+        "compiled": 8,
         "excluded": 0,
         "testVerdict": "tests-passed",
         "adjustments": {
@@ -979,13 +987,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260908T121237Z",
-        "evidence": ".evidence/ladder/tinycc/20260908T121237Z"
+        "run": "20260909T075341Z",
+        "evidence": ".evidence/ladder/tinycc/20260909T075341Z"
       },
       "measurement": {
-        "run": "20260909T074238.247563Z",
-        "subject": "c461caf947738d9fb63beae8d307db5099a64ecc",
-        "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e"
+        "run": "20260909T132841.817643Z",
+        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
       }
     },
     "toybox": {
@@ -1005,10 +1013,7 @@
       "testVerdict": "no-regression",
       "adjustments": {
         "sourcePageBreaksStripped": [],
-        "noreturnSpecifiersRemoved": [
-          "lib/lib.h",
-          "toys/pending/csplit.c"
-        ],
+        "noreturnSpecifiersRemoved": [],
         "highBytesReEscaped": [
           "generated/flags.h",
           "scripts/prereq/generated/flags.h",
@@ -1029,29 +1034,16 @@
             "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
             "change": "the AdvSIMD and SVE guards are forced closed",
             "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
-          },
-          {
-            "file": "every exported header",
-            "change": "form feeds and vertical tabs are deleted",
-            "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
-          },
-          {
-            "file": "gccinc/stdint.h",
-            "change": "renamed out of the search path",
-            "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
           }
         ],
-        "defines": [
-          "-D__extension__=",
-          "-D__STDC_NO_VLA__=1"
-        ],
+        "defines": [],
         "unitsNotSubstitutable": [
           "the object built from main.c"
         ]
       },
       "status": "INCOMPLETE",
-      "run": "20260908T080325Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T080325Z",
+      "run": "20260909T133141Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260909T133141Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1060,25 +1052,25 @@
         "--evocc",
         "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
         "--jobs",
-        "4",
+        "2",
         "--budget",
-        "40"
+        "45"
       ],
       "exitCode": 0,
-      "seconds": 59.8,
+      "seconds": 66.1,
       "previous": {
         "rung": "E6",
         "note": "mixed-link tests relative to baseline failures",
         "outcomes": {},
         "refusals": {
-          "E3101": 11
+          "E3101": 8
         },
         "baselineFailures": 1,
         "failingUnits": [],
         "total": 203,
-        "passed": 192,
+        "passed": 195,
         "kind": "units",
-        "compiled": 192,
+        "compiled": 195,
         "excluded": 0,
         "testVerdict": "no-regression",
         "adjustments": {
@@ -1128,13 +1120,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260908T064146Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260908T064146Z"
+        "run": "20260909T070146Z",
+        "evidence": ".evidence/ladder/toybox/20260909T070146Z"
       },
       "measurement": {
-        "run": "20260908T080325.213428Z",
-        "subject": "82e2cff99a93e28032d2867a252bf9e3f74d182e",
-        "driverSha256": "040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884"
+        "run": "20260909T132841.817643Z",
+        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
       }
     },
     "musl": {
@@ -1142,7 +1134,7 @@
       "note": "libc-test relative to baseline failures",
       "outcomes": {},
       "refusals": {
-        "E3101": 219,
+        "E3101": 216,
         "E1006": 83,
         "E2001": 14,
         "E2203": 8,
@@ -1154,33 +1146,14 @@
       "baselineFailures": 17,
       "failingUnits": [],
       "total": 1339,
-      "passed": 1007,
+      "passed": 1010,
       "kind": "units",
-      "compiled": 1007,
+      "compiled": 1010,
       "excluded": 0,
       "testVerdict": "libc-test-clean",
       "adjustments": {
         "sourcePageBreaksStripped": [],
-        "noreturnSpecifiersRemoved": [
-          "include/assert.h",
-          "include/err.h",
-          "include/pthread.h",
-          "include/setjmp.h",
-          "include/stdlib.h",
-          "include/threads.h",
-          "include/unistd.h",
-          "src/exit/_Exit.c",
-          "src/exit/abort.c",
-          "src/exit/assert.c",
-          "src/exit/exit.c",
-          "src/exit/quick_exit.c",
-          "src/include/pthread.h",
-          "src/legacy/err.c",
-          "src/signal/siglongjmp.c",
-          "src/thread/pthread_create.c",
-          "src/thread/thrd_exit.c",
-          "src/unistd/_exit.c"
-        ],
+        "noreturnSpecifiersRemoved": [],
         "highBytesReEscaped": [],
         "sysroot": "none: musl is built -nostdinc against its own headers",
         "configure": "--disable-shared, so the library is one set of objects",
@@ -1188,8 +1161,8 @@
         "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
       },
       "status": "INCOMPLETE",
-      "run": "20260909T112011Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260909T112011Z",
+      "run": "20260909T132842Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260909T132842Z",
       "receipt": "tests/contracts/ladder-musl-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1203,32 +1176,29 @@
         "45"
       ],
       "exitCode": 0,
-      "seconds": 144.3,
+      "seconds": 142.4,
       "previous": {
         "rung": "E7",
         "note": "libc-test relative to baseline failures",
         "outcomes": {},
         "refusals": {
-          "E3101": 227,
+          "E3101": 219,
           "E1006": 83,
           "E2001": 14,
           "E2203": 8,
-          "E2939": 6,
-          "E2102": 3,
+          "E2939": 5,
           "E1005": 1,
           "E3021": 1,
           "E3030": 1
         },
         "baselineFailures": 17,
-        "failingUnits": [
-          "obj/src/stdio/fprintf.lo"
-        ],
+        "failingUnits": [],
         "total": 1339,
-        "passed": 498,
+        "passed": 1007,
         "kind": "units",
-        "compiled": 995,
+        "compiled": 1007,
         "excluded": 0,
-        "testVerdict": "bisection-budget-exhausted",
+        "testVerdict": "libc-test-clean",
         "adjustments": {
           "sourcePageBreaksStripped": [],
           "noreturnSpecifiersRemoved": [
@@ -1258,65 +1228,63 @@
           "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
         },
         "status": "INCOMPLETE",
-        "run": "20260909T070307Z",
-        "evidence": ".evidence/ladder/musl/20260909T070307Z"
+        "run": "20260909T112011Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260909T112011Z"
       },
       "measurement": {
-        "run": "20260909T112011.563321Z",
-        "subject": "7f91fd2e4eefe2e70f3ada9ef5b1a84077ead728",
-        "driverSha256": "45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823"
+        "run": "20260909T132841.817643Z",
+        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
       }
     },
     "kernel": {
       "rung": "K1/K5-K7 ramp",
-      "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
-      "outcomes": {},
-      "refusals": {
-        "E3021": 2419,
-        "E3026": 2,
-        "E3029": 1,
-        "E3031": 1,
-        "E3101": 286
-      },
-      "baselineFailures": 0,
-      "failingUnits": [],
-      "total": 2799,
-      "passed": 76,
-      "kind": "units",
-      "compiled": 90,
-      "testVerdict": "PASS",
-      "proof": {
-        "no-symbols": 3,
-        "not-linked": 14,
-        "proven": 15,
-        "proven-modulo-relocations": 58
-      },
-      "status": "INCOMPLETE",
-      "run": "2026-09-09T06:26:53Z",
-      "evidence": ".evidence/k1/measure-20260909T053908Z/survey",
-      "receipt": "tests/contracts/k1-mixed-link-receipt.json",
+      "status": "ERROR",
+      "error": "receipt unchanged; previous evidence is not a new measurement",
+      "errorTail": [
+        "k1: relinking Image and vmlinux",
+        "k1: relink exit 2",
+        "{",
+        "  \"runId\": \"substitution\",",
+        "  \"requestedUnits\": 2072,",
+        "  \"evoccSha256\": \"8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84\",",
+        "  \"cacheHits\": 2072,",
+        "  \"counts\": {",
+        "    \"substituted\": 2072",
+        "  },",
+        "  \"refusalCodeCounts\": {},",
+        "  \"relinkExitCode\": 2,",
+        "  \"installed\": true,",
+        "  \"allowSymbolDrift\": true,",
+        "  \"imageSha256\": \"8e97ac657e34a75bf2458c4dba7bf5c544d4750c64af756fbbda13895cc6a2c0\",",
+        "  \"vmlinuxSha256\": \"1da20652101da8edd03d5323c48a48d6905d307f73ae3f4cc3dcf0b0c2720609\"",
+        "}",
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260909T133504Z/attempt-04/substitution",
+        "k1: the relink failed; treating this allowlist as failing",
+        "k1: still failing after 3 reductions; see /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260909T133504Z"
+      ],
       "command": [
         "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
         "--jobs",
-        "4"
+        "2"
       ],
-      "exitCode": 0,
-      "seconds": 2864.9,
+      "exitCode": 1,
+      "seconds": 6280.4,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
         "outcomes": {},
         "refusals": {
-          "E3021": 2707,
+          "E3021": 2419,
+          "E3026": 2,
           "E3029": 1,
-          "E3031": 1
+          "E3031": 1,
+          "E3101": 286
         },
         "baselineFailures": 0,
-        "failingUnits": [
-          "arch/arm64/lib/insn.o"
-        ],
+        "failingUnits": [],
         "total": 2799,
-        "passed": 75,
+        "passed": 76,
         "kind": "units",
         "compiled": 90,
         "testVerdict": "PASS",
@@ -1324,16 +1292,16 @@
           "no-symbols": 3,
           "not-linked": 14,
           "proven": 15,
-          "proven-modulo-relocations": 57
+          "proven-modulo-relocations": 58
         },
         "status": "INCOMPLETE",
-        "run": "2026-09-09T05:01:07Z",
-        "evidence": ".evidence/k1/measure-20260909T035847Z/survey"
+        "run": "2026-09-09T06:26:53Z",
+        "evidence": ".evidence/k1/measure-20260909T053908Z/survey"
       },
       "measurement": {
-        "run": "20260909T053908.023962Z",
-        "subject": "ed38a72441daf60aeb6c65c1e580dfed0dc60093",
-        "driverSha256": "49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd"
+        "run": "20260909T133504.882775Z",
+        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
+        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
       }
     },
     "mbedtls": {

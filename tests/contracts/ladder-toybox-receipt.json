@@ -3,7 +3,7 @@
  "rung": "E6",
  "subject": "toybox",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260909T070146Z",
+ "run": "20260909T133141Z",
  "pin": {
   "subject": "toybox",
   "rung": "E6",
@@ -12,7 +12,7 @@
   "origin": "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
   "sha256": "082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1"
  },
- "driverSha256": "57af3d4c871e82142618d9274a5fe77b0781bf24b6f54d78488a7d7f522b014d",
+ "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "tests": 56,
@@ -32,10 +32,7 @@
  "symbolParity": {},
  "adjustments": {
   "sourcePageBreaksStripped": [],
-  "noreturnSpecifiersRemoved": [
-   "lib/lib.h",
-   "toys/pending/csplit.c"
-  ],
+  "noreturnSpecifiersRemoved": [],
   "highBytesReEscaped": [
    "generated/flags.h",
    "scripts/prereq/generated/flags.h",
@@ -56,22 +53,9 @@
     "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
     "change": "the AdvSIMD and SVE guards are forced closed",
     "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
-   },
-   {
-    "file": "every exported header",
-    "change": "form feeds and vertical tabs are deleted",
-    "why": "C makes both white space (C11 6.4p1); the front end reports a form feed as a stray token, and glibc's regex.h uses one as a page break, which alone refuses every unit that includes it"
-   },
-   {
-    "file": "gccinc/stdint.h",
-    "change": "renamed out of the search path",
-    "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`, and the front end ignores #include_next, so keeping it hides the C library's real stdint.h and leaves intmax_t undeclared"
    }
   ],
-  "defines": [
-   "-D__extension__=",
-   "-D__STDC_NO_VLA__=1"
-  ],
+  "defines": [],
   "unitsNotSubstitutable": [
    "the object built from main.c"
   ]
@@ -92,5 +76,5 @@
   "-funsigned-char": 203,
   "-o": 203
  },
- "evidence": ".evidence/ladder/toybox/20260909T070146Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260909T133141Z"
 }
