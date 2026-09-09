@@ -6020,6 +6020,12 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Wide bit-field promotions and unsupported scalar storage order
+
+The reviewed profile refuses integer promotion of a bit-field wider than `int` with E2939 (`unsupported-wide-bit-field-promotion`), while retaining storage, explicit conversions and fields no wider than `int`; `.evidence/ladder/e0/20260908T213308Z` and `docs/notebook/benchmark-closure.md` record the four original wide-field oracle conflicts.
+The attribute `scalar_storage_order`, including its underscored spelling, is refused with E2940 (`unsupported-scalar-storage-order`), not preserved as an ignored semantic promise.
+Evidence `.evidence/builtin-probes/20260909-storage-order/results.txt` records GCC-14 O0/O2 passing and Clang-19 O0/O2 ignoring the attribute then aborting for both originals; the two refusal classes affect four and two named original programs respectively, not predicted passes.
+
 ### Pending body revision: source-width constant arithmetic
 
 The reviewed constant-context rule is supported by `.evidence/builtin-probes/20260909-constant-contexts/{constants.c,results.txt}`: GCC-14 and Clang-19 at O0/O2 agree on signed 32/64-bit literal add/subtract/multiply, the `(unsigned)(INT_MAX + 2)` shape from `920730-1`, and integer promotions.
@@ -6030,7 +6036,7 @@ No diagnostic is allocated and no implementation pass is claimed; the body revis
 
 The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.
 Both compilers reject `goto-in.c`, which jumps into the scope of a variable-length object.
-No diagnostic is allocated or changed here; prototype-only bounds still need a separate probe, and the body revision and original-program impact count remain pending.
+`parameter-bounds.c` in the same directory separately measures prototype-only bounds as unevaluated and definition-entry bounds as evaluated once, with all four runs reporting `prototype=0 entry=1 result=8`; no diagnostic is allocated or changed, and the body revision and original-program impact count remain pending.
 
 ### Pending body revision: integer aggregate variable arguments
 
