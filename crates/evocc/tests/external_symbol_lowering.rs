@@ -25,6 +25,71 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn flexible_record_elements_share_brace_elision_and_full_element_storage() {
+    let declarations = r#"
+        struct S { unsigned char a, b, c[2]; };
+        struct W { int head; struct S s[]; };
+        struct W w = {1, {1, 2, 3, 4, 5}};
+        struct W z = {.s = {[1].c[1] = 9, 10}};
+    "#;
+    let source = format!(
+        "{declarations}int main(void){{
+            if(sizeof(struct W)!=4 || w.head!=1) return 1;
+            if(w.s[0].a!=1 || w.s[0].c[1]!=4 || w.s[1].a!=5) return 2;
+            if(w.s[1].b || w.s[1].c[0] || w.s[1].c[1]) return 3;
+            if(z.s[0].a || z.s[1].c[1]!=9 || z.s[2].a!=10 || z.s[2].c[1]) return 4;
+            return 0;
+        }}"
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(&source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    let output = run(&source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert_eq!(
+        module
+            .globals
+            .iter()
+            .find(|g| g.symbol == "w")
+            .unwrap()
+            .layout
+            .size_bytes,
+        12
+    );
+    assert_eq!(
+        module
+            .globals
+            .iter()
+            .find(|g| g.symbol == "z")
+            .unwrap()
+            .layout
+            .size_bytes,
+        16
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(
+            &format!("{declarations}int main(void){{return w.s[2].a;}}"),
+            mode,
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3011"));
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(&source, "flexible-records");
+}
+
+#[test]
 fn dereferenced_arrays_decay_without_loading_the_array_object() {
     let source = r#"
         typedef char Row[4];
