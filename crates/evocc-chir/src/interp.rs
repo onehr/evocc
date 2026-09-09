@@ -996,7 +996,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     /// Bound only the initializer paths that still use recursive object walks.
     /// Pure integer evaluation uses the fuel-bounded task machine instead.
     fn guard_static_initializer_evaluation(
-        &self,
+        &mut self,
         value: &'arena CHirExpr<'arena>,
     ) -> Result<(), InterpreterError> {
         let mut pending: Vec<(&'arena CHirExpr<'arena>, usize)> = vec![(value, 1)];
@@ -1007,7 +1007,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: expression.span(),
                 });
             }
-            push_static_initializer_children(expression, depth, &mut pending);
+            match expression {
+                CHirExpr::Ternary(condition, left, right, _)
+                    if self.infer_integer_type(expression).is_err() =>
+                {
+                    pending.extend([condition, left, right].map(|child| (*child, depth + 1)));
+                }
+                CHirExpr::Binary(BinaryOp::Eq | BinaryOp::Ne, left, right, _)
+                    if self.infer_integer_type(left).is_err()
+                        || self.infer_integer_type(right).is_err() =>
+                {
+                    pending.extend([left, right].map(|child| (*child, depth + 1)));
+                }
+                _ => push_static_initializer_children(expression, depth, &mut pending),
+            }
         }
         Ok(())
     }
@@ -1317,6 +1330,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             expression = operand;
         }
         let mut value = match expression {
+            CHirExpr::Ternary(condition, left, right, span)
+                if self.infer_integer_type(expression).is_err() =>
+            {
+                self.tick(*span)?;
+                let condition =
+                    machine_truth(self.eval_static_initializer_value(condition)?, *span)?;
+                let value =
+                    self.eval_static_initializer_value(if condition { left } else { right })?;
+                let target = self.expression_value_type(expression)?;
+                cast_machine_value(value, target, *span, self.unit.types(), &mut self.memory)
+            }
+            CHirExpr::Binary(operator @ (BinaryOp::Eq | BinaryOp::Ne), left, right, span)
+                if self.infer_integer_type(left).is_err()
+                    || self.infer_integer_type(right).is_err() =>
+            {
+                self.tick(*span)?;
+                let left = self.eval_static_initializer_value(left)?;
+                let right = self.eval_static_initializer_value(right)?;
+                self.apply_machine_binary(*operator, left, right, *span)
+            }
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
                 self.static_address_value(operand, false)
             }

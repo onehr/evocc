@@ -1496,7 +1496,7 @@ fn symbolic_address(
                 value.raw_bits() != 0
             } else if let CHirExpr::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b, _) = condition
             {
-                let a = if null_pointer_constant(unit, target, a) {
+                let a = if static_null_pointer(unit, target, a) {
                     None
                 } else {
                     Some(symbolic_address(
@@ -1509,7 +1509,7 @@ fn symbolic_address(
                         label_addresses,
                     )?)
                 };
-                let b = if null_pointer_constant(unit, target, b) {
+                let b = if static_null_pointer(unit, target, b) {
                     None
                 } else {
                     Some(symbolic_address(
