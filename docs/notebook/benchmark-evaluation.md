@@ -205,3 +205,23 @@ checks the tooling's replayability, not a second execution of every native lane.
 No new full-workspace Rust, Clippy or layout-corpus measurement is claimed for
 this harness-only change. Raw outcome sums and unique program/unit identities
 were checked independently before writing this review.
+
+## Address-operand measurement
+
+Subject `ce81980`, release SHA-256
+`256036c08ef66f493dff435d4504eea6ec3ea988745a237c7b5cea36c3b9fded`:
+
+- `python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60`:
+  run `20260909T031003Z-16402`, 90 clean, 2,708 diagnosed, zero unavailable,
+  timeout or panic, out of the unchanged 2,798 units. The 2,706 E3021 units
+  share a pointer input tied to a 64-bit integer output in `RELOC_HIDE`.
+- `python3 tools/bench.py kernel --no-build --jobs 4 --allow-qemu-drift`:
+  run `20260909T035847.646343Z`, 90 assembled and 2,709 refused out of 2,799.
+  The first 90-object mixed image times out; bisection isolates `insn.o`.
+  Restoring that reference object gives a booting 89-object substitution,
+  with 75 units proven included by the lane's accounting. Status remains
+  **INCOMPLETE**, not a whole-kernel pass.
+
+These measurements precede the signed-shift, stack-realignment and tied-input
+fixes. They are not closure evidence for those later commits. Raw lowering
+and mixed-link unit denominators are distinct and are never added together.

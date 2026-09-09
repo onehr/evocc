@@ -1,12 +1,12 @@
 {
   "bisection": {
-    "allowlistSize": 84,
+    "allowlistSize": 90,
     "minimalFailingSet": [
       "arch/arm64/lib/insn.o"
     ],
     "result": "minimal-failing-set",
-    "rounds": 8,
-    "runDirectory": ".evidence/k1/measure-20260908T141252Z/bisection-2"
+    "rounds": 9,
+    "runDirectory": ".evidence/k1/measure-20260909T035847Z/bisection-1"
   },
   "emulator": {
     "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
@@ -15,35 +15,35 @@
     "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
   },
   "failingUnits": [
-    "arch/arm64/kernel/kaslr.o",
     "arch/arm64/lib/insn.o"
   ],
   "failingUnitsByReason": {
     "multiple-definition": 0,
-    "other": 2
+    "other": 1
   },
-  "generatedAt": "2026-09-08T15:15:11Z",
+  "generatedAt": "2026-09-09T05:01:07Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e",
-      "nonce": "k1-20260908T151507Z-634d6fc1",
-      "runDirectory": ".evidence/k1/measure-20260908T141252Z/attempt-03/boot",
-      "serialLog": ".evidence/k1/measure-20260908T141252Z/attempt-03/boot/boot.log",
-      "serialLogSha256": "f889c830d4ba11a04cd4b5c2279662c4bc54e77682441c936c7043a9f5190a34",
+      "imageSha256": "a09fc8e3c098408a720159e9a89b22c84c5b08ddda4606c7077b784ba9a7e729",
+      "nonce": "k1-20260909T050040Z-0dc5b1c0",
+      "runDirectory": ".evidence/k1/measure-20260909T035847Z/attempt-02/boot",
+      "serialLog": ".evidence/k1/measure-20260909T035847Z/attempt-02/boot/boot.log",
+      "serialLogSha256": "3c7c87d70ce2df18e997bf69e17f2a03236b0eeeb55cb8db77f230031634c83b",
       "verdict": "PASS"
     },
-    "imageSha256": "90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e",
+    "imageSha256": "a09fc8e3c098408a720159e9a89b22c84c5b08ddda4606c7077b784ba9a7e729",
     "outcomeCounts": {
-      "substituted": 83
+      "substituted": 89
     },
-    "provenVmlinuxSha256": "1966057b830e146a6fdac53cb33124aa90c6746346b92cf8a758756451c318c6",
+    "provenVmlinuxSha256": "6a81679ebbe6b2c4728b1478655452de4733c3bf9445e5c3ef3230a5b68f4e56",
     "relinkExitCode": 0,
-    "requestedUnits": 83,
-    "runDirectory": ".evidence/k1/measure-20260908T141252Z/attempt-03/substitution",
+    "requestedUnits": 89,
+    "runDirectory": ".evidence/k1/measure-20260909T035847Z/attempt-02/substitution",
     "substitutedUnits": [
       "arch/arm64/kernel/jump_label.o",
+      "arch/arm64/kernel/kaslr.o",
       "arch/arm64/kernel/pi/lib-fdt.o",
       "arch/arm64/kernel/pi/lib-fdt_ro.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
@@ -65,6 +65,7 @@
       "drivers/firmware/efi/libstub/string.o",
       "drivers/firmware/efi/libstub/vsprintf.o",
       "drivers/tty/vt/consolemap_deftbl.o",
+      "drivers/tty/vt/defkeymap.o",
       "drivers/tty/vt/ucs.o",
       "drivers/video/logo/logo_linux_clut224.o",
       "drivers/video/screen_info_generic.o",
@@ -83,6 +84,8 @@
       "lib/compat_audit.o",
       "lib/crypto/chacha-block-generic.o",
       "lib/ctype.o",
+      "lib/debug_locks.o",
+      "lib/dec_and_lock.o",
       "lib/decompress.o",
       "lib/earlycpio.o",
       "lib/errname.o",
@@ -101,6 +104,7 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/lockref.o",
       "lib/math/div64.o",
       "lib/math/gcd.o",
       "lib/math/int_log.o",
@@ -110,6 +114,7 @@
       "lib/math/reciprocal_div.o",
       "lib/memweight.o",
       "lib/plist.o",
+      "lib/refcount.o",
       "lib/union_find.o",
       "lib/uuid.o",
       "lib/zlib_deflate/deftree.o",
@@ -127,7 +132,7 @@
       "lib/zstd/decompress/zstd_decompress_block.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "1966057b830e146a6fdac53cb33124aa90c6746346b92cf8a758756451c318c6"
+    "vmlinuxSha256": "6a81679ebbe6b2c4728b1478655452de4733c3bf9445e5c3ef3230a5b68f4e56"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -143,6 +148,7 @@
     ],
     "unitsLinkedIntoVmlinux": [
       "arch/arm64/kernel/jump_label.o",
+      "arch/arm64/kernel/kaslr.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -151,6 +157,7 @@
       "crypto/rsapubkey.asn1.o",
       "drivers/acpi/apei/ghes_helpers.o",
       "drivers/tty/vt/consolemap_deftbl.o",
+      "drivers/tty/vt/defkeymap.o",
       "drivers/tty/vt/ucs.o",
       "drivers/video/logo/logo_linux_clut224.o",
       "drivers/video/screen_info_generic.o",
@@ -169,6 +176,8 @@
       "lib/compat_audit.o",
       "lib/crypto/chacha-block-generic.o",
       "lib/ctype.o",
+      "lib/debug_locks.o",
+      "lib/dec_and_lock.o",
       "lib/decompress.o",
       "lib/earlycpio.o",
       "lib/errname.o",
@@ -187,6 +196,7 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/lockref.o",
       "lib/math/div64.o",
       "lib/math/gcd.o",
       "lib/math/int_log.o",
@@ -196,6 +206,7 @@
       "lib/math/reciprocal_div.o",
       "lib/memweight.o",
       "lib/plist.o",
+      "lib/refcount.o",
       "lib/union_find.o",
       "lib/uuid.o",
       "lib/zlib_deflate/deftree.o",
@@ -230,6 +241,7 @@
     ],
     "unitsProvenByteIdenticalInVmlinux": [
       "arch/arm64/kernel/jump_label.o",
+      "arch/arm64/kernel/kaslr.o",
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
@@ -238,6 +250,7 @@
       "crypto/rsapubkey.asn1.o",
       "drivers/acpi/apei/ghes_helpers.o",
       "drivers/tty/vt/consolemap_deftbl.o",
+      "drivers/tty/vt/defkeymap.o",
       "drivers/tty/vt/ucs.o",
       "drivers/video/logo/logo_linux_clut224.o",
       "drivers/video/screen_info_generic.o",
@@ -254,6 +267,8 @@
       "lib/compat_audit.o",
       "lib/crypto/chacha-block-generic.o",
       "lib/ctype.o",
+      "lib/debug_locks.o",
+      "lib/dec_and_lock.o",
       "lib/decompress.o",
       "lib/earlycpio.o",
       "lib/errname.o",
@@ -272,6 +287,7 @@
       "lib/hweight.o",
       "lib/list_sort.o",
       "lib/llist.o",
+      "lib/lockref.o",
       "lib/math/div64.o",
       "lib/math/gcd.o",
       "lib/math/int_log.o",
@@ -281,6 +297,7 @@
       "lib/math/reciprocal_div.o",
       "lib/memweight.o",
       "lib/plist.o",
+      "lib/refcount.o",
       "lib/union_find.o",
       "lib/uuid.o",
       "lib/zlib_deflate/deftree.o",
@@ -300,7 +317,7 @@
       "no-symbols": 3,
       "not-linked": 14,
       "proven": 15,
-      "proven-modulo-relocations": 51
+      "proven-modulo-relocations": 57
     }
   },
   "reference": {
@@ -317,25 +334,25 @@
   },
   "schemaVersion": 1,
   "survey": {
-    "assemblingUnits": 85,
+    "assemblingUnits": 90,
     "linkCollisions": {
       "groups": [],
       "symbolsDefinedTwice": 0,
       "units": []
     },
     "outcomeCounts": {
-      "assembled": 85,
-      "refused": 2714
+      "assembled": 90,
+      "refused": 2709
     },
     "refusalCodeCounts": {
-      "E3021": 2712,
+      "E3021": 2707,
       "E3029": 1,
       "E3031": 1
     },
     "refusalsByCode": {
       "E3021": {
         "owner": "front-end",
-        "units": 2712
+        "units": 2707
       },
       "E3029": {
         "owner": "front-end",
@@ -347,18 +364,18 @@
       }
     },
     "refusalsByFirstCode": {
-      "E3021": 2712,
+      "E3021": 2707,
       "E3029": 1,
       "E3031": 1
     },
     "refusalsByOwner": {
-      "front-end": 2714
+      "front-end": 2709
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/measure-20260908T141252Z/survey"
+    "runDirectory": ".evidence/k1/measure-20260909T035847Z/survey"
   },
-  "unitsCompiledByEvoccInABootingKernel": 69,
+  "unitsCompiledByEvoccInABootingKernel": 75,
   "unitsExcludedForMultipleDefinition": 0,
-  "unitsProvenPresentInVmlinux": 66,
-  "unitsSubstituted": 83
+  "unitsProvenPresentInVmlinux": 72,
+  "unitsSubstituted": 89
 }
