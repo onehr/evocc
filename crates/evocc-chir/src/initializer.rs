@@ -8,7 +8,8 @@ use std::fmt;
 
 use evocc_common::SourceSpan;
 use evocc_types::{
-    ArrayBound, IntRank, TagDefinition, TagId, TagState, TypeId, TypeInterner, TypeKind,
+    ArrayBound, IntRank, LayoutError, TagDefinition, TagId, TagState, TargetDataLayout, TypeId,
+    TypeInterner, TypeKind, TypeLayout,
 };
 
 use crate::{CHirExpr, SpannedName, StringLit, StringPrefix};
@@ -363,6 +364,46 @@ impl<'arena> InitPlan<'arena> {
     #[must_use]
     pub fn flexible_array_elements(&self) -> u64 {
         self.flexible_array_elements
+    }
+
+    /// Storage includes complete initialized flexible elements, including
+    /// omitted members of the final element. The declared type is unchanged.
+    pub fn storage_layout(
+        &self,
+        types: &TypeInterner,
+        target: &TargetDataLayout,
+    ) -> Result<TypeLayout, LayoutError> {
+        let ty = self.target_type;
+        let mut layout = target.layout_of(types, ty)?;
+        if self.flexible_array_elements == 0 {
+            return Ok(layout);
+        }
+        let TypeKind::Struct(tag) = types.get(ty).ok_or(LayoutError::UnknownType(ty))?.kind else {
+            return Err(LayoutError::NonObjectType(ty));
+        };
+        let TagState::Complete(TagDefinition::Struct(fields)) =
+            &types.tag(tag).ok_or(LayoutError::UnknownTag(tag))?.state
+        else {
+            return Err(LayoutError::IncompleteTag(tag));
+        };
+        let field = fields.last().ok_or(LayoutError::NonObjectType(ty))?;
+        let TypeKind::Array {
+            element,
+            bound: ArrayBound::Unbounded,
+        } = types
+            .get(field.ty)
+            .ok_or(LayoutError::UnknownType(field.ty))?
+            .kind
+        else {
+            return Err(LayoutError::NonObjectType(field.ty));
+        };
+        let element = target.layout_of(types, element)?;
+        layout.size_bytes = self
+            .flexible_array_elements
+            .checked_mul(element.size_bytes)
+            .and_then(|extension| layout.size_bytes.checked_add(extension))
+            .ok_or(LayoutError::ArithmeticOverflow)?;
+        Ok(layout)
     }
 
     #[must_use]

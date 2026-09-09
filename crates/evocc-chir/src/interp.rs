@@ -5180,53 +5180,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         initializer: Option<&crate::ObjectInitializer<'arena>>,
         span: SourceSpan,
     ) -> Result<AccessLayout, InterpreterError> {
-        let base = self.access_layout(ty, span)?;
-        let count = initializer.map_or(0, |initializer| {
-            initializer.plan().flexible_array_elements()
-        });
-        if count == 0 {
-            return Ok(base);
+        let Some(initializer) = initializer else {
+            return self.access_layout(ty, span);
+        };
+        if initializer.plan().target_type() != ty {
+            return Err(InterpreterError::UnsupportedType { ty, span });
         }
-        let TypeKind::Struct(tag) = self
-            .unit
-            .types()
-            .get(ty)
-            .ok_or(InterpreterError::UnsupportedType { ty, span })?
-            .kind
-        else {
-            return Err(InterpreterError::UnsupportedType { ty, span });
-        };
-        let fields = match &self
-            .unit
-            .types()
-            .tag(tag)
-            .ok_or(InterpreterError::UnsupportedType { ty, span })?
-            .state
-        {
-            TagState::Complete(TagDefinition::Struct(fields)) => fields,
-            _ => return Err(InterpreterError::UnsupportedType { ty, span }),
-        };
-        let field = fields
-            .last()
-            .ok_or(InterpreterError::UnsupportedType { ty, span })?;
-        let TypeKind::Array {
-            element,
-            bound: ArrayBound::Unbounded,
-        } = self
-            .unit
-            .types()
-            .get(field.ty)
-            .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?
-            .kind
-        else {
-            return Err(InterpreterError::UnsupportedType { ty, span });
-        };
-        let element = self.access_layout(element, span)?;
-        let size_bytes = count
-            .checked_mul(element.size_bytes)
-            .and_then(|extension| base.size_bytes.checked_add(extension))
-            .ok_or(InterpreterError::UnsupportedType { ty, span })?;
-        Ok(AccessLayout::new(size_bytes, base.align_bytes))
+        initializer
+            .plan()
+            .storage_layout(self.unit.types(), &self.target)
+            .map(AccessLayout::from_type_layout)
+            .map_err(|_| InterpreterError::UnsupportedType { ty, span })
     }
 
     fn memory_binding(&self, symbol: SymbolId) -> Option<MemoryBinding> {

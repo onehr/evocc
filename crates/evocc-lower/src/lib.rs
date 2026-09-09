@@ -1202,33 +1202,20 @@ fn lower_globals<'a>(
                     span: object.span,
                     source,
                 })?;
-            let mut object_size = layout.size_bytes;
-            if let Some(initializer) = &object.initializer {
-                if initializer.plan().flexible_array_elements() != 0 {
-                    for action in initializer.plan().actions() {
-                        let action_span = action.span().unwrap_or(object.span);
-                        let (offset, actual_ty, _) =
-                            subobject_offset(unit, target, object.ty, action.path(), action_span)?;
-                        if actual_ty != action.destination_type() || offset < 0 {
-                            return Err(LowerError::UnsupportedStatement {
-                                span: action_span,
-                                feature: "flexible initializer path disagrees with its object",
-                            });
-                        }
-                        let destination =
-                            initializer_destination_layout(unit, target, action, action_span)?;
-                        object_size = object_size.max(
-                            u64::try_from(offset)
-                                .ok()
-                                .and_then(|offset| offset.checked_add(destination.size_bytes))
-                                .ok_or(LowerError::UnsupportedStatement {
-                                    span: action_span,
-                                    feature: "flexible initializer range overflow",
-                                })?,
-                        );
-                    }
+            let object_size = match &object.initializer {
+                Some(initializer) => {
+                    initializer
+                        .plan()
+                        .storage_layout(unit.types(), target)
+                        .map_err(|source| LowerError::Layout {
+                            ty: object.ty,
+                            span: object.span,
+                            source,
+                        })?
+                        .size_bytes
                 }
-            }
+                None => layout.size_bytes,
+            };
             let size = usize::try_from(object_size).map_err(|_| LowerError::UnsupportedType {
                 ty: object.ty,
                 span: object.span,
@@ -1647,7 +1634,14 @@ fn apply_static_initializer(
     let span = action
         .span()
         .unwrap_or_else(|| SourceSpan::new(evocc_common::FileId::new(0), 0, 0, 1, 1));
-    let (offset, _, bit_field) = subobject_offset(unit, target, object_ty, action.path(), span)?;
+    let (offset, actual_ty, bit_field) =
+        subobject_offset(unit, target, object_ty, action.path(), span)?;
+    if actual_ty != action.destination_type() {
+        return Err(LowerError::UnsupportedStatement {
+            span,
+            feature: "static initializer path disagrees with its object",
+        });
+    }
     let offset = usize::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
         span,
         feature: "negative static initializer offset",

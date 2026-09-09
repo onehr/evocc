@@ -3394,45 +3394,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             (
                 TypeKind::Array {
-                    element,
                     bound: ArrayBound::Unbounded,
+                    ..
                 },
                 WrittenInitializer::List {
                     elements,
                     designations,
                     ..
                 },
-            ) if self.flexible_initializer_allowed => {
-                if designations.iter().any(Option::is_some) {
-                    for (written, designation) in elements.iter().zip(designations) {
-                        let Some(designation) = designation else {
-                            self.report("E2906", "designator-outside-object", written.span());
-                            return None;
-                        };
-                        let resolved =
-                            self.resolve_initializer_designation(target, &path, designation)?;
-                        for destination in resolved {
-                            self.normalize_initializer_value(
-                                destination.ty,
-                                destination.path,
-                                written,
-                                actions,
-                            )?;
-                        }
-                    }
-                    return Some(());
-                }
-                for (index, written) in elements.iter().enumerate() {
-                    let index = u64::try_from(index).ok()?;
-                    self.normalize_initializer_value(
-                        *element,
-                        path.clone().with_index(index),
-                        written,
-                        actions,
-                    )?;
-                }
-                Some(())
-            }
+            ) if self.flexible_initializer_allowed => self.normalize_designated_aggregate_elements(
+                target,
+                path,
+                elements,
+                designations,
+                actions,
+            ),
             (
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::List {
@@ -3938,7 +3914,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 },
                 [SubobjectStep::Field {
                     field_index: candidate,
-                }, SubobjectStep::Index { index }]
+                }, SubobjectStep::Index { index }, ..]
                     if *candidate == field_index =>
                 {
                     index.checked_add(1)
