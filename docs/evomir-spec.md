@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.27** | **Authoritative reference** | **2026-09-09**
+**Revision 0.28** | **Authoritative reference** | **2026-09-09**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -421,10 +421,34 @@ padding. With no named stack arguments it is zero. This is the AAPCS64
 `va_start` rule, measured with both sealed oracles in
 `.evidence/builtin-probes/20260907-variadic-stack/results.txt` and covered by
 `tests/fixtures/variadic-named-stack.c`. The remaining fields are `gr_top = save area +
-64`, `vr_top = gr_top` (never read: the target is built with general
-registers only and both oracles leave `vr_offs = 0`), `gr_offs = -8 * (8 -
-k)` and `vr_offs = 0`; `k = 8` gives `gr_offs = 0` and every argument
-comes from the stack. `va_arg` of a type of size `S` (rounded up to a
+64`, `gr_offs = -8 * (8 - k)`; `k = 8` gives `gr_offs = 0` and every
+general-register argument comes from the stack.
+
+**Vector register save area (revision 0.28).** A variadic callee also
+reserves a 128-byte, 16-byte-aligned vector save area and stores `q0` to
+`q7` into it at offsets `16 * j` in the prologue (`stp q0, q1, ...`
+pairs), and `va_start` stores `vr_top = vector save area + 128` and
+`vr_offs = -128`. It does so even though this profile executes no
+floating point: the callee's own code never reads those registers, but a
+caller compiled by a reference compiler passes a `double` anonymous
+argument in `q0` to `q7`, and a `va_list` this function hands to another
+function (`vsnprintf`) is read by that function's `va_arg` of `double`,
+which takes `vr_offs < 0` as "the value is in the save area". Both sealed
+oracles store all eight registers and write `-128` at `-O0` and `-O2`
+(`.evidence/builtin-probes/20260909-variadic-vector-save/wrapper.c`,
+`results.txt`, printing `7 1e+09 11`); the earlier text, which set
+`vr_offs = 0` and called the field never read, described a program built
+entirely without floating point and was wrong for a mixed link. Measured
+consequence: with `vr_offs = 0`, every musl variadic wrapper EvoCC compiled
+(`snprintf`, `swprintf`, `fprintf`) made the floating-point formatting
+tests of libc-test fail (`printf-fmt-g-*`, `printf-1e9-oob`, `snprintf`,
+`swprintf`, `strtod_simple`: 12 cases in run `20260909T070307Z`), and the
+bisection could not separate them, which capped the passing build at 498
+of 995 assembled units. Named floating-point parameters still do not
+exist in this profile, so the vector registers consumed by named
+parameters are always zero and `vr_offs` is always `-128`; `va_arg` of a
+floating type remains outside the profile. Darwin passes every anonymous
+argument on the stack and has no save areas (revision 0.20's note). `va_arg` of a type of size `S` (rounded up to a
 multiple of 8 as `S8`) and alignment `A` performs the procedure of the
 AAPCS64 Appendix B restricted to general registers:
 
@@ -775,6 +799,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.28 | 2026-09-09 | A variadic callee saves `q0` to `q7` in a 128-byte vector save area and writes `vr_top`/`vr_offs = -128`, as both oracles do; the earlier `vr_offs = 0` lost every `double` a reference-compiled caller passed through an EvoCC-compiled wrapper, the cause of musl's floating-point formatting failures in the mixed link. |
 | 0.27 | 2026-09-09 | Corrects the stack-realignment instruction sequence to use the reserved scratch register, because logical instructions cannot read SP. Both sealed assemblers reject the previous spelling and accept the replacement. Authorized review correction; this changes no compiler code. |
 | 0.26 | 2026-09-09 | Specifies frame realignment (instruction spelling corrected in 0.27) when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |
 | 0.25 | 2026-09-08 | Carry EvoIR 1.9.80 symbolic assembly immediates without a register, with canonical signed-addend text and target-correct symbol/block emission. This revision changes the contract, not compiler code. |
