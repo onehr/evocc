@@ -64,6 +64,17 @@ class BenchmarkEntryTest(unittest.TestCase):
         row = bench.metrics("torture", receipt)
         self.assertEqual((row["status"], row["passed"], row["total"]), ("INCOMPLETE", 2, 4))
 
+    def test_profile_closure_does_not_claim_deferred_programs_passed(self):
+        values = {'programs': 3, 'outcomes': {'pass': 1, 'refused': 2},
+                  'dispositionCounts': {'PASS': 1, 'compiler-failure': 0, 'not-applicable': 1, 'FP-deferred': 1, 'oracle-unusable': 0}}
+        row = bench.metrics('torture', {'suites': {'torture': values}})
+        self.assertEqual((row['status'], row['passed'], row['total']), ('PROFILE_CLEAN', 1, 3))
+        self.assertEqual(row['dispositions'], values['dispositionCounts'])
+        values['dispositionCounts']['compiler-failure'] = 1
+        with self.assertRaises(ValueError):
+            bench.metrics('torture', {'suites': {'torture': values}})
+
+
     def test_oracle_unavailable_stays_in_csmith_denominator(self):
         row = bench.metrics("csmith", {"programs": 10, "agreeing": 9, "campaigns": {
             "base": {"outcomes": {"agree": 9, "oracle-unusable": 1}}
