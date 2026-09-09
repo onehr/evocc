@@ -1,14 +1,13 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T193124.118062Z",
-  "subject": "691b654f8af3d538302ebfa734bcb01343401e92",
+  "run": "20260909T215349.472835Z",
+  "subject": "5aabf60c011760baef01910e7a264743041ee07a",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "6e218a8583dbaf404f032ba03a393575c469ca2c84e48dec25661afeeda4a1fc",
+  "driverSha256": "f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "csmith",
     "torture",
     "--no-build",
     "--jobs",
@@ -16,7 +15,6 @@
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "csmith",
     "torture"
   ],
   "status": "INCOMPLETE",
@@ -80,9 +78,9 @@
         "link-fail": 1
       },
       "refusals": {
-        "E3101": 126,
-        "E2001": 23,
+        "E3101": 128,
         "E2201": 22,
+        "E2001": 21,
         "E2203": 20,
         "E1205": 17,
         "E3021": 17,
@@ -124,14 +122,14 @@
       },
       "dispositions": {
         "PASS": 1268,
-        "compiler-failure": 273,
-        "FP-deferred": 6,
+        "compiler-failure": 268,
+        "FP-deferred": 11,
         "not-applicable": 145,
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T201535Z",
-      "evidence": ".evidence/ladder/e0/20260909T201535Z",
+      "run": "20260909T215349Z",
+      "evidence": ".evidence/ladder/e0/20260909T215349Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -143,20 +141,20 @@
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 173.9,
+      "seconds": 224.6,
       "previous": {
         "rung": "E0a",
         "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
         "outcomes": {
-          "pass": 1267,
-          "refused": 330,
+          "pass": 1269,
+          "refused": 328,
           "not-applicable": 89,
           "fail": 5,
           "link-fail": 1
         },
         "refusals": {
           "E3101": 126,
-          "E2001": 26,
+          "E2001": 23,
           "E2201": 22,
           "E2203": 20,
           "E1205": 17,
@@ -170,9 +168,9 @@
           "E3046": 6,
           "E2920": 6,
           "E2940": 5,
+          "E2933": 3,
           "E2913": 3,
           "E2903": 3,
-          "E2933": 2,
           "E1006": 2,
           "E1007": 2,
           "E0002": 1,
@@ -189,7 +187,7 @@
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 1692,
-        "passed": 1266,
+        "passed": 1268,
         "kind": "programs",
         "runtimeDiagnostics": {
           "E3004 signed-integer-overflow": 2,
@@ -198,20 +196,20 @@
           "E3001 read-of-uninitialized-object": 1
         },
         "dispositions": {
-          "PASS": 1266,
-          "compiler-failure": 276,
+          "PASS": 1268,
+          "compiler-failure": 273,
           "FP-deferred": 6,
-          "not-applicable": 144,
+          "not-applicable": 145,
           "oracle-unusable": 0
         },
         "status": "INCOMPLETE",
-        "run": "20260909T182954Z",
-        "evidence": ".evidence/ladder/e0/20260909T182954Z"
+        "run": "20260909T201535Z",
+        "evidence": ".evidence/ladder/e0/20260909T201535Z"
       },
       "measurement": {
-        "run": "20260909T193124.118062Z",
-        "subject": "691b654f8af3d538302ebfa734bcb01343401e92",
-        "driverSha256": "6e218a8583dbaf404f032ba03a393575c469ca2c84e48dec25661afeeda4a1fc"
+        "run": "20260909T215349.472835Z",
+        "subject": "5aabf60c011760baef01910e7a264743041ee07a",
+        "driverSha256": "f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd"
       }
     },
     "csmith": {

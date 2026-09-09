@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T201535Z",
-  "subject": "691b654",
-  "driverSha256": "6e218a8583dbaf404f032ba03a393575c469ca2c84e48dec25661afeeda4a1fc",
+  "run": "20260909T215349Z",
+  "subject": "5aabf60",
+  "driverSha256": "f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -75,15 +75,15 @@
     },
     "dispositionCounts": {
      "PASS": 1268,
-     "compiler-failure": 273,
-     "FP-deferred": 6,
+     "compiler-failure": 268,
+     "FP-deferred": 11,
      "not-applicable": 145,
      "oracle-unusable": 0
     },
     "refusalsByCode": {
-     "E3101": 126,
-     "E2001": 23,
+     "E3101": 128,
      "E2201": 22,
+     "E2001": 21,
      "E2203": 20,
      "E1205": 17,
      "E3021": 17,
@@ -127,5 +127,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T201535Z"
+ "evidence": ".evidence/ladder/e0/20260909T215349Z"
 }

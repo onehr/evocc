@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-09 UTC,EvoIR 1.9.90 / EvoMIR 0.28, checkout 691b654)
+EvoCC ── (2026-09-09 UTC,EvoIR 1.9.90 / EvoMIR 0.28, checkout 5aabf60)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -41,15 +41,15 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260909T193124.118062Z`; checkout `691b654`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260909T215349.472835Z`; checkout `5aabf60`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
 | ctest | E0b | INCOMPLETE | 209/220 programs | 20260909T171506.687331Z (previous) | E3101: 8, E3030: 1, E2102: 1 |
-| torture | E0a | INCOMPLETE | 1268/1692 programs | 20260909T193124.118062Z | E3101: 126, E2001: 23, E2201: 22 |
-| csmith | E0c | INCOMPLETE | 932/1000 programs | 20260909T193124.118062Z | original seeds; unavailable oracles are not passes |
+| torture | E0a | INCOMPLETE | 1268/1692 programs | 20260909T215349.472835Z | E3101: 128, E2201: 22, E2001: 21 |
+| csmith | E0c | INCOMPLETE | 932/1000 programs | 20260909T193124.118062Z (previous) | original seeds; unavailable oracles are not passes |
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 6/44 units | 20260909T074238.247563Z (previous) | E1001: 37, E3101: 1 |
 | cjson | E3 | INCOMPLETE | 0/2 units | 20260908T135846.118517Z (previous) | E2001: 1, E3101: 1 |
