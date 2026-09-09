@@ -506,7 +506,10 @@ pub(crate) fn eval_integer_constant(
             } else {
                 when_false
             };
-            eval_integer_constant(selected, types, symbols, target)
+            Some(
+                eval_integer_constant(selected, types, symbols, target)?
+                    .cast(integer_expression_type(expression, types, symbols)?),
+            )
         }
         CHirExpr::Elvis(operand, fallback, _) => {
             let operand_value = eval_integer_constant(operand, types, symbols, target)?;
@@ -696,10 +699,18 @@ fn integer_expression_type(
             Some(CIntegerType::ULONG)
         }
         CHirExpr::Comma(_, right, _) => integer_expression_type(right, types, symbols),
+        CHirExpr::Call(callee, _, _) => {
+            let function = crate::PointerTypeDesc::from_expression(symbols, types, callee)
+                .ok()?
+                .pointee();
+            let TypeKind::Function { return_type, .. } = &types.get(function)?.kind else {
+                return None;
+            };
+            canonical_integer_type(types, *return_type)
+        }
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::LabelAddress { .. }
-        | CHirExpr::Call(_, _, _)
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)

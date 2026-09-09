@@ -716,6 +716,9 @@ fn always_inline_substitutes_constant_arguments_before_assembly_validation() {
     emits(
         r#"static __attribute__((always_inline)) int f(int n){asm goto("b %l[hit]"::"i"(n)::hit);return 0;hit:return 1;}int entry(void){return f(3)+f(4);}"#,
     );
+    emits(
+        r#"static __attribute__((always_inline)) int inner(int n){return n;}static __attribute__((always_inline)) int f(int n){asm goto(""::"i"(n)::hit);return 0;hit:return 1;}int entry(void){return f(1?7:inner(3));}"#,
+    );
 }
 
 #[test]

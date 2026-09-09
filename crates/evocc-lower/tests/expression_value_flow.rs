@@ -404,6 +404,14 @@ fn inline_constant_arguments_do_not_duplicate_control_flow_identities() {
         ));
     }
     agrees("static int x;static __attribute__((always_inline)) int *inner(void){return &x;}static __attribute__((always_inline)) int *outer(int *p){return p;}int main(void){return outer(1 ? &x : inner())!=&x;}");
+    for source in [
+        "static __attribute__((always_inline)) unsigned long f(unsigned long n){return n;}int main(void){return f(-1)!=~0UL;}",
+        "static __attribute__((always_inline)) unsigned __int128 f(unsigned __int128 n){return n;}int main(void){return f(-1)!=~(unsigned __int128)0;}",
+        "static __attribute__((always_inline)) unsigned __int128 f(unsigned __int128 n){return n;}int main(void){return f(((unsigned __int128)1<<100)+7)!=(((unsigned __int128)1<<100)+7);}",
+        "static __attribute__((always_inline)) __int128 f(__int128 n){return n;}int main(void){return f(-((__int128)1<<100)+7)!=(-((__int128)1<<100)+7);}",
+    ] {
+        agrees(source);
+    }
 }
 
 #[test]

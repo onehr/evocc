@@ -30,6 +30,7 @@ struct Uses<'a> {
     addresses: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
+    owns_statements: bool,
 }
 
 /// Replaying an immutable parameter's argument must not read mutable storage
@@ -241,6 +242,7 @@ fn inspect_with_declarations<'a>(
                 | CHirStmt::AttributedNull(..) => {}
             },
             Node::Expr(e, callee) => {
+                uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 if let CHirExpr::Ident { symbol, .. } = e {
                     uses.references.insert(*symbol);
                 }
@@ -657,6 +659,60 @@ impl<'a> Substitution<'a, '_> {
             span,
         })
     }
+    /// Propagate a value, never a second copy of its owned statements/labels.
+    /// The original object initializer remains in place, so argument effects
+    /// and checked-arithmetic obligations are still executed exactly once.
+    fn repeatable_value(
+        &self,
+        expression: &'a CHirExpr<'a>,
+        ty: TypeId,
+    ) -> Option<&'a CHirExpr<'a>> {
+        if let Some(value) = crate::constant::eval_integer_constant(
+            expression,
+            &self.unit.types,
+            &self.unit.symbols,
+            self.target,
+        ) {
+            let span = expression.span();
+            let suffix = match (value.ty().rank(), value.ty().is_signed()) {
+                (0..=3, true) => IntSuffix::None,
+                (0..=3, false) => IntSuffix::U,
+                (4, true) => IntSuffix::L,
+                (4, false) => IntSuffix::UL,
+                (5, true) => IntSuffix::LL,
+                _ => IntSuffix::ULL,
+            };
+            let literal = |bits| {
+                self.alloc(CHirExpr::Lit(
+                    IntLit {
+                        value: bits,
+                        suffix,
+                        base: IntBase::Hex,
+                    },
+                    span,
+                ))
+            };
+            let low = self.alloc(CHirExpr::Cast(ty, literal(value.raw_bits() as u64), span));
+            if value.raw_bits() >> 64 == 0 {
+                return Some(low);
+            }
+            let high = self.alloc(CHirExpr::Cast(
+                ty,
+                literal((value.raw_bits() >> 64) as u64),
+                span,
+            ));
+            let high = self.alloc(CHirExpr::Binary(BinaryOp::Shl, high, literal(64), span));
+            return Some(self.alloc(CHirExpr::Binary(BinaryOp::BitOr, high, low, span)));
+        }
+        (repeatable_argument(
+            expression,
+            &self.unit.types,
+            &self.unit.symbols,
+            self.target,
+        ) && !inspect([Node::Expr(expression, false)]).owns_statements)
+            .then_some(expression)
+    }
+
     fn object(
         &self,
         s: SymbolId,
@@ -866,9 +922,8 @@ impl<'a> Substitution<'a, '_> {
                     }
                     _ => None,
                 };
-                let repeatable = value.is_some_and(|value| {
-                    repeatable_argument(value, &self.unit.types, &self.unit.symbols, self.target)
-                });
+                let replacement = value.and_then(|value| self.repeatable_value(value, o.ty));
+                let repeatable = replacement.is_some();
                 let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
                 if repeatable
                     && !c.mutable.contains(&original)
@@ -876,7 +931,7 @@ impl<'a> Substitution<'a, '_> {
                     && !qualifiers.is_atomic
                     && o.asm_label.is_none()
                 {
-                    c.constants.insert(original, value.unwrap());
+                    c.constants.insert(original, replacement.unwrap());
                 }
                 // Only a straight-line, repeatable declaration prefix is
                 // known to dominate every later use. A statement-expression
@@ -1246,9 +1301,10 @@ impl<'a> Substitution<'a, '_> {
                 if !c.mutable.contains(&original)
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
-                    && repeatable_argument(arg, &self.unit.types, &self.unit.symbols, self.target)
                 {
-                    c.constants.insert(original, arg);
+                    if let Some(replacement) = self.repeatable_value(arg, parameter.ty) {
+                        c.constants.insert(original, replacement);
+                    }
                 }
             }
         }
