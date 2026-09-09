@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "authority": "Architecture review of 2026-09-09: original identities and five-way dispositions; raw benchmark outcomes remain unchanged.",
+  "sourceCommit": "78d4ac73dd391005b895a6148cd9831e28e1208b",
+  "programs": {
+    "torture:20050107-1": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: enumeration mode canonical type",
+      "sourceSha256": "6d87852f44567f8935cbc519f7b170652fcbfac249dc09c202bf3794c16038b1",
+      "evidence": [
+        ".evidence/builtin-probes/20260908-integer-modes/results.txt"
+      ]
+    },
+    "torture:20050119-1": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: enumeration mode canonical type",
+      "sourceSha256": "4c279df792eb5a96540858429ae3686b5d3008cc34075e6d0434a9c014147350",
+      "evidence": [
+        ".evidence/builtin-probes/20260908-integer-modes/results.txt"
+      ]
+    },
+    "torture:20050119-2": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: enumeration mode canonical type",
+      "sourceSha256": "75fbb2275508bec55ac52616771ac22dbdfd8afa679a5472a9e95b5519d3810b",
+      "evidence": [
+        ".evidence/builtin-probes/20260908-integer-modes/results.txt"
+      ]
+    },
+    "torture:20230630-2": {
+      "disposition": "not-applicable",
+      "reason": "GCC-only scalar_storage_order changes object bytes",
+      "sourceSha256": "3fee99e4e5c5b5ba4cd56c80287630d2a3b6f9e3eea2751f37cf6880393dc43f",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-storage-order/results.txt"
+      ]
+    },
+    "torture:20230630-4": {
+      "disposition": "not-applicable",
+      "reason": "GCC-only scalar_storage_order changes object bytes",
+      "sourceSha256": "75b86123dbfa571b0c34576552ccbccb0a9e3a1166f7e90ef8400f7961749868",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-storage-order/results.txt"
+      ]
+    },
+    "torture:arith-rand": {
+      "disposition": "not-applicable",
+      "reason": "both compiler instrumentation paths diagnose unrequested runtime signed overflow",
+      "sourceSha256": "2a7bade42fd22c970f880cb2fe78665cb71755c8557d224dd1fa97f176bc6764",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-new-overflow-failures/results.txt"
+      ]
+    },
+    "torture:arith-rand-ll": {
+      "disposition": "not-applicable",
+      "reason": "both compiler instrumentation paths diagnose unrequested runtime signed overflow",
+      "sourceSha256": "8e4da7b080eee46dd5d37a9b588ee64a439ef009a8fa3458573475278bbd9cf0",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-new-overflow-failures/results.txt"
+      ]
+    },
+    "torture:bitfld-3": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: wide bit-field integer promotion",
+      "sourceSha256": "3bec021b8d98a23aa8a1154167df5c7c984f1c9390d8ccbb03f1b13572e24a7a",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/results.txt"
+      ]
+    },
+    "torture:bitfld-5": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: wide bit-field integer promotion",
+      "sourceSha256": "bd2186dc773085e4d4873760c305aa72e406c13f605348ad256d6f4fe1d1a5dc",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/results.txt"
+      ]
+    },
+    "torture:loop-3b": {
+      "disposition": "not-applicable",
+      "reason": "both compiler instrumentation paths diagnose unrequested runtime signed overflow",
+      "sourceSha256": "7ea7763d2a14f6f6dd0eeb856cd5e4b7600ee17520c56db939bb3e34844904b4",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-new-overflow-failures/results.txt"
+      ]
+    },
+    "torture:pr19687": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: inactive union tail bytes differ with optimization",
+      "sourceSha256": "931deff4fba057e414cd3b9dcb82b30c8efa529c408e716e3864eea5f2971be1",
+      "evidence": [
+        ".evidence/builtin-probes/20260907-union-tail/results.txt"
+      ]
+    },
+    "torture:pr28865": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: nonempty flexible-array initialization nested in another aggregate",
+      "sourceSha256": "ab1f11aedd377667e47af314418c4c79c6492b71b327c4181bb772c19c2cf6a4",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-flexible-strings/results.txt"
+      ]
+    },
+    "torture:pr32244-1": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: wide bit-field integer promotion",
+      "sourceSha256": "1f3e091ac93fd1efcae495b1cbea01db21fcf546c0009e4e98d94173cc515525",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/results.txt"
+      ]
+    },
+    "torture:pr34971": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict: wide bit-field integer promotion",
+      "sourceSha256": "4eb46d66dc3dbb9dbc0a518d6c0101d616dbf983475b4c5cf462c3dce0c92638",
+      "evidence": [
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/results.txt"
+      ]
+    },
+    "torture:pr86714": {
+      "disposition": "not-applicable",
+      "reason": "original source explicitly tests quality of implementation for an excessively long string initializer",
+      "sourceSha256": "d33772251fbc170de4fea0464aa8f90aa3b929407613ed3d59193c14b7fccc15",
+      "evidence": [
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c"
+      ]
+    },
+    "torture:va-arg-trap-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed quality-of-implementation test outside the unpromoted va_arg rejection profile",
+      "sourceSha256": "6fbbc2681a834c531d94a5e7c2d29fc13ce41857d726387ab0c7ef6e0f7e7dad",
+      "evidence": [
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c"
+      ]
+    }
+  }
+}

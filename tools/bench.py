@@ -3,7 +3,8 @@
 
 Examples: python3 tools/bench.py csmith cjson
           python3 tools/bench.py all --jobs 4 --budget 20
-Exit 0: every selected benchmark fully passes. Exit 1: measured gaps/failures.
+Exit 0: selected gates pass or have evidenced PROFILE_CLEAN dispositions.
+PROFILE_CLEAN is not an all-program PASS. Exit 1: measured gaps/failures.
 Exit 2: usage, build, runner or evidence error. No failures are skipped.
 """
 
@@ -128,6 +129,16 @@ def metrics(name, data):
                    outcomes=values["outcomes"], kind="programs",
                    refusals=values.get("refusalsByCode", {}),
                    runtimeDiagnostics=values.get("failuresByInterpreterVerdict", {}))
+        if dispositions := values.get('dispositionCounts'):
+            labels = {'PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'oracle-unusable'}
+            if (set(dispositions) != labels
+                    or any(not isinstance(n, int) or n < 0 for n in dispositions.values())
+                    or sum(dispositions.values()) != row['total']
+                    or dispositions['PASS'] > row['passed']):
+                raise ValueError('program dispositions disagree with the original denominator or raw passes')
+            row.update(passed=dispositions['PASS'], dispositions=dispositions)
+            if not dispositions['compiler-failure'] and dispositions['PASS'] != row['total']:
+                row['status'] = 'PROFILE_CLEAN'
     elif name == "csmith":
         outcomes = Counter()
         for campaign in data["campaigns"].values():
@@ -324,7 +335,7 @@ def main(argv=None):
                 row.update(command=cmd, exitCode=code, seconds=round(time.monotonic() - started, 1), previous=previous)
                 row["measurement"] = {key: summary[key] for key in ("run", "subject", "driverSha256")}
                 summary["benchmarks"][name] = row
-                overall = max(overall, 2 if row["status"] == "ERROR" else int(row["status"] != "PASS"))
+                overall = max(overall, 2 if row["status"] == "ERROR" else int(row["status"] not in ('PASS', 'PROFILE_CLEAN')))
                 print(f"bench {name}: {row['status']} {row.get('passed', '?')}/{row.get('total', '?')}", flush=True)
                 save(summary, directory)
                 if not binary.is_file() or sha256(binary) != driver:
@@ -333,7 +344,8 @@ def main(argv=None):
             summary["status"] = "INTERRUPTED"
             save(summary, directory)
             return 130
-        summary["status"] = "PASS" if overall == 0 else ("ERROR" if overall == 2 else "INCOMPLETE")
+        profile_only = any(summary['benchmarks'][name]['status'] == 'PROFILE_CLEAN' for name in selected)
+        summary["status"] = ("PROFILE_CLEAN" if profile_only else "PASS") if overall == 0 else ("ERROR" if overall == 2 else "INCOMPLETE")
         save(summary, directory)
         render = subprocess.run([sys.executable, str(ROOT / "tools/render-status.py")], cwd=ROOT)
         print(f"bench receipt: {RECEIPT}; capture: {directory.relative_to(ROOT)}", flush=True)

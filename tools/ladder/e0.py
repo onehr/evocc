@@ -48,6 +48,7 @@ IMAGE = "evo-flight-lab:sealed"
 TARGET = "aarch64-unknown-linux-gnu"
 TARGET_EVIDENCE = ".evidence/builtin-probes/20260909-torture-requirements/results.txt"
 STACK_BYTES = 8388608
+DISPOSITIONS = ('PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'oracle-unusable')
 # gcc/testsuite/lib/target-supports.exp from the pinned torture source:
 # these predicates describe the target, not the subject's implementation.
 # In particular, missing computed-goto lowering cannot make indirect_jumps
@@ -503,6 +504,26 @@ def interpreter_verdict(evocc: Path, work: Path, name: str, inc: list[str]) -> s
     )
 
 
+def classify_program(row: dict, source: Path, reviewed: dict) -> dict:
+    key = f"{row['suite']}:{row['program']}"
+    if key in reviewed:
+        rule = reviewed[key]
+        evidence = rule.get('evidence', []) if isinstance(rule, dict) else []
+        if (not isinstance(rule, dict)
+                or rule.get('disposition') not in ('not-applicable', 'FP-deferred')
+                or rule.get('sourceSha256') != sha256(source)
+                or not rule.get('reason') or not isinstance(evidence, list) or not evidence
+                or not all(isinstance(path, str) and (ROOT / path).is_file() for path in evidence)):
+            return {'disposition': 'compiler-failure',
+                    'dispositionError': 'reviewed disposition has missing evidence, changed source or invalid label'}
+        return {'disposition': rule['disposition'], 'dispositionReason': rule['reason'],
+                'dispositionEvidence': evidence, 'sourceSha256': rule['sourceSha256']}
+    if row['outcome'] == 'not-applicable':
+        return {'disposition': 'not-applicable',
+                'dispositionEvidence': [row['applicabilityEvidence']]}
+    return {'disposition': 'PASS' if row['outcome'] == 'pass' else 'compiler-failure'}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suite", default="all", choices=["all", "ctest", "torture"])
@@ -520,6 +541,8 @@ def main() -> int:
     out_dir = EVIDENCE / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     system_includes = include_flags(sysroot())
+    disposition_file = ROOT / 'tests/contracts/benchmark-program-dispositions.json'
+    reviewed = json.loads(disposition_file.read_text())['programs'] if disposition_file.is_file() else {}
     head = sh(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"]).stdout.strip()
     summary = {
         "run": run_id,
@@ -551,6 +574,7 @@ def main() -> int:
             rows = emit(evocc, work, names, inc)
             runs = run_in_container(work)
             counts = collections.Counter()
+            dispositions = collections.Counter(dict.fromkeys(DISPOSITIONS, 0))
             refusals = collections.Counter()
             verdicts = collections.Counter()
             applied_options = collections.Counter()
@@ -568,10 +592,6 @@ def main() -> int:
                     else row.get("run", "not-run")
                 )
                 row["outcome"] = outcome
-                row['disposition'] = (
-                    'PASS' if outcome == 'pass' else
-                    'not-applicable' if outcome == 'not-applicable' else 'compiler-failure'
-                )
                 if outcome in ('not-applicable', 'requirement-unresolved'):
                     key = f'{suite}:{name}'
                     applicability_evidence[key] = {
@@ -582,7 +602,9 @@ def main() -> int:
                         'reasons': row['applicability'],
                     }
                     row['applicabilityEvidence'] = str((out_dir / 'applicability.json').relative_to(ROOT)) + '#' + key
+                row.update(classify_program(row, source_dir / f'{name}.c', reviewed))
                 counts[outcome] += 1
+                dispositions[row['disposition']] += 1
                 applied_options.update(row["options"]["applied"])
                 unhandled_programs += bool(row["options"]["unhandled"])
                 if outcome == "refused":
@@ -598,6 +620,7 @@ def main() -> int:
                 "programs": len(names),
                 "adjustedEmptyParameterLists": adjusted,
                 "outcomes": dict(counts),
+                "dispositionCounts": dict(dispositions),
                 "refusalsByCode": dict(refusals.most_common()),
                 "failuresByInterpreterVerdict": dict(verdicts.most_common()),
                 "appliedOptions": dict(applied_options),
