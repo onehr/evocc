@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.89** | **Authoritative reference** | **2026-09-09**
+**Revision 1.9.90** | **Authoritative reference** | **2026-09-09**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1111,7 +1111,14 @@ this table does not combine, is `E3021` with the constraint named. Clobbers:
 and a named physical register, which the allocator must treat as written.
 Template operand references: `%0` to `%9`, `%[name]`, a width modifier
 `%w0`/`%x0` before the number or name, `%c0`/`%c[name]` for immediates,
-`%l[label]` in an `asm.goto`,
+`%l[label]` or `%l<N>` in an `asm.goto` (revision 1.9.90: `N` counts the
+outputs, then the inputs, then the labels, in that order, so the first
+label of an `asm.goto` with `k` operands is `%l<k>`; an index outside the
+label range is `E3021`, as both oracles reject it; the kernel's extable
+idiom `.long (%l2) - .` in `get_user` was the first error of 2,272 units
+in survey `survey-eval-20260909T073457Z`; both oracles agree on numbered
+and named forms at `-O0` and `-O2` in
+`.evidence/builtin-probes/20260909-asm-numbered-labels/labels.c`),
 `%a0`/`%a[name]` (revision 1.9.88) for an address operand, and
 `%%` for a literal percent; any other reference is `E3021`.
 
@@ -4194,6 +4201,44 @@ symbolic name, constraint text and expression, clobber strings in order, and
 label names. The keyword-alias and piece spellings are the only things the
 representation drops.
 
+**Wide bit-fields in arithmetic (revision 1.9.90).** For a bit-field whose
+declared type is wider than `int`, GCC-14 computes arithmetic in the
+field's own precision and Clang-19 in the declared type, so `x + 1`,
+`x << k`, `~x`, `-x`, `x * 3`, `++x` and compound assignment give different
+values for a field of width 33, 40, 52 or 58 at both `-O0` and `-O2`, while
+comparisons, truth tests, right shifts, conversions to a type at least as
+wide as the field, and binary arithmetic whose other operand already has a
+type at least as wide as the declared type (`maplen * 4096UL`) give the
+same value (`.evidence/builtin-probes/20260909-wide-bitfield-shapes/`,
+`results.txt`, 27 shapes). `E2939` is therefore raised only where the two
+disagree: a wide bit-field rvalue as the operand of unary `~` or `-`, of
+`++`/`--` or a compound assignment, or of a binary `+ - * / % << & | ^`
+whose other operand's promoted type is narrower than the field's declared
+type. The consensus contexts are admitted with the declared type as the
+operation type, which is what both oracles compute there. The measured
+kernel shape `desc->iommu_msi_iova << desc->iommu_msi_shift`
+(`include/linux/msi.h`, 150 units) is in the conflicting class and stays
+refused unless the function holding it is not lowered (next paragraph).
+
+**Unreferenced internal functions (revision 1.9.90).** A function with
+internal linkage that nothing in the unit references by call, address,
+alias or module assembly is not lowered, and no lowering refusal
+(`E30xx`) or profile refusal recorded in Appendix D is raised for its
+body; the front end still parses and checks it. This generalises
+revision 1.9.75 from substituted `always_inline` bodies to every unused
+internal function, and matches the reference compilers, which emit no
+code for such a function. A unit is therefore refused only for
+constructs in code the reference build also contains. The drop is
+computed to a fixed point before lowering, exactly as EvoMIR 0.16 does
+after it.
+
+**Alignment of an incomplete array member (revision 1.9.90).** `__alignof__`
+and `_Alignof` of an expression or type whose type is an array, including
+a flexible array member, answer the element type's alignment raised by an
+`aligned` attribute on the member (`__alignof__(tfm->__crt_ctx)` in
+`include/linux/crypto.h`, 45 units); no layout of the incomplete array is
+needed, and `E3101` is not raised for the query.
+
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
 After EqSat optimization and extraction, the chosen EvoIR representations
@@ -5916,6 +5961,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.90 | 2026-09-09 | Admits numbered `%l<N>` label references in `asm.goto`; narrows `E2939` to the measured conflicting contexts of wide bit-field arithmetic and admits the consensus ones; stops lowering unreferenced internal functions, generalising 1.9.75; defines `__alignof__` of an incomplete array member. |
 | 1.9.89 | 2026-09-09 | Corrects the claim that function alignment is unobservable in interpreters: virtual function addresses must satisfy the declared alignment and preserve identity and pointer round-trips. Authorized review correction; this changes no compiler code. |
 | 1.9.88 | 2026-09-09 | Admits the `p` constraint and the `%a` address modifier (the kernel's `prfm pldl1keep, %a0`); defines signed left shift in the GNU profile as the truncated bit pattern for a valid count, dropping the `signed_shl_defined` obligation as both oracles do; adds `align=N` to function headers for `aligned` on functions with maximum-of-declarations merging. |
 | 1.9.87 | 2026-09-09 | Bounds the shift-amount width of the P0 profile to 1..64, matching both eligibility implementations and the 64-bit fact lattice; wider amounts make a region ineligible. |
