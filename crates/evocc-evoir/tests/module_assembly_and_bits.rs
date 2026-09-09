@@ -4,6 +4,55 @@ use evocc_evoir::{
 use evocc_types::{EvoIRType, Region};
 
 #[test]
+fn builtin_trap_round_trips_and_reports_only_on_its_executed_edge() {
+    let text = "\
+func @f(%arg0: bits<1>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<1>, %v1: mem<all>, %v2: world):
+    cond_br %v0, ^b1(%v1, %v2), ^b2(%v1, %v2)
+
+^b1(%v3: mem<all>, %v4: world):
+    trap.builtin_trap
+
+^b2(%v5: mem<all>, %v6: world):
+    %v7 = const.bits<32> 7
+    ret %v7, %v5, %v6
+}
+";
+    let module = parse_section9_module(text.as_bytes()).expect("explicit typed trap parses");
+    evocc_evoir::validate_module(&module).expect("trap remains a valid effectful terminator");
+    assert_eq!(render_module(&module), text);
+    for reached in [false, true] {
+        let result = interpret_module(
+            &module,
+            "f",
+            &[
+                RuntimeValue::new(EvoIRType::Bits(1), u64::from(reached)),
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+                RuntimeValue::new(EvoIRType::World, 0),
+            ],
+            InterpreterLimits::new(100),
+        );
+        if reached {
+            let error = result.unwrap_err();
+            assert_eq!(error.code(), "E3047");
+            assert_eq!(error.message(), "builtin-trap-reached");
+        } else {
+            assert_eq!(result.unwrap().return_values[0].raw_bits, 7);
+        }
+    }
+    assert!(parse_section9_module(
+        text.replace("trap.builtin_trap", "trap.builtin_trap %v3")
+            .as_bytes()
+    )
+    .is_err());
+    let mut dishonest_effects = module;
+    dishonest_effects.functions[0].effects.may_trap = false;
+    assert!(evocc_evoir::validate_module(&dishonest_effects).is_err());
+}
+
+#[test]
 fn module_assembly_round_trips_without_execution() {
     let text = "asm \".globl name\\x0a\"\n";
     let module = parse_section9_module(text.as_bytes()).expect("module assembly is admitted");

@@ -88,6 +88,39 @@ fn bracket_attributes_keep_layout_and_function_execution() {
 }
 
 #[test]
+fn builtin_trap_only_terminates_when_reached() {
+    agrees("int f(int stop){if(stop)__builtin_trap();return 7;} int main(void){return f(0)!=7;}");
+    agrees("int main(void){return sizeof(__builtin_trap())!=1;}");
+    agrees("static __attribute__((always_inline)) int f(int stop){if(stop)__builtin_trap();return 7;} int main(void){return f(0)!=7;}");
+    evaluates("int main(void){__builtin_trap();}", Some("E3047"));
+    evaluates(
+        "int main(void){return (__builtin_trap(),0);}",
+        Some("E3047"),
+    );
+    evaluates("static __attribute__((always_inline)) void f(void){__builtin_trap();} int main(void){f();return 0;}", Some("E3047"));
+}
+
+#[test]
+fn builtin_trap_is_a_zero_argument_builtin_not_an_external_identifier() {
+    for (source, code) in [
+        ("void f(void){__builtin_trap(1);}", "E2909"),
+        ("void f(void){__builtin_trap;}", "E2910"),
+        (
+            "_Static_assert((__builtin_trap(),1),\"not constant\");",
+            "E2912",
+        ),
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45024);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        parser.parse_translation_unit_in(&arena);
+        assert_eq!(parser.diagnostic().map(|d| d.code), Some(code), "{source}");
+    }
+}
+
+#[test]
 fn floating_object_declarations_do_not_execute_floating_values() {
     for source in [
         "int main(void){double value;return sizeof(value)!=8;}",
