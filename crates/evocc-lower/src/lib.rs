@@ -6702,6 +6702,18 @@ impl<'a> FunctionLowerer<'a> {
         Ok(())
     }
 
+    fn contains_addressed_label(&self, statement: &CHirStmt<'_>) -> bool {
+        if self.address_labels.is_empty() {
+            return false;
+        }
+        let mut references = FunctionReferences::default();
+        collect_references_stmt(statement, &mut references);
+        references
+            .defined_labels
+            .iter()
+            .any(|label| self.address_labels.contains_key(label))
+    }
+
     fn lower_if(
         &mut self,
         condition: &'a CHirExpr<'a>,
@@ -6712,23 +6724,14 @@ impl<'a> FunctionLowerer<'a> {
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
         let mut known_truth = constant_truth(self.unit, self.target, condition);
-        if known_truth.is_some() && !self.address_labels.is_empty() {
-            let contains_addressed_label = |branch| {
-                let mut references = FunctionReferences::default();
-                collect_references_stmt(branch, &mut references);
-                references
-                    .defined_labels
-                    .iter()
-                    .any(|label| self.address_labels.contains_key(label))
-            };
-            if contains_addressed_label(then_branch)
-                || else_branch.is_some_and(contains_addressed_label)
-            {
-                // An address-taken label is an observable code identity.
-                // Section 2.5 still requires its terminator-edge path from
-                // entry; do not remove that path merely to fold a branch.
-                known_truth = None;
-            }
+        if known_truth.is_some()
+            && (self.contains_addressed_label(then_branch)
+                || else_branch.is_some_and(|branch| self.contains_addressed_label(branch)))
+        {
+            // An address-taken label is an observable code identity.
+            // Section 2.5 still requires its terminator-edge path from
+            // entry; do not remove that path merely to fold a branch.
+            known_truth = None;
         }
         let condition = self.lower_condition(condition, &mut state)?;
         let mut then_symbols = live_after.clone();
@@ -7133,6 +7136,7 @@ impl<'a> FunctionLowerer<'a> {
             integer_promotion(selector.integer),
             &state,
         )?;
+        let known_selector = self.known_switch_selector(expression, body, selector.integer);
         let selector_key = self.retain_temporary(selector.value, &mut state);
         let mut labels = Vec::new();
         collect_nested_switch_labels(body, &mut labels);
@@ -7157,6 +7161,17 @@ impl<'a> FunctionLowerer<'a> {
         let mut dispatch = state.clone();
         for (matcher, entry) in &entries {
             let Some(matcher) = matcher else { continue };
+            let next = self.new_block_from(&dispatch, &keys, BlockRole::Ordinary)?;
+            if let Some(selector) = known_selector {
+                let target = if self.switch_case_matches(*matcher, selector)? {
+                    entry.block
+                } else {
+                    next.block
+                };
+                self.branch(&dispatch, target, &keys)?;
+                dispatch = next;
+                continue;
+            }
             let selected = self.token(&dispatch, selector_key)?;
             let condition = self.lower_switch_condition(
                 *matcher,
@@ -7166,7 +7181,6 @@ impl<'a> FunctionLowerer<'a> {
                 },
                 &mut dispatch,
             )?;
-            let next = self.new_block_from(&dispatch, &keys, BlockRole::Ordinary)?;
             let true_args = self.edge_values(&dispatch, &keys)?;
             let false_args = self.edge_values(&dispatch, &keys)?;
             self.terminate(
@@ -7201,12 +7215,33 @@ impl<'a> FunctionLowerer<'a> {
         Ok(Flow { normal: vec![exit] })
     }
 
+    fn known_switch_selector(
+        &self,
+        expression: &CHirExpr<'_>,
+        body: &CHirStmt<'_>,
+        integer: CIntegerType,
+    ) -> Option<CInteger> {
+        if self.contains_addressed_label(body) {
+            return None;
+        }
+        constant_integer(self.unit, self.target, expression).map(|v| v.cast(integer))
+    }
+
     fn lower_case_constant(
         &mut self,
         expression: &'a CHirExpr<'a>,
         integer: CIntegerType,
         state: &State,
     ) -> Result<ExprValue, LowerError> {
+        let value = self.case_constant(expression, integer)?;
+        self.wide_constant(state, integer, value.raw_bits())
+    }
+
+    fn case_constant(
+        &self,
+        expression: &'a CHirExpr<'a>,
+        integer: CIntegerType,
+    ) -> Result<CInteger, LowerError> {
         let value = evocc_chir::interp::interpret_static_integer_expression(
             self.unit,
             expression,
@@ -7217,7 +7252,31 @@ impl<'a> FunctionLowerer<'a> {
             feature: "case value is not an integer constant expression",
         })?
         .cast(integer);
-        self.wide_constant(state, integer, value.raw_bits())
+        Ok(value)
+    }
+
+    fn switch_case_matches(
+        &self,
+        matcher: SwitchCase<'a>,
+        selector: CInteger,
+    ) -> Result<bool, LowerError> {
+        match matcher {
+            SwitchCase::Single(expression) => Ok(self
+                .case_constant(expression, selector.ty())?
+                .raw_bits()
+                == selector.raw_bits()),
+            SwitchCase::Range(first, last) => {
+                let first = self.case_constant(first, selector.ty())?;
+                let last = self.case_constant(last, selector.ty())?;
+                // Both operands have the promoted selector type. Comparing
+                // them does not discharge any source arithmetic obligation.
+                Ok(
+                    eval_binary_integer(BinaryOp::Le, first, selector).is_ok_and(CInteger::truth)
+                        && eval_binary_integer(BinaryOp::Le, selector, last)
+                            .is_ok_and(CInteger::truth),
+                )
+            }
+        }
     }
 
     fn lower_switch_condition(
@@ -7294,6 +7353,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         let selector = self.lower_expr(expression, &mut state)?;
         let selector_type = integer_promotion(selector.integer);
+        let known_selector = self.known_switch_selector(expression, body, selector_type);
         let already_promoted = selector.integer == selector_type;
         let selector = self.cast(selector, selector_type, &state)?;
         let selector_temporary = if matches!(expression, CHirExpr::Ident { symbol, .. }
@@ -7474,8 +7534,6 @@ impl<'a> FunctionLowerer<'a> {
                     })?,
                 }
             };
-            let condition =
-                self.lower_switch_condition(case_matcher, current_selector, &mut dispatch)?;
             let true_entry = &entries[index];
             let (false_target, false_args) =
                 if position + 1 < segments.len() && !next_keys.is_empty() {
@@ -7490,6 +7548,17 @@ impl<'a> FunctionLowerer<'a> {
                     (break_placeholder, self.edge_values(&dispatch, &break_keys)?)
                 };
             let true_args = self.edge_values(&dispatch, &true_entry.1)?;
+            if let Some(selector) = known_selector {
+                let (target, arguments) = if self.switch_case_matches(case_matcher, selector)? {
+                    (true_entry.0.block, true_args)
+                } else {
+                    (false_target, false_args)
+                };
+                self.terminate(&dispatch, Inst::Br(target, arguments))?;
+                continue;
+            }
+            let condition =
+                self.lower_switch_condition(case_matcher, current_selector, &mut dispatch)?;
             self.terminate(
                 &dispatch,
                 Inst::CondBr(
@@ -11090,6 +11159,9 @@ fn constant_integer(
     expression: &CHirExpr<'_>,
 ) -> Option<CInteger> {
     match expression {
+        CHirExpr::SizeOf(..) | CHirExpr::SizeOfExpr(..) | CHirExpr::AlignOf(..) => {
+            evocc_chir::interp::interpret_static_integer_expression(unit, expression, target).ok()
+        }
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
         CHirExpr::CharLit(literal, _) => Some(literal.integer_value()),
         CHirExpr::Ident {
