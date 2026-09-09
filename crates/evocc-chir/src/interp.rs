@@ -42,17 +42,10 @@ const MAX_MEMORY_OBJECTS: u64 = 65_536;
 const MAX_MEMORY_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_MEMORY_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_VOLATILE_EVENTS: u64 = 1_048_576;
-/// Deepest static-initializer expression the recursive evaluator may descend.
-///
-/// Static initializers are the one remaining path that reaches `eval_expr`
-/// directly instead of the iterative task machine, so this bound is what keeps
-/// a hostile constant expression from aborting the process on a host stack
-/// overflow. It is calibrated against measurement, not taste: on a 2 MiB debug
-/// test thread this evaluator survives depth 224 and overflows by depth 240, so
-/// the limit keeps roughly a 3.5x margin for release builds, other targets, and
-/// future growth of the evaluator's stack frame. Raising it is only safe once
-/// static initializers are evaluated through the task machine like every other
-/// expression; do not raise it on the strength of one platform passing.
+/// Bound for the remaining recursive address/aggregate initializer paths.
+/// Integer expressions and cast chains use explicit stacks, so their depth
+/// does not consume this allowance. Keep the bound until those remaining
+/// object paths are iterative too.
 const MAX_STATIC_INITIALIZER_DEPTH: usize = 64;
 
 /// Deterministic execution limits for one interpreter invocation.
@@ -900,7 +893,6 @@ pub fn interpret_static_integer_expression<'arena>(
     target: &TargetDataLayout,
 ) -> Result<CInteger, InterpreterError> {
     let mut interpreter = Interpreter::new(unit, target, InterpreterLimits::default(), false)?;
-    interpreter.guard_static_initializer_evaluation(expression)?;
     interpreter.eval_static_integer_expression(expression)
 }
 
@@ -929,6 +921,7 @@ struct Interpreter<'unit, 'arena> {
     fuel_anchor: Option<SourceSpan>,
     nested_mutation_depth: usize,
     static_integer_evaluation: bool,
+    integer_expression_types: HashMap<usize, CIntegerType>,
     temporary_origin_site: u64,
 }
 
@@ -981,6 +974,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             fuel_anchor: None,
             nested_mutation_depth: 0,
             static_integer_evaluation: false,
+            integer_expression_types: HashMap::new(),
             temporary_origin_site: 0,
         })
     }
@@ -999,12 +993,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(())
     }
 
-    /// Reject a static initializer whose expression tree is deeper than the
-    /// recursive evaluator can safely descend.
-    ///
-    /// This walk is itself iterative, so the guard can never be the thing that
-    /// overflows the host stack it exists to protect. Depth is measured in
-    /// expression nodes along one root-to-leaf path.
+    /// Bound only the initializer paths that still use recursive object walks.
+    /// Pure integer evaluation uses the fuel-bounded task machine instead.
     fn guard_static_initializer_evaluation(
         &self,
         value: &'arena CHirExpr<'arena>,
@@ -1329,9 +1319,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
     fn eval_static_initializer_value(
         &mut self,
-        expression: &'arena CHirExpr<'arena>,
+        mut expression: &'arena CHirExpr<'arena>,
     ) -> Result<CValue, InterpreterError> {
-        match expression {
+        let mut casts = Vec::new();
+        while let CHirExpr::Cast(ty, operand, span) = expression {
+            self.tick(*span)?;
+            casts.push((*ty, *span));
+            expression = operand;
+        }
+        let mut value = match expression {
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
                 self.static_address_value(operand, false)
             }
@@ -1358,20 +1354,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::CompoundLit(_, _, span) => {
                 self.static_compound_pointer(expression, *span, true)
             }
-            CHirExpr::Cast(ty, operand, span) => {
-                let value = self.eval_static_initializer_value(operand)?;
-                cast_machine_value(
-                    value,
-                    self.value_type(*ty, *span)?,
-                    *span,
-                    self.unit.types(),
-                    &mut self.memory,
-                )
-            }
             _ => self
                 .eval_static_integer_expression(expression)
                 .map(CValue::Integer),
+        }?;
+        for (ty, span) in casts.into_iter().rev() {
+            value = cast_machine_value(
+                value,
+                self.value_type(ty, span)?,
+                span,
+                self.unit.types(),
+                &mut self.memory,
+            )?;
         }
+        Ok(value)
     }
 
     fn static_address_value(
@@ -1523,9 +1519,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<CInteger, InterpreterError> {
         let previous = std::mem::replace(&mut self.static_integer_evaluation, true);
-        let result = self.eval_expr(expression, false);
+        let result = self.run_tasks(vec![MachineTask::EvalExpression {
+            expression,
+            allow_root_mutation: false,
+        }]);
         self.static_integer_evaluation = previous;
-        result
+        let (outcome, mut values) = result?;
+        if outcome.is_some() || values.len() != 1 {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "static initializer did not produce one integer value",
+                span: expression.span(),
+            });
+        }
+        expect_machine_integer(
+            pop_machine_value(&mut values, expression.span())?,
+            expression.span(),
+        )
     }
 
     fn static_compound_pointer(
@@ -1563,7 +1572,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
     fn run_with_calls(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
         let mut tasks = Vec::new();
-        let mut values = Vec::new();
         let root_span = self
             .unit
             .symbols()
@@ -1571,7 +1579,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .map(|symbol| symbol.span())
             .map_err(|_| InterpreterError::UnknownFunction { symbol: function })?;
         self.enter_function(function, Vec::new(), None, None, None, false, 0, &mut tasks)?;
+        let (outcome, _) = self.run_tasks(tasks)?;
+        let outcome = outcome.ok_or(InterpreterError::UnsupportedStatement {
+            feature: "interpreter call stack ended without a root result",
+            span: root_span,
+        })?;
+        Ok(InterpretOutcome {
+            return_value: outcome.return_value,
+            steps: self.consumed,
+            memory: self.memory,
+            world: self.world,
+        })
+    }
 
+    fn run_tasks(
+        &mut self,
+        mut tasks: Vec<MachineTask<'arena>>,
+    ) -> Result<(Option<MachineOutcome>, Vec<CValue>), InterpreterError> {
+        let mut values = Vec::new();
         while let Some(task) = tasks.pop() {
             let outcome = match task {
                 MachineTask::ApplyVarArgs {
@@ -1974,16 +1999,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         continue;
                     }
                     let operand = expect_machine_integer(operand, expression_span)?;
-                    let value = self
-                        .runtime_integer_unary(operator, operand)
-                        .map_err(|error| {
-                            let error_span = if operator == crate::UnaryOp::Neg {
-                                unary_operator_span(expression_span, operand_span)
-                            } else {
-                                expression_span
-                            };
-                            self.integer_error(error, error_span)
-                        })?;
+                    let value = if self.static_integer_evaluation {
+                        eval_constant_unary_integer(operator, operand)
+                    } else {
+                        self.runtime_integer_unary(operator, operand)
+                    }
+                    .map_err(|error| {
+                        let error_span = if operator == crate::UnaryOp::Neg {
+                            unary_operator_span(expression_span, operand_span)
+                        } else {
+                            expression_span
+                        };
+                        self.integer_error(error, error_span)
+                    })?;
                     values.push(CValue::Integer(value));
                     None
                 }
@@ -2441,19 +2469,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             };
             if let Some(outcome) = outcome {
-                return Ok(InterpretOutcome {
-                    return_value: outcome.return_value,
-                    steps: self.consumed,
-                    memory: self.memory,
-                    world: self.world,
-                });
+                return Ok((Some(outcome), values));
             }
         }
-
-        Err(InterpreterError::UnsupportedStatement {
-            feature: "interpreter call stack ended without a root result",
-            span: root_span,
-        })
+        Ok((None, values))
     }
 
     fn exec_machine_statement(
@@ -3567,7 +3586,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
-        if !self.memory_mode && !expression_contains_call(expression) {
+        if !self.static_integer_evaluation
+            && !self.memory_mode
+            && !expression_contains_call(expression)
+        {
             values.push(CValue::Integer(
                 self.eval_expr(expression, allow_root_mutation)?,
             ));
@@ -3576,6 +3598,41 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
         let span = expression.span();
         self.tick(span)?;
+        if self.static_integer_evaluation {
+            // Reusing the execution machine must not admit calls, reads of
+            // objects, or mutations into constant initialization. Inspect only
+            // the evaluated path: sizeof and unselected arms stay unevaluated.
+            let admitted = match expression {
+                CHirExpr::Lit(..)
+                | CHirExpr::CharLit(..)
+                | CHirExpr::Unary(
+                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Abs | UnaryOp::Not | UnaryOp::BitNot,
+                    ..,
+                )
+                | CHirExpr::EvaluateOnce(..)
+                | CHirExpr::Binary(..)
+                | CHirExpr::Ternary(..)
+                | CHirExpr::Elvis(..)
+                | CHirExpr::BitBuiltin { .. }
+                | CHirExpr::SizeOf(..)
+                | CHirExpr::SizeOfExpr(..)
+                | CHirExpr::AlignOf(..)
+                | CHirExpr::Comma(..) => true,
+                CHirExpr::Ident { symbol, .. } => self
+                    .unit
+                    .symbols()
+                    .symbol(*symbol)
+                    .is_ok_and(|symbol| symbol.enumerator_value().is_some()),
+                CHirExpr::Cast(ty, ..) => self.integer_type(*ty, span).is_ok(),
+                _ => false,
+            };
+            if !admitted {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "nonconstant expression in static integer initializer",
+                    span,
+                });
+            }
+        }
         match expression {
             CHirExpr::Lit(literal, _) => values.push(CValue::Integer(
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))?,
@@ -3661,11 +3718,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::Comma(left, right, _) | CHirExpr::Binary(BinaryOp::Comma, left, right, _) => {
-                tasks.push(MachineTask::EvalExpression {
-                    expression: right,
-                    allow_root_mutation,
-                });
-                self.schedule_discarded_expression(left, tasks)?;
+                if self.static_integer_evaluation {
+                    tasks.push(MachineTask::ContinueBinary {
+                        operator: BinaryOp::Comma,
+                        right,
+                        span,
+                        allow_root_mutation: false,
+                    });
+                    tasks.push(MachineTask::EvalExpression {
+                        expression: left,
+                        allow_root_mutation: false,
+                    });
+                } else {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression: right,
+                        allow_root_mutation,
+                    });
+                    self.schedule_discarded_expression(left, tasks)?;
+                }
             }
             CHirExpr::Binary(operator, left, right, _) => {
                 tasks.push(MachineTask::ContinueBinary {
@@ -5836,9 +5906,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn expression_value_type(
-        &self,
-        expression: &CHirExpr<'arena>,
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
     ) -> Result<ValueType, InterpreterError> {
+        if self.static_integer_evaluation {
+            return self.infer_integer_type(expression).map(ValueType::Integer);
+        }
         if let Ok(pointer) =
             PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
         {
@@ -7120,6 +7193,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         right: CInteger,
         span: SourceSpan,
     ) -> Result<CInteger, InterpreterError> {
+        if self.static_integer_evaluation {
+            return eval_constant_binary_integer(operator, left, right)
+                .map_err(|error| self.integer_error(error, span));
+        }
         if matches!(operator, BinaryOp::Div | BinaryOp::Mod)
             && (left.ty().bits() == 128 || right.ty().bits() == 128)
         {
@@ -8087,141 +8164,180 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn infer_integer_type(
-        &self,
-        expression: &CHirExpr<'arena>,
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
     ) -> Result<CIntegerType, InterpreterError> {
-        let span = expression.span();
-        match expression {
-            CHirExpr::Lit(literal, _) => integer_literal_value(*literal)
-                .map(|value| value.ty())
-                .map_err(|error| self.integer_error(error, span)),
-            CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::CheckedArithmetic { facts, .. }
-            | CHirExpr::BitBuiltin { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. }
-            | CHirExpr::StatementExpr { facts, .. } => self.integer_type(facts.ty(), span),
-            CHirExpr::Unary(operator, operand, _) => match operator {
-                crate::UnaryOp::Not => Ok(CIntegerType::INT),
-                crate::UnaryOp::Plus
-                | crate::UnaryOp::Neg
-                | crate::UnaryOp::Abs
-                | crate::UnaryOp::BitNot => Ok(CInteger::new(0, self.infer_integer_type(operand)?)
-                    .promoted()
-                    .ty()),
-                crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => {
-                    Err(InterpreterError::UnsupportedExpression {
-                        feature: "non-integer unary operand",
+        enum TypeTask<'a> {
+            Infer(&'a CHirExpr<'a>),
+            Cache(usize),
+            Promote,
+            Common,
+        }
+        // Type inference is unevaluated but still must not consume the host
+        // call stack. Cache immutable expression identities so nested selected
+        // conditionals do not repeatedly walk their entire remaining subtree.
+        let mut pending = vec![TypeTask::Infer(expression)];
+        let mut values = Vec::new();
+        while let Some(task) = pending.pop() {
+            let expression = match task {
+                TypeTask::Cache(key) => {
+                    self.integer_expression_types
+                        .insert(key, *values.last().expect("inferred type"));
+                    continue;
+                }
+                TypeTask::Promote => {
+                    let ty = values.pop().expect("unary operand type");
+                    values.push(CInteger::new(0, ty).promoted().ty());
+                    continue;
+                }
+                TypeTask::Common => {
+                    let right = values.pop().expect("right operand type");
+                    let left = values.pop().expect("left operand type");
+                    values.push(usual_arithmetic_type(
+                        CInteger::new(0, left).promoted().ty(),
+                        CInteger::new(0, right).promoted().ty(),
+                    ));
+                    continue;
+                }
+                TypeTask::Infer(expression) => expression,
+            };
+            let key = expression as *const CHirExpr<'arena> as usize;
+            if let Some(ty) = self.integer_expression_types.get(&key) {
+                values.push(*ty);
+                continue;
+            }
+            pending.push(TypeTask::Cache(key));
+            let span = expression.span();
+            let immediate = match expression {
+                CHirExpr::Lit(literal, _) => integer_literal_value(*literal)
+                    .map(|value| value.ty())
+                    .map_err(|error| self.integer_error(error, span)),
+                CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
+                CHirExpr::Ident { facts, .. }
+                | CHirExpr::CheckedArithmetic { facts, .. }
+                | CHirExpr::BitBuiltin { facts, .. }
+                | CHirExpr::Assign { facts, .. }
+                | CHirExpr::MemoryAssign { facts, .. }
+                | CHirExpr::MemoryRead { facts, .. }
+                | CHirExpr::Update { facts, .. }
+                | CHirExpr::MemoryUpdate { facts, .. }
+                | CHirExpr::StatementExpr { facts, .. } => self.integer_type(facts.ty(), span),
+                CHirExpr::Unary(operator, operand, _) => match operator {
+                    crate::UnaryOp::Not => Ok(CIntegerType::INT),
+                    crate::UnaryOp::Plus
+                    | crate::UnaryOp::Neg
+                    | crate::UnaryOp::Abs
+                    | crate::UnaryOp::BitNot => {
+                        pending.push(TypeTask::Promote);
+                        pending.push(TypeTask::Infer(operand));
+                        continue;
+                    }
+                    crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => {
+                        Err(InterpreterError::UnsupportedExpression {
+                            feature: "non-integer unary operand",
+                            span,
+                        })
+                    }
+                },
+                CHirExpr::EvaluateOnce(operand, _) => {
+                    pending.push(TypeTask::Infer(operand));
+                    continue;
+                }
+                CHirExpr::Binary(operator, left, right, _) => match operator {
+                    BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge
+                    | BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::And
+                    | BinaryOp::Or => Ok(CIntegerType::INT),
+                    BinaryOp::Shl | BinaryOp::Shr => {
+                        pending.push(TypeTask::Promote);
+                        pending.push(TypeTask::Infer(left));
+                        continue;
+                    }
+                    BinaryOp::Comma => {
+                        pending.push(TypeTask::Infer(right));
+                        continue;
+                    }
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor => {
+                        pending.push(TypeTask::Common);
+                        pending.push(TypeTask::Infer(right));
+                        pending.push(TypeTask::Infer(left));
+                        continue;
+                    }
+                    BinaryOp::Assign
+                    | BinaryOp::AddAssign
+                    | BinaryOp::SubAssign
+                    | BinaryOp::MulAssign
+                    | BinaryOp::DivAssign
+                    | BinaryOp::ModAssign
+                    | BinaryOp::ShlAssign
+                    | BinaryOp::ShrAssign
+                    | BinaryOp::BitAndAssign
+                    | BinaryOp::BitOrAssign
+                    | BinaryOp::BitXorAssign => Err(InterpreterError::UnsupportedExpression {
+                        feature: "unlowered assignment binary operator",
                         span,
-                    })
+                    }),
+                },
+                CHirExpr::Ternary(_, left, right, _) | CHirExpr::Elvis(left, right, _) => {
+                    pending.push(TypeTask::Common);
+                    pending.push(TypeTask::Infer(right));
+                    pending.push(TypeTask::Infer(left));
+                    continue;
                 }
-            },
-            CHirExpr::EvaluateOnce(operand, _) => self.infer_integer_type(operand),
-            CHirExpr::Binary(operator, left, right, _) => match operator {
-                BinaryOp::Lt
-                | BinaryOp::Le
-                | BinaryOp::Gt
-                | BinaryOp::Ge
-                | BinaryOp::Eq
-                | BinaryOp::Ne
-                | BinaryOp::And
-                | BinaryOp::Or => Ok(CIntegerType::INT),
-                BinaryOp::Shl | BinaryOp::Shr => {
-                    Ok(CInteger::new(0, self.infer_integer_type(left)?)
-                        .promoted()
-                        .ty())
+                CHirExpr::Cast(ty, _, _) => self.integer_type(*ty, span),
+                CHirExpr::Call(callee, _, _) => {
+                    let function_type = self.call_designator_function_type(callee).ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "indirect scalar function call",
+                            span: callee.span(),
+                        },
+                    )?;
+                    let Some(TypeKind::Function { return_type, .. }) =
+                        self.unit.types().get(function_type).map(|ty| &ty.kind)
+                    else {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "inconsistent function designator",
+                            span: callee.span(),
+                        });
+                    };
+                    self.integer_type(*return_type, span)
                 }
-                BinaryOp::Comma => self.infer_integer_type(right),
-                BinaryOp::Add
-                | BinaryOp::Sub
-                | BinaryOp::Mul
-                | BinaryOp::Div
-                | BinaryOp::Mod
-                | BinaryOp::BitAnd
-                | BinaryOp::BitOr
-                | BinaryOp::BitXor => {
-                    let left = CInteger::new(0, self.infer_integer_type(left)?)
-                        .promoted()
-                        .ty();
-                    let right = CInteger::new(0, self.infer_integer_type(right)?)
-                        .promoted()
-                        .ty();
-                    Ok(usual_arithmetic_type(left, right))
+                CHirExpr::SizeOf(_, _)
+                | CHirExpr::SizeOfExpr(_, _, _)
+                | CHirExpr::AlignOf(_, _) => Ok(CIntegerType::ULONG),
+                CHirExpr::Comma(_, right, _) => {
+                    pending.push(TypeTask::Infer(right));
+                    continue;
                 }
-                BinaryOp::Assign
-                | BinaryOp::AddAssign
-                | BinaryOp::SubAssign
-                | BinaryOp::MulAssign
-                | BinaryOp::DivAssign
-                | BinaryOp::ModAssign
-                | BinaryOp::ShlAssign
-                | BinaryOp::ShrAssign
-                | BinaryOp::BitAndAssign
-                | BinaryOp::BitOrAssign
-                | BinaryOp::BitXorAssign => Err(InterpreterError::UnsupportedExpression {
-                    feature: "unlowered assignment binary operator",
+                CHirExpr::FloatLit(_, _)
+                | CHirExpr::StringLit(_, _)
+                | CHirExpr::LabelAddress { .. }
+                | CHirExpr::BuiltinUnreachable { .. }
+                | CHirExpr::BuiltinReturnAddress { .. }
+                | CHirExpr::BuiltinFrameAddress { .. }
+                | CHirExpr::BuiltinVarArgs { .. }
+                | CHirExpr::Member(_, _, _)
+                | CHirExpr::PtrMember(_, _, _)
+                | CHirExpr::Index(_, _, _)
+                | CHirExpr::CompoundLit(_, _, _) => Err(InterpreterError::UnsupportedExpression {
+                    feature: "non-integer expression type",
                     span,
                 }),
-            },
-            CHirExpr::Ternary(_, then_expression, else_expression, _) => {
-                let then_type = CInteger::new(0, self.infer_integer_type(then_expression)?)
-                    .promoted()
-                    .ty();
-                let else_type = CInteger::new(0, self.infer_integer_type(else_expression)?)
-                    .promoted()
-                    .ty();
-                Ok(usual_arithmetic_type(then_type, else_type))
-            }
-            CHirExpr::Elvis(operand, else_expression, _) => {
-                let operand_type = CInteger::new(0, self.infer_integer_type(operand)?)
-                    .promoted()
-                    .ty();
-                let else_type = CInteger::new(0, self.infer_integer_type(else_expression)?)
-                    .promoted()
-                    .ty();
-                Ok(usual_arithmetic_type(operand_type, else_type))
-            }
-            CHirExpr::Cast(ty, _, _) => self.integer_type(*ty, span),
-            CHirExpr::Call(callee, _, _) => {
-                let function_type = self.call_designator_function_type(callee).ok_or(
-                    InterpreterError::UnsupportedExpression {
-                        feature: "indirect scalar function call",
-                        span: callee.span(),
-                    },
-                )?;
-                let Some(TypeKind::Function { return_type, .. }) =
-                    self.unit.types().get(function_type).map(|ty| &ty.kind)
-                else {
-                    return Err(InterpreterError::UnsupportedExpression {
-                        feature: "inconsistent function designator",
-                        span: callee.span(),
-                    });
-                };
-                self.integer_type(*return_type, span)
-            }
-            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
-                Ok(CIntegerType::ULONG)
-            }
-            CHirExpr::Comma(_, right, _) => self.infer_integer_type(right),
-            CHirExpr::FloatLit(_, _)
-            | CHirExpr::StringLit(_, _)
-            | CHirExpr::LabelAddress { .. }
-            | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { .. }
-            | CHirExpr::BuiltinVarArgs { .. }
-            | CHirExpr::Member(_, _, _)
-            | CHirExpr::PtrMember(_, _, _)
-            | CHirExpr::Index(_, _, _)
-            | CHirExpr::CompoundLit(_, _, _) => Err(InterpreterError::UnsupportedExpression {
-                feature: "non-integer expression type",
-                span,
-            }),
+            }?;
+            values.push(immediate);
         }
+        Ok(values.pop().expect("root integer expression type"))
     }
 
     fn eval_binary(
@@ -8642,99 +8758,38 @@ fn reachable_function_body<'arena>(
     })
 }
 
-/// Push every immediate subexpression of a static initializer, one level deeper.
-///
-/// Static initializers are constant expressions, so the lvalue-bearing
-/// `MemoryAssign`/`MemoryUpdate` forms cannot appear; they are still walked so
-/// this helper stays total over `CHirExpr`.
+/// Follow only recursive object-initializer edges. Integer expressions are
+/// task-machine work, and peeling consecutive casts is an explicit loop.
 fn push_static_initializer_children<'arena>(
     expression: &'arena CHirExpr<'arena>,
     depth: usize,
     pending: &mut Vec<(&'arena CHirExpr<'arena>, usize)>,
 ) {
+    if let CHirExpr::Cast(_, operand, _) = expression {
+        pending.push((operand, depth));
+        return;
+    }
     let child_depth = depth.saturating_add(1);
     let mut push = |child: &'arena CHirExpr<'arena>| pending.push((child, child_depth));
     match expression {
-        CHirExpr::Unary(_, operand, _)
-        | CHirExpr::EvaluateOnce(operand, _)
-        | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::BitBuiltin { operand, .. }
+        CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, operand, _)
         | CHirExpr::Member(operand, _, _)
-        | CHirExpr::PtrMember(operand, _, _)
-        | CHirExpr::Update {
-            target: operand, ..
-        } => push(operand),
-        CHirExpr::Binary(_, left, right, _)
-        | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _)
-        | CHirExpr::Assign {
-            target: left,
-            value: right,
-            ..
-        } => {
-            push(left);
-            push(right);
-        }
-        CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-            push(condition);
-            push(then_expression);
-            push(else_expression);
-        }
-        CHirExpr::Call(callee, arguments, _) => {
-            push(callee);
-            for argument in arguments {
-                push(argument);
-            }
-        }
-        CHirExpr::CheckedArithmetic {
-            lhs, rhs, target, ..
-        } => {
-            push(lhs);
-            push(rhs);
-            push(target);
-        }
-        CHirExpr::BuiltinVarArgs { first, second, .. } => {
-            push(first);
-            if let Some(second) = second {
-                push(second);
-            }
-        }
+        | CHirExpr::PtrMember(operand, _, _) => push(operand),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     push(value);
                 }
             }
         }
-        CHirExpr::MemoryAssign { place, value, .. } => {
-            for source in place.source_expressions() {
-                push(source);
-            }
-            push(value);
-        }
-        CHirExpr::MemoryUpdate { place, .. } | CHirExpr::MemoryRead { place, .. } => {
+        CHirExpr::MemoryRead { place, .. } => {
             for source in place.source_expressions() {
                 push(source);
             }
         }
-        // The parser rejects statement expressions in static initializers.
-        // A forged node is retained here as a leaf so this expression-only
-        // depth walk stays total without pretending a statement is an
-        // ordinary constant-expression child.
-        CHirExpr::StatementExpr { .. }
-        | CHirExpr::Ident { .. }
-        | CHirExpr::LabelAddress { .. }
-        | CHirExpr::Lit(_, _)
-        | CHirExpr::FloatLit(_, _)
-        | CHirExpr::CharLit(_, _)
-        | CHirExpr::StringLit(_, _)
-        | CHirExpr::SizeOf(_, _)
-        | CHirExpr::SizeOfExpr(_, _, _)
-        | CHirExpr::AlignOf(_, _)
-        | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => {}
+        _ => {}
     }
 }
 
@@ -10358,11 +10413,9 @@ mod tests {
     }
 
     #[test]
-    fn a_static_initializer_within_the_depth_limit_still_evaluates() {
+    fn odd_negations_in_static_initializers_preserve_the_value() {
         let arena = Arena::new(64 * 1024);
-        // One literal plus `depth - 1` negations keeps the deepest path exactly
-        // at the limit, so the guard must stay silent and the value must be real.
-        let negations = MAX_STATIC_INITIALIZER_DEPTH - 1;
+        let negations = 63;
         let (unit, main) = deep_static_initializer_program(&arena, negations);
 
         let outcome = interpret_scalar_function_with_target(
@@ -10371,7 +10424,7 @@ mod tests {
             &TargetDataLayout::aarch64_unknown_linux_gnu(),
             InterpreterLimits::new(1_000_000),
         )
-        .expect("an initializer at the depth limit must still be evaluated");
+        .expect("a defined static initializer must be evaluated");
 
         let value = outcome
             .return_value
@@ -10380,6 +10433,56 @@ mod tests {
             .expect("the global is a plain int");
         // An even number of negations leaves the literal 1 unchanged.
         assert_eq!(value, if negations.is_multiple_of(2) { 1 } else { -1 });
+    }
+
+    #[test]
+    fn static_integer_machine_does_not_execute_calls_or_dead_operands() {
+        let arena = Arena::default();
+        let (unit, function, int) = scalar_program(&arena, false);
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let callee = alloc(
+            &arena,
+            CHirExpr::Ident {
+                symbol: function,
+                spelling: "main".to_owned(),
+                facts: ExprFacts::function_designator(
+                    unit.symbols().symbol(function).unwrap().ty(),
+                ),
+                span: span(0, 4),
+            },
+        );
+        let call = alloc(&arena, CHirExpr::Call(callee, Vec::new(), span(0, 6)));
+        let zero = alloc(
+            &arena,
+            CHirExpr::Lit(
+                IntLit {
+                    value: 0,
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span(7, 8),
+            ),
+        );
+        let comma = alloc(&arena, CHirExpr::Comma(call, zero, span(0, 8)));
+        for expression in [call, comma] {
+            assert!(matches!(
+                interpret_static_integer_expression(&unit, expression, &target),
+                Err(InterpreterError::UnsupportedExpression {
+                    feature: "nonconstant expression in static integer initializer",
+                    ..
+                })
+            ));
+        }
+        let selected = alloc(&arena, CHirExpr::Ternary(zero, call, zero, span(0, 8)));
+        assert_eq!(
+            interpret_static_integer_expression(&unit, selected, &target).unwrap(),
+            CInteger::int(0)
+        );
+        let size = alloc(&arena, CHirExpr::SizeOfExpr(call, int, span(0, 8)));
+        assert_eq!(
+            interpret_static_integer_expression(&unit, size, &target).unwrap(),
+            CInteger::new(4, CIntegerType::ULONG)
+        );
     }
 
     /// Build `int deep = -(-(-...1...)); int main(void) { return deep; }` with
