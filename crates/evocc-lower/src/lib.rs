@@ -8889,6 +8889,7 @@ impl<'a> FunctionLowerer<'a> {
         right: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        let known_truth = self.known_expression_truth(left, &[right]);
         let left = self.lower_condition(left, state)?;
         let keys = self.expression_join_keys(state, &[right]);
         let mut right_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
@@ -8910,7 +8911,14 @@ impl<'a> FunctionLowerer<'a> {
         };
         self.terminate(
             state,
-            Inst::CondBr(left, true_target, true_args, false_target, false_args),
+            conditional_branch(
+                left,
+                known_truth,
+                true_target,
+                true_args,
+                false_target,
+                false_args,
+            ),
         )?;
         let right_value = self.lower_expr(right, &mut right_state)?;
         let right_result = self.lower_condition_value(right_value, &right_state)?;
@@ -9214,6 +9222,28 @@ impl<'a> FunctionLowerer<'a> {
         ))
     }
 
+    fn known_expression_truth(
+        &self,
+        condition: &CHirExpr<'_>,
+        arms: &[&CHirExpr<'_>],
+    ) -> Option<bool> {
+        let truth = constant_truth(self.unit, self.target, condition)?;
+        if !self.address_labels.is_empty() {
+            let mut references = FunctionReferences::default();
+            for arm in arms {
+                collect_references_expr(arm, &mut references);
+            }
+            if references
+                .defined_labels
+                .iter()
+                .any(|label| self.address_labels.contains_key(label))
+            {
+                return None;
+            }
+        }
+        Some(truth)
+    }
+
     fn lower_ternary(
         &mut self,
         condition: &'a CHirExpr<'a>,
@@ -9221,6 +9251,8 @@ impl<'a> FunctionLowerer<'a> {
         else_expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        let known_truth =
+            self.known_expression_truth(condition, &[then_expression, else_expression]);
         let predicate = self.lower_condition(condition, state)?;
         let keys = self.expression_join_keys(state, &[then_expression, else_expression]);
         let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
@@ -9229,8 +9261,9 @@ impl<'a> FunctionLowerer<'a> {
         let else_arguments = self.edge_values(state, &keys)?;
         self.terminate(
             state,
-            Inst::CondBr(
+            conditional_branch(
                 predicate,
+                known_truth,
                 then_state.block,
                 then_arguments,
                 else_state.block,
@@ -9285,6 +9318,7 @@ impl<'a> FunctionLowerer<'a> {
         else_expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        let known_truth = self.known_expression_truth(operand, &[else_expression]);
         // Retain the one evaluated operand as an explicit edge value. The
         // true successor consumes that value directly; it never lowers the
         // source expression a second time.
@@ -9331,8 +9365,9 @@ impl<'a> FunctionLowerer<'a> {
         let else_arguments = self.edge_values(state, &keys)?;
         self.terminate(
             state,
-            Inst::CondBr(
+            conditional_branch(
                 predicate,
+                known_truth,
                 then_state.block,
                 then_arguments,
                 else_state.block,
@@ -9748,6 +9783,8 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<Flow, LowerError> {
         match expression {
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
+                let known_truth =
+                    self.known_expression_truth(condition, &[then_expression, else_expression]);
                 let predicate = self.lower_condition(condition, &mut state)?;
                 let keys = self.expression_join_keys(&state, &[then_expression, else_expression]);
                 let then_state = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
@@ -9755,8 +9792,9 @@ impl<'a> FunctionLowerer<'a> {
                 let arguments = self.edge_values(&state, &keys)?;
                 self.terminate(
                     &state,
-                    Inst::CondBr(
+                    conditional_branch(
                         predicate,
+                        known_truth,
                         then_state.block,
                         arguments.clone(),
                         else_state.block,
@@ -11095,6 +11133,27 @@ fn collect_symbols_switch_item(item: &SwitchSegmentItem<'_>, symbols: &mut BTree
 
 fn bits(integer: CIntegerType) -> EvoIRType {
     EvoIRType::Bits(u16::from(integer.bits()))
+}
+
+fn conditional_branch(
+    condition: Value,
+    known_truth: Option<bool>,
+    true_target: BlockId,
+    true_arguments: Vec<Value>,
+    false_target: BlockId,
+    false_arguments: Vec<Value>,
+) -> Inst {
+    match known_truth {
+        Some(true) => Inst::Br(true_target, true_arguments),
+        Some(false) => Inst::Br(false_target, false_arguments),
+        None => Inst::CondBr(
+            condition,
+            true_target,
+            true_arguments,
+            false_target,
+            false_arguments,
+        ),
+    }
 }
 
 fn constant_truth(
