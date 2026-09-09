@@ -24,6 +24,7 @@ struct Signature {
 }
 
 struct Header {
+    alignment: u32,
     name: String,
     convention: String,
     visibility: GlobalVisibility,
@@ -272,6 +273,7 @@ impl ModuleParser<'_> {
         self.position += 1;
 
         Ok(Function {
+            alignment: header.alignment,
             variadic: header.signature.variadic,
             name: header.name,
             params: header
@@ -492,6 +494,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
+        alignment: 4,
         // A `declare` names a symbol this module does not define, so it has no
         // linkage of its own and Section 9 gives it no visibility field.
         linkage,
@@ -557,10 +560,17 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
         GlobalVisibility::External
     };
     let linkage = parse_linkage(&mut cursor)?;
+    let alignment = if cursor.at(" align=") {
+        cursor.expect(" align=")?;
+        u32::try_from(cursor.index()?).map_err(|_| "function alignment exceeds u32")?
+    } else {
+        4
+    };
     cursor.finish()?;
     Ok(Header {
         name,
         convention,
+        alignment,
         visibility,
         linkage,
         signature: Signature {

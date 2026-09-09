@@ -274,6 +274,7 @@ fn fold_function(name: &str, shapes: &[Shape]) -> Function {
         .collect::<Vec<_>>();
     let (acc, mem_out, world_out) = fold(&mut builder, shapes, &args, mem, world);
     Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
@@ -337,6 +338,7 @@ fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
     });
 
     Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
@@ -653,6 +655,7 @@ fn narrow_result_function(name: &str, width: u16) -> Function {
     builder.push(Inst::Sub(negated.clone(), zero, narrowed));
 
     Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,

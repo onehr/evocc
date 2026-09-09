@@ -822,8 +822,13 @@ fn render_function(function: &Function) -> String {
         GlobalVisibility::External => "",
         GlobalVisibility::Internal => " visibility=internal",
     };
+    let alignment = if function.alignment == 4 {
+        String::new()
+    } else {
+        format!(" align={}", function.alignment)
+    };
     rendered.push_str(&format!(
-        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}{}\n",
+        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}{}{alignment}\n",
         function.name,
         function.linkage.suffix(),
     ));
@@ -897,6 +902,7 @@ mod tests {
             declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
+                alignment: 4,
                 linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,

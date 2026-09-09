@@ -595,6 +595,7 @@ mod tests {
         let more = flag(5);
         let result = bits(6);
         let function = Function {
+            alignment: 4,
             linkage: Linkage::Strong,
             visibility: GlobalVisibility::External,
             variadic: false,

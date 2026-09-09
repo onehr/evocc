@@ -341,6 +341,7 @@ fn sentinel_module() -> Module {
             },
         ],
         functions: vec![Function {
+            alignment: 256,
             linkage: evocc_evoir::Linkage::Weak,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
@@ -781,6 +782,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     }
     for function in functions {
         let Function {
+            alignment,
             linkage,
             name,
             params,
@@ -791,9 +793,9 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             visibility,
             blocks,
         } = function;
-        let _ = (name, ret_tys, variadic, visibility, linkage);
+        let _ = (name, ret_tys, variadic, visibility, linkage, alignment);
         keys.insert(
-            "Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,blocks)",
+            "Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,alignment,blocks)",
         );
         for mark in param_marks {
             if let Some(RecordShape { size, align }) = mark.shape() {

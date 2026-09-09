@@ -411,6 +411,7 @@ pub struct WorldLimits {
 pub struct MemoryConfig {
     byte_order: ByteOrder,
     pointer_layout: AccessLayout,
+    function_alignment: u32,
     limits: MemoryLimits,
 }
 
@@ -431,6 +432,7 @@ impl MemoryConfig {
         Ok(Self {
             byte_order,
             pointer_layout,
+            function_alignment: 16,
             limits,
         })
     }
@@ -444,6 +446,18 @@ impl MemoryConfig {
             AccessLayout::from_type_layout(target.pointer_layout()),
             limits,
         )
+    }
+
+    /// A module-wide stride keeps every function aligned without changing its
+    /// provenance identity. Larger strides also preserve distinct addresses.
+    pub fn with_function_alignment(mut self, alignment: u32) -> Result<Self, MemoryFault> {
+        if !is_valid_alignment(alignment) {
+            return Err(MemoryFault::InvalidAlignment {
+                align_bytes: alignment,
+            });
+        }
+        self.function_alignment = alignment.max(16);
+        Ok(self)
     }
 
     #[must_use]
@@ -949,7 +963,7 @@ impl MemoryState {
             PointerValue::Null => Ok(0),
             PointerValue::Exposed(address) => Ok(address),
             PointerValue::Function(identity) => identity
-                .checked_mul(16)
+                .checked_mul(u64::from(self.config.function_alignment))
                 .filter(|value| identity != 0 && *value < (1_u64 << 63))
                 .map(|value| value | (1_u64 << 63))
                 .ok_or(MemoryFault::InvalidFunctionIdentity { identity }),

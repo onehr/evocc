@@ -562,6 +562,7 @@ mod tests {
 
     fn function(blocks: Vec<Block>) -> Function {
         Function {
+            alignment: 4,
             linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,

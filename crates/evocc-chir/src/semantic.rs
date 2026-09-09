@@ -612,8 +612,8 @@ impl SymbolTable {
         Ok(())
     }
 
-    /// Accumulate object alignment without changing canonical type identity.
-    pub fn raise_object_alignment(
+    /// Accumulate object or function alignment without changing type identity.
+    pub fn raise_declared_alignment(
         &mut self,
         symbol: SymbolId,
         alignment: u32,

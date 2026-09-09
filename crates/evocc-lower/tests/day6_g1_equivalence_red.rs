@@ -1954,6 +1954,7 @@ fn main() {
     let left = value(2, bits32.clone());
     let right = value(3, bits32.clone());
     let valid = Function {
+        alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,

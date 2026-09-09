@@ -1446,9 +1446,9 @@ impl TargetDataLayout {
         let canonical = types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
         match &canonical.kind {
             TypeKind::Void => Ok(1),
-            // Explicit function alignment still needs declaration metadata
-            // and emission support; never quietly answer the default for it.
-            TypeKind::Function { .. } if canonical.qualifiers.aligned.is_none() => Ok(4),
+            // A designator query carries its declaration's alignment on the
+            // query type, while the canonical function type remains unaligned.
+            TypeKind::Function { .. } => Ok(canonical.qualifiers.aligned.unwrap_or(4).max(4)),
             _ => self.layout_of(types, ty).map(|layout| layout.align_bytes),
         }
     }

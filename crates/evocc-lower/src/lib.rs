@@ -3498,6 +3498,16 @@ impl<'a> FunctionLowerer<'a> {
             self.info.span,
         )?;
         let mut function = Function {
+            alignment: self
+                .unit
+                .symbols()
+                .symbol(declaration.symbol)
+                .map_err(|_| LowerError::UnknownSymbol {
+                    symbol: declaration.symbol,
+                    span: declaration.span,
+                })?
+                .declared_alignment()
+                .max(4),
             name: self.info.name.clone(),
             variadic: self.info.variadic,
             params,
