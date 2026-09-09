@@ -83,7 +83,7 @@ const STRING_POINTER_CONTROL: &str = "int f(void) { char *p; p = \"x\"; return 0
 const FAILED_UPDATE_ROLLBACK: &str =
     "int keep; int bad(void) { int *p; p *= 2; return 0; } long after;\n";
 const PREFIXED_STRING_CONTROLS: &str = concat!(
-    "int f(void) { char *c; unsigned short *w; unsigned short *s; unsigned int *u32; void *v; ",
+    "int f(void) { char *c; unsigned int *w; unsigned short *s; unsigned int *u32; void *v; ",
     "c = u8\"a\"; w = L\"b\"; s = u\"c\"; u32 = U\"d\"; v = U\"e\"; return 0; }\n",
 );
 const INVALID_WIDE_TO_CHAR: &str = "int f(void) { char *p; p = L\"x\"; return 0; }\n";
@@ -91,7 +91,7 @@ const INVALID_U16_TO_INT: &str = "int f(void) { int *p; p = u\"x\"; return 0; }\
 const INVALID_U32_TO_U16: &str = "int f(void) { unsigned short *p; p = U\"x\"; return 0; }\n";
 const INVALID_U8_TO_U32: &str = "int f(void) { unsigned int *p; p = u8\"x\"; return 0; }\n";
 const STRING_EXPRESSION_CONTROLS: &str = concat!(
-    "int f(int c) { char *p; char *q; unsigned short *w; int x = 0; ",
+    "int f(int c) { char *p; char *q; unsigned int *w; int x = 0; ",
     "p = c ? \"a\" : 0; p = c ? 0 : \"b\"; ",
     "q = c ? \"c\" : p; q = c ? p : \"d\"; ",
     "w = c ? L\"e\" : 0; x = \"f\" != 0; return x; }\n",

@@ -213,6 +213,7 @@ int main(void){return 0;}
             ('/* { dg-options "-fwrapv" } */', ["-fwrapv"], []),
             ('/* { dg-options "-fno-builtin -fbuiltin" } */', ["-fno-builtin", "-fbuiltin"], []),
             ('/* { dg-options "-fbuiltin -fno-builtin" } */', ["-fbuiltin", "-fno-builtin"], []),
+            ('/* { dg-options "-fshort-wchar -fno-short-wchar" } */', ["-fshort-wchar", "-fno-short-wchar"], []),
             ('/* { dg-options { "-fwrapv" } } */', ["-fwrapv"], []),
             ('/* { dg-additional-options "-fno-strict-overflow" } */', ["-fno-strict-overflow"], []),
             ('/* { dg-options "-Wno-psabi -fwrapv" } */', ["-fwrapv"], ["-Wno-psabi"]),

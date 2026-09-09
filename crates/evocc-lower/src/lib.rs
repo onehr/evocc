@@ -7526,12 +7526,8 @@ impl<'a> FunctionLowerer<'a> {
                 self.wide_constant(state, integer.ty(), integer.raw_bits())
             }
             CHirExpr::CharLit(literal, _) => {
-                let result = self.fresh_value(bits(CIntegerType::INT));
-                self.emit(state, Inst::Const(result.clone(), u64::from(literal.value)))?;
-                Ok(ExprValue {
-                    value: result,
-                    integer: CIntegerType::INT,
-                })
+                let integer = literal.integer_value();
+                self.wide_constant(state, integer.ty(), integer.raw_bits())
             }
             CHirExpr::Ident {
                 symbol,
@@ -11022,9 +11018,7 @@ fn constant_integer(
 ) -> Option<CInteger> {
     match expression {
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
-        CHirExpr::CharLit(literal, _) => {
-            Some(CInteger::new(u64::from(literal.value), CIntegerType::INT))
-        }
+        CHirExpr::CharLit(literal, _) => Some(literal.integer_value()),
         CHirExpr::Ident {
             symbol,
             facts,

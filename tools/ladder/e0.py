@@ -288,6 +288,7 @@ def program_options(source: Path) -> dict:
     supported = {
         "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
         "-fbuiltin", "-fno-builtin",
+        "-fshort-wchar", "-fno-short-wchar",
         "-std=gnu89", "-std=gnu11",
     }
     base, additional, unhandled, applicability, skips = [], [], [], [], []

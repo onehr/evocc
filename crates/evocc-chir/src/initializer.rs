@@ -657,7 +657,7 @@ fn validate_string_destination(
 ) -> Result<(), InitPlanError> {
     if !matches!(
         literal.prefix,
-        StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+        StringPrefix::None | StringPrefix::U8 | StringPrefix::L | StringPrefix::L16
     ) {
         return Err(InitPlanError::UnsupportedStringPrefix {
             action,
@@ -679,8 +679,8 @@ fn validate_string_destination(
                     element_type.kind,
                     TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
                 ),
-                StringPrefix::L => {
-                    matches!(element_type.kind, TypeKind::Int(IntRank::UShort))
+                StringPrefix::L | StringPrefix::L16 => {
+                    element_type.kind == TypeKind::Int(literal.prefix.element_rank())
                 }
                 StringPrefix::U16 | StringPrefix::U => false,
             }

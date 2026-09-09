@@ -4,6 +4,18 @@ use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::{ParseDiagnostic, Parser};
 
 fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>, ParseDiagnostic> {
+    parse_with_layout(
+        source,
+        arena,
+        evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
+    )
+}
+
+fn parse_with_layout<'arena>(
+    source: &str,
+    arena: &'arena Arena,
+    layout: evocc_types::TargetDataLayout,
+) -> Result<CHirUnit<'arena>, ParseDiagnostic> {
     let file = FileId::new(10_153);
     let mut lexer = Lexer::new(file, source);
     let mut tokens = Vec::new();
@@ -12,6 +24,7 @@ fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>,
         tokens.push(token);
     }
     let mut parser = Parser::new(tokens, file, source);
+    parser.set_target_layout(layout);
     let unit = parser.parse_translation_unit_in(arena);
     match parser.diagnostic().cloned() {
         Some(diagnostic) => Err(diagnostic),
@@ -40,14 +53,16 @@ fn object<'arena>(unit: &CHirUnit<'arena>, name: &str) -> &'arena ObjectDecl<'ar
 
 #[test]
 fn short_wchar_controls_wide_literal_type_and_concatenation() {
-    accepts(concat!(
+    let arena = Arena::default();
+    parse_with_layout(concat!(
         "typedef unsigned short efi_char16_t; ",
         "static const efi_char16_t wide[] = L\"Mok\"; ",
         "static const efi_char16_t wide2[] = L\"\" \"abc\"; ",
         "_Static_assert(sizeof wide == 8, \"wide\"); ",
         "_Static_assert(sizeof wide2 == 8, \"concat\"); ",
         "_Static_assert(__builtin_types_compatible_p(typeof(L\"x\"), unsigned short[2]), \"element\");\n",
-    ));
+    ), &arena, evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu().with_short_wchar(true))
+    .expect("the short target preserves the measured 16-bit literal layout");
 }
 
 #[test]

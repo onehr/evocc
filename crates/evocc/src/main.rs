@@ -71,12 +71,23 @@ struct DriverOptions {
     signed_wrapping: bool,
     standard_builtins: bool,
     legacy_declarations: bool,
+    short_wchar: bool,
     /// Report every diagnostic rather than the first.
     ///
     /// A build wants one unambiguous first-error site. Surveying a body of
     /// code for what it requires wants the whole set, or it takes one build
     /// per unsupported construct to enumerate.
     survey: bool,
+}
+
+impl DriverOptions {
+    fn target_layout(&self) -> TargetDataLayout {
+        match self.target {
+            DriverTarget::Aarch64UnknownLinuxGnu => {
+                TargetDataLayout::aarch64_unknown_linux_gnu().with_short_wchar(self.short_wchar)
+            }
+        }
+    }
 }
 
 enum MacroAction {
@@ -207,6 +218,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut signed_wrapping = false;
     let mut standard_builtins = true;
     let mut legacy_declarations = false;
+    let mut short_wchar = false;
     let mut survey = false;
     let mut index = 0;
 
@@ -225,6 +237,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
             "-fno-builtin" => standard_builtins = false,
             "-fbuiltin" => standard_builtins = true,
+            "-fshort-wchar" => short_wchar = true,
+            "-fno-short-wchar" => short_wchar = false,
             "--target" => {
                 index += 1;
                 let value = args
@@ -320,6 +334,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         signed_wrapping,
         standard_builtins,
         legacy_declarations,
+        short_wchar,
         survey,
     })
 }
@@ -436,6 +451,28 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
+    let wchar_rank = options.target_layout().wide_character_rank();
+    let wchar_type = evocc_chir::integer::integer_type_for_rank(wchar_rank);
+    let wchar_bits = wchar_type.bits();
+    let wchar_max = (1_u64 << wchar_bits) - 1;
+    for (name, replacement) in [
+        ("__ARM_SIZEOF_WCHAR_T", (wchar_bits / 8).to_string()),
+        ("__SIZEOF_WCHAR_T__", (wchar_bits / 8).to_string()),
+        ("__WCHAR_WIDTH__", wchar_bits.to_string()),
+        ("__WCHAR_MIN__", "0U".to_owned()),
+        ("__WCHAR_MAX__", format!("{wchar_max:#x}U")),
+        (
+            "__WCHAR_TYPE__",
+            match wchar_rank {
+                evocc_types::IntRank::UShort => "short unsigned int",
+                evocc_types::IntRank::UInt => "unsigned int",
+                _ => unreachable!("the selected target has unsigned 16-bit or 32-bit wchar_t"),
+            }
+            .to_owned(),
+        ),
+    ] {
+        pp.define(name.to_owned(), decoded_tokens(&replacement)?);
+    }
     if options.legacy_declarations {
         pp.undefine("__STDC_VERSION__");
         pp.undefine("__GNUC_STDC_INLINE__");
@@ -587,6 +624,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
 
     let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
+    parser.set_target_layout(options.target_layout());
     parser.set_standard_builtins(options.standard_builtins);
     parser.set_legacy_declarations(options.legacy_declarations);
     if !options.survey {
@@ -626,11 +664,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
         ParsedAction::EmitCHir => emit_chir(&unit),
         ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
-            let target = match options.target {
-                DriverTarget::Aarch64UnknownLinuxGnu => {
-                    TargetDataLayout::aarch64_unknown_linux_gnu()
-                }
-            };
+            let target = options.target_layout();
             let module = match lower_unit(&unit, &target) {
                 Ok(module) => module,
                 Err(error) => {

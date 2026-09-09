@@ -1401,13 +1401,30 @@ impl std::error::Error for LayoutError {}
 /// AArch64 implementation cannot silently inherit this ABI's decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TargetDataLayout {
-    _private: (),
+    short_wchar: bool,
 }
 
 impl TargetDataLayout {
     #[must_use]
     pub const fn aarch64_unknown_linux_gnu() -> Self {
-        Self { _private: () }
+        Self { short_wchar: false }
+    }
+
+    /// Select the target ABI's optional 16-bit wide-character representation.
+    #[must_use]
+    pub const fn with_short_wchar(mut self, enabled: bool) -> Self {
+        self.short_wchar = enabled;
+        self
+    }
+
+    /// Canonical integer rank of `wchar_t` and an `L` literal's elements.
+    #[must_use]
+    pub const fn wide_character_rank(&self) -> IntRank {
+        if self.short_wchar {
+            IntRank::UShort
+        } else {
+            IntRank::UInt
+        }
     }
 
     /// Byte order of scalar and pointer object representations.

@@ -892,11 +892,7 @@ fn pointer_expression_type(
     expression: &CHirExpr<'_>,
 ) -> Result<PointerTypeDesc, MemoryPlaceError> {
     if let CHirExpr::StringLit(literal, _) = expression {
-        let rank = match literal.prefix {
-            crate::StringPrefix::None | crate::StringPrefix::U8 => evocc_types::IntRank::Char,
-            crate::StringPrefix::L | crate::StringPrefix::U16 => evocc_types::IntRank::UShort,
-            crate::StringPrefix::U => evocc_types::IntRank::UInt,
-        };
+        let rank = literal.prefix.element_rank();
         let ty = types
             .find(&evocc_types::CanonicalType {
                 kind: TypeKind::Int(rank),
@@ -1083,17 +1079,8 @@ fn string_literal_matches(
                     | evocc_types::IntRank::SChar
                     | evocc_types::IntRank::UChar
             )
-        ) | (
-            crate::StringPrefix::L,
-            TypeKind::Int(evocc_types::IntRank::UShort)
-        ) | (
-            crate::StringPrefix::U16,
-            TypeKind::Int(evocc_types::IntRank::UShort)
-        ) | (
-            crate::StringPrefix::U,
-            TypeKind::Int(evocc_types::IntRank::UInt)
         )
-    );
+    ) || pointee.kind == TypeKind::Int(prefix.element_rank());
     matches_literal && expected.pointee_qualifiers() == pointee.qualifiers
 }
 

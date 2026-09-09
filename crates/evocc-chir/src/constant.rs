@@ -470,10 +470,7 @@ pub(crate) fn eval_integer_constant(
 ) -> Option<CInteger> {
     match expression {
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
-        CHirExpr::CharLit(literal, _) => {
-            let value = i32::try_from(literal.value).ok()?;
-            Some(CInteger::int(value))
-        }
+        CHirExpr::CharLit(literal, _) => Some(literal.integer_value()),
         CHirExpr::Ident { symbol, .. } => {
             let symbol = symbols.symbol(*symbol).ok()?;
             if symbol.kind() != SymbolKind::Enumerator {
@@ -607,7 +604,7 @@ fn integer_expression_type(
 ) -> Option<CIntegerType> {
     match expression {
         CHirExpr::Lit(literal, _) => Some(integer_literal_value(*literal).ok()?.ty()),
-        CHirExpr::CharLit(_, _) => Some(CIntegerType::INT),
+        CHirExpr::CharLit(literal, _) => Some(literal.integer_value().ty()),
         CHirExpr::Ident { symbol, facts, .. } => {
             let symbol = symbols.symbol(*symbol).ok()?;
             canonical_integer_type(types, facts.ty()).or_else(|| {

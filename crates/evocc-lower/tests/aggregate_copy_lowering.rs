@@ -201,7 +201,10 @@ fn flexible_string_initializers_preserve_object_extent_and_terminators() {
         ("text", b"owx\0"),
         ("listed", b"lwx\0"),
         ("empty", b"e\0"),
-        ("wide", &[7, 0, 0, 0, b'w', 0, b'x', 0, 0, 0]),
+        (
+            "wide",
+            &[7, 0, 0, 0, b'w', 0, 0, 0, b'x', 0, 0, 0, 0, 0, 0, 0],
+        ),
         ("terminated", b"wx\0\0\0"),
         ("exact", b"wx"),
     ];

@@ -583,7 +583,7 @@ def raw_projection(evocc: Path, original: list[str], lane: str, source: str) -> 
             projected.append("-I" + translate_container_path(value[2:], lane))
         elif value.startswith(("-D", "-U")) and len(value) > 2:
             projected.append(value)
-        elif value in {"-nostdinc", "-undef"} or value.startswith("-std="):
+        elif value in {"-nostdinc", "-undef", "-fshort-wchar", "-fno-short-wchar"} or value.startswith("-std="):
             projected.append(value)
         elif value.startswith("-fmacro-prefix-map="):
             projected.append(value.replace("/work/src/", str(SOURCE_ROOT) + "/"))
@@ -1317,6 +1317,12 @@ def parser_observation(
         str(evocc),
         "--parse-only",
         "--target=aarch64-unknown-linux-gnu",
+        *[
+            flag for flag in first_saved_command(
+                REFERENCE_ROOT / f"{family}-lane-1" / unit["commandRecordPath"]
+            )[1]
+            if flag in {"-fshort-wchar", "-fno-short-wchar"}
+        ],
         str(parser_input),
     ]
     parser_rc, timed_out = run_process(
