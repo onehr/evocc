@@ -167,11 +167,11 @@ fn checked_shifts_do_not_inherit_host_shift_or_overflow_behavior() {
     }
     assert_eq!(
         eval_binary_integer(BinaryOp::Shl, CInteger::int(-1), CInteger::int(1)),
-        Err(IntegerError::InvalidSignedLeftShift)
+        Ok(CInteger::int(-2))
     );
     assert_eq!(
         eval_binary_integer(BinaryOp::Shl, CInteger::int(1), CInteger::int(31)),
-        Err(IntegerError::InvalidSignedLeftShift)
+        Ok(CInteger::int(i32::MIN))
     );
     assert_eq!(
         eval_binary_integer(

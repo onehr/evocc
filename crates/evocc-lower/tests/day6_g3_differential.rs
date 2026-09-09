@@ -19,11 +19,15 @@ use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 const DAY5_DEFINED: usize = 256;
 const DAY5_INVALID: usize = 64;
+// The original 320 source identities remain frozen. Four historical E3006
+// cases now return measured values under the GNU shift rule (revision 1.9.88).
+const RETURN_CASES: usize = DAY5_DEFINED + 4;
+const DIAGNOSTIC_CASES: usize = DAY5_INVALID - 4;
 const DAY6_GENERATED: usize = 256;
 const DAY5_CONTRACT_SHA256: &str =
     "71a757d161cd562d54992511a202925aeb5768ea5a23d93cfb0aabc332ee69a4";
 const DAY5_GENERATOR_SHA256: &str =
-    "e8975123ca654cb01c245cb40363b0187cecc382a9aaaedce0342ee32f2ee4c7";
+    "ba0dcb92efbe85f103e41f8dda83e98757f31e66dd29b5afbf319b594da14b9e";
 const STEP_BUDGET: u64 = 100_000;
 const MAX_FRAME_BYTES: usize = 1 << 20;
 const CASE_WATCHDOG: Duration = Duration::from_secs(2);
@@ -48,6 +52,10 @@ rows = []
 for case in authority["build_defined_cases"]():
     rows.append(("defined", case.case_id, case.source, str(case.value), "", ""))
 for case in authority["build_reject_cases"]():
+    if case.case_id in authority["SIGNED_SHIFT_RESULTS"]:
+        rows.append(("defined", case.case_id, case.source,
+                     str(authority["SIGNED_SHIFT_RESULTS"][case.case_id]), "", ""))
+        continue
     rows.append((
         "invalid",
         case.case_id,
@@ -271,7 +279,7 @@ fn load_day5_corpus() -> Result<Vec<CorpusCase>, String> {
         .filter(|case| matches!(case.expected, Expected::Value(_)))
         .count();
     let invalid = cases.len() - defined;
-    if defined != DAY5_DEFINED || invalid != DAY5_INVALID {
+    if defined != RETURN_CASES || invalid != DIAGNOSTIC_CASES {
         return Err(format!(
             "authoritative denominators changed: defined={defined}, invalid={invalid}"
         ));
@@ -679,11 +687,11 @@ fn day5_and_day6_corpora_are_exactly_differentially_clean() {
 
     assert!(
         failures.is_empty()
-            && day5_defined_passed == DAY5_DEFINED
-            && day5_invalid_passed == DAY5_INVALID
+            && day5_defined_passed == RETURN_CASES
+            && day5_invalid_passed == DIAGNOSTIC_CASES
             && generated_passed == DAY6_GENERATED,
-        "Day-6 G3 differential gate failed: Day5 defined={day5_defined_passed}/{DAY5_DEFINED}, \
-         Day5 invalid={day5_invalid_passed}/{DAY5_INVALID}, \
+        "Day-6 G3 differential gate failed: current returns={day5_defined_passed}/{RETURN_CASES}, \
+         current diagnostics={day5_invalid_passed}/{DIAGNOSTIC_CASES}, \
          Day6 call+recursion+for={generated_passed}/{DAY6_GENERATED}; failures:\n{}",
         failures.join("\n")
     );

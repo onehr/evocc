@@ -2,9 +2,10 @@
 """Frozen Day-5 scalar C-HIR interpreter corpus and comparator.
 
 The 256 defined programs are checked against this independent, bounded model.
-The 64 EXPECTED_REJECT programs are hand-audited runtime-error witnesses, not
-compiler-oracle goldens: executing them as native C would invoke undefined
-behavior.  This file never accepts observations from a TSV or similar external
+The historical 64 EXPECTED_REJECT programs were runtime-error witnesses in
+the original profile. Revision 1.9.88 defines four signed shifts; their source
+bytes and frozen manifest remain unchanged, but current execution checks their
+measured return values. This file never accepts observations from a TSV or similar external
 subject substitute; ``behavior`` executes the binary path supplied by the
 authoritative shell join directly.
 """
@@ -31,6 +32,13 @@ REJECT_VARIANTS = 8
 REJECT_COUNT = REJECT_FAMILIES * REJECT_VARIANTS
 WATCHDOG_SECONDS = 2.0
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts/day5-scalar-interpreter.json"
+# Current GNU-profile results, not a mutation of the historical corpus.
+SIGNED_SHIFT_RESULTS = {
+    "reject.signed-edge.v04": -2,
+    "reject.signed-edge.v05": -2147483648,
+    "reject.signed-edge.v06": -2147483648,
+    "reject.signed-edge.v07": -1073741824,
+}
 
 
 def sha256_text(value: str) -> str:
@@ -573,6 +581,18 @@ def expected_observations() -> list[dict[str, Any]]:
         )
     for case in build_reject_cases():
         diagnostic = case.diagnostic
+        if case.case_id in SIGNED_SHIFT_RESULTS:
+            observations.append(
+                {
+                    "id": case.case_id,
+                    "sourceSha256": sha256_text(case.source),
+                    "rc": 0,
+                    "stdout": f"{SIGNED_SHIFT_RESULTS[case.case_id]}\n",
+                    "stderr": "",
+                    "timedOut": False,
+                }
+            )
+            continue
         observations.append(
             {
                 "id": case.case_id,
@@ -707,8 +727,11 @@ def verify_behavior(binary_name: str) -> int:
 
     summary = {
         "status": "PASS" if not mismatches else "FAIL",
-        "defined": DEFINED_COUNT,
-        "expectedReject": REJECT_COUNT,
+        "defined": DEFINED_COUNT + len(SIGNED_SHIFT_RESULTS),
+        "expectedReject": REJECT_COUNT - len(SIGNED_SHIFT_RESULTS),
+        "historicalDefined": DEFINED_COUNT,
+        "historicalExpectedReject": REJECT_COUNT,
+        "signedShiftProfileRevision": "1.9.88",
         "fuelControls": 1,
         "mismatchCount": len(mismatches),
         "mismatchSample": mismatches[:32],

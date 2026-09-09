@@ -760,8 +760,8 @@ fn signed_wrapping_can_be_disabled_without_changing_the_default() {
 #[test]
 fn signed_wrapping_does_not_waive_other_runtime_obligations() {
     for (source, code) in [
-        ("int main(void){int x=1;return x<<31;}", "E3006"),
         ("int main(void){int x=1;return x<<32;}", "E3005"),
+        ("int main(void){int x=1;return x<<-1;}", "E3005"),
         ("int main(void){int x=1,y=0;return x/y;}", "E3002"),
         ("int main(void){int x=1,y=0;return x%y;}", "E3003"),
         (
@@ -1043,7 +1043,7 @@ fn discarded_expression_exits_execute_without_invented_fallthrough() {
 }
 
 #[test]
-fn constant_case_folding_does_not_waive_runtime_shift_checks() {
+fn constant_case_and_executed_signed_shift_agree_on_the_bit_pattern() {
     let source = "int main(void) { int x = -2147483647-1; switch (x) {
         case 1 << 31: return 0; default: return 1; } }";
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
@@ -1056,11 +1056,47 @@ fn constant_case_folding_does_not_waive_runtime_shift_checks() {
         assert_eq!(output.stdout, b"0\n");
         let runtime = source.replace("case 1 << 31: return 0", "case 1 << 31: return 1 << 31");
         let output = run(&runtime, mode);
-        assert!(!output.status.success(), "{mode} waived the executed shift");
-        assert!(String::from_utf8_lossy(&output.stderr).contains("E3006"));
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"-2147483648\n");
     }
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     assert_native_execution(source, "case-constant-folding");
+}
+
+#[test]
+fn signed_shifts_use_the_measured_bit_pattern_at_every_integer_width() {
+    let source = include_str!("../../../tests/fixtures/signed-shift-bit-patterns.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(!text.contains("signed_shl_defined"), "{text}");
+    assert!(
+        !text.contains("ub.assume.invalid_signed_left_shift"),
+        "{text}"
+    );
+    assert!(text.contains("ub.assume.invalid_shift_count"), "{text}");
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "signed-shift-bit-patterns");
 }
 
 #[test]
