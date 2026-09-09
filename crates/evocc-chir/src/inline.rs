@@ -838,9 +838,11 @@ impl<'a> Substitution<'a, '_> {
         let symbol = self.unit.symbols.symbol(s).unwrap();
         let ty = symbol.ty();
         let initializer = value.map(|v| {
+            // A list parameter is the same complete-object copy as an
+            // ordinary record parameter, never a scalar store of its address.
             let action = if matches!(
                 self.unit.types.get(ty).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_)
+                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
             ) {
                 InitAction::CopyAggregate {
                     path: SubobjectPath::root(),
@@ -1224,7 +1226,7 @@ impl<'a> Substitution<'a, '_> {
                         let ty = self.unit.symbols.symbol(result).unwrap().ty();
                         let value = if matches!(
                             self.unit.types.get(ty).unwrap().kind,
-                            TypeKind::Struct(_) | TypeKind::Union(_)
+                            TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
                         ) {
                             value
                         } else {
@@ -1387,7 +1389,7 @@ impl<'a> Substitution<'a, '_> {
             let object = self.object(s, None, span);
             if matches!(
                 self.unit.types.get(return_type).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_)
+                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
             ) {
                 // Like the existing call-result buffer, an aggregate result
                 // belongs to the caller, not the callee's ended block.
@@ -1400,7 +1402,7 @@ impl<'a> Substitution<'a, '_> {
             let fresh = self.fresh(inline_scope, parameter.ty, StorageClass::None, span)?;
             let arg = if matches!(
                 self.unit.types.get(parameter.ty).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_)
+                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
             ) {
                 *arg
             } else {

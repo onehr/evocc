@@ -469,7 +469,10 @@ impl<'arena> InitPlan<'arena> {
                     )?;
                 }
                 InitAction::CopyAggregate { .. }
-                    if !matches!(destination_kind, TypeKind::Struct(_) | TypeKind::Union(_)) =>
+                    if !matches!(
+                        destination_kind,
+                        TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
+                    ) =>
                 {
                     return Err(InitPlanError::AggregateDestinationIsNotRecord {
                         action: action_index,
