@@ -1651,6 +1651,52 @@ fn incomplete_external_objects_have_addresses_without_invented_layouts() {
 }
 
 #[test]
+fn incomplete_external_addresses_execute_without_claiming_object_storage() {
+    for declaration in [
+        "extern const void input;",
+        "extern const void input __attribute__((aligned(32)));",
+        "struct O; extern struct O input;",
+        "union O; extern union O input;",
+    ] {
+        let source = format!("{declaration} const void *f(void){{return &input;}} int main(void){{return f()!=&input;}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        assert!(module.globals.is_empty());
+        assert_eq!(module.extern_objects.len(), 1);
+        let external = &module.extern_objects[0];
+        assert_eq!(external.size, None);
+        assert_eq!(
+            external.align,
+            if declaration.contains("aligned") {
+                32
+            } else {
+                1
+            }
+        );
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(&source, mode);
+            assert!(
+                output.status.success(),
+                "{declaration}: {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, b"0\n");
+        }
+        let output = run(
+            &format!("{declaration} int main(void){{return *(const char*)&input;}}"),
+            "--interpret-c-hir",
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3040"));
+    }
+}
+
+#[test]
 fn unresolved_runtime_symbols_fail_only_when_reached() {
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
         for (source, code) in [
