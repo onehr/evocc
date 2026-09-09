@@ -1,4 +1,4 @@
-use evocc_evoir::{parse_section9_module, render_module};
+use evocc_evoir::{parse_section9_module, render_module, validate_ssa};
 
 const UNIT: &str = "\
 func @f(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default visibility=internal
@@ -21,11 +21,14 @@ fn function_alignment_round_trips_and_default_headers_are_unchanged() {
 
 #[test]
 fn function_alignment_requires_a_power_of_two_at_least_four() {
+    let mut module = parse_section9_module(UNIT.as_bytes()).unwrap();
     for alignment in [0, 1, 2, 3, 12] {
         let text = UNIT.replace(
             "visibility=internal",
             &format!("visibility=internal align={alignment}"),
         );
         assert!(parse_section9_module(text.as_bytes()).is_err(), "{text}");
+        module.functions[0].alignment = alignment;
+        assert!(validate_ssa(&module.functions[0]).is_err());
     }
 }

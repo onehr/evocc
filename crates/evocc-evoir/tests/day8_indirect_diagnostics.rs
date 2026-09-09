@@ -50,6 +50,7 @@ fn identity(width: u16) -> Function {
     let memory = mem(1);
     let ordered = world(2);
     Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
@@ -92,6 +93,7 @@ fn caller(insts: Vec<Inst>, result: Value, memory: Value, ordered: Value) -> Fun
     let memory_in = mem(0);
     let world_in = world(1);
     Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,

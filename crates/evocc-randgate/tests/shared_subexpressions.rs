@@ -186,6 +186,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,

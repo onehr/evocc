@@ -989,16 +989,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn add_entity_attributes(&mut self, symbol: SymbolId, attributes: &[Attribute]) {
-        if self
-            .symbols
-            .symbol(symbol)
-            .is_ok_and(|entry| matches!(entry.kind(), SymbolKind::Object | SymbolKind::Parameter))
-        {
+        if self.symbols.symbol(symbol).is_ok_and(|entry| {
+            matches!(
+                entry.kind(),
+                SymbolKind::Object | SymbolKind::Parameter | SymbolKind::Function
+            )
+        }) {
             for attribute in attributes {
                 if let Some(AppliedAttribute::Aligned(bytes)) = attribute.applied {
                     self.symbols
-                        .raise_object_alignment(symbol, bytes)
-                        .expect("declared object exists");
+                        .raise_declared_alignment(symbol, bytes)
+                        .expect("declared entity exists");
                 }
             }
         }
@@ -4687,14 +4688,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         attributes: &mut [Attribute],
         typedef: bool,
     ) -> TypeId {
-        if typedef
-            || matches!(
-                self.types.get(ty).map(|ty| &ty.kind),
-                Some(TypeKind::Function { .. })
-            )
-        {
+        if typedef {
             self.validate_alignment_specifiers(ty, attributes, false);
             return self.apply_attributes_to_type(ty, attributes);
+        }
+        if matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::Function { .. })
+        ) {
+            self.validate_alignment_specifiers(ty, attributes, false);
         }
         let mut ty = ty;
         for attribute in attributes {

@@ -50,6 +50,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
@@ -324,6 +325,7 @@ fn width_min_excludes_a_one_bit_value() {
         ty: EvoIRType::Bits(1),
     };
     let function = Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,

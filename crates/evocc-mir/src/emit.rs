@@ -382,7 +382,13 @@ fn emit_unit(
             static_blocks.entry(function).or_default().insert(block);
         }
     }
+    let alignments: BTreeMap<_, _> = module
+        .into_iter()
+        .flat_map(|module| &module.functions)
+        .map(|function| (function.name.as_str(), function.alignment))
+        .collect();
     for function in functions {
+        let alignment = alignments.get(function.name.as_str()).copied().unwrap_or(4);
         emit_function(
             &mut text,
             target,
@@ -390,6 +396,7 @@ fn emit_unit(
             static_blocks.get(function.name.as_str()),
             weak_functions.contains(function.name.as_str()),
             &indirect_addresses,
+            alignment,
         );
         emit_aliases(
             &mut text,
@@ -679,6 +686,7 @@ fn emit_function(
     static_blocks: Option<&BTreeSet<u32>>,
     weak: bool,
     indirect_addresses: &BTreeSet<(SymbolKind, &str)>,
+    alignment: u32,
 ) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
@@ -693,7 +701,7 @@ fn emit_function(
         text.push('\n');
         emit_definition_linkage(text, target, &allocated.name, weak);
     }
-    let _ = writeln!(text, ".p2align 2");
+    let _ = writeln!(text, ".p2align {}", alignment.trailing_zeros());
     if target == Target::Linux {
         let _ = writeln!(text, ".type {}, %function", allocated.name);
     }

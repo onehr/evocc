@@ -53,6 +53,7 @@ fn module() -> Module {
     let world = value(6, EvoIRType::World);
 
     let function = Function {
+        alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,

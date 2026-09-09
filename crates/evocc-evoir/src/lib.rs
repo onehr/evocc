@@ -742,6 +742,8 @@ impl EffectSummary {
 /// A function in EvoIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
+    /// Alignment of the first instruction; absent from text when it is four.
+    pub alignment: u32,
     pub linkage: Linkage,
     pub name: String,
     pub params: Vec<FunctionParam>,
@@ -801,6 +803,7 @@ pub struct FunctionDeclaration {
 impl FunctionDeclaration {
     fn signature(&self) -> Function {
         Function {
+            alignment: 4,
             name: self.name.clone(),
             variadic: self.variadic,
             params: self
@@ -1064,6 +1067,12 @@ pub struct Relocation {
 /// or an instruction result defined earlier in that same block.  Values that
 /// cross a CFG edge must be passed explicitly to the destination arguments.
 pub fn validate_ssa(func: &Function) -> Result<(), String> {
+    if func.alignment < 4 || !func.alignment.is_power_of_two() {
+        return Err(format!(
+            "function '{}' has invalid alignment {}",
+            func.name, func.alignment
+        ));
+    }
     if func.variadic {
         callable_signature(func)?;
     }
@@ -3240,7 +3249,10 @@ struct ActivationAddresses {
 }
 
 impl ExecutionState {
-    fn for_target(target: &TargetDataLayout) -> Result<Self, InterpreterError> {
+    fn for_target(
+        target: &TargetDataLayout,
+        function_alignment: u32,
+    ) -> Result<Self, InterpreterError> {
         let config = MemoryConfig::for_target(
             target,
             MemoryLimits {
@@ -3249,6 +3261,7 @@ impl ExecutionState {
                 max_total_bytes: MAX_MEMORY_TOTAL_BYTES,
             },
         )
+        .and_then(|config| config.with_function_alignment(function_alignment))
         .map_err(|error| InterpreterError::MemorySetup { error })?;
         let memory =
             MemoryState::new(config).map_err(|error| InterpreterError::MemorySetup { error })?;
@@ -3615,7 +3628,7 @@ pub fn interpret_function_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
-    let state = ExecutionState::for_target(target)?;
+    let state = ExecutionState::for_target(target, func.alignment)?;
     interpret_function_in_state(func, entry_args, limits, state)
 }
 
@@ -3870,7 +3883,13 @@ pub fn interpret_module_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
-    let state = ExecutionState::for_target(target)?;
+    let alignment = module
+        .functions
+        .iter()
+        .map(|function| function.alignment)
+        .max()
+        .unwrap_or(4);
+    let state = ExecutionState::for_target(target, alignment)?;
     interpret_module_in_state(module, entry_name, entry_args, limits, state)
 }
 
@@ -6074,6 +6093,7 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6112,6 +6132,7 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6160,6 +6181,7 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6221,6 +6243,7 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6303,6 +6326,7 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6368,6 +6392,7 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6483,6 +6508,7 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6557,6 +6583,7 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6630,6 +6657,7 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6662,6 +6690,7 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6734,6 +6763,7 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6777,6 +6807,7 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6854,6 +6885,7 @@ mod tests {
             }
         };
         let main = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -6927,6 +6959,7 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7263,7 +7296,7 @@ mod tests {
     #[test]
     fn direct_call_preserves_the_single_seeded_execution_state_without_reset() {
         let target = TargetDataLayout::aarch64_unknown_linux_gnu();
-        let mut state = ExecutionState::for_target(&target).expect("valid execution state");
+        let mut state = ExecutionState::for_target(&target, 4).expect("valid execution state");
         let (memory, seeded_address) = state
             .memory
             .allocate_static(91, AccessLayout::new(4, 4), InitialState::Zeroed)
@@ -7352,6 +7385,7 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7418,6 +7452,7 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7451,6 +7486,7 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7498,6 +7534,7 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7557,6 +7594,7 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7661,6 +7699,7 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7836,6 +7875,7 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                alignment: 4,
                 linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,
@@ -7877,6 +7917,7 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7896,6 +7937,7 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7923,6 +7965,7 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                alignment: 4,
                 linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
                 variadic: false,
@@ -7948,6 +7991,7 @@ mod tests {
         }
 
         let invalid_void = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -7972,6 +8016,7 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -8062,6 +8107,7 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -8147,6 +8193,7 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -8233,6 +8280,7 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8256,6 +8304,7 @@ mod tests {
             ),
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8279,6 +8328,7 @@ mod tests {
             ),
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8301,6 +8351,7 @@ mod tests {
             ),
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8323,6 +8374,7 @@ mod tests {
             ),
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8345,6 +8397,7 @@ mod tests {
             ),
             (
                 Function {
+                    alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
                     variadic: false,
@@ -8386,6 +8439,7 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -8494,6 +8548,7 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,
@@ -8522,6 +8577,7 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
             variadic: false,

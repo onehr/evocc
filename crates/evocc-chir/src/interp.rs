@@ -940,7 +940,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             max_object_bytes: MAX_MEMORY_OBJECT_BYTES,
             max_total_bytes: MAX_MEMORY_TOTAL_BYTES,
         };
+        let alignment = unit
+            .symbols()
+            .symbols_in_source_order()
+            .iter()
+            .filter(|symbol| symbol.kind() == SymbolKind::Function)
+            .map(|symbol| symbol.declared_alignment())
+            .max()
+            .unwrap_or(4)
+            .max(4);
         let config = MemoryConfig::for_target(target, memory_limits)
+            .and_then(|config| config.with_function_alignment(alignment))
             .map_err(|error| InterpreterError::MemorySetup { error })?;
         let memory =
             MemoryState::new(config).map_err(|error| InterpreterError::MemorySetup { error })?;
