@@ -1018,6 +1018,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::SizeOf(..)
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -2288,7 +2289,7 @@ fn prevalidate_expr_for_lowering(
         }
         CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
         CHirExpr::LabelAddress { .. } => Ok(()),
-        CHirExpr::BuiltinUnreachable { .. } => Ok(()),
+        CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinTrap { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
                 if let InitAction::StoreScalar { value, .. }
@@ -4491,6 +4492,10 @@ impl<'a> FunctionLowerer<'a> {
             CHirStmt::Asm(assembly) => self.lower_assembly(assembly, state, live_after),
             CHirStmt::Expr(CHirExpr::BuiltinUnreachable { .. }, _) => {
                 self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
+                Ok(Flow::default())
+            }
+            CHirStmt::Expr(CHirExpr::BuiltinTrap { .. }, _) => {
+                self.terminate(&state, Inst::Trap(TrapReason::BuiltinTrap))?;
                 Ok(Flow::default())
             }
             CHirStmt::Expr(expression, _) => self.lower_discarded_flow(expression, state),
@@ -7830,6 +7835,10 @@ impl<'a> FunctionLowerer<'a> {
                 span: *span,
                 feature: "unreachable builtin must be a discarded expression",
             }),
+            CHirExpr::BuiltinTrap { span, .. } => Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "void trap builtin used where a value is required",
+            }),
             CHirExpr::StatementExpr {
                 body,
                 value,
@@ -9855,6 +9864,10 @@ impl<'a> FunctionLowerer<'a> {
                 self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
                 return Ok(Flow::default());
             }
+            CHirExpr::BuiltinTrap { .. } => {
+                self.terminate(&state, Inst::Trap(TrapReason::BuiltinTrap))?;
+                return Ok(Flow::default());
+            }
             _ => {
                 let _ = self.lower_expr(expression, &mut state)?;
             }
@@ -11614,6 +11627,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         | CHirExpr::SizeOf(..)
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -11876,6 +11890,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         | CHirExpr::SizeOf(..)
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -12068,6 +12083,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::SizeOf(..)
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}

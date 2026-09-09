@@ -155,6 +155,7 @@ fn attribute_query_expression_type(
         CHirExpr::Ident { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::BitBuiltin { facts, .. }
+        | CHirExpr::BuiltinTrap { facts, .. }
         | CHirExpr::BuiltinUnreachable { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. }
@@ -456,6 +457,7 @@ fn expression_contains_declaration(
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => false,
@@ -550,6 +552,7 @@ pub(crate) fn eval_integer_constant(
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::Call(_, _, _)
         | CHirExpr::CheckedArithmetic { .. }
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. }
@@ -719,7 +722,8 @@ pub fn integer_expression_type(
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
         | CHirExpr::CompoundLit(_, _, _) => None,
-        CHirExpr::BuiltinUnreachable { .. }
+        CHirExpr::BuiltinTrap { .. }
+        | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. }
         | CHirExpr::BuiltinVarArgs { .. } => None,

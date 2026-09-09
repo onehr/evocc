@@ -159,6 +159,7 @@ impl UbReason {
 pub enum TrapReason {
     ScalarFunctionFellOffEnd,
     UnreachableReached,
+    BuiltinTrap,
 }
 
 impl TrapReason {
@@ -168,6 +169,7 @@ impl TrapReason {
         match self {
             Self::ScalarFunctionFellOffEnd => "E3007",
             Self::UnreachableReached => "E3024",
+            Self::BuiltinTrap => "E3047",
         }
     }
 
@@ -177,6 +179,7 @@ impl TrapReason {
         match self {
             Self::ScalarFunctionFellOffEnd => "scalar-function-fell-off-end",
             Self::UnreachableReached => "unreachable-reached",
+            Self::BuiltinTrap => "builtin-trap-reached",
         }
     }
 
@@ -186,6 +189,7 @@ impl TrapReason {
         match self {
             Self::ScalarFunctionFellOffEnd => "scalar_function_fell_off_end",
             Self::UnreachableReached => "unreachable_reached",
+            Self::BuiltinTrap => "builtin_trap",
         }
     }
 }
@@ -3373,6 +3377,9 @@ pub enum InterpreterError {
     MissingReturn {
         block: BlockId,
     },
+    BuiltinTrapReached {
+        block: BlockId,
+    },
     UnsupportedBitWidth {
         block: BlockId,
         width: u16,
@@ -3426,6 +3433,7 @@ impl InterpreterError {
             Self::UninitializedRead { .. } => "E3001",
             Self::InvalidPointerRepresentation { .. } => "E3013",
             Self::MissingReturn { .. } => "E3007",
+            Self::BuiltinTrapReached { .. } => TrapReason::BuiltinTrap.diagnostic(),
             Self::DivisionByZero { .. } => "E3002",
             Self::RemainderByZero { .. } => "E3003",
             Self::SignedDivisionOverflow { .. } | Self::SignedRemainderOverflow { .. } => "E3004",
@@ -3455,6 +3463,7 @@ impl InterpreterError {
                 "invalid-pointer-representation".to_owned()
             }
             Self::MissingReturn { .. } => "scalar-function-fell-off-end".to_owned(),
+            Self::BuiltinTrapReached { .. } => TrapReason::BuiltinTrap.message().to_owned(),
             Self::DivisionByZero { .. } => "integer-division-by-zero".to_owned(),
             Self::RemainderByZero { .. } => "integer-remainder-by-zero".to_owned(),
             Self::SignedDivisionOverflow { .. } | Self::SignedRemainderOverflow { .. } => {
@@ -3537,6 +3546,12 @@ impl fmt::Display for InterpreterError {
                 formatter,
                 "E3007: scalar-function-fell-off-end (trap in block {block})"
             ),
+            Self::BuiltinTrapReached { block } => write!(
+                formatter,
+                "{}: {} (trap in block {block})",
+                TrapReason::BuiltinTrap.diagnostic(),
+                TrapReason::BuiltinTrap.message()
+            ),
             Self::UnsupportedBitWidth { block, width } => write!(
                 formatter,
                 "EvoIR interpreter does not support bits<{width}> in block {block}"
@@ -3596,6 +3611,7 @@ fn assembly_error(block: BlockId) -> InterpreterError {
 fn trap_error(reason: TrapReason, block: BlockId) -> InterpreterError {
     match reason {
         TrapReason::ScalarFunctionFellOffEnd => InterpreterError::MissingReturn { block },
+        TrapReason::BuiltinTrap => InterpreterError::BuiltinTrapReached { block },
         TrapReason::UnreachableReached => InterpreterError::UndefinedBehavior {
             block,
             diagnostic: reason.diagnostic(),

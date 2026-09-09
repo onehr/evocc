@@ -541,6 +541,11 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// An explicit abnormal termination, not an assertion of unreachable code.
+    BuiltinTrap {
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     /// The current activation's return address.
     BuiltinReturnAddress {
         facts: ExprFacts,
@@ -683,9 +688,9 @@ pub fn expression_is_void(
             is_void(facts.ty())
                 && value.is_none_or(|value| expression_is_void(value, symbols, types))
         }
-        CHirExpr::BuiltinVarArgs { facts, .. } | CHirExpr::BuiltinUnreachable { facts, .. } => {
-            is_void(facts.ty())
-        }
+        CHirExpr::BuiltinVarArgs { facts, .. }
+        | CHirExpr::BuiltinTrap { facts, .. }
+        | CHirExpr::BuiltinUnreachable { facts, .. } => is_void(facts.ty()),
         _ => false,
     }
 }
@@ -707,6 +712,7 @@ impl CHirExpr<'_> {
             | Self::Call(_, _, span)
             | Self::CheckedArithmetic { span, .. }
             | Self::BitBuiltin { span, .. }
+            | Self::BuiltinTrap { span, .. }
             | Self::BuiltinUnreachable { span, .. }
             | Self::BuiltinReturnAddress { span, .. }
             | Self::BuiltinFrameAddress { span, .. }
@@ -1872,6 +1878,7 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -2091,6 +2098,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. } => {}

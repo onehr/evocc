@@ -412,6 +412,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_bswap64",
                     ) => TokenKind::BuiltinBit,
                     Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
+                    Some("__builtin_trap") => TokenKind::BuiltinTrap,
                     Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
                     Some("__builtin_frame_address") => TokenKind::BuiltinFrameAddress,
                     Some("__auto_type") => TokenKind::AutoType,
@@ -2537,6 +2538,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
@@ -2667,6 +2669,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
@@ -6244,6 +6247,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
@@ -6363,6 +6367,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::StringLit(_, _)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
@@ -8312,6 +8317,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BitBuiltin { .. }
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
@@ -9052,6 +9058,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
             CHirExpr::BitBuiltin { facts, .. }
+            | CHirExpr::BuiltinTrap { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
             | CHirExpr::BuiltinReturnAddress { facts, .. }
             | CHirExpr::BuiltinFrameAddress { facts, .. }
@@ -10394,7 +10401,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::BuiltinVaArg => return self.parse_builtin_va_arg(tok),
             TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
-            TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
+            TokenKind::BuiltinUnreachable | TokenKind::BuiltinTrap => {
+                return self.parse_builtin_termination(tok);
+            }
             TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
             TokenKind::BuiltinFrameAddress => return self.parse_builtin_frame_address(tok),
             TokenKind::BuiltinAddOverflow => {
@@ -11644,7 +11653,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }))
     }
 
-    fn parse_builtin_unreachable(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+    fn parse_builtin_termination(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         if self.peek_kind() != Some(TokenKind::LParen) {
             self.report("E2910", "builtin-not-called", keyword.span);
             return None;
@@ -11656,9 +11665,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
         let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
-        Some(self.alloc_node(CHirExpr::BuiltinUnreachable {
-            facts: ExprFacts::value(void_ty),
-            span: self.merge_span(keyword.span, close.span),
+        let facts = ExprFacts::value(void_ty);
+        let span = self.merge_span(keyword.span, close.span);
+        Some(self.alloc_node(if keyword.kind == TokenKind::BuiltinTrap {
+            CHirExpr::BuiltinTrap { facts, span }
+        } else {
+            CHirExpr::BuiltinUnreachable { facts, span }
         }))
     }
 
@@ -12142,6 +12154,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinVaArg
             | TokenKind::BuiltinBit
             | TokenKind::BuiltinUnreachable
+            | TokenKind::BuiltinTrap
             | TokenKind::BuiltinReturnAddress
             | TokenKind::BuiltinFrameAddress
             | TokenKind::BuiltinAddOverflow
@@ -12455,6 +12468,7 @@ fn collect_jump_regions_expr(
         | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -12669,6 +12683,7 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => false,
@@ -13013,6 +13028,10 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             span: paren_span,
         },
         CHirExpr::BuiltinUnreachable { facts, .. } => CHirExpr::BuiltinUnreachable {
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinTrap { facts, .. } => CHirExpr::BuiltinTrap {
             facts: *facts,
             span: paren_span,
         },

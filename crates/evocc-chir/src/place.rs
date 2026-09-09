@@ -1016,6 +1016,7 @@ fn pointer_expression_type(
         | CHirExpr::Binary(_, _, _, _)
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BitBuiltin { .. }
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)

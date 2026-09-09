@@ -128,6 +128,7 @@ pub enum TokenKind {
     /// after preprocessing.
     BuiltinBit,
     BuiltinUnreachable,
+    BuiltinTrap,
     BuiltinReturnAddress,
     BuiltinFrameAddress,
     /// GNU `__auto_type`, promoted only after preprocessing at the parser

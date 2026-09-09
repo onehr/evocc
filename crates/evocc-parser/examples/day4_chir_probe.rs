@@ -260,6 +260,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 format!("bit_builtin({op:?},{operand})")
             }
             CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".to_owned(),
+            CHirExpr::BuiltinTrap { .. } => "builtin_trap".to_owned(),
             CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".to_owned(),
             CHirExpr::BuiltinFrameAddress { .. } => "builtin_frame_address".to_owned(),
             CHirExpr::BuiltinVarArgs {

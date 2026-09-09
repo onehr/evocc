@@ -333,6 +333,7 @@ fn inspect_with_declarations<'a>(
                     | CHirExpr::SizeOf(..)
                     | CHirExpr::SizeOfExpr(..)
                     | CHirExpr::AlignOf(..)
+                    | CHirExpr::BuiltinTrap { .. }
                     | CHirExpr::BuiltinUnreachable { .. }
                     | CHirExpr::BuiltinReturnAddress { .. }
                     | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -1190,6 +1191,7 @@ impl<'a> Substitution<'a, '_> {
             | CHirExpr::SizeOf(..)
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. } => {}

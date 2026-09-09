@@ -79,6 +79,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}

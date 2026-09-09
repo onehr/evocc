@@ -6668,3 +6668,10 @@ Per the F03 ruling, `[[gnu::name]]` and `[[__gnu__::__name__]]` reuse the GNU at
 The sealed GCC-14/Clang-19 probes in `.evidence/builtin-probes/20260909-attribute-brackets/` and `20260910-attribute-namespaces/` cover the grammar, preserved names, actual alignment and packed-member offsets, with outcomes in each `results.txt`.
 Malformed placement retains E2903, including the mixed GNU-before-bracket specifier order and the measured layout conflicts for `aligned` on an array suffix or pointer layer; the function-suffix form is preserved on the function type without raising function alignment, as both oracles measure four bytes.
 Four original first-error programs in torture `20260909T171533Z` reach bracket syntax; replay decides their actual outcomes, and the independent GCC O2 failure of `pr124358` is recorded separately rather than treated as a consensus value.
+
+### Explicit builtin trap termination
+
+Per F07, `__builtin_trap()` has type `void`, takes no arguments, has no constant value, and lowers to the zero-operand `trap.builtin_trap` reason of the existing typed terminator family, with `may_trap=true` and no licence for dead-edge reasoning.
+When reached, both interpreters report E3047 `builtin-trap-reached` (explicit termination, not a failed UB assumption), and the AArch64 emitter uses `brk #1000`; an unevaluated or unselected occurrence does not terminate execution.
+The sealed GCC-14/Clang-19 O0/O2 runs of `.evidence/builtin-probes/20260910-builtin-trap/trap.c` all return zero on the ordinary path and SIGTRAP (133) on the reached path (`results.txt`); GCC uses immediate 1000 and Clang uses 1, which are not an observable termination disagreement.
+Three original torture first-error programs in `20260909T182954Z` reach this missing builtin; the next original-program replay determines gains rather than this probe.

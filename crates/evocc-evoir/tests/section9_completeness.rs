@@ -150,6 +150,7 @@ fn sentinel_instructions() -> Vec<Inst> {
         Inst::Ret(vec![bits(1270), mem(1271), world(1272)]),
         Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
         Inst::Trap(TrapReason::UnreachableReached),
+        Inst::Trap(TrapReason::BuiltinTrap),
         Inst::PtrNull(pointer(1280)),
         Inst::GlobalAddr {
             result: value(1290, EvoIRType::Ptr(AddressSpace::Global)),
@@ -939,10 +940,12 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
     for value in [
         TrapReason::ScalarFunctionFellOffEnd,
         TrapReason::UnreachableReached,
+        TrapReason::BuiltinTrap,
     ] {
         keys.insert(match value {
             TrapReason::ScalarFunctionFellOffEnd => "TrapReason.ScalarFunctionFellOffEnd",
             TrapReason::UnreachableReached => "TrapReason.UnreachableReached",
+            TrapReason::BuiltinTrap => "TrapReason.BuiltinTrap",
         });
     }
     for value in directions {

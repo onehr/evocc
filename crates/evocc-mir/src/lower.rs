@@ -202,7 +202,10 @@ fn ub_immediate(reason: UbReason) -> u16 {
 }
 
 fn trap_immediate(reason: TrapReason) -> u16 {
-    reason_immediate(reason.diagnostic())
+    match reason {
+        TrapReason::BuiltinTrap => 1000,
+        _ => reason_immediate(reason.diagnostic()),
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -162,6 +162,9 @@ pub enum InterpreterError {
     UnreachableReached {
         span: SourceSpan,
     },
+    BuiltinTrapReached {
+        span: SourceSpan,
+    },
     ComputedGoto {
         span: SourceSpan,
     },
@@ -285,6 +288,7 @@ impl InterpreterError {
             Self::Asm { .. } => "E3021",
             Self::BitBuiltinZeroOperand { .. } => "E3022",
             Self::UnreachableReached { .. } => "E3024",
+            Self::BuiltinTrapReached { .. } => "E3047",
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
             Self::WideInteger { .. } => "E3033",
@@ -386,6 +390,7 @@ impl InterpreterError {
             Self::Asm { .. } => "not-lowered: asm".to_owned(),
             Self::BitBuiltinZeroOperand { .. } => "bit-builtin-zero-operand".to_owned(),
             Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
+            Self::BuiltinTrapReached { .. } => "builtin-trap-reached".to_owned(),
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
@@ -432,6 +437,7 @@ impl InterpreterError {
             | Self::Asm { span }
             | Self::BitBuiltinZeroOperand { span }
             | Self::UnreachableReached { span }
+            | Self::BuiltinTrapReached { span }
             | Self::ComputedGoto { span }
             | Self::VarArgs { span }
             | Self::WideInteger { span }
@@ -3850,6 +3856,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::BuiltinUnreachable { .. } => {
                 return Err(InterpreterError::UnreachableReached { span });
+            }
+            CHirExpr::BuiltinTrap { .. } => {
+                return Err(InterpreterError::BuiltinTrapReached { span });
             }
             CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
@@ -7764,6 +7773,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::SizeOf(..)
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
+            | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -8098,6 +8108,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::BuiltinUnreachable { .. } => {
                 Err(InterpreterError::UnreachableReached { span })
             }
+            CHirExpr::BuiltinTrap { .. } => Err(InterpreterError::BuiltinTrapReached { span }),
             CHirExpr::BuiltinReturnAddress { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "return-address builtin",
                 span,
@@ -8348,6 +8359,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 CHirExpr::FloatLit(_, _)
                 | CHirExpr::StringLit(_, _)
                 | CHirExpr::LabelAddress { .. }
+                | CHirExpr::BuiltinTrap { .. }
                 | CHirExpr::BuiltinUnreachable { .. }
                 | CHirExpr::BuiltinReturnAddress { .. }
                 | CHirExpr::BuiltinFrameAddress { .. }
@@ -9005,6 +9017,7 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => {}
@@ -9181,6 +9194,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. } => false,
     }
 }
@@ -9282,6 +9296,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::BuiltinFrameAddress { .. } => false,
