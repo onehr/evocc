@@ -38,6 +38,32 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn address_references_round_trip_and_validate_the_named_input_type() {
+    for ty in ["ptr<generic>", "bits<64>"] {
+        for constraint in ["r", "p"] {
+            for reference in ["%a0", "%a[address]"] {
+                let source = format!(concat!(
+                    "func @hint(%arg0: {ty}, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default\n",
+                    "    effects {{ reads={{all}}, writes={{all}}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }}\n",
+                    "{{\n^entry(%v0: {ty}, %v1: mem<all>, %v2: world):\n",
+                    "    (%v3, %v4) = asm \"prfm pldl1keep, {reference}\" %v1, %v2 outputs [] inputs [(\"{constraint}\", \"address\", %v0)] clobbers []\n",
+                    "    ret %v3, %v4\n}}\n"
+                ), ty=ty, constraint=constraint, reference=reference);
+                let module = parse_section9_module(source.as_bytes()).expect("address input");
+                assert_eq!(render_module(&module), source);
+                for bad in ["bits<1>", "bits<32>", "bits<128>"] {
+                    let invalid = source.replace(ty, bad);
+                    assert!(
+                        parse_section9_module(invalid.as_bytes()).is_err(),
+                        "{invalid}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn symbolic_address_operands_and_constant_modifiers_preserve_opaque_effects() {
     let source = concat!(
         "global @object origin=0 kind=file visibility=internal size=4 align=4 bytes=00000000 initialized=1111\n\n",

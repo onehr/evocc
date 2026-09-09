@@ -31,6 +31,52 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn address_modifiers_select_registers_and_execute_operands_once() {
+    let source = include_str!("../../../tests/fixtures/assembly-address-operands.c");
+    let selected = source.replace("\"p\"", "\"r\"");
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let actual = run(source, mode);
+        assert!(
+            actual.status.success(),
+            "{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        let expected = run(&selected, mode);
+        assert!(
+            expected.status.success(),
+            "{}",
+            String::from_utf8_lossy(&expected.stderr)
+        );
+        assert_eq!(actual.stdout, expected.stdout, "{mode}: p selects r");
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "address-modifiers");
+}
+
+#[test]
+fn address_modifiers_refuse_non_address_operands_and_outputs() {
+    for operands in [
+        "::\"r\"(1)",
+        "::\"p\"(1)",
+        "::\"i\"(1UL)",
+        ":\"=r\"(x)",
+        ":\"+r\"(x)",
+        "::\"Q\"(x)",
+        "::\"rZ\"(0UL)",
+    ] {
+        let source =
+            format!("int f(void){{unsigned long x=0; asm(\"// %a0\" {operands}); return 0;}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success(), "{operands}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E3021"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn single_trailing_assembly_spelling_uses_the_existing_contextual_path() {
     for source in [
         "__asm(\".text\"); int value;",
