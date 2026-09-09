@@ -600,7 +600,11 @@ pub(crate) fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option
     }
 }
 
-fn integer_expression_type(
+/// Infer an integer expression's type without evaluating either conditional arm.
+/// Consumers of constant knowledge must use this type even when only one arm
+/// supplies the value. Unsupported or non-integer forms return `None`.
+#[must_use]
+pub fn integer_expression_type(
     expression: &CHirExpr<'_>,
     types: &TypeInterner,
     symbols: &SymbolTable,

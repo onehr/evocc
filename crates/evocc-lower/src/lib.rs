@@ -11269,11 +11269,29 @@ fn constant_integer(
         )
         .ok(),
         CHirExpr::Ternary(condition, then_value, else_value, _) => {
-            if constant_integer(unit, target, condition)?.truth() {
+            let value = if constant_integer(unit, target, condition)?.truth() {
                 constant_integer(unit, target, then_value)
             } else {
                 constant_integer(unit, target, else_value)
-            }
+            }?;
+            Some(value.cast(evocc_chir::constant::integer_expression_type(
+                expression,
+                unit.types(),
+                unit.symbols(),
+            )?))
+        }
+        CHirExpr::Elvis(operand, fallback, _) => {
+            let value = constant_integer(unit, target, operand)?;
+            let value = if value.truth() {
+                value
+            } else {
+                constant_integer(unit, target, fallback)?
+            };
+            Some(value.cast(evocc_chir::constant::integer_expression_type(
+                expression,
+                unit.types(),
+                unit.symbols(),
+            )?))
         }
         CHirExpr::Cast(ty, operand, span) => {
             let target_integer = canonical_integer(unit.types(), target, *ty, *span).ok()?;
