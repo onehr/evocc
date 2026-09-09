@@ -77,7 +77,14 @@ fn unused_target_header_prototypes_do_not_require_floating_execution() {
 
 #[test]
 fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_aliases() {
-    for spelling in ["_Float32", "__Float32x4_t", "__SVFloat32_t"] {
+    for spelling in [
+        "float",
+        "double",
+        "long double",
+        "_Float32",
+        "__Float32x4_t",
+        "__SVFloat32_t",
+    ] {
         let source = format!("{spelling} identity({spelling} x){{return x;}}");
         let arena = Arena::default();
         let file = FileId::new(11_900);

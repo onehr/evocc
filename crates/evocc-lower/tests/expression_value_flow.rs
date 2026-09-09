@@ -96,6 +96,12 @@ fn floating_object_declarations_do_not_execute_floating_values() {
 }
 
 #[test]
+fn logical_negation_accepts_pointer_values_and_evaluates_once() {
+    agrees("int main(void){int a;int *p=&a;int *n=0;return !p || !!n || !&a || !main;}");
+    agrees("int main(void){int a;int *p[2]={&a,0};int i=0;int first=!p[i++];int second=!p[i++];return first || !second || i!=2;}");
+}
+
+#[test]
 fn pretty_function_resolves_to_the_shared_function_name_object() {
     agrees("int main(void){static const char *saved=__PRETTY_FUNCTION__;return saved[0]!='m' || saved[3]!='n' || saved[4]!=0 || sizeof(__PRETTY_FUNCTION__)!=5 || saved!=__func__;}");
     agrees("int other(void){return __PRETTY_FUNCTION__[0]!='o' || sizeof(__PRETTY_FUNCTION__)!=6;}int main(void){return other() || __PRETTY_FUNCTION__[0]!='m';}");
