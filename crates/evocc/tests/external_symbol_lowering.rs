@@ -1343,6 +1343,33 @@ fn referenced_external_symbols_lower_without_invented_bodies() {
 }
 
 #[test]
+fn incomplete_external_objects_have_addresses_without_invented_layouts() {
+    for (source, alignment) in [
+        ("struct FILE; extern struct FILE input; void *f(void){return &input;}", 1),
+        ("union U; extern union U input; void *f(void){return &input;}", 1),
+        ("struct FILE; extern struct FILE input __attribute__((aligned(32))); void *f(void){return &input;}", 32),
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains(&format!("extern @input size=unknown align={alignment}")), "{text}");
+        assert!(text.contains("global_addr @input"), "{text}");
+        let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+        assert!(module.globals.is_empty());
+        assert_eq!(module.extern_objects.len(), 1);
+        assert_eq!(module.extern_objects[0].size, None);
+    }
+    let output = run(
+        "struct FILE; extern struct FILE input; int f(void){return sizeof input;}",
+        "--parse-only",
+    );
+    assert!(
+        !output.status.success(),
+        "an address does not make the type complete"
+    );
+}
+
+#[test]
 fn unresolved_runtime_symbols_fail_only_when_reached() {
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
         for (source, code) in [
