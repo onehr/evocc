@@ -233,6 +233,15 @@ const PROGRAMS: &[Program] = &[
         linux_only: true,
     },
     Program {
+        name: "variadic-forwarding",
+        unit: include_str!("../../../tests/fixtures/variadic-forwarding.c"),
+        darwin: None,
+        other: Some(include_str!(
+            "../../../tests/fixtures/variadic-forwarding-caller.c"
+        )),
+        linux_only: true,
+    },
+    Program {
         name: "register-variable",
         unit: REGISTER_VARIABLE_UNIT,
         darwin: None,

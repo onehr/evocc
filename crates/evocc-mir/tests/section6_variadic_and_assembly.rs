@@ -82,6 +82,62 @@ fn a_variadic_callee_saves_the_registers_its_named_parameters_left() {
 }
 
 #[test]
+fn a_variadic_callee_preserves_all_incoming_vector_registers() {
+    let module = parse_section9_module(CALLEE.as_bytes()).unwrap();
+    let machine = evocc_mir::lower_module(&module).unwrap();
+    let allocated =
+        evocc_mir::allocate_for(Target::Linux, &evocc_mir::out_of_ssa(&machine.functions[0]))
+            .unwrap();
+    for outgoing in [0, 16, 1024, 65536] {
+        let mut allocated = allocated.clone();
+        allocated.outgoing = outgoing;
+        let frame = evocc_mir::frame_of(&allocated);
+        let (_, base) = frame.register_save.unwrap();
+        assert_eq!(base % 16, 0);
+        assert!(frame.slots.values().all(|offset| *offset >= base + 192));
+        let text = evocc_mir::emit_module_for(Target::Linux, &[allocated], &[]);
+        for pair in [0, 2, 4, 6] {
+            assert!(
+                text.contains(&format!("stp q{pair}, q{},", pair + 1)),
+                "incoming q{pair} and q{} must survive before any body call:\n{text}",
+                pair + 1
+            );
+        }
+    }
+}
+
+#[test]
+fn va_start_points_at_a_distinct_vector_save_area() {
+    let module = parse_section9_module(CALLEE.as_bytes()).unwrap();
+    let machine = evocc_mir::lower_module(&module).unwrap();
+    let insts = &machine.functions[0].blocks[0].insts;
+    let stored = |offset| {
+        insts
+            .iter()
+            .find_map(|inst| match inst {
+                evocc_mir::MInst::Store {
+                    src, offset: at, ..
+                } if *at == offset => Some(*src),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_ne!(
+        stored(8),
+        stored(16),
+        "gr_top and vr_top are different areas"
+    );
+    let vr_offs = stored(28);
+    assert!(
+        insts.iter().any(|inst| matches!(inst,
+            evocc_mir::MInst::MovImm { dst, imm }
+                if *dst == vr_offs && *imm == u64::from((-128_i32) as u32)
+        )),
+        "vr_offs starts at -128, not at the caller's stack"
+    );
+}
+
+#[test]
 fn va_start_stores_the_five_fields_and_va_end_stores_nothing() {
     let text = emitted(Target::Linux, CALLEE);
     // `stack = x29 + 16` is the only address taken from the frame pointer.
