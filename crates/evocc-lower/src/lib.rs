@@ -746,38 +746,13 @@ fn lower_resolved_unit(
         {
             continue;
         }
-        let (size, align) = match target.layout_of(unit.types(), entry.ty()) {
-            Ok(layout) => (Some(layout.size_bytes), layout.align_bytes),
-            Err(LayoutError::IncompleteTag(tag)) => (
-                None,
-                unit.types()
-                    .tag(tag)
-                    .and_then(|tag| tag.layout.aligned)
-                    .unwrap_or(1),
-            ),
-            Err(_) => match unit.types().get(entry.ty()).map(|ty| &ty.kind) {
-                Some(TypeKind::Array {
-                    element,
-                    bound: ArrayBound::Unbounded,
-                }) => {
-                    let layout = target.layout_of(unit.types(), *element).map_err(|source| {
-                        LowerError::Layout {
-                            ty: *element,
-                            span: entry.span(),
-                            source,
-                        }
-                    })?;
-                    (None, layout.align_bytes)
-                }
-                _ => {
-                    return Err(LowerError::UnsupportedType {
-                        ty: entry.ty(),
-                        span: entry.span(),
-                        feature: "external object has no object layout",
-                    })
-                }
-            },
-        };
+        let (size, align) = target
+            .external_object_layout(unit.types(), entry.ty())
+            .map_err(|source| LowerError::Layout {
+                ty: entry.ty(),
+                span: entry.span(),
+                source,
+            })?;
         extern_objects.insert(
             entry.spelling().to_owned(),
             ExternalObject {

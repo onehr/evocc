@@ -1444,6 +1444,32 @@ impl TargetDataLayout {
         LayoutContext::new(self, types).layout_type(ty)
     }
 
+    /// Extent and natural alignment known for a separately defined symbol.
+    /// An incomplete declaration can name an address without making its type
+    /// allocatable. Object-level alignment is combined by the caller.
+    pub fn external_object_layout(
+        &self,
+        types: &TypeInterner,
+        ty: TypeId,
+    ) -> Result<(Option<u64>, u32), LayoutError> {
+        match self.layout_of(types, ty) {
+            Ok(layout) => Ok((Some(layout.size_bytes), layout.align_bytes)),
+            Err(LayoutError::IncompleteTag(tag)) => {
+                let declaration = types.tag(tag).ok_or(LayoutError::UnknownTag(tag))?;
+                Ok((None, declaration.layout.aligned.unwrap_or(1)))
+            }
+            Err(LayoutError::IncompleteArray(_)) => Ok((None, self.alignof_type(types, ty)?)),
+            Err(LayoutError::NonObjectType(_))
+                if types
+                    .get(ty)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Void)) =>
+            {
+                Ok((None, self.alignof_type(types, ty)?))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Compute the GNU C `sizeof` value for a canonical type.
     ///
     /// `void` and function types are not object types and deliberately remain

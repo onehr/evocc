@@ -494,12 +494,28 @@ fn invalid_and_non_object_layouts_fail_closed_with_typed_errors() {
         layout.layout_of(&types, vla),
         Err(LayoutError::VariableLengthArray(vla))
     );
+    assert_eq!(
+        layout.external_object_layout(&types, void_ty),
+        Ok((None, 1))
+    );
+    assert_eq!(
+        layout.external_object_layout(&types, function_ty),
+        Err(LayoutError::NonObjectType(function_ty))
+    );
+    assert_eq!(
+        layout.external_object_layout(&types, vla),
+        Err(LayoutError::VariableLengthArray(vla))
+    );
 
     let incomplete = types.declare_tag(TagKind::Struct, None);
     let incomplete_ty = types.intern(plain(TypeKind::Struct(incomplete)));
     assert_eq!(
         layout.layout_of(&types, incomplete_ty),
         Err(LayoutError::IncompleteTag(incomplete))
+    );
+    assert_eq!(
+        layout.external_object_layout(&types, incomplete_ty),
+        Ok((None, 1))
     );
 
     let recursive = types.declare_tag(TagKind::Struct, Some("recursive".into()));

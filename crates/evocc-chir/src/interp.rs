@@ -1144,24 +1144,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             if entry.storage_class() != Some(StorageClass::Extern) {
                 continue;
             }
-            let (size, align) = match self.target.layout_of(self.unit.types(), entry.ty()) {
-                Ok(layout) => (Some(layout.size_bytes), layout.align_bytes),
-                Err(_) => match self.unit.types().get(entry.ty()).map(|ty| &ty.kind) {
-                    Some(TypeKind::Array {
-                        element,
-                        bound: ArrayBound::Unbounded,
-                    }) => (
-                        None,
-                        self.access_layout(*element, entry.span())?.align_bytes,
-                    ),
-                    _ => {
-                        return Err(InterpreterError::UnsupportedType {
-                            ty: entry.ty(),
-                            span: entry.span(),
-                        })
-                    }
-                },
-            };
+            let (size, align) = self
+                .target
+                .external_object_layout(self.unit.types(), entry.ty())
+                .map_err(|_| InterpreterError::UnsupportedType {
+                    ty: entry.ty(),
+                    span: entry.span(),
+                })?;
             let (memory, address) = self
                 .memory
                 .register_external(
