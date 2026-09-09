@@ -507,6 +507,33 @@
         ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c"
       ]
     },
+    "torture:pr86659-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed profile excludes scalar_storage_order itself; Clang ignores it and all four original runs pass, not a new value conflict",
+      "sourceSha256": "18f01430fad2ecf32cd90db2ad9e9a39d8410d04a36673ef387872987d804820",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/additional-originals.txt"
+      ]
+    },
+    "torture:pr86659-2": {
+      "disposition": "not-applicable",
+      "reason": "reviewed profile excludes scalar_storage_order itself, including native-endian spelling; all four original runs pass",
+      "sourceSha256": "b7c34b3c2b5c426680dd9737a3625dc0bfeca2e953e7bf8c7cabc09500988b8c",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/additional-originals.txt"
+      ]
+    },
+    "torture:pr87623": {
+      "disposition": "not-applicable",
+      "reason": "reviewed profile excludes scalar_storage_order itself; the original only compares byte members and all four oracle runs pass",
+      "sourceSha256": "58bab44dc5bf63430fad3f87b225694e7e2b4ce541aefedce5fbe93fbdebd13c",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260909-wide-field-conflicts/additional-originals.txt"
+      ]
+    },
     "torture:va-arg-trap-1": {
       "disposition": "not-applicable",
       "reason": "reviewed quality-of-implementation test outside the unpromoted va_arg rejection profile",

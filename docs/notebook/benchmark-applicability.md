@@ -71,3 +71,26 @@ GCC-14 admits its huge array types and Clang-19 refuses them. Its structure
 size is still below PTRDIFF_MAX; it must not be described as an overflow of
 that limit. The probe in `20260909-large-layout/results.txt` supports the
 oracle-conflict disposition, not an invented smaller numeric layout limit.
+
+## New refusals of formerly passing originals
+
+Capture `.evidence/ladder/e0/20260909T074333Z` has six fewer raw torture
+PASS results than `20260909T062923Z`. The loss is retained and is not counted
+as a compiler improvement. The review's 15:30 supplement narrows the earlier
+blanket wide-field refusal: the first three remain compiler failures pending
+shape-specific reduction and repair, not new inapplicability entries.
+
+| Originals | Source-level reviewed boundary |
+|---|---|
+| 991118-1, bf64-1 | Compound arithmetic on 52/53-bit fields; OPEN under the narrowed conflict-only rule. |
+| bf-sign-2 | Arithmetic on an unsigned 35-bit field; OPEN under the narrowed conflict-only rule. |
+| pr86659-1, pr86659-2, pr87623 | Explicit `scalar_storage_order`, whose presence must be refused rather than silently ignored. |
+
+Both oracles at O0/O2 pass **all 24 executions** of these original programs;
+Clang warns that it ignores the storage-order attribute. Evidence:
+`.evidence/builtin-probes/20260909-wide-field-conflicts/additional-originals.txt`.
+These are not six newly observed oracle conflicts. Only the three explicit
+storage-order attributes remain reviewed-profile exclusions; the other three
+must not be relabelled to hide the over-broad refusal. New classification
+entries apply on the next actual replay, not retroactively to this sealed
+run's counts or raw outcomes.

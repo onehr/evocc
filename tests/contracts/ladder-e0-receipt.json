@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T062923Z",
-  "subject": "48f8da4",
-  "driverSha256": "b2c501508dc33daf6009ee78c17d3ac404a6734aab03f2be075a822fc33eef32",
+  "run": "20260909T074333Z",
+  "subject": "c461caf",
+  "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -67,11 +67,18 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1265,
-     "refused": 326,
+     "pass": 1259,
+     "refused": 338,
      "not-applicable": 89,
-     "fail": 11,
+     "fail": 5,
      "link-fail": 1
+    },
+    "dispositionCounts": {
+     "PASS": 1259,
+     "compiler-failure": 293,
+     "FP-deferred": 0,
+     "not-applicable": 140,
+     "oracle-unusable": 0
     },
     "refusalsByCode": {
      "E3101": 128,
@@ -85,8 +92,10 @@
      "E1001": 10,
      "E0112": 10,
      "E3029": 9,
+     "E2939": 7,
      "E3046": 6,
      "E2920": 6,
+     "E2940": 5,
      "E2913": 3,
      "E2903": 3,
      "E2933": 2,
@@ -105,10 +114,9 @@
      "E2929": 1
     },
     "failuresByInterpreterVerdict": {
-     "E3039 external-call-not-executable": 6,
      "E3004 signed-integer-overflow": 2,
      "E3008 interpreter-fuel-exhausted": 2,
-     "E3021 not-lowered": 1,
+     "E3039 external-call-not-executable": 1,
      "E3001 read-of-uninitialized-object": 1
     },
     "appliedOptions": {
@@ -120,5 +128,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T062923Z"
+ "evidence": ".evidence/ladder/e0/20260909T074333Z"
 }

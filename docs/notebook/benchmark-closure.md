@@ -129,26 +129,58 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; fresh replay verifies a 494/1,339-unit combination, not the withdrawn 987-unit claim | `torture musl` | PARTIAL: symbol repair benched; remaining execution failures include FP varargs |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: fresh replay complete, 494-unit passing combination; further failures remain |
-| 4 | Remaining native failures | `20260909T062900.006209Z`: ctest runtime failures zero; torture 11 runtime failures and one alloca link failure, with every identity retained | `ctest torture` | PARTIAL: every prior PASS retained; original `align-3` now PASS; remaining failures OPEN |
+| 4 | Remaining native failures | `20260909T074238.247563Z`: ctest runtime failures zero; torture five runtime failures and one alloca link failure, with every identity retained | `ctest torture` | PARTIAL: six older runtime failures now reach reviewed typed refusals; three lost wide-field passes remain OPEN under the narrowed conflict-only rule |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | `20260909T053908.023962Z`: 2,419 E3021 on numeric asm labels, 286 E3101 layout/identity cases, two E3026, one computed goto and one frame address | `kernel` | OPEN: 90 assemble and substitute, first boot passes, 76 proven included; shift/tie repairs are measured, subsequent full-width predicate lowering is not part of this subject |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
-| 10 | Unused system-header types | Nominal target types move cJSON to its actual FP builtin/value boundaries; zstd reaches 37 integer-NEON header declarations and 5 pretty-function sites | `zstd cjson` | PARTIAL: 12 measured header identities implemented and replayed; integer vector declarations remain OPEN |
-| 11 | TinyCC compiler build | 7/11 assemble and pass together; all original PIE link failures are repaired; four compile refusals remain | `tinycc` | PARTIAL: external object/function addresses CLOSED in `20260908T102835Z`; remaining source forms OPEN |
+| 10 | Unused system-header types | zstd now has six passing substituted units; all five pretty-function first sites clear, leaving 37 integer-NEON declarations and one E3101 | `zstd cjson` | PARTIAL: C function-name choice and storage-only declarations replayed; integer vector declarations remain OPEN |
+| 11 | TinyCC compiler build | 8/11 assemble and pass together; all original PIE link failures are repaired; three compile refusals remain | `tinycc` | PARTIAL: function-name fix replayed in `20260909T075341Z`; remaining source forms and adapter workarounds OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
 | 13 | Torture declaration coverage | 35 E1001 refusals after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero on original replay | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms OPEN |
 | 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
 | 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 326 total refusals in `20260909T062923Z`; musl 352 in its earlier run; oracle-conflict refusals remain explicit, not passes | `torture musl` | OPEN |
-| 17 | Torture applicability/options | `20260909T062923Z`: 89 evidenced not-applicable rows, zero unresolved requirements, 1,692 unchanged identities | `torture` | PARTIAL: original requirements replayed; reviewed five-way classification implemented afterward and still awaits its own measured run |
+| 16 | Remaining diagnostic classes | Torture 338 raw refusals in `20260909T074333Z`; five-way classifier records 293 compiler failures overall, including unclassified refusals | `torture musl` | OPEN: not every refusal has an evidenced disposition yet |
+| 17 | Torture applicability/options | `20260909T074333Z`: 1,259 PASS / 293 compiler failure / 0 FP deferred / 140 not applicable / 0 oracle-unusable; 1,692 unchanged identities | `torture` | PARTIAL: measured five-way run; zero FP-labelled rows means classification incomplete, not absence of FP programs |
 | 18 | Unavailable Csmith references | Fresh `20260908T080716Z`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; original identities and outcomes unchanged | `csmith` | OPEN: unavailable references are not passes |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Function-name and storage-only original-program replay
+
+`python3 -u tools/bench.py ctest torture zstd tinycc --jobs 2`, subject
+`c461caf`, wrapper `20260909T074238.247563Z`, exits INCOMPLETE. ctest is
+208 PASS / 12 refused (up one); torture is 1,259 PASS / 338 refused /
+5 runtime failures / 1 link failure / 89 original-option exclusions.
+The measured five-way counts are respectively 208 / 5 / 7 / 0 / 0 and
+1,259 / 293 / 0 / 140 / 0 in PASS / compiler failure / FP deferred /
+not applicable / oracle-unusable order. No source or identity changed.
+Captures: `.evidence/ladder/e0/20260909T074238Z` and `20260909T074333Z`.
+
+`00178` now passes: an unused `double` object's storage and `sizeof` do not
+require floating-point execution. `288c101` also shares the C function-name
+resolver and repairs pointer logical negation through the existing truth
+conversion. Its 72 focused tests and changed gate against `bc2916c` pass
+(the successful gate listing was truncated, so no aggregate is inferred).
+Floating-point evaluation still fails closed. zstd rises from 2 to 6 of 44
+units in a passing mixed build (`20260909T075101Z`); TinyCC rises from 7 to
+8 of 11 (`20260909T075341Z`). Both have zero symbol exclusions.
+
+Torture loses six raw passes to the reviewed refusal classes. Original
+GCC-14/Clang-19 O0/O2 replay passes all 24 executions; these are not six new
+oracle conflicts. The 15:30 review requires narrowing the wide-field rule,
+so `991118-1`, `bf64-1` and `bf-sign-2` remain OPEN compiler failures.
+Only the three explicit storage-order attributes are new reviewed-profile
+exclusions. Their new disposition entries do not rewrite this run's sealed
+counts. See [applicability evidence](benchmark-applicability.md).
+
+The updated priority is the specified vector-register varargs save area,
+incomplete external-object addressing, and the overly broad field refusal;
+then the remaining memory/ABI and type work. None is hidden as deferred FP.
 
 ### Aligned-function and full-width original-program replay
 

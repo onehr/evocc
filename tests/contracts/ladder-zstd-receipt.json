@@ -3,30 +3,34 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260909T070008Z",
+ "run": "20260909T075101Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "57af3d4c871e82142618d9274a5fe77b0781bf24b6f54d78488a7d7f522b014d",
+ "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
- "unitsEvoccCompiled": 2,
- "unitsSubstituted": 2,
+ "unitsEvoccCompiled": 6,
+ "unitsSubstituted": 6,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 2,
+ "unitsInPassingBuild": 6,
  "outcomes": {
-  "assembled": 2,
-  "refused": 42
+  "assembled": 6,
+  "refused": 38
  },
  "refusalsByCode": {
   "E1001": 37,
-  "E2921": 5
+  "E3101": 1
  },
  "refusals": [
   {
@@ -52,18 +56,6 @@
    "code": "E1001",
    "message": "expected-declaration",
    "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
-   "code": "E2921",
-   "message": "pretty-function-unsupported",
-   "at": "common/threading.c:142:5"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
-   "code": "E2921",
-   "message": "pretty-function-unsupported",
-   "at": "common/xxhash.h:2964:20"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
@@ -186,12 +178,6 @@
    "at": "include/arm_neon.h:40:9"
   },
   {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
-   "code": "E2921",
-   "message": "pretty-function-unsupported",
-   "at": "dictBuilder/divsufsort.c:418:7"
-  },
-  {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
    "code": "E1001",
    "message": "expected-declaration",
@@ -223,9 +209,9 @@
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
-   "code": "E2921",
-   "message": "pretty-function-unsupported",
-   "at": "programs/benchfn.c:238:17"
+   "code": "E3101",
+   "message": "evoir-lowering-failed: non-integer scalar type is outside Day 6",
+   "at": "programs/benchfn.c:142:32"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
@@ -256,12 +242,6 @@
    "code": "E1001",
    "message": "expected-declaration",
    "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
-   "code": "E2921",
-   "message": "pretty-function-unsupported",
-   "at": "programs/lorem.c:122:5"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
@@ -299,7 +279,7 @@
    "passed": true,
    "stage": "pass",
    "signature": "",
-   "unitCount": 2
+   "unitCount": 6
   }
  ],
  "adjustments": {
@@ -315,9 +295,9 @@
    "includeNext": "`#include_next <x>` resolved to the next header in the search order"
   },
   "includeOrder": [
-   "-I.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
-   "-I.build/ladder/sysroot-adjusted/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -498,6 +478,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260909T070008Z",
- "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 37, 'E2921': 5}"
+ "evidence": ".evidence/ladder/zstd/20260909T075101Z",
+ "summaryLine": "zstd: 6 of 44 units by EvoCC in a passing build; refused by code {'E1001': 37, 'E3101': 1}"
 }
