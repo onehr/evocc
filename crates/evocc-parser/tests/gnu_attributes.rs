@@ -80,6 +80,74 @@ fn layout_of(source: &str, name: &str) -> (u64, u32) {
 }
 
 #[test]
+fn bracket_attributes_share_the_gnu_layout_and_placement_rules() {
+    accepts(include_str!("../../../tests/fixtures/bracket-attributes.c"));
+    assert_eq!(
+        layout_of("[[gnu::aligned(32)]] int value;", "value"),
+        (4, 32)
+    );
+    assert_eq!(
+        layout_of(
+            "typedef struct [[gnu::packed]] { char a; int b; } value;",
+            "value"
+        ),
+        (5, 1)
+    );
+}
+
+#[test]
+fn bracket_namespaces_do_not_apply_unrelated_gnu_attributes() {
+    for attribute in ["aligned(32)", "other::aligned(32)"] {
+        assert_eq!(
+            layout_of(&format!("[[{attribute}]] int value;"), "value"),
+            (4, 4)
+        );
+    }
+    assert_eq!(
+        layout_of("[[__gnu__::__aligned__(32)]] int value;", "value"),
+        (4, 32)
+    );
+    let arena = Arena::default();
+    let unit = parse("[[gnu::unused, other::hint(1)]] int value;", &arena).unwrap();
+    let attributes = unit
+        .iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Object(object) => Some(&object.attributes),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(attributes[0].written, "gnu::unused");
+    assert_eq!(attributes[1].written, "other::hint");
+}
+
+#[test]
+fn malformed_bracket_attribute_lists_report_attribute_diagnostics() {
+    for source in [
+        "[[gnu::]] int value;",
+        "[[gnu:aligned(4)]] int value;",
+        "[[gnu::aligned(4)] int value;",
+        "[[gnu::aligned(4), other::]] int value;",
+        "[[gnu::aligned(3)]] int value;",
+    ] {
+        rejects(source, "E2903");
+    }
+}
+
+#[test]
+fn bracket_after_gnu_specifier_keeps_the_measured_ordering_refusal() {
+    for source in [
+        "__attribute__((unused)) [[gnu::aligned(32)]] static int value;",
+        "static [[gnu::aligned(32)]] int value;",
+        "int [[gnu::aligned(32)]] value;",
+        "int a, [[gnu::unused]] b;",
+        "struct S { char a; int b; } [[gnu::packed]];",
+    ] {
+        rejects(source, "E2903");
+    }
+    accepts("[[gnu::aligned(32)]] __attribute__((unused)) static int value;");
+}
+
+#[test]
 fn integer_modes_select_the_measured_canonical_types() {
     for (mode, spelling, size) in [
         ("QI", "char", 1),

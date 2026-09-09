@@ -83,6 +83,11 @@ fn declaration_specifier_order_preserves_storage_and_types() {
 }
 
 #[test]
+fn bracket_attributes_keep_layout_and_function_execution() {
+    agrees(include_str!("../../../tests/fixtures/bracket-attributes.c"));
+}
+
+#[test]
 fn floating_object_declarations_do_not_execute_floating_values() {
     for source in [
         "int main(void){double value;return sizeof(value)!=8;}",
