@@ -428,9 +428,16 @@ fn symbolic_inline_arguments_preserve_one_evaluation_on_the_machine() {
 
 #[test]
 fn symbolic_inline_immediates_discard_unselected_statement_ownership() {
-    for argument in ["1 ? &object : inner()", "(1 ? &object : inner()) + 0"] {
+    for argument in [
+        "1 ? &object : inner()",
+        "(1 ? &object : inner()) + 0",
+        "&*(1 ? &object : inner())",
+        "&array[0 && (inner() != 0)]",
+        "&(1 ? array : inner())[1]",
+        "(1 ? array : (void *)inner()) + 1",
+    ] {
         let source = format!(
-            r#"static int object;
+            r#"static int object, array[2];
             static inline __attribute__((always_inline)) int *inner(void) {{ return &object; }}
             static inline __attribute__((always_inline)) int f(int *p) {{ asm volatile("// %c0"::"i"(p)); return 0; }}
             int main(void) {{ return f({argument}); }}"#,
@@ -441,6 +448,8 @@ fn symbolic_inline_immediates_discard_unselected_statement_ownership() {
             "{source}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        #[cfg(target_arch = "aarch64")]
+        execute_native_assembly(&source, "symbolic-conditional");
     }
 }
 

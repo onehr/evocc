@@ -663,7 +663,7 @@ impl<'a> Substitution<'a, '_> {
     /// The original object initializer remains in place, so argument effects
     /// and checked-arithmetic obligations are still executed exactly once.
     fn repeatable_value(
-        &self,
+        &mut self,
         expression: &'a CHirExpr<'a>,
         ty: TypeId,
     ) -> Option<&'a CHirExpr<'a>> {
@@ -704,13 +704,129 @@ impl<'a> Substitution<'a, '_> {
             let high = self.alloc(CHirExpr::Binary(BinaryOp::Shl, high, literal(64), span));
             return Some(self.alloc(CHirExpr::Binary(BinaryOp::BitOr, high, low, span)));
         }
-        (repeatable_argument(
+        if !repeatable_argument(
             expression,
             &self.unit.types,
             &self.unit.symbols,
             self.target,
-        ) && !inspect([Node::Expr(expression, false)]).owns_statements)
-            .then_some(expression)
+        ) {
+            return None;
+        }
+        self.reference_value(expression)
+    }
+
+    /// Remove unselected statement ownership from an already-proven stable
+    /// reference. Keep each intermediate pointer type: it determines scaling.
+    fn reference_value(&mut self, expression: &'a CHirExpr<'a>) -> Option<&'a CHirExpr<'a>> {
+        if !inspect([Node::Expr(expression, false)]).owns_statements {
+            return Some(expression);
+        }
+        if let Some(value) = crate::constant::eval_integer_constant(
+            expression,
+            &self.unit.types,
+            &self.unit.symbols,
+            self.target,
+        ) {
+            let kind = if let Some(rank) = crate::integer::rank_for_integer_type(value.ty()) {
+                TypeKind::Int(rank)
+            } else if value.ty().bits() == 128 {
+                TypeKind::GnuInt128(if value.ty().is_signed() {
+                    evocc_types::GnuInt128Signedness::Signed
+                } else {
+                    evocc_types::GnuInt128Signedness::Unsigned
+                })
+            } else {
+                return None;
+            };
+            let ty = self.unit.types.intern(evocc_types::CanonicalType {
+                kind,
+                qualifiers: Default::default(),
+            });
+            return self.repeatable_value(expression, ty);
+        }
+        let span = expression.span();
+        let value = match expression {
+            CHirExpr::Cast(ty, operand, _) => {
+                CHirExpr::Cast(*ty, self.reference_value(operand)?, span)
+            }
+            CHirExpr::Ternary(condition, yes, no, _) => {
+                let condition = crate::constant::eval_integer_constant(
+                    condition,
+                    &self.unit.types,
+                    &self.unit.symbols,
+                    self.target,
+                )?;
+                let pointer = PointerTypeDesc::from_expression(
+                    &self.unit.symbols,
+                    &self.unit.types,
+                    expression,
+                )
+                .ok()?;
+                let mut pointee = self.unit.types.get(pointer.pointee())?.clone();
+                pointee.qualifiers = pointer.pointee_qualifiers();
+                let pointee = self.unit.types.intern(pointee);
+                let ty = self.unit.types.intern(evocc_types::CanonicalType {
+                    kind: TypeKind::Pointer(pointee),
+                    qualifiers: Default::default(),
+                });
+                let selected = self.reference_value(if condition.truth() { yes } else { no })?;
+                CHirExpr::Cast(ty, selected, span)
+            }
+            CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), left, right, _) => {
+                let left = self.reference_value(left)?;
+                let right = self.reference_value(right)?;
+                CHirExpr::Binary(*op, left, right, span)
+            }
+            CHirExpr::Unary(op @ (UnaryOp::AddrOf | UnaryOp::Deref), operand, _) => {
+                CHirExpr::Unary(*op, self.reference_value(operand)?, span)
+            }
+            CHirExpr::MemoryRead {
+                place,
+                facts,
+                target_span,
+                ..
+            } => {
+                let root = match place.root() {
+                    PlaceRoot::Object { symbol } => PlaceRoot::Object { symbol: *symbol },
+                    PlaceRoot::PointerExpression {
+                        pointer,
+                        pointer_type,
+                    } => PlaceRoot::PointerExpression {
+                        pointer: self.reference_value(pointer)?,
+                        pointer_type: *pointer_type,
+                    },
+                    PlaceRoot::CompoundLiteral { .. } => return None,
+                };
+                let mut projections = Vec::new();
+                for projection in place.projections() {
+                    projections.push(match projection {
+                        PlaceProjection::Field(field) => PlaceProjection::Field(*field),
+                        PlaceProjection::Index(index) => {
+                            PlaceProjection::Index(IndexProjection::new(
+                                self.reference_value(index.index())?,
+                                index.element_ty(),
+                                index.promoted_index(),
+                            ))
+                        }
+                    });
+                }
+                CHirExpr::MemoryRead {
+                    place: MemoryPlace::derive(
+                        &self.unit.symbols,
+                        &self.unit.types,
+                        root,
+                        projections,
+                        place.value_ty(),
+                    )
+                    .ok()?,
+                    facts: *facts,
+                    target_span: *target_span,
+                    span,
+                }
+            }
+            _ => return None,
+        };
+        Some(self.alloc(value))
     }
 
     fn object(
