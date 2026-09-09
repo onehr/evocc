@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.88** | **Authoritative reference** | **2026-09-09**
+**Revision 1.9.89** | **Authoritative reference** | **2026-09-09**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1519,8 +1519,12 @@ symbol of this unit's definition. Emission is EvoMIR 0.22.
 of two of at least 4, written after its linkage marks; absent, it is 4, the
 instruction alignment. It is the alignment of the function's first
 instruction in the object, so `func_addr @f` (and every pointer with
-provenance `Function(@f)`) is a multiple of `N`; the interpreter needs no
-change, since it never compares function addresses arithmetically. The
+provenance `Function(@f)`) is a multiple of `N`. Both interpreters must honor
+the same alignment when assigning virtual function addresses: `ptr.to_int`
+makes their low bits observable. Distinct functions retain distinct identities
+and addresses, aliases retain their target's identity, and exposing and
+reconstructing a function pointer must round-trip. This does not prescribe
+the numeric address beyond its alignment and the existing pointer rules. The
 machine emits `.p2align log2(N)` before the label (EvoMIR 0.26). C-HIR
 writes the field for `__attribute__((aligned(N)))` on a function: the value
 is the maximum over every declaration and the definition of the symbol in
@@ -5912,6 +5916,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.89 | 2026-09-09 | Corrects the claim that function alignment is unobservable in interpreters: virtual function addresses must satisfy the declared alignment and preserve identity and pointer round-trips. Authorized review correction; this changes no compiler code. |
 | 1.9.88 | 2026-09-09 | Admits the `p` constraint and the `%a` address modifier (the kernel's `prfm pldl1keep, %a0`); defines signed left shift in the GNU profile as the truncated bit pattern for a valid count, dropping the `signed_shl_defined` obligation as both oracles do; adds `align=N` to function headers for `aligned` on functions with maximum-of-declarations merging. |
 | 1.9.87 | 2026-09-09 | Bounds the shift-amount width of the P0 profile to 1..64, matching both eligibility implementations and the 64-bit fact lattice; wider amounts make a region ineligible. |
 | 1.9.86 | 2026-09-09 | Clarifies that constants are minimal elements of the known-bits lattice, not its bottom; states the two classes of proof coverage and that coverage constraints live only in registry text; adds Section 11.7 listing the trusted base A1-A7 behind a certificate. |

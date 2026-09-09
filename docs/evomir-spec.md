@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.26** | **Authoritative reference** | **2026-09-09**
+**Revision 0.27** | **Authoritative reference** | **2026-09-09**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -351,7 +351,10 @@ virtual register), then the register save area of a variadic function
 **Over-aligned frames (revision 0.26).** When any `frame.slot` of the
 function declares an alignment `A` greater than 16, the frame is realigned:
 the prologue's `sub sp, sp, #frame` uses a frame size rounded up to a
-multiple of `A` plus `A - 16` of slack, and is followed by `and sp, sp, #-A`,
+multiple of `A` plus `A - 16` of slack, and is followed by `mov x16, sp`,
+`and x16, x16, #-A`, `mov sp, x16`, using the reserved scratch register.
+The logical instruction cannot read `sp`: both sealed assemblers reject
+`and sp, sp, #-256` and accept this scratch-register sequence,
 so that `sp` itself is a multiple of `A`; every slot keeps its non-negative
 offset from `sp`, and a slot whose alignment is `A'` sits at an offset that
 is a multiple of `A'`, which now makes its address a multiple of `A'` for
@@ -772,7 +775,8 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
-| 0.26 | 2026-09-09 | Realigns the frame with `and sp, sp, #-A` when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |
+| 0.27 | 2026-09-09 | Corrects the stack-realignment instruction sequence to use the reserved scratch register, because logical instructions cannot read SP. Both sealed assemblers reject the previous spelling and accept the replacement. Authorized review correction; this changes no compiler code. |
+| 0.26 | 2026-09-09 | Specifies frame realignment (instruction spelling corrected in 0.27) when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |
 | 0.25 | 2026-09-08 | Carry EvoIR 1.9.80 symbolic assembly immediates without a register, with canonical signed-addend text and target-correct symbol/block emission. This revision changes the contract, not compiler code. |
 | 0.24 | 2026-09-08 | Apply the measured PIE address rule to strong undefined functions as well as objects; direct calls and defined symbols remain unchanged. The original TinyCC replay exposed longjmp immediately after environ. This revision changes the contract, not compiler code. |
 | 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
