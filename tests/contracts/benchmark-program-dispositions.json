@@ -6,6 +6,26 @@
     "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
   },
   "programs": {
+    "torture:pr124358": {
+      "disposition": "not-applicable",
+      "reason": "unchanged source passes GCC-14 O0 and Clang-19 O0/O2 but aborts with GCC-14 O2",
+      "sourceSha256": "4bfac3671278712097cedc58d0c1524f1bec0b73bb30895d10b947b0103806b5",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-attribute-namespaces/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr124358.c"
+      ]
+    },
+    "torture:stdarg-4": {
+      "disposition": "FP-deferred",
+      "reason": "after the integer list-copy repair, main reaches va_arg(ap, double) through f1 and f1i",
+      "sourceSha256": "df92949fcdfbb1dec3c0d7fdad72e494a01ab6d678bd237196fa300234673e54",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-inline-variadic/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c"
+      ]
+    },
     "ctest:00113": {
       "disposition": "FP-deferred",
       "reason": "reached float conversion and comparison",

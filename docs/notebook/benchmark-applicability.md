@@ -60,9 +60,20 @@ from the line-19 list initializer to line 9's `va_arg(ap, double)`, called
 from `main -> f1 -> f1i`. The full original passes sealed GCC-14/Clang-19
 at O0/O2, and the integer-only reduction passes both interpreters and both
 native links (`20260910-inline-variadic/results.txt` under the probe directory).
-This identifies reached FP execution for its next classification; it does
-not relabel the frozen run or claim the original passes. Integer `_Complex`
-cases remain separate open coverage.
+This identifies reached FP execution: the source-bound disposition now marks
+it FP-deferred for subsequent replays, without relabelling the frozen run or
+claiming the original passes. Integer `_Complex` cases remain separate open
+coverage.
+
+## Bracket-attribute original with an oracle disagreement
+
+The unchanged torture `pr124358` compiles with both sealed compilers at O0/O2.
+GCC-14 O2 aborts (exit 134), while GCC-14 O0 and Clang-19 O0/O2 exit zero;
+commands and results are in
+`.evidence/builtin-probes/20260910-attribute-namespaces/results.txt`.
+Under R01 this identity is not-applicable (oracle conflict), not an inferred
+compiler PASS. Its source digest is bound in the disposition table, and
+subsequent subject replays still record its actual compile/run outcome.
 
 ## Explicitly excluded GNU function extensions
 
