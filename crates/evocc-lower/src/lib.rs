@@ -6748,11 +6748,16 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<Flow, LowerError> {
         let mut known_truth = constant_truth(self.unit, self.target, condition);
         if known_truth.is_some() && !self.address_labels.is_empty() {
-            let addressed = self.address_labels.keys().cloned().collect();
-            let no_cases = BTreeMap::new();
-            if contains_targeted_label(then_branch, &addressed, &no_cases)
-                || else_branch
-                    .is_some_and(|branch| contains_targeted_label(branch, &addressed, &no_cases))
+            let contains_addressed_label = |branch| {
+                let mut references = FunctionReferences::default();
+                collect_references_stmt(branch, &mut references);
+                references
+                    .defined_labels
+                    .iter()
+                    .any(|label| self.address_labels.contains_key(label))
+            };
+            if contains_addressed_label(then_branch)
+                || else_branch.is_some_and(contains_addressed_label)
             {
                 // An address-taken label is an observable code identity.
                 // Section 2.5 still requires its terminator-edge path from
@@ -11264,6 +11269,7 @@ struct FunctionReferences {
     direct: BTreeSet<SymbolId>,
     any: bool,
     labels: BTreeMap<usize, String>,
+    defined_labels: BTreeSet<String>,
     scope: usize,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
 }
@@ -11339,9 +11345,11 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
                 }
             }
         }
-        CHirStmt::Label(_, statement, _) | CHirStmt::Default(statement, _) => {
+        CHirStmt::Label(label, statement, _) => {
+            calls.defined_labels.insert(label.spelling.clone());
             collect_references_stmt(statement, calls)
         }
+        CHirStmt::Default(statement, _) => collect_references_stmt(statement, calls),
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
