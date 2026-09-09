@@ -25,6 +25,57 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn compatible_record_casts_preserve_the_value_and_operand_effects() {
+    let source = r#"
+        struct S { int a; };
+        union U { int a; unsigned b; };
+        struct S once(int *calls) { ++*calls; return (struct S){42}; }
+        int main(void) {
+            int calls = 0;
+            const struct S a = {42};
+            struct S b = (struct S)a;
+            struct S c = (struct S)once(&calls);
+            union U u = {17};
+            union U v = (union U)u;
+            return b.a != 42 || c.a != 42 || calls != 1
+                || ((struct S)b).a != 42 || v.a != 17;
+        }
+    "#;
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+        let output = run(
+            "struct A{int x;}; struct B{int x;}; int main(void){struct A a={1};struct B b=(struct B)a;return b.x;}",
+            mode,
+        );
+        assert!(!output.status.success(), "{mode}: unrelated record tags");
+    }
+    let output = run(
+        "struct S{int x;}; int main(void){volatile struct S a={42};struct S b=(struct S)a;return b.x!=42;}",
+        "--emit=evoir",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .matches("load volatile")
+            .count(),
+        1
+    );
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "record-casts");
+}
+
+#[test]
 fn flexible_record_elements_share_brace_elision_and_full_element_storage() {
     let declarations = r#"
         struct S { unsigned char a, b, c[2]; };
