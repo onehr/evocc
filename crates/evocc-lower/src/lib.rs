@@ -800,13 +800,18 @@ fn collect_global_register_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
 fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn declaration(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>, out: &mut BTreeSet<SymbolId>) {
         if let CHirDecl::Object(object) = declaration {
-            let is_aggregate = matches!(
+            // Storage does not execute a scalar value. In particular an
+            // uninitialized floating object may be used only by sizeof or
+            // address-of while floating arithmetic remains unsupported.
+            let needs_object_storage = matches!(
                 unit.types().get(object.ty).map(|ty| &ty.kind),
                 Some(
                     TypeKind::Array { .. }
                         | TypeKind::Struct(_)
                         | TypeKind::Union(_)
                         | TypeKind::BuiltinVaList
+                        | TypeKind::Float(_)
+                        | TypeKind::Complex(_)
                 )
             );
             let is_qualified_memory = unit
@@ -817,7 +822,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 .symbols()
                 .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
                 .unwrap_or(false);
-            if is_aggregate
+            if needs_object_storage
                 || is_file
                 || is_qualified_memory
                 || object.storage == StorageClass::Static

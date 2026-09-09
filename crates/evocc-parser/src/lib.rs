@@ -4222,10 +4222,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         return false;
                     }
                 }
-                TokenKind::Identifier if brace_depth > 0 => {
-                    if matches!(self.token_text(token), "__func__" | "__FUNCTION__") {
-                        return true;
-                    }
+                TokenKind::Identifier
+                    if brace_depth > 0
+                        && implicit_function_name(self.token_text(token)).is_some() =>
+                {
+                    return true;
                 }
                 _ => {}
             }
@@ -10032,15 +10033,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Identifier => {
                 let spelling = self.token_text(&tok).to_owned();
-                if spelling == "__PRETTY_FUNCTION__" {
-                    self.report("E2921", "pretty-function-unsupported", tok.span);
-                    return None;
-                }
-                let resolved_spelling = if spelling == "__FUNCTION__" {
-                    "__func__"
-                } else {
-                    &spelling
-                };
+                let resolved_spelling = implicit_function_name(&spelling).unwrap_or(&spelling);
                 let Some(symbol) = self
                     .symbols
                     .resolve(self.current_scope, resolved_spelling)
@@ -11755,6 +11748,14 @@ fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
         | OperandTypeClass::Void
         | OperandTypeClass::Other => None,
     }
+}
+
+fn implicit_function_name(spelling: &str) -> Option<&'static str> {
+    matches!(
+        spelling,
+        "__func__" | "__FUNCTION__" | "__PRETTY_FUNCTION__"
+    )
+    .then_some("__func__")
 }
 
 fn floating_rank(kind: FloatKind) -> u8 {

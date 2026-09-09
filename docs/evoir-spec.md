@@ -6032,6 +6032,13 @@ All four GCC-14/Clang-19 O0/O2 executions of original `921007-1` pass, but the n
 Both O0 executions and Clang-19 O2 call the local `strcmp` (result -123, one call), while GCC-14 O2 bypasses it (result -128, zero calls).
 No binding rule is inferred from the passing original alone, no diagnostic is allocated, and the requested body ruling remains pending.
 
+### C function-name spelling and storage-only floating declarations
+
+The reviewed C profile resolves `__PRETTY_FUNCTION__` through the same function-local name object as `__func__`; this is an explicit choice of GCC's C spelling, not a claim that the oracle spellings agree.
+Evidence `.evidence/builtin-probes/20260909-function-name-profile/{name.c,results.txt}` records GCC-14's `name` versus Clang-19's `const char *name(void)` at O0/O2; no original torture source asserts this spelling, while the last zstd and TinyCC measurements have five and one E2921 first sites.
+An uninitialized floating object may have storage, an address and an unevaluated `sizeof` without executing a floating value; the same probe returns size 8 in all four runs and original c-testsuite `00178` requires only this behavior.
+No new diagnostic is allocated and actual floating value execution remains deferred.
+
 ### Wide bit-field promotions and unsupported scalar storage order
 
 The reviewed profile refuses integer promotion of a bit-field wider than `int` with E2939 (`unsupported-wide-bit-field-promotion`), while retaining storage, explicit conversions and fields no wider than `int`; `.evidence/ladder/e0/20260908T213308Z` and `docs/notebook/benchmark-closure.md` record the four original wide-field oracle conflicts.

@@ -1961,10 +1961,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expression_span,
                     operand_span,
                 } => {
-                    let operand = expect_machine_integer(
-                        pop_machine_value(&mut values, expression_span)?,
-                        expression_span,
-                    )?;
+                    let operand = pop_machine_value(&mut values, expression_span)?;
+                    if operator == UnaryOp::Not {
+                        values.push(CValue::Integer(CInteger::int(i32::from(!machine_truth(
+                            operand,
+                            expression_span,
+                        )?))));
+                        continue;
+                    }
+                    let operand = expect_machine_integer(operand, expression_span)?;
                     let value = self
                         .runtime_integer_unary(operator, operand)
                         .map_err(|error| {
@@ -5359,6 +5364,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     | TypeKind::Struct(_)
                     | TypeKind::Union(_)
                     | TypeKind::BuiltinVaList
+                    | TypeKind::Float(_)
+                    | TypeKind::Complex(_)
             )
         {
             return Err(InterpreterError::UnsupportedType {
