@@ -1,26 +1,20 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T074238.247563Z",
-  "subject": "c461caf947738d9fb63beae8d307db5099a64ecc",
+  "run": "20260909T085125.845803Z",
+  "subject": "b54ae6318bfbb17a4b48202155657d6438c06069",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e",
+  "driverSha256": "b9ed7b58d1e67f1eea525f54178bd959d0f89209adfc85c062a9510f0f7bcf83",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
     "ctest",
-    "torture",
-    "zstd",
-    "tinycc",
     "--jobs",
     "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
-    "torture",
-    "zstd",
-    "tinycc"
+    "ctest"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -28,32 +22,32 @@
       "rung": "E0b",
       "note": "self-checking programs and expected stdout",
       "outcomes": {
-        "pass": 208,
-        "refused": 12
+        "pass": 209,
+        "refused": 11
       },
       "refusals": {
         "E3101": 7,
-        "E2202": 2,
         "E3030": 1,
         "E2102": 1,
-        "E2203": 1
+        "E2203": 1,
+        "E2202": 1
       },
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 220,
-      "passed": 208,
+      "passed": 209,
       "kind": "programs",
       "runtimeDiagnostics": {},
       "dispositions": {
-        "PASS": 208,
-        "compiler-failure": 5,
+        "PASS": 209,
+        "compiler-failure": 4,
         "FP-deferred": 7,
         "not-applicable": 0,
         "oracle-unusable": 0
       },
       "status": "INCOMPLETE",
-      "run": "20260909T074238Z",
-      "evidence": ".evidence/ladder/e0/20260909T074238Z",
+      "run": "20260909T085126Z",
+      "evidence": ".evidence/ladder/e0/20260909T085126Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -65,12 +59,12 @@
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 54.7,
+      "seconds": 25.8,
       "previous": null,
       "measurement": {
-        "run": "20260909T074238.247563Z",
-        "subject": "c461caf947738d9fb63beae8d307db5099a64ecc",
-        "driverSha256": "0c4474b91d155f922ad95d86624fb94ea3afe40f0e95eef9aa8ecd602f39e58e"
+        "run": "20260909T085125.845803Z",
+        "subject": "b54ae6318bfbb17a4b48202155657d6438c06069",
+        "driverSha256": "b9ed7b58d1e67f1eea525f54178bd959d0f89209adfc85c062a9510f0f7bcf83"
       }
     },
     "torture": {

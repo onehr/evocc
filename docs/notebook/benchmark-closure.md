@@ -150,6 +150,30 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Target-selected wide character original-program replay
+
+`python3 -u tools/bench.py ctest --jobs 2`, subject `b54ae63`, wrapper
+`20260909T085125.845803Z`: 209 PASS / 11 refused out of the original 220.
+The five-way counts are 209 / 4 / 7 / 0 / 0; the run is INCOMPLETE.
+Capture: `.evidence/ladder/e0/20260909T085126Z`. Comparing every original
+identity with `20260909T074238Z`, only `00220` changes (refused to PASS),
+with no lost passes. Remaining compiler failures are `00140` (aggregate
+varargs), `00144` (update operands), `00207` (VLA), and `00216` (initializer).
+
+`3bbb5d8` shares the target's wide-character type across decoding, typing,
+layout, initialization, and driver options. `tools/gate-changed.sh c461caf
+--offline --quiet` passes 1,704 tests in 254 suites, with zero failures and
+four existing ignored tests; Clippy and fmt pass. The first attempt exposed
+two stale hosted-wide-string fixtures; both now assert the correct complete
+16-byte object, rather than retaining the old short-wchar assumption.
+
+A targeted replay using `tools/survey-cohort.py`'s existing `inventory` and
+each selected unit's unchanged `projected_argv` passes both original EFI
+units: `drivers/firmware/efi/libstub/file.c` (`8c75a470ff720055`, 1.768 s)
+and `secureboot.c` (`c8917c6473e8338d`, 1.674 s). Both retain
+`-fshort-wchar`, exit 0, and emit no diagnostics. These are two serial
+targeted checks, not a new full-configuration survey.
+
 ### Function-name and storage-only original-program replay
 
 `python3 -u tools/bench.py ctest torture zstd tinycc --jobs 2`, subject
