@@ -134,6 +134,23 @@ fn an_addressed_switch_label_keeps_its_terminator_edge_path() {
 }
 
 #[test]
+fn addressed_labels_in_expression_arms_keep_their_entry_edges() {
+    for expression in [
+        "0 && ({keep: ++n;})",
+        "1 || ({keep: ++n;})",
+        "1 ? 7 : ({keep: ++n;})",
+        "0 ? ({keep: ++n;}) : 7",
+        "7 ?: ({keep: ++n;})",
+    ] {
+        check_label_address(
+            &format!("int main(void){{void *p=&&keep;int n=0;(void)({expression});return n!=0 || p==0;}}"),
+            Ok(0),
+            &["block_addr", "cond_br"],
+        );
+    }
+}
+
+#[test]
 fn an_address_only_dead_label_keeps_the_reachability_boundary() {
     // Section 3.7 admits the address, but 2.5 still forbids a validated
     // block without a terminator-edge path from entry. Do not weaken SSA.

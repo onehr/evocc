@@ -255,3 +255,39 @@ fn constant_switch_preserves_label_entry_and_selector_effects() {
     );
     assert_execution("int main(void){int n=0;switch(4){case 4:switch(7){case 7:n=5;break;default:n=99;}n+=2;break;default:n=88;}return n!=7;}");
 }
+
+#[test]
+fn constant_expression_edges_remove_only_unselected_external_calls() {
+    for expression in [
+        "0 && link_error()",
+        "(0 && n) && link_error()",
+        "(1 || n) || link_error()",
+        "1 ? 7 : link_error()",
+        "0 ? link_error() : 7",
+        "7 ?: link_error()",
+        "sizeof(n) == 4 ? 7 : link_error()",
+    ] {
+        let source = format!("extern int link_error(void); int main(void){{int n=3; (void)({expression}); return 0;}}");
+        let module = assert_execution(&source);
+        assert!(!module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+            .any(|i| matches!(i, evocc_evoir::Inst::Call { callee, .. } if callee == "link_error")),
+            "unselected expression still links an external call: {expression}");
+    }
+}
+
+#[test]
+fn constant_expression_edges_keep_selected_values_and_effects() {
+    for expression in [
+        "1 && ++n",
+        "0 || ++n",
+        "1 ? ++n : 9",
+        "0 ? 9 : ++n",
+        "0 ?: ++n",
+    ] {
+        assert_execution(&format!(
+            "int main(void){{int n=0;int value=({expression});return value!=1 || n!=1;}}"
+        ));
+    }
+    assert_execution("int main(void){int n=0;int v=(n++ ? 9 : ++n);return v!=2 || n!=2;}");
+    assert_execution("int main(void){int n=0;int v=(++n ?: ++n);return v!=1 || n!=1;}");
+}
