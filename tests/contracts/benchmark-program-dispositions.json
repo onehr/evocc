@@ -69,6 +69,56 @@
         ".build/ladder/ctest/tests/single-exec/00204.c"
       ]
     },
+    "torture:20020227-1": {
+      "disposition": "FP-deferred",
+      "reason": "main reaches a packed complex-float member store and comparison through f1 and f2",
+      "sourceSha256": "22863853a7e0bbad256eaa0e42f32684ff4fd585c1cc37d10d0a6b14c6db1388",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-floating-applicability/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020227-1.c"
+      ]
+    },
+    "torture:20020411-1": {
+      "disposition": "FP-deferred",
+      "reason": "main reaches complex-float component stores, conjf and conversion to complex double",
+      "sourceSha256": "fffe831c2eba4bc557ea7c8d048dcd56f5b6ad0cdb49f9b90ac4aa7cfd8e03d8",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-floating-applicability/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c"
+      ]
+    },
+    "torture:960512-1": {
+      "disposition": "FP-deferred",
+      "reason": "main reaches an integer-to-complex-double conversion and tests the returned complex value",
+      "sourceSha256": "0ba045de14f9208e1ec847d39fb4712a943f00ac2b9ad1e45abf5735852b2699",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-floating-applicability/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/960512-1.c"
+      ]
+    },
+    "torture:pr38969": {
+      "disposition": "FP-deferred",
+      "reason": "main passes initialized complex float through two calls and compares the returned value",
+      "sourceSha256": "9aff21d405a2044acd737d24d37128b16147249a8ff89bf61ad0cdda44df2633",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-floating-applicability/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr38969.c"
+      ]
+    },
+    "torture:pr42248": {
+      "disposition": "FP-deferred",
+      "reason": "main reaches complex-double argument passing, a record-member store and comparison",
+      "sourceSha256": "82ab9b38b0f835c76d19bcd6f536d372226739a0373f2a5bf0bbc8d256f5fe80",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".evidence/builtin-probes/20260910-floating-applicability/results.txt",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c"
+      ]
+    },
     "torture:20000822-1": {
       "disposition": "not-applicable",
       "reason": "profile excludes GNU nested functions",

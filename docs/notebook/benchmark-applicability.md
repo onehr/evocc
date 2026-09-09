@@ -34,6 +34,29 @@ They remain compiler failures until repaired or individually supported by
 different applicability evidence. A search for the word `float` is not a
 classification rule.
 
+## Torture complex floating execution
+
+Source pin: `78d4ac73dd391005b895a6148cd9831e28e1208b`. Each of these five
+originals was read through its reached call path, then compiled and run
+unchanged with both sealed compilers at O0/O2: all 20 executions return zero.
+Commands and outcomes are in
+`.evidence/builtin-probes/20260910-floating-applicability/results.txt`.
+
+| Original | Reached floating operation |
+|---|---|
+| 20020227-1 | `main -> f1 -> f2` stores and compares a complex-float member in a packed record. |
+| 20020411-1 | `foo` sets two floating components and invokes `conjf`; `main` converts the complex result to double and checks its components. |
+| 960512-1 | `f` converts an integer array element to complex double; `main` evaluates the returned complex value's truth. |
+| pr38969 | `main` passes initialized complex float through `bar -> foo` and compares the returned value. |
+| pr42248 | `main -> init` stores a complex-double argument through a member; `check` compares that member with another complex-double argument. |
+
+These identities receive FP-deferred, never PASS. Their existing raw failures
+are retained, and the new labels are measured only by the next real replay.
+`stdarg-4` is deliberately not included: its first refusal exposed an
+integer-only always-inline list-copy defect, reproduced separately by
+`tests/fixtures/inline-variadic-copy.c`; floating syntax is not permission to
+hide that defect. Integer `_Complex` cases remain separate open coverage.
+
 ## Explicitly excluded GNU function extensions
 
 The architecture review excludes GNU nested functions, rather than weakening

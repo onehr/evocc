@@ -29,8 +29,27 @@ static int take_member(int count, ...)
     return result;
 }
 
+static inline __attribute__((always_inline)) argument_list forward(argument_list ap)
+{
+    return ap;
+}
+
+static int ordinary_one(argument_list ap)
+{
+    return __builtin_va_arg(ap, int);
+}
+
+static int take_returned(int count, ...)
+{
+    argument_list ap;
+    __builtin_va_start(ap, count);
+    int result = ordinary_one(forward(ap));
+    __builtin_va_end(ap);
+    return result;
+}
+
 int main(void)
 {
     return take(2, 7, 9) != 97 || take(2, 3, 4) != 43
-        || take_member(1, 13) != 13;
+        || take_member(1, 13) != 13 || take_returned(1, 17) != 17;
 }
