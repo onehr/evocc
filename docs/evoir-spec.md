@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.87** | **Authoritative reference** | **2026-09-09**
+**Revision 1.9.88** | **Authoritative reference** | **2026-09-09**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -486,8 +486,9 @@ never traps while computing the predicate.
 `and`, `or`, `xor`: bitwise logical operations on `N`-bit values. Total.
 
 `shl`: shift left. `%b` is decoded at its own `M`-bit width. C
-lowering must first assert `shift_count_defined` and, for signed left shift,
-`signed_shl_defined` with their distinct reasons.
+lowering must first assert `shift_count_defined`; since revision 1.9.88 the
+GNU profile asserts nothing else for a signed left shift (Section 6.1),
+and `signed_shl_defined` remains in the grammar for modules written before it.
 
 `lshr`: logical shift right. Zeros fill the vacated high bits.
 C lowering must first assert `shift_count_defined`.
@@ -1110,8 +1111,22 @@ this table does not combine, is `E3021` with the constraint named. Clobbers:
 and a named physical register, which the allocator must treat as written.
 Template operand references: `%0` to `%9`, `%[name]`, a width modifier
 `%w0`/`%x0` before the number or name, `%c0`/`%c[name]` for immediates,
-`%l[label]` in an `asm.goto`, and
-`%%` for a literal percent; any other reference is `E3021`. Every rule in
+`%l[label]` in an `asm.goto`,
+`%a0`/`%a[name]` (revision 1.9.88) for an address operand, and
+`%%` for a literal percent; any other reference is `E3021`.
+
+**Address operands (revision 1.9.88).** The constraint `p` is a general
+register holding an address; lowering treats it exactly as `r` for a
+`ptr<AS>` or `bits<64>` operand and C-HIR keeps the written letter. The
+template modifier `%a` applies to a `p` or `r` input operand of pointer or
+64-bit integer type and prints it as an AArch64 address operand, the 64-bit
+register in brackets, `[x<n>]`; on any other operand class or type it is
+`E3021` with the reference named. This is the kernel's
+`prfm pldl1keep, %a0` idiom (`arch/arm64/include/asm/processor.h`, 2,712
+first-error units in survey `measure-20260908T141252Z`). Both sealed oracles
+accept `p` and `r` under `%a`, numbered and named, at `-O0` and `-O2`, and
+evaluate the operand once
+(`.evidence/builtin-probes/20260908-assembly-address/address.c`, `results.txt`). Every rule in
 this paragraph is measured in `p33-asm-constraints.out`, where both oracles
 compile the whole vocabulary and print the same values.
 
@@ -1500,6 +1515,21 @@ reference to its target for the drop rule of revision 1.9.70. C-HIR writes an
 alias for `__attribute__((alias("target")))`, resolving the string to the
 symbol of this unit's definition. Emission is EvoMIR 0.22.
 
+**Code alignment (revision 1.9.88).** A function may carry `align=N`, a power
+of two of at least 4, written after its linkage marks; absent, it is 4, the
+instruction alignment. It is the alignment of the function's first
+instruction in the object, so `func_addr @f` (and every pointer with
+provenance `Function(@f)`) is a multiple of `N`; the interpreter needs no
+change, since it never compares function addresses arithmetically. The
+machine emits `.p2align log2(N)` before the label (EvoMIR 0.26). C-HIR
+writes the field for `__attribute__((aligned(N)))` on a function: the value
+is the maximum over every declaration and the definition of the symbol in
+the unit, a later declaration never lowers it, and `__alignof__` of a
+function designator answers that maximum while `__alignof__` of a function
+type answers 4. Both oracles agree on every point of the probe
+(`.evidence/builtin-probes/20260909-nonobject-alignment/attributed.c`:
+designator 256, type 4, real address a multiple of 256).
+
 ```text
 func @name(...) -> (...) cc = target_default visibility=internal
 ```
@@ -1669,6 +1699,24 @@ particular this profile does not use either option to waive pointer safety
 or admit out-of-object accesses; it does not claim GCC's full pointer-wrap
 option compatibility.
 
+**Signed left shift in the GNU profile (revision 1.9.88).** For a signed left
+operand and a valid count (`shift_count_defined` still asserted, so the
+count is in `[0, N)`), `x << y` is the low `N` bits of the mathematical
+product `x * 2^y` in two's complement, whatever the sign of `x` and whether
+or not the result is representable. C11 6.5.7 leaves both undefined; GCC
+documents that it "does not use the latitude given in C99 and C11 only to
+treat certain aspects of signed `<<` as undefined", and Clang emits a plain
+shift. Both sealed oracles compute `-16` for the kernel's
+`(imm << 6) >> 4` on a negative `imm` at `-O0` and `-O2`
+(`.evidence/builtin-probes/20260908-instruction-encoding`), and their
+sanitizers report the C11 rule only under `-fsanitize=shift`
+(`.evidence/builtin-probes/20260908-runtime-domains`). Lowering therefore
+emits `shift_count_defined` and `ub.assume.invalid_shift_count` before every
+shift as before, and no `signed_shl_defined` obligation; an invalid count
+remains `E3005`. Signed addition, subtraction and multiplication keep their
+obligations unless the wrapping mode above is selected; the two rules are
+separate because the oracles are separate about them.
+
 Memory obligations are deliberately not encoded as `bits<1>` plus one generic
 `ub.assume` reason. Such an encoding would erase whether a dynamic failure was
 null, dangling, out of bounds, misaligned, or an invalid pointer
@@ -1709,7 +1757,7 @@ source-independent `1:1` location until a source map is specified.
 | Division by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.division_by_zero` → `sdiv`/`udiv` |
 | Remainder by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `srem`/`urem` |
 | Shift amount invalid for width | mathematical `shift_amt` is outside `[0, N)` | `shift_count_defined.<signedness>(x, amt)` → `ub.assume.invalid_shift_count` → shift |
-| Invalid signed left shift | signed `x << y` is not representable | `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift` → `shl` |
+| Invalid signed left shift | signed `x << y` is not representable (C11 6.5.7) | not asserted since revision 1.9.88: the GNU profile defines the result as the truncated two's-complement bit pattern; `signed_shl_defined` and `E3006` stay readable |
 | Pointer arithmetic validity | result must name a live object at an offset in `[0,size]` | `ptr.offset.*.*` → `pointer_valid` |
 | Memory access validity | complete positive-width range and alignment must be valid in the current snapshot | `access_in_bounds` → matching `load`/`store` |
 | Null pointer access | pointer has `Null` provenance | memory guard or direct fail-closed access reports `E3009` |
@@ -2711,7 +2759,8 @@ address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list [", ..."] ")"
                    " -> (" type_list ")"
-                   " cc = " ident [" visibility=internal"] [" linkage=weak"] newline
+                   " cc = " ident [" visibility=internal"] [" linkage=weak"]
+                   [" align=" integer] newline
                    indent effects_clause newline
                    "{" newline
                    block_seq
@@ -3666,7 +3715,8 @@ size of that set is measured rather than assumed. In particular `section`,
 effect or backend semantics that belong to later stages, and applying
 a partial reading now would create a second source of truth for each.
 `always_inline` has an effect since revision 1.9.74, stated next; `weak` and
-`alias` are linkage marks since revision 1.9.79 (Section 5.2).
+`alias` are linkage marks since revision 1.9.79 (Section 5.2); `aligned` on a
+function is code alignment since revision 1.9.88 (Section 5.2).
 
 **`always_inline` (revision 1.9.74).** A call whose callee is a function
 defined in this unit with the `always_inline` attribute is replaced, in
@@ -5862,6 +5912,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.88 | 2026-09-09 | Admits the `p` constraint and the `%a` address modifier (the kernel's `prfm pldl1keep, %a0`); defines signed left shift in the GNU profile as the truncated bit pattern for a valid count, dropping the `signed_shl_defined` obligation as both oracles do; adds `align=N` to function headers for `aligned` on functions with maximum-of-declarations merging. |
 | 1.9.87 | 2026-09-09 | Bounds the shift-amount width of the P0 profile to 1..64, matching both eligibility implementations and the 64-bit fact lattice; wider amounts make a region ineligible. |
 | 1.9.86 | 2026-09-09 | Clarifies that constants are minimal elements of the known-bits lattice, not its bottom; states the two classes of proof coverage and that coverage constraints live only in registry text; adds Section 11.7 listing the trusted base A1-A7 behind a certificate. |
 | 1.9.85 | 2026-09-08 | Define source register-or-memory alternatives by selection of the existing register path, preserving operand evaluation and output markers; sealed GCC/Clang probes agree. This changes no compiler code. |

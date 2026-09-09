@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.25** | **Authoritative reference** | **2026-09-08**
+**Revision 0.26** | **Authoritative reference** | **2026-09-09**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -230,6 +230,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR 3.3.1 defines the predicate (revision 0.3) |
 | `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
 | `bits<128>` forms (revision 0.10; the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form the oracles emit, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` selecting the 64-or-more case (`p35-int128.c`, `shl_var`, `lshr_var`, both compilers); `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, exactly as both oracles emit for a `volatile u128` (the cohort's atomic 128-bit accesses are `asm`); `shift_count_defined` compares the amount with `#128`; `copy` is unchanged; the remaining UB predicates and `sdiv`/`udiv`/`srem`/`urem` at width 128 are `E4003` (the cohort has none; EvoIR keeps division `E3033`) |
+| 128-bit UB predicates (revision 0.26; the pair is `lo`, `hi`) | `divisor_nonzero`: `orr t, lo, hi`, `cmp t, #0`, `cset ne`. `signed_div_rem_no_overflow`: `%a` is `MIN` when `lo == 0` and `hi == 0x8000000000000000`, `%b` is `-1` when both halves are all ones; the predicate is the negation of their conjunction, computed with `cmp`/`ccmp` and one `cset`. `signed_add_defined`: `adds t, alo, blo`, `adcs t, ahi, bhi`, `cset vc`; `signed_sub_defined`: `subs`, `sbcs`, `cset vc`. `signed_mul_defined`: take the magnitudes of both operands (negate the pair when `hi` is negative), form the 256-bit product of the magnitudes from the four 64-bit limb products with `mul`/`umulh` and carries, and answer true exactly when the high 128 bits are zero and the low 128 bits do not exceed `2^127 - 1` (operand signs equal) or `2^127` (signs differ). `shift_count_defined` with a 128-bit shifted value: as at narrower widths with bound `#128`. `signed_shl_defined` at 128: the conjunction of the count predicate, `ahi` non-negative, and the round trip through the pair shift sequences of revision 0.10 (`(x << amt) >> amt == x` with the arithmetic right shift). Under EvoIR 1.9.88 the front end no longer emits `signed_shl_defined`, so the row serves older modules. |
 | `va_start %ap` | in a variadic function only: store to the list object at `%ap` the five fields of Section 6 (`stack`, `gr_top`, `vr_top`, `gr_offs`, `vr_offs`) |
 | `va_arg.T %ap` | the register-then-stack procedure of Section 6 for `T`'s size and alignment, ending in a load of `T` from the computed address |
 | `va_end %ap` | nothing |
@@ -345,7 +346,24 @@ the frame downward), then the spill area (one 8-byte slot per spilled
 virtual register), then the register save area of a variadic function
 (Section 6, 64 bytes), then outgoing stack arguments (Linux only, revision 0.10).
 `sp` stays 16-byte aligned at every call. The frame is static: no dynamic
-`alloca` exists in EvoIR. Every slot (object, spill, save area) is addressed
+`alloca` exists in EvoIR.
+
+**Over-aligned frames (revision 0.26).** When any `frame.slot` of the
+function declares an alignment `A` greater than 16, the frame is realigned:
+the prologue's `sub sp, sp, #frame` uses a frame size rounded up to a
+multiple of `A` plus `A - 16` of slack, and is followed by `and sp, sp, #-A`,
+so that `sp` itself is a multiple of `A`; every slot keeps its non-negative
+offset from `sp`, and a slot whose alignment is `A'` sits at an offset that
+is a multiple of `A'`, which now makes its address a multiple of `A'` for
+every `A' <= A`. The epilogue restores `sp` from the frame pointer, `mov sp,
+x29`, before the `ldp` of the saved pair, since the realigned `sp` is no
+longer `x29 - frame`. Incoming stack arguments are still read from `x29`,
+the frame chain is unchanged, and a function without such a slot is emitted
+exactly as before. Both oracles realign this way and the probe checks the
+real address and the live bytes of 32 recursive `aligned(256)` objects
+(`.evidence/builtin-probes/20260909-alignment-specifiers/stack.c`); the
+subject's earlier emission kept `sp` at 16 and returned a wrong value, the
+first silent native error the alignment work found. Every slot (object, spill, save area) is addressed
 from `sp` with a non-negative scaled offset, never from `x29`, so that frames
 above 256 bytes stay inside the unsigned twelve-bit immediate form; `x29`
 serves the unwinder and the debugger, not the code (revision 0.4).
@@ -515,7 +533,7 @@ The target is a parameter of emission (`darwin-arm64`, `linux-aarch64`), not
 a build-time choice.
 
 The assembly text is the platform assembler's syntax. Functions are emitted
-in module order, each as `.globl` (external functions only, revision 0.16)/`.p2align 2`/label/body; globals as data
+in module order, each as `.globl` (external functions only, revision 0.16)/`.p2align log2(align)` (the function's `align=N`, EvoIR 1.9.88, 4 when absent; revision 0.26)/label/body; globals as data
 in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
 EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin). The
 only relocations this revision emits are the page-relative pair for
@@ -665,7 +683,7 @@ sides, and are never emitted today.
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | `f32`/`f64` operand or result |
 | `E4002` | `not-lowered: vector` | `vec` operand or result |
-| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division, remainder and the signed UB predicates |
+| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division and remainder (the UB predicates lower since revision 0.26) |
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
 | `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
 | `E4006` | `not-lowered: indirect-branch` | computed goto (EvoIR `E3029` boundary) |
@@ -754,6 +772,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.26 | 2026-09-09 | Realigns the frame with `and sp, sp, #-A` when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |
 | 0.25 | 2026-09-08 | Carry EvoIR 1.9.80 symbolic assembly immediates without a register, with canonical signed-addend text and target-correct symbol/block emission. This revision changes the contract, not compiler code. |
 | 0.24 | 2026-09-08 | Apply the measured PIE address rule to strong undefined functions as well as objects; direct calls and defined symbols remain unchanged. The original TinyCC replay exposed longjmp immediately after environ. This revision changes the contract, not compiler code. |
 | 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
