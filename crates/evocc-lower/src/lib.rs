@@ -8673,22 +8673,6 @@ impl<'a> FunctionLowerer<'a> {
             state,
             Inst::UbAssume(count_defined, UbReason::InvalidShiftCount),
         )?;
-        if operator == BinaryOp::Shl && integer.is_signed() {
-            let defined = self.fresh_value(EvoIRType::Bits(1));
-            self.emit(
-                state,
-                Inst::SignedShlDefined {
-                    result: defined.clone(),
-                    shifted: shifted.value.clone(),
-                    amount: amount.value.clone(),
-                    amount_signed: amount.integer.is_signed(),
-                },
-            )?;
-            self.emit(
-                state,
-                Inst::UbAssume(defined, UbReason::InvalidSignedLeftShift),
-            )?;
-        }
         let result = self.fresh_value(bits(integer));
         let instruction = match (operator, integer.is_signed()) {
             (BinaryOp::Shl, _) => Inst::Shl(result.clone(), shifted.value, amount.value),

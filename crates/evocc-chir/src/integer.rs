@@ -828,13 +828,8 @@ fn eval_integer_shift(
         return Err(IntegerError::InvalidShiftCount);
     }
     match op {
-        BinaryOp::Shl if left.ty.signed => {
-            let left_value = left.mathematical_value();
-            if left_value < 0 || left_value > (left.ty.signed_max() >> shift) {
-                return Err(IntegerError::InvalidSignedLeftShift);
-            }
-            Ok(CInteger::from_raw(left.raw << shift, left.ty))
-        }
+        // The GNU profile defines signed left shift by its truncated bit
+        // pattern. The count check above still applies to either signedness.
         BinaryOp::Shl => Ok(CInteger::from_raw(left.raw << shift, left.ty)),
         BinaryOp::Shr if left.ty.signed => integer_from_mathematical(
             left.mathematical_value()
