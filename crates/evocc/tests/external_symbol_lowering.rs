@@ -1100,6 +1100,59 @@ fn signed_shifts_use_the_measured_bit_pattern_at_every_integer_width() {
 }
 
 #[test]
+fn overaligned_stack_objects_keep_their_addresses_and_live_values_across_calls() {
+    let source = include_str!("../../../tests/fixtures/overaligned-stack.c");
+    // Test actual addresses, recursion and live bytes, not just __alignof__.
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "overaligned-stack");
+}
+
+#[test]
+fn both_targets_realign_overaligned_frames_using_the_reserved_scratch_register() {
+    let source = include_str!("../../../tests/fixtures/overaligned-stack.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let lowered = evocc_mir::lower_module_for(target, &module, &|_| true).unwrap();
+        let function = lowered
+            .functions
+            .iter()
+            .find(|f| f.name == "check")
+            .unwrap();
+        let allocated = evocc_mir::allocate(&evocc_mir::out_of_ssa(function)).unwrap();
+        evocc_mir::verify_allocation(&allocated).unwrap();
+        assert!(
+            allocated.frame_slots > 0,
+            "the fixture must exercise spills"
+        );
+        let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+        assert!(
+            assembly.contains("mov x16, sp\n    and x16, x16, #-256\n    mov sp, x16"),
+            "{target:?}: {assembly}"
+        );
+        assert!(
+            assembly.contains("mov sp, x29\n    ldp x29, x30, [sp], #16"),
+            "{target:?}: {assembly}"
+        );
+        assert!(!assembly.contains("and sp, sp"), "{target:?}: {assembly}");
+    }
+}
+
+#[test]
 fn substituted_member_macro_keeps_its_single_object_projection() {
     let source = "struct S { int slot; };\n\
         #define slot state->slot\n\
