@@ -6020,6 +6020,30 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Pending body revision: source-width constant arithmetic
+
+The reviewed constant-context rule is supported by `.evidence/builtin-probes/20260909-constant-contexts/{constants.c,results.txt}`: GCC-14 and Clang-19 at O0/O2 agree on signed 32/64-bit literal add/subtract/multiply, the `(unsigned)(INT_MAX + 2)` shape from `920730-1`, and integer promotions.
+The source-literal probes do not establish a rule for runtime variable arithmetic or optimized propagation; runtime overflow obligations remain unchanged.
+No diagnostic is allocated and no implementation pass is claimed; the body revision is pending the architecture owner, with one named original program and unmeasured siblings.
+
+### Pending body revision: dynamic automatic objects
+
+The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.
+Both compilers reject `goto-in.c`, which jumps into the scope of a variable-length object.
+No diagnostic is allocated or changed here; prototype-only bounds still need a separate probe, and the body revision and original-program impact count remain pending.
+
+### Pending body revision: integer aggregate variable arguments
+
+Both sealed compilers at O0/O2 agree on the 4/16/24-byte aggregate layouts, list copying and register/stack exhaustion in `.evidence/builtin-probes/20260909-memory-abi/{varargs.c,results.txt}`.
+These are probes for the reviewed integer-aggregate AAPCS64 rule, not floating-point/HFA admission or implemented-subject evidence.
+No diagnostic is allocated; the architecture-owned body revision and original-program closure measurements remain pending.
+
+### Pending body revision: computed branches and label differences
+
+Both sealed compilers at O0/O2 execute the direct-label and relative-label dispatch tables in `.evidence/builtin-probes/20260909-memory-abi/{label-differences.c,results.txt}` with identical results.
+The reviewed indirect-successor, object-carried-value and symbol-difference rules still require their architecture-owned body revision; this entry does not relax the current validator or E3029 boundary.
+No diagnostic is allocated and no original-program gain is inferred from these probes.
+
 ### Integer absolute-value builtins and ordinary-call boundaries
 
 `__builtin_abs`, `__builtin_labs` and `__builtin_llabs` have respectively the prototypes `int(int)`, `long(long)` and `long long(long long)`, evaluate their converted operand once, and return its nonnegative absolute value; a reached minimum signed value remains E3004 even with wrapping enabled, while existing arity/conversion/declaration diagnostics apply.
