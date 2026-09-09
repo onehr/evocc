@@ -25,6 +25,49 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn unspecified_declarations_use_the_composite_call_interface() {
+    let mut failures = Vec::new();
+    for declarations in [
+        "long f();long f(long);",
+        "long f(long);long f();",
+        "long f();extern long f(long);long f();",
+    ] {
+        let source =
+            format!("{declarations}long entry(void){{long(*p)(long)=f;return p(1)+f(2);}}");
+        let output = run(&source, "--emit=evoir");
+        if !output.status.success() {
+            failures.push(format!(
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+            continue;
+        }
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        let declaration = module.declares.iter().find(|f| f.name == "f").unwrap();
+        // One source parameter, followed by the existing memory/world tokens.
+        assert_eq!(declaration.params.len(), 3, "{source}");
+    }
+    let alias = "long f();static long impl(long n){return n+1;}extern __typeof(impl) f __attribute__((weak,alias(\"impl\")));int main(void){return f(41)!=42;}";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(alias, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {} {:?}",
+                String::from_utf8_lossy(&output.stderr),
+                output.stdout
+            ));
+        }
+    }
+    for source in [
+        "long f(int);long f(long);",
+        "long f(void);long entry(void){return f(1);}",
+    ] {
+        assert!(!run(source, "--emit=evoir").status.success(), "{source}");
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn incomplete_array_alignment_preserves_member_attributes_without_evaluation() {
     let source = r#"
         struct Object { int tag; unsigned char bytes[] __attribute__((aligned(8))); };
