@@ -83,11 +83,13 @@ impl SymbolLinkage {
             if file_scope {
                 names.insert(name.clone(), symbol);
             }
-            let alias = attributes.iter().find(|a| a.name == "alias");
+            let alias = attributes
+                .iter()
+                .find(|a| a.semantic_name() == Some("alias"));
             if file_scope && defined && alias.is_none() {
                 definitions.insert(symbol);
             }
-            if attributes.iter().any(|a| a.name == "weak") {
+            if attributes.iter().any(|a| a.semantic_name() == Some("weak")) {
                 if storage == StorageClass::Static
                     || unit
                         .symbols()

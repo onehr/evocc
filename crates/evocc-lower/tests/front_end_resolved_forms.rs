@@ -50,6 +50,19 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn bracket_attributes_resolve_through_the_existing_attribute_semantics() {
+    assert_pairs(&[
+        ("[[gnu::aligned(32)]] int x; int f(void){return x;}",
+         "__attribute__((aligned(32))) int x; int f(void){return x;}"),
+        ("struct [[gnu::packed]] S{char a; int b;}; int f(struct S *p){return p->b;}",
+         "struct __attribute__((packed)) S{char a; int b;}; int f(struct S *p){return p->b;}"),
+        ("[[other::weak, other::alias(\"missing\")]] static int x=3; int f(void){return x;}",
+         "static int x=3; int f(void){return x;}"),
+        ("int f(void) [[gnu::aligned(32)]] {return 0;}", "int f(void){return 0;}"),
+    ], 2000);
+}
+
+#[test]
 fn unused_target_header_prototypes_do_not_require_floating_execution() {
     for spelling in [
         "_Float16",

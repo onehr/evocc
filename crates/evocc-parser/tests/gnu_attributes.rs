@@ -118,6 +118,24 @@ fn bracket_namespaces_do_not_apply_unrelated_gnu_attributes() {
         .unwrap();
     assert_eq!(attributes[0].written, "gnu::unused");
     assert_eq!(attributes[1].written, "other::hint");
+    assert_eq!(layout_of("int [[other::hint]] value;", "value"), (4, 4));
+    assert_eq!(
+        layout_of("int value [[gnu::aligned(32)]];", "value"),
+        (4, 32)
+    );
+    accepts("int value(void) [[gnu::aligned(32)]] { return 0; } _Static_assert(__alignof__(value)==4, \"function-type attribute ignored\");");
+}
+
+#[test]
+fn bracket_type_alignment_conflicts_remain_refused() {
+    for source in [
+        "int value[4] [[gnu::aligned(32)]];",
+        "struct S { int value[4] [[gnu::aligned(32)]]; };",
+        "int f(int value[4] [[gnu::aligned(32)]]) { return 0; }",
+        "int * [[gnu::aligned(32)]] value;",
+    ] {
+        rejects(source, "E2903");
+    }
 }
 
 #[test]
@@ -128,6 +146,8 @@ fn malformed_bracket_attribute_lists_report_attribute_diagnostics() {
         "[[gnu::aligned(4)] int value;",
         "[[gnu::aligned(4), other::]] int value;",
         "[[gnu::aligned(3)]] int value;",
+        "[[u8\"bad\"]] int value;",
+        "[[gnu::u8\"bad\"]] int value;",
     ] {
         rejects(source, "E2903");
     }

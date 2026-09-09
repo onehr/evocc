@@ -426,7 +426,7 @@ pub fn without_unreferenced_functions<'u, 'a>(
 }
 
 pub fn has_inline_definitions(unit: &CHirUnit<'_>) -> bool {
-    unit.iter().any(|d| matches!(d, CHirDecl::Function(f) if f.body.is_some() && f.attributes.iter().any(|a| a.name == "always_inline")))
+    unit.iter().any(|d| matches!(d, CHirDecl::Function(f) if f.body.is_some() && f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))))
 }
 
 /// Rewrite into the caller-owned arena. Original nodes and symbol tables are
@@ -448,7 +448,9 @@ pub fn substitute<'a>(
         .filter_map(|d| match d {
             CHirDecl::Function(f)
                 if f.body.is_some()
-                    && f.attributes.iter().any(|a| a.name == "always_inline")
+                    && f.attributes
+                        .iter()
+                        .any(|a| a.semantic_name() == Some("always_inline"))
                     && !uses.addresses.contains(&f.symbol)
                     && !matches!(
                         f.parameters,

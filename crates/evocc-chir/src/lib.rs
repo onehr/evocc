@@ -1042,6 +1042,10 @@ pub enum AttributePlacement {
     TypeName,
     /// After `*` and its qualifiers, before the rest of the declarator.
     PointerDeclarator,
+    /// Bracketed attribute after a function's parameter list, on its type.
+    FunctionType,
+    /// Bracketed attribute after an array's bound, on its type.
+    ArrayType,
 }
 
 impl AttributePlacement {
@@ -1061,6 +1065,8 @@ impl AttributePlacement {
             Self::Enumerator => "enumerator",
             Self::TypeName => "type-name",
             Self::PointerDeclarator => "pointer-declarator",
+            Self::FunctionType => "function-type",
+            Self::ArrayType => "array-type",
         }
     }
 }
@@ -1095,13 +1101,46 @@ pub enum AppliedAttribute {
 pub struct Attribute {
     pub name: String,
     pub written: String,
+    pub syntax: AttributeSyntax,
     pub arguments: Vec<AttributeArgument>,
     pub placement: AttributePlacement,
     pub span: SourceSpan,
     pub applied: Option<AppliedAttribute>,
 }
 
+/// The spelling namespace is semantic: `[[aligned]]` does not name the GNU
+/// layout attribute, whereas `[[gnu::aligned]]` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeSyntax {
+    Gnu,
+    Brackets { namespace: Option<String> },
+}
+
 impl Attribute {
+    #[must_use]
+    pub fn semantic_name(&self) -> Option<&str> {
+        if matches!(self.syntax, AttributeSyntax::Brackets { .. })
+            && matches!(
+                self.placement,
+                AttributePlacement::FunctionType | AttributePlacement::ArrayType
+            )
+        {
+            return None;
+        }
+        match &self.syntax {
+            AttributeSyntax::Gnu => Some(&self.name),
+            AttributeSyntax::Brackets {
+                namespace: Some(namespace),
+            } if matches!(namespace.as_str(), "gnu" | "__gnu__") => Some(&self.name),
+            AttributeSyntax::Brackets { namespace: None } => match self.name.as_str() {
+                "deprecated" | "fallthrough" | "nodiscard" | "noreturn" => Some(&self.name),
+                "maybe_unused" => Some("unused"),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// The zero C11 alignment specifier is preserved but contributes no
     /// attribute to the declaration queried by `__builtin_has_attribute`.
     #[must_use]
@@ -1114,7 +1153,7 @@ impl Attribute {
         {
             None
         } else {
-            Some(&self.name)
+            self.semantic_name()
         }
     }
 
@@ -1147,7 +1186,8 @@ impl AttributeInventory {
         } else {
             &mut self.preserved_not_applied
         };
-        *bucket.entry(attribute.name.clone()).or_insert(0) += 1;
+        let name = attribute.semantic_name().unwrap_or(&attribute.written);
+        *bucket.entry(name.to_owned()).or_insert(0) += 1;
     }
 }
 
@@ -1867,7 +1907,10 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
         let _ = writeln!(
             out,
             "  attribute {}({arguments}) placement={} {applied}",
-            attribute.name,
+            match attribute.syntax {
+                AttributeSyntax::Gnu => &attribute.name,
+                AttributeSyntax::Brackets { .. } => &attribute.written,
+            },
             attribute.placement.spelling()
         );
     }

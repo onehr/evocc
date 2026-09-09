@@ -6661,3 +6661,10 @@ The character-pointer conversions of Section 10.1.3 include discarding immediate
 Both sealed compilers at O0/O2 execute `tests/fixtures/qualified-character-pointers.c` and the 36-combination `matrix.c` in `.evidence/builtin-probes/20260910-character-qualifiers/`, with the unchanged original torture `20121108-1` also printing `c0a8bea0`, `c0a8bea0`, `WORKS.` and returning zero (`results.txt`); qualifier discards are warnings, not errors.
 No instruction or diagnostic is added, and ordinary non-character pointer conversions retain their current compatibility checks.
 One original first-error program is measured in `20260909T162314Z`; the subsequent original-program replay, not the positive probe, determines the new PASS count.
+
+### Bracketed attribute namespaces and attachment
+
+Per the F03 ruling, `[[gnu::name]]` and `[[__gnu__::__name__]]` reuse the GNU attribute meanings at their measured declaration, member and tag-keyword positions, while unscoped or foreign names do not acquire GNU layout, linkage or inlining effects merely by spelling the same name; spelling and namespace remain in C-HIR.
+The sealed GCC-14/Clang-19 probes in `.evidence/builtin-probes/20260909-attribute-brackets/` and `20260910-attribute-namespaces/` cover the grammar, preserved names, actual alignment and packed-member offsets, with outcomes in each `results.txt`.
+Malformed placement retains E2903, including the mixed GNU-before-bracket specifier order and the measured layout conflicts for `aligned` on an array suffix or pointer layer; the function-suffix form is preserved on the function type without raising function alignment, as both oracles measure four bytes.
+Four original first-error programs in torture `20260909T171533Z` reach bracket syntax; replay decides their actual outcomes, and the independent GCC O2 failure of `pr124358` is recorded separately rather than treated as a consensus value.

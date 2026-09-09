@@ -1120,7 +1120,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         || object
                             .attributes
                             .iter()
-                            .any(|attribute| attribute.name == "alias")
+                            .any(|attribute| attribute.semantic_name() == Some("alias"))
                     {
                         None
                     } else if object.initializer.is_some() {

@@ -12,17 +12,17 @@ use evocc_chir::integer::{
 use evocc_chir::{
     attribute_query_target, builtin_constant_p, is_modifiable_object_type, record_member_path,
     statement_expression_value, AppliedAttribute, AsmOperand, AsmStmt, AssignmentOp, Attribute,
-    AttributeArgument, AttributePlacement, AttributeQueryTarget, BinaryOp, CHirBlockItem, CHirDecl,
-    CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp,
-    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix,
-    FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction,
-    InitPlan, InitializerDesignation, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
-    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
-    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
-    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
-    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp,
-    UpdateOp, VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator,
-    WrittenInitializer,
+    AttributeArgument, AttributePlacement, AttributeQueryTarget, AttributeSyntax, BinaryOp,
+    CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix,
+    CheckedArithmeticOp, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit,
+    FloatSuffix, FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord, IndexProjection,
+    InitAction, InitPlan, InitializerDesignation, IntBase, IntLit, IntSuffix, MemoryPlace,
+    ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot,
+    PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass,
+    StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind,
+    SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand,
+    UnaryOp, UpdateOp, VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    WrittenDesignator, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
@@ -74,6 +74,7 @@ fn derived_declarator_span(layer: &DerivedDeclarator) -> SourceSpan {
 struct ParsedDeclarator {
     name: SpannedName,
     derived: Vec<DerivedDeclarator>,
+    attributes: Vec<Attribute>,
     span: SourceSpan,
 }
 
@@ -1614,13 +1615,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // Attributes after the declarator attach to it alone. When a function
         // body follows they are in function-definition position; the same
         // tokens, a different row of the placement table.
-        let trailing_placement = if self
-            .tokens
-            .iter()
-            .skip(self.pos)
-            .find(|token| token.kind != TokenKind::Attribute)
-            .is_some_and(|_| self.declarator_is_followed_by_body())
-        {
+        attributes.extend(declarator.attributes.iter().cloned());
+        let trailing_placement = if self.declarator_is_followed_by_body() {
             AttributePlacement::FunctionDefinition
         } else {
             AttributePlacement::AfterDeclarator
@@ -1990,6 +1986,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             self.validate_array_parameter_modifiers(&next.derived, false);
             let (next_asm_label, next_asm_label_span) = self.parse_optional_asm_label()?;
+            next_attributes.extend(next.attributes.iter().cloned());
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
@@ -4179,6 +4176,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.apply_declarator(specifier.surface.type_id(), &declaration.derived);
                     let ty = self.adjust_parameter_type(unadjusted, &declaration.derived);
                     let mut parameter_attributes = attributes.clone();
+                    parameter_attributes.extend(declaration.attributes.iter().cloned());
                     parameter_attributes
                         .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
                     let ty =
@@ -4434,27 +4432,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// without consuming them.
     fn declarator_is_followed_by_body(&self) -> bool {
         let mut index = self.pos;
-        while self.tokens.get(index).map(|token| token.kind) == Some(TokenKind::Attribute) {
-            // skip `__attribute__ ( ( ... ) )` by balancing parentheses
-            index += 1;
-            let mut depth = 0_usize;
-            let mut seen_open = false;
-            while let Some(token) = self.tokens.get(index) {
-                match token.kind {
-                    TokenKind::LParen => {
-                        depth += 1;
-                        seen_open = true;
-                    }
-                    TokenKind::RParen => {
-                        depth = depth.saturating_sub(1);
-                    }
-                    _ => {}
-                }
-                index += 1;
-                if seen_open && depth == 0 {
-                    break;
-                }
-            }
+        while self.attribute_starts_at(index) {
+            let Some(end) = self.attribute_specifier_end(index) else {
+                return false;
+            };
+            index = end;
         }
         self.tokens.get(index).map(|token| token.kind) == Some(TokenKind::LBrace)
     }
@@ -4508,7 +4490,53 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     // ── GNU attributes ───────────────────────────────────────────────────
 
-    /// Consume every `__attribute__((...))` specifier at the cursor.
+    fn bracket_attribute_starts_at(&self, position: usize) -> bool {
+        self.tokens.get(position).map(|token| token.kind) == Some(TokenKind::LBracket)
+            && self.tokens.get(position + 1).map(|token| token.kind) == Some(TokenKind::LBracket)
+    }
+
+    fn attribute_starts_at(&self, position: usize) -> bool {
+        self.tokens.get(position).map(|token| token.kind) == Some(TokenKind::Attribute)
+            || self.bracket_attribute_starts_at(position)
+    }
+
+    fn parse_bracket_attributes(&mut self, placement: AttributePlacement) -> Vec<Attribute> {
+        if self.bracket_attribute_starts_at(self.pos) {
+            self.parse_attribute_specifiers(placement)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Look ahead through one attribute group without consuming or applying it.
+    fn attribute_specifier_end(&self, position: usize) -> Option<usize> {
+        let bracketed = self.bracket_attribute_starts_at(position);
+        let start = position + usize::from(!bracketed);
+        let (open, close) = if bracketed {
+            (TokenKind::LBracket, TokenKind::RBracket)
+        } else {
+            (TokenKind::LParen, TokenKind::RParen)
+        };
+        if self.tokens.get(start)?.kind != open || self.tokens.get(start + 1)?.kind != open {
+            return None;
+        }
+        let mut depth = 0_usize;
+        for (index, token) in self.tokens.iter().enumerate().skip(start) {
+            if token.kind == open {
+                depth += 1;
+            } else if token.kind == close {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(index + 1);
+                }
+            } else if token.kind == TokenKind::Eof {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// Consume GNU or bracketed attribute specifiers at the cursor.
     ///
     /// Each attribute is kept as written, with arguments as text, and is
     /// labelled with the placement the caller is parsing, since placement is
@@ -4516,14 +4544,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// type, tag or member apply `aligned` and `packed` and leave `applied`
     /// set so the dump and the inventory can tell the two apart.
     fn parse_attribute_specifiers(&mut self, placement: AttributePlacement) -> Vec<Attribute> {
+        let is_attribute_name = |text: &str| {
+            let mut chars = text.chars();
+            chars
+                .next()
+                .is_some_and(|c| c == '_' || c == '$' || c.is_alphabetic())
+                && chars.all(|c| c == '_' || c == '$' || c.is_alphanumeric())
+        };
         let mut attributes = Vec::new();
-        while self.peek_kind() == Some(TokenKind::Attribute) {
-            let keyword = self.advance().expect("peeked attribute keyword");
+        let mut saw_gnu = false;
+        while self.attribute_starts_at(self.pos) {
+            let bracketed = self.bracket_attribute_starts_at(self.pos);
+            let keyword = self.peek().expect("peeked attribute start").clone();
+            if bracketed && (saw_gnu || placement == AttributePlacement::BeforeDeclarator) {
+                self.report("E2903", "malformed-attribute", keyword.span);
+            }
+            if !bracketed {
+                saw_gnu = true;
+                self.advance();
+            }
+            let (open_kind, close_kind) = if bracketed {
+                (TokenKind::LBracket, TokenKind::RBracket)
+            } else {
+                (TokenKind::LParen, TokenKind::RParen)
+            };
             // `expect` reports its own diagnostic, and the first diagnostic is
             // the one a reader sees, so the delimiters are checked by hand to
             // keep the report on the attribute rather than on a stray token.
             for _ in 0..2 {
-                if self.peek_kind() != Some(TokenKind::LParen) {
+                if self.peek_kind() != Some(open_kind) {
                     self.report("E2903", "malformed-attribute", keyword.span);
                     return attributes;
                 }
@@ -4534,7 +4583,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 if self.match_kind(TokenKind::Comma) {
                     continue;
                 }
-                if self.peek_kind() == Some(TokenKind::RParen) {
+                if self.peek_kind() == Some(close_kind) {
                     break;
                 }
                 let Some(name_token) = self.advance() else {
@@ -4547,20 +4596,55 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E2903", "malformed-attribute", name_token.span);
                     return attributes;
                 }
-                let written = self.token_text(&name_token).to_owned();
-                let name = Attribute::canonical_name(&written);
-                if name == "scalar_storage_order" {
+                let mut span = name_token.span;
+                let mut written = self.token_text(&name_token).to_owned();
+                let mut name = Attribute::canonical_name(&written);
+                let mut namespace = None;
+                if bracketed {
+                    if !is_attribute_name(&written) {
+                        self.report("E2903", "malformed-attribute", name_token.span);
+                        return attributes;
+                    }
+                    if self.match_kind(TokenKind::Colon) {
+                        if !self.match_kind(TokenKind::Colon) {
+                            self.report("E2903", "malformed-attribute", name_token.span);
+                            return attributes;
+                        }
+                        let Some(member) = self.advance() else {
+                            self.report("E2903", "malformed-attribute", name_token.span);
+                            return attributes;
+                        };
+                        let member_text = self.token_text(&member);
+                        if !is_attribute_name(member_text) {
+                            self.report("E2903", "malformed-attribute", member.span);
+                            return attributes;
+                        }
+                        name = Attribute::canonical_name(member_text);
+                        namespace = Some(written.clone());
+                        written = format!("{written}::{member_text}");
+                        span = self.merge_span(name_token.span, member.span);
+                    }
+                }
+                let syntax = if bracketed {
+                    AttributeSyntax::Brackets { namespace }
+                } else {
+                    AttributeSyntax::Gnu
+                };
+                let gnu_name = matches!(&syntax, AttributeSyntax::Gnu)
+                    || matches!(&syntax, AttributeSyntax::Brackets { namespace: Some(ns) } if matches!(ns.as_str(), "gnu" | "__gnu__"));
+                if gnu_name && name == "scalar_storage_order" {
                     self.defer_profile_refusal(
                         "E2940",
                         "unsupported-scalar-storage-order",
                         name_token.span,
                     );
                 }
-                let mut span = name_token.span;
                 let mut arguments = Vec::new();
                 if self.peek_kind() == Some(TokenKind::LParen) {
                     let open = self.advance().expect("peeked argument list");
-                    let parsed = if name == "aligned" && self.peek_kind() != Some(TokenKind::RParen)
+                    let parsed = if gnu_name
+                        && name == "aligned"
+                        && self.peek_kind() != Some(TokenKind::RParen)
                     {
                         self.parse_integer_constant_argument(open.span)
                     } else {
@@ -4574,9 +4658,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         None => return attributes,
                     }
                 }
+                if bracketed
+                    && gnu_name
+                    && ((placement == AttributePlacement::TagClosingBrace
+                        && matches!(name.as_str(), "packed" | "aligned"))
+                        || (placement == AttributePlacement::TypeName
+                            && matches!(name.as_str(), "packed" | "aligned"))
+                        || (matches!(
+                            placement,
+                            AttributePlacement::PointerDeclarator | AttributePlacement::ArrayType
+                        ) && name == "aligned")
+                        || (matches!(
+                            placement,
+                            AttributePlacement::Label | AttributePlacement::NullStatement
+                        ) && name == "unused"))
+                {
+                    self.report("E2903", "malformed-attribute", name_token.span);
+                }
                 attributes.push(Attribute {
                     name,
                     written,
+                    syntax,
                     arguments,
                     placement,
                     span,
@@ -4587,7 +4689,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
             }
             for _ in 0..2 {
-                if self.peek_kind() != Some(TokenKind::RParen) {
+                if self.peek_kind() != Some(close_kind) {
                     self.report("E2903", "malformed-attribute", keyword.span);
                     return attributes;
                 }
@@ -4756,7 +4858,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut ty = ty;
         for attribute in attributes {
-            if attribute.name == "aligned" {
+            if attribute.semantic_name() == Some("aligned") {
                 attribute.applied = self.aligned_bytes(attribute).map(AppliedAttribute::Aligned);
             } else {
                 ty = self.apply_attributes_to_type(ty, std::slice::from_mut(attribute));
@@ -4773,7 +4875,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn apply_attributes_to_type(&mut self, ty: TypeId, attributes: &mut [Attribute]) -> TypeId {
         let mut ty = ty;
         for attribute in attributes.iter_mut() {
-            match attribute.name.as_str() {
+            match attribute.semantic_name().unwrap_or("") {
                 "mode" => ty = self.apply_integer_mode(ty, attribute),
                 "aligned" => {
                     let Some(bytes) = self.aligned_bytes(attribute) else {
@@ -4870,7 +4972,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// and power-of-two constraint.
     fn validate_pointer_attributes(&mut self, attributes: &[Attribute]) {
         for attribute in attributes {
-            if attribute.name == "aligned" {
+            if attribute.semantic_name() == Some("aligned") {
                 let _ = self.aligned_bytes(attribute);
             }
         }
@@ -4879,7 +4981,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// Apply `packed` and `aligned` written on a tag itself.
     fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
         for attribute in attributes.iter_mut() {
-            match attribute.name.as_str() {
+            match attribute.semantic_name().unwrap_or("") {
                 "packed" => {
                     if !attribute.arguments.is_empty() {
                         self.report("E2903", "malformed-attribute", attribute.span);
@@ -4931,7 +5033,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn member_layout_attributes(&mut self, attributes: &mut [Attribute]) -> FieldLayoutAttributes {
         let mut layout = FieldLayoutAttributes::default();
         for attribute in attributes.iter_mut() {
-            match attribute.name.as_str() {
+            match attribute.semantic_name().unwrap_or("") {
                 "packed" => {
                     layout.packed = true;
                     attribute.applied = Some(AppliedAttribute::Packed);
@@ -5327,10 +5429,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .push(attribute);
             return true;
         }
-        if self.peek_kind() != Some(TokenKind::Attribute) {
+        if !self.attribute_starts_at(self.pos) {
             return false;
         }
-        let parsed = self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
+        let bracketed = self.bracket_attribute_starts_at(self.pos);
+        let previous = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .map(|token| token.kind);
+        if bracketed
+            && previous.is_some_and(|kind| {
+                matches!(
+                    kind,
+                    TokenKind::Static
+                        | TokenKind::Extern
+                        | TokenKind::Typedef
+                        | TokenKind::Register
+                        | TokenKind::Auto
+                        | TokenKind::Inline
+                        | TokenKind::ThreadLocal
+                        | TokenKind::Const
+                        | TokenKind::Volatile
+                        | TokenKind::Restrict
+                        | TokenKind::Atomic
+                )
+            })
+        {
+            self.report("E2903", "malformed-attribute", self.span());
+        }
+        let placement = if bracketed && previous.is_some_and(is_builtin_type_word) {
+            AttributePlacement::TypeName
+        } else {
+            AttributePlacement::DeclarationSpecifiers
+        };
+        let parsed = self.parse_attribute_specifiers(placement);
         attributes
             .as_mut()
             .expect("specifier attribute capture was enabled")
@@ -5346,6 +5478,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(Attribute {
             name: "noreturn".into(),
             written: "_Noreturn".into(),
+            syntax: AttributeSyntax::Gnu,
             arguments: Vec::new(),
             placement: AttributePlacement::DeclarationSpecifiers,
             span: token.span,
@@ -5390,6 +5523,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(Attribute {
             name: "aligned".into(),
             written: "_Alignas".into(),
+            syntax: AttributeSyntax::Gnu,
             arguments: vec![argument],
             placement: AttributePlacement::DeclarationSpecifiers,
             span: self.merge_span(keyword.span, close.span),
@@ -5695,6 +5829,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.parse_declarator(false)
                 };
                 if let Some(declarator) = declarator.as_ref() {
+                    member_attributes.extend(declarator.attributes.iter().cloned());
                     self.validate_array_parameter_modifiers(&declarator.derived, false);
                     self.validate_variable_array_bounds(&declarator.derived);
                 }
@@ -5719,7 +5854,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // on the member, never on its canonical type identity.
                 let mut ty = ty;
                 for attribute in &mut member_attributes {
-                    if attribute.name == "mode" {
+                    if attribute.semantic_name() == Some("mode") {
                         ty = self.apply_integer_mode(ty, attribute);
                     }
                 }
@@ -6524,7 +6659,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         loop {
             match self.peek_kind() {
-                Some(TokenKind::LBracket) => {
+                Some(TokenKind::LBracket) if !self.bracket_attribute_starts_at(self.pos) => {
                     let open = self.advance().expect("peeked abstract array");
                     if matches!(
                         declarator.derived.last(),
@@ -6567,6 +6702,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         static_bound,
                         span: layer_span,
                     });
+                    declarator
+                        .attributes
+                        .extend(self.parse_bracket_attributes(AttributePlacement::ArrayType));
                     declarator.span = self.merge_span(declarator.span, layer_span);
                 }
                 Some(TokenKind::LParen) => {
@@ -6590,6 +6728,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         scope: parameter_scope,
                         span: layer_span,
                     });
+                    declarator
+                        .attributes
+                        .extend(self.parse_bracket_attributes(AttributePlacement::FunctionType));
                     declarator.span = self.merge_span(declarator.span, layer_span);
                 }
                 _ => break,
@@ -6634,6 +6775,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span: token.span,
                 },
                 derived: Vec::new(),
+                attributes: Vec::new(),
                 span: token.span,
             }
         } else if self.peek_kind() == Some(TokenKind::LParen) {
@@ -6648,7 +6790,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         loop {
             match self.peek_kind() {
-                Some(TokenKind::LBracket) => {
+                Some(TokenKind::LBracket) if !self.bracket_attribute_starts_at(self.pos) => {
                     let open = self.advance().unwrap();
                     if matches!(
                         declarator.derived.last(),
@@ -6678,6 +6820,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         static_bound,
                         span: self.merge_span(open.span, close.span),
                     });
+                    declarator
+                        .attributes
+                        .extend(self.parse_bracket_attributes(AttributePlacement::ArrayType));
                     declarator.span = self.merge_span(declarator.span, close.span);
                 }
                 Some(TokenKind::LParen) => {
@@ -6704,6 +6849,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         scope: parameter_scope,
                         span: self.merge_span(open.span, close.span),
                     });
+                    declarator
+                        .attributes
+                        .extend(self.parse_bracket_attributes(AttributePlacement::FunctionType));
                     declarator.span = self.merge_span(declarator.span, close.span);
                 }
                 _ => break,
@@ -6738,9 +6886,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         // Parenthesized declarators may contribute closing
                         // parentheses between the parameter list and body.
                         loop {
+                            if self.attribute_starts_at(index) {
+                                let Some(end) = self.attribute_specifier_end(index) else {
+                                    break;
+                                };
+                                index = end;
+                                continue;
+                            }
                             match self.tokens.get(index).map(|token| token.kind) {
                                 Some(TokenKind::RParen) => index += 1,
-                                Some(TokenKind::Attribute | TokenKind::Asm) => {
+                                Some(TokenKind::Asm) => {
                                     index += 1;
                                     if self.tokens.get(index).map(|token| token.kind)
                                         != Some(TokenKind::LParen)
@@ -6918,6 +7073,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     match self.parse_declarator(false) {
                         Some(declarator) => {
                             let written = self.written_declarator(&declarator);
+                            specifier_attributes.extend(declarator.attributes);
                             (
                                 Some(declarator.name),
                                 declarator.derived,
@@ -7356,7 +7512,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         match self.peek_kind()? {
-            TokenKind::Attribute => {
+            _ if self.attribute_starts_at(self.pos) => {
                 let start = self.span();
                 let attributes = self.parse_attribute_specifiers(AttributePlacement::NullStatement);
                 if self.peek_kind() != Some(TokenKind::Semicolon) {
@@ -7694,7 +7850,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else if self.peek_kind() == Some(TokenKind::StaticAssert) {
                 at_block_start = false;
                 self.parse_static_assert_declaration();
-            } else if self.peek_kind() == Some(TokenKind::Attribute)
+            } else if self.attribute_starts_at(self.pos)
                 && !self.attribute_sequence_starts_declaration()
             {
                 at_block_start = false;
@@ -7788,57 +7944,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             return false;
         }
-        matches!(
-            token.kind,
-            TokenKind::Attribute
-                | TokenKind::Alignas
-                | TokenKind::Noreturn
-                | TokenKind::Inline
-                | TokenKind::Auto
-                | TokenKind::Extern
-                | TokenKind::AutoType
-                | TokenKind::Register
-                | TokenKind::Static
-                | TokenKind::ThreadLocal
-                | TokenKind::Typedef
-                | TokenKind::Const
-                | TokenKind::Volatile
-                | TokenKind::Restrict
-                | TokenKind::Atomic
-        ) || self.token_starts_type_name(token)
+        self.attribute_starts_at(position)
+            || matches!(
+                token.kind,
+                TokenKind::Attribute
+                    | TokenKind::Alignas
+                    | TokenKind::Noreturn
+                    | TokenKind::Inline
+                    | TokenKind::Auto
+                    | TokenKind::Extern
+                    | TokenKind::AutoType
+                    | TokenKind::Register
+                    | TokenKind::Static
+                    | TokenKind::ThreadLocal
+                    | TokenKind::Typedef
+                    | TokenKind::Const
+                    | TokenKind::Volatile
+                    | TokenKind::Restrict
+                    | TokenKind::Atomic
+            )
+            || self.token_starts_type_name(token)
     }
 
     fn attribute_sequence_starts_declaration(&self) -> bool {
         let mut position = self.pos;
-        while self.tokens.get(position).map(|token| token.kind) == Some(TokenKind::Attribute) {
-            position += 1;
-            if self.tokens.get(position).map(|token| token.kind) != Some(TokenKind::LParen)
-                || self.tokens.get(position + 1).map(|token| token.kind) != Some(TokenKind::LParen)
-            {
+        while self.attribute_starts_at(position) {
+            let Some(end) = self.attribute_specifier_end(position) else {
                 return false;
-            }
-            let mut depth = 0_u32;
-            while let Some(token) = self.tokens.get(position) {
-                match token.kind {
-                    TokenKind::LParen => depth += 1,
-                    TokenKind::RParen => {
-                        if depth == 0 {
-                            return false;
-                        }
-                        depth -= 1;
-                        if depth == 0 {
-                            position += 1;
-                            break;
-                        }
-                    }
-                    TokenKind::Eof => return false,
-                    _ => {}
-                }
-                position += 1;
-            }
-            if depth != 0 {
-                return false;
-            }
+            };
+            position = end;
         }
         let Some(token) = self.tokens.get(position) else {
             return false;
