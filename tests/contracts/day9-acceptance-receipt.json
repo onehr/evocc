@@ -514,7 +514,7 @@
     "revision": "1.9.76",
     "sha256": "d62ef30f0983236548cd2314fbd948e1beab42c24831cb5f8baa28c3dfa5916c"
   },
-  "cutLine": "Ir admission and its native consumer path are complete on 2055f26: changed gate 796 passed, zero failed, isolated offline replay green, Darwin/Linux execution green. Sealed survey 20260907T074335Z-32186 measures 52 clean and 2746 diagnosed, no timeout/panic/unavailable, zero clean regressions. Ir and E3101 first errors are gone; the new frontier is Kr in 2744 units, computed goto in one and frame-address in one. This is not whole-kernel assembly/link/boot success; older benchmark and K1 evidence is unchanged.",
+  "cutLine": "Sealed lowering survey 20260909T112601Z-99781 measures e04fc4c: 2008 clean / 790 diagnosed of 2798, zero panic, timeout or unavailable and zero clean regressions. This is not whole-kernel assembly/link/boot success. Dependent gate still has the declared constant-folding RED; overall compiler closure remains OPEN.",
   "registerAlternativeProgress": {
     "status": "COMPLETE_NATIVE_GATE_REPLAY_AND_SURVEY",
     "authorityCommit": "8ffc1dc",
@@ -588,71 +588,215 @@
     }
   },
   "latestLoweringSurvey": {
-    "run": "20260907T074335Z-32186",
-    "subject": "2055f267bf4e877cdc68ea7c0061279cdd0ab337",
-    "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/register-alternative-evocc --action lower --jobs 8 --timeout 60",
-    "capture": ".evidence/full-config-lowering-survey/20260907T074335Z-32186",
-    "binarySha256": "4b998722225b1fcd606b3a33ac0dd3ffbad7c04b4988fec2afb408251f7405b6",
-    "sealSha256": "0f45445415ebd7b2be782b751c9d665c1ba706c5be82ae59c43d18ce49555446",
-    "resultsSha256": "016f5152bc25593bafbfa4b17c38d7c3ca5df201e61753b010e0fa7744bd6e36",
+    "run": "20260909T112601Z-99781",
+    "subject": "e04fc4c429902ecc7af782ab2be00f2b06a00c17",
+    "command": "python3 -u tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --evocc target/frontend/release/evocc --action lower --jobs 2 --timeout 60",
+    "capture": ".evidence/full-config-lowering-survey/20260909T112601Z-99781",
+    "binarySha256": "45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823",
+    "sealSha256": "3bfa707577ee1274c5893f67c76aab150c2e327a7f92a81c9f4f0e1c03674aa1",
+    "resultsSha256": "17834904f7b09c718d63be38afdfa8b0abf7ab5c39abfcb46410fd4a4129c120",
     "verifiedCaptureFiles": 5603,
     "classifications": {
-      "clean": 52,
-      "diagnosed": 2746,
+      "clean": 2008,
+      "diagnosed": 790,
       "panic": 0,
       "timeout": 0,
       "unavailable": 0
     },
     "firstDiagnosticCounts": {
-      "E3021": 2744,
+      "E2939": 4,
+      "E3021": 7,
+      "E3026": 86,
       "E3029": 1,
-      "E3031": 1
+      "E3030": 2,
+      "E3031": 1,
+      "E3034": 1,
+      "E3046": 1,
+      "E3101": 687
     },
     "comparison": {
-      "previousRun": "20260907T043340Z-13363",
-      "previousClean": 47,
-      "attribution": "Three newly clean zstd units were already clean in the prior targeted identity/CFG replay. list_sort.c and plist.c are the additional clean units after Ir admission; do not attribute all five to Ir alone.",
-      "cleanToClean": 47,
-      "diagnosedToClean": 5,
-      "diagnosedToDiagnosed": 2746,
+      "previousRun": "20260909T031003Z-16402",
+      "previousClean": 90,
+      "cleanToClean": 90,
+      "diagnosedToClean": 1918,
+      "diagnosedToDiagnosed": 790,
       "cleanRegressions": 0,
-      "newClean": [
-        "lib/list_sort.c",
-        "lib/plist.c",
-        "lib/zstd/common/entropy_common.c",
-        "lib/zstd/decompress/huf_decompress.c",
-        "lib/zstd/decompress/zstd_decompress_block.c"
-      ]
+      "attribution": "Combined arithmetic, ABI, assembly-label, incomplete-layout and unused-internal-function repairs; not a per-patch gain."
     },
     "timing": {
       "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
-      "maximumWallMilliseconds": 24084.976,
-      "medianWallMilliseconds": 3274.92,
+      "maximumWallMilliseconds": 18535.361,
+      "medianWallMilliseconds": 2434.169,
       "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
-      "parallelism": 8,
-      "perUnitTimeoutSeconds": 60
+      "parallelism": 2,
+      "perUnitTimeoutSeconds": 60,
+      "load": "Two survey workers; occasional focused single-job debug compilation in an isolated worktree. Not controlled performance evidence."
     },
     "diagnosticSubclasses": [
       {
+        "code": "E3101",
+        "message": "zero-byte global layout",
+        "units": 372,
+        "example": "arch/arm64/kernel/idle.c"
+      },
+      {
+        "code": "E3101",
+        "message": "unreachable CFG block",
+        "units": 225,
+        "example": "arch/arm64/kernel/smp_spin_table.c"
+      },
+      {
+        "code": "E3026",
+        "message": "evoir-lowering-failed: not-lowered: static-relocation",
+        "units": 86,
+        "example": "drivers/acpi/button.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: duplicate label reached lowering",
+        "units": 21,
+        "example": "arch/arm64/kvm/mmu.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: global initializer is not an admitted integer constant",
+        "units": 20,
+        "example": "arch/arm64/crypto/aes-ce-glue.c"
+      },
+      {
+        "code": "E3101",
+        "message": "external object treated as automatic storage",
+        "units": 11,
+        "example": "arch/arm64/kernel/vdso.c"
+      },
+      {
+        "code": "E3101",
+        "message": "zero-byte record ABI",
+        "units": 10,
+        "example": "io_uring/futex.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: object subvalue is neither an integer nor pointer",
+        "units": 8,
+        "example": "arch/arm64/kvm/hyp/nvhe/ffa.c"
+      },
+      {
         "code": "E3021",
-        "message": "unsupported assembly input constraint Kr or operand type",
-        "units": 2744,
-        "example": "arch/arm64/include/asm/atomic_ll_sc.h:278"
+        "message": "evoir-lowering-failed: not-lowered: asm: i",
+        "units": 6,
+        "example": "net/ipv4/arp.c"
+      },
+      {
+        "code": "E2939",
+        "message": "unsupported-wide-bit-field-promotion",
+        "units": 4,
+        "example": "drivers/irqchip/irq-gic-v2m.c"
+      },
+      {
+        "code": "E3101",
+        "message": "zero-size pointer arithmetic scale",
+        "units": 4,
+        "example": "fs/super.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: effect or temporary edge uses an unavailable environment value",
+        "units": 3,
+        "example": "fs/notify/fanotify/fanotify.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: non-integer scalar type is outside Day 6",
+        "units": 3,
+        "example": "kernel/bpf/btf.c"
+      },
+      {
+        "code": "E3030",
+        "message": "evoir-lowering-failed: not-lowered: varargs",
+        "units": 2,
+        "example": "net/9p/client.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: external object has no object layout",
+        "units": 2,
+        "example": "arch/arm64/kernel/hibernate.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: initializer range lies outside global object",
+        "units": 2,
+        "example": "arch/arm64/kernel/pi/idreg-override.c"
+      },
+      {
+        "code": "E3021",
+        "message": "evoir-lowering-failed: not-lowered: asm: unsupported assembly register binding +r@x30",
+        "units": 1,
+        "example": "arch/arm64/kernel/process.c"
       },
       {
         "code": "E3029",
-        "message": "computed-goto",
+        "message": "evoir-lowering-failed: not-lowered: computed-goto",
         "units": 1,
         "example": "kernel/bpf/core.c"
       },
       {
         "code": "E3031",
-        "message": "frame-address",
+        "message": "evoir-lowering-failed: not-lowered: frame-address",
         "units": 1,
         "example": "arch/arm64/kernel/stacktrace.c"
+      },
+      {
+        "code": "E3034",
+        "message": "evoir-lowering-failed: not-lowered: function-pointer-arithmetic",
+        "units": 1,
+        "example": "arch/arm64/net/bpf_jit_comp.c"
+      },
+      {
+        "code": "E3046",
+        "message": "evoir-lowering-failed: not-lowered: dynamic-stack-allocation",
+        "units": 1,
+        "example": "arch/arm64/kernel/syscall.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: case value is not an integer constant expression",
+        "units": 1,
+        "example": "kernel/signal.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: expression requires the Day-7 object or non-integer model",
+        "units": 1,
+        "example": "kernel/panic.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: generated invalid EvoIR: E3041: symbol-declared-and-defined: 'free_pages'",
+        "units": 1,
+        "example": "mm/page_alloc.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: generated invalid EvoIR: E3041: symbol-declared-and-defined: 'update'",
+        "units": 1,
+        "example": "net/sunrpc/svcauth_unix.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: generated invalid EvoIR: global 'acpi_ex_dump_integer' has a malformed relocation",
+        "units": 1,
+        "example": "drivers/acpi/acpica/exdump.c"
+      },
+      {
+        "code": "E3101",
+        "message": "evoir-lowering-failed: generated invalid EvoIR: global 'acpi_rs_dump_irq' has a malformed relocation",
+        "units": 1,
+        "example": "drivers/acpi/acpica/rsdumpinfo.c"
       }
     ],
-    "completion": "SURVEY_COMPLETE. Ir and E3101 first errors are zero. F4 and the overall compiler milestone remain OPEN; successful lowering is not successful assembly, linking or execution."
+    "completion": "SURVEY_COMPLETE, not compiler closure. 790 diagnosed units remain. Lowering does not prove assembly, linking or execution. Later prototype, array decay, flexible initializer, expression-label and record-cast fixes are not in this subject."
   },
   "completedSerialReplays": {
     "csmith": { "run": "20260907T012857Z", "command": "python3 tools/ladder/csmith.py --campaign all --programs 500 --evocc .build/aggregate-value-evocc", "programs": 1000, "agreeing": 761, "mismatches": 0, "noChecksum": 169, "oracleUnusable": 69, "timeout": 1, "receipt": "tests/contracts/ladder-csmith-receipt.json", "limitation": "This frozen compiler predates always-inline substitution. Non-agree outcomes are not passes." },

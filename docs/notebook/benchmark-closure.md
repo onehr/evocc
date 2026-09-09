@@ -150,6 +150,58 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Original-kernel lowering moves past the assembly-label frontier
+
+The sealed `20260909T112601Z-99781` capture measures `e04fc4c`, executable
+`45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823`:
+2,008 clean and 790 diagnosed out of the same 2,798 units, with no panic,
+timeout or unavailable result. All 5,603 capture files were digest-checked.
+Against `20260909T031003Z-16402`, 1,918 diagnosed units become clean and
+all 90 previously clean units remain clean. This is a combined implementation
+measurement, not 1,918 gains attributable to one patch or a native kernel result.
+
+The first-diagnostic counts are E3101 687, E3026 86, E3021 7, E2939 4,
+E3030 2, and E3029/E3031/E3034/E3046 one each. Source-level subclasses
+include zero-byte globals 372, unreachable CFG blocks 225, duplicate labels
+21, unsupported integer initializer evaluation 20, and array subvalues 8;
+the complete breakdown is in the acceptance receipt. Zero-byte globals,
+record ABI metadata and pointer scaling remain subject to the pending body
+correction, not a validator relaxation.
+
+The run used two workers and a 60-second bound. Median unit wall time was
+2,434.169 ms; maximum was 18,535.361 ms for `hns3_enet.c`. Focused single-job
+debug compilations occasionally ran concurrently in an isolated worktree,
+so these are coarse observations, not controlled performance comparisons.
+
+Subsequent RED/GREEN repairs use canonical composite call prototypes,
+preserve dereferenced array addresses, share flexible-record initialization
+and full-element storage extent, retain conditional edges to labels nested
+inside expressions, and admit same-record casts without dropping volatile
+reads. Original `hcd_queue.c` lowers successfully in a targeted debug replay.
+Original ctest `00216` advances past initialization and record casts but still
+hits the zero-byte-object boundary. Neither targeted observation changes the
+sealed numbers above; original benchmark replays remain required. The disputed
+wide-bit-field shift prototype is not merged.
+
+The dependent gate on `a146cdd`, `CARGO_TARGET_DIR=target/frontend
+CARGO_BUILD_JOBS=2 tools/gate-changed.sh e04fc4c --offline --quiet`, finishes
+with 1,311 passed, one failed and three existing ignored tests across 196
+test-result groups. The sole failure is the retained
+`constant_arithmetic_preserves_the_source_integer_width` RED (C04); its body
+revision is still pending. This is not a green workspace or an isolated replay.
+The separate full-workspace all-targets Clippy run was interrupted to release
+the shared Cargo lock; it is INCOMPLETE, not PASS. Formatting and Ruff passed.
+
+`74c04b5` / `b438861` add and repair block-only extern storage, exclusion of
+same-spelled local symbols from the external table, and expression extension
+prefixes. Their focused execution checks pass 76 Rust tests, including both
+interpreters and native expression evaluation; 118 ladder Python tests and
+`cargo clippy -p evocc-parser -p evocc-lower --lib --offline -- -D warnings`
+pass, as do fmt and Ruff. The superseded include-next rewrite helper and its
+two tests are removed, replaced by direct byte-preservation checks of the
+exported headers. Original benchmark replay without the source adaptations
+remains required; the for-declaration oracle conflict remains refused.
+
 ### Variadic register preservation and internal-body original-program replay
 
 `CARGO_TARGET_DIR=target/frontend python3 -u tools/bench.py musl --no-build
