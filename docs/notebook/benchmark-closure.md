@@ -150,6 +150,35 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Constant edge values and original kernel object replay
+
+`9d4d4a7` adds a tests-only wrong-value regression: the focused suite reports
+17 passes and one failure, with no build errors. For
+`if ((1 ? -1 : 0U) < 0)`, the C-HIR interpreter and sealed GCC-14/Clang-19
+at O0/O2 return zero, but the previous lowering returns one. `b7afc89`
+reuses the existing C-HIR integer type query to apply the conditional common
+type before selecting an edge, including omitted-middle conditionals;
+checked runtime arithmetic is unchanged.
+
+The six focused lower suites pass 115 tests with zero failures:
+`cargo test -p evocc-lower --test switch_labels --test expression_value_flow
+--test computed_goto_lowering --test static_storage_and_discard
+--test front_end_resolved_forms --test day6_g3_differential --offline
+--no-fail-fast`. C-HIR/lower library Clippy with `-D warnings`, fmt and Ruff
+pass. The preceding broad `gate-changed.sh 33bc3d4 --offline` cold build was
+interrupted after the new wrong value was confirmed; it is INCOMPLETE, not
+a passing gate. The separate authority-pending constant-overflow RED remains
+open, and no new workspace or isolated-replay total is claimed.
+
+Release digest `de76e7d611b6fa7660922b8f78f7a56793fba973b6abb40aeaf2235de9b3b46b`
+executes both `conditional-common-type.c` and `constant-switch-linkage.c`
+with return zero in C-HIR, EvoIR, and the emitted assembly linked and run
+using each sealed compiler. The original Kbuild replay
+`.evidence/k1/constant-edges-20260909T1621Z/` assembles all three selected
+objects (`debug-monitors.o`, `entry-common.o`, `configs.o`) with exact
+defined-symbol parity. It installs nothing and performs no kernel relink
+or boot; these are targeted checks, not an updated K1 milestone count.
+
 ### Original-kernel lowering moves past the assembly-label frontier
 
 The sealed `20260909T112601Z-99781` capture measures `e04fc4c`, executable

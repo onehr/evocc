@@ -6647,3 +6647,10 @@ Section 10.1.9 explicitly preserves `section` without applying it, so this recor
 Both sealed compilers put the two objects of `.evidence/builtin-probes/20260909-object-sections/section.c` into the named sections with their declared alignment (`results.txt`).
 In K1 run `measure-20260909T133504Z`, the reference `cpuinfo.o` places its 360-byte `cpu_data` in `.data..percpu`, while the emitted object places it in `.bss`; the isolated substitution links but its boot logs a paging Oops before the timeout, and no corrected-section boot has yet established that this is the sole cause.
 One isolated failing unit is measured, no new diagnostic is allocated, and a body contract for section metadata, textual form and emission remains required.
+
+### Memory and general assembly operand probes
+
+The reviewed `m`/`=m`/`+m`/`g` expansion remains pending a Section 3.11 body change; these probes do not extend the current constraint vocabulary.
+Both sealed compilers at O0/O2 run `.evidence/builtin-probes/20260910-memory-constraints/memory.c` with output `7 14 3` and `general.c` with output `8`, all exiting zero (`results.txt`), covering memory read/write and exactly-once operand evaluation.
+The retained first probe `operands.c` is not consensus evidence: Clang-19 O0 selects memory for `g` and rejects its register-only `mov` template, so a template that assumes `g` always chooses a register is not a valid test of that operand class.
+No diagnostic is allocated, no original-program gain is claimed, and the eight successful runs do not establish a universal oracle register-selection rule.
