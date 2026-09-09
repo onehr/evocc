@@ -159,14 +159,14 @@ fn repeated_gnu_extension_prefixes_are_trivia_on_file_and_block_declarations() {
 }
 
 #[test]
-fn gnu_extension_is_not_silently_dropped_outside_a_declaration_prefix() {
+fn gnu_extension_rejects_a_missing_declaration_or_expression() {
     let cases = [
         ("int __extension__; int after;\n", "E1001", "__extension__"),
         ("__extension__ value = 1; int after;\n", "E1001", "value"),
         (
-            "int f(void) { return __extension__ 1; } int after;\n",
+            "int f(void) { return __extension__ ; } int after;\n",
             "E1003",
-            "__extension__",
+            ";",
         ),
     ];
 

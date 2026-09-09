@@ -25,6 +25,61 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn block_external_storage_is_not_inferred_from_lexical_scope_or_spelling() {
+    for source in [
+        "char *f(void){extern char a[];return a;} int main(void){return f()==0;}",
+        "int main(void){extern char a[];static char *p=a;return p!=a;}",
+        "int main(void){extern int x;return &x==0;}",
+        "void update(void){} void(*p)(void)=update;int f(int update){int*q=&update;return*q;}int main(void){return f(3)!=3;}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n", "{mode}: {source}");
+        }
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        assert!(module.extern_objects.iter().all(|object| object.symbol != "update"));
+    }
+}
+
+#[test]
+fn extension_expression_prefixes_preserve_values_and_side_effects() {
+    let source = r#"
+        #define USE(x) __extension__ (x)
+        int calls;
+        int once(void) { return ++calls; }
+        int main(void) {
+            int x = __extension__ __extension__ once();
+            __extension__ x++;
+            int y = 2 * __extension__ (x + 1);
+            for (int i = 0; i < 2; ++i) y++;
+            for (__extension__ x = 0; x < 2; ++x) y++;
+            _Static_assert(__extension__ 3 == 3, "constant");
+            return USE(calls != 1 || x != 2 || y != 10);
+        }
+    "#;
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n");
+    }
+    for source in [
+        "int f(void){for(__extension__ int i=0;i<2;++i){}return 0;}",
+        "int f(void){return __extension__ ;}",
+    ] {
+        assert!(!run(source, "--parse-only").status.success(), "{source}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "extension-expressions");
+}
+
+#[test]
 fn compatible_record_casts_preserve_the_value_and_operand_effects() {
     let source = r#"
         struct S { int a; };

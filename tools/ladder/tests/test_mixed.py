@@ -165,6 +165,7 @@ class PreparationPreservesSource(unittest.TestCase):
 
     def test_variable_length_profile_macro_comes_from_the_compiler(self):
         self.assertFalse(any('__STDC_NO_VLA__' in flag for flag in mixed.SYSROOT_DEFINES))
+        self.assertFalse(any('__extension__' in flag for flag in mixed.SYSROOT_DEFINES))
 
     def test_supported_specifiers_and_whitespace_are_not_deleted(self):
         contents = (

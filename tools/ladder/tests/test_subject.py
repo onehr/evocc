@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 # Loaded by path: the lane's directory holds files named for their subjects,
 # and ``zlib`` is a standard library module, so that directory must not go on
@@ -148,6 +149,28 @@ class EvoccArgvTest(unittest.TestCase):
         argv, _ = self.command(f"gcc -include {TREE}/lib/zstd.h -c -o a.o a.c\n")
         self.assertIn("-include", argv)
         self.assertIn(f"{self.tree}/lib/zstd.h", argv)
+
+
+class SysrootSourceTest(unittest.TestCase):
+    def test_supported_source_tokens_reach_the_compiler_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "original"
+            source.mkdir()
+            header = source / "header.h"
+            contents = (
+                b"#include_next <header.h>\n"
+                b"struct S { __extension__ int x; };\n"
+                b"\f\vint f(void){return __extension__ 0;}\n"
+            )
+            header.write_bytes(contents)
+            with mock.patch.object(ladder, "exported_sysroot", return_value=source), \
+                    mock.patch.object(ladder, "BUILD", root):
+                for force in (False, True):
+                    prepared, counts = ladder.adjust_sysroot(force=force)
+                    self.assertEqual((prepared / "header.h").read_bytes(), contents)
+                    self.assertEqual(prepared, source)
+                    self.assertEqual(sum(counts.values()), 0)
 
 
 class IncludeNextTest(unittest.TestCase):
