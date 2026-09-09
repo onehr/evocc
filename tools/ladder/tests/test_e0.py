@@ -15,6 +15,86 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_irrelevant_foreign_predicates_do_not_block_a_selector(self):
+        self.assertFalse(e0.target_matches('nvptx-*-* && { ! nvptx_softstack }'))
+        self.assertTrue(e0.target_matches('aarch64*-*-* || unknown_foreign_predicate'))
+        with self.assertRaises(ValueError):
+            e0.target_matches('aarch64*-*-* && unknown_required_predicate')
+
+    def test_measured_target_requirements_do_not_stand_for_compiler_coverage(self):
+        requirements = [
+            'trampolines', 'fileio', 'mmap', 'signal', 'fpic', 'c99_runtime',
+            'stdint_types', 'double64plus', 'unwrapped', 'run_expensive_tests', 'dfp', 'dfprt',
+        ]
+        for requirement in requirements:
+            with self.subTest(requirement=requirement):
+                self.assertTrue(e0.target_matches(requirement))
+        self.assertFalse(e0.target_matches('newlib_nano_io'))
+        self.assertFalse(e0.target_matches('stack_size'))
+
+    def test_original_board_requirements_and_annotations_are_consumed(self):
+        source = '''/* { dg-add-options stack_size } */
+/* { dg-add-options ieee } */
+/* { dg-require-stack-size "100000 * 4 + 1024" } */
+/* { dg-require-weak "" } */
+/* { dg-require-alias "" } */
+/* { dg-xfail-run-if "foreign platform" { nvptx-*-* } } */
+/* { dg-prune-output "unused warning" } */
+int main(void){return 0;}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'probe.c'
+            path.write_text(source)
+            options = e0.program_options(path)
+        self.assertEqual(options['unhandled'], [])
+        self.assertEqual(options.get('applicability', []), [])
+        self.assertEqual(options['applied'], [])
+        self.assertIn('unused warning', str(options.get('annotations')))
+        self.assertIn('stack_size', str(options.get('annotations')))
+
+    def test_stack_requirements_are_bounded_arithmetic_not_executable_expressions(self):
+        for amount, status in [('0x80100', None), ('8*100*100', None), ('1 + 8388608', False), ('__import__("os")', True)]:
+            with self.subTest(amount=amount), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / 'probe.c'
+                path.write_text('/* { dg-require-stack-size {' + amount + '} } */')
+                options = e0.program_options(path)
+                reasons = options.get('applicability', [])
+                if status is None:
+                    self.assertEqual(reasons, [])
+                else:
+                    self.assertEqual(len(reasons), 1)
+                    self.assertEqual(bool(reasons[0].get('unresolved')), status)
+
+    def test_expected_failure_never_turns_a_failed_execution_into_pass_or_exclusion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / 'src').mkdir()
+            (work / 'asm').mkdir()
+            (work / 'src/probe.c').write_text('/* { dg-xfail-run-if "known issue" { aarch64*-*-* } } */\nint main(void){return 1;}')
+            with patch.object(e0, 'sh', return_value=SimpleNamespace(returncode=0, stdout='ret\n', stderr='')):
+                row = e0.emit(Path('/compiler'), work, ['probe'], [])['probe']
+            self.assertEqual(row['emit'], 'emitted')
+            self.assertIn('known issue', str(row['options'].get('annotations')))
+            with patch.object(e0, 'sh', return_value=SimpleNamespace(returncode=0, stdout='probe fail rc=1\n', stderr='')):
+                self.assertEqual(e0.run_in_container(work)['probe'], {'run': 'fail', 'exit': 1})
+
+    def test_declared_timeout_factor_reaches_every_execution_without_changing_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / 'src').mkdir()
+            (work / 'asm').mkdir()
+            (work / 'src/probe.c').write_text('/* { dg-timeout-factor 8 } */\nint main(void){return 0;}')
+            with patch.object(e0, 'sh', return_value=SimpleNamespace(returncode=0, stdout='ret\n', stderr='')) as run:
+                row = e0.emit(Path('/compiler'), work, ['probe'], [])['probe']
+                self.assertEqual(row['emit'], 'emitted')
+                self.assertEqual(run.call_args.kwargs['timeout'], 480)
+                e0.interpreter_verdict(Path('/compiler'), work, 'probe', [])
+                self.assertEqual(run.call_args.kwargs['timeout'], 240)
+            with patch.object(e0, 'sh', return_value=SimpleNamespace(returncode=0, stdout='probe pass\n', stderr='')):
+                e0.run_in_container(work)
+            self.assertEqual((work / 'src/probe.timeout').read_text().strip(), '80')
+            self.assertIn('timeout "$limit"', (work / 'run.sh').read_text())
+
     def test_inapplicable_requirements_cannot_be_reported_as_passes(self):
         for directive, reason in [
             ('/* { dg-options "-fwrapv -fnot-an-option" } */', '-fnot-an-option'),
