@@ -253,10 +253,10 @@ def ladder() -> None:
     c.text(60, 64, "The evaluation ladder", 34, TEXT, "700")
     c.text(60, 96, "each program is pinned to a release and judged by its own test suite", 17, MUTED)
     groups = [
-        ("compiler test suites", BLUE, [("E0a", "GCC C torture", "GCC 16.2", "725 / 1,692 pass"), ("E0b", "c-testsuite", "5c7275656d75", "187 / 220 pass"), ("E0c", "Csmith, no float", "0cdc710315cf", "differential")]),
-        ("integer programs", CYAN, [("E1", "zlib", "1.3.2", "make test"), ("E2", "zstd", "1.5.7", "make check"), ("E4", "Mbed TLS", "4.2.0", "selftest"), ("E5", "TinyCC", "0.9.27", "self-hosted tests"), ("E6", "toybox", "0.8.14", "make tests"), ("E7", "musl + libc-test", "1.2.6", "libc-test")]),
-        ("after the floating-point rung F1", GRAY, [("E3", "cJSON", "1.7.19", "Unity"), ("E8", "PolyBench/C", "4.2.1-beta", "reference outputs"), ("E9", "llvm-test-suite", "llvmorg-23.1.0", "SingleSource"), ("E10", "jq", "1.8.2", "make check"), ("E11", "Lua", "5.5.1", "official suite"), ("E12", "SQLite", "3.53.4", "TH3 / TCL")]),
-        ("Linux 6.18.44", GREEN, [("K5", "lib/ + kernel/", "mixed link", "boots"), ("K6", "full configuration", "EvoCC alone", "boots to init"), ("K7", "kselftest", "in initramfs", "pass rate")]),
+        ("compiler test suites", BLUE, [("E0a", "GCC C torture", "GCC 16.2", "1,265 / 1,692 pass"), ("E0b", "c-testsuite", "5c7275656d75", "207 / 220 pass"), ("E0c", "Csmith, no float", "0cdc710315cf", "932 / 1,000 agree, 0 wrong")]),
+        ("integer programs", CYAN, [("E1", "zlib", "1.3.2", "19 / 19 units pass"), ("E2", "zstd", "1.5.7", "2 / 44 units"), ("E4", "Mbed TLS", "4.2.0", "selftest"), ("E5", "TinyCC", "0.9.27", "7 / 11 units"), ("E6", "toybox", "0.8.14", "195 / 203 units"), ("E7", "musl + libc-test", "1.2.6", "494 / 1,339 units")]),
+        ("after the floating-point rung F1", GRAY, [("E3", "cJSON", "1.7.19", "0 / 2 units, needs FP"), ("E8", "PolyBench/C", "4.2.1-beta", "reference outputs"), ("E9", "llvm-test-suite", "llvmorg-23.1.0", "SingleSource"), ("E10", "jq", "1.8.2", "make check"), ("E11", "Lua", "5.5.1", "official suite"), ("E12", "SQLite", "3.53.4", "TH3 / TCL")]),
+        ("Linux 6.18.44", GREEN, [("K5", "lib/ + kernel/", "mixed link", "76 units boot"), ("K6", "full configuration", "EvoCC alone", "boots to init"), ("K7", "kselftest", "in initramfs", "pass rate")]),
     ]
     x0, y_track = 60, 330
     total = sum(len(g[2]) for g in groups)
@@ -269,7 +269,7 @@ def ladder() -> None:
         for code, subject, pin, oracle in rungs:
             cx = x + step / 2
             above = k % 2 == 0
-            done = code in ("E0a", "E0b")
+            done = code in ("E0a", "E0b", "E0c", "E1", "E2", "E3", "E5", "E6", "E7", "K5")
             c.raw(f'<circle cx="{cx}" cy="{y_track}" r="8" fill="{col if done else BG}" stroke="{col}" stroke-width="2"/>')
             ty = y_track - 100 if above else y_track + 40
             c.line(cx, y_track - 10 if above else y_track + 10, cx, y_track - 30 if above else y_track + 30, col, 1, 0.6)
@@ -282,7 +282,7 @@ def ladder() -> None:
         c.line(gx0 + 6, y_track + 120, x - 6, y_track + 120, col, 1.2, 0.8)
         c.text((gx0 + x) / 2, y_track + 142, name, 13, col, "600", SANS, "middle", 1, 1)
         x += 40
-    c.text(60, 520, "filled: run at least once. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.", 13, MUTED)
+    c.text(60, 520, "filled: measured at least once, with its reading. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.", 13, MUTED)
     c.text(60, 544, "the backend has no floating point yet; the programs after F1 wait for it.", 13, MUTED)
     c.text(60, 590, "github.com/onehr/evocc  ·  docs/roadmap.md", 14, MUTED, "normal", MONO)
     c.write("evocc-ladder")
@@ -295,10 +295,11 @@ def milestones() -> None:
     items = [
         ("parse the kernel", "2,798 / 2,798", "done"),
         ("backend", "AArch64, two targets", "done"),
-        ("kernel objects boot", "12 units by EvoCC", "done"),
-        ("lower every unit", "30 / 2,798 so far", "now"),
-        ("machine forms", "varargs, asm, relocs", "now"),
-        ("outside programs", "c-testsuite, torture, zlib", "now"),
+        ("kernel objects boot", "76 units by EvoCC", "done"),
+        ("rules proved", "55 rules, Lean 4", "done"),
+        ("lower every unit", "90 / 2,798 so far", "now"),
+        ("machine forms", "asm, alignment, 128-bit", "now"),
+        ("outside programs", "torture 1,265 / 1,692", "now"),
         ("most kernel units", "by EvoCC, boots", "next"),
         ("whole kernel", "EvoCC alone, boots", "later"),
         ("floating point", "then SQLite, Lua", "later"),

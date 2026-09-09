@@ -7,65 +7,65 @@
 <text x="97.77777777777777" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0a</text>
 <text x="97.77777777777777" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC C torture</text>
 <text x="97.77777777777777" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC 16.2</text>
-<text x="97.77777777777777" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">725 / 1,692 pass</text>
+<text x="97.77777777777777" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">1,265 / 1,692 pass</text>
 <circle cx="173.33333333333331" cy="330" r="8" fill="#58a6ff" stroke="#58a6ff" stroke-width="2"/>
 <line x1="173.33333333333331" y1="340" x2="173.33333333333331" y2="360" stroke="#58a6ff" stroke-width="1" opacity="0.6"/>
 <text x="173.33333333333331" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0b</text>
 <text x="173.33333333333331" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">c-testsuite</text>
 <text x="173.33333333333331" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">5c7275656d75</text>
-<text x="173.33333333333331" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">187 / 220 pass</text>
-<circle cx="248.88888888888886" cy="330" r="8" fill="#0b1117" stroke="#58a6ff" stroke-width="2"/>
+<text x="173.33333333333331" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">207 / 220 pass</text>
+<circle cx="248.88888888888886" cy="330" r="8" fill="#58a6ff" stroke="#58a6ff" stroke-width="2"/>
 <line x1="248.88888888888886" y1="320" x2="248.88888888888886" y2="300" stroke="#58a6ff" stroke-width="1" opacity="0.6"/>
 <text x="248.88888888888886" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0c</text>
 <text x="248.88888888888886" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">Csmith, no float</text>
 <text x="248.88888888888886" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">0cdc710315cf</text>
-<text x="248.88888888888886" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">differential</text>
+<text x="248.88888888888886" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">932 / 1,000 agree, 0 wrong</text>
 <line x1="66" y1="450" x2="280.66666666666663" y2="450" stroke="#58a6ff" stroke-width="1.2" opacity="0.8"/>
 <text x="173.33333333333331" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#58a6ff" text-anchor="middle" opacity="1" letter-spacing="1">compiler test suites</text>
-<circle cx="364.4444444444444" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
+<circle cx="364.4444444444444" cy="330" r="8" fill="#79c0ff" stroke="#79c0ff" stroke-width="2"/>
 <line x1="364.4444444444444" y1="340" x2="364.4444444444444" y2="360" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="364.4444444444444" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E1</text>
 <text x="364.4444444444444" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">zlib</text>
 <text x="364.4444444444444" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">1.3.2</text>
-<text x="364.4444444444444" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">make test</text>
-<circle cx="439.99999999999994" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
+<text x="364.4444444444444" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">19 / 19 units pass</text>
+<circle cx="439.99999999999994" cy="330" r="8" fill="#79c0ff" stroke="#79c0ff" stroke-width="2"/>
 <line x1="439.99999999999994" y1="320" x2="439.99999999999994" y2="300" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="439.99999999999994" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E2</text>
 <text x="439.99999999999994" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">zstd</text>
 <text x="439.99999999999994" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">1.5.7</text>
-<text x="439.99999999999994" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">make check</text>
+<text x="439.99999999999994" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">2 / 44 units</text>
 <circle cx="515.5555555555555" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
 <line x1="515.5555555555555" y1="340" x2="515.5555555555555" y2="360" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="515.5555555555555" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E4</text>
 <text x="515.5555555555555" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">Mbed TLS</text>
 <text x="515.5555555555555" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">4.2.0</text>
 <text x="515.5555555555555" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">selftest</text>
-<circle cx="591.1111111111111" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
+<circle cx="591.1111111111111" cy="330" r="8" fill="#79c0ff" stroke="#79c0ff" stroke-width="2"/>
 <line x1="591.1111111111111" y1="320" x2="591.1111111111111" y2="300" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="591.1111111111111" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E5</text>
 <text x="591.1111111111111" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">TinyCC</text>
 <text x="591.1111111111111" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">0.9.27</text>
-<text x="591.1111111111111" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">self-hosted tests</text>
-<circle cx="666.6666666666666" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
+<text x="591.1111111111111" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">7 / 11 units</text>
+<circle cx="666.6666666666666" cy="330" r="8" fill="#79c0ff" stroke="#79c0ff" stroke-width="2"/>
 <line x1="666.6666666666666" y1="340" x2="666.6666666666666" y2="360" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="666.6666666666666" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E6</text>
 <text x="666.6666666666666" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">toybox</text>
 <text x="666.6666666666666" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">0.8.14</text>
-<text x="666.6666666666666" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">make tests</text>
-<circle cx="742.2222222222222" cy="330" r="8" fill="#0b1117" stroke="#79c0ff" stroke-width="2"/>
+<text x="666.6666666666666" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">195 / 203 units</text>
+<circle cx="742.2222222222222" cy="330" r="8" fill="#79c0ff" stroke="#79c0ff" stroke-width="2"/>
 <line x1="742.2222222222222" y1="320" x2="742.2222222222222" y2="300" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
 <text x="742.2222222222222" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E7</text>
 <text x="742.2222222222222" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">musl + libc-test</text>
 <text x="742.2222222222222" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">1.2.6</text>
-<text x="742.2222222222222" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">libc-test</text>
+<text x="742.2222222222222" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">494 / 1,339 units</text>
 <line x1="332.66666666666663" y1="450" x2="773.9999999999999" y2="450" stroke="#79c0ff" stroke-width="1.2" opacity="0.8"/>
 <text x="553.3333333333333" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#79c0ff" text-anchor="middle" opacity="1" letter-spacing="1">integer programs</text>
-<circle cx="857.7777777777777" cy="330" r="8" fill="#0b1117" stroke="#4a5462" stroke-width="2"/>
+<circle cx="857.7777777777777" cy="330" r="8" fill="#4a5462" stroke="#4a5462" stroke-width="2"/>
 <line x1="857.7777777777777" y1="340" x2="857.7777777777777" y2="360" stroke="#4a5462" stroke-width="1" opacity="0.6"/>
 <text x="857.7777777777777" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#4a5462" text-anchor="middle" opacity="1.0" letter-spacing="0">E3</text>
 <text x="857.7777777777777" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">cJSON</text>
 <text x="857.7777777777777" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">1.7.19</text>
-<text x="857.7777777777777" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">Unity</text>
+<text x="857.7777777777777" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">0 / 2 units, needs FP</text>
 <circle cx="933.3333333333333" cy="330" r="8" fill="#0b1117" stroke="#4a5462" stroke-width="2"/>
 <line x1="933.3333333333333" y1="320" x2="933.3333333333333" y2="300" stroke="#4a5462" stroke-width="1" opacity="0.6"/>
 <text x="933.3333333333333" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#4a5462" text-anchor="middle" opacity="1.0" letter-spacing="0">E8</text>
@@ -98,12 +98,12 @@
 <text x="1235.5555555555557" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">TH3 / TCL</text>
 <line x1="825.9999999999999" y1="450" x2="1267.3333333333335" y2="450" stroke="#4a5462" stroke-width="1.2" opacity="0.8"/>
 <text x="1046.6666666666667" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#4a5462" text-anchor="middle" opacity="1" letter-spacing="1">after the floating-point rung F1</text>
-<circle cx="1351.1111111111113" cy="330" r="8" fill="#0b1117" stroke="#3fb950" stroke-width="2"/>
+<circle cx="1351.1111111111113" cy="330" r="8" fill="#3fb950" stroke="#3fb950" stroke-width="2"/>
 <line x1="1351.1111111111113" y1="340" x2="1351.1111111111113" y2="360" stroke="#3fb950" stroke-width="1" opacity="0.6"/>
 <text x="1351.1111111111113" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">K5</text>
 <text x="1351.1111111111113" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">lib/ + kernel/</text>
 <text x="1351.1111111111113" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">mixed link</text>
-<text x="1351.1111111111113" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">boots</text>
+<text x="1351.1111111111113" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">76 units boot</text>
 <circle cx="1426.666666666667" cy="330" r="8" fill="#0b1117" stroke="#3fb950" stroke-width="2"/>
 <line x1="1426.666666666667" y1="320" x2="1426.666666666667" y2="300" stroke="#3fb950" stroke-width="1" opacity="0.6"/>
 <text x="1426.666666666667" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">K6</text>
@@ -118,7 +118,7 @@
 <text x="1502.2222222222226" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">pass rate</text>
 <line x1="1319.3333333333335" y1="450" x2="1534.0000000000005" y2="450" stroke="#3fb950" stroke-width="1.2" opacity="0.8"/>
 <text x="1426.666666666667" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#3fb950" text-anchor="middle" opacity="1" letter-spacing="1">Linux 6.18.44</text>
-<text x="60" y="520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">filled: run at least once. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.</text>
+<text x="60" y="520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">filled: measured at least once, with its reading. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.</text>
 <text x="60" y="544" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">the backend has no floating point yet; the programs after F1 wait for it.</text>
 <text x="60" y="590" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc  ·  docs/roadmap.md</text>
 </svg>
