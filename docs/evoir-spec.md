@@ -6633,3 +6633,10 @@ One or more `__extension__` prefixes on an expression leave its type, value and 
 Both sealed compilers at O0/O2 execute `accepted.c` under `.evidence/builtin-probes/20260909-extension-expressions/` with exit zero (`accepted.out`); `forms.c` separately shows disagreement on a prefixed for-initializer declaration, so that declaration form remains refused by the existing E1003 rather than being silently reinterpreted.
 No instruction or diagnostic is added, and a missing operand remains an expression error.
 The mixed-link adapters previously erased this spelling before measurement, so original-program replay without that adaptation is required rather than attributing predicted gains to the focused probe.
+
+### Hidden external visibility requires body authority
+
+Section 10.1.9's preserved-but-not-applied attribute boundary remains authoritative for `visibility("hidden")`; this entry does not authorize new symbol metadata or change default external addressing.
+Both sealed compilers emit direct page-relative address relocations and a hidden undefined symbol for `hidden.c`, versus GOT relocations and default visibility for `default.c`, under `.evidence/builtin-probes/20260909-hidden-extern/` (`results.txt`).
+K1 run `measure-20260909T133504Z` emits GOT accesses in two vDSO units (`vgettimeofday.o`, `vgetrandom.o`) and its combined vDSO link rejects dynamic relocations; individual-unit link isolation is not claimed.
+No diagnostic is allocated, and the missing IR visibility and machine-emission contract remains pending architecture review rather than a passing kernel result.
