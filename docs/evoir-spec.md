@@ -6640,3 +6640,10 @@ Section 10.1.9's preserved-but-not-applied attribute boundary remains authoritat
 Both sealed compilers emit direct page-relative address relocations and a hidden undefined symbol for `hidden.c`, versus GOT relocations and default visibility for `default.c`, under `.evidence/builtin-probes/20260909-hidden-extern/` (`results.txt`).
 K1 run `measure-20260909T133504Z` emits GOT accesses in two vDSO units (`vgettimeofday.o`, `vgetrandom.o`) and its combined vDSO link rejects dynamic relocations; individual-unit link isolation is not claimed.
 No diagnostic is allocated, and the missing IR visibility and machine-emission contract remains pending architecture review rather than a passing kernel result.
+
+### Object section placement requires body authority
+
+Section 10.1.9 explicitly preserves `section` without applying it, so this record does not authorize silently adding section metadata or native placement semantics.
+Both sealed compilers put the two objects of `.evidence/builtin-probes/20260909-object-sections/section.c` into the named sections with their declared alignment (`results.txt`).
+In K1 run `measure-20260909T133504Z`, the reference `cpuinfo.o` places its 360-byte `cpu_data` in `.data..percpu`, while the emitted object places it in `.bss`; the isolated substitution links but its boot logs a paging Oops before the timeout, and no corrected-section boot has yet established that this is the sole cause.
+One isolated failing unit is measured, no new diagnostic is allocated, and a body contract for section metadata, textual form and emission remains required.
