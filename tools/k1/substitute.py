@@ -377,12 +377,18 @@ def check_symbol_parity(rows: list[dict], asm_root: Path, pristine: Path, work: 
     table = defined_symbols(pairs, work)
     for row in assembled:
         unit = row["unit"]
-        mine = {entry.split(" ", 1)[1] for entry in table.get(f"mine/{unit}", [])}
-        theirs = {entry.split(" ", 1)[1] for entry in table.get(f"theirs/{unit}", [])}
+        mine_kinds = {name: kind for kind, name in
+                      (entry.split(" ", 1) for entry in table.get(f"mine/{unit}", []))}
+        their_kinds = {name: kind for kind, name in
+                       (entry.split(" ", 1) for entry in table.get(f"theirs/{unit}", []))}
+        mine = set(mine_kinds)
+        theirs = set(their_kinds)
         missing = sorted(theirs - mine)
         extra = sorted(mine - theirs)
         row["definedSymbols"] = sorted(mine)
+        row["definedSymbolKinds"] = dict(sorted(mine_kinds.items()))
         row["referenceSymbols"] = sorted(theirs)
+        row["referenceSymbolKinds"] = dict(sorted(their_kinds.items()))
         row["missingSymbols"] = missing
         row["extraSymbols"] = extra
 

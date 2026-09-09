@@ -50,7 +50,7 @@ def assembling_units(rows: list[dict]) -> list[str]:
 def linkable_units(rows: list[dict]) -> list[str]:
     """The units that produced an object and can be in one link together.
 
-    Two objects that define the same symbol cannot both be linked, and the
+    Two strong definitions of the same symbol cannot both be linked, and the
     linker says so before anything boots. Reducing the allowlist one relink at
     a time would find that out eventually, at the cost of a relink per pair and
     of both members of every pair; reading it off the survey's symbol tables
@@ -108,13 +108,18 @@ def link_target(unit: str) -> str:
         return "pi"
     if unit.startswith("drivers/firmware/efi/libstub/"):
         return "efi-stub"
+    if unit.startswith("arch/arm64/kvm/hyp/nvhe/") or unit.endswith(".nvhe.o"):
+        # hypcopy prefixes the partially linked object with __kvm_nvhe_.
+        return "hyp-nvhe"
+    if unit.startswith("arch/arm64/kernel/vdso/"):
+        return "vdso"
     return "vmlinux.a"
 
 
 def link_collisions(rows: list[dict]) -> dict:
     """The candidate objects that cannot share a link with each other.
 
-    A symbol defined by two objects in one link target is a multiple
+    A symbol strongly defined by two objects in one link target is a multiple
     definition, and the linker refuses the whole vmlinux over it. The survey
     already records what each
     object defines, so the objects that can never be substituted together are
@@ -122,11 +127,17 @@ def link_collisions(rows: list[dict]) -> dict:
     reduction at a time. Units are grouped into the sets that conflict, so a
     group of size n costs at least n-1 units of the measurement.
     """
-    defined = {
-        row["unit"]: set(row["definedSymbols"])
-        for row in rows
-        if row.get("outcome") in ASSEMBLING_OUTCOMES and row.get("definedSymbols")
-    }
+    defined = {}
+    for row in rows:
+        if row.get("outcome") not in ASSEMBLING_OUTCOMES or not row.get("definedSymbols"):
+            continue
+        kinds = row.get("definedSymbolKinds", {})
+        # Weak, common and GNU-unique definitions coalesce. Older captures
+        # without binding metadata stay conservative, not silently relabelled.
+        defined[row["unit"]] = {
+            symbol for symbol in row["definedSymbols"]
+            if kinds.get(symbol) not in {"W", "V", "w", "v", "C", "u"}
+        }
     owners: dict[tuple[str, str], list[str]] = {}
     for unit, symbols in defined.items():
         for symbol in symbols:
