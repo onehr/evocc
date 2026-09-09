@@ -150,6 +150,19 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Full-width shift-count edge awaiting body correction
+
+`width-edges.c` in `.evidence/builtin-probes/20260909-wide-bitfield-shapes/`
+compiles and runs under GCC-14 and Clang-19 at O0/O2. For a 40-bit field
+holding `0xffffffffff`, `field << 1UL` remains a conflict: GCC gives
+`0xfffffffffe`, Clang gives `0x1fffffffffe`; same-width addition and
+multiplication agree. The exact command and output are in `width-edges.out`.
+Revision 1.9.90 currently groups left shift with usual-conversion arithmetic;
+the proposed correction is to retain E2939 for a wide-field left operand
+regardless of the shift count's width. Authority was requested; the body is
+unchanged. This does not invalidate the consensus mallocng multiplication
+or the independent vector-save and incomplete-extern repairs.
+
 ### Target-selected wide character original-program replay
 
 `python3 -u tools/bench.py ctest --jobs 2`, subject `b54ae63`, wrapper
