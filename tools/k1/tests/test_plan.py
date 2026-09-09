@@ -114,6 +114,31 @@ class LinkCollisionTest(unittest.TestCase):
         self.assertEqual(found["groups"], [])
         self.assertEqual(found["symbolsDefinedTwice"], 0)
 
+    def test_weak_and_common_definitions_are_not_strong_link_conflicts(self) -> None:
+        for kind in ("W", "V", "C", "u"):
+            rows = self.rows({"strong.o": ["value"], "fallback.o": ["value"]})
+            rows[0]["definedSymbolKinds"] = {"value": "T"}
+            rows[1]["definedSymbolKinds"] = {"value": kind}
+            self.assertEqual(plan.link_collisions(rows)["units"], [], kind)
+            rows[0]["definedSymbolKinds"] = {"value": kind}
+            self.assertEqual(plan.link_collisions(rows)["units"], [], kind)
+
+    def test_missing_binding_metadata_does_not_hide_a_strong_conflict(self) -> None:
+        rows = self.rows({"a.o": ["value"], "b.o": ["value"]})
+        rows[0]["definedSymbolKinds"] = {"value": "D"}
+        self.assertEqual(plan.link_collisions(rows)["units"], ["a.o", "b.o"])
+
+    def test_hypervisor_and_vdso_symbols_have_their_own_link_namespaces(self) -> None:
+        rows = self.rows({
+            "arch/arm64/kvm/hyp/vhe/switch.o": ["switch_to_guest"],
+            "arch/arm64/kvm/hyp/nvhe/switch.nvhe.o": ["switch_to_guest"],
+            "arch/arm64/kvm/hyp/nvhe/../aarch32.nvhe.o": ["saved_state"],
+            "arch/arm64/kvm/hyp/vhe/../aarch32.o": ["saved_state"],
+            "arch/arm64/kernel/vdso/vgettimeofday.o": ["clock_impl"],
+            "kernel/time/time.o": ["clock_impl"],
+        })
+        self.assertEqual(plan.link_collisions(rows)["units"], [])
+
     def test_independent_kernel_link_targets_do_not_collide(self) -> None:
         rows = self.rows({
             "lib/fdt.o": ["fdt_check_header"],
