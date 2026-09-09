@@ -21,6 +21,8 @@ class SourceIdentityTest(unittest.TestCase):
             ('/* { dg-require-effective-target imaginary_target_feature } */', 'imaginary_target_feature'),
             ('/* { dg-skip-if "not this target" { aarch64*-*-* } } */', 'not this target'),
             ('/* { dg-do run { target x86_64-*-* } } */', 'x86_64-*-*'),
+            ('/* { dg-do run { target { { aarch64*-*-* || x86_64-*-* } && x86_64-*-* } } } */', 'target selector'),
+            ('/* { dg-do run { target { { aarch64*-*-* || x86_64-*-* } && x86_64-*-* || riscv*-*-* } } } */', 'target selector'),
         ]:
             with self.subTest(directive=directive), tempfile.TemporaryDirectory() as tmp:
                 work = Path(tmp)
@@ -30,7 +32,8 @@ class SourceIdentityTest(unittest.TestCase):
                 (work / "src/probe.c").write_text(source)
                 with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="ret\n", stderr="")) as run:
                     row = e0.emit(Path("/compiler"), work, ["probe"], [])["probe"]
-                self.assertEqual(row.get("emit"), "not-applicable")
+                expected = 'requirement-unresolved' if 'imaginary_target_feature' in directive else 'not-applicable'
+                self.assertEqual(row.get("emit"), expected)
                 self.assertIn(reason, str(row.get("applicability", {})))
                 self.assertEqual(row.get("sourceSha256"), e0.hashlib.sha256(source.encode()).hexdigest())
                 run.assert_not_called()
@@ -133,7 +136,7 @@ class SourceIdentityTest(unittest.TestCase):
             ('/* { dg-options { "-fwrapv" } } */', ["-fwrapv"], []),
             ('/* { dg-additional-options "-fno-strict-overflow" } */', ["-fno-strict-overflow"], []),
             ('/* { dg-options "-Wno-psabi -fwrapv" } */', ["-fwrapv"], ["-Wno-psabi"]),
-            ('/* { dg-options "-fwrapv" { target x86_64-*-* } } */', [], ["target"]),
+            ('/* { dg-options "-fwrapv" { target x86_64-*-* } } */', [], []),
             ('char *s="/* { dg-options \\\"-fwrapv\\\" } */";', [], []),
         ]:
             with self.subTest(directive=directive), tempfile.TemporaryDirectory() as tmp:
@@ -143,10 +146,14 @@ class SourceIdentityTest(unittest.TestCase):
                 (work / "src/probe.c").write_text(directive + "\nint main(void){return 0;}\n")
                 with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="ret\n", stderr="")) as run:
                     rows = e0.emit(Path("/compiler"), work, ["probe"], [])
-                argv = run.call_args.args[0]
-                self.assertEqual([arg for arg in argv if arg.startswith("-f")], applied)
                 options = rows["probe"].get("options", {})
                 self.assertEqual(options.get("applied"), applied)
+                if options.get('applicability'):
+                    self.assertEqual(rows['probe']['emit'], 'not-applicable')
+                    run.assert_not_called()
+                else:
+                    argv = run.call_args.args[0]
+                    self.assertEqual([arg for arg in argv if arg.startswith("-f")], applied)
                 for item in unhandled:
                     self.assertIn(item, str(options.get("unhandled", [])))
                 if not unhandled:
