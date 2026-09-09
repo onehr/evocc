@@ -88,6 +88,13 @@ fn bracket_attributes_keep_layout_and_function_execution() {
 }
 
 #[test]
+fn type_classification_does_not_require_the_queried_value_to_execute() {
+    agrees(include_str!(
+        "../../../tests/fixtures/type-classification.c"
+    ));
+}
+
+#[test]
 fn builtin_trap_only_terminates_when_reached() {
     agrees("int f(int stop){if(stop)__builtin_trap();return 7;} int main(void){return f(0)!=7;}");
     agrees("int main(void){return sizeof(__builtin_trap())!=1;}");

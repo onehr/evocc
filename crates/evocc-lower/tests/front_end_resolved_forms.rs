@@ -50,6 +50,39 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn type_classification_is_resolved_without_values_or_calls_in_evoir() {
+    assert_pairs(
+        &[
+            (
+                "int f(int x){return __builtin_classify_type(x++);}",
+                "int f(int x){return 1;}",
+            ),
+            (
+                "int f(int *p){return __builtin_classify_type(p);}",
+                "int f(int *p){return 5;}",
+            ),
+            (
+                "int f(void){return __builtin_classify_type(*(double *)0);}",
+                "int f(void){return 8;}",
+            ),
+            (
+                "int f(void){return __builtin_classify_type((struct S{int i;}){0});}",
+                "int f(void){return 12;}",
+            ),
+            (
+                "int f(void){return __builtin_classify_type(\"x\");}",
+                "int f(void){return 5;}",
+            ),
+            (
+                "int f(void){return __builtin_classify_type(*(int (*)(void))0);}",
+                "int f(void){return 5;}",
+            ),
+        ],
+        2100,
+    );
+}
+
+#[test]
 fn bracket_attributes_resolve_through_the_existing_attribute_semantics() {
     assert_pairs(&[
         ("[[gnu::aligned(32)]] int x; int f(void){return x;}",

@@ -124,6 +124,41 @@ fn types_compatible_p_uses_compatible_unqualified_types() {
 }
 
 #[test]
+fn classify_type_is_an_integer_constant_without_evaluating_its_operand() {
+    assert_eq!(
+        evaluate(include_str!(
+            "../../../tests/fixtures/type-classification.c"
+        ))
+        .unwrap(),
+        0,
+    );
+}
+
+#[test]
+fn classify_type_refuses_conflicting_or_malformed_forms() {
+    rejects(
+        "int f(void){return __builtin_classify_type((_Bool)1);}",
+        "E2941",
+    );
+    rejects(
+        "int f(void){_Bool b=0;return __builtin_classify_type(b);}",
+        "E2941",
+    );
+    rejects(
+        "int f(void){return __builtin_classify_type((void)0);}",
+        "E2913",
+    );
+    rejects("int f(void){return __builtin_classify_type();}", "E2909");
+    rejects("int f(void){return __builtin_classify_type(1,2);}", "E2909");
+    rejects("int f(void){return __builtin_classify_type(int);}", "E1003");
+    rejects("int f(void){return __builtin_classify_type;}", "E2910");
+    rejects(
+        "int f(void){return __builtin_classify_type(missing);}",
+        "E2001",
+    );
+}
+
+#[test]
 fn builtin_offsetof_accepts_member_index_and_nested_paths() {
     accepts(concat!(
         "struct s { char c; int i; int arr[4]; struct { short x; } in; }; ",
