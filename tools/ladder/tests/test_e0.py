@@ -15,6 +15,46 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_inapplicable_requirements_cannot_be_reported_as_passes(self):
+        for directive, reason in [
+            ('/* { dg-options "-fwrapv -fnot-an-option" } */', '-fnot-an-option'),
+            ('/* { dg-require-effective-target imaginary_target_feature } */', 'imaginary_target_feature'),
+            ('/* { dg-skip-if "not this target" { aarch64*-*-* } } */', 'not this target'),
+            ('/* { dg-do run { target x86_64-*-* } } */', 'x86_64-*-*'),
+        ]:
+            with self.subTest(directive=directive), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "src").mkdir()
+                (work / "asm").mkdir()
+                source = directive + "\nint main(void){return 0;}\n"
+                (work / "src/probe.c").write_text(source)
+                with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="ret\n", stderr="")) as run:
+                    row = e0.emit(Path("/compiler"), work, ["probe"], [])["probe"]
+                self.assertEqual(row.get("emit"), "not-applicable")
+                self.assertIn(reason, str(row.get("applicability", {})))
+                self.assertEqual(row.get("sourceSha256"), e0.hashlib.sha256(source.encode()).hexdigest())
+                run.assert_not_called()
+
+    def test_target_selected_options_and_skips_are_consumed(self):
+        for directives, expected in [
+            ('/* { dg-options "-fwrapv" { target aarch64*-*-* } } */', ['-fwrapv']),
+            ('/* { dg-options "-fnot-an-option" { target x86_64-*-* } } */', []),
+            ('/* { dg-skip-if "small alignment" { pdp11-*-* } } */', []),
+            ('/* { dg-do run { target { aarch64*-*-* || x86_64-*-* } } } */', []),
+            ('/* { dg-require-effective-target int128 } */', []),
+            ('/* { dg-require-effective-target int32plus } */', []),
+        ]:
+            with self.subTest(directives=directives), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "src").mkdir()
+                (work / "asm").mkdir()
+                (work / "src/probe.c").write_text(directives + "\nint main(void){return 0;}\n")
+                with patch.object(e0, "sh", return_value=SimpleNamespace(returncode=0, stdout="ret\n", stderr="")) as run:
+                    row = e0.emit(Path("/compiler"), work, ["probe"], [])["probe"]
+                self.assertEqual(row.get("emit"), "emitted", row)
+                self.assertEqual(row["options"]["applied"], expected)
+                self.assertEqual([arg for arg in run.call_args.args[0] if arg.startswith('-f')], expected)
+
     def test_original_support_directory_reaches_emission_and_diagnosis(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "run"
