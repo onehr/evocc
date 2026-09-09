@@ -4500,6 +4500,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 let written = self.token_text(&name_token).to_owned();
                 let name = Attribute::canonical_name(&written);
+                if name == "scalar_storage_order" {
+                    self.report("E2940", "unsupported-scalar-storage-order", name_token.span);
+                }
                 let mut span = name_token.span;
                 let mut arguments = Vec::new();
                 if self.peek_kind() == Some(TokenKind::LParen) {
@@ -7919,6 +7922,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // right-associative RHS so recovery resumes at the statement boundary.
         let typed_target = self.typed_update_target(target);
         let value = self.parse_assignment()?;
+        if op != AssignmentOp::Simple {
+            self.require_supported_integer_promotion(target)?;
+            self.require_supported_integer_promotion(value)?;
+        }
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
         let constraint = self.assignment_constraint(op, typed_target.ty(), value);
@@ -8994,6 +9001,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(inferred)
     }
 
+    /// The profile refuses the oracle-dependent promotion of a field wider
+    /// than int. Its storage and explicit conversions remain ordinary C.
+    fn require_supported_integer_promotion(&mut self, expression: &CHirExpr<'_>) -> Option<()> {
+        if self
+            .expression_bit_field_width(expression)
+            .is_some_and(|width| width > u16::from(CIntegerType::INT.bits()))
+        {
+            self.report(
+                "E2939",
+                "unsupported-wide-bit-field-promotion",
+                expression.span(),
+            );
+            return None;
+        }
+        Some(())
+    }
+
     fn expression_bit_field_width(&self, expression: &CHirExpr<'_>) -> Option<u16> {
         let field = match expression {
             CHirExpr::MemoryRead { place, .. } => match place.projections().last()? {
@@ -9515,12 +9539,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if self.match_kind(TokenKind::Colon) {
             let fallback = self.parse_conditional()?;
+            self.require_supported_integer_promotion(condition)?;
+            self.require_supported_integer_promotion(fallback)?;
             let span = self.merge_span(condition.span(), fallback.span());
             return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
         }
         let when_true = self.parse_expression()?;
         self.expect(TokenKind::Colon)?;
         let when_false = self.parse_conditional()?;
+        self.require_supported_integer_promotion(when_true)?;
+        self.require_supported_integer_promotion(when_false)?;
         let span = self.merge_span(condition.span(), when_false.span());
         Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
     }
@@ -9539,6 +9567,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let op_prec = prec(op_kind);
             self.advance();
             let rhs = self.parse_binary(op_prec + 1)?;
+            if !matches!(op, BinaryOp::And | BinaryOp::Or) {
+                self.require_supported_integer_promotion(lhs)?;
+                self.require_supported_integer_promotion(rhs)?;
+            }
             let span = self.merge_span(lhs.span(), rhs.span());
             lhs = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
         }
@@ -9574,6 +9606,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ) {
             let token = self.advance().expect("peeked prefix update");
             let target = self.parse_unary()?;
+            self.require_supported_integer_promotion(target)?;
             let typed_target = self.typed_update_target(target)?;
             let op = if token.kind == TokenKind::PlusPlus {
                 UpdateOp::PreIncrement
@@ -9624,6 +9657,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(op) = unary {
             let token = self.advance().unwrap();
             let operand = self.parse_unary()?;
+            if matches!(op, UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot) {
+                self.require_supported_integer_promotion(operand)?;
+            }
             if op == UnaryOp::AddrOf && self.place_roots_register_object(operand) {
                 self.report("E2928", "address-of-register-object", token.span);
                 return None;
@@ -9935,6 +9971,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
                     let token = self.advance().unwrap();
                     let target = expression;
+                    self.require_supported_integer_promotion(target)?;
                     let typed_target = self.typed_update_target(target)?;
                     let op = if token.kind == TokenKind::PlusPlus {
                         UpdateOp::PostIncrement
@@ -10504,6 +10541,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<Vec<TypeId>> {
         let mut parameters = Vec::with_capacity(arguments.len());
         for argument in arguments {
+            self.require_supported_integer_promotion(argument)?;
             let inferred = self.arithmetic_operand_type(argument)?.ty;
             let promoted = match self.operand_type_class(inferred) {
                 OperandTypeClass::Integer(integer) => {

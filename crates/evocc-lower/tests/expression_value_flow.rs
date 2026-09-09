@@ -465,7 +465,7 @@ fn bit_fields_preserve_neighbors_sign_and_cross_byte_values() {
         "struct __attribute__((packed)) S{unsigned a:9;unsigned b:7;};int main(void){struct S s={511,73};s.a=0;return s.a!=0 || s.b!=73 || sizeof(s)!=2;}",
         "struct S{char head;unsigned b:3;};int main(void){struct S s={42,5};s.b++;return s.head!=42 || s.b!=6;}",
         "struct S{unsigned a:3;unsigned b:5;};struct S s={2,7};int main(void){return ++s.a!=3 || s.b!=7;}",
-        "struct S{unsigned long a:60;unsigned long b:4;};int main(void){struct S s={0xfffffffffffffffUL,9};s.a=3;return s.a!=3 || s.b!=9;}",
+        "struct S{unsigned long a:60;unsigned long b:4;};int main(void){struct S s={0xfffffffffffffffUL,9};s.a=3;unsigned long value=s.a;return value!=3 || s.b!=9;}",
         "struct S{unsigned a:3;};int main(void){struct S s={1};return !((s.a-2)<0);}",
     ] { agrees(source); }
 }
