@@ -5,6 +5,32 @@ raw compilation/execution outcomes remain in the benchmark; a classification
 does not turn a refusal into PASS. The per-program contract binds these
 decisions to the exact source digest and requires the evidence files to exist.
 
+## Csmith unavailable-reference accounting
+
+Capture `.evidence/ladder/csmith/20260909T193124Z/results.jsonl`, subject
+`691b654`, retains all 1,000 original campaign/seed identities: 932 agree and
+68 remain oracle-unusable, with zero compiler refusals or mismatches.
+Every per-program result, including all five execution statuses and checksums,
+is identical to capture `20260909T162714Z`; generator options, defines and
+runtime digests are unchanged. A ten-second timeout alone proves neither
+undefined behavior nor nontermination.
+
+The reviewed two-way analysis labels account for every unavailable identity:
+
+| Campaign | Repeating source path identified | Undetermined; timeout is not a proof |
+|---|---|---|
+| base | 11, 307 (2) | 14, 33, 42, 64, 68, 83, 87, 88, 93, 112, 120, 122, 128, 161, 204, 223, 237, 239, 241, 246, 287, 315, 322, 327, 340, 345, 362, 442, 466 (29) |
+| bitfields | 307, 457 (2) | 11, 14, 21, 24, 26, 54, 69, 83, 104, 114, 115, 122, 128, 132, 146, 162, 173, 192, 206, 234, 239, 240, 242, 259, 292, 322, 340, 352, 357, 360, 362, 404, 455, 466, 481 (35) |
+
+The source arguments for these four identities are in
+[the closure notebook](benchmark-closure.md); the bounded optimization probes
+for both 307 identities and bitfields/457 are in
+`.evidence/builtin-probes/20260909-csmith-loops/results.txt`.
+Their repeating source paths explain why the reference executions do not
+provide a common terminating checksum; they do not turn an unusable input
+into a passing compiler test. All 68 keep their original benchmark label,
+and individual source classification of the other 64 remains open.
+
 ## c-testsuite floating execution
 
 Source pin: `5c7275656d75`, `tests/single-exec`. These seven originals require

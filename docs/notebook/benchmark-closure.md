@@ -129,7 +129,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 1 | Macro push/pop state | `00206` and `pushpop_macro` now pass; definitions, undefined and nested states restored before subsequent uses | `ctest torture` | CLOSED: `20260908T005741.383578Z`, zero regressions |
 | 2 | Object aliases and weak symbols | Three original alias link failures now pass; musl symbol exclusions 167 to 0; replay `20260909T132842Z` substitutes all 1,010 assembled units together out of 1,339, with no additional baseline test failure | `torture musl` | PARTIAL: symbol repair benched; 17 reference-baseline failures and remaining refusals stay visible |
 | 3 | Explicit register operands | Binding reaches IR, allocation and all output edges; native spills and binding validation pass; corrected musl recorder preserves 1,339 identities | `musl` | PARTIAL: 1,010-unit combination measured in `20260909T132842Z`; further failures remain |
-| 4 | Remaining native failures | `20260909T171533Z`: torture retains five raw runtime failures and one alloca link failure; four runtime failures have reviewed not-applicable evidence, while constant-overflow `920730-1` remains OPEN | `ctest torture` | PARTIAL: no lost PASS in this replay; three older lost wide-field passes remain OPEN under the narrowed conflict-only rule |
+| 4 | Remaining native failures | `20260909T201535Z`: torture retains five raw runtime failures and one alloca link failure; four runtime failures have reviewed not-applicable evidence, while constant-overflow `920730-1` remains OPEN | `ctest torture` | PARTIAL: no lost PASS in this replay; three older lost wide-field passes remain OPEN under the narrowed conflict-only rule |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
 | 7 | Remaining kernel refusals | Lowering `20260909T112601Z-99781`: 2,008 clean / 790 diagnosed. Later K1 `measure-20260909T133504Z`: 2,193 assemble / 605 refuse / one assembler refusal out of 2,799, but mixed linking/boot fails | `kernel` | OPEN: targeted constant-edge replay repairs three original objects, not a new successful kernel; object sections, hidden extern visibility and zero-byte layouts remain separate blockers |
@@ -138,17 +138,88 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 10 | Unused system-header types | zstd now has six passing substituted units; all five pretty-function first sites clear, leaving 37 integer-NEON declarations and one E3101 | `zstd cjson` | PARTIAL: C function-name choice and storage-only declarations replayed; integer vector declarations remain OPEN |
 | 11 | TinyCC compiler build | 8/11 assemble and pass together; all original PIE link failures are repaired; three compile refusals remain | `tinycc` | PARTIAL: function-name fix replayed in `20260909T075341Z`; remaining source forms and adapter workarounds OPEN |
 | 12 | Switch, labels, function prototypes | Nested cases, promoted dispatch, discarded abrupt exits, unprototyped calls, enum/integer pointer compatibility and jump-entered storage pass original replay | `ctest torture toybox` | CLOSED for these identified constructs; remaining declaration forms stay in row 13 |
-| 13 | Torture declaration coverage | 10 raw E1001 refusals in `20260909T171533Z` after consuming GNU89 and C11 alignment; the 66 function-declaration placement errors are now zero | `torture` | PARTIAL: implicit declaration placement CLOSED; remaining syntax forms and per-program applicability OPEN |
-| 14 | Integer vectors | 23 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
-| 15 | Variable-length objects | 19 torture refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
-| 16 | Remaining diagnostic classes | Torture 332 raw refusals in `20260909T171533Z`; five-way classifier records 279 compiler failures overall, including unclassified refusals | `torture musl` | OPEN: not every refusal has an evidenced disposition yet |
-| 17 | Torture applicability/options | `20260909T171533Z`: 1,265 PASS / 279 compiler failure / 5 FP deferred / 143 not applicable / 0 oracle-unusable; 1,692 unchanged identities | `torture` | PARTIAL: measured five-way run; additional unclassified programs may still require FP execution |
-| 18 | Unavailable Csmith references | Fresh `20260909T162714Z`, subject `7de9b39`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; every identity, runtime checksum/verdict, generator option and runtime digest unchanged | `csmith` | OPEN: unavailable references are not passes; this subject precedes the later inline-list and character-pointer repairs |
+| 13 | Torture declaration coverage | Six raw E1001 refusals in `20260909T201535Z`; bracket attributes now parse through the shared attribute implementation, and the 66 function-declaration placement errors remain zero | `torture` | PARTIAL: the identified declaration and bracket-attribute defects are replayed; remaining syntax forms and per-program applicability OPEN |
+| 14 | Integer vectors | `20260909T201535Z`: 22 excess initializers and 17 projected-place failures mention vectors; non-FP does not imply scalar; keep vector execution distinct from header admission | `torture` | OPEN |
+| 15 | Variable-length objects | `20260909T201535Z`: 20 torture E2203 refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
+| 16 | Remaining diagnostic classes | Torture 328 raw refusals in `20260909T201535Z`; five-way classifier records 273 compiler failures overall, including unclassified refusals | `torture musl` | OPEN: not every refusal has an evidenced disposition yet |
+| 17 | Torture applicability/options | `20260909T201535Z`: 1,268 PASS / 273 compiler failure / 6 FP deferred / 145 not applicable / 0 oracle-unusable; 1,692 unchanged identities | `torture` | PARTIAL: measured five-way run; additional unclassified programs may still require FP execution |
+| 18 | Unavailable Csmith references | Fresh `20260909T193124Z`, subject `691b654`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; every identity, runtime checksum/verdict, generator option and runtime digest unchanged | `csmith` | OPEN: four repeating source paths identified, 64 undetermined; every unavailable identity is listed in the applicability notebook, and none is a PASS |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Typed builtin termination and original-program replay
+
+`fe20a3f` records three failing semantic tests, with zero build errors.
+`be5c3f5` implements `__builtin_trap()` as the existing typed-terminator
+family's `trap.builtin_trap`, reporting E3047 when reached and emitting
+`brk #1000` on AArch64. It remains distinct from `__builtin_unreachable`:
+neither grants a dead-edge assumption. Unevaluated and untaken occurrences,
+comma expressions, inline substitution, textual round-trip, validation and
+both interpreter paths are covered. No fake return value or external call
+is introduced. The compact oracle/native probe record is
+`.evidence/builtin-probes/20260910-builtin-trap/results.txt`.
+
+Release subject `691b654`, SHA-256
+`6e218a8583dbaf404f032ba03a393575c469ca2c84e48dec25661afeeda4a1fc`,
+was measured by `CARGO_TARGET_DIR=target/frontend python3 -u tools/bench.py
+csmith torture --no-build --jobs 2`, sequential wrapper
+`20260909T193124.118062Z`. Csmith capture `20260909T193124Z` retains all
+1,000 identities, all emit, 932 agree and 68 remain oracle-unusable;
+every result row is identical to `20260909T162714Z`, including all five
+execution statuses and checksums. Generator identity, options and runtime
+digests are unchanged. The applicability notebook now names all 68 inputs,
+separating four identified repeating source paths from 64 undetermined ones.
+
+Torture capture `20260909T201535Z` retains all 1,692 identities and options,
+with zero lost raw passes or validated PASS. `20020418-1` and `pr125291`
+now pass unchanged; both also pass the four sealed GCC-14/Clang-19 O0/O2
+reference runs. Raw totals are 1,269 pass / 328 refused / 89 not-applicable /
+5 runtime fail / 1 link fail. Reviewed totals are 1,268 PASS / 273 compiler
+failure / 145 not-applicable / 6 FP-deferred / 0 oracle-unusable.
+The third trap original, `pr115033`, reaches the explicitly excluded
+`__builtin_exit`; Clang rejects the unchanged source at both optimization
+levels. `691b654` binds that exclusion to the source and probe rather than
+claiming a third repaired program. The older `pr124358` oracle conflict
+also remains separate from its raw subject success. Other lanes were not
+remeasured by this two-suite invocation, which correctly exits INCOMPLETE.
+
+The focused Rust regression command passes 158 tests across twelve target
+summaries, zero failures. Whole-workspace all-targets Clippy passes with
+`CARGO_TARGET_DIR=target/frontend cargo clippy --workspace --all-targets
+--locked --offline -j 1 -- -D warnings`; fmt, Ruff, diff-check, and the
+17 benchmark/disposition Python tests pass. These are not a fresh green
+workspace test claim: the authority-pending constant-width RED is still open.
+The subject layout commands pass 128/128 and 22/22, zero mismatches:
+`bash tests/acceptance/day5-layout-conformance.sh --subject` (capture
+`20260909T192907Z-30945`), and the same command with
+`C30_LAYOUT_CASE_SET=attributed` and
+`C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json`
+(capture `20260909T193015Z-31682`). The first attributed invocation,
+`20260909T192939Z-31199`, omitted the case-set selector and stopped at its
+manifest check before executing any case; it is retained, not counted PASS.
+
+A separate `git clone --no-local` of `691b654`, with its own empty
+`target/replay` and no copied evidence, passes 138 tests across nine targets,
+zero failed or ignored, with the stable toolchain and this offline command:
+
+```sh
+CARGO_TARGET_DIR=target/replay cargo test \
+  -p evocc-chir --test g2_initializer_schema \
+  -p evocc-parser --test gnu_attributes --test gnu_pointer_attributes \
+  --test character_pointer_conversions \
+  -p evocc-evoir --test module_assembly_and_bits --test section9_completeness \
+  -p evocc-lower --test expression_value_flow --test variadic_execution \
+  --test front_end_resolved_forms --locked --offline --no-fail-fast --quiet -j 1
+```
+
+This replays the changed semantic families, not all workspace tests. The
+separate `constant_source_width` RED remains one PASS / one FAIL in its last
+recorded run; the architecture review explicitly reserves its body revision.
+The refreshed remote remains `33bc3d4`, so no new authority is inferred from
+network recovery. The broader non-FP completion condition is still unmet.
 
 ### Bracket attributes and original-program replay
 
