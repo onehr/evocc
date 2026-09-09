@@ -1,8 +1,392 @@
 {
   "schemaVersion": 1,
   "authority": "Architecture review of 2026-09-09: original identities and five-way dispositions; raw benchmark outcomes remain unchanged.",
-  "sourceCommit": "78d4ac73dd391005b895a6148cd9831e28e1208b",
+  "sourceCommits": {
+    "torture": "78d4ac73dd391005b895a6148cd9831e28e1208b",
+    "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
+  },
   "programs": {
+    "ctest:00113": {
+      "disposition": "FP-deferred",
+      "reason": "reached float conversion and comparison",
+      "sourceSha256": "d12643c2a0f7204727d317604e4cb96124e2e96d5e78039f451bb579b34c113f",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00113.c"
+      ]
+    },
+    "ctest:00119": {
+      "disposition": "FP-deferred",
+      "reason": "reached double object read and comparison",
+      "sourceSha256": "f9547c4ff49b462dd3b255c407499447f76f5c425fc074e96a4d40e1ca33369e",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00119.c"
+      ]
+    },
+    "ctest:00123": {
+      "disposition": "FP-deferred",
+      "reason": "reached double object read and comparison",
+      "sourceSha256": "08de725058f8cf389e5aa5f87d53ff3c4570d92df8eeafeb29b871d722ead304",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00123.c"
+      ]
+    },
+    "ctest:00174": {
+      "disposition": "FP-deferred",
+      "reason": "reached floating arithmetic, formatting and sin",
+      "sourceSha256": "179432fa8f0ffd84d95e44c410d6203fede9a8cb439ddd0e5710d413e30ae80b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00174.c"
+      ]
+    },
+    "ctest:00175": {
+      "disposition": "FP-deferred",
+      "reason": "reached floating call arguments, return values and formatting",
+      "sourceSha256": "9140671105335599b144512673237a8ce1faf1e251840708a8c1999c9601dcee",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00175.c"
+      ]
+    },
+    "ctest:00195": {
+      "disposition": "FP-deferred",
+      "reason": "reached double member stores, reads and formatting",
+      "sourceSha256": "7ce62ef70e5360efcad044f5342f90d16bd1b7f8b2b17e4ee27106c1f0904c9b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00195.c"
+      ]
+    },
+    "ctest:00204": {
+      "disposition": "FP-deferred",
+      "reason": "reached homogeneous floating aggregate calls, returns and variable arguments",
+      "sourceSha256": "cfa12d12c391f845fbc18176b14ae8f169cd680e1971902b10a4ac6f556530ea",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/ctest/tests/single-exec/00204.c"
+      ]
+    },
+    "torture:20000822-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "b532f760520f824ef53089d9a518e2ea10519c6e075db4cf7635afd5b117e98c",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000822-1.c"
+      ]
+    },
+    "torture:20001111-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin exit forms",
+      "sourceSha256": "dbd0e52c97a8d5e0a7a59761d577080645619cc7c4f480c15a31e20604c34441",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20001111-1.c"
+      ]
+    },
+    "torture:20010605-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "24eb43d6a6424e606d170655e938851a29a7e38019971797f491acf198980a8b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20010605-1.c"
+      ]
+    },
+    "torture:20030501-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "ef20fce8426213d6db7242d01d48269a021fa3e9b0f59884531e7c3d32cf7d3a",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20030501-1.c"
+      ]
+    },
+    "torture:20040520-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "a115ba3f50ac8addcdf338a582a1e1aa88c8f67b2bae821945fc18572653846f",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040520-1.c"
+      ]
+    },
+    "torture:20061220-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "2bde09609c3dc80d48f3fd66240d501dbdb54de6780007dfe31dd9e7512f743b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20061220-1.c"
+      ]
+    },
+    "torture:20090219-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "12a3f071f2d81472787b706133cf560ecd15ea7549a910dceebd61a6192bf417",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20090219-1.c"
+      ]
+    },
+    "torture:920415-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "1ff3990eb697e49dd27ced9cffbf004d690ad6fae06302fb9ac19f92ad97dd79",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920415-1.c"
+      ]
+    },
+    "torture:920428-2": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "c0ddca64fe1f6fe4eab7b6fca86b9c2ea99059603a5f4b8c62daf93e028884c2",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920428-2.c"
+      ]
+    },
+    "torture:920612-2": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "ab7f6234ace1b05a0f6769b5a722b457a101fc87c3614ce133940dc3e205404d",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920612-2.c"
+      ]
+    },
+    "torture:920721-4": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "28e3a6297ea77cde685cdf7cf1bb4148953e8e97d6acdab667f703693398f896",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920721-4.c"
+      ]
+    },
+    "torture:921215-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "20bfe032a4e19a7ecfe0e61d88e27ed16c3c2930395843dad9687d8f11b3f294",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921215-1.c"
+      ]
+    },
+    "torture:931002-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "3ea01f673de9d5ab1e8a48e39a1efaae085e036c83eefc3aa7fc00a144c5d655",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/931002-1.c"
+      ]
+    },
+    "torture:991014-1": {
+      "disposition": "not-applicable",
+      "reason": "oracle conflict on extreme array-type admission",
+      "sourceSha256": "3d984273ae4ce7de1aecf84972af15ddb2202a4197dfde878dfdfd454ee393f0",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/991014-1.c",
+        ".evidence/builtin-probes/20260909-large-layout/results.txt"
+      ]
+    },
+    "torture:built-in-setjmp": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin nonlocal context transfer",
+      "sourceSha256": "d2487c4a7733f29b51ab3db27fd7918589b4da586360772c994b53f88497497e",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c"
+      ]
+    },
+    "torture:nest-align-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "99a3c0dc6d77331614eb2c3d7720b09c5edd87444a18de4e29e1bf95dc1415c7",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nest-align-1.c"
+      ]
+    },
+    "torture:nest-stdar-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "e0d3ed0f10cba7cbbdada1e966e991a13ac72e905d3abd08b2f1d33948ac1456",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nest-stdar-1.c"
+      ]
+    },
+    "torture:nestfunc-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "67883bbf9ee372c6c60659e5ba28f1d218f8df07a70d00e43d22ca77a8158858",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c"
+      ]
+    },
+    "torture:nestfunc-2": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "4378b96e756ef4d0f2cfeb8db9864311916f01361610a7ed522967cc8875bb6a",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c"
+      ]
+    },
+    "torture:nestfunc-3": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "36e09b03bf4fb33aff71bf3b149530a02194a8f3955e5d7b210548e1aeb1c8e6",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c"
+      ]
+    },
+    "torture:nestfunc-5": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "a265a5198feb2d7e9c379cb1864f674e8f30bf0ebe05cf1b0cfc1395f059a36b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c"
+      ]
+    },
+    "torture:nestfunc-6": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "de7c400d4e0050ae86a7b3818b1ba13ab8c9df88d0943de5855d365534f619ec",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c"
+      ]
+    },
+    "torture:nestfunc-7": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "d0b668626de9fa3c999777ed0a74c7bcf7f767e85bcd8d3294e5efc4fd49be22",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c"
+      ]
+    },
+    "torture:pr103052": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin exit forms",
+      "sourceSha256": "a27e72a0d30107d9cd7c3d5002cf4d03cb082be4ebe1defcd0061999ef9e2f1c",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr103052.c"
+      ]
+    },
+    "torture:pr103405": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "1a3ac630f7827560249fcaa53e346d45ed7fbb649836a4cc15686f9ca7c11d61",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr103405.c"
+      ]
+    },
+    "torture:pr105777": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes overflow predicate builtins",
+      "sourceSha256": "5bdf72e2be7dce010c9c8a11d77d6a884bd1b20c31d48f324ff359b90bb5d7f2",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr105777.c",
+        ".build/ladder/torture/gcc/testsuite/gcc.dg/tree-ssa/pr105777.c"
+      ]
+    },
+    "torture:pr105984": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes overflow predicate builtins",
+      "sourceSha256": "7045416e06cd49df5d922b31027d12147502373dccce5d25a780020474281dcb",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr105984.c"
+      ]
+    },
+    "torture:pr24135": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "27672b21b01966d4a1759f20f756df6ee0f566a7e847962cd7f20364f97c5f4d",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr24135.c"
+      ]
+    },
+    "torture:pr30314": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes overflow predicate builtins",
+      "sourceSha256": "067897649784f6d96b597ab986dbb0cc026d69061717e4a230a775bc4003ab70",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr30314.c",
+        ".build/ladder/torture/gcc/testsuite/gcc.dg/tree-ssa/pr30314.c"
+      ]
+    },
+    "torture:pr47237": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin argument application",
+      "sourceSha256": "47ff0df11587f7443d78ae36eb756353bbdf62d330de2af86ac54c4d546478c4",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr47237.c"
+      ]
+    },
+    "torture:pr51447": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "5defc96b0d7221a3457c93e047c824623dd12c43199dc9a6c5e8e365563b9c9a",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr51447.c"
+      ]
+    },
+    "torture:pr60003": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin nonlocal context transfer",
+      "sourceSha256": "ac63868a2fe72338f0c5a4f616799d9fbe3f5b8bcbc19d053149f61875ec3689",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr60003.c"
+      ]
+    },
+    "torture:pr64242": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin nonlocal context transfer",
+      "sourceSha256": "4684cadf19a1718f3f85d9b16f90d8efc70c8e030f215d1559dd5830fe75c0c2",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr64242.c"
+      ]
+    },
+    "torture:pr71494": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes GNU nested functions",
+      "sourceSha256": "d8a034c18c5df17b9cd31850a3d95362d40142de8ece62fd48bc811944a73b37",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr71494.c"
+      ]
+    },
+    "torture:va-arg-pack-1": {
+      "disposition": "not-applicable",
+      "reason": "profile excludes builtin anonymous argument forwarding",
+      "sourceSha256": "89833d58fc9113ca04e2a8a163f08d42755507f542236a58ea0fbbd0119c2f41",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c"
+      ]
+    },
     "torture:20050107-1": {
       "disposition": "not-applicable",
       "reason": "oracle conflict: enumeration mode canonical type",
