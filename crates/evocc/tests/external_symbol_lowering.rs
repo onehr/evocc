@@ -1117,6 +1117,58 @@ fn overaligned_stack_objects_keep_their_addresses_and_live_values_across_calls()
 }
 
 #[test]
+fn aligned_function_addresses_preserve_identity_aliases_and_round_trips() {
+    let source = include_str!("../../../tests/fixtures/function-alignment.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "function-alignment");
+}
+
+#[test]
+fn function_alignment_is_emitted_for_both_targets() {
+    let source = include_str!("../../../tests/fixtures/function-alignment.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let header = text
+        .lines()
+        .find(|line| line.starts_with("func @first("))
+        .unwrap();
+    assert!(
+        header.ends_with("visibility=internal align=256"),
+        "{header}"
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+        let label = if target == evocc_mir::Target::Linux {
+            ".type first, %function\nfirst:"
+        } else {
+            "_first:"
+        };
+        assert!(
+            assembly.contains(&format!(".p2align 8\n{label}")),
+            "{target:?}: {assembly}"
+        );
+    }
+}
+
+#[test]
 fn both_targets_realign_overaligned_frames_using_the_reserved_scratch_register() {
     let source = include_str!("../../../tests/fixtures/overaligned-stack.c");
     let output = run(source, "--emit=evoir");
