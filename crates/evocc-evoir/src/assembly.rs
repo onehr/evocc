@@ -290,8 +290,24 @@ impl InlineAssembly {
                     .iter()
                     .position(|(candidate, _, _)| !name.is_empty() && *candidate == name)
             } else if let Some(digit) = bytes.get(position).filter(|byte| byte.is_ascii_digit()) {
+                if modifier == Some(b'l') {
+                    let number_start = position;
+                    while bytes.get(position).is_some_and(u8::is_ascii_digit) {
+                        position += 1;
+                    }
+                    let number = &self.template[number_start..position];
+                    let label = number
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|index| index.checked_sub(operands.len()))
+                        .and_then(|index| labels.get(index));
+                    if label.is_none() {
+                        return Err(format!("unknown assembly label index {number}"));
+                    }
+                    continue;
+                }
                 position += 1;
-                if modifier == Some(b'l') || bytes.get(position).is_some_and(u8::is_ascii_digit) {
+                if bytes.get(position).is_some_and(u8::is_ascii_digit) {
                     return Err(format!(
                         "unsupported assembly reference {}",
                         &self.template[start..]

@@ -35,6 +35,55 @@ use evocc_types::{
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
 
+/// GNU source numbers a read-write output's implicit input as well as the
+/// explicit operands before its labels. Resolve those source numbers once;
+/// EvoIR keeps only explicit operand numbers and ordinary symbolic labels.
+fn source_assembly_template(source: &AsmStmt<'_>) -> Result<String, LowerError> {
+    if source.goto_span.is_none() {
+        return Ok(source.template.clone());
+    }
+    let first_label = source.outputs.len()
+        + source.inputs.len()
+        + source
+            .outputs
+            .iter()
+            .filter(|output| output.constraint.starts_with('+'))
+            .count();
+    let mut template = String::with_capacity(source.template.len());
+    let mut rest = source.template.as_str();
+    while let Some(at) = rest.find('%') {
+        template.push_str(&rest[..at]);
+        rest = &rest[at..];
+        if rest.starts_with("%%") {
+            template.push_str("%%");
+            rest = &rest[2..];
+        } else if let Some(reference) = rest
+            .strip_prefix("%l")
+            .filter(|reference| reference.as_bytes().first().is_some_and(u8::is_ascii_digit))
+        {
+            let end = reference.bytes().take_while(u8::is_ascii_digit).count();
+            let label = reference[..end]
+                .parse::<usize>()
+                .ok()
+                .and_then(|index| index.checked_sub(first_label))
+                .and_then(|index| source.labels.get(index))
+                .ok_or_else(|| LowerError::AsmOperand {
+                    span: source.span,
+                    reason: format!("unknown assembly label index {}", &reference[..end]),
+                })?;
+            template.push_str("%l[");
+            template.push_str(&label.spelling);
+            template.push(']');
+            rest = &reference[end..];
+        } else {
+            template.push('%');
+            rest = &rest[1..];
+        }
+    }
+    template.push_str(rest);
+    Ok(template)
+}
+
 /// A fail-closed lowering diagnostic.  Every unsupported source construct is
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
@@ -4307,7 +4356,7 @@ impl<'a> FunctionLowerer<'a> {
             .map(|ty| self.fresh_value(ty))
             .collect::<Vec<_>>();
         let assembly = InlineAssembly {
-            template: source.template.clone(),
+            template: source_assembly_template(source)?,
             volatile: source.volatile_span.is_some(),
             outputs,
             inputs,

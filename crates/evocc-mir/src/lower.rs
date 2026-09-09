@@ -1741,8 +1741,9 @@ fn lower_terminator(
             fallthrough,
         } => {
             let mut body = lower_assembly(lowerer, insts, assembly)?;
-            // EvoIR labels are named; EvoMIR templates use declaration-order
-            // positions. Convert only actual references, never escaped %%.
+            // EvoIR labels may be named or numbered after explicit operands;
+            // EvoMIR uses declaration-order label positions. Escaped %% is
+            // never a reference.
             let mut template = String::new();
             let mut rest = body.template.as_str();
             while let Some(at) = rest.find('%') {
@@ -1760,6 +1761,20 @@ fn lower_terminator(
                         .ok_or_else(|| format!("unknown assembly label {name}"))?;
                     template.push_str(&format!("%l[{position}]"));
                     rest = &reference[end + 1..];
+                } else if let Some(reference) = rest.strip_prefix("%l").filter(|reference| {
+                    reference.as_bytes().first().is_some_and(u8::is_ascii_digit)
+                }) {
+                    let end = reference.bytes().take_while(u8::is_ascii_digit).count();
+                    let position = reference[..end]
+                        .parse::<usize>()
+                        .ok()
+                        .and_then(|index| {
+                            index.checked_sub(assembly.outputs.len() + assembly.inputs.len())
+                        })
+                        .filter(|index| *index < labels.len())
+                        .ok_or("assembly label index outside label range")?;
+                    template.push_str(&format!("%l[{position}]"));
+                    rest = &reference[end..];
                 } else {
                     template.push('%');
                     rest = &rest[1..];
