@@ -131,13 +131,8 @@ SYSROOT_ADJUSTMENTS = [
     },
 ]
 
-#: Definitions handed to the front end for every hosted unit.
-#:
-#: ``__extension__`` only suppresses pedantic warnings in GCC, so erasing it
-#: changes nothing a program can observe. Declaration prefixes are supported,
-#: but the expression prefix still reports E1003, so this workaround remains
-#: explicit until that source form is implemented and replayed.
-SYSROOT_DEFINES = ["-D__extension__="]
+#: No source-language token is erased through command-line definitions.
+SYSROOT_DEFINES = []
 
 EXPORT = r"""
 set -u

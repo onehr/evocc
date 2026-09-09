@@ -5630,11 +5630,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_extension_prefix(&mut self) -> Vec<SourceSpan> {
         let mut spans = Vec::new();
         while self.peek_kind() == Some(TokenKind::GnuExtension) {
-            spans.push(
-                self.advance()
-                    .expect("peeked GNU extension declaration prefix")
-                    .span,
-            );
+            spans.push(self.advance().expect("peeked GNU extension prefix").span);
         }
         spans
     }
@@ -7525,9 +7521,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_for_statement_in_scope(&mut self, keyword: Token) -> Option<&'arena CHirStmt<'arena>> {
         self.expect(TokenKind::LParen)?;
 
-        // `__extension__` in a for initializer is outside the frozen Day 5
-        // declaration-prefix consensus and must not be silently reinterpreted
-        // as one here.
+        // Both oracles admit a prefixed expression here, but disagree on a
+        // prefixed declaration: GCC accepts it and Clang rejects it. Keep
+        // that declaration form outside the consensus profile.
         let initializer = if self.match_kind(TokenKind::Semicolon) {
             CHirForInit::Empty
         } else if self.peek_kind() != Some(TokenKind::GnuExtension) && self.is_declaration_start() {
@@ -7777,14 +7773,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn is_declaration_start(&self) -> bool {
-        let Some(token) = self.peek() else {
+        let mut position = self.pos;
+        while self.tokens.get(position).map(|token| token.kind) == Some(TokenKind::GnuExtension) {
+            position += 1;
+        }
+        let Some(token) = self.tokens.get(position) else {
             return false;
         };
         // Labels occupy their own namespace. Even when the same spelling is
         // currently a typedef name, `identifier:` is unambiguously a labeled
         // statement rather than the start of a declaration.
         if token.kind == TokenKind::Identifier
-            && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::Colon)
+            && self.tokens.get(position + 1).map(|token| token.kind) == Some(TokenKind::Colon)
         {
             return false;
         }
@@ -7793,9 +7793,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Attribute
                 | TokenKind::Alignas
                 | TokenKind::Noreturn
+                | TokenKind::Inline
                 | TokenKind::Auto
                 | TokenKind::Extern
-                | TokenKind::GnuExtension
                 | TokenKind::AutoType
                 | TokenKind::Register
                 | TokenKind::Static
@@ -9633,6 +9633,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        self.parse_extension_prefix();
         if self.peek_kind() == Some(TokenKind::AmpAmp) {
             let operator = self.advance().expect("peeked label-address operator");
             let token = self.expect(TokenKind::Identifier)?;
@@ -11960,6 +11961,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
     matches!(
         kind,
         TokenKind::Identifier
+            | TokenKind::GnuExtension
             | TokenKind::IntLiteral
             | TokenKind::FloatLiteral
             | TokenKind::CharLiteral

@@ -6626,3 +6626,10 @@ A cast to the same record or union identity, ignoring top-level qualifiers, prod
 Lowering retains the existing aggregate address-and-copy representation and preserves volatile source accesses, matching the already implemented C-HIR conversion.
 Both sealed compilers at O0/O2 execute `forms.c` and reject `distinct.c` in `.evidence/builtin-probes/20260909-record-casts/`, with the exact outcomes in `results.txt`.
 No instruction or diagnostic is added; original c-testsuite `00216` reaches this missing lowering after its flexible initializer is repaired, and its full replay remains required.
+
+### Extension prefixes on expressions
+
+One or more `__extension__` prefixes on an expression leave its type, value and operand evaluation unchanged, including in a constant-expression context and a for-initializer expression.
+Both sealed compilers at O0/O2 execute `accepted.c` under `.evidence/builtin-probes/20260909-extension-expressions/` with exit zero (`accepted.out`); `forms.c` separately shows disagreement on a prefixed for-initializer declaration, so that declaration form remains refused by the existing E1003 rather than being silently reinterpreted.
+No instruction or diagnostic is added, and a missing operand remains an expression error.
+The mixed-link adapters previously erased this spelling before measurement, so original-program replay without that adaptation is required rather than attributing predicted gains to the focused probe.

@@ -34,14 +34,9 @@ object newer than its source is not rebuilt by make, and the binaries that
 depend on it are relinked. Nothing wraps ``CC``; the reference build stays
 the reference build.
 
-Two facts about the environment are not the subject's fault and are recorded
-as adjustments rather than hidden. The container's glibc headers use three
-constructs the front end does not accept yet (``__extension__`` before a
-member declaration, a form feed as whitespace, and ``#include_next``), so a
-copy of the sysroot is rewritten mechanically and the rewrite counts appear
-in the receipt. And the flags a build system passes for optimisation and
-warnings are not flags the front end consumes; those are dropped by name and
-counted, never guessed at.
+The exported headers reach the front end unchanged. Build-system options
+that the compiler does not consume are dropped by name and counted; source
+syntax is never rewritten to bypass a compiler refusal.
 """
 
 from __future__ import annotations
@@ -249,58 +244,11 @@ def unpack(subject: Subject) -> Path:
 # the sysroot the front end can read
 
 
-#: The mechanical rewrites the container's headers need before the front end
-#: can read them. Each one stands for a diagnostic the front end raises on
-#: valid C, is recorded in the receipt with its count, and is reversible: the
-#: unadjusted sysroot stays on disk beside the adjusted one.
-SYSROOT_ADJUSTMENTS = {
-    "extensionKeyword": "`__extension__` removed (E1001 before a member declaration)",
-    "formFeed": "form feed and vertical tab replaced by a newline (E0112 stray-token)",
-    "includeNext": "`#include_next <x>` resolved to the next header in the search order",
-}
+#: Headers are measured as exported, with no source-token substitutions.
+SYSROOT_ADJUSTMENTS = {}
 
-#: The gaps that made the rewrites necessary, each with the smallest program
-#: that shows it. They are properties of the front end, not of any subject,
-#: so every receipt carries them and none of them is worked around in a
-#: subject's own source.
+#: Remaining declaration coverage, distinct from floating-point execution.
 FRONT_END_GAPS = [
-    {
-        "code": "E1001",
-        "construct": "__extension__ before a member declaration",
-        "repro": "struct s { __extension__ int a; };",
-        "reachedFrom": "bits/atomic_wide_counter.h, and so every <stdlib.h>",
-    },
-    {
-        "code": "E1003",
-        "construct": "__extension__ before an expression",
-        "repro": "int main(void){ return __extension__ 0; }",
-    },
-    {
-        "code": "E0112",
-        "construct": "a form feed or vertical tab between declarations is whitespace",
-        "repro": "int a;\n\f\nint b;\n",
-        "reachedFrom": "sys/stat.h, which pages its sections with form feeds",
-    },
-    {
-        "code": "silent",
-        "construct": "#include_next is ignored without a diagnostic",
-        "repro": (
-            "a/h.h: #include_next <h.h>\nb/h.h: int from_b;\n"
-            "main.c: #include <h.h>  # -Ia -Ib yields nothing at all"
-        ),
-        "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are"
-        " nothing but an include_next",
-    },
-    {
-        "code": "E0102",
-        "construct": "a null directive swallows the line after it",
-        "repro": "#\n#if 0\nint compiled_anyway;\n#endif\n",
-        "effect": "the `#` line is legal and does nothing; here it consumes"
-        " the next line, so a false conditional is entered and its #endif is"
-        " then unmatched. A `#` followed by `#define X 1` leaves X undefined"
-        " with no diagnostic at all.",
-        "reachedFrom": "zstd's lib/common/compiler.h, and so 37 of its units",
-    },
     {
         "code": "E1001",
         "construct": "the built-in vector types a GCC 14 front end promises",
@@ -309,16 +257,7 @@ FRONT_END_GAPS = [
         " defines __GNUC__ 14, so glibc takes the branches that use GCC 14's"
         " own vector types",
     },
-    {
-        "code": "linkage",
-        "construct": "a static function is defined with external linkage",
-        "repro": "static int helper(void){ return 0; } int use(void){ return helper(); }",
-        "effect": "two objects that saw the same static collide at link time",
-    },
 ]
-
-EXTENSION = re.compile(r"\b__extension__\s+")
-INCLUDE_NEXT = re.compile(r"^([ \t]*#[ \t]*)include_next[ \t]*<([^>]+)>", re.MULTILINE)
 
 
 def exported_sysroot() -> Path:
@@ -365,77 +304,13 @@ def exported_sysroot() -> Path:
 
 
 def adjust_sysroot(force: bool = False) -> tuple[Path, dict[str, int]]:
-    """A copy of the sysroot the front end can read, and what was rewritten.
+    """Use the original exported headers, never a cached rewritten copy.
 
-    Nothing here changes what a header means. ``__extension__`` only silences
-    a pedantic diagnostic; a form feed is whitespace; and ``#include_next``
-    is rewritten to the very file GCC's own search order would have reached,
-    computed from the include path rather than guessed.
+    ``force`` remains an accepted caller option but there is no derived
+    sysroot to regenerate: the preprocessor owns include_next and whitespace,
+    and the parser owns extension prefixes.
     """
-    source = exported_sysroot()
-    adjusted = BUILD / "sysroot-adjusted"
-    counts_file = adjusted / ".adjustments.json"
-    if adjusted.is_dir() and counts_file.is_file() and not force:
-        return adjusted, json.loads(counts_file.read_text(encoding="utf-8"))
-    if adjusted.is_dir():
-        shutil.rmtree(adjusted)
-    shutil.copytree(source, adjusted, symlinks=True)
-    search = [Path(flag[2:]) for flag in e0.include_flags(adjusted)]
-    counts = collections.Counter()
-    for path in sorted(adjusted.rglob("*")):
-        if not path.is_file() or path.is_symlink():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="surrogateescape")
-        except OSError:
-            continue
-        original = text
-        text, extensions = EXTENSION.subn(" ", text)
-        counts["extensionKeyword"] += extensions
-        feeds = text.count("\f") + text.count("\v")
-        if feeds:
-            text = text.replace("\f", "\n").replace("\v", "\n")
-            counts["formFeed"] += feeds
-        text, resolved = _resolve_include_next(text, path, search)
-        counts["includeNext"] += resolved
-        if text != original:
-            counts["filesRewritten"] += 1
-            path.write_text(text, encoding="utf-8", errors="surrogateescape")
-    counts_file.write_text(json.dumps(dict(counts), indent=1) + "\n", encoding="utf-8")
-    return adjusted, dict(counts)
-
-
-def _resolve_include_next(text: str, path: Path, search: list[Path]) -> tuple[str, int]:
-    """Rewrite ``#include_next <x>`` to the next ``x`` in the search order.
-
-    GCC resolves ``include_next`` against the directory list, starting after
-    the directory the including file came from. That is computable here, so
-    the directive becomes a quoted include of the file it would have found. A
-    directive with nothing after it is left alone: GCC would find nothing
-    either, and the guard around it is what the header relies on.
-    """
-    if "include_next" not in text:
-        return text, 0
-    owner = None
-    for index, directory in enumerate(search):
-        if directory in path.parents:
-            owner = index
-            break
-    if owner is None:
-        return text, 0
-    resolved = 0
-
-    def replace(match: re.Match) -> str:
-        nonlocal resolved
-        header = match.group(2)
-        for directory in search[owner + 1 :]:
-            candidate = directory / header
-            if candidate.is_file():
-                resolved += 1
-                return f'{match.group(1)}include "{candidate}"'
-        return match.group(0)
-
-    return INCLUDE_NEXT.sub(replace, text), resolved
+    return exported_sysroot(), {}
 
 
 # --------------------------------------------------------------------------

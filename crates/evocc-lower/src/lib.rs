@@ -741,11 +741,8 @@ fn lower_resolved_unit(
                 .map_err(|_| LowerError::InvalidGeneratedSsa {
                     message: "external object has no symbol".into(),
                 })?;
-        if !referenced_objects.contains(entry.spelling())
-            || matches!(
-                unit.types().get(entry.ty()).map(|ty| &ty.kind),
-                Some(TypeKind::Function { .. })
-            )
+        if !has_linked_object_storage(unit, *symbol)
+            || !referenced_objects.contains(entry.spelling())
         {
             continue;
         }
@@ -888,6 +885,17 @@ fn collect_global_register_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
         .collect()
 }
 
+fn has_linked_object_storage(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
+    unit.symbols().symbol(symbol).is_ok_and(|entry| {
+        entry.kind() == SymbolKind::Object
+            && (entry.storage_class() == Some(StorageClass::Extern)
+                || unit
+                    .symbols()
+                    .is_bound_in_scope(symbol, unit.symbols().file_scope())
+                    .unwrap_or(false))
+    })
+}
+
 fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn declaration(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>, out: &mut BTreeSet<SymbolId>) {
         if let CHirDecl::Object(object) = declaration {
@@ -909,12 +917,8 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 .types()
                 .get(object.ty)
                 .is_some_and(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic);
-            let is_file = unit
-                .symbols()
-                .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
-                .unwrap_or(false);
             if needs_object_storage
-                || is_file
+                || has_linked_object_storage(unit, object.symbol)
                 || is_qualified_memory
                 || object.storage == StorageClass::Static
             {
@@ -959,13 +963,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn expression(unit: &CHirUnit<'_>, expr: &CHirExpr<'_>, out: &mut BTreeSet<SymbolId>) {
         match expr {
             CHirExpr::Ident { symbol, .. } => {
-                if unit.symbols().symbol(*symbol).is_ok_and(|entry| {
-                    entry.kind() == SymbolKind::Object
-                        && unit
-                            .symbols()
-                            .is_bound_in_scope(*symbol, unit.symbols().file_scope())
-                            .unwrap_or(false)
-                }) {
+                if has_linked_object_storage(unit, *symbol) {
                     out.insert(*symbol);
                 }
             }
@@ -1300,11 +1298,7 @@ fn symbolic_address(
                     .to_owned(),
                 0,
             ))
-        } else if unit
-            .symbols()
-            .is_bound_in_scope(id, unit.symbols().file_scope())
-            .unwrap_or(false)
-        {
+        } else if has_linked_object_storage(unit, id) {
             Ok((symbol.spelling().to_owned(), 0))
         } else if symbol.storage_class() == Some(StorageClass::Static) {
             Ok((
@@ -5478,12 +5472,7 @@ impl<'a> FunctionLowerer<'a> {
             .symbols()
             .symbol(symbol)
             .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
-        if !self
-            .unit
-            .symbols()
-            .is_bound_in_scope(symbol, self.unit.symbols().file_scope())
-            .unwrap_or(false)
-        {
+        if !has_linked_object_storage(self.unit, symbol) {
             return Err(LowerError::InvalidGeneratedSsa {
                 message: format!(
                     "automatic memory object '{}' ({}) has no live address binding",

@@ -173,33 +173,6 @@ class SysrootSourceTest(unittest.TestCase):
                     self.assertEqual(sum(counts.values()), 0)
 
 
-class IncludeNextTest(unittest.TestCase):
-    def test_the_directive_resolves_to_the_next_header_in_the_search_order(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            first, second = root / "gcc", root / "usr"
-            first.mkdir()
-            second.mkdir()
-            (second / "stdint.h").write_text("int from_libc;\n")
-            wrapper = first / "stdint.h"
-            wrapper.write_text("#include_next <stdint.h>\n")
-            text, resolved = ladder._resolve_include_next(
-                wrapper.read_text(), wrapper, [first, second]
-            )
-            self.assertEqual(resolved, 1)
-            self.assertEqual(text.strip(), f'#include "{second / "stdint.h"}"')
-
-    def test_a_directive_with_nothing_after_it_is_left_alone(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            last = root / "usr"
-            last.mkdir()
-            header = last / "limits.h"
-            header.write_text("#include_next <limits.h>\n")
-            text, resolved = ladder._resolve_include_next(header.read_text(), header, [last])
-            self.assertEqual((text, resolved), ("#include_next <limits.h>\n", 0))
-
-
 class CollisionTest(unittest.TestCase):
     def rows(self, table: dict[str, list[str]]) -> list[dict]:
         return [
