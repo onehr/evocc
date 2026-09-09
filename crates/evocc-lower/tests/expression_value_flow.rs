@@ -390,6 +390,13 @@ fn inline_calls_preserve_parameters_returns_labels_and_static_identity() {
 }
 
 #[test]
+fn inline_list_parameters_copy_the_complete_variadic_state() {
+    agrees(include_str!(
+        "../../../tests/fixtures/inline-variadic-copy.c"
+    ));
+}
+
+#[test]
 fn inline_constant_arguments_do_not_duplicate_control_flow_identities() {
     let prefix = "static __attribute__((always_inline)) int inner(int n){return n;} static __attribute__((always_inline)) int outer(int n){return n+n;}";
     for (argument, expected) in [
