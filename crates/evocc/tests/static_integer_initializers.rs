@@ -45,6 +45,39 @@ fn bitwise_array_initializer_has_the_measured_value() {
 }
 
 #[test]
+fn nested_static_integer_expressions_do_not_depend_on_the_host_stack() {
+    let mut selected = "(1 ? 42 : (1 / 0))".to_owned();
+    for index in 0..80 {
+        selected = format!("(0 ? {index} : {selected})");
+    }
+    let unary = format!("{}1{}", "-(".repeat(80), ")".repeat(80));
+    agrees(
+        &format!("static int selected={selected};static int unary={unary};int main(void){{return selected==42&&unary==1;}}"),
+        1,
+    );
+    let mut common_type = "-1".to_owned();
+    for _ in 0..80 {
+        common_type = format!("(0 ? 1U : {common_type})");
+    }
+    agrees(
+        &format!("static int positive=({common_type})>0;int main(void){{return positive;}}"),
+        1,
+    );
+}
+
+#[test]
+fn constant_logarithm_initializers_keep_the_kernel_bit_selection() {
+    let mut selected = "1".to_owned();
+    for bit in 2..=63 {
+        selected = format!("((n)&(1ULL<<{bit}) ? {bit} : {selected})");
+    }
+    agrees(
+        &format!("#define const_ilog2(n) (__builtin_constant_p(n)?((n)<2?0:{selected}):-1)\nstatic unsigned char features[]={{const_ilog2(1),const_ilog2(8),const_ilog2(1ULL<<63)}};int main(void){{return features[0]==0&&features[1]==3&&features[2]==63;}}"),
+        1,
+    );
+}
+
+#[test]
 fn initializer_arithmetic_uses_promotions_and_intermediate_casts() {
     agrees("int a = (unsigned char)257 + ((signed char)255 < 0); unsigned long b = 4294967295U + 1U; long c = (signed char)255; int main(void) { return a == 2 && b == 0 && c == -1; }", 1);
     agrees("int a = ((12 * 9) / 3) % 11; int b = ~0 & 15; int main(void) { return a == 3 && b == 15; }", 1);

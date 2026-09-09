@@ -10318,28 +10318,42 @@ mod tests {
     }
 
     #[test]
-    fn deeply_nested_static_initializer_fails_closed_without_overflowing_the_host() {
+    fn deeply_nested_static_initializer_executes_without_recursive_stack_growth() {
         let arena = Arena::new(64 * 1024);
-        let (unit, main) =
-            deep_static_initializer_program(&arena, MAX_STATIC_INITIALIZER_DEPTH + 8);
+        let (unit, main) = deep_static_initializer_program(&arena, 512);
 
-        let error = interpret_scalar_function_with_target(
+        let outcome = interpret_scalar_function_with_target(
             &unit,
             main,
             &TargetDataLayout::aarch64_unknown_linux_gnu(),
             InterpreterLimits::default(),
         )
-        .expect_err("an over-deep static initializer must be rejected, not evaluated");
+        .expect("a defined constant initializer is independent of host stack depth");
 
+        assert_eq!(
+            outcome
+                .return_value
+                .unwrap()
+                .mathematical_value(unit.types())
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn static_initializer_iteration_retains_the_execution_budget() {
+        let arena = Arena::new(64 * 1024);
+        let (unit, main) = deep_static_initializer_program(&arena, 512);
+        let error = interpret_scalar_function_with_target(
+            &unit,
+            main,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            InterpreterLimits::new(32),
+        )
+        .expect_err("constant initialization consumes the same explicit fuel budget");
         assert!(
-            matches!(
-                error,
-                InterpreterError::UnsupportedExpression {
-                    feature: "deeply-nested-static-initializer",
-                    ..
-                }
-            ),
-            "expected a typed depth rejection, got {error:?}"
+            matches!(error, InterpreterError::FuelExhausted { .. }),
+            "{error:?}"
         );
     }
 
