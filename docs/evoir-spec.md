@@ -6020,6 +6020,18 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Pending body revision: numeric assembly label references
+
+The current §3.11 reference vocabulary admits named `%l[label]`, not numbered `%lN`; the latest mixed-link survey records 2,419 original units refused at the numbered form.
+`.evidence/builtin-probes/20260909-numeric-assembly-labels/{labels.c,results.txt}` records GCC-14 and Clang-19 at O0/O2 agreeing on numbered labels, multiple labels, multi-digit indexes and the extra implicit-input count for a read/write output.
+No validator rule or source acceptance has changed; normalization to the existing named-label representation awaits the requested body ruling.
+
+### Pending body revision: builtin calls and a same-named static definition
+
+All four GCC-14/Clang-19 O0/O2 executions of original `921007-1` pass, but the nonconstant-input probe `.evidence/builtin-probes/20260909-local-library-binding/{binding.c,results.txt}` is an oracle conflict.
+Both O0 executions and Clang-19 O2 call the local `strcmp` (result -123, one call), while GCC-14 O2 bypasses it (result -128, zero calls).
+No binding rule is inferred from the passing original alone, no diagnostic is allocated, and the requested body ruling remains pending.
+
 ### Wide bit-field promotions and unsupported scalar storage order
 
 The reviewed profile refuses integer promotion of a bit-field wider than `int` with E2939 (`unsupported-wide-bit-field-promotion`), while retaining storage, explicit conversions and fields no wider than `int`; `.evidence/ladder/e0/20260908T213308Z` and `docs/notebook/benchmark-closure.md` record the four original wide-field oracle conflicts.
