@@ -82,10 +82,16 @@ fn implicit_object_identity_precedes_explicit_locals_only_when_referenced() {
 }
 
 #[test]
-fn pretty_function_uses_the_conflict_diagnostic() {
+fn pretty_function_uses_the_reviewed_c_function_name_profile() {
+    accepts(concat!(
+        "void pretty(void) { ",
+        "_Static_assert(sizeof __PRETTY_FUNCTION__ == 7, \"size\"); ",
+        "_Static_assert(_Generic(&__PRETTY_FUNCTION__, const char (*)[7]: 1, default: 0), \"address\"); ",
+        "static const char *saved = __PRETTY_FUNCTION__; (void)saved; ",
+        "{ (void)__PRETTY_FUNCTION__; } }\n",
+    ));
     let arena = Arena::default();
-    let error = parse("void pretty(void) { (void)__PRETTY_FUNCTION__; }\n", &arena)
-        .expect_err("the oracle-conflicting spelling must be refused");
-    assert_eq!(error.code, "E2921");
-    assert_eq!(error.message, "pretty-function-unsupported");
+    let error = parse("const char *outside = __PRETTY_FUNCTION__;", &arena)
+        .expect_err("function-local identifiers stay out of file scope");
+    assert_eq!(error.code, "E2001");
 }

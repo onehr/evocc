@@ -83,6 +83,25 @@ fn declaration_specifier_order_preserves_storage_and_types() {
 }
 
 #[test]
+fn floating_object_declarations_do_not_execute_floating_values() {
+    for source in [
+        "int main(void){double value;return sizeof(value)!=8;}",
+        "int main(void){float value;int x=1;if(x){x=sizeof(value);}return x!=4;}",
+        "int main(void){long double value;int x=0;while(x<2){++x;}return sizeof(value)!=16 || x!=2;}",
+        "int main(void){double value;void *p=&value;return !p || sizeof(value)!=8;}",
+        "int main(void){char a;int b;double c;return sizeof(a)!=1 || sizeof(b)!=4 || sizeof(c)!=8 || sizeof(!a)!=4;}",
+    ] {
+        agrees(source);
+    }
+}
+
+#[test]
+fn pretty_function_resolves_to_the_shared_function_name_object() {
+    agrees("int main(void){static const char *saved=__PRETTY_FUNCTION__;return saved[0]!='m' || saved[3]!='n' || saved[4]!=0 || sizeof(__PRETTY_FUNCTION__)!=5 || saved!=__func__;}");
+    agrees("int other(void){return __PRETTY_FUNCTION__[0]!='o' || sizeof(__PRETTY_FUNCTION__)!=6;}int main(void){return other() || __PRETTY_FUNCTION__[0]!='m';}");
+}
+
+#[test]
 fn qualifier_spellings_preserve_the_qualified_type() {
     agrees(include_str!(
         "../../../tests/fixtures/qualifier-spellings.c"
