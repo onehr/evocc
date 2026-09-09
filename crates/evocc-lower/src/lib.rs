@@ -5188,7 +5188,7 @@ impl<'a> FunctionLowerer<'a> {
             | CHirExpr::StatementExpr { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. } => facts.ty(),
             CHirExpr::MemoryRead { place, .. } => place.value_ty(),
-            CHirExpr::CompoundLit(ty, ..) => *ty,
+            CHirExpr::CompoundLit(ty, ..) | CHirExpr::Cast(ty, ..) => *ty,
             CHirExpr::Call(callee, ..) => {
                 let ty = self.call_designator_function_type(callee)?;
                 let TypeKind::Function { return_type, .. } = &self.unit.types().get(ty)?.kind
@@ -5307,6 +5307,7 @@ impl<'a> FunctionLowerer<'a> {
 
     fn aggregate_source_is_volatile(&self, expression: &CHirExpr<'_>) -> bool {
         match expression {
+            CHirExpr::Cast(_, operand, _) => self.aggregate_source_is_volatile(operand),
             CHirExpr::MemoryRead { place, .. } => place.access_qualifiers().is_volatile,
             CHirExpr::Ident { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
@@ -7832,6 +7833,24 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
             CHirExpr::Cast(target, operand, span) => {
+                if matches!(
+                    self.unit.types().get(*target).map(|ty| &ty.kind),
+                    Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                ) {
+                    let source = self
+                        .record_value_type(operand)
+                        .and_then(|ty| self.unit.types().get(ty));
+                    if !source
+                        .zip(self.unit.types().get(*target))
+                        .is_some_and(|(source, target)| source.kind == target.kind)
+                    {
+                        return Err(LowerError::UnsupportedExpression {
+                            span: *span,
+                            feature: "record cast changes the aggregate identity",
+                        });
+                    }
+                    return self.lower_expr(operand, state);
+                }
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
                     Some(TypeKind::Pointer(_))

@@ -6619,3 +6619,10 @@ The address argument of `__builtin_prefetch` accepts an object pointer with any 
 Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260909-qualified-prefetch/forms.c` with exit zero, warning about the discarded qualifier (`results.txt`).
 This address-only hint rule does not loosen ordinary implicit pointer conversions, change the optional argument checks, or add an instruction or diagnostic.
 One original torture first-error program, `builtin-prefetch-3` in `20260908T204820Z`, reaches this refusal; the original-program replay determines its outcome.
+
+### Value-preserving record casts
+
+A cast to the same record or union identity, ignoring top-level qualifiers, produces that record value and evaluates its operand once; it does not permit conversion between distinct tags or make the result a modifiable lvalue.
+Lowering retains the existing aggregate address-and-copy representation and preserves volatile source accesses, matching the already implemented C-HIR conversion.
+Both sealed compilers at O0/O2 execute `forms.c` and reject `distinct.c` in `.evidence/builtin-probes/20260909-record-casts/`, with the exact outcomes in `results.txt`.
+No instruction or diagnostic is added; original c-testsuite `00216` reaches this missing lowering after its flexible initializer is repaired, and its full replay remains required.
