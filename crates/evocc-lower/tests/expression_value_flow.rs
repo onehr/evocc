@@ -365,6 +365,28 @@ fn pointer_equality_accepts_integer_signedness_counterparts() {
 }
 
 #[test]
+fn character_pointer_conversions_preserve_the_address_at_each_site() {
+    agrees(include_str!(
+        "../../../tests/fixtures/qualified-character-pointers.c"
+    ));
+    for source_type in ["char", "signed char", "unsigned char"] {
+        for target_type in ["char", "signed char", "unsigned char"] {
+            for qualifiers in ["", "const", "volatile", "const volatile"] {
+                agrees(&format!(
+                    "{target_type} *back({qualifiers} {source_type} *p){{return p;}}\
+                     int first({target_type} *p){{return *p;}}\
+                     int main(void){{char bytes[2]={{7,9}};\
+                     {qualifiers} {source_type} *source=({qualifiers} {source_type} *)bytes;\
+                     {target_type} *initialized=source;{target_type} *assigned=0;\
+                     assigned=source;{target_type} **out=&assigned;*out=source+1;\
+                     return *initialized!=7 || *assigned!=9 || *back(source)!=7 || first(source)!=7;}}"
+                ));
+            }
+        }
+    }
+}
+
+#[test]
 fn assignment_values_are_operands_with_their_effects_preserved() {
     agrees("int main(void){int a=0;int b=0;int r=(a=3)+(b=4);return r!=7 || a!=3 || b!=4;}");
     agrees("int a;int main(void){int b=2;int r=(a=3)*(b+=4);return r!=18 || a!=3 || b!=6;}");

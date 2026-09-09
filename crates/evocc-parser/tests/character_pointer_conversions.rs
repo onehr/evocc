@@ -71,3 +71,17 @@ fn unrelated_object_pointer_types_remain_incompatible() {
     assert_eq!(error.code, "E2202");
     assert_eq!(error.message, "invalid-initializer-type");
 }
+
+#[test]
+fn character_pointer_conversion_does_not_remove_nested_qualifiers_or_const_places() {
+    for (source, code) in [
+        ("void f(const char **p){char **q=p;}", "E2202"),
+        ("void f(const char **p,char **q){q=p;}", "E2102"),
+        ("void f(void){const char c=1;c=2;}", "E2101"),
+        ("void f(const char *p){*p=2;}", "E2101"),
+    ] {
+        let arena = Arena::default();
+        let error = parse(source, &arena).expect_err("unrelated qualifier rules stay enforced");
+        assert_eq!(error.code, code, "{source}: {error:?}");
+    }
+}
