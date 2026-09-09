@@ -4201,12 +4201,49 @@ impl<'a> FunctionLowerer<'a> {
             // Immediate expressions have no execution effects. Define their
             // values here, after other operands may have split the block, so
             // machine lowering need not guess constants through edge arguments.
-            let value = match pending {
+            let mut value = match pending {
                 AssemblyInputSource::Constant(constant) => {
                     self.emit_assembly_constant(constant, operand.span, &state)?
                 }
                 AssemblyInputSource::Temporary(key) => self.token(&state, key)?.value,
             };
+            // A tie names a physical location, not a C arithmetic conversion.
+            // RELOC_HIDE ties a pointer to an unsigned long output. Make that
+            // shared 64-bit representation explicit without weakening the IR
+            // validator's equal-type requirement or guessing wider high bits
+            // for narrow integer inputs.
+            if let [digit @ b'0'..=b'9'] = operand.constraint.as_bytes() {
+                if let Some(output) = outputs.get(usize::from(*digit - b'0')) {
+                    if !evocc_evoir::assembly_memory_constraint(&output.constraint)
+                        && output.ty != value.ty
+                        && evocc_evoir::assembly_address_type(&output.ty)
+                        && evocc_evoir::assembly_address_type(&value.ty)
+                    {
+                        if value.ty != EvoIRType::Bits(64) {
+                            let result = self.fresh_value(EvoIRType::Bits(64));
+                            self.emit(
+                                &state,
+                                Inst::PointerCast {
+                                    result: result.clone(),
+                                    operand: value,
+                                },
+                            )?;
+                            value = result;
+                        }
+                        if output.ty != EvoIRType::Bits(64) {
+                            let result = self.fresh_value(output.ty.clone());
+                            self.emit(
+                                &state,
+                                Inst::PointerCast {
+                                    result: result.clone(),
+                                    operand: value,
+                                },
+                            )?;
+                            value = result;
+                        }
+                    }
+                }
+            }
             // An admitted immediate letter paired with r permits a register
             // for every value. Select it after the single evaluation, leaving
             // no alternatives for downstream consumers to resolve.
@@ -8673,22 +8710,6 @@ impl<'a> FunctionLowerer<'a> {
             state,
             Inst::UbAssume(count_defined, UbReason::InvalidShiftCount),
         )?;
-        if operator == BinaryOp::Shl && integer.is_signed() {
-            let defined = self.fresh_value(EvoIRType::Bits(1));
-            self.emit(
-                state,
-                Inst::SignedShlDefined {
-                    result: defined.clone(),
-                    shifted: shifted.value.clone(),
-                    amount: amount.value.clone(),
-                    amount_signed: amount.integer.is_signed(),
-                },
-            )?;
-            self.emit(
-                state,
-                Inst::UbAssume(defined, UbReason::InvalidSignedLeftShift),
-            )?;
-        }
         let result = self.fresh_value(bits(integer));
         let instruction = match (operator, integer.is_signed()) {
             (BinaryOp::Shl, _) => Inst::Shl(result.clone(), shifted.value, amount.value),

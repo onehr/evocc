@@ -23,15 +23,15 @@ use crate::{
 /// callee-saved save area, then one slot per `frame.slot` ..., then the spill
 /// area", so the callee-saved words are highest and the spill area lowest.
 ///
-/// Every offset here is taken from `sp`. Section 6 fixes the order and the
-/// sizes but never says which register addresses a slot; with a frame this
-/// revision guarantees is static, `sp` and `x29` differ only by a constant,
-/// and `sp` keeps every offset non-negative and inside the unsigned
-/// twelve-bit form. Recorded gap.
+/// Every offset here is taken from the aligned `sp`. Over-aligned frames
+/// restore the entry stack pointer through `x29`, since their alignment
+/// adjustment depends on the incoming address rather than only frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
     /// Total bytes the prologue subtracts, a multiple of sixteen.
     pub size: u64,
+    /// Required alignment of `sp` after the prologue, at least sixteen.
+    pub alignment: u64,
     /// Callee-saved register to its offset above `sp`.
     pub saved: BTreeMap<u8, u64>,
     /// Spill slot index to its offset above `sp`.
@@ -82,6 +82,12 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
     automatic.sort_unstable();
     automatic.dedup();
+    let alignment = automatic
+        .iter()
+        .map(|(_, _, align)| *align)
+        .max()
+        .unwrap_or(16)
+        .max(16);
 
     let spill_bytes = u64::from(allocated.frame_slots) * 8;
 
@@ -129,7 +135,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // objects below it needed.
     let saved_base = align_up(cursor, 8);
     let saved_bytes = allocated.used_callee_saved.len() as u64 * 8;
-    let size = align_up(saved_base + saved_bytes, 16);
+    let size = align_up(saved_base + saved_bytes, alignment) + alignment - 16;
 
     let mut saved = BTreeMap::new();
     for (index, number) in allocated.used_callee_saved.iter().enumerate() {
@@ -138,6 +144,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
 
     Frame {
         size,
+        alignment,
         saved,
         spills,
         slots,
@@ -811,6 +818,11 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     if frame.size != 0 {
         emit_add_immediate(text, "sub", "sp", "sp", frame.size);
     }
+    if frame.alignment > 16 {
+        let _ = writeln!(text, "    mov x16, sp");
+        let _ = writeln!(text, "    and x16, x16, #-{}", frame.alignment);
+        let _ = writeln!(text, "    mov sp, x16");
+    }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "str", &format!("x{number}"), *offset);
     }
@@ -833,7 +845,9 @@ fn emit_epilogue(text: &mut String, frame: &Frame) {
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "ldr", &format!("x{number}"), *offset);
     }
-    if frame.size != 0 {
+    if frame.alignment > 16 {
+        let _ = writeln!(text, "    mov sp, x29");
+    } else if frame.size != 0 {
         emit_add_immediate(text, "add", "sp", "sp", frame.size);
     }
     let _ = writeln!(text, "    ldp x29, x30, [sp], #16");

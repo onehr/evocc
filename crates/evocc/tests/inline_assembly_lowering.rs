@@ -31,6 +31,53 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn tied_address_operands_preserve_bits_and_single_evaluation() {
+    let source = include_str!("../../../tests/fixtures/assembly-tied-addresses.c");
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if mode == "--emit=evoir" {
+            evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "tied-addresses");
+}
+
+#[test]
+fn tied_pointer_inputs_match_explicit_representation_casts() {
+    let source = r#"unsigned long hide(void *p) {
+        unsigned long bits; asm("" : "=r"(bits) : "0"(p)); return bits;
+    }"#;
+    let explicit = source.replace("\"0\"(p)", "\"0\"((unsigned long)p)");
+    let actual = run(source, "--emit=evoir");
+    let expected = run(&explicit, "--emit=evoir");
+    assert!(
+        actual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&actual.stderr)
+    );
+    assert!(
+        expected.status.success(),
+        "{}",
+        String::from_utf8_lossy(&expected.stderr)
+    );
+    assert_eq!(actual.stdout, expected.stdout);
+    let narrow = run(
+        r#"long f(signed char input) {
+        long output; asm("" : "=r"(output) : "0"(input)); return output;
+    }"#,
+        "--emit=evoir",
+    );
+    assert!(!narrow.status.success());
+    assert!(String::from_utf8_lossy(&narrow.stderr).contains("E3021"));
+}
+
+#[test]
 fn address_modifiers_select_registers_and_execute_operands_once() {
     let source = include_str!("../../../tests/fixtures/assembly-address-operands.c");
     let selected = source.replace("\"p\"", "\"r\"");

@@ -147,12 +147,12 @@ fn signed_overflow_matches_typed_runtime_diagnostic() {
 }
 
 #[test]
-fn runtime_signed_left_shift_keeps_its_undefined_behavior_obligation() {
+fn negative_signed_shift_count_keeps_its_runtime_obligation() {
     assert_typed_runtime_diagnostic(
-        "int main(void) { int one = 1; int count = 31; return one << count; }\n",
+        "int main(void) { int one = 1; int count = -1; return one << count; }\n",
         "one << count",
-        IntegerError::InvalidSignedLeftShift,
-        "E3006",
-        "invalid-signed-left-shift",
+        IntegerError::InvalidShiftCount,
+        "E3005",
+        "invalid-shift-count",
     );
 }

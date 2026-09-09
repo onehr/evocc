@@ -28,7 +28,7 @@ RECEIPT = Path("tests/contracts/bench-receipt.json")
 # name: (roadmap rung, existing adapter, measurement limitation)
 CATALOG = {
     "ctest": ("E0b", "e0", "self-checking programs and expected stdout"),
-    "torture": ("E0a", "e0", "mixed integer/FP suite; supported wrapping options consumed, other requirements recorded but not yet interpreted"),
+    "torture": ("E0a", "e0", "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved"),
     "csmith": ("E0c", "csmith", "original seeds; unavailable oracles are not passes"),
     "zlib": ("E1", "subject", "mixed-link program tests"),
     "zstd": ("E2", "subject", "mixed-link program tests; see recorded source/build adjustments"),

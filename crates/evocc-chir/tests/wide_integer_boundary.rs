@@ -101,8 +101,6 @@ fn wide_division_refusal_covers_values_and_compound_stores() {
 fn wide_runtime_obligations_remain_typed_failures() {
     for (expression, code) in [
         ("((__int128)1<<126)*2", "E3004"),
-        ("(__int128)1<<127", "E3006"),
-        ("(__int128)-1<<1", "E3006"),
         ("(__uint128_t)1<<128", "E3005"),
         ("(__uint128_t)1<<(~(__uint128_t)0)", "E3005"),
     ] {
@@ -113,5 +111,22 @@ fn wide_runtime_obligations_remain_typed_failures() {
             interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
                 .unwrap_err();
         assert_eq!(error.code(), code, "{source}: {error}");
+    }
+}
+
+#[test]
+fn wide_signed_shifts_preserve_the_truncated_bit_pattern() {
+    for (expression, expected) in [
+        ("(__int128)1<<127", 1_u128 << 127),
+        ("(__int128)-1<<1", u128::MAX - 1),
+        ("((__int128)1<<127)<<1", 0),
+    ] {
+        let source = format!("__int128 main(void){{ return {expression}; }}");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let outcome =
+            interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
+                .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert_eq!(outcome.return_value.unwrap().raw_bits, expected, "{source}");
     }
 }

@@ -1332,3 +1332,32 @@ python3 tools/bench.py all --jobs 4 --programs 500 --budget 40 --allow-qemu-drif
 
 An incomplete lane, unresolved issue, or deferred prerequisite is reported as
 such; it is never changed to PASS merely to reach an all-green summary.
+
+### 2026-09-09: bit patterns and real stack addresses
+
+Signed left shift now uses the measured GNU truncated bit pattern at 32, 64
+and 128 bits; invalid counts and the other arithmetic obligations remain.
+`cargo test -p evocc --test external_symbol_lowering --test static_integer_initializers -p evocc-chir --test
+g3_integer_semantics --test wide_integer_boundary -p evocc-lower --test
+day6_g3_differential --test day6_lower_runtime_diagnostics` was covered by
+the focused run (81 passing tests across six targets, including static
+initializers). The existing 320-source scalar corpus remains byte-identical:
+the new rule changes four expected observations from E3006 to integer
+results, yielding 260 returns and 60 typed diagnostics, with zero mismatches.
+The changed-crate gate against `ce81980` passed 858 tests with zero failures
+and three pre-existing ignored tests. Original torture and boot replay is
+still pending; focused checks do not close those rows.
+
+The recursive over-alignment fixture now returns zero in both interpreters
+and native Darwin execution instead of native exit 1. It tests 32 separate
+256-byte-aligned frame objects, live bytes and real allocator spills. Both
+target emitters use the reserved x16 scratch sequence and restore sp through
+x29. The emitted Linux assembly runs successfully through GCC-14 and through
+Clang-19 with `-fno-integrated-as` in the sealed image. Clang's integrated
+assembler rejects the pre-existing `:pg_hi21:` global-address spelling; that
+is a separate recorded toolchain incompatibility, not a successful lane or
+a reason to alter this fixture. Evidence: `.evidence/builtin-probes/20260909-stack-realignment/`.
+The command `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2
+tools/gate-changed.sh a53b3c0 --offline` completed with exit 0 (tests, Clippy
+and fmt) for evocc, evocc-mir, evocc-policy, evocc-proofcheck and evocc-randgate;
+the worktree run used the same target directory by its absolute path.

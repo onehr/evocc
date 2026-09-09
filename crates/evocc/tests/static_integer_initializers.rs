@@ -74,12 +74,19 @@ fn static_sizeof_and_alignment_use_the_target_without_evaluation() {
 }
 
 #[test]
-fn static_integer_folding_does_not_erase_the_runtime_shift_obligation() {
+fn static_and_executed_signed_shifts_have_the_same_bit_pattern() {
+    agrees(
+        "int a = 1 << 31; int main(void) { int one = 1; return (one << 31) == a; }",
+        1,
+    );
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
-        let output = run("int a = 1 << 31; int main(void) { return 1 << 31; }", mode);
+        let output = run(
+            "int a = 1 << 31; int main(void) { int count = 32; return 1 << count; }",
+            mode,
+        );
         assert!(!output.status.success());
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("E3006"),
+            String::from_utf8_lossy(&output.stderr).contains("E3005"),
             "{mode}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
