@@ -94,6 +94,27 @@ fn static_addresses_relocate_objects_members_and_functions() {
 }
 
 #[test]
+fn static_address_conditions_recognize_typed_null_pointer_values() {
+    for condition in ["f == (fn_type)0", "(fn_type)(void *)0 == f"] {
+        check(
+            &format!("typedef int (*fn_type)(void);int f(void){{return 7;}}int g(void){{return 11;}}static fn_type p=({condition})?g:f;int main(void){{return p();}}"),
+            Ok(7),
+            &["relocs=[(0, @f, 0)]"],
+        );
+    }
+    check(
+        "typedef int (*fn_type)(void);int f(void){return 7;}static const void *data=(f==(fn_type)((void *)0))?f:f;int main(void){return ((fn_type)data)();}",
+        Ok(7),
+        &["relocs=[(0, @f, 0)]"],
+    );
+    check(
+        "int a=7,b=11;static int *p=(&a!=(int *)0)?&a:&b;int main(void){return *p;}",
+        Ok(7),
+        &["relocs=[(0, @a, 0)]"],
+    );
+}
+
+#[test]
 fn function_relocations_travel_through_object_pointer_storage() {
     check(
         "int f(void){return 7;} static void *p=(void *)(unsigned long)&f; int main(void){return p!=0;}",
