@@ -339,9 +339,9 @@ fn a_wide_load_and_store_are_a_register_pair() {
 }
 
 #[test]
-fn division_remainder_and_the_signed_predicates_stay_e4003_at_this_width() {
-    // Section 10: "at N = 128, division, remainder and the signed UB
-    // predicates" are E4003.
+fn division_and_remainder_stay_e4003_at_this_width() {
+    // Section 10 still defers division and remainder; revision 0.26 opens
+    // the total predicates without making the arithmetic operations executable.
     for operation in ["sdiv", "udiv", "srem", "urem"] {
         // Division may trap, so its function carries the Section 4.6 summary
         // that says so.
@@ -363,6 +363,10 @@ fn division_remainder_and_the_signed_predicates_stay_e4003_at_this_width() {
             "{operation}: {refusals:?}"
         );
     }
+}
+
+#[test]
+fn signed_predicates_have_full_width_lowering() {
     for predicate in [
         "signed_add_defined",
         "signed_sub_defined",
@@ -378,12 +382,8 @@ fn division_remainder_and_the_signed_predicates_stay_e4003_at_this_width() {
             "%v2",
         );
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
-        let refusals =
-            lower_module(&module).expect_err("the signed predicates at 128 are not lowered");
-        assert!(
-            refusals.iter().any(|refusal| refusal.code == "E4003"),
-            "{predicate}: {refusals:?}"
-        );
+        let lowered = lower_module(&module).expect("total predicates lower at width 128");
+        validate_module(&lowered).expect("the independent machine validator accepts");
     }
 }
 

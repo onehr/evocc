@@ -8,10 +8,9 @@
 //! shifts, the borrow-aware comparison and the even-aligned argument pair
 //! observable rather than asserted: a disagreement is a wrong exit status.
 //!
-//! The C front end does not yet lower `__int128` (it reports `E3033` at the
-//! type, EvoIR 1.9.61 having narrowed that code to division and remainder), so
-//! the sources here are EvoIR rather than C. The comparison is against the same
-//! oracles the C corpus uses.
+//! The sources are EvoIR to isolate register-pair lowering from C parsing and
+//! promotion. The front end also lowers `__int128`; division and remainder
+//! remain separate execution boundaries. The same native oracles serve both.
 
 use std::process::Command;
 
