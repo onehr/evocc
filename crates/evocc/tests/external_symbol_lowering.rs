@@ -25,6 +25,37 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn incomplete_array_alignment_preserves_member_attributes_without_evaluation() {
+    let source = r#"
+        struct Object { int tag; unsigned char bytes[] __attribute__((aligned(8))); };
+        unsigned long query(void) { struct Object *pointer; return __alignof__(pointer->bytes); }
+        int main(void) {
+            struct Object *pointer = 0;
+            if (_Alignof(int[]) != 4) return 1;
+            if (__alignof__((pointer++)->bytes) != 8 || pointer != 0) return 2;
+            return query() != 8;
+        }
+    "#;
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: {:?} {}",
+                output.stdout,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let output = run("int main(void){return sizeof(int[]);}", "--emit=evoir");
+    assert!(
+        !output.status.success(),
+        "alignment must not invent a complete array layout"
+    );
+}
+
+#[test]
 fn globals_first_declared_in_a_block_keep_their_external_storage() {
     let source = include_str!("../../../tests/fixtures/block-extern-global.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

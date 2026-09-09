@@ -52,6 +52,30 @@ fn complete_record(
 }
 
 #[test]
+fn incomplete_array_alignment_does_not_require_an_object_size() {
+    let mut types = TypeInterner::new();
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    let int = types.intern(plain(TypeKind::Int(IntRank::Int)));
+    for bound in [
+        ArrayBound::Unbounded,
+        ArrayBound::Fixed(0),
+        ArrayBound::Fixed(3),
+    ] {
+        let array = types.intern(plain(TypeKind::Array {
+            element: int,
+            bound: bound.clone(),
+        }));
+        assert_eq!(target.alignof_type(&types, array), Ok(4));
+        if bound == ArrayBound::Unbounded {
+            assert_eq!(
+                target.layout_of(&types, array),
+                Err(LayoutError::IncompleteArray(array))
+            );
+        }
+    }
+}
+
+#[test]
 fn aarch64_lp64_scalar_pointer_array_and_enum_layouts() {
     let mut types = TypeInterner::new();
     let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
