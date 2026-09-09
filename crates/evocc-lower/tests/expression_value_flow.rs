@@ -95,6 +95,17 @@ fn type_classification_does_not_require_the_queried_value_to_execute() {
 }
 
 #[test]
+fn constant_if_skips_only_arms_without_another_entry() {
+    agrees(include_str!("../../../tests/fixtures/constant-if-entry.c"));
+}
+
+#[test]
+fn constant_if_without_else_keeps_the_following_environment() {
+    agrees("int main(void){int value=7;if(0)value=5.25;return value!=7;}");
+    agrees("int main(void){int value=7;if(1)value=9;else value=5.25;return value!=9;}");
+}
+
+#[test]
 fn builtin_trap_only_terminates_when_reached() {
     agrees("int f(int stop){if(stop)__builtin_trap();return 7;} int main(void){return f(0)!=7;}");
     agrees("int main(void){return sizeof(__builtin_trap())!=1;}");
