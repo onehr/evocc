@@ -69,7 +69,7 @@ if grep -q 'ALL TESTS PASSED' test.log; then echo tests-passed; else echo tests-
 
 
 def prepare(build: Path, source: Path) -> tuple[Path, dict]:
-    """A clean copy of the pinned tree, with page breaks removed."""
+    """A clean copy of the pinned tree, preserving supported source syntax."""
     tree = build / "tinycc"
     if tree.exists():
         shutil.rmtree(tree)
@@ -77,13 +77,11 @@ def prepare(build: Path, source: Path) -> tuple[Path, dict]:
     pristine = build / "tinycc-pristine"
     if pristine.exists():
         shutil.rmtree(pristine)
-    stripped = mixed.strip_page_breaks(tree)
-    specifiers = mixed.strip_specifiers(tree)
     escaped = mixed.escape_high_bytes(tree)
     mixed.install_recorder(tree)
     return tree, {
-        "sourcePageBreaksStripped": stripped,
-        "noreturnSpecifiersRemoved": specifiers,
+        "sourcePageBreaksStripped": [],
+        "noreturnSpecifiersRemoved": [],
         "highBytesReEscaped": escaped,
     }
 

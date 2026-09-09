@@ -96,10 +96,8 @@ def prepare(build: Path, source: Path) -> tuple[Path, list[str], list[str]]:
     pristine = build / "toybox-pristine"
     if pristine.exists():
         shutil.rmtree(pristine)
-    stripped = mixed.strip_page_breaks(tree)
-    specifiers = mixed.strip_specifiers(tree)
     mixed.install_recorder(tree)
-    return tree, stripped, specifiers
+    return tree, [], []
 
 
 def reference_build(tree: Path) -> str:

@@ -129,35 +129,15 @@ SYSROOT_ADJUSTMENTS = [
         " types (__Float32x4_t, __SVFloat32_t), which the front end has no"
         " syntax for",
     },
-    {
-        "file": "every exported header",
-        "change": "form feeds and vertical tabs are deleted",
-        "why": "C makes both white space (C11 6.4p1); the front end reports a"
-        " form feed as a stray token, and glibc's regex.h uses one as a page"
-        " break, which alone refuses every unit that includes it",
-    },
-    {
-        "file": "gccinc/stdint.h",
-        "change": "renamed out of the search path",
-        "why": "it is a wrapper whose whole body is `#include_next <stdint.h>`,"
-        " and the front end ignores #include_next, so keeping it hides the C"
-        " library's real stdint.h and leaves intmax_t undeclared",
-    },
 ]
 
 #: Definitions handed to the front end for every hosted unit.
 #:
 #: ``__extension__`` only suppresses pedantic warnings in GCC, so erasing it
-#: changes nothing a program can observe; the front end has no keyword for it
-#: and the glibc thread and atomic headers use it in declaration position.
-#:
-#: ``__STDC_NO_VLA__`` is the standard's own way for an implementation to say
-#: it has no variable-length arrays, which is true of the front end today
-#: (E2203). glibc's regex.h reads it and drops the ``regmatch_t
-#: __pmatch[__nmatch]`` parameter form when it is set; without it, every unit
-#: that includes <regex.h> is refused. The front end should predefine this
-#: itself, and that it does not is filed with the run.
-SYSROOT_DEFINES = ["-D__extension__=", "-D__STDC_NO_VLA__=1"]
+#: changes nothing a program can observe. Declaration prefixes are supported,
+#: but the expression prefix still reports E1003, so this workaround remains
+#: explicit until that source form is implemented and replayed.
+SYSROOT_DEFINES = ["-D__extension__="]
 
 EXPORT = r"""
 set -u
@@ -197,15 +177,12 @@ def _adjust_sysroot(root: Path) -> None:
         ):
             text = text.replace(guard, "#if 0 /* EvoCC ladder */\n")
         vector.write_text(text)
-    wrapper = root / "gccinc" / "stdint.h"
-    if wrapper.exists():
-        wrapper.rename(root / "gccinc" / "stdint-wrapper.h.disabled")
-    strip_page_breaks(root, suffixes=(".h",))
 
 
-def ladder_sysroot(name: str = "sysroot-l3") -> tuple[Path, list[str]]:
+def ladder_sysroot(name: str = "sysroot-supported-tokens") -> tuple[Path, list[str]]:
     """Export the container's headers once and return the include flags.
 
+    The distinct cache name avoids reusing headers rewritten by older adapters.
     The export is a plain copy rather than a tar pipe, because a tar pipe
     silently dropped the ``asm/`` tree in an earlier export and left every
     ``<linux/...>`` include unresolvable. Two kinds of file do not survive the
@@ -230,34 +207,6 @@ def ladder_sysroot(name: str = "sysroot-l3") -> tuple[Path, list[str]]:
 # --------------------------------------------------------------------------
 # Source adjustments
 # --------------------------------------------------------------------------
-
-WHITESPACE_CONTROLS = str.maketrans("", "", "\f\v")
-
-
-def strip_page_breaks(tree: Path, suffixes=(".c", ".h", ".def")) -> list[str]:
-    """Remove form feeds and vertical tabs from a subject's sources.
-
-    C makes both of them white space (C11 5.1.1.2p1, 6.4p1), and old GNU
-    sources use a form feed as a page break. The front end reports one as a
-    stray token, which destroys the translation unit; deleting them is a
-    change no conforming compiler can observe, so it is applied to the tree
-    the reference compiler builds as well, and the files touched are listed
-    in the receipt.
-    """
-    touched: list[str] = []
-    for path in sorted(tree.rglob("*")):
-        if path.suffix not in suffixes or not path.is_file():
-            continue
-        try:
-            text = path.read_text(errors="replace")
-        except OSError:
-            continue
-        if "\f" not in text and "\v" not in text:
-            continue
-        path.write_text(text.translate(WHITESPACE_CONTROLS))
-        touched.append(str(path.relative_to(tree)))
-    return touched
-
 
 def escape_high_bytes(tree: Path, suffixes=(".c", ".h")) -> list[str]:
     """Re-spell bytes above 0x7F so a file is valid UTF-8 without changing it.
@@ -302,81 +251,6 @@ def escape_high_bytes(tree: Path, suffixes=(".c", ".h")) -> list[str]:
         path.write_bytes(b"\n".join(lines))
         touched.append(str(path.relative_to(tree)))
     return touched
-
-
-#: Function specifiers the front end lexes as keywords but does not accept in
-#: a declaration, and which therefore cannot be defined away with ``-D``.
-UNSUPPORTED_SPECIFIERS = ("_Noreturn",)
-
-
-def strip_specifiers(
-    tree: Path,
-    tokens: tuple[str, ...] = UNSUPPORTED_SPECIFIERS,
-    suffixes=(".c", ".h"),
-) -> list[str]:
-    """Delete function specifiers the front end cannot parse.
-
-    ``_Noreturn`` tells the compiler a function never returns; deleting it
-    can cost an optimization or a warning and cannot change what a program
-    computes. It has to be deleted rather than defined away, because the
-    front end lexes it as a keyword, so ``-D_Noreturn=`` never reaches it --
-    and then refuses it in declaration position. As with the page breaks, the
-    deletion is applied to the tree the reference compiler builds too, so the
-    two compilers still see the same program.
-
-    Two places are left alone, because the token there is data rather than a
-    specifier: a string or character literal, which is how tcc spells its own
-    keyword table, and a preprocessor directive, which is how musl's
-    ``features.h`` defines ``_Noreturn`` for compilers that predate C11.
-    """
-    pattern = re.compile(r"\b(?:" + "|".join(re.escape(t) for t in tokens) + r")\b")
-    touched: list[str] = []
-    for path in sorted(tree.rglob("*")):
-        if path.suffix not in suffixes or not path.is_file():
-            continue
-        try:
-            text = path.read_text(errors="replace")
-        except OSError:
-            continue
-        changed = False
-        lines = []
-        for line in text.split("\n"):
-            if pattern.search(line) and not line.lstrip().startswith("#"):
-                new = pattern.sub(
-                    lambda match: "" if not _in_literal(line, match.start()) else match.group(0),
-                    line,
-                )
-                changed = changed or new != line
-                line = new
-            lines.append(line)
-        if changed:
-            path.write_text("\n".join(lines))
-            touched.append(str(path.relative_to(tree)))
-    return touched
-
-
-def _in_literal(line: str, index: int) -> bool:
-    """Whether ``line[index]`` sits inside a string or character literal.
-
-    A compiler is one of the subjects, and a compiler spells its own
-    keywords in string literals: tcc's token table contains the four
-    characters ``_Noreturn`` as data. Deleting that would change the program
-    rather than a hint about it, so a match inside a literal is left alone.
-    """
-    quote = None
-    position = 0
-    while position < index:
-        character = line[position]
-        if quote:
-            if character == "\\":
-                position += 2
-                continue
-            if character == quote:
-                quote = None
-        elif character in "\"'":
-            quote = character
-        position += 1
-    return quote is not None
 
 
 # --------------------------------------------------------------------------

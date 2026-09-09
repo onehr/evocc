@@ -148,22 +148,6 @@ class SymbolParity(unittest.TestCase):
         self.assertEqual(excluded, {})
 
 
-class Specifiers(unittest.TestCase):
-    def test_a_declaration_loses_the_specifier_but_data_keeps_it(self):
-        with tempfile.TemporaryDirectory() as directory:
-            tree = Path(directory)
-            (tree / "a.c").write_text(
-                '_Noreturn void die(void);\n'
-                'const char *name = "_Noreturn";\n'
-                '#define _Noreturn __attribute__((__noreturn__))\n'
-            )
-            self.assertEqual(mixed.strip_specifiers(tree), ["a.c"])
-            text = (tree / "a.c").read_text()
-            self.assertTrue(text.startswith(" void die(void);"))
-            self.assertIn('"_Noreturn"', text)
-            self.assertIn("#define _Noreturn __attribute__", text)
-
-
 class PreparationPreservesSource(unittest.TestCase):
     def test_exported_headers_keep_include_next_and_whitespace(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -316,17 +300,6 @@ class LinkDiagnostics(unittest.TestCase):
             " first defined here\n"
         )
         self.assertEqual(mixed.multiple_definition_symbols(log), {"is_space"})
-
-
-class PageBreaks(unittest.TestCase):
-    def test_form_feeds_and_vertical_tabs_are_removed(self):
-        with tempfile.TemporaryDirectory() as directory:
-            tree = Path(directory)
-            (tree / "a.c").write_text("int main(void)\n{\n\f\v  return 0;\n}\n")
-            (tree / "b.c").write_text("int f(void);\n")
-            touched = mixed.strip_page_breaks(tree)
-            self.assertEqual(touched, ["a.c"])
-            self.assertNotIn("\f", (tree / "a.c").read_text())
 
 
 if __name__ == "__main__":
