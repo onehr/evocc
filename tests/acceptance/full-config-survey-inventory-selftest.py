@@ -45,7 +45,7 @@ def main() -> int:
         (sources / "scripts").mkdir(parents=True)
         (sources / "kernel/target.c").write_text("int target;\n", encoding="utf-8")
         (sources / "scripts/host.c").write_text("int host;\n", encoding="utf-8")
-        write_record(commands, "kernel/.target.o.cmd", "gcc-14", "kernel/target.c")
+        write_record(commands, "kernel/.target.o.cmd", "gcc-14 -fshort-wchar", "kernel/target.c")
         write_record(commands, "scripts/.host.o.cmd", "gcc", "scripts/host.c")
 
         reconnaissance = survey.load_reconnaissance_runner()
@@ -73,6 +73,8 @@ def main() -> int:
         assert lowering_units[0].projected_argv[1:3] == ("--emit=evoir", "--survey")
         assert units[0].projected_argv[3:] == lowering_units[0].projected_argv[3:]
         assert units[0].omitted_argv == lowering_units[0].omitted_argv
+        assert "-fshort-wchar" in units[0].projected_argv, units[0].projected_argv
+        assert "-fshort-wchar" not in units[0].omitted_argv, units[0].omitted_argv
 
         assert survey.diagnostic_code_family({"code": "E3034"}) == "E30xx"
         assert survey.diagnostic_code_family({"code": "E2928"}) == "E29xx"
