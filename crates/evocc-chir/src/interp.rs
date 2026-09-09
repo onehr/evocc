@@ -1330,6 +1330,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             expression = operand;
         }
         let mut value = match expression {
+            CHirExpr::LabelAddress { span, .. } => {
+                Err(InterpreterError::ComputedGoto { span: *span })
+            }
             CHirExpr::Ternary(condition, left, right, span)
                 if self.infer_integer_type(expression).is_err() =>
             {
