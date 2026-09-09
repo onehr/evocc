@@ -667,6 +667,13 @@ fn lower_resolved_unit(
         }
         let (size, align) = match target.layout_of(unit.types(), entry.ty()) {
             Ok(layout) => (Some(layout.size_bytes), layout.align_bytes),
+            Err(LayoutError::IncompleteTag(tag)) => (
+                None,
+                unit.types()
+                    .tag(tag)
+                    .and_then(|tag| tag.layout.aligned)
+                    .unwrap_or(1),
+            ),
             Err(_) => match unit.types().get(entry.ty()).map(|ty| &ty.kind) {
                 Some(TypeKind::Array {
                     element,

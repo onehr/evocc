@@ -1361,7 +1361,7 @@ fn incomplete_external_objects_have_addresses_without_invented_layouts() {
     }
     let output = run(
         "struct FILE; extern struct FILE input; int f(void){return sizeof input;}",
-        "--parse-only",
+        "--emit=evoir",
     );
     assert!(
         !output.status.success(),
