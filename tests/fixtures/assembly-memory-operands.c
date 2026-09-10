@@ -16,5 +16,12 @@ int main(void) {
     if (read != 23) return 2;
     __asm__ volatile("" : : "g"(general++), "g"(&local), "g"(5));
     if (general != 18 || local != 23) return 3;
+    long pair[2] = {29, 31};
+    __asm__ volatile("stp %1, %2, %0" : "=m"(pair) : "r"(37L), "r"(41L));
+    if (pair[0] != 37 || pair[1] != 41) return 4;
+    struct record { long first, second; } record = {41, 43};
+    __asm__ volatile("ldr x9, %0\n\tadd x9, x9, #3\n\tstr x9, %0"
+                     : "+m"(record) : : "x9");
+    if (record.first != 44 || record.second != 43) return 5;
     return 0;
 }

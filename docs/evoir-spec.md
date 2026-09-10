@@ -6699,10 +6699,10 @@ One isolated failing unit is measured, no new diagnostic is allocated, and a bod
 
 ### Memory and general assembly operand probes
 
-The reviewed `m`/`=m`/`+m`/`g` expansion remains pending a Section 3.11 body change; these probes do not extend the current constraint vocabulary.
-Both sealed compilers at O0/O2 run `.evidence/builtin-probes/20260910-memory-constraints/memory.c` with output `7 14 3` and `general.c` with output `8`, all exiting zero (`results.txt`), covering memory read/write and exactly-once operand evaluation.
-The retained first probe `operands.c` is not consensus evidence: Clang-19 O0 selects memory for `g` and rejects its register-only `mov` template, so a template that assumes `g` always chooses a register is not a valid test of that operand class.
-No diagnostic is allocated, no original-program gain is claimed, and the eight successful runs do not establish a universal oracle register-selection rule.
+Per S07 and the 2026-09-10 implementation authorization, `m`/`=m`/`+m` select the existing address-only `Q`/`=Q`/`+Q` representation, while input `g` selects `r`; source operands are evaluated once, and memory operands introduce no implicit scalar load or writeback.
+Memory operands require addressable objects, and memory outputs may name arrays but cannot write const subobjects; violations use E2914, while unrepresentable register inputs and unlisted constraint combinations retain E3021.
+Both sealed compilers at O0/O2 pass `tests/fixtures/assembly-memory-operands.c` and the earlier probes under `.evidence/builtin-probes/20260910-memory-constraints/` (`results.txt`); both reject `assembly-memory-object-errors.c` cases 1–3 and accept 4–5, and the old register-only `operands.c` is not consensus evidence because Clang may select memory for `g`.
+Register selection is the reviewed profile choice, not a universal oracle-selection claim; no original-program gain is measured here, and affected benchmark counts remain those of the last full campaign.
 
 ### Immediate qualifiers in character-pointer conversions
 

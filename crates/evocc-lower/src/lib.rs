@@ -4227,6 +4227,8 @@ impl<'a> FunctionLowerer<'a> {
                 "+rm" | "+mr" => "+r",
                 "=&rm" | "=&mr" => "=&r",
                 "+&rm" | "+&mr" => "+&r",
+                "=m" => "=Q",
+                "+m" => "+Q",
                 constraint => constraint,
             };
             if !matches!(constraint, "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q") {
@@ -4380,11 +4382,13 @@ impl<'a> FunctionLowerer<'a> {
                     return Err(refuse(operand.constraint.clone()));
                 }
                 "r".to_owned()
-            } else if register_alternative {
+            } else if register_alternative || operand.constraint == "g" {
                 if !evocc_evoir::assembly_register_type(&value.ty) {
                     return Err(refuse(operand.constraint.clone()));
                 }
                 "r".to_owned()
+            } else if operand.constraint == "m" {
+                "Q".to_owned()
             } else {
                 operand.constraint.clone()
             };

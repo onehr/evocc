@@ -7527,7 +7527,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let expression = self.parse_expression()?;
             let close = self.expect(TokenKind::RParen)?;
             let span = self.merge_span(start, close.span);
-            if outputs && !self.is_modifiable_asm_output(expression) {
+            let memory = matches!(
+                constraint.as_str(),
+                "m" | "=m" | "+m" | "Q" | "=Q" | "+Q" | "Qo"
+            );
+            let memory_place = if memory {
+                let Some(place) = self
+                    .resolve_memory_place(expression)
+                    .filter(MemoryPlace::is_addressable)
+                else {
+                    self.report("E2914", "malformed-asm", expression.span());
+                    return None;
+                };
+                Some(place)
+            } else {
+                None
+            };
+            let writable = memory_place.as_ref().map_or_else(
+                || self.is_modifiable_asm_output(expression),
+                |place| self.is_writable_asm_memory(place),
+            );
+            if outputs && !writable {
                 self.report("E2914", "malformed-asm", expression.span());
                 return None;
             }
@@ -7599,13 +7619,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let InferredType::Canonical(ty) = inferred.ty else {
             return false;
         };
-        self.types.get(ty).is_some_and(|canonical| {
-            !canonical.qualifiers.is_const
-                && !matches!(
-                    canonical.kind,
-                    TypeKind::Array { .. } | TypeKind::Function { .. }
-                )
-        })
+        is_modifiable_object_type(&self.types, ty)
+    }
+
+    /// Assembly writes an array's storage, not an array assignment. Preserve
+    /// const subobject checks while testing its element type for writability.
+    fn is_writable_asm_memory(&self, place: &MemoryPlace<'_>) -> bool {
+        if place.access_qualifiers().is_const {
+            return false;
+        }
+        let mut ty = place.value_ty();
+        while let Some(canonical) = self.types.get(ty) {
+            if canonical.qualifiers.is_const {
+                return false;
+            }
+            let TypeKind::Array { element, .. } = canonical.kind else {
+                return is_modifiable_object_type(&self.types, ty);
+            };
+            ty = element;
+        }
+        false
     }
 
     // ── statements ─────────────────────────────────────────────────────

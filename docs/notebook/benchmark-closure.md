@@ -194,6 +194,29 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### General and memory assembly operands
+
+Tests-only `2e195f8` records three semantic failures, five passing guards and
+zero build errors. The reviewed `m`/`=m`/`+m` forms now use the existing
+address-based Q forms, while input `g` selects the existing register form.
+Parser object checks admit writable arrays without accepting const subobjects
+or non-addressable inputs. The IR's canonical constraint vocabulary and its
+validator are unchanged; memory operands cause no scalar load or writeback.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc --test
+inline_assembly_lowering -p evocc-parser --test gnu_asm -p evocc-evoir --test
+inline_assembly --locked --offline --no-fail-fast -j 1` passes 60 tests,
+zero failed or ignored, including native operand and goto regressions. The
+final expanded fixture repeats the eight `memory_` tests successfully;
+these are not eight additional distinct tests. `cargo clippy -p evocc-parser
+-p evocc-evoir -p evocc-lower --lib --locked --offline -j 1 -- -D warnings`,
+fmt, Ruff and diff-check pass. Both sealed compilers execute the final
+fixture at O0/O2, and both Linux toolchains execute subject assembly, all
+six exiting zero. The initial array write-only probe was corrected after
+GCC O2 exposed its invalid expectation of an unwritten element; no compiler
+change or subject PASS is justified by that failed reference attempt.
+All full-campaign counts are unchanged.
+
 ### Union member values and static initializer dependencies
 
 Tests-only `b589d6f` records three semantic failures and zero build errors.

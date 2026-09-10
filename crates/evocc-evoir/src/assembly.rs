@@ -45,10 +45,12 @@ pub struct InlineAssembly {
     pub world_out: Value,
 }
 
-/// Memory constraints carry addresses, including write-only outputs.
+/// Memory constraints carry addresses, including write-only outputs. Source
+/// `m` forms normalize to `Q` before IR validation; the IR vocabulary stays
+/// canonical rather than requiring the backend to choose an addressing mode.
 #[must_use]
 pub fn assembly_memory_constraint(constraint: &str) -> bool {
-    matches!(constraint, "Q" | "=Q" | "+Q" | "Qo")
+    matches!(constraint, "Q" | "=Q" | "+Q" | "Qo" | "m" | "=m" | "+m")
 }
 
 /// A lowered local-register operand preserves its physical binding in the
