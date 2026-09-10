@@ -1,5 +1,6 @@
 struct U { unsigned long x:40; };
 struct S { signed long pad:12; signed long x:52; };
+struct T { signed long x:53; signed long pad:11; };
 
 int main(void) {
     struct U u = {0xffffffffffUL};
@@ -23,5 +24,8 @@ int main(void) {
     s.x = 0xFFF000FFF000FL;
     s.x |= 0x0008765412345678L;
     if (s.pad != 0x123 || s.x != (long)0xFFFFFF541FFF567FUL) return 14;
+    struct T t = {0x1FFFF00000000L, 0x123};
+    t.x ^= 0x0018765412345678L;
+    if (t.pad != 0x123 || t.x != (long)0xFFF989AB12345678UL) return 15;
     return 0;
 }

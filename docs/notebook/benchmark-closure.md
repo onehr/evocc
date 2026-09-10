@@ -194,6 +194,30 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Wide-field consensus and conflicting precision contexts
+
+Tests-only `36288de` records three parser semantic failures and one lowering
+failure, with no build error. The consensus fixture covers the signed 52/53-bit
+XOR/OR and unsigned 35-bit sign checks behind `991118-1`, `bf64-1` and
+`bf-sign-2`, plus unsigned stored updates, returned values and neighboring bits.
+Both sealed compilers execute it at O0/O2 with zero exits.
+
+The parser now checks the consuming operation instead of refusing every wide
+field promotion. It retains precision through parentheses, comma, conditionals
+and update results, and only discharges an unsigned sign comparison when both
+possible precisions are unsigned. A macro-span regression prevents unrelated
+refusals from being erased. The additional probe found negative comparisons
+and mixed signed-long operations disagree even though positive comparisons
+and unsigned-long arithmetic agree; those shapes remain E2939, with exact
+outputs in `tests/fixtures/wide-bit-field-contexts.out` and Appendix D.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser --test
+unsupported_bit_field_semantics -p evocc-lower --test
+static_storage_and_discard --locked --offline --no-fail-fast -j 1 --quiet`
+passes 26 tests (nine parser, 17 lowering), no failures or ignored tests.
+These are local regression results; the original-program counts remain at
+the last sealed campaign, and the full campaign is deliberately not rerun.
+
 ### Source-width constant arithmetic without weakening runtime checks
 
 Tests-only commit `4675bd6` extends the existing RED with source-width

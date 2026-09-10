@@ -34,5 +34,11 @@ int main(void) {
     printf("divide-assign %lx\n", (unsigned long)(u.x /= -1));
     u.x = 0xffffffffffUL;
     printf("remainder-assign %lx\n", (unsigned long)(u.x %= -1));
+    u.x = 0xffffffffffUL;
+    printf("negative-comparisons %d %d %d %d\n", u.x < -1, u.x == -1, u.x < -1L, u.x == -1L);
+    printf("signed-wide-divide %lx %lx\n", (unsigned long)(u.x / -1L), (unsigned long)(u.x % -1L));
+    printf("signed-wide-condition %lx\n", (unsigned long)(0 ? u.x : -1L));
+    printf("signed-wide-condition-sign %d\n", (0 ? u.x : -1L) < 0);
+    printf("signed-wide-sum-sign %d\n", (u.x + -0x10000000000L) < 0);
     return 0;
 }

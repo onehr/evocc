@@ -1,0 +1,61 @@
+Probe: wide-bit-field-contexts.c
+Target: linux/arm64, evo-flight-lab:sealed, network disabled
+Command for each compiler and optimization level:
+  COMPILER -std=gnu11 -OLEVEL wide-bit-field-contexts.c -o /tmp/probe && /tmp/probe
+Both O0 and O2 produced the following stdout for the named compiler; all four executions exited zero.
+
+gcc-14:
+comparison 1 1 1
+right-shift ffffffff
+wide-product 1fffffffffe
+wide-sum 10000000000
+narrow-difference-sign 0
+wide-condition ffffffffff
+compound 0 0
+postfix ffffffffff 0
+prefix 0
+signed-store 123 fff9551175bdfdb5
+conflict-shift fffffffffe
+conflict-sum 0
+conflict-unary-nested 0
+conflict-condition-nested 0
+conflict-compound-nested 0
+conflict-postfix-nested 0
+conflict-comma-nested 0
+conflict-negative-arm ffffffffff
+divide-assign 1
+remainder-assign 0
+negative-comparisons 0 1 0 0
+signed-wide-divide ffffff0000000001 0
+signed-wide-condition ffffffffffffffff
+signed-wide-condition-sign 1
+signed-wide-sum-sign 1
+
+clang-19:
+comparison 1 1 1
+right-shift ffffffff
+wide-product 1fffffffffe
+wide-sum 10000000000
+narrow-difference-sign 0
+wide-condition ffffffffff
+compound 0 0
+postfix ffffffffff 0
+prefix 0
+signed-store 123 fff9551175bdfdb5
+conflict-shift 1fffffffffe
+conflict-sum 10000000000
+conflict-unary-nested 10000000000
+conflict-condition-nested 10000000000
+conflict-compound-nested 10000000000
+conflict-postfix-nested 10000000000
+conflict-comma-nested 10000000000
+conflict-negative-arm ffffffffffffffff
+divide-assign 0
+remainder-assign ffffffffff
+negative-comparisons 1 0 1 0
+signed-wide-divide 0 ffffffffff
+signed-wide-condition ffffffffffffffff
+signed-wide-condition-sign 0
+signed-wide-sum-sign 0
+
+Clang also reports an unused-value warning for the discarded value of the comma expression's left operand; it does not reject the program.

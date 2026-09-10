@@ -6111,6 +6111,27 @@ Evidence is the earlier `20260909-constant-contexts/{constants.c,results.txt}` p
 Runtime variable overflow, invalid shift counts, division by zero and executed signed `MIN / -1` retain their existing obligations; no diagnostic is removed or allocated.
 This implements the user's authorization to record the missing body distinction here, affects the named original `920730-1`, and does not claim a new full-campaign result.
 
+### Wide-field consumers and stored results (2026-09-10 authorization)
+
+The narrowed profile admits precision-invariant comparison, truth, right shift, full-declared-width arithmetic with agreed signedness, and conditional arms whose values fit the common field precision; unsigned total compound arithmetic and increments/decrements also agree after truncation back into the field, as do signed compound operations with a full-width other operand.
+A result that is unsigned under both field precisions, from add/subtract/multiply/bitwise arithmetic and compared with integer zero solely for its sign, is precision-invariant: this discharges only that operation's E2939, without deleting its evaluation, side effects or other pending diagnostics.
+Evidence is `tests/fixtures/wide-bit-field-contexts.{c,out}` (sealed GCC-14/Clang-19, O0/O2) and the value assertions in `wide-field-consensus.c`; the three affected original torture programs are `991118-1`, `bf64-1` and `bf-sign-2`, with no new full-campaign count claimed.
+This refines the body's broader compound/update refusal under the user's authorization, without allocating a diagnostic or weakening runtime overflow obligations.
+
+### Precision must survive expression wrappers
+
+E2939 remains required when a disputed wide-field value reaches narrow arithmetic through unary plus, a comma, a conditional, a right shift, or an assignment/update result; a wide shift-count type never widens the shifted value.
+The same `wide-bit-field-contexts.{c,out}` probe measures GCC's zero versus Clang's `0x10000000000` in those nested additions, and `0xfffffffffe` versus `0x1fffffffffe` for a 40-bit value shifted by `1UL`.
+A negative conditional arm converted to an unsigned field-precision result and narrow division/remainder assignments also disagree and remain E2939; admitting a stored unsigned add does not admit those different operations.
+These corrections preserve the original refusal code, close the measured comma-wrapper acceptance hole, and do not infer a corpus count from the probes.
+
+### Wide-field mixed signedness
+
+An unsigned wide field combined with a signed operand can disagree even in comparison: the probe above gives GCC/Clang `0/1` for `< -1`, `1/0` for `== -1`, and `0/1` for `< -1L`; these comparisons retain E2939 unless the signed operand is known nonnegative or has a wider type that represents both full declared ranges.
+With a signed operand of the field's declared width, arithmetic and conditional results can have different signedness, so those forms also retain E2939 rather than discharging a subsequent sign comparison.
+The same sealed probe gives `ffffff0000000001/0` for division by `-1L`, `0/ffffffffff` for its remainder, and `1/0` for the negative wide sum's sign, at both optimization levels.
+No diagnostic is added; this records measured boundaries of the authorized narrowing, not evidence that every comparison or full-width operand is safe.
+
 ### Pending body revision: dynamic automatic objects
 
 The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.

@@ -248,6 +248,28 @@ struct SwitchCaseContext {
     intervals: Vec<(i128, i128)>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct BinaryExpressionIdentity {
+    operator: BinaryOp,
+    left: usize,
+    right: usize,
+}
+
+impl BinaryExpressionIdentity {
+    fn of(expression: &CHirExpr<'_>) -> Option<Self> {
+        let CHirExpr::Binary(operator, left, right, _) = expression else {
+            return None;
+        };
+        // Parentheses clone the root with a different span, but preserve its
+        // operands. Neither root addresses nor macro spans identify this use.
+        Some(Self {
+            operator: *operator,
+            left: *left as *const CHirExpr<'_> as usize,
+            right: *right as *const CHirExpr<'_> as usize,
+        })
+    }
+}
+
 pub struct Parser<'src, 'arena> {
     target_layout: TargetDataLayout,
     standard_builtins: bool,
@@ -295,7 +317,14 @@ pub struct Parser<'src, 'arena> {
     builtin_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     current_function_parameters: Option<ParameterSyntax>,
-    profile_refusals: Vec<(evocc_chir::ProfileRefusal, usize)>,
+    // The optional expression identity lets a surrounding, precision-invariant
+    // consumer discharge only its own pending wide-field refusal. Source spans
+    // cannot identify expressions: macro expansions can share the same span.
+    profile_refusals: Vec<(
+        evocc_chir::ProfileRefusal,
+        usize,
+        Option<BinaryExpressionIdentity>,
+    )>,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -578,19 +607,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_profile_refusals(
             refusals
                 .iter()
-                .map(|(refusal, _)| refusal.clone())
+                .map(|(refusal, _, _)| refusal.clone())
                 .collect(),
         );
         if !refusals.is_empty() {
             let retained = evocc_chir::inline::retained_functions(&unit);
-            let active = refusals.into_iter().filter(|(refusal, _)| {
+            let active = refusals.into_iter().filter(|(refusal, _, _)| {
                 // A malformed definition/linkage is not proof of disuse.
                 !definitions.contains(&refusal.function)
                     || retained
                         .as_ref()
                         .map_or(true, |functions| functions.contains(&refusal.function))
             });
-            for (inserted, (refusal, preceding)) in active.enumerate() {
+            for (inserted, (refusal, preceding, _)) in active.enumerate() {
                 self.report(refusal.code, refusal.message, refusal.span);
                 let diagnostic = self.diagnostics.pop().expect("just reported diagnostic");
                 // This is parse encounter order, not a comparison of spans
@@ -731,6 +760,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         span,
                     },
                     self.diagnostics.len(),
+                    None,
                 ));
                 return true;
             }
@@ -8156,10 +8186,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // right-associative RHS so recovery resumes at the statement boundary.
         let typed_target = self.typed_update_target(target);
         let value = self.parse_assignment()?;
-        if op != AssignmentOp::Simple {
-            self.require_supported_integer_promotion(target)?;
-            self.require_supported_integer_promotion(value)?;
-        }
+        self.require_supported_assignment_promotion(op, target, value)?;
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
         let constraint = self.assignment_constraint(op, typed_target.ty(), value);
@@ -9239,29 +9266,311 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(inferred)
     }
 
-    /// The profile refuses the oracle-dependent promotion of a field wider
-    /// than int. Its storage and explicit conversions remain ordinary C.
+    /// Only a consumer that observes disputed field precision is refused.
     fn require_supported_integer_promotion(&mut self, expression: &CHirExpr<'_>) -> Option<()> {
-        if self
-            .expression_bit_field_width(expression)
-            .is_some_and(|width| width > u16::from(CIntegerType::INT.bits()))
-            && !self.defer_profile_refusal(
+        self.require_supported_promotion_at(expression, expression)
+    }
+
+    fn require_supported_promotion_at(
+        &mut self,
+        expression: &CHirExpr<'_>,
+        consumer: &CHirExpr<'_>,
+    ) -> Option<()> {
+        if self.wide_field_integer(expression).is_some() {
+            let previous = self.profile_refusals.len();
+            if !self.defer_profile_refusal(
                 "E2939",
                 "unsupported-wide-bit-field-promotion",
                 expression.span(),
-            )
-        {
-            return None;
+            ) {
+                return None;
+            }
+            if let Some((_, _, cause)) = self.profile_refusals.get_mut(previous) {
+                *cause = BinaryExpressionIdentity::of(consumer);
+            }
         }
         Some(())
     }
 
+    fn promoted_integer_operand(&self, expression: &CHirExpr<'_>) -> Option<CIntegerType> {
+        match self.operand_type_class(self.converted_expression_type(expression)?.ty) {
+            OperandTypeClass::Integer(integer) => Some(CInteger::new(0, integer).promoted().ty()),
+            OperandTypeClass::WideInteger { ty, .. } => self.canonical_integer_type(ty).ok(),
+            _ => None,
+        }
+    }
+
+    fn wide_field_integer(&self, expression: &CHirExpr<'_>) -> Option<CIntegerType> {
+        self.wide_field_precision(expression)
+            .map(|(_, integer)| integer)
+    }
+
+    fn require_supported_binary_promotion(
+        &mut self,
+        operator: BinaryOp,
+        left: &CHirExpr<'_>,
+        right: &CHirExpr<'_>,
+        consumer: &CHirExpr<'_>,
+    ) -> Option<()> {
+        if operator == BinaryOp::Shl {
+            // A wide shift count never widens the shifted operand.
+            return self.require_supported_promotion_at(left, consumer);
+        }
+        if matches!(
+            operator,
+            BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        ) {
+            for (field, other) in [(left, right), (right, left)] {
+                if self.wide_field_integer(field).is_some_and(|integer| {
+                    !integer.is_signed()
+                        && self.promoted_integer_operand(other).is_some_and(|other| {
+                            other.is_signed() && other.bits() <= integer.bits()
+                        })
+                }) && !self
+                    .eval_integer_constant_expression(other)
+                    .is_ok_and(|value| {
+                        value
+                            .try_mathematical_value()
+                            .is_some_and(|value| value >= 0)
+                    })
+                {
+                    self.require_supported_promotion_at(field, consumer)?;
+                }
+            }
+        }
+        if matches!(
+            operator,
+            BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+        ) {
+            for (field, other) in [(left, right), (right, left)] {
+                if let Some(integer) = self.wide_field_integer(field) {
+                    if self.wide_field_integer(other).is_some()
+                        || self.promoted_integer_operand(other).is_none_or(|other| {
+                            other.bits() < integer.bits()
+                                || (!integer.is_signed()
+                                    && other.is_signed()
+                                    && other.bits() == integer.bits())
+                        })
+                    {
+                        self.require_supported_promotion_at(field, consumer)?;
+                    }
+                }
+            }
+        }
+        Some(())
+    }
+
+    fn require_supported_assignment_promotion(
+        &mut self,
+        operator: AssignmentOp,
+        target: &CHirExpr<'_>,
+        value: &CHirExpr<'_>,
+    ) -> Option<()> {
+        let binary = match operator {
+            AssignmentOp::Simple => return Some(()),
+            AssignmentOp::Add => BinaryOp::Add,
+            AssignmentOp::Subtract => BinaryOp::Sub,
+            AssignmentOp::Multiply => BinaryOp::Mul,
+            AssignmentOp::Divide => BinaryOp::Div,
+            AssignmentOp::Remainder => BinaryOp::Mod,
+            AssignmentOp::ShiftLeft => BinaryOp::Shl,
+            AssignmentOp::ShiftRight => BinaryOp::Shr,
+            AssignmentOp::BitAnd => BinaryOp::BitAnd,
+            AssignmentOp::BitOr => BinaryOp::BitOr,
+            AssignmentOp::BitXor => BinaryOp::BitXor,
+        };
+        // Unsigned total arithmetic followed by truncation into the original
+        // field has the same stored value at either intermediate precision.
+        // Division and shifts do not have this property and keep their checks.
+        if self
+            .wide_field_integer(target)
+            .is_some_and(|integer| !integer.is_signed())
+            && matches!(
+                binary,
+                BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor
+            )
+        {
+            return Some(());
+        }
+        self.require_supported_binary_promotion(binary, target, value, target)
+    }
+
+    fn require_supported_update_promotion(&mut self, target: &CHirExpr<'_>) -> Option<()> {
+        if self
+            .wide_field_integer(target)
+            .is_some_and(|integer| !integer.is_signed())
+        {
+            return Some(());
+        }
+        self.require_supported_integer_promotion(target)
+    }
+
+    fn require_supported_conditional_promotion(
+        &mut self,
+        left: &CHirExpr<'_>,
+        right: &CHirExpr<'_>,
+    ) -> Option<()> {
+        for (field, other) in [(left, right), (right, left)] {
+            let Some(integer) = self.wide_field_integer(field) else {
+                continue;
+            };
+            let Some(other_integer) = self.promoted_integer_operand(other) else {
+                continue;
+            };
+            let other_is_wide_field = self.wide_field_integer(other).is_some();
+            if !integer.is_signed()
+                && other_integer.is_signed()
+                && other_integer.bits() == integer.bits()
+            {
+                self.require_supported_integer_promotion(field)?;
+                continue;
+            }
+            if !other_is_wide_field && other_integer.bits() >= integer.bits() {
+                continue;
+            }
+            if !integer.is_signed()
+                && other_integer.is_signed()
+                && !self
+                    .eval_integer_constant_expression(other)
+                    .is_ok_and(|value| {
+                        value
+                            .try_mathematical_value()
+                            .is_some_and(|value| value >= 0)
+                    })
+            {
+                self.require_supported_integer_promotion(field)?;
+            }
+        }
+        Some(())
+    }
+
+    fn discharge_unsigned_sign_comparison(
+        &mut self,
+        operator: BinaryOp,
+        left: &CHirExpr<'_>,
+        right: &CHirExpr<'_>,
+    ) {
+        let (value, zero) = match operator {
+            BinaryOp::Lt | BinaryOp::Ge => (left, right),
+            BinaryOp::Gt | BinaryOp::Le => (right, left),
+            _ => return,
+        };
+        if !self
+            .eval_integer_constant_expression(zero)
+            .is_ok_and(|value| !value.truth())
+            || !self
+                .promoted_integer_operand(value)
+                .is_some_and(|integer| !integer.is_signed())
+            || !matches!(
+                value,
+                CHirExpr::Binary(
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::BitAnd
+                        | BinaryOp::BitOr
+                        | BinaryOp::BitXor,
+                    ..
+                )
+            )
+        {
+            return;
+        }
+        // Both possible unsigned precisions give the same sign comparison.
+        // Do not discard evaluation, or clear nested/unrelated diagnostics.
+        let identity = BinaryExpressionIdentity::of(value);
+        let CHirExpr::Binary(_, a, b, _) = value else {
+            return;
+        };
+        for (field, other) in [(a, b), (b, a)] {
+            if self.wide_field_integer(field).is_some_and(|integer| {
+                !integer.is_signed()
+                    && self
+                        .promoted_integer_operand(other)
+                        .is_some_and(|other| other.is_signed() && other.bits() == integer.bits())
+            }) {
+                // GCC can use a signed long here while Clang retains the
+                // unsigned declared type, so the sign is not invariant.
+                return;
+            }
+        }
+        self.profile_refusals
+            .retain(|(refusal, _, cause)| refusal.code != "E2939" || *cause != identity);
+    }
+
     fn expression_bit_field_width(&self, expression: &CHirExpr<'_>) -> Option<u16> {
-        Some(
-            self.expression_record_field(expression)?
-                .bit_field?
-                .width_bits,
-        )
+        if let Some(field) = self.expression_record_field(expression) {
+            return Some(field.bit_field?.width_bits);
+        }
+        self.wide_field_precision(expression)
+            .map(|(width, _)| width)
+    }
+
+    // Carry the width and integer type together. Asking expression_type again
+    // for the same conditional arm recursively repeats this precision walk.
+    fn wide_field_precision(&self, expression: &CHirExpr<'_>) -> Option<(u16, CIntegerType)> {
+        match expression {
+            CHirExpr::Unary(UnaryOp::Plus, operand, _)
+            | CHirExpr::Binary(BinaryOp::Shr, operand, _, _)
+            | CHirExpr::Comma(_, operand, _)
+            | CHirExpr::EvaluateOnce(operand, _) => {
+                return self.wide_field_precision(operand);
+            }
+            CHirExpr::MemoryAssign { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+                let PlaceProjection::Field(field) = place.projections().last()? else {
+                    return None;
+                };
+                let TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                ) = &self.types.tag(field.tag())?.state
+                else {
+                    return None;
+                };
+                let field = fields.get(field.field_index())?;
+                let width = field.bit_field?.width_bits;
+                let integer = self.canonical_integer_type(field.ty).ok()?;
+                return (width > 32 && width < u16::from(integer.bits()))
+                    .then_some((width, integer));
+            }
+            CHirExpr::Ternary(_, left, right, _) | CHirExpr::Elvis(left, right, _) => {
+                let left_precision = self.wide_field_precision(left);
+                let right_precision = self.wide_field_precision(right);
+                return match (left_precision, right_precision) {
+                    (Some((left_width, left)), Some((right_width, right))) => Some((
+                        left_width.max(right_width),
+                        usual_arithmetic_type(left, right),
+                    )),
+                    (Some((width, integer)), None) | (None, Some((width, integer))) => {
+                        let other = if left_precision.is_some() {
+                            right
+                        } else {
+                            left
+                        };
+                        let other = self.promoted_integer_operand(other)?;
+                        (other.bits() < integer.bits())
+                            .then_some((width, usual_arithmetic_type(integer, other)))
+                    }
+                    _ => None,
+                };
+            }
+            _ => {}
+        }
+        let field = self.expression_record_field(expression)?;
+        let width = field.bit_field?.width_bits;
+        let integer = self.canonical_integer_type(field.ty).ok()?;
+        (width > 32 && width < u16::from(integer.bits())).then_some((width, integer))
     }
 
     fn expression_record_field(&self, expression: &CHirExpr<'_>) -> Option<&RecordField> {
@@ -9797,16 +10106,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if self.match_kind(TokenKind::Colon) {
             let fallback = self.parse_conditional()?;
-            self.require_supported_integer_promotion(condition)?;
-            self.require_supported_integer_promotion(fallback)?;
+            self.require_supported_conditional_promotion(condition, fallback)?;
             let span = self.merge_span(condition.span(), fallback.span());
             return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
         }
         let when_true = self.parse_expression()?;
         self.expect(TokenKind::Colon)?;
         let when_false = self.parse_conditional()?;
-        self.require_supported_integer_promotion(when_true)?;
-        self.require_supported_integer_promotion(when_false)?;
+        self.require_supported_conditional_promotion(when_true, when_false)?;
         let span = self.merge_span(condition.span(), when_false.span());
         Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
     }
@@ -9825,12 +10132,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let op_prec = prec(op_kind);
             self.advance();
             let rhs = self.parse_binary(op_prec + 1)?;
-            if !matches!(op, BinaryOp::And | BinaryOp::Or) {
-                self.require_supported_integer_promotion(lhs)?;
-                self.require_supported_integer_promotion(rhs)?;
-            }
             let span = self.merge_span(lhs.span(), rhs.span());
-            lhs = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
+            let expression = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
+            self.discharge_unsigned_sign_comparison(op, lhs, rhs);
+            self.require_supported_binary_promotion(op, lhs, rhs, expression)?;
+            lhs = expression;
         }
         Some(lhs)
     }
@@ -9865,7 +10171,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ) {
             let token = self.advance().expect("peeked prefix update");
             let target = self.parse_unary()?;
-            self.require_supported_integer_promotion(target)?;
+            self.require_supported_update_promotion(target)?;
             let typed_target = self.typed_update_target(target)?;
             let op = if token.kind == TokenKind::PlusPlus {
                 UpdateOp::PreIncrement
@@ -9916,7 +10222,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(op) = unary {
             let token = self.advance().unwrap();
             let operand = self.parse_unary()?;
-            if matches!(op, UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot) {
+            if matches!(op, UnaryOp::Neg | UnaryOp::BitNot) {
                 self.require_supported_integer_promotion(operand)?;
             }
             if op == UnaryOp::AddrOf && self.place_roots_register_object(operand) {
@@ -10232,7 +10538,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
                     let token = self.advance().unwrap();
                     let target = expression;
-                    self.require_supported_integer_promotion(target)?;
+                    self.require_supported_update_promotion(target)?;
                     let typed_target = self.typed_update_target(target)?;
                     let op = if token.kind == TokenKind::PlusPlus {
                         UpdateOp::PostIncrement
