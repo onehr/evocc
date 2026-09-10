@@ -6745,7 +6745,7 @@ This rule requires no floating execution or new IR node; two original torture fi
 Per the reviewed S08 rule and the 2026-09-10 implementation authorization, signed/unsigned division and remainder execute at `bits<128>`, preserving E3002 for division by zero, E3003 for remainder by zero and E3004 for signed MIN/-1 in either operator; other unsupported widths still retain E3033.
 Native lowering uses ordinary caller-clobber-aware calls to `__divti3`, `__udivti3`, `__modti3` and `__umodti3`, with low/high halves in x0:x1 and x2:x3 and the result in x0:x1, requiring the hosted target's libgcc or compiler-rt; no new IR opcode, register class or waived UB assumption is introduced.
 The machine interpreter models only these four unresolved helpers with that pair interface, executes a same-module function definition instead when present, and continues refusing unrelated missing callees.
-`tests/fixtures/wide-division.c` and `wide-division.out` record GCC-14/Clang-19 O0/O2 agreement on full-width values, signed remainders, stores and live pairs across calls; these tailored results do not change any original-program count, and checked arithmetic exceeding its old intermediate width remains a separate implementation item.
+`tests/fixtures/wide-division.c` and `wide-division.out` record GCC-14/Clang-19 O0/O2 agreement on full-width values, signed remainders, stores and live pairs across calls; these tailored results do not change any original-program count, and the following ruling addresses wider checked arithmetic separately.
 
 ### Exact checked arithmetic with wide operands
 
@@ -6753,3 +6753,10 @@ Per reviewed S08 and the 2026-09-10 implementation authorization, checked add/su
 The result is computed as an exact sign, low 128-bit magnitude and magnitude-overflow flag, then tested against the destination's mathematical range and stored modulo its width; cancellation yields nonnegative zero and operands, including the destination address, are evaluated once.
 For multiplication, magnitude overflow is equivalent to `a > UMAX / b`, with denominator 1 substituted for zero, so existing unsigned IR operations and hosted division suffice without introducing a 256-bit type, signed-overflow assumptions or undefined zero division.
 `tests/fixtures/wide-checked-arithmetic.c` and `wide-checked-arithmetic.out` record GCC-14/Clang-19 O0/O2 agreement and the exact official compiler-rt prerequisite; original-program gains remain unmeasured until the deferred campaign replay.
+
+### Volatile bit-field containers
+
+Per reviewed S11, an ordinary volatile bit-field read accesses its declared allocation container and a write performs a read/modify/write preserving neighboring bits; compound updates additionally read the field value, and each underlying load/store advances `world` and contributes one event rather than treating volatile as atomic.
+Packed allocation spans use bounded power-of-two scalar units of at most 16 bytes, in increasing byte order, so a three-byte record never receives a four-byte access and fields crossing units retain their full value.
+`tests/fixtures/volatile-bit-fields.c` and `volatile-bit-fields.out` record four agreeing numerical executions, but explicitly different oracle instruction widths: the ordinary-container rule chooses the declared 32-bit width rather than GCC's 16-bit small-field stores, while the packed-unit traversal fixes this profile's trace instead of claiming both compilers have the same internal access order.
+This extends the previous volatile bit-field refusal without changing aggregate-copy restrictions, atomic semantics, bounds checks or the requirement that C-HIR and EvoIR produce identical value-and-access traces; original-program gains remain unmeasured.

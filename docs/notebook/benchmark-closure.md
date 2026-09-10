@@ -194,6 +194,32 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Volatile bit-field execution
+
+Tests-only `fc3288a` compiled and failed twice on the declared volatile
+bit-field refusal, independently in C-HIR execution and lowering. Volatile
+reads and read/modify/writes now preserve the container's neighboring bits
+and carry the existing world token; packed containers are split into bounded
+scalar accesses rather than reading past the object. The two interpreters
+agree on the complete access trace as well as the program result.
+
+With `CARGO_TARGET_DIR=target/frontend`, `--locked --offline -j 1`,
+`cargo test -p evocc-lower --test expression_value_flow --test
+checked_and_bit_lowering -p evocc-types --test target_data_layout` passes
+80 tests (60 + 9 + 11), including the two original RED tests, not adding their
+separate rerun again. Affected-library Clippy (`evocc-types`, `evocc-chir`,
+`evocc-lower`, `--lib -- -D warnings`), fmt, Ruff, diff-check and the
+instruction-shape audit pass. `cargo build -p evocc` builds the debug CLI;
+both sealed toolchains link and execute its assembly for
+`tests/fixtures/volatile-bit-fields.c`, exit zero.
+
+The four reference executions agree numerically, but their small-field
+store widths and packed instruction sequences differ. The adjacent `.out`
+records that distinction; the implementation follows the reviewed declared
+container rule, not a false claim of identical oracle access traces. No
+new IR instruction or weakened validator was needed. Full campaigns and
+their measured counts remain unchanged.
+
 ### Exact wide checked arithmetic
 
 Tests-only `4198a69` compiled with ten PASS and four semantic failures:
@@ -260,8 +286,8 @@ The existing wide-form native matrix reports 146,157 checks on Darwin and
 146,196 on Linux, zero failures; those counts cover all tested wide forms,
 not division alone. The runtime-obligation tests now use volatile inputs
 so they do not accidentally test the separately authorized constant-wrap rule.
-Wide checked arithmetic is still separate work: its probe is measured, but
-its current lowering boundary is not closed. All campaign counts are unchanged.
+Wide checked arithmetic was still separate work at that checkpoint and is
+subsequently addressed above. All campaign counts are unchanged.
 
 ### Hidden symbols and explicit object sections
 

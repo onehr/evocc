@@ -5733,12 +5733,6 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "bit-field place has no final field",
             });
         };
-        if place.access_qualifiers().is_volatile {
-            return Err(LowerError::UnsupportedExpression {
-                span,
-                feature: "volatile bit-field access",
-            });
-        }
         let layout = self
             .target
             .record_layout(self.unit.types(), field.tag())
@@ -5765,6 +5759,17 @@ impl<'a> FunctionLowerer<'a> {
         stored: Option<Value>,
         state: &mut State,
     ) -> Result<Value, LowerError> {
+        self.emit_integer_access(address, stored, CIntegerType::UCHAR, false, state)
+    }
+
+    fn emit_integer_access(
+        &mut self,
+        address: Value,
+        stored: Option<Value>,
+        integer: CIntegerType,
+        volatile: bool,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
         self.emit(
@@ -5774,7 +5779,7 @@ impl<'a> FunctionLowerer<'a> {
                 pointer: address.clone(),
                 mem_out: guarded.clone(),
                 layout: AccessLayout {
-                    size_bytes: 1,
+                    size_bytes: u64::from(integer.bits() / 8),
                     align_bytes: 1,
                 },
             },
@@ -5792,12 +5797,12 @@ impl<'a> FunctionLowerer<'a> {
                     world_in,
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
-                    volatile: false,
+                    volatile,
                 },
             )?;
             value
         } else {
-            let result = self.fresh_value(EvoIRType::Bits(8));
+            let result = self.fresh_value(bits(integer));
             self.emit(
                 state,
                 Inst::Load {
@@ -5807,7 +5812,7 @@ impl<'a> FunctionLowerer<'a> {
                     world_in,
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
-                    volatile: false,
+                    volatile,
                 },
             )?;
             result
@@ -5859,10 +5864,14 @@ impl<'a> FunctionLowerer<'a> {
         address: Value,
         ty: TypeId,
         field: BitFieldLayout,
+        volatile: bool,
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+        if volatile {
+            return self.emit_volatile_bit_field_load(address, integer, field, state);
+        }
         let mut result = self.constant(state, integer, 0)?.value;
         let mut consumed = 0u16;
         while consumed < field.width_bits {
@@ -5918,9 +5927,13 @@ impl<'a> FunctionLowerer<'a> {
         address: Value,
         value: ExprValue,
         field: BitFieldLayout,
+        volatile: bool,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let value = self.normalize_bit_field(value, field, state)?;
+        if volatile {
+            return self.emit_volatile_bit_field_store(address, value, field, state);
+        }
         let mut consumed = 0u16;
         while consumed < field.width_bits {
             let position = field.bit_offset % 8 + consumed;
@@ -5970,6 +5983,132 @@ impl<'a> FunctionLowerer<'a> {
             };
             self.emit_byte_access(byte_address, Some(stored), state)?;
             consumed += count;
+        }
+        Ok(value)
+    }
+
+    fn bit_field_unit_address(
+        &mut self,
+        address: Value,
+        field: BitFieldLayout,
+        offset: u32,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let delta = i64::from(offset) - i64::from(field.bit_offset / 8);
+        if delta == 0 {
+            return Ok(address);
+        }
+        let index = self.constant(state, CIntegerType::LONG, delta as u64)?;
+        self.offset_address(
+            address,
+            index,
+            OffsetDirection::Add,
+            IndexSignedness::Signed,
+            1,
+            state,
+        )
+    }
+
+    fn emit_volatile_bit_field_load(
+        &mut self,
+        address: Value,
+        integer: CIntegerType,
+        field: BitFieldLayout,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let mut result = self.constant(state, integer, 0)?.value;
+        for (offset, bytes) in field.storage_units() {
+            let unit_integer = bit_field_unit_integer(bytes);
+            let first = u32::from(field.bit_offset).max(offset * 8);
+            let last = (u32::from(field.bit_offset) + u32::from(field.width_bits))
+                .min((offset + bytes) * 8);
+            let count = last - first;
+            let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
+            let raw = self.emit_integer_access(at, None, unit_integer, true, state)?;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(first - offset * 8))?
+                .value;
+            let selected = self.emit_raw_binary(state, Inst::LShr, &raw, &shift)?;
+            let mask = self
+                .wide_constant(state, unit_integer, u128::MAX >> (128 - count))?
+                .value;
+            let selected = self.emit_raw_binary(state, Inst::And, &selected, &mask)?;
+            let selected = self
+                .cast(
+                    ExprValue {
+                        value: selected,
+                        integer: unit_integer,
+                    },
+                    integer,
+                    state,
+                )?
+                .value;
+            let shift = self
+                .constant(
+                    state,
+                    CIntegerType::UINT,
+                    u64::from(first - u32::from(field.bit_offset)),
+                )?
+                .value;
+            let positioned = self.emit_raw_binary(state, Inst::Shl, &selected, &shift)?;
+            result = self.emit_raw_binary(state, Inst::Or, &result, &positioned)?;
+        }
+        let value = self.normalize_bit_field(
+            ExprValue {
+                value: result,
+                integer,
+            },
+            field,
+            state,
+        )?;
+        self.cast(value, integer.bit_field_promoted(field.width_bits), state)
+    }
+
+    fn emit_volatile_bit_field_store(
+        &mut self,
+        address: Value,
+        value: ExprValue,
+        field: BitFieldLayout,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        for (offset, bytes) in field.storage_units() {
+            let unit_integer = bit_field_unit_integer(bytes);
+            let first = u32::from(field.bit_offset).max(offset * 8);
+            let last = (u32::from(field.bit_offset) + u32::from(field.width_bits))
+                .min((offset + bytes) * 8);
+            let count = last - first;
+            let within = first - offset * 8;
+            let shift = self
+                .constant(
+                    state,
+                    CIntegerType::UINT,
+                    u64::from(first - u32::from(field.bit_offset)),
+                )?
+                .value;
+            let selected = self.emit_raw_binary(state, Inst::LShr, &value.value, &shift)?;
+            let selected = self
+                .cast(
+                    ExprValue {
+                        value: selected,
+                        integer: value.integer,
+                    },
+                    unit_integer,
+                    state,
+                )?
+                .value;
+            let shift = self
+                .constant(state, CIntegerType::UINT, u64::from(within))?
+                .value;
+            let positioned = self.emit_raw_binary(state, Inst::Shl, &selected, &shift)?;
+            let mask_bits = (u128::MAX >> (128 - count)) << within;
+            let mask = self.wide_constant(state, unit_integer, mask_bits)?.value;
+            let selected = self.emit_raw_binary(state, Inst::And, &positioned, &mask)?;
+            let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
+            let original = self.emit_integer_access(at.clone(), None, unit_integer, true, state)?;
+            let keep = self.wide_constant(state, unit_integer, !mask_bits)?.value;
+            let kept = self.emit_raw_binary(state, Inst::And, &original, &keep)?;
+            let merged = self.emit_raw_binary(state, Inst::Or, &kept, &selected)?;
+            self.emit_integer_access(at, Some(merged), unit_integer, true, state)?;
         }
         Ok(value)
     }
@@ -6506,7 +6645,7 @@ impl<'a> FunctionLowerer<'a> {
                         .get(*destination_type)
                         .is_some_and(|ty| ty.qualifiers.is_volatile);
                     if let Some(field) = bit_field {
-                        self.emit_bit_field_store(action_address, lowered, field, state)?;
+                        self.emit_bit_field_store(action_address, lowered, field, false, state)?;
                     } else {
                         self.emit_memory_store_with_layout(
                             action_address,
@@ -6541,7 +6680,7 @@ impl<'a> FunctionLowerer<'a> {
                         }
                     };
                     if let Some(field) = bit_field {
-                        self.emit_bit_field_store(action_address, zero, field, state)?;
+                        self.emit_bit_field_store(action_address, zero, field, false, state)?;
                     } else {
                         self.emit_memory_store_with_layout(
                             action_address,
@@ -8182,7 +8321,7 @@ impl<'a> FunctionLowerer<'a> {
                     bit_field = field.bit_field;
                 }
                 if let Some(field) = bit_field {
-                    self.emit_bit_field_load(address, field_type, field, *span, state)
+                    self.emit_bit_field_load(address, field_type, field, false, *span, state)
                 } else if self.is_aggregate_type(field_type)
                     || matches!(
                         self.unit.types().get(field_type).map(|t| &t.kind),
@@ -8212,6 +8351,7 @@ impl<'a> FunctionLowerer<'a> {
                         address,
                         place.value_ty(),
                         field,
+                        place.access_qualifiers().is_volatile,
                         *target_span,
                         state,
                     );
@@ -9251,23 +9391,23 @@ impl<'a> FunctionLowerer<'a> {
             // a*b exceeds UMAX iff a > UMAX/b. Use denominator 1 when b=0:
             // the comparison is then false and the division is always defined.
             let divisor = self.select_bits(state, &right_nonzero, &right, &one)?;
-            let limit = self.checked_binary(state, Inst::UDiv, &maximum, &divisor)?;
+            let limit = self.emit_raw_binary(state, Inst::UDiv, &maximum, &divisor)?;
             let overflow = self.checked_compare(state, CmpOp::ULt, &limit, &left)?;
-            let magnitude = self.checked_binary(state, Inst::Mul, &left, &right)?;
+            let magnitude = self.emit_raw_binary(state, Inst::Mul, &left, &right)?;
             let negative =
-                self.checked_binary(state, Inst::Xor, &left_negative, &right_negative)?;
+                self.emit_raw_binary(state, Inst::Xor, &left_negative, &right_negative)?;
             (magnitude, negative, overflow)
         } else {
             if op == evocc_chir::CheckedArithmeticOp::Sub {
-                right_negative = self.checked_binary(state, Inst::Xor, &right_negative, &truth)?;
+                right_negative = self.emit_raw_binary(state, Inst::Xor, &right_negative, &truth)?;
             }
             let same_sign =
                 self.checked_compare(state, CmpOp::Eq, &left_negative, &right_negative)?;
-            let sum = self.checked_binary(state, Inst::Add, &left, &right)?;
+            let sum = self.emit_raw_binary(state, Inst::Add, &left, &right)?;
             let carry = self.checked_compare(state, CmpOp::ULt, &sum, &left)?;
             let left_larger = self.checked_compare(state, CmpOp::ULe, &right, &left)?;
-            let difference_left = self.checked_binary(state, Inst::Sub, &left, &right)?;
-            let difference_right = self.checked_binary(state, Inst::Sub, &right, &left)?;
+            let difference_left = self.emit_raw_binary(state, Inst::Sub, &left, &right)?;
+            let difference_right = self.emit_raw_binary(state, Inst::Sub, &right, &left)?;
             let difference =
                 self.select_bits(state, &left_larger, &difference_left, &difference_right)?;
             let difference_negative =
@@ -9275,13 +9415,13 @@ impl<'a> FunctionLowerer<'a> {
             let magnitude = self.select_bits(state, &same_sign, &sum, &difference)?;
             let negative =
                 self.select_bits(state, &same_sign, &left_negative, &difference_negative)?;
-            let overflow = self.checked_binary(state, Inst::And, &same_sign, &carry)?;
+            let overflow = self.emit_raw_binary(state, Inst::And, &same_sign, &carry)?;
             (magnitude, negative, overflow)
         };
         // Equal opposite-signed magnitudes produce zero, never negative zero.
         // If magnitude overflowed, representability is false regardless.
         let nonzero = self.checked_compare(state, CmpOp::Ne, &magnitude, &zero)?;
-        let negative = self.checked_binary(state, Inst::And, &negative, &nonzero)?;
+        let negative = self.emit_raw_binary(state, Inst::And, &negative, &nonzero)?;
         let fits = if destination.is_signed() {
             let boundary = self
                 .wide_constant(
@@ -9298,12 +9438,12 @@ impl<'a> FunctionLowerer<'a> {
                 .wide_constant(state, CIntegerType::UINT128, destination.mask())?
                 .value;
             let small_enough = self.checked_compare(state, CmpOp::ULe, &magnitude, &maximum)?;
-            let nonnegative = self.checked_binary(state, Inst::Xor, &negative, &truth)?;
-            self.checked_binary(state, Inst::And, &nonnegative, &small_enough)?
+            let nonnegative = self.emit_raw_binary(state, Inst::Xor, &negative, &truth)?;
+            self.emit_raw_binary(state, Inst::And, &nonnegative, &small_enough)?
         };
-        let does_not_fit = self.checked_binary(state, Inst::Xor, &fits, &truth)?;
-        let result = self.checked_binary(state, Inst::Or, &overflow, &does_not_fit)?;
-        let negated = self.checked_binary(state, Inst::Sub, &zero, &magnitude)?;
+        let does_not_fit = self.emit_raw_binary(state, Inst::Xor, &fits, &truth)?;
+        let result = self.emit_raw_binary(state, Inst::Or, &overflow, &does_not_fit)?;
+        let negated = self.emit_raw_binary(state, Inst::Sub, &zero, &magnitude)?;
         let raw = self.select_bits(state, &negative, &negated, &magnitude)?;
         let stored = self.cast(
             ExprValue {
@@ -9329,12 +9469,12 @@ impl<'a> FunctionLowerer<'a> {
         } else {
             self.constant(state, CIntegerType::BOOL, 0)?.value
         };
-        let negated = self.checked_binary(state, Inst::Sub, &zero, &raw)?;
+        let negated = self.emit_raw_binary(state, Inst::Sub, &zero, &raw)?;
         let magnitude = self.select_bits(state, &negative, &negated, &raw)?;
         Ok((magnitude, negative))
     }
 
-    fn checked_binary(
+    fn emit_raw_binary(
         &mut self,
         state: &State,
         operator: fn(Value, Value, Value) -> Inst,
@@ -9380,10 +9520,10 @@ impl<'a> FunctionLowerer<'a> {
         };
         let zero = self.fresh_value(yes.ty.clone());
         self.emit(state, Inst::Const(zero.clone(), 0))?;
-        let mask = self.checked_binary(state, Inst::Sub, &zero, &condition)?;
-        let difference = self.checked_binary(state, Inst::Xor, yes, no)?;
-        let selected = self.checked_binary(state, Inst::And, &difference, &mask)?;
-        self.checked_binary(state, Inst::Xor, no, &selected)
+        let mask = self.emit_raw_binary(state, Inst::Sub, &zero, &condition)?;
+        let difference = self.emit_raw_binary(state, Inst::Xor, yes, no)?;
+        let selected = self.emit_raw_binary(state, Inst::And, &difference, &mask)?;
+        self.emit_raw_binary(state, Inst::Xor, no, &selected)
     }
 
     fn lower_bit(
@@ -10656,6 +10796,7 @@ impl<'a> FunctionLowerer<'a> {
                 address.clone(),
                 place.value_ty(),
                 field,
+                volatile,
                 target_span,
                 state,
             )?)
@@ -10696,7 +10837,7 @@ impl<'a> FunctionLowerer<'a> {
             }
         };
         if let Some(field) = bit_field {
-            return self.emit_bit_field_store(address, result, field, state);
+            return self.emit_bit_field_store(address, result, field, volatile, state);
         }
         self.emit_memory_store_with_layout(address, result, access_layout, volatile, state)
     }
@@ -10716,7 +10857,14 @@ impl<'a> FunctionLowerer<'a> {
         let bit_field = self.place_bit_field(place, target_span)?;
         let access_layout = self.place_access_layout(place, target_span)?;
         let original = if let Some(field) = bit_field {
-            self.emit_bit_field_load(address.clone(), place.value_ty(), field, target_span, state)?
+            self.emit_bit_field_load(
+                address.clone(),
+                place.value_ty(),
+                field,
+                place.access_qualifiers().is_volatile,
+                target_span,
+                state,
+            )?
         } else {
             self.emit_memory_load_with_layout(
                 address.clone(),
@@ -10774,7 +10922,13 @@ impl<'a> FunctionLowerer<'a> {
             canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
         let updated = self.cast(computed, destination, state)?;
         let updated = if let Some(field) = bit_field {
-            self.emit_bit_field_store(address, updated, field, state)?
+            self.emit_bit_field_store(
+                address,
+                updated,
+                field,
+                place.access_qualifiers().is_volatile,
+                state,
+            )?
         } else {
             self.emit_memory_store_with_layout(
                 address,
@@ -11436,6 +11590,17 @@ fn collect_symbols_switch_item(item: &SwitchSegmentItem<'_>, symbols: &mut BTree
             collect_symbols_item(&CHirBlockItem::Declaration(declaration), symbols);
         }
         SwitchSegmentItem::Statement(statement) => collect_symbols_stmt(statement, symbols),
+    }
+}
+
+fn bit_field_unit_integer(bytes: u32) -> CIntegerType {
+    match bytes {
+        1 => CIntegerType::UCHAR,
+        2 => CIntegerType::USHORT,
+        4 => CIntegerType::UINT,
+        8 => CIntegerType::ULONG,
+        16 => CIntegerType::UINT128,
+        _ => unreachable!("bit-field storage units have scalar widths"),
     }
 }
 

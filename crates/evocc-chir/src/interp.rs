@@ -1286,7 +1286,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         &mut self.memory,
                     )?;
                     if let Some(field) = bit_field {
-                        self.store_bit_field(address, *destination_type, field, value, span)?;
+                        self.store_bit_field(
+                            address,
+                            *destination_type,
+                            field,
+                            value,
+                            false,
+                            span,
+                        )?;
                     } else {
                         self.store_static_scalar(address, *destination_type, value, span)?;
                     }
@@ -1296,7 +1303,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let value = self.zero_value(*destination_type, span)?;
                     if let Some(field) = bit_field {
-                        self.store_bit_field(address, *destination_type, field, value, span)?;
+                        self.store_bit_field(
+                            address,
+                            *destination_type,
+                            field,
+                            value,
+                            false,
+                            span,
+                        )?;
                     } else {
                         self.store_static_scalar(address, *destination_type, value, span)?;
                     }
@@ -1933,7 +1947,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         &mut self.memory,
                     )?;
                     if let Some(field) = bit_field {
-                        self.store_bit_field(address, ty, field, value, *span)?;
+                        self.store_bit_field(address, ty, field, value, false, *span)?;
                     } else {
                         self.store_initialized_value(address, ty, value, *span)?;
                     }
@@ -2291,7 +2305,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let (address, _) =
                         expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
                     let old = if let Some(field) = bit_field {
-                        self.load_bit_field(address, value_type, field, target_span)?
+                        self.load_bit_field(
+                            address,
+                            value_type,
+                            field,
+                            qualifiers.is_volatile,
+                            target_span,
+                        )?
                     } else {
                         self.load_memory_value_with_layout(
                             address,
@@ -2303,7 +2323,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     };
                     let stepped = self.step_update_value(old, operator, span)?;
                     let stepped = if let Some(field) = bit_field {
-                        self.store_bit_field(address, value_type, field, stepped, span)?
+                        self.store_bit_field(
+                            address,
+                            value_type,
+                            field,
+                            stepped,
+                            qualifiers.is_volatile,
+                            span,
+                        )?
                     } else {
                         self.store_memory_value_with_layout(
                             address, value_type, qualifiers, stepped, span, layout,
@@ -2340,7 +2367,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let address =
                         self.resolve_projected_address(place, subscripts, &mut values, span)?;
                     let value = if let Some(field) = self.place_bit_field(place, span)? {
-                        self.load_bit_field(address, place.value_ty(), field, span)?
+                        self.load_bit_field(
+                            address,
+                            place.value_ty(),
+                            field,
+                            place.access_qualifiers().is_volatile,
+                            span,
+                        )?
                     } else {
                         self.load_memory_value_with_layout(
                             address,
@@ -2385,7 +2418,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             right
                         } else {
                             let left = expect_machine_integer(
-                                self.load_bit_field(address, value_type, field, target_span)?,
+                                self.load_bit_field(
+                                    address,
+                                    value_type,
+                                    field,
+                                    qualifiers.is_volatile,
+                                    target_span,
+                                )?,
                                 target_span,
                             )?;
                             let binary = assignment_binary(operator).ok_or(
@@ -2401,6 +2440,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             value_type,
                             field,
                             CValue::Integer(result),
+                            qualifiers.is_volatile,
                             span,
                         )?);
                     } else {
@@ -2947,7 +2987,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.subobject_address(target.binding, path, span)?;
                 let value = self.zero_value(ty, span)?;
                 if let Some(field) = bit_field {
-                    self.store_bit_field(address, ty, field, value, span)?;
+                    self.store_bit_field(address, ty, field, value, false, span)?;
                 } else {
                     self.store_initialized_value(address, ty, value, span)?;
                 }
@@ -6011,12 +6051,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: target_span,
             });
         }
-        if place.is_bit_field() && place.access_qualifiers().is_volatile {
-            return Err(InterpreterError::UnsupportedExpression {
-                feature: "bit-field memory access",
-                span: target_span,
-            });
-        }
         Ok(())
     }
 
@@ -6417,12 +6451,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if !place.is_bit_field() {
             return Ok(None);
         }
-        if place.access_qualifiers().is_volatile {
-            return Err(InterpreterError::UnsupportedExpression {
-                span,
-                feature: "volatile bit-field access",
-            });
-        }
         let Some(PlaceProjection::Field(field)) = place.projections().last() else {
             return Err(InterpreterError::UnsupportedExpression {
                 span,
@@ -6467,27 +6495,47 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn load_bit_field(
-        &self,
+        &mut self,
         address: Pointer,
         ty: TypeId,
         field: BitFieldLayout,
+        volatile: bool,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         let mut raw = 0u128;
-        let mut consumed = 0u16;
-        while consumed < field.width_bits {
-            let position = field.bit_offset % 8 + consumed;
-            let within = position % 8;
-            let count = (8 - within).min(field.width_bits - consumed);
-            let at = address
-                .checked_offset(i64::from(position / 8))
-                .map_err(|error| self.memory_error(error, span))?;
-            let byte = self
-                .memory
-                .load_integer(at, AccessLayout::new(1, 1))
-                .map_err(|error| self.memory_error(error, span))?;
-            raw |= ((byte >> within) & ((1u128 << count) - 1)) << consumed;
-            consumed += count;
+        if volatile {
+            for (offset, bytes) in field.storage_units() {
+                let first = u32::from(field.bit_offset).max(offset * 8);
+                let last = (u32::from(field.bit_offset) + u32::from(field.width_bits))
+                    .min((offset + bytes) * 8);
+                let count = last - first;
+                let at = address
+                    .checked_offset(i64::from(offset) - i64::from(field.bit_offset / 8))
+                    .map_err(|error| self.memory_error(error, span))?;
+                let (value, world) = self
+                    .memory
+                    .volatile_load_integer(&self.world, at, AccessLayout::new(u64::from(bytes), 1))
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.world = world;
+                let selected = (value >> (first - offset * 8)) & (u128::MAX >> (128 - count));
+                raw |= selected << (first - u32::from(field.bit_offset));
+            }
+        } else {
+            let mut consumed = 0u16;
+            while consumed < field.width_bits {
+                let position = field.bit_offset % 8 + consumed;
+                let within = position % 8;
+                let count = (8 - within).min(field.width_bits - consumed);
+                let at = address
+                    .checked_offset(i64::from(position / 8))
+                    .map_err(|error| self.memory_error(error, span))?;
+                let byte = self
+                    .memory
+                    .load_integer(at, AccessLayout::new(1, 1))
+                    .map_err(|error| self.memory_error(error, span))?;
+                raw |= ((byte >> within) & ((1u128 << count) - 1)) << consumed;
+                consumed += count;
+            }
         }
         let result = self.normalize_bit_field(
             CInteger::from_raw(raw, CIntegerType::UINT128),
@@ -6506,10 +6554,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ty: TypeId,
         field: BitFieldLayout,
         value: CValue,
+        volatile: bool,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         let value =
             self.normalize_bit_field(expect_machine_integer(value, span)?, ty, field, span)?;
+        if volatile {
+            for (offset, bytes) in field.storage_units() {
+                let first = u32::from(field.bit_offset).max(offset * 8);
+                let last = (u32::from(field.bit_offset) + u32::from(field.width_bits))
+                    .min((offset + bytes) * 8);
+                let count = last - first;
+                let within = first - offset * 8;
+                let at = address
+                    .checked_offset(i64::from(offset) - i64::from(field.bit_offset / 8))
+                    .map_err(|error| self.memory_error(error, span))?;
+                let layout = AccessLayout::new(u64::from(bytes), 1);
+                let (original, world) = self
+                    .memory
+                    .volatile_load_integer(&self.world, at, layout)
+                    .map_err(|error| self.memory_error(error, span))?;
+                let mask = (u128::MAX >> (128 - count)) << within;
+                let selected =
+                    ((value.raw_bits() >> (first - u32::from(field.bit_offset))) << within) & mask;
+                let stored = (original & !mask) | selected;
+                let (memory, world) = self
+                    .memory
+                    .volatile_store_integer(&world, at, layout, stored)
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.memory = memory;
+                self.world = world;
+            }
+            return Ok(CValue::Integer(value));
+        }
         let mut consumed = 0u16;
         while consumed < field.width_bits {
             let position = field.bit_offset % 8 + consumed;

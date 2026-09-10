@@ -1241,6 +1241,25 @@ pub struct BitFieldLayout {
     pub width_bits: u16,
 }
 
+impl BitFieldLayout {
+    /// Bounded scalar accesses to the allocation container, in increasing
+    /// byte order. Ordinary containers need one access; packed containers
+    /// need multiple accesses when their byte span is not a scalar width.
+    pub fn storage_units(self) -> impl Iterator<Item = (u32, u32)> {
+        let mut offset = 0;
+        std::iter::from_fn(move || {
+            let remaining = self.storage_size_bytes - offset;
+            if remaining == 0 {
+                return None;
+            }
+            let bytes = 1 << remaining.ilog2().min(4);
+            let start = offset;
+            offset += bytes;
+            Some((start, bytes))
+        })
+    }
+}
+
 /// Layout of one source-order record field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RecordFieldLayout {
