@@ -194,6 +194,37 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Ancestor frame addresses
+
+Tests-only `a852841` records 30 passing guards, four semantic failures and
+zero build errors. Frame depths now pass through the unsigned-int operand
+conversion into canonical EvoIR and machine metadata; native lowering follows
+saved frame links, with a bounded-size loop for depths above two. The loop
+uses reserved x16 without changing condition flags. Abstract interpreters
+retain the reached-only E3031 boundary for physical ancestor queries.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower --test
+activation_addresses --test fail_closed_forms -p evocc-evoir --test
+activation_addresses --test section9_completeness -p evocc-mir --test
+section5_activation_addresses -p evocc-parser --test compile_time_builtins
+--locked --offline --no-fail-fast -j 1` passes 42 distinct tests, zero failed
+or ignored. The updated native fixture checks depths 1, 2 and 3 through an
+over-aligned leaf frame; GCC-14 and Clang-19 at O0/O2 all return zero with
+`-fno-omit-frame-pointer -fno-optimize-sibling-calls`.
+The repaired debug compiler's Linux assembly also executes with exit zero
+when assembled/linked with each sealed toolchain (Clang uses the established
+`-fno-integrated-as` path). Affected-library Clippy with `-D warnings`, fmt,
+Ruff and diff-check pass; the textual shape audit reports 43/43 and no
+disagreement. These are tailored native executions, not a full lane replay.
+
+Nonzero return-address queries remain E2913: the sealed runtime probe returns
+zero addresses under GCC but caller link-register values under Clang. Depth
+range conflicts and unsigned narrowing are separately pinned in
+`tests/fixtures/ancestor-frame-operands.out`; accepting one compiler's answer
+is not consensus. No campaign result changes from these tailored checks.
+The broad workspace all-targets check was intentionally interrupted (exit
+130) and deferred to final integration, not recorded as PASS.
+
 ### General and memory assembly operands
 
 Tests-only `2e195f8` records three semantic failures, five passing guards and

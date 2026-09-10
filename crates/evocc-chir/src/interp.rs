@@ -174,6 +174,9 @@ pub enum InterpreterError {
     WideInteger {
         span: SourceSpan,
     },
+    FrameAddressUnavailable {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -292,6 +295,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
             Self::WideInteger { .. } => "E3033",
+            Self::FrameAddressUnavailable { .. } => "E3031",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -394,6 +398,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
+            Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -441,6 +446,7 @@ impl InterpreterError {
             | Self::ComputedGoto { span }
             | Self::VarArgs { span }
             | Self::WideInteger { span }
+            | Self::FrameAddressUnavailable { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -3926,10 +3932,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::BuiltinFrameAddress { .. } => {
-                return Err(InterpreterError::UnsupportedExpression {
-                    feature: "frame-address builtin",
-                    span,
-                });
+                return Err(InterpreterError::FrameAddressUnavailable { span });
             }
             CHirExpr::BuiltinVarArgs { .. } => self.schedule_varargs(expression, tasks)?,
             CHirExpr::LabelAddress { .. } => {

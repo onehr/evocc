@@ -2964,6 +2964,7 @@ ub.assume.<> <>
 (<>) = va_end <>, <>, <>
 (<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
+<> = frame_address depth=<> : <>
 br <>
 cond_br <>, <>, <>
 ret
@@ -6703,6 +6704,13 @@ Per S07 and the 2026-09-10 implementation authorization, `m`/`=m`/`+m` select th
 Memory operands require addressable objects, and memory outputs may name arrays but cannot write const subobjects; violations use E2914, while unrepresentable register inputs and unlisted constraint combinations retain E3021.
 Both sealed compilers at O0/O2 pass `tests/fixtures/assembly-memory-operands.c` and the earlier probes under `.evidence/builtin-probes/20260910-memory-constraints/` (`results.txt`); both reject `assembly-memory-object-errors.c` cases 1–3 and accept 4–5, and the old register-only `operands.c` is not consensus evidence because Clang may select memory for `g`.
 Register selection is the reviewed profile choice, not a universal oracle-selection claim; no original-program gain is measured here, and affected benchmark counts remain those of the last full campaign.
+
+### Ancestor frame addresses and the return-address disagreement
+
+Per F10 and the 2026-09-10 implementation authorization, stack-address builtin depths first convert to `unsigned int`; `frame_address` admits 0–65535, follows that many saved x29 links in native code, and preserves level zero's existing semantics, while both abstract interpreters report E3031 (`not-executed: frame-address`) only when a nonzero query is reached.
+The canonical nonzero EvoIR form is `%v = frame_address depth=N : ptr<generic>` (`N` is decimal 1–65535, with no leading zero), the machine place is `frame.address [fp_N]`, and zero retains its old spelling; large depths use a bounded-size loop with reserved x16 and no flag-setting instructions.
+The sealed GCC-14/Clang-19 probes `tests/fixtures/ancestor-frame-addresses.c` and `ancestor-frame-operands.c` have their outcomes in `ancestor-frame-operands.out`: both execute frame links correctly at O0/O2 with frame pointers and sibling-call optimization disabled, but GCC answers zero for nonzero `return_address` while Clang reads the ancestor's LR, so nonzero return queries retain E2913 instead of claiming consensus.
+Negative depths and 65536 are acceptance conflicts and retain E2913 after the unsigned conversion; wider constants that narrow to an admitted depth use that depth, no new diagnostic is assigned, and no original-program or cohort gain is measured by these probes.
 
 ### Immediate qualifiers in character-pointer conversions
 

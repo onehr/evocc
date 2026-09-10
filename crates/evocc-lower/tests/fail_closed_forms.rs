@@ -29,9 +29,9 @@ fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) 
     );
     AllocationSiteManifest::derive(&unit)
         .unwrap_or_else(|error| panic!("allocation manifest case {ordinal}: {error:?}"));
-    if code == "E3021" {
+    if matches!(code, "E3021" | "E3031") {
         let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-            .expect("assembly now has an opaque IR representation");
+            .expect("the operation has an IR representation");
         let function = &module.functions[0];
         let arguments = function
             .params
@@ -44,7 +44,7 @@ fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) 
             &arguments,
             evocc_evoir::InterpreterLimits::new(100),
         )
-        .expect_err("assembly execution remains fail closed");
+        .expect_err("native-only execution remains fail closed");
         assert_eq!(error.code(), code);
         assert!(error.to_string().contains(message));
         return;
@@ -90,12 +90,12 @@ fn return_address_lowers_to_an_activation_address() {
 }
 
 #[test]
-fn frame_address_fails_closed_with_only_e3031() {
+fn ancestor_frame_address_lowers_and_execution_fails_closed_with_e3031() {
     assert_lowering_error(
         "void *f(void) { return __builtin_frame_address(1); }\n",
         8,
         "E3031",
-        "not-lowered: frame-address",
+        "not-executed: frame-address",
     );
 }
 

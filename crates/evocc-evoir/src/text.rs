@@ -538,8 +538,13 @@ impl FunctionRenderer {
                 render_value(result),
                 render_type(&result.ty)
             ),
-            Inst::FrameAddress { result } => format!(
+            Inst::FrameAddress { result, depth: 0 } => format!(
                 "{} = frame_address : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
+            Inst::FrameAddress { result, depth } => format!(
+                "{} = frame_address depth={depth} : {}",
                 render_value(result),
                 render_type(&result.ty)
             ),

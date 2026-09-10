@@ -551,7 +551,8 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
-    /// The frame-address builtin; only depth zero has executable semantics.
+    /// The frame-address builtin. Only depth zero has abstract interpreter
+    /// semantics; ancestors require a physical native frame chain.
     BuiltinFrameAddress {
         depth: u128,
         facts: ExprFacts,

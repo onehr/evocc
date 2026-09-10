@@ -11,6 +11,8 @@ fn activation_addresses_lower_and_have_stable_nondereferenceable_identity() {
         ("unsigned long f(void){return (unsigned long)__builtin_frame_address(0);} int main(void){return f()==f();}", None),
         ("int main(void){return *(int *)__builtin_return_address(0);}", Some("E3013")),
         ("int main(void){return *(int *)__builtin_frame_address(0);}", Some("E3013")),
+        ("int unused(void){return __builtin_frame_address(1)==0;}int main(void){if(0)return unused();return 0;}", None),
+        ("int main(void){return __builtin_frame_address(0x100000000UL)==0 || __builtin_return_address(0x100000000UL)==0;}", None),
     ] {
         let arena = Arena::default();
         let file = FileId::new(45020);

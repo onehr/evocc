@@ -1443,10 +1443,10 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         }
         // Section 6's variadic places live above and inside the linear stack
         // the interpreter has no model of, exactly as the prologue does; the
-        // native run judges them.
+        // native run judges them, as it does physical ancestor-frame walks.
         MInst::FrameAddress { .. } | MInst::VaSaveArea { .. } => {
             return Err(MirError::Invalid {
-                detail: "a variadic frame place exists only in an emitted frame".to_owned(),
+                detail: "a physical frame place exists only in an emitted frame".to_owned(),
             });
         }
         MInst::Bl { .. } | MInst::Blr { .. } => {

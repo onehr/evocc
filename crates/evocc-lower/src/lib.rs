@@ -2337,9 +2337,8 @@ fn prevalidate_expr_for_lowering(
             }
             Ok(())
         }
-        CHirExpr::BuiltinReturnAddress { .. } | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
-            Ok(())
-        }
+        CHirExpr::BuiltinReturnAddress { .. } => Ok(()),
+        CHirExpr::BuiltinFrameAddress { depth, .. } if u16::try_from(*depth).is_ok() => Ok(()),
         CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
         CHirExpr::LabelAddress { .. } => Ok(()),
         CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinTrap { .. } => Ok(()),
@@ -7880,26 +7879,25 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void variadic operation used as a value",
                 }),
-            CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
+            CHirExpr::BuiltinReturnAddress { .. } | CHirExpr::BuiltinFrameAddress { .. } => {
                 let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
-                let instruction = if matches!(expression, CHirExpr::BuiltinReturnAddress { .. }) {
-                    Inst::ReturnAddress {
-                        result: result.clone(),
-                    }
-                } else {
-                    Inst::FrameAddress {
-                        result: result.clone(),
-                    }
-                };
+                let instruction =
+                    if let CHirExpr::BuiltinFrameAddress { depth, span, .. } = expression {
+                        Inst::FrameAddress {
+                            result: result.clone(),
+                            depth: u16::try_from(*depth)
+                                .map_err(|_| LowerError::FrameAddress { span: *span })?,
+                        }
+                    } else {
+                        Inst::ReturnAddress {
+                            result: result.clone(),
+                        }
+                    };
                 self.emit(state, instruction)?;
                 Ok(ExprValue {
                     value: result,
                     integer: CIntegerType::ULONG,
                 })
-            }
-            CHirExpr::BuiltinFrameAddress { span, .. } => {
-                Err(LowerError::FrameAddress { span: *span })
             }
             CHirExpr::LabelAddress { label, span, .. } => {
                 let block = *self.address_labels.get(&label.spelling).ok_or(
@@ -12316,7 +12314,7 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         | Inst::FuncAddr { result, .. }
         | Inst::BlockAddr { result, .. }
         | Inst::ReturnAddress { result }
-        | Inst::FrameAddress { result } => {
+        | Inst::FrameAddress { result, .. } => {
             vec![result]
         }
         Inst::Alloca {

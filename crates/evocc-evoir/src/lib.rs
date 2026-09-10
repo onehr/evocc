@@ -337,13 +337,15 @@ pub enum Inst {
     /// kernel's `_RET_IP_` is `(unsigned long)__builtin_return_address(0)`.
     ReturnAddress { result: Value },
 
-    /// Return the address of the current activation's frame record, with
+    /// Return the address of this activation's frame record (depth zero), with
     /// *stack* provenance of an object no load or store may touch (revision
     /// 1.9.72).
     ///
     /// Section 3.7 gives it the same fresh-per-activation identity as
     /// `return_address`; only `E3013` separates it from an ordinary object.
-    FrameAddress { result: Value },
+    /// A nonzero depth follows saved caller frame pointers on the machine;
+    /// interpreters preserve their explicit physical-stack boundary.
+    FrameAddress { result: Value, depth: u16 },
 
     /// Allocate one fresh automatic object in the current invocation.
     Alloca {
@@ -499,7 +501,7 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         | Inst::FuncAddr { result, .. }
         | Inst::BlockAddr { result, .. }
         | Inst::ReturnAddress { result }
-        | Inst::FrameAddress { result }
+        | Inst::FrameAddress { result, .. }
         | Inst::PtrOffset { result, .. } => vec![result],
         Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
             vec![result]
@@ -2539,7 +2541,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 result.ty
             )),
         },
-        Inst::FrameAddress { result } => match result.ty {
+        Inst::FrameAddress { result, .. } => match result.ty {
             EvoIRType::Ptr(evocc_types::AddressSpace::Generic) => Ok(()),
             _ => Err(format!(
                 "frame-address result in block {block} has type {:?}, expected ptr<generic>",
@@ -3411,6 +3413,10 @@ pub enum InterpreterError {
         block: BlockId,
         operation: &'static str,
     },
+    FrameAddressUnavailable {
+        block: BlockId,
+        depth: u16,
+    },
     CallThroughNullFunctionPointer {
         block: BlockId,
     },
@@ -3445,6 +3451,7 @@ impl InterpreterError {
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
             Self::UnsupportedBitWidth { .. } => "E3033",
+            Self::FrameAddressUnavailable { .. } => "E3031",
             _ => "E3007",
         }
     }
@@ -3483,6 +3490,7 @@ impl InterpreterError {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
             Self::UnsupportedBitWidth { .. } => "not-executed: wide-integer".to_owned(),
+            Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
             _ => self.to_string(),
         }
     }
@@ -3583,6 +3591,10 @@ impl fmt::Display for InterpreterError {
             Self::UnsupportedInstruction { block, operation } => write!(
                 formatter,
                 "EvoIR interpreter does not support {operation} in block {block}"
+            ),
+            Self::FrameAddressUnavailable { block, depth } => write!(
+                formatter,
+                "not-executed: frame-address (depth {depth} in block {block})"
             ),
             Self::CallThroughNullFunctionPointer { block } => write!(
                 formatter,
@@ -5018,7 +5030,13 @@ fn execute_instruction(
                 ),
             );
         }
-        Inst::FrameAddress { result } => {
+        Inst::FrameAddress { result, depth } => {
+            if *depth != 0 {
+                return Err(InterpreterError::FrameAddressUnavailable {
+                    block,
+                    depth: *depth,
+                });
+            }
             write_internal(
                 values,
                 result,

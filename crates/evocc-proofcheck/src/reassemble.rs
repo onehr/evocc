@@ -493,7 +493,7 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         | Inst::FuncAddr { result, .. }
         | Inst::BlockAddr { result, .. }
         | Inst::ReturnAddress { result }
-        | Inst::FrameAddress { result } => {
+        | Inst::FrameAddress { result, .. } => {
             vec![result]
         }
         Inst::PtrOffset {

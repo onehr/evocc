@@ -1511,6 +1511,22 @@ fn emit_inst(
             crate::FramePlace::FramePointer => {
                 let _ = writeln!(text, "    mov {}, x29", name(*dst));
             }
+            crate::FramePlace::AncestorFrame(depth) => {
+                let destination = name(*dst);
+                let _ = writeln!(text, "    mov {destination}, x29");
+                if depth.get() <= 2 {
+                    for _ in 0..depth.get() {
+                        let _ = writeln!(text, "    ldr {destination}, [{destination}]");
+                    }
+                } else {
+                    // x16 is reserved from allocation. A non-flag-setting sub
+                    // and cbnz preserve live NZCV across this pseudo-form.
+                    let label = format!("{}{function}_frame{}", target.label_prefix(), *copies);
+                    *copies += 1;
+                    emit_immediate(text, "x16", RegClass::Gpr64, u64::from(depth.get()));
+                    let _ = writeln!(text, "{label}:\n    ldr {destination}, [{destination}]\n    sub x16, x16, #1\n    cbnz x16, {label}");
+                }
+            }
         },
         // The area itself is reserved by the frame layout and filled by the
         // prologue, so the marker emits nothing of its own.

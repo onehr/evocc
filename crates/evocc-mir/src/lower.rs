@@ -2138,11 +2138,12 @@ fn lower_inst(
             });
             lowerer.bind(result, dst);
         }
-        Inst::FrameAddress { result } => {
+        Inst::FrameAddress { result, depth } => {
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::FrameAddress {
                 dst,
-                place: FramePlace::FramePointer,
+                place: std::num::NonZeroU16::new(*depth)
+                    .map_or(FramePlace::FramePointer, FramePlace::AncestorFrame),
             });
             lowerer.bind(result, dst);
         }

@@ -913,7 +913,7 @@ pub enum MInst {
     },
     /// Which part of Section 6's frame an address names.
     ///
-    /// Both are places only the frame layout knows, so like `frame.slot` they
+    /// These are places only the frame layout knows, so like `frame.slot` they
     /// are pseudo-forms emission expands.
     FrameAddress {
         dst: VReg,
@@ -957,7 +957,7 @@ pub enum MInst {
 
 /// One place in Section 6's frame that only the frame layout can name.
 ///
-/// The first two belong to the variadic rules; the last two are Section 5's
+/// The first two belong to the variadic rules; the others are Section 5's
 /// activation-address rows (revision 0.17), which read the frame record every
 /// prologue writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -973,21 +973,28 @@ pub enum FramePlace {
     SavedLinkRegister,
     /// `fp`: Section 5's `frame_address` row, "`mov rd, x29`".
     FramePointer,
+    /// A positive number of saved caller-frame links, never a stack offset.
+    AncestorFrame(std::num::NonZeroU16),
 }
 
 impl FramePlace {
     #[must_use]
-    pub const fn mnemonic(self) -> &'static str {
+    pub fn mnemonic(self) -> String {
         match self {
-            Self::IncomingStack => "incoming",
-            Self::RegisterSaveTop => "gr_top",
-            Self::SavedLinkRegister => "saved_lr",
-            Self::FramePointer => "fp",
+            Self::IncomingStack => "incoming".to_owned(),
+            Self::RegisterSaveTop => "gr_top".to_owned(),
+            Self::SavedLinkRegister => "saved_lr".to_owned(),
+            Self::FramePointer => "fp".to_owned(),
+            Self::AncestorFrame(depth) => format!("fp_{depth}"),
         }
     }
 
     #[must_use]
     pub fn from_mnemonic(text: &str) -> Option<Self> {
+        if let Some(number) = text.strip_prefix("fp_") {
+            let depth = number.parse::<std::num::NonZeroU16>().ok()?;
+            return (depth.to_string() == number).then_some(Self::AncestorFrame(depth));
+        }
         match text {
             "incoming" => Some(Self::IncomingStack),
             "gr_top" => Some(Self::RegisterSaveTop),

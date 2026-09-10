@@ -904,8 +904,8 @@ fn parse_instruction(
         });
     }
     // `%p = return_address : ptr<generic>` and `%p = frame_address :
-    // ptr<generic>` (Section 3.7, revision 1.9.72). Neither takes an operand,
-    // so all that follows the mnemonic is the result type.
+    // ptr<generic>` retain the level-zero spelling. A nonzero frame depth is
+    // canonical integer metadata, never an SSA value operand.
     if let Some(rest) = rhs.strip_prefix("return_address : ") {
         return Ok(Inst::ReturnAddress {
             result: Value {
@@ -920,6 +920,21 @@ fn parse_instruction(
                 id: result_id,
                 ty: parse_type(rest)?,
             },
+            depth: 0,
+        });
+    }
+    if let Some(rest) = rhs.strip_prefix("frame_address depth=") {
+        let (number, ty) = rest.split_once(" : ").ok_or("malformed frame depth")?;
+        let depth = number.parse::<u16>().map_err(|_| "invalid frame depth")?;
+        if depth == 0 || depth.to_string() != number {
+            return Err("frame depth must be canonical nonzero metadata".to_owned());
+        }
+        return Ok(Inst::FrameAddress {
+            result: Value {
+                id: result_id,
+                ty: parse_type(ty)?,
+            },
+            depth,
         });
     }
     if let Some(rest) = rhs.strip_prefix("pointer_valid ") {

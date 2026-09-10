@@ -3,7 +3,7 @@ Runtime flags: -fno-omit-frame-pointer -fno-optimize-sibling-calls
 Compilers: gcc-14, clang-19 in evo-flight-lab:sealed
 
 ancestor-frame-addresses.c         GCC O0  GCC O2  Clang O0  Clang O2
-default (frame addresses)          exit 0  exit 0  exit 0    exit 0
+default (frame depths 1, 2, 3)     exit 0  exit 0  exit 0    exit 0
 -DCHECK_RETURN_CHAIN               exit 3  exit 3  exit 0    exit 0
 
 ancestor-frame-operands.c -DCASE=N  GCC-14                  Clang-19

@@ -12223,11 +12223,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
-        let depth = self.eval_integer_constant_expression(argument);
-        if !depth
-            .as_ref()
-            .is_ok_and(|value| frame_address || value.raw_bits() == 0)
-        {
+        // Both builtins take unsigned int, including narrowing a wider ICE.
+        // Clang bounds stack depths to 16 bits; disagreements are refused.
+        let depth = self
+            .eval_integer_constant_expression(argument)
+            .map(|value| value.cast(CIntegerType::UINT).raw_bits());
+        if !depth.as_ref().is_ok_and(|value| {
+            if frame_address {
+                *value <= u128::from(u16::MAX)
+            } else {
+                *value == 0
+            }
+        }) {
             self.report("E2913", "builtin-operand-not-convertible", argument.span());
             return None;
         }
@@ -12237,7 +12244,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let span = self.merge_span(keyword.span, close.span);
         Some(self.alloc_node(if frame_address {
             CHirExpr::BuiltinFrameAddress {
-                depth: depth.expect("validated constant depth").raw_bits(),
+                depth: depth.expect("validated constant depth"),
                 facts,
                 span,
             }
