@@ -6080,11 +6080,11 @@ The current §3.11 reference vocabulary admits named `%l[label]`, not numbered `
 `.evidence/builtin-probes/20260909-numeric-assembly-labels/{labels.c,results.txt}` records GCC-14 and Clang-19 at O0/O2 agreeing on numbered labels, multiple labels, multi-digit indexes and the extra implicit-input count for a read/write output.
 No validator rule or source acceptance has changed; normalization to the existing named-label representation awaits the requested body ruling.
 
-### Pending body revision: builtin calls and a same-named static definition
+### Builtin calls and a same-named static definition: probe boundary
 
 All four GCC-14/Clang-19 O0/O2 executions of original `921007-1` pass, but the nonconstant-input probe `.evidence/builtin-probes/20260909-local-library-binding/{binding.c,results.txt}` is an oracle conflict.
 Both O0 executions and Clang-19 O2 call the local `strcmp` (result -123, one call), while GCC-14 O2 bypasses it (result -128, zero calls).
-No binding rule is inferred from the passing original alone, no diagnostic is allocated, and the requested body ruling remains pending.
+No binding rule is inferred from the passing original alone; the later literal-string rule below records the authorized implementation and the nonliteral refusal.
 
 ### C function-name spelling and storage-only floating declarations
 
@@ -6790,3 +6790,10 @@ Per reviewed S02/S03, a block-scope variable array typedef evaluates each writte
 The canonical array bound carries the capture's semantic object identity rather than a placeholder count, so different captures stay distinct but a variable bound does not by itself make compatible element types incompatible; size elaboration uses ordinary C-HIR reads and arithmetic, preserving ordinary inline symbol substitution.
 Entering the scope of a variably modified declaration without passing its declaration, by direct/assembly goto or switch dispatch, reports E2945 `jump-into-variable-type-scope`; noninteger bounds retain E2923 and contexts requiring an ICE retain their own diagnostic.
 The four sealed executions of `tests/fixtures/captured-array-bounds.c` agree, and both compilers reject all five `captured-array-bound-errors.c` cases (`captured-array-bounds.out`); this size-capture slice does not yet admit actual VLA objects, variably modified typeof operands or claim their scope reclamation implemented.
+
+### Literal string operations and local bindings
+
+Per reviewed F02 and the 2026-09-10 authorization, `__builtin_strcmp` of two narrow string literals folds to `int` -1, 0 or 1 by unsigned code-unit order up to the first NUL, before consulting any same-named declaration; explicit builtins retain this behavior under `-fno-builtin`.
+Literal `__builtin_strlen` likewise stops at the first NUL, without shortening the literal array's extent or evaluating arbitrary pointer expressions; nonliteral calls and operand/arity checks retain their ordinary paths.
+`tests/fixtures/literal-string-comparison.{c,out}` and original `921007-1.c` execute successfully with sealed GCC-14/Clang-19 at O0/O2, whereas the earlier `20260909-local-library-binding/{binding.c,results.txt}` records disagreement for nonliteral comparisons with a visible same-named static function, now refused as E2946 `builtin-local-binding-conflict` rather than assigned a guessed callee.
+This repairs the named original in tailored native execution and makes no new full-campaign claim or binding rule for other library functions.

@@ -1,6 +1,11 @@
 static int calls;
 static int strcmp(void) { ++calls; return 123; }
 
+_Static_assert(__builtin_strlen("a\0tail") == 1, "first nul");
+_Static_assert(__builtin_strlen("\0tail") == 0, "empty prefix");
+_Static_assert(__builtin_strlen("a\0" "tail") == 1, "fragments");
+_Static_assert(sizeof("a\0tail") == 7, "array extent");
+
 int main(void) {
     if (__builtin_strcmp("alpha", "omega") != -1) return 1;
     if (__builtin_strcmp("omega", "alpha") != 1) return 2;

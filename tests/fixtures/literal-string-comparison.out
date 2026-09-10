@@ -7,3 +7,13 @@ The eight literal comparisons have the asserted exact -1/0/1 values; the
 same-named static body is not called. This does not establish a rule for
 nonliteral calls: the sealed 20260909-local-library-binding probe already
 records an optimization-dependent GCC/Clang disagreement for those.
+The embedded-NUL strlen assertions also pass in all four executions;
+the full literal array still has size 7 rather than the string length 1.
+
+Unchanged original gcc.c-torture/execute/921007-1.c:
+gcc-14 O0/O2: exit 0/0; clang-19 O0/O2: exit 0/0 (gnu11).
+Subject for this fixture and the original:
+target/tailored/debug/evocc --emit=asm --target=aarch64-unknown-linux-gnu SOURCE
+gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject: exit 0 for each.
+clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject:
+exit 0 for each (the existing GNU assembler spelling is retained).

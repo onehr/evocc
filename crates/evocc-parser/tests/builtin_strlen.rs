@@ -69,6 +69,45 @@ fn string_literal_length_is_a_size_t_integer_constant_expression() {
 }
 
 #[test]
+fn literal_length_stops_at_the_first_nul_without_changing_array_extent() {
+    assert_eq!(
+        run(concat!(
+            "_Static_assert(__builtin_strlen(\"a\\0tail\") == 1, \"first nul\"); ",
+            "_Static_assert(__builtin_strlen(\"\\0tail\") == 0, \"empty prefix\"); ",
+            "_Static_assert(__builtin_strlen(\"a\\0\" \"tail\") == 1, \"fragments\"); ",
+            "_Static_assert(sizeof(\"a\\0tail\") == 7, \"array extent\"); ",
+            "int main(void) { return __builtin_strlen(\"a\\0tail\"); }"
+        ))
+        .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn literal_folding_does_not_bypass_arity_or_operand_types() {
+    for (source, code) in [
+        ("int f(void){return __builtin_strcmp(\"a\");}", "E2909"),
+        (
+            "int f(void){return __builtin_strcmp(\"a\",\"b\",\"c\");}",
+            "E2909",
+        ),
+        (
+            "int f(void){return __builtin_strlen(\"a\",\"b\");}",
+            "E2909",
+        ),
+        ("int f(void){return __builtin_strlen(L\"a\");}", "E2913"),
+        (
+            "int f(void){return __builtin_strcmp(L\"a\",L\"b\");}",
+            "E2913",
+        ),
+    ] {
+        let arena = Arena::default();
+        let error = parse(source, &arena).unwrap_err();
+        assert!(error.starts_with(code), "{source}: {error}");
+    }
+}
+
+#[test]
 fn non_literal_length_is_an_ordinary_call_to_visible_strlen() {
     assert_eq!(
         run(concat!(

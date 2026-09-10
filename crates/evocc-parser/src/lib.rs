@@ -11588,14 +11588,52 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
         designator_span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
-        if builtin == "__builtin_strlen" && arguments.len() == 1 {
-            if let CHirExpr::StringLit(literal, _) = arguments[0] {
-                let length = literal.explicit_unit_count().or_else(|| {
-                    self.report("E1006", "invalid-string-literal", arguments[0].span());
-                    None
-                })?;
-                return Some(self.size_literal(length, span));
+        let literal_arity = match builtin {
+            "__builtin_strlen" => 1,
+            "__builtin_strcmp" => 2,
+            _ => 0,
+        };
+        if literal_arity != 0
+            && arguments.len() == literal_arity
+            && arguments.iter().all(|argument| {
+                matches!(argument, CHirExpr::StringLit(literal, _)
+                    if matches!(literal.prefix, StringPrefix::None | StringPrefix::U8))
+            })
+        {
+            // Library string operations stop at NUL. The literal's complete
+            // array extent (used by sizeof/initialization) must not change.
+            let strings = arguments
+                .iter()
+                .map(|argument| {
+                    let CHirExpr::StringLit(literal, _) = argument else {
+                        unreachable!("literal operands checked above")
+                    };
+                    literal
+                        .decoded_units()
+                        .map(|units| units.into_iter().take_while(|unit| *unit != 0).collect())
+                        .or_else(|| {
+                            self.report("E1006", "invalid-string-literal", argument.span());
+                            None
+                        })
+                })
+                .collect::<Option<Vec<Vec<u32>>>>()?;
+            if builtin == "__builtin_strlen" {
+                return Some(self.size_literal(strings[0].len() as u64, span));
             }
+            let order = strings[0].cmp(&strings[1]);
+            let magnitude = self.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: u64::from(!order.is_eq()),
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span,
+            ));
+            return Some(if order.is_lt() {
+                self.alloc_node(CHirExpr::Unary(UnaryOp::Neg, magnitude, span))
+            } else {
+                magnitude
+            });
         }
 
         let (external_name, return_ty, parameter_types) =
@@ -12053,6 +12091,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
     ) -> Option<SymbolId> {
         self.validate_builtin_library_declaration(external_name, function_ty, span)?;
+        if external_name == "strcmp"
+            && self
+                .symbols
+                .resolve(self.current_scope, external_name)
+                .expect("the parser current scope is always live")
+                .is_some_and(|symbol| {
+                    self.entities
+                        .get(&symbol)
+                        .is_some_and(|entity| entity.linkage == EntityLinkage::Internal)
+                        && self
+                            .symbols
+                            .symbol(symbol)
+                            .is_ok_and(|declaration| declaration.kind() == SymbolKind::Function)
+                })
+        {
+            // Nonliteral calls can bind the static body or libc depending on
+            // the reference compiler's optimization. Do not guess a binding.
+            self.report("E2946", "builtin-local-binding-conflict", span);
+            return None;
+        }
         let (symbol, introduced) = self
             .symbols
             .declare_builtin_function(external_name, function_ty, span)

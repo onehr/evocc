@@ -50,6 +50,27 @@ fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
 }
 
 #[test]
+fn literal_comparisons_resolve_without_library_bindings() {
+    assert_pairs(
+        &[
+            (
+                "int f(void){return __builtin_strcmp(\"a\",\"b\");}",
+                "int f(void){return -1;}",
+            ),
+            (
+                "int f(void){return __builtin_strcmp(\"a\\0z\",\"a\\0x\");}",
+                "int f(void){return 0;}",
+            ),
+            (
+                "unsigned long f(void){return __builtin_strlen(\"a\\0tail\");}",
+                "unsigned long f(void){return 1UL;}",
+            ),
+        ],
+        2200,
+    );
+}
+
+#[test]
 fn type_classification_is_resolved_without_values_or_calls_in_evoir() {
     assert_pairs(
         &[

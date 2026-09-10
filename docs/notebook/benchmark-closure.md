@@ -202,6 +202,28 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Literal string comparisons and embedded NUL
+
+Tests-only `b9c34e4` compiled with seven passes and two semantic failures:
+literal comparisons reached E2927 because of a same-named static declaration,
+while the measured nonliteral binding conflict was silently accepted.
+A further RED pinned `strlen("a\0tail")` folding to the wrong length (E2911
+in its assertion). Both literal operations now use the shared string decoder
+and stop at the first NUL, without changing array extents; strcmp yields
+the measured int -1/0/1. Nonliteral static-binding ambiguity is E2946.
+
+`cargo test -p evocc-parser --test builtin_strlen --test library_builtin_typing
+-p evocc-lower --test compiler_hints --test front_end_builtin_integrity
+--test front_end_resolved_forms --no-fail-fast` with the target/offline flags
+above passes 52 tests (7 + 11 + 9 + 1 + 24), zero failed or ignored.
+The same library/test selections pass Clippy `-D warnings`; fmt, Ruff,
+diff-check and the 44/44 instruction-shape audit are clean.
+Both the fixture and unchanged original `921007-1.c` pass sealed GCC-14 and
+Clang-19 at O0/O2 and subject-generated Linux assembly linked by each
+toolchain (Clang uses `-fno-integrated-as`, as in earlier tailored checks).
+Literal operations are byte-identical to spelled-out constants in EvoIR;
+no full campaign was run and benchmark receipts remain unchanged.
+
 ### Captured array sizes and forbidden scope entry
 
 Tests-only `077e6c2` compiled with 64 existing passes and three E2203
