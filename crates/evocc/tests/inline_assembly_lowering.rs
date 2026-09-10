@@ -22,6 +22,7 @@ const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c"
 const MEMORY_ALTERNATIVES: &str =
     include_str!("../../../tests/fixtures/assembly-memory-alternatives.c");
 const LOCAL_ADDRESS: &str = include_str!("../../../tests/fixtures/inline-local-address.c");
+const MEMORY_OPERANDS: &str = include_str!("../../../tests/fixtures/assembly-memory-operands.c");
 const INLINE_MEMORY: &str = r#"
 static inline __attribute__((always_inline)) int read_memory(int value) {
     asm volatile("" : : "Q"(value) : "memory");
@@ -29,6 +30,75 @@ static inline __attribute__((always_inline)) int read_memory(int value) {
 }
 int main(void) { return read_memory(7) != 7; }
 "#;
+
+#[test]
+fn general_and_memory_operands_use_existing_canonical_constraints() {
+    let canonical = MEMORY_OPERANDS
+        .replace("\"m\"", "\"Q\"")
+        .replace("\"=m\"", "\"=Q\"")
+        .replace("\"+m\"", "\"+Q\"")
+        .replace("\"g\"", "\"r\"");
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let expected = run(&canonical, mode);
+        assert!(
+            expected.status.success(),
+            "{}",
+            String::from_utf8_lossy(&expected.stderr)
+        );
+        let actual = run(MEMORY_OPERANDS, mode);
+        assert!(
+            actual.status.success(),
+            "{}",
+            String::from_utf8_lossy(&actual.stderr)
+        );
+        assert_eq!(actual.stdout, expected.stdout, "{mode}");
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(MEMORY_OPERANDS, "memory-operands");
+}
+
+#[test]
+fn memory_operands_carry_addresses_without_implicit_value_accesses() {
+    for (declaration, operand) in [
+        ("long x=5;", "x"),
+        ("long x[2]={5,7};", "x"),
+        ("struct S{long n;};struct S x={5};", "x"),
+    ] {
+        for (constraint, colon) in [("m", ": :"), ("=m", ":"), ("+m", ":")] {
+            let source = format!("int main(void){{{declaration}asm volatile(\"\" {colon} \"{constraint}\"({operand}));return 0;}}");
+            let canonical = source.replace(
+                &format!("\"{constraint}\""),
+                &format!("\"{}\"", constraint.replace('m', "Q")),
+            );
+            let actual = emits(&source);
+            assert_eq!(actual, emits(&canonical));
+            assert_eq!(actual.matches(" = load").count(), 0, "{actual}");
+        }
+    }
+}
+
+#[test]
+fn memory_assembly_requires_addressable_inputs_and_writable_outputs() {
+    for constraint in ["m", "Q"] {
+        for source in [
+            format!("void f(void){{const long a[2]={{1,2}};asm(\"\" : \"={constraint}\"(a));}}"),
+            format!("struct S{{const long n;}};void f(void){{struct S a={{1}};asm(\"\" : \"={constraint}\"(a));}}"),
+            format!("void f(long n){{asm(\"\" : : \"{constraint}\"(n+1));}}"),
+        ] {
+            let output = run(&source, "--emit=evoir");
+            assert!(!output.status.success(), "{source}");
+            assert!(String::from_utf8_lossy(&output.stderr).contains("E2914"), "{}", String::from_utf8_lossy(&output.stderr));
+        }
+    }
+    for source in [
+        "void f(void){__uint128_t x=1;asm(\"\" : : \"g\"(x));}",
+        "void f(void){long x=1;asm(\"\" : \"=g\"(x));}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "{source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+}
 
 #[test]
 fn numbered_labels_share_named_label_lowering_and_native_edges() {
