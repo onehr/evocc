@@ -33,6 +33,31 @@ fn captured_bounds_keep_identity_without_claiming_static_size() {
     assert!(types.compatible(a, b));
     assert!(types.compatible(a, fixed));
     assert!(types.compatible(fixed, a));
+    for (left, right, composite) in [
+        (
+            ArrayBound::Variable,
+            ArrayBound::Captured(7),
+            Some(ArrayBound::Captured(7)),
+        ),
+        (
+            ArrayBound::Captured(7),
+            ArrayBound::Captured(8),
+            Some(ArrayBound::Captured(8)),
+        ),
+        (
+            ArrayBound::Captured(7),
+            ArrayBound::Fixed(4),
+            Some(ArrayBound::Fixed(4)),
+        ),
+        (
+            ArrayBound::Fixed(4),
+            ArrayBound::Captured(7),
+            Some(ArrayBound::Fixed(4)),
+        ),
+        (ArrayBound::Fixed(3), ArrayBound::Fixed(4), None),
+    ] {
+        assert_eq!(left.composite(&right), composite);
+    }
     assert_eq!(target.alignof_type(&types, a), Ok(4));
     let pair = types.intern(plain(TypeKind::Array {
         element: a,

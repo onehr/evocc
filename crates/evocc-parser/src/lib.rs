@@ -58,7 +58,7 @@ enum DerivedDeclarator<'arena> {
     },
     Function {
         parameters: ParameterSyntax,
-        entry_bounds: Vec<&'arena CHirExpr<'arena>>,
+        entry_bounds: Vec<&'arena CHirDecl<'arena>>,
         scope: ScopeId,
         span: SourceSpan,
     },
@@ -89,7 +89,7 @@ struct ParsedAbstractDeclarator<'arena> {
 
 struct ParsedParameters<'arena> {
     syntax: ParameterSyntax,
-    entry_bounds: Vec<&'arena CHirExpr<'arena>>,
+    entry_bounds: Vec<&'arena CHirDecl<'arena>>,
 }
 
 struct ParsedSpecifier<'arena> {
@@ -1408,11 +1408,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 },
             ) => {
                 let element = self.composite_type(left_element, right_element, false)?;
-                let bound = match (left_bound, right_bound) {
-                    (ArrayBound::Unbounded, bound) | (bound, ArrayBound::Unbounded) => bound,
-                    (left, right) if left == right => right,
-                    _ => return None,
-                };
+                let bound = left_bound.composite(&right_bound)?;
                 TypeKind::Array { element, bound }
             }
             (
@@ -4410,13 +4406,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let CHirStmt::Compound(items, span) = body else {
             unreachable!("a function definition has a compound body")
         };
-        // Array adjustment removes only the parameter's outer array type,
-        // not its declaration-time evaluation. Ordinary entry statements let
-        // every consumer (including inlining) preserve the same effects.
+        // Array adjustment removes only the parameter's outer array type.
+        // Capture all written sizes at entry, before the body can change the
+        // parameters; inner dimensions keep those identities in their types.
         let mut with_bounds = Vec::with_capacity(entry_bounds.len() + items.len());
-        with_bounds.extend(entry_bounds.iter().map(|expression| {
-            CHirBlockItem::Statement(self.alloc_node(CHirStmt::Expr(expression, expression.span())))
-        }));
+        with_bounds.extend(entry_bounds.iter().copied().map(CHirBlockItem::Declaration));
         with_bounds.extend(items.iter().cloned());
         self.alloc_node(CHirStmt::Compound(with_bounds, *span))
     }
@@ -6820,18 +6814,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         derived: &[DerivedDeclarator<'arena>],
         array_parameter: bool,
     ) {
-        if let Some(span) = derived
-            .iter()
-            .enumerate()
-            .find_map(|(index, layer)| match layer {
-                DerivedDeclarator::Array {
+        if array_parameter {
+            for layer in derived {
+                if let DerivedDeclarator::Array {
                     bound: ArrayBound::Variable,
-                    span,
+                    expression: Some(expression),
                     ..
-                } if index != 0 || !array_parameter => Some(*span),
-                _ => None,
-            })
-        {
+                } = layer
+                {
+                    if !self
+                        .converted_expression_type(expression)
+                        .is_some_and(|inferred| {
+                            is_integer_class(self.operand_type_class(inferred.ty))
+                        })
+                    {
+                        self.report("E2923", "invalid-array-bound", expression.span());
+                    }
+                }
+            }
+            return;
+        }
+        if let Some(span) = derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Array {
+                bound: ArrayBound::Variable,
+                span,
+                ..
+            } => Some(*span),
+            _ => None,
+        }) {
             self.report("E2203", "variable-length-object", span);
         }
     }
@@ -7347,7 +7357,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             specifier_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers));
             let start = specifier.surface.span();
-            let (name, derived, written, end) =
+            let (name, mut derived, mut written, end) =
                 if matches!(self.peek_kind(), Some(TokenKind::Comma | TokenKind::RParen)) {
                     (
                         None,
@@ -7425,19 +7435,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
             self.validate_array_parameter_modifiers(&derived, true);
             self.validate_variable_array_bounds(&derived, true);
-            if let Some(DerivedDeclarator::Array {
-                bound: ArrayBound::Variable,
-                expression: Some(expression),
-                ..
-            }) = derived.first()
+            if self
+                .symbols
+                .scope(self.current_scope)
+                .is_ok_and(|scope| scope.kind() == ScopeKind::Function)
             {
-                if self
-                    .converted_expression_type(expression)
-                    .is_some_and(|inferred| is_integer_class(self.operand_type_class(inferred.ty)))
-                {
-                    entry_bounds.push(*expression);
-                } else {
-                    self.report("E2923", "invalid-array-bound", expression.span());
+                if let Some(captures) = self.capture_array_bounds(&mut derived) {
+                    entry_bounds.extend(captures);
+                    written = self.written_derived(&derived, written.span);
                 }
             }
             let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);

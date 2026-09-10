@@ -202,6 +202,44 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Multidimensional parameter strides
+
+Tests-only `7480eb7` compiled with 97 passes and three E2203 failures:
+definition-entry strides, inner prototype stars and integer-bound validation.
+Prototype-style definitions now capture every variable dimension once at
+entry using the existing size-object path; their outer array layer still
+adjusts to a pointer. Prototype-only declarations, including nested callback
+prototypes, do not execute their bounds. Later parameters can query a prior
+parameter's captured size, and mutations of the original size parameter do
+not change indexing or sizeof.
+
+Array-bound composition is shared by canonical compatibility, parser
+redeclarations and allocation-manifest checking. Known constant dimensions
+take precedence, differing known constants remain incompatible, and element
+type/qualifier mismatches still report E2002. Inline parameter copies obtain
+fresh capture identities before their types are copied; the captures'
+ordinary entry initializers still run only after all arguments are bound.
+
+`cargo test --locked --offline -j 1 -p evocc-lower
+--test expression_value_flow --test front_end_resolved_forms -p evocc-parser
+--test array_bound_validation --test gnu_typeof
+--test parameter_and_pointer_sign_conversions -p evocc-types
+--test target_data_layout --test type_interner --no-fail-fast` with the
+tailored target passes 161 tests (72 + 24 + 15 + 17 + 14 + 12 + 7).
+`cargo test --locked --offline -j 1 -p evocc-chir --lib allocation::tests::
+--no-fail-fast` adds 15 manifest tests, including forged metadata refusals:
+176 distinct passes, zero failures or ignored tests. Affected Clippy, fmt,
+Ruff, diff-check and the 44/44 shape audit pass. Four sealed reference runs
+and two native subject runs pass (`parameter-array-strides.out`).
+
+An additional K&R experiment is **not** a passing value fixture:
+`legacy-array-bound-probe.{c,out}` measures GCC storing 2 and Clang storing 3
+after the same bound increment and first local initialization (both O0/O2).
+It remains separate from the original RED fixture; legacy variable-bound
+definitions are still OPEN, not a blanket evidenced-not-applicable category.
+Actual VLA object storage and scope-aware reclamation also remain OPEN.
+No full campaign ran; all benchmark receipt numbers remain unchanged.
+
 ### Captured array strides through pointer operations
 
 Tests-only `0eafa69` compiled with 68 passes and one E2102
@@ -229,9 +267,9 @@ The same selected tests and affected libraries pass Clippy `-D warnings`;
 fmt, Ruff, diff-check and the 44/44 instruction-shape audit pass.
 The expanded fixture passes four sealed reference runs and both Linux
 toolchains' executions of subject assembly (`captured-array-strides.out`).
-Actual VLA object storage, inner variable parameter dimensions and
-scope-aware stack reclamation remain OPEN; no full campaign ran or changed
-its measured counts.
+Inner variable parameter dimensions were subsequently addressed above for
+prototype-style definitions. Actual VLA object storage and scope-aware stack
+reclamation remain OPEN; no full campaign ran or changed its measured counts.
 
 ### Literal string comparisons and embedded NUL
 

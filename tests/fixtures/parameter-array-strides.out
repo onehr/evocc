@@ -3,8 +3,13 @@ Command: COMPILER -std=gnu11 -OLEVEL parameter-array-strides.c -o /tmp/probe
          /tmp/probe
 gcc-14 O0/O2: exit 0/0.
 clang-19 O0/O2: exit 0/0; the unnamed definition parameter emits its existing
-extension warning. Its bound is still evaluated, just as for a named one.
+extension warning. Both compilers warn about sizeof of the adjusted array
+parameter. Its bound is still evaluated, just as for a named one.
 Multidimensional arrays and pointer-to-array parameters capture their inner
 sizes once at entry; prototypes and nested callback prototypes do not run
 their bound expressions. Independent inline expansions and recursive frames
 retain their own sizes after the source parameters change.
+Subject command: target/tailored/debug/evocc --emit=asm
+                 --target=aarch64-unknown-linux-gnu parameter-array-strides.c
+The assembly links and executes with gcc-14 and clang-19
+(-fno-integrated-as for the existing GNU relocation spelling): exit 0/0.

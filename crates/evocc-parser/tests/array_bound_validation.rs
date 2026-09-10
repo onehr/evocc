@@ -189,6 +189,19 @@ fn inner_parameter_bounds_must_be_integer_even_in_prototypes() {
 }
 
 #[test]
+fn variable_parameter_redeclarations_preserve_nonbound_type_constraints() {
+    for source in [
+        "void f(int n, int a[2][n]); void f(int n, long a[2][n]);",
+        "void f(int n, const int a[2][n]); void f(int n, int a[2][n]);",
+        "void f(int a[2][3]); void f(int a[2][4]);",
+    ] {
+        let arena = Arena::default();
+        let error = parse(source, &arena).expect_err("only compatible bounds may compose");
+        assert_eq!(error.code, "E2002", "{source}: {error:?}");
+    }
+}
+
+#[test]
 fn positive_constant_bounds_remain_valid() {
     let arena = Arena::default();
     parse(

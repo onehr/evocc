@@ -1,0 +1,18 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -w -OLEVEL legacy-array-bound-probe.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0 and O2, exit 0:
+increment: n=4 size=12 stride=12
+changed: n=99 size=12 stride=12
+stored=2
+call: n=3 size=12 stride=12 calls=1
+clang-19 O0 and O2, exit 0:
+increment: n=4 size=12 stride=12
+changed: n=99 size=12 stride=12
+stored=3
+call: n=3 size=12 stride=12 calls=1
+Without -w Clang reports its deprecated-non-prototype warning; both compile.
+ORACLE_CONFLICT: the first local initializer observes the source parameter
+before versus after its bound's increment. This probe is not a consensus
+value fixture and is not a justification to admit or classify all legacy
+variable-bound definitions. That separate legacy-declarator work stays OPEN.

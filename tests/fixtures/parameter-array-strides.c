@@ -30,6 +30,12 @@ static __attribute__((always_inline)) inline int inlined(int n, int a[2][n]) {
     return sizeof(*a) + a[1][0];
 }
 
+static int invoke_inlined(int n, void *values) { return inlined(n, values); }
+static int dependent(int n, int a[2][n], int b[sizeof(*a)]) {
+    n = 99;
+    return sizeof(*a) != 12 || sizeof(b) != sizeof(int *) || b[0] != 7;
+}
+
 static int recursive(int n, int a[2][n]) {
     int width = n;
     if (n > 1 && recursive(n - 1, (void *)a)) return 1;
@@ -61,5 +67,8 @@ int main(void) {
     if (buffer[1] != 1 || buffer[2] != 2 || buffer[3] != 3 || buffer[4] != 4) return 9;
     if (unnamed(3, a) != 3 || inner_calls != 3) return 10;
     if (through_callback(5, callback, b) || star(3, a)) return 11;
+    buffer[0] = 7;
+    if (dependent(3, a, buffer)) return 12;
+    if (invoke_inlined(3, a) != 31 || invoke_inlined(5, b) != 39) return 13;
     return prototype_calls != 0;
 }

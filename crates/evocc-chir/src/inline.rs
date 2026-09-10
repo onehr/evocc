@@ -1047,8 +1047,15 @@ impl<'a> Substitution<'a, '_> {
             | TypeSpecifier::Typeof { resolved: ty, .. }
             | TypeSpecifier::AutoType { resolved: ty, .. }) = &mut o.specifier;
             *ty = self.substituted_type(*ty, c);
-            let s = self.fresh(c.scope, o.ty, o.storage, o.span)?;
-            c.replacements.insert(o.symbol, s);
+            let s = if let Some(symbol) = c.replacements.get(&o.symbol) {
+                // A parameter's type may name this entry-bound capture
+                // before its initializer is substituted below.
+                *symbol
+            } else {
+                let symbol = self.fresh(c.scope, o.ty, o.storage, o.span)?;
+                c.replacements.insert(o.symbol, symbol);
+                symbol
+            };
             o.symbol = s;
             o.name.spelling = self.unit.symbols.symbol(s).unwrap().spelling().to_owned();
         }
@@ -1464,6 +1471,36 @@ impl<'a> Substitution<'a, '_> {
             spelling: format!("__evocc_inline_{serial}_end"),
             span,
         });
+        // Parameter types can refer forward to captures initialized at body
+        // entry. Give these identities a home before copying the parameters;
+        // their ordinary declarations still evaluate the bounds afterward.
+        let mut captures = BTreeSet::new();
+        for parameter in parameters {
+            let mut ty = parameter.ty;
+            loop {
+                match &self.unit.types.get(ty).unwrap().kind {
+                    TypeKind::Pointer(pointee) => ty = *pointee,
+                    TypeKind::Array { element, bound } => {
+                        if let evocc_types::ArrayBound::Captured(raw) = bound {
+                            captures.insert(*raw);
+                        }
+                        ty = *element;
+                    }
+                    _ => break,
+                }
+            }
+        }
+        for raw in captures {
+            let original = self
+                .unit
+                .symbols
+                .symbols_in_source_order()
+                .get(raw as usize)
+                .ok_or_else(|| self.error(span, "parameter size capture has no symbol"))?;
+            let (symbol, ty) = (original.id(), original.ty());
+            let fresh = self.fresh(inline_scope, ty, StorageClass::Auto, span)?;
+            c.replacements.insert(symbol, fresh);
+        }
         let mut items = Vec::new();
         if !matches!(
             self.unit.types.get(return_type).unwrap().kind,
@@ -1484,14 +1521,15 @@ impl<'a> Substitution<'a, '_> {
             }
         }
         for (parameter, arg) in parameters.iter().zip(args) {
-            let fresh = self.fresh(inline_scope, parameter.ty, StorageClass::None, span)?;
+            let ty = self.substituted_type(parameter.ty, &c);
+            let fresh = self.fresh(inline_scope, ty, StorageClass::None, span)?;
             let arg = if matches!(
-                self.unit.types.get(parameter.ty).unwrap().kind,
+                self.unit.types.get(ty).unwrap().kind,
                 TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
             ) {
                 *arg
             } else {
-                self.alloc(CHirExpr::Cast(parameter.ty, arg, span))
+                self.alloc(CHirExpr::Cast(ty, arg, span))
             };
             items.push(CHirBlockItem::Declaration(self.object(
                 fresh,
@@ -1500,12 +1538,12 @@ impl<'a> Substitution<'a, '_> {
             )));
             if let Some(original) = parameter.symbol {
                 c.replacements.insert(original, fresh);
-                let qualifiers = self.unit.types.get(parameter.ty).unwrap().qualifiers;
+                let qualifiers = self.unit.types.get(ty).unwrap().qualifiers;
                 if !c.mutable.contains(&original)
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
                 {
-                    if let Some(replacement) = self.repeatable_value(arg, parameter.ty) {
+                    if let Some(replacement) = self.repeatable_value(arg, ty) {
                         c.constants.insert(original, replacement);
                     }
                 }

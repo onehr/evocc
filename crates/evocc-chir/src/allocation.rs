@@ -1801,7 +1801,7 @@ fn types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
 }
 
 fn array_bounds_compatible(left: &ArrayBound, right: &ArrayBound) -> bool {
-    left == right || matches!(left, ArrayBound::Unbounded) || matches!(right, ArrayBound::Unbounded)
+    left.composite(right).is_some()
 }
 
 fn prototype_survives_default_promotions(

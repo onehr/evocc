@@ -143,6 +143,24 @@ pub enum ArrayBound {
     Unbounded, // incomplete array `int a[]`
 }
 
+impl ArrayBound {
+    /// Composite bound of compatible array declarations. A known constant
+    /// size takes precedence; otherwise retain a specified runtime capture.
+    /// Capture identity remains part of the type, not a compatibility test.
+    #[must_use]
+    pub fn composite(&self, other: &Self) -> Option<Self> {
+        Some(match (self, other) {
+            (Self::Fixed(left), Self::Fixed(right)) if left != right => return None,
+            (fixed @ Self::Fixed(_), _) | (_, fixed @ Self::Fixed(_)) => fixed.clone(),
+            (_, captured @ Self::Captured(_)) | (captured @ Self::Captured(_), _) => {
+                captured.clone()
+            }
+            (Self::Variable, _) | (_, Self::Variable) => Self::Variable,
+            (Self::Unbounded, Self::Unbounded) => Self::Unbounded,
+        })
+    }
+}
+
 /// Opaque identifier for a C type that lives in a type interning table.
 /// Carries no information on its own; the table resolves it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -756,15 +774,7 @@ impl TypeInterner {
                 },
             ) => {
                 self.compatible_with(*left_element, *right_element, false)
-                    && (left_bound == right_bound
-                        || matches!(
-                            left_bound,
-                            ArrayBound::Unbounded | ArrayBound::Variable | ArrayBound::Captured(_)
-                        )
-                        || matches!(
-                            right_bound,
-                            ArrayBound::Unbounded | ArrayBound::Variable | ArrayBound::Captured(_)
-                        ))
+                    && left_bound.composite(right_bound).is_some()
             }
             (
                 TypeKind::Function {
