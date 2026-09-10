@@ -5,6 +5,62 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 #[test]
+fn literal_string_comparison_does_not_bind_a_same_named_local_function() {
+    let source = include_str!("../../../tests/fixtures/literal-string-comparison.c");
+    for builtins in [true, false] {
+        let arena = Arena::default();
+        let file = FileId::new(45019);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        parser.set_standard_builtins(builtins);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let main = unit
+            .iter()
+            .find_map(|decl| match decl {
+                CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+                _ => None,
+            })
+            .unwrap();
+        let chir =
+            interp::interpret_scalar_function(&unit, main, interp::InterpreterLimits::new(10000))
+                .unwrap();
+        assert_eq!(chir.return_value.unwrap().raw_bits, 0);
+        let module =
+            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        assert!(!evocc_evoir::render_module(&module).contains("call @strcmp"));
+        let f = module.functions.iter().find(|f| f.name == "main").unwrap();
+        let args = f
+            .params
+            .iter()
+            .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+            .collect::<Vec<_>>();
+        let ir = evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &args,
+            evocc_evoir::InterpreterLimits::new(10000),
+        )
+        .unwrap();
+        assert_eq!(ir.return_values[0].raw_bits, 0);
+    }
+}
+
+#[test]
+fn nonliteral_builtin_comparison_with_local_binding_is_refused() {
+    let source = "static int strcmp(const char *a,const char *b){return -123;} int f(const char *a,const char *b){return __builtin_strcmp(a,b);}";
+    let arena = Arena::default();
+    let file = FileId::new(45020);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let _unit = parser.parse_translation_unit_in(&arena);
+    assert!(parser.had_error(), "conflicting local binding was accepted");
+    assert_eq!(parser.diagnostic().unwrap().code, "E2946");
+}
+
+#[test]
 fn prefetch_keeps_address_evaluation_without_an_external_call() {
     let source = "int n; int *address(void){n++;return &n;} int main(void){__builtin_prefetch(address()); __builtin_prefetch(address(),0); __builtin_prefetch(address(),1,3); return n-3;}";
     let arena = Arena::default();

@@ -1,0 +1,9 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL literal-string-comparison.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0/O2: exit 0/0 (same-name builtin-type warning).
+clang-19 O0/O2: exit 0/0.
+The eight literal comparisons have the asserted exact -1/0/1 values; the
+same-named static body is not called. This does not establish a rule for
+nonliteral calls: the sealed 20260909-local-library-binding probe already
+records an optimization-dependent GCC/Clang disagreement for those.
