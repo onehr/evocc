@@ -189,6 +189,16 @@ fn inner_parameter_bounds_must_be_integer_even_in_prototypes() {
 }
 
 #[test]
+fn local_pointer_bounds_must_be_integer() {
+    for source in [
+        "void f(void){int (*p)[1.5]=0;}",
+        "void f(int *n){int (*p)[n];}",
+    ] {
+        rejects(source, "E2923", "invalid-array-bound");
+    }
+}
+
+#[test]
 fn variable_parameter_redeclarations_preserve_nonbound_type_constraints() {
     for source in [
         "void f(int n, int a[2][n]); void f(int n, long a[2][n]);",

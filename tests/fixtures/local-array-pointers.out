@@ -7,3 +7,11 @@ Local pointer declarators, including a fixed array of pointers, capture
 pointed-to array sizes before their initializers, once per declarator.
 Uninitialized, initialized, register, for-initializer and inline-local
 pointer objects agree; all pointed-to storage is an existing fixed array.
+An unevaluated sizeof statement expression does not execute a nested bound.
+
+Subject: target/tailored/debug/evocc --emit=asm
+         --target=aarch64-unknown-linux-gnu local-array-pointers.c
+Link/run: gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject
+          clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject
+gcc-14 subject: exit 0.
+clang-19 subject: exit 0.

@@ -1916,13 +1916,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declarator, so self-references in an initializer resolve to this
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
-            let captures = if storage == StorageClass::Typedef
-                && context != DeclarationContext::File
-                && !has_initializer
+            let fixed_automatic_view = context != DeclarationContext::File
+                && matches!(
+                    storage,
+                    StorageClass::None | StorageClass::Auto | StorageClass::Register
+                )
+                && declarator.derived.iter().any(|layer| {
+                    matches!(
+                        layer,
+                        DerivedDeclarator::Array {
+                            bound: ArrayBound::Variable,
+                            ..
+                        }
+                    )
+                })
+                && !self.initialized_array_contains_vla(full_type)
+                && !matches!(
+                    self.types.get(full_type).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                );
+            let captures = if context != DeclarationContext::File
+                && ((storage == StorageClass::Typedef && !has_initializer) || fixed_automatic_view)
             {
                 let captures = self.capture_array_bounds(&mut declarator.derived)?;
                 full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
-                full_type = self.apply_declaration_attributes(full_type, &mut attributes, true);
+                full_type = self.apply_declaration_attributes(
+                    full_type,
+                    &mut attributes,
+                    storage == StorageClass::Typedef,
+                );
                 written = self.written_declarator(&declarator);
                 captures
             } else {

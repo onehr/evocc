@@ -27,5 +27,7 @@ int main(void) {
     int data[32] = {0};
     if (view(3, data) || view(5, data)) return 1;
     if (inlined(2, data) != 2 || inlined(8, data) != 8) return 2;
+    int side = 3;
+    if (sizeof(({int (*p)[++side] = 0; 0;})) != 4 || side != 3) return 3;
     return 0;
 }

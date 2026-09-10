@@ -1,0 +1,21 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Subject commit: 962d85b.
+Original source directory:
+  .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/
+No source edits or extra test options.
+
+For each ORIGINAL in 20040411-1.c and pr22061-2.c:
+  gcc-14 -std=gnu11 -O0 ORIGINAL -o /tmp/probe; /tmp/probe
+  gcc-14 -std=gnu11 -O2 ORIGINAL -o /tmp/probe; /tmp/probe
+  clang-19 -std=gnu11 -O0 ORIGINAL -o /tmp/probe; /tmp/probe
+  clang-19 -std=gnu11 -O2 ORIGINAL -o /tmp/probe; /tmp/probe
+  target/tailored/debug/evocc --emit=asm
+    --target=aarch64-unknown-linux-gnu ORIGINAL
+  gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject
+  clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject
+
+20040411-1.c: four reference exits 0; two subject native exits 0.
+pr22061-2.c: four reference exits 0; two subject native exits 0.
+These are tailored original-program checks, not a new campaign result.
+The second original's variable-array body is an unused static function;
+this result does not establish execution of dynamic object allocation.

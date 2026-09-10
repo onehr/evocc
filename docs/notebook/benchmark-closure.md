@@ -126,10 +126,12 @@ their remaining closure work without creating a second set of measurements.
   and replay the original initializer/place failures (row 14).
 - [ ] Close the variable-length-object requirement under an authorized contract;
   a current profile refusal is not a non-FP pass (row 15).
-  Prior-parameter visibility, prototype `[*]`, and outer array-parameter bound
-  effects are locally repaired: definitions evaluate bounds on entry and
-  prototypes do not. Actual variable-length storage, inner dimensions and
-  captured `sizeof` remain unfinished; pointer adjustment is not VLA support.
+  Prior-parameter visibility, prototype `[*]`, inner/outer array-parameter
+  bounds, captured sizeof and fixed-storage local pointer views are locally
+  repaired. Definitions capture sizes on entry; prototypes do not evaluate
+  them. Actual variable-length storage/reclamation, variably modified typeof,
+  static pointer declarations and legacy variable-bound definitions remain
+  unfinished; pointer adjustment is not full VLA support.
 - [ ] Reduce and repair every remaining non-FP diagnostic family, including
   builtins, ABI, initializers and the remaining TinyCC compile refusals
   (rows 11, 16).
@@ -201,6 +203,35 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Local variable-array pointers over fixed storage
+
+Tests-only `9c0cb03` compiled with 72 passes and one E2203 failure.
+Automatic pointer declarations now reuse bound capture before initialization,
+including uninitialized pointers, fixed arrays of pointers, register objects
+and for initializers. An inline regression also exposed stale capture IDs in
+written array layers; those now use the same renaming as canonical types,
+with allocation identity validation unchanged. Unevaluated operands do not
+execute captures, noninteger bounds remain E2923, and goto/switch bypasses
+remain E2945.
+
+`cargo test --locked --offline -j 1 -p evocc-lower
+--test expression_value_flow --test front_end_resolved_forms -p evocc-parser
+--test array_bound_validation --test gnu_typeof
+--test parameter_and_pointer_sign_conversions -p evocc-types
+--test target_data_layout --test type_interner --no-fail-fast` with the
+tailored target passes 163 tests (73 + 24 + 16 + 17 + 14 + 12 + 7).
+`cargo test --locked --offline -j 1 -p evocc-chir --lib allocation
+--no-fail-fast` adds 16 distinct tests: 179 passes, zero failures or ignored.
+Affected Clippy, fmt, Ruff, diff-check and the 44/44 instruction-shape audit
+pass. Four sealed reference runs and two native subject runs pass
+(`local-array-pointers.out`).
+
+Unchanged originals `20040411-1` and `pr22061-2` also pass four reference and
+two native subject runs each on `962d85b` (`captured-array-originals.out`).
+The latter does not execute its unused variable-array function, so it is not
+evidence for actual VLA storage. No full campaign ran and frozen benchmark
+receipts remain unchanged; dynamic storage and scope reclamation remain OPEN.
 
 ### Multidimensional parameter strides
 

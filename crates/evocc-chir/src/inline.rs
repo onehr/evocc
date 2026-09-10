@@ -1047,6 +1047,11 @@ impl<'a> Substitution<'a, '_> {
             | TypeSpecifier::Typeof { resolved: ty, .. }
             | TypeSpecifier::AutoType { resolved: ty, .. }) = &mut o.specifier;
             *ty = self.substituted_type(*ty, c);
+            for layer in &mut o.written.layers {
+                if let WrittenDeclaratorLayer::Array { bound, .. } = layer {
+                    *bound = self.substituted_bound(bound, c);
+                }
+            }
             let s = if let Some(symbol) = c.replacements.get(&o.symbol) {
                 // A parameter's type may name this entry-bound capture
                 // before its initializer is substituted below.
@@ -1107,20 +1112,27 @@ impl<'a> Substitution<'a, '_> {
             TypeKind::Pointer(pointee) => *pointee = self.substituted_type(*pointee, c),
             TypeKind::Array { element, bound } => {
                 *element = self.substituted_type(*element, c);
-                if let evocc_types::ArrayBound::Captured(raw) = bound {
-                    if let Some(symbol) = self
-                        .unit
-                        .symbols
-                        .symbols_in_source_order()
-                        .get(*raw as usize)
-                    {
-                        *raw = self.symbol(symbol.id(), c).raw();
-                    }
-                }
+                *bound = self.substituted_bound(bound, c);
             }
             _ => return ty,
         }
         self.unit.types.intern(canonical)
+    }
+
+    fn substituted_bound(
+        &self,
+        bound: &evocc_types::ArrayBound,
+        c: &Context<'a>,
+    ) -> evocc_types::ArrayBound {
+        let evocc_types::ArrayBound::Captured(raw) = bound else {
+            return bound.clone();
+        };
+        self.unit
+            .symbols
+            .symbols_in_source_order()
+            .get(*raw as usize)
+            .map(|symbol| evocc_types::ArrayBound::Captured(self.symbol(symbol.id(), c).raw()))
+            .unwrap_or_else(|| bound.clone())
     }
 
     fn expr(
