@@ -1,0 +1,11 @@
+Command: each sealed gcc-14 and clang-19 -std=gnu11 -O0/-O2 wide-division.c -o /tmp/wide; /tmp/wide
+Target: aarch64-linux-gnu, evo-flight-lab:sealed, network none
+gcc-14 O0 exit=0
+gcc-14 O2 exit=0
+clang-19 O0 exit=0
+clang-19 O2 exit=0
+The fixture checks four operators, full-width inputs/results, signed truncation
+towards zero, minimum/one, minimum/minimum, unsigned maximum, compound stores,
+once-only addresses and live register pairs across helper calls/stack arguments.
+Undefined zero-divisor and minimum/-1 cases are interpreter diagnostic tests,
+not reference-value probes.

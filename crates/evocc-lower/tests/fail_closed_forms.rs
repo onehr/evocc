@@ -156,20 +156,6 @@ fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
 }
 
 #[test]
-fn wide_integer_division_fails_closed_with_only_e3033() {
-    assert_lowering_error(
-        concat!(
-            "unsigned long f(void) { ",
-            "__uint128_t u = ((__uint128_t)1 << 100) + 7; ",
-            "return (unsigned long)(u / 3); }\n",
-        ),
-        10,
-        "E3033",
-        "not-executed: wide-integer",
-    );
-}
-
-#[test]
 fn aggregate_variable_arguments_fail_closed_with_only_e3030() {
     for (ordinal, source) in [
         (

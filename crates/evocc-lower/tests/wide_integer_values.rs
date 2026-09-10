@@ -174,16 +174,81 @@ fn chir_executes_the_sealed_wide_reference_values() {
 }
 
 #[test]
-fn wide_division_and_remainder_keep_the_declared_refusal() {
-    for op in ["/", "%"] {
-        let source = format!("typedef unsigned __int128 U; U f(U a,U b){{return a {op} b;}}");
-        let arena = Arena::default();
-        let unit = parse(&source, &arena);
-        assert_eq!(
-            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-                .unwrap_err()
-                .code(),
-            "E3033"
+fn wide_division_and_remainder_preserve_the_arithmetic_obligations() {
+    for (ty, op, mnemonic) in [
+        ("unsigned __int128", "/", "udiv"),
+        ("unsigned __int128", "%", "urem"),
+        ("__int128", "/", "sdiv"),
+        ("__int128", "%", "srem"),
+    ] {
+        let source = format!("typedef {ty} U; U f(U a,U b){{return a {op} b;}}");
+        let module = lower(&source);
+        let text = evocc_evoir::render_module(&module);
+        assert!(text.contains(&format!("{mnemonic}.bits<128>")), "{text}");
+        assert!(text.contains("divisor_nonzero"), "{text}");
+        assert!(
+            text.contains(if op == "/" {
+                "ub.assume.division_by_zero"
+            } else {
+                "ub.assume.remainder_by_zero"
+            }),
+            "{text}"
         );
+        if ty == "__int128" {
+            assert!(text.contains("signed_div_rem_no_overflow"), "{text}");
+            assert!(text.contains("ub.assume.signed_overflow"), "{text}");
+        }
+    }
+}
+
+#[test]
+fn wide_division_fixture_agrees_between_interpreters() {
+    let source = include_str!("../../../tests/fixtures/wide-division.c");
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let main = unit
+        .iter()
+        .find_map(|decl| match decl {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        })
+        .unwrap();
+    let chir = interpret_scalar_function(&unit, main, InterpreterLimits::new(100_000)).unwrap();
+    assert_eq!(chir.return_value.unwrap().raw_bits, 0);
+    let module = lower(source);
+    let ir = evocc_evoir::interpret_module(
+        &module,
+        "main",
+        &[
+            evocc_evoir::RuntimeValue::new(EvoIRType::Mem(evocc_types::Region::All), 0),
+            evocc_evoir::RuntimeValue::new(EvoIRType::World, 0),
+        ],
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(ir.return_values[0].value(), 0);
+}
+
+#[test]
+fn wide_division_errors_still_have_their_typed_diagnostics() {
+    for (op, left, right, code) in [
+        ("/", "7", "0", "E3002"),
+        ("%", "7", "0", "E3003"),
+        ("/", "-((__int128)1<<126)*2", "-1", "E3004"),
+        ("%", "-((__int128)1<<126)*2", "-1", "E3004"),
+    ] {
+        let source = format!("__int128 f(__int128 a,__int128 b){{return a {op} b;}} int main(void){{return (int)f({left},{right});}}");
+        let module = lower(&source);
+        let error = evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &[
+                evocc_evoir::RuntimeValue::new(EvoIRType::Mem(evocc_types::Region::All), 0),
+                evocc_evoir::RuntimeValue::new(EvoIRType::World, 0),
+            ],
+            evocc_evoir::InterpreterLimits::new(10_000),
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), code, "{source}: {error}");
     }
 }

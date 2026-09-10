@@ -339,10 +339,13 @@ fn a_wide_load_and_store_are_a_register_pair() {
 }
 
 #[test]
-fn division_and_remainder_stay_e4003_at_this_width() {
-    // Section 10 still defers division and remainder; revision 0.26 opens
-    // the total predicates without making the arithmetic operations executable.
-    for operation in ["sdiv", "udiv", "srem", "urem"] {
+fn wide_division_and_remainder_use_verified_runtime_calls() {
+    for (operation, helper) in [
+        ("sdiv", "__divti3"),
+        ("udiv", "__udivti3"),
+        ("srem", "__modti3"),
+        ("urem", "__umodti3"),
+    ] {
         // Division may trap, so its function carries the Section 4.6 summary
         // that says so.
         let text = [
@@ -357,11 +360,62 @@ fn division_and_remainder_stay_e4003_at_this_width() {
         ]
         .join("\n");
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
-        let refusals = lower_module(&module).expect_err("division at 128 is not lowered");
-        assert!(
-            refusals.iter().any(|refusal| refusal.code == "E4003"),
-            "{operation}: {refusals:?}"
-        );
+        let lowered = lower_module(&module).expect("hosted runtime division lowers");
+        validate_module(&lowered).unwrap();
+        every_register_is_narrow(&lowered);
+        let calls: Vec<_> = lowered
+            .functions
+            .iter()
+            .flat_map(|f| &f.blocks)
+            .flat_map(|b| &b.insts)
+            .filter_map(|i| {
+                if let MInst::Bl {
+                    symbol,
+                    args,
+                    results,
+                } = i
+                {
+                    Some((symbol, args, results))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, helper);
+        assert_eq!(calls[0].1.len(), 4);
+        assert_eq!(calls[0].2.len(), 2);
+        let rendered = evocc_mir::render_module(&lowered);
+        assert_eq!(evocc_mir::parse_module(&rendered).unwrap(), lowered);
+        let assembly = compile_module_for(Target::Linux, &module, &|_| true).unwrap();
+        assert!(assembly.contains(&format!("bl {helper}")), "{assembly}");
+        for (left, right) in [((1_u128 << 100) + 7, 3), (u128::MAX, 2), (1_u128 << 127, 1)] {
+            let expected = match operation {
+                "sdiv" => ((left as i128) / (right as i128)) as u128,
+                "srem" => ((left as i128) % (right as i128)) as u128,
+                "udiv" => left / right,
+                _ => left % right,
+            };
+            let out = evocc_mir::interpret_module(
+                &lowered,
+                "main",
+                &[
+                    evocc_mir::MirValue::Int(left as u64),
+                    evocc_mir::MirValue::Int((left >> 64) as u64),
+                    evocc_mir::MirValue::Int(right as u64),
+                    evocc_mir::MirValue::Int((right >> 64) as u64),
+                ],
+                evocc_mir::MirLimits::new(1000),
+            )
+            .unwrap();
+            assert_eq!(
+                out.results,
+                [
+                    evocc_mir::MirValue::Int(expected as u64),
+                    evocc_mir::MirValue::Int((expected >> 64) as u64)
+                ]
+            );
+        }
     }
 }
 

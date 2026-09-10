@@ -78,33 +78,39 @@ fn wide_returns_memory_and_calls_do_not_truncate() {
 }
 
 #[test]
-fn wide_division_refusal_covers_values_and_compound_stores() {
-    for body in [
-        "return x/3;",
-        "return x%3;",
-        "x/=3; return x;",
-        "x%=3; return x;",
-        "U *p=&x; *p/=3; return x;",
-        "U *p=&x; *p%=3; return x;",
+fn wide_division_covers_values_and_compound_stores() {
+    for (body, expected) in [
+        ("return x/3;", (1_u128 << 100) / 3),
+        ("return x%3;", (1_u128 << 100) % 3),
+        ("x/=3; return x;", (1_u128 << 100) / 3),
+        ("x%=3; return x;", (1_u128 << 100) % 3),
+        ("U *p=&x; *p/=3; return x;", (1_u128 << 100) / 3),
+        ("U *p=&x; *p%=3; return x;", (1_u128 << 100) % 3),
     ] {
         let source = format!("typedef unsigned __int128 U; U main(void){{U x=(U)1<<100; {body}}}");
         let arena = Arena::default();
         let unit = parse(&source, &arena);
-        let error =
+        let outcome =
             interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
-                .unwrap_err();
-        assert_eq!(error.code(), "E3033", "{source}: {error}");
+                .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert_eq!(outcome.return_value.unwrap().raw_bits, expected, "{source}");
     }
 }
 
 #[test]
 fn wide_runtime_obligations_remain_typed_failures() {
     for (expression, code) in [
-        ("((__int128)1<<126)*2", "E3004"),
-        ("(__uint128_t)1<<128", "E3005"),
-        ("(__uint128_t)1<<(~(__uint128_t)0)", "E3005"),
+        ("value*2", "E3004"),
+        ("one<<128", "E3005"),
+        ("one<<(~(__uint128_t)0)", "E3005"),
+        ("one/zero", "E3002"),
+        ("one%zero", "E3003"),
+        ("(value*-2)/negative", "E3004"),
+        ("(value*-2)%negative", "E3004"),
     ] {
-        let source = format!("int main(void){{ return (int)({expression}); }}");
+        // Source-only constant overflow has its separate width-wrapping rule.
+        // Volatile reads make these checks executed arithmetic, not folding.
+        let source = format!("int main(void){{ volatile int zero=0, negative=-1; volatile __int128 value=(__int128)1<<126; volatile __uint128_t one=1; return (int)({expression}); }}");
         let arena = Arena::default();
         let unit = parse(&source, &arena);
         let error =

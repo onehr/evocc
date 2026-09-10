@@ -1,5 +1,5 @@
-//! EvoIR 10.1.19 (revision 1.9.61): `bits<128>` executes in every scalar form
-//! but division and remainder.
+//! EvoIR 10.1.19 and the reviewed hosted division extension: `bits<128>`
+//! executes scalar arithmetic with width-typed runtime obligations.
 //!
 //! "A `bits<128>` value lowers, is interpreted and is optimized exactly as any
 //! other `bits<N>`: `load`/`store` at 16 bytes and alignment 16, `copy` of
@@ -225,34 +225,68 @@ fn a_value_spanning_the_whole_width_is_reachable() {
 }
 
 #[test]
-fn division_and_remainder_stay_e3033_at_width_one_hundred_and_twenty_eight() {
-    // "sdiv, udiv, srem and urem on bits<128> stay E3033
-    // (not-executed: wide-integer) until a unit needs one."
+fn wide_division_and_remainder_execute_with_typed_boundaries() {
     for operation in ["sdiv", "udiv", "srem", "urem"] {
-        let body = format!(
-            "    %v4 = zext.bits<128> %v0\n\
-             \x20   %v5 = zext.bits<128> %v1\n\
-             \x20   %v6 = {operation}.bits<128> %v4, %v5\n\
-             \x20   %v99 = trunc.bits<64> %v6\n"
-        );
-        // Division may trap, so its function carries the Section 4.6 summary
-        // that says so.
-        let text = wrap(&body).replace("may_trap=false", "may_trap=true");
+        let text = wrap(&format!("    %v99 = {operation}.bits<128> %v0, %v1\n"))
+            .replace("bits<64>", "bits<128>")
+            .replace("may_trap=false", "may_trap=true");
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
-        let error = interpret_module(
-            &module,
-            "main",
-            &[
-                RuntimeValue::bits(64, 6),
-                RuntimeValue::bits(64, 3),
-                RuntimeValue::new(EvoIRType::Mem(evocc_types::Region::All), 0),
-                RuntimeValue::new(EvoIRType::World, 0),
-            ],
-            InterpreterLimits::new(1000),
-        )
-        .expect_err("division at width 128 is not executed");
-        assert_eq!(error.code(), "E3033", "{operation}: {error:?}");
-        assert_eq!(error.message(), "not-executed: wide-integer", "{operation}");
+        for (left, right) in [
+            ((1_u128 << 100) + 7, 3),
+            (u128::MAX, 2),
+            ((-(1_i128 << 100) - 7) as u128, (-3_i128) as u128),
+            (1_u128 << 127, 1),
+            (1_u128 << 127, 1_u128 << 127),
+        ] {
+            let expected = match operation {
+                "sdiv" => ((left as i128) / (right as i128)) as u128,
+                "srem" => ((left as i128) % (right as i128)) as u128,
+                "udiv" => left / right,
+                _ => left % right,
+            };
+            let outcome = interpret_module(
+                &module,
+                "main",
+                &[
+                    RuntimeValue::wide(EvoIRType::Bits(128), left),
+                    RuntimeValue::wide(EvoIRType::Bits(128), right),
+                    RuntimeValue::new(EvoIRType::Mem(evocc_types::Region::All), 0),
+                    RuntimeValue::new(EvoIRType::World, 0),
+                ],
+                InterpreterLimits::new(1000),
+            )
+            .unwrap_or_else(|e| panic!("{operation}: {e:?}"));
+            assert_eq!(outcome.return_values[0].value(), expected, "{operation}");
+        }
+        for (left, right, code) in [
+            (
+                7,
+                0,
+                if operation.ends_with("div") {
+                    "E3002"
+                } else {
+                    "E3003"
+                },
+            ),
+            (1_u128 << 127, u128::MAX, "E3004"),
+        ] {
+            if code == "E3004" && operation.starts_with('u') {
+                continue;
+            }
+            let error = interpret_module(
+                &module,
+                "main",
+                &[
+                    RuntimeValue::wide(EvoIRType::Bits(128), left),
+                    RuntimeValue::wide(EvoIRType::Bits(128), right),
+                    RuntimeValue::new(EvoIRType::Mem(evocc_types::Region::All), 0),
+                    RuntimeValue::new(EvoIRType::World, 0),
+                ],
+                InterpreterLimits::new(1000),
+            )
+            .expect_err("undefined arithmetic is not executed");
+            assert_eq!(error.code(), code, "{operation}: {error:?}");
+        }
     }
 }
 

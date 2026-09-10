@@ -9,8 +9,8 @@
 //! observable rather than asserted: a disagreement is a wrong exit status.
 //!
 //! The sources are EvoIR to isolate register-pair lowering from C parsing and
-//! promotion. The front end also lowers `__int128`; division and remainder
-//! remain separate execution boundaries. The same native oracles serve both.
+//! promotion. Division and remainder use the hosted runtime's pair ABI;
+//! the same native oracles serve both front-end and machine tests.
 
 use std::process::Command;
 
@@ -100,6 +100,24 @@ fn module_text() -> String {
             &format!("    %v2 = {operation}.bits<128> %v0, %v1\n"),
             "%v2",
         ));
+        text.push('\n');
+    }
+    for (name, operation) in [
+        ("wide_sdiv", "sdiv"),
+        ("wide_udiv", "udiv"),
+        ("wide_srem", "srem"),
+        ("wide_urem", "urem"),
+    ] {
+        text.push_str(
+            &func(
+                name,
+                &["bits<128>", "bits<128>"],
+                "bits<128>",
+                &format!("%v2 = {operation}.bits<128> %v0, %v1\n"),
+                "%v2",
+            )
+            .replace("may_trap=false", "may_trap=true"),
+        );
         text.push('\n');
     }
 
@@ -231,6 +249,10 @@ u64 wide_mul_shr(u64 a, u64 b, u64 s);
 u128 wide_add(u128 a, u128 b);
 u128 wide_sub(u128 a, u128 b);
 u128 wide_mul(u128 a, u128 b);
+u128 wide_udiv(u128 a, u128 b);
+u128 wide_urem(u128 a, u128 b);
+s128 wide_sdiv(s128 a, s128 b);
+s128 wide_srem(s128 a, s128 b);
 u128 wide_and(u128 a, u128 b);
 u128 wide_or(u128 a, u128 b);
 u128 wide_xor(u128 a, u128 b);
@@ -299,6 +321,14 @@ int main(void) {
         expect("add", wide_add(a, b), a + b);
         expect("sub", wide_sub(a, b), a - b);
         expect("mul", wide_mul(a, b), a * b);
+        if (b) {
+            expect("udiv", wide_udiv(a, b), a / b);
+            expect("urem", wide_urem(a, b), a % b);
+            if (!(a == (u128)1 << 127 && sb == -1)) {
+                expect("sdiv", wide_sdiv(sa, sb), sa / sb);
+                expect("srem", wide_srem(sa, sb), sa % sb);
+            }
+        }
         expect("and", wide_and(a, b), a & b);
         expect("or", wide_or(a, b), a | b);
         expect("xor", wide_xor(a, b), a ^ b);
