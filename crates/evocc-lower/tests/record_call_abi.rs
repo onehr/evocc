@@ -45,6 +45,49 @@ fn record_program() -> &'static str {
 }
 
 #[test]
+fn union_member_casts_execute_once_in_the_chir_interpreter() {
+    let arena = Arena::default();
+    let unit = parse(
+        include_str!("../../../tests/fixtures/union-member-casts.c"),
+        &arena,
+    );
+    let main = unit
+        .symbols()
+        .resolve(unit.symbols().file_scope(), "main")
+        .unwrap()
+        .unwrap();
+    let result = evocc_chir::interp::interpret_scalar_function(
+        &unit,
+        main,
+        evocc_chir::interp::InterpreterLimits::new(100_000),
+    )
+    .expect("matched union members initialize their value before use");
+    assert_eq!(result.return_value.unwrap().raw_bits, 0);
+}
+
+#[test]
+fn union_member_casts_use_existing_memory_and_record_call_forms() {
+    let module = lower(include_str!("../../../tests/fixtures/union-member-casts.c"));
+    let text = render_module(&module);
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(render_module(&parsed), text);
+    let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+    let args = main
+        .params
+        .iter()
+        .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+        .collect::<Vec<_>>();
+    let result = evocc_evoir::interpret_module(
+        &parsed,
+        "main",
+        &args,
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(result.return_values[0].raw_bits, 0);
+}
+
+#[test]
 fn record_parameter_and_return_destination_have_the_frozen_signature() {
     let module = lower(record_program());
     let identity = module

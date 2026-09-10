@@ -47,6 +47,28 @@ fn rejects(source: &str, code: &str) {
 }
 
 #[test]
+fn member_type_union_casts_are_values_with_checked_initializers() {
+    accepts(include_str!("../../../tests/fixtures/union-member-casts.c"));
+    rejects(
+        "union value { int member; }; int f(void){((union value)1).member=2;return 0;}",
+        "E2101",
+    );
+}
+
+#[test]
+fn union_casts_require_a_compatible_member_not_an_assignment_conversion() {
+    for source in [
+        "union value{long member;};union value f(void){return (union value)1;}",
+        "struct a{int member;};struct b{int member;};union value{struct a member;};union value f(struct b b){return (union value)b;}",
+        "union value{char *member;};union value f(const char *p){return (union value)p;}",
+        "union value{void *member;};union value f(void){return (union value)0;}",
+        "union value{int member:3;};union value f(void){return (union value)7;}",
+    ] {
+        rejects(source, "E2942");
+    }
+}
+
+#[test]
 fn record_union_nested_and_array_members_are_assignable() {
     accepts(concat!(
         "struct Inner { int x; }; struct S { int a[2]; struct Inner inner; }; ",
