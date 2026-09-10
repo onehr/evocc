@@ -179,6 +179,22 @@ fn parameter_bounds_execute_once_on_definition_entry_only() {
 }
 
 #[test]
+fn dynamic_stack_objects_survive_blocks_calls_and_recursion() {
+    agrees(include_str!(
+        "../../../tests/fixtures/dynamic-stack-objects.c"
+    ));
+}
+
+#[test]
+fn dynamic_stack_objects_end_when_the_function_returns() {
+    evaluates(
+        "int *f(unsigned long n) { int *p = __builtin_alloca(n); *p = 7; return p; } \
+         int main(void) { int *p = f(4); return *p; }",
+        Some("E3010"),
+    );
+}
+
+#[test]
 fn parameter_type_queries_keep_the_queried_symbol_identity() {
     agrees(concat!(
         "int f(int n __attribute__((unused)), ",

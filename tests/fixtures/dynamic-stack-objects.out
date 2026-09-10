@@ -1,0 +1,11 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL dynamic-stack-objects.c -o /tmp/dynamic;
+         /tmp/dynamic
+gcc-14 O0: compile=0 run=0
+gcc-14 O2: compile=0 run=0
+clang-19 O0: compile=0 run=0
+clang-19 O2: compile=0 run=0
+Checks: once-only size evaluation; survival beyond the allocating inner block;
+simultaneous allocations across a twelve-argument call; a 64-byte-aligned fixed
+object; distinct loop allocations; recursive frame isolation.
+These are bounded reference probes, not a full campaign or stack-overflow test.

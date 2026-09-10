@@ -67,6 +67,78 @@ fn entry_tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn dynamic_stack_size_is_a_typed_ssa_operand_and_preserves_object_lifetime() {
+    let mem = EvoIRType::Mem(Region::All);
+    let world = EvoIRType::World;
+    let pointer = value(3, EvoIRType::Ptr(AddressSpace::Generic));
+    let mem_out = value(4, mem.clone());
+    let world_out = value(5, world.clone());
+    let mut function = token_function(
+        "main",
+        vec![Inst::Alloca {
+            result: pointer.clone(),
+            mem_in: value(0, mem),
+            world_in: value(1, world),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            origin: 77,
+            layout: AccessLayout::new(13, 16),
+        }],
+        vec![pointer, mem_out, world_out],
+    );
+    function.params.insert(
+        0,
+        FunctionParam {
+            name: "size".into(),
+            ty: EvoIRType::Bits(64),
+        },
+    );
+    function.blocks[0].args.insert(
+        0,
+        BlockArg {
+            name: "size_entry".into(),
+            value: value(2, EvoIRType::Bits(64)),
+        },
+    );
+    let mut module = Module {
+        aliases: vec![],
+        assembly: vec![],
+        extern_objects: vec![],
+        declares: vec![],
+        globals: vec![],
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    let text = render_module(&module).replace(
+        "= alloca %v0, %v1 [origin=77, size=13, align=16]",
+        "= alloca.dynamic %v0, %v1, %v2 [origin=77, align=16]",
+    );
+    assert!(text.contains("alloca.dynamic"));
+    let parsed = parse_section9_module(text.as_bytes()).expect("dynamic alloca must parse");
+    assert_eq!(render_module(&parsed), text);
+    for size in [0, 1, 19, 35] {
+        let mut arguments = entry_tokens();
+        arguments.insert(0, RuntimeValue::bits(64, size));
+        let result = interpret_module(&parsed, "main", &arguments, InterpreterLimits::new(20))
+            .expect("dynamic allocation must use its actual size");
+        let objects = result.memory.objects().collect::<Vec<_>>();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].layout, AccessLayout::new(size as u64, 16));
+        assert!(!objects[0].lifetime.is_alive());
+    }
+    for malformed in [
+        text.replace("bits<64>", "bits<32>"),
+        text.replace(
+            "alloca.dynamic %v0, %v1, %v2",
+            "alloca.dynamic %v0, %v1, %v99",
+        ),
+        text.replace("align=16", "align=3"),
+    ] {
+        assert!(parse_section9_module(malformed.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn automatic_store_load_roundtrip_executes_real_memory() {
     let ptr_ty = EvoIRType::Ptr(AddressSpace::Generic);
     let mem_ty = EvoIRType::Mem(Region::All);
