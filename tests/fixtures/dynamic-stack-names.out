@@ -1,0 +1,30 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu89 -OLEVEL -fMODE -DCASE=CASE
+         dynamic-stack-names.c -o /tmp/names; /tmp/names
+Exit 0 = stack storage. Exit 11 = the written function body ran.
+F = compile/link refused (no runtime observation).
+
+MODE=builtin             gcc14-O0 gcc14-O2 clang19-O0 clang19-O2
+CASE=0 no declaration    0        0        0          0
+CASE=1 extern prototype  0        0        0          0
+CASE=2 external body     0        11       0          0
+CASE=3 internal body     11       11       11         11
+CASE=4 assembly rename   0        0        11         11
+
+MODE=no-builtin          gcc14-O0 gcc14-O2 clang19-O0 clang19-O2
+CASE=0 no declaration    F        F        F          F
+CASE=1 extern prototype  F        F        F          F
+CASE=2 external body     11       11       11         11
+CASE=3 internal body     11       11       11         11
+CASE=4 assembly rename   11       11       11         11
+
+For no-builtin CASE=0 GCC warns about the int-to-pointer conversion then fails
+to link alloca; Clang rejects the conversion. CASE=1 has undefined alloca in
+both toolchains. Builtin CASE=2 and CASE=4 are binding conflicts, not agreed
+values. A focused fix must not claim that the two oracles agree on these.
+
+Additional command: COMPILER -std=gnu11 -O0 -DCASE=CASE
+                    dynamic-stack-names.c -o /tmp/names; /tmp/names
+Both compilers reject CASE=0 (implicit declaration); both compile and return 0
+for CASE=1 (extern prototype). GNU89's implicit builtin recognition must not
+silently admit an undeclared ordinary call in the GNU11 profile.

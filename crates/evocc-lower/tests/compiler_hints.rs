@@ -94,3 +94,81 @@ fn dynamic_stack_allocation_never_becomes_an_external_call() {
         );
     }
 }
+
+#[test]
+fn ordinary_allocation_calls_follow_the_builtin_option_and_prototype() {
+    for (prefix, legacy, builtins) in [
+        ("", true, true),
+        ("extern void *alloca(unsigned long);", false, true),
+        ("extern void *alloca(unsigned long);", false, false),
+    ] {
+        let source = format!("{prefix} int main(void) {{ unsigned long n=19; unsigned char *p=alloca(n); p[0]=17; p[18]=29; return p[0]+p[18]-46; }}");
+        let arena = Arena::default();
+        let file = FileId::new(45014);
+        let mut lexer = Lexer::new(file, &source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, &source);
+        parser.set_legacy_declarations(legacy);
+        parser.set_standard_builtins(builtins);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let module =
+            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let text = evocc_evoir::render_module(&module);
+        assert_eq!(text.contains("alloca.dynamic"), builtins, "{text}");
+        assert_eq!(text.contains("call @alloca"), !builtins, "{text}");
+        if builtins {
+            let main = unit
+                .iter()
+                .find_map(|d| match d {
+                    CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(
+                interp::interpret_scalar_function(
+                    &unit,
+                    main,
+                    interp::InterpreterLimits::new(10000)
+                )
+                .unwrap()
+                .return_value
+                .unwrap()
+                .raw_bits,
+                0
+            );
+            let function = module.functions.iter().find(|f| f.name == "main").unwrap();
+            let arguments = function
+                .params
+                .iter()
+                .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+                .collect::<Vec<_>>();
+            let result = evocc_evoir::interpret_module(
+                &module,
+                "main",
+                &arguments,
+                evocc_evoir::InterpreterLimits::new(10000),
+            )
+            .unwrap();
+            assert_eq!(result.return_values[0].raw_bits, 0);
+        }
+    }
+}
+
+#[test]
+fn conflicting_ordinary_allocation_bindings_are_explicitly_refused() {
+    for source in [
+        "void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
+        "extern void *alloca(unsigned long) asm(\"replacement\"); void *f(void){return alloca(16);}",
+        "extern void *alloca(unsigned long); void *f(void){return alloca(16);} void *alloca(unsigned long n){return 0;}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45015);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let _unit = parser.parse_translation_unit_in(&arena);
+        assert!(parser.had_error(), "conflicting builtin binding was accepted: {source}");
+        assert_eq!(parser.diagnostic().unwrap().code, "E2944");
+    }
+}
