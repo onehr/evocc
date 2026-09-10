@@ -47,6 +47,8 @@ fn runtime_signed_overflow_keeps_its_obligation() {
         "int main(void){int a=-2147483647-1;return -a;}",
         "int main(void){int a=1073741824;return a*3;}",
         "int add(int a){return a+2;} int main(void){return add(2147483647);}",
+        "int main(void){return ((-2147483647-1)/-1)+(-2147483647-1);}",
+        "int main(void){if (((-2147483647-1)/-1)<0) return 1; return 0;}",
     ] {
         for mode in ["--interpret-c-hir", "--interpret-evoir"] {
             let output = run(mode, source);

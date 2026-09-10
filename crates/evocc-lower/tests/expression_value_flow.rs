@@ -525,7 +525,10 @@ fn inline_constant_arguments_do_not_duplicate_control_flow_identities() {
 
 #[test]
 fn inline_constant_replacements_do_not_elide_original_argument_obligations() {
-    evaluates("static __attribute__((always_inline)) int f(int n){return n;}int main(void){return f(2147483647+1);}", Some("E3004"));
+    // Source constants wrap in their own type; a value read from an object
+    // remains runtime arithmetic even when an inline call consumes it.
+    agrees("static __attribute__((always_inline)) int f(int n){return n;}int main(void){return f(2147483647+1)!=(-2147483647-1);}");
+    evaluates("static __attribute__((always_inline)) int f(int n){return n;}int main(void){volatile int n=2147483647;return f(n+1);}", Some("E3004"));
 }
 
 #[test]

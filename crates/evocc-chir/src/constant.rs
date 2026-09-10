@@ -7,9 +7,10 @@ use evocc_types::{
 };
 
 use crate::integer::{
-    eval_bit_builtin, eval_constant_binary_integer, eval_constant_unary_integer,
-    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
-    usual_arithmetic_type, CInteger, CIntegerType,
+    eval_binary_integer, eval_bit_builtin, eval_constant_binary_integer,
+    eval_constant_unary_integer, eval_unary_integer, floating_literal_to_integer,
+    integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
+    IntegerError,
 };
 use crate::{
     record_member_path, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
@@ -464,18 +465,108 @@ fn expression_contains_declaration(
     }
 }
 
-pub(crate) fn eval_integer_constant(
+/// Evaluate source-language integer constant knowledge without reading objects.
+/// This is also the value predicate used for `__builtin_constant_p`; it does
+/// not propagate values from local bindings or optimizer facts.
+#[must_use]
+pub fn eval_integer_constant(
     expression: &CHirExpr<'_>,
     types: &TypeInterner,
     symbols: &SymbolTable,
     target: &TargetDataLayout,
 ) -> Option<CInteger> {
+    eval_integer_constant_in(
+        expression,
+        types,
+        symbols,
+        target,
+        ConstantContext::Required,
+    )
+}
+
+/// Constant knowledge safe for replacing an executed expression. Unlike the
+/// required-constant context, this retains the runtime MIN/-1 obligation.
+#[must_use]
+pub fn eval_executable_integer_constant(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<CInteger> {
+    eval_integer_constant_in(
+        expression,
+        types,
+        symbols,
+        target,
+        ConstantContext::Executable,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum ConstantContext {
+    Required,
+    Executable,
+}
+
+/// Resolve the source-width wrapping case before runtime arithmetic is emitted
+/// or interpreted. Ordinary arithmetic stays on its existing execution path;
+/// only a constant add/subtract/multiply/negation that needs wrapping is folded.
+/// Calls, object reads and mutations cannot become constant operands here.
+#[must_use]
+pub fn fold_wrapping_integer_arithmetic(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<CInteger> {
+    let operand = |expression| eval_executable_integer_constant(expression, types, symbols, target);
+    match expression {
+        CHirExpr::Unary(UnaryOp::Neg, value, _) => {
+            let value = operand(value)?;
+            (eval_unary_integer(UnaryOp::Neg, value) == Err(IntegerError::SignedOverflow))
+                .then(|| eval_constant_unary_integer(UnaryOp::Neg, value).ok())
+                .flatten()
+        }
+        CHirExpr::Binary(
+            operator @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul),
+            left,
+            right,
+            _,
+        ) => {
+            let left = operand(left)?;
+            let right = operand(right)?;
+            (eval_binary_integer(*operator, left, right) == Err(IntegerError::SignedOverflow))
+                .then(|| eval_constant_binary_integer(*operator, left, right).ok())
+                .flatten()
+        }
+        _ => None,
+    }
+}
+
+fn eval_integer_constant_in(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+    context: ConstantContext,
+) -> Option<CInteger> {
+    let evaluate =
+        |expression| eval_integer_constant_in(expression, types, symbols, target, context);
     match expression {
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
         CHirExpr::CharLit(literal, _) => Some(literal.integer_value()),
-        CHirExpr::Ident { symbol, .. } => {
+        CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            ..
+        } => {
             let symbol = symbols.symbol(*symbol).ok()?;
-            if symbol.kind() != SymbolKind::Enumerator {
+            if symbol.kind() != SymbolKind::Enumerator
+                || symbol.spelling() != spelling
+                || facts.ty() != symbol.ty()
+                || facts.category() != crate::ExprCategory::Value
+            {
                 return None;
             }
             Some(CInteger::from_raw(
@@ -483,42 +574,43 @@ pub(crate) fn eval_integer_constant(
                 canonical_integer_type(types, symbol.ty())?,
             ))
         }
-        CHirExpr::Unary(operator, operand, _) => eval_constant_unary_integer(
-            *operator,
-            eval_integer_constant(operand, types, symbols, target)?,
-        )
-        .ok(),
-        CHirExpr::EvaluateOnce(operand, _) => {
-            eval_integer_constant(operand, types, symbols, target)
+        CHirExpr::Unary(operator, operand, _) => {
+            eval_constant_unary_integer(*operator, evaluate(operand)?).ok()
         }
+        CHirExpr::EvaluateOnce(operand, _) => evaluate(operand),
         CHirExpr::Binary(operator, left, right, _) => {
-            let left = eval_integer_constant(left, types, symbols, target)?;
+            let left = evaluate(left)?;
             if *operator == BinaryOp::And && !left.truth() {
                 return Some(CInteger::int(0));
             }
             if *operator == BinaryOp::Or && left.truth() {
                 return Some(CInteger::int(1));
             }
-            let right = eval_integer_constant(right, types, symbols, target)?;
-            eval_constant_binary_integer(*operator, left, right).ok()
+            let right = evaluate(right)?;
+            if matches!(context, ConstantContext::Executable)
+                && matches!(operator, BinaryOp::Div | BinaryOp::Mod)
+            {
+                // The literal add/sub/mul rule is not a licence to erase an
+                // executed MIN/-1 failure hidden inside one of its operands.
+                eval_binary_integer(*operator, left, right).ok()
+            } else {
+                eval_constant_binary_integer(*operator, left, right).ok()
+            }
         }
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
-            let selected = if eval_integer_constant(condition, types, symbols, target)?.truth() {
+            let selected = if evaluate(condition)?.truth() {
                 when_true
             } else {
                 when_false
             };
-            Some(
-                eval_integer_constant(selected, types, symbols, target)?
-                    .cast(integer_expression_type(expression, types, symbols)?),
-            )
+            Some(evaluate(selected)?.cast(integer_expression_type(expression, types, symbols)?))
         }
         CHirExpr::Elvis(operand, fallback, _) => {
-            let operand_value = eval_integer_constant(operand, types, symbols, target)?;
+            let operand_value = evaluate(operand)?;
             let selected = if operand_value.truth() {
                 operand_value
             } else {
-                eval_integer_constant(fallback, types, symbols, target)?
+                evaluate(fallback)?
             };
             let operand_type = CInteger::new(0, integer_expression_type(operand, types, symbols)?)
                 .promoted()
@@ -534,7 +626,7 @@ pub(crate) fn eval_integer_constant(
             if let CHirExpr::FloatLit(literal, _) = operand {
                 return floating_literal_to_integer(*literal, target_ty).ok();
             }
-            Some(eval_integer_constant(operand, types, symbols, target)?.cast(target_ty))
+            Some(evaluate(operand)?.cast(target_ty))
         }
         CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => Some(CInteger::new(
             target.sizeof_type(types, *ty).ok()?,
@@ -544,9 +636,7 @@ pub(crate) fn eval_integer_constant(
             u64::from(target.alignof_type(types, *ty).ok()?),
             CIntegerType::ULONG,
         )),
-        CHirExpr::BitBuiltin { op, operand, .. } => {
-            eval_bit_builtin(*op, eval_integer_constant(operand, types, symbols, target)?)
-        }
+        CHirExpr::BitBuiltin { op, operand, .. } => eval_bit_builtin(*op, evaluate(operand)?),
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::LabelAddress { .. }

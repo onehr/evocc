@@ -3629,6 +3629,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
         let span = expression.span();
         self.tick(span)?;
+        if !self.static_integer_evaluation {
+            if let Some(value) = crate::constant::fold_wrapping_integer_arithmetic(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                &self.target,
+            ) {
+                values.push(CValue::Integer(value));
+                return Ok(());
+            }
+        }
         if self.static_integer_evaluation {
             // Reusing the execution machine must not admit calls, reads of
             // objects, or mutations into constant initialization. Inspect only
@@ -7993,6 +8004,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<CInteger, InterpreterError> {
         let span = expression.span();
         self.tick(span)?;
+        if !self.static_integer_evaluation {
+            if let Some(value) = crate::constant::fold_wrapping_integer_arithmetic(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                &self.target,
+            ) {
+                return Ok(value);
+            }
+        }
         match expression {
             CHirExpr::Lit(literal, _) => {
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))

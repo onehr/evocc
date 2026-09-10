@@ -27,6 +27,13 @@ Order is by correctness first, then shared-path reach. Small independent
 wrong-result fixes precede changes that require new machine constraint plumbing.
 Only one heavyweight benchmark invocation runs at once.
 
+The user's 2026-09-10 follow-up authorizes implementing the PM-decided rules
+from the sealed probes without waiting for the missing body revisions.
+Record differences in Appendix D only; do not rewrite specification-body
+sections. The previously body-pending items below are now implementation
+work, not blockers. Probe disagreement still requires an explicit refused
+shape, not a guessed result or a removed runtime check.
+
 ### Tailored-first execution plan (2026-09-10)
 
 Starting checkout: `21f522d`. The last torture capture remains
@@ -38,7 +45,7 @@ improvement below is a new measurement.
 
 | Order | Remaining work | Tailored acceptance before any campaign |
 |---|---|---|
-| 1 | Source-width constant arithmetic and wide-field regressions | Existing C04 RED plus boundary values and nonconstant-overflow rejection; minimize the three lost wide-field passes, test consensus and conflicting contexts separately. Body-dependent changes remain pending the requested authority. |
+| 1 | Source-width constant arithmetic and wide-field regressions | Existing C04 RED plus boundary values and nonconstant-overflow rejection; minimize the three lost wide-field passes, test consensus and conflicting contexts separately. Implement the authorized probe-backed rules and record body differences only in Appendix D. |
 | 2 | Remaining declaration, call and initialization defects within the existing profile | One reproducer per original first-error construct; parser type assertions, C-HIR/EvoIR execution, negative compatibility tests and native execution where relevant. Include prototype parameter scope and builtin/local-function binding. |
 | 3 | Dynamic automatic objects, zero-byte objects, static addresses and integer aggregate varargs | One-time bounds, lifetime exits, invalid entry, zero-size identity/access, relocations and ABI register/stack boundaries. Reuse existing oracle probes; do not infer new IR semantics from direction-only approval. |
 | 4 | Computed branches, remaining asm operands, frame chains and kernel symbol metadata | Successor/edge validation, spills and ties, same/different function label cases, section/visibility symbols, and small linked programs. Preserve all independent validators. |
@@ -186,6 +193,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Source-width constant arithmetic without weakening runtime checks
+
+Tests-only commit `4675bd6` extends the existing RED with source-width
+32/64/128-bit boundaries, integer promotions, surrounding assignments and
+an unevaluated conditional arm. The focused CLI result before the repair
+is two passing guards and one semantic failure, E3004 in both interpreters;
+there is no build error. Both sealed reference compilers execute the shared
+`constant-source-width.c` fixture at O0/O2 with exit zero.
+
+The C-HIR interpreter and lowering now use the shared source-constant
+knowledge and integer kernel for constant add/subtract/multiply/negation
+that needs wrapping. Lowering's separate recursive integer evaluator is
+removed. Executable constant knowledge preserves failing division, so a
+known-branch shortcut cannot remove a reached MIN/-1 obligation. Ordinary
+object reads are never propagated into constants; the inline-argument test
+now covers both the approved literal result and the unchanged volatile
+overflow diagnostic.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc --test
+constant_source_width -p evocc-lower --test expression_value_flow --test
+day6_lower_runtime_diagnostics --test day6_g1_equivalence_red --test
+front_end_builtin_integrity --test wide_integer_values --test
+static_storage_and_discard --locked --offline --no-fail-fast -j 1 --quiet`
+passes 92 tests, zero failures or ignored tests. `cargo test -p evocc-chir
+--lib --locked --offline -j 1 --quiet` passes another 41, including the
+512-level static initializer and its fuel guard. Debug subject assembly
+for the same fixture is piped into sealed GCC-14 and Clang-19 (the latter
+with `-fno-integrated-as`); both native executables exit zero. No full
+campaign or release measurement has run, and the frozen benchmark totals
+remain unchanged. `cargo clippy -p evocc-chir -p evocc-lower --lib --locked
+--offline -j 1 -- -D warnings`, fmt, Ruff and `git diff --check` pass.
 
 ### Variadic list subobjects use ordinary value copies
 

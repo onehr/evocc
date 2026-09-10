@@ -6104,6 +6104,13 @@ The reviewed constant-context rule is supported by `.evidence/builtin-probes/202
 The source-literal probes do not establish a rule for runtime variable arithmetic or optimized propagation; runtime overflow obligations remain unchanged.
 No diagnostic is allocated and no implementation pass is claimed; the body revision is pending the architecture owner, with one named original program and unmeasured siblings.
 
+### Executed source-constant arithmetic (2026-09-10 authorization)
+
+The approved literal-expression rule also applies outside required-constant contexts: constant add, subtract, multiply and negation wrap in their promoted source type before surrounding casts or runtime operations, without propagating object values into constant knowledge.
+Evidence is the earlier `20260909-constant-contexts/{constants.c,results.txt}` probe plus `tests/fixtures/constant-source-width.c`, independently executed with sealed GCC-14 and Clang-19 at O0/O2 (four zero exits, including 128-bit multiplication and surrounding side effects).
+Runtime variable overflow, invalid shift counts, division by zero and executed signed `MIN / -1` retain their existing obligations; no diagnostic is removed or allocated.
+This implements the user's authorization to record the missing body distinction here, affects the named original `920730-1`, and does not claim a new full-campaign result.
+
 ### Pending body revision: dynamic automatic objects
 
 The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.

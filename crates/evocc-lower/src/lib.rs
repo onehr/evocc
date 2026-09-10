@@ -10,8 +10,8 @@ use std::fmt;
 mod allocation;
 
 use evocc_chir::integer::{
-    eval_binary_integer, eval_unary_integer, integer_literal_value, integer_type_for_rank,
-    usual_arithmetic_type, CInteger, CIntegerType,
+    eval_binary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
+    CInteger, CIntegerType,
 };
 use evocc_chir::{
     statement_expression_value, AllocationSiteManifest, AsmStmt, AssignmentOp, BinaryOp,
@@ -7669,6 +7669,14 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        ) {
+            return self.wide_constant(state, value.ty(), value.raw_bits());
+        }
         match expression {
             CHirExpr::Lit(literal, _) => {
                 let integer = integer_literal_value(*literal).map_err(|_| {
@@ -11199,7 +11207,17 @@ fn constant_truth(
     target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
-    constant_integer(unit, target, expression).map(CInteger::truth)
+    if let CHirExpr::Comma(left, right, _) = expression {
+        constant_truth(unit, target, left)?;
+        return constant_truth(unit, target, right);
+    }
+    evocc_chir::constant::eval_executable_integer_constant(
+        expression,
+        unit.types(),
+        unit.symbols(),
+        target,
+    )
+    .map(CInteger::truth)
 }
 
 fn static_null_pointer(
@@ -11255,92 +11273,13 @@ fn constant_integer(
     target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
 ) -> Option<CInteger> {
-    match expression {
-        CHirExpr::SizeOf(..) | CHirExpr::SizeOfExpr(..) | CHirExpr::AlignOf(..) => {
-            evocc_chir::interp::interpret_static_integer_expression(unit, expression, target).ok()
-        }
-        CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
-        CHirExpr::CharLit(literal, _) => Some(literal.integer_value()),
-        CHirExpr::Ident {
-            symbol,
-            facts,
-            span,
-            ..
-        } => {
-            let declaration = unit.symbols().symbol(*symbol).ok()?;
-            if declaration.kind() != SymbolKind::Enumerator {
-                return None;
-            }
-            let integer = canonical_integer(unit.types(), target, facts.ty(), *span).ok()?;
-            Some(CInteger::new(
-                declaration.enumerator_value()? as u64,
-                integer,
-            ))
-        }
-        CHirExpr::Unary(operator, operand, _) => {
-            eval_unary_integer(*operator, constant_integer(unit, target, operand)?).ok()
-        }
-        CHirExpr::Binary(BinaryOp::And, left, right, _) => {
-            let left = constant_integer(unit, target, left)?;
-            if !left.truth() {
-                Some(CInteger::int(0))
-            } else {
-                Some(CInteger::int(i32::from(
-                    constant_integer(unit, target, right)?.truth(),
-                )))
-            }
-        }
-        CHirExpr::Binary(BinaryOp::Or, left, right, _) => {
-            let left = constant_integer(unit, target, left)?;
-            if left.truth() {
-                Some(CInteger::int(1))
-            } else {
-                Some(CInteger::int(i32::from(
-                    constant_integer(unit, target, right)?.truth(),
-                )))
-            }
-        }
-        CHirExpr::Binary(operator, left, right, _) => eval_binary_integer(
-            *operator,
-            constant_integer(unit, target, left)?,
-            constant_integer(unit, target, right)?,
-        )
-        .ok(),
-        CHirExpr::Ternary(condition, then_value, else_value, _) => {
-            let value = if constant_integer(unit, target, condition)?.truth() {
-                constant_integer(unit, target, then_value)
-            } else {
-                constant_integer(unit, target, else_value)
-            }?;
-            Some(value.cast(evocc_chir::constant::integer_expression_type(
-                expression,
-                unit.types(),
-                unit.symbols(),
-            )?))
-        }
-        CHirExpr::Elvis(operand, fallback, _) => {
-            let value = constant_integer(unit, target, operand)?;
-            let value = if value.truth() {
-                value
-            } else {
-                constant_integer(unit, target, fallback)?
-            };
-            Some(value.cast(evocc_chir::constant::integer_expression_type(
-                expression,
-                unit.types(),
-                unit.symbols(),
-            )?))
-        }
-        CHirExpr::Cast(ty, operand, span) => {
-            let target_integer = canonical_integer(unit.types(), target, *ty, *span).ok()?;
-            Some(constant_integer(unit, target, operand)?.cast(target_integer))
-        }
-        CHirExpr::Comma(left, right, _) => {
-            constant_integer(unit, target, left)?;
-            constant_integer(unit, target, right)
-        }
-        _ => None,
+    // A comma is allowed by the existing static-address initializer rules,
+    // but deliberately is not an ICE or a builtin_constant_p operand.
+    if let CHirExpr::Comma(left, right, _) = expression {
+        constant_integer(unit, target, left)?;
+        return constant_integer(unit, target, right);
     }
+    evocc_chir::constant::eval_integer_constant(expression, unit.types(), unit.symbols(), target)
 }
 
 fn integer_promotion(integer: CIntegerType) -> CIntegerType {
