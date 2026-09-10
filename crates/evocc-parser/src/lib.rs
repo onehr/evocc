@@ -42,7 +42,7 @@ pub struct ParseDiagnostic {
 }
 
 #[derive(Debug, Clone)]
-enum DerivedDeclarator {
+enum DerivedDeclarator<'arena> {
     Pointer {
         qualifiers: Qualifiers,
         attributes: Vec<Attribute>,
@@ -50,6 +50,7 @@ enum DerivedDeclarator {
     },
     Array {
         bound: ArrayBound,
+        expression: Option<&'arena CHirExpr<'arena>>,
         prototype_star: bool,
         parameter_qualifiers: Qualifiers,
         static_bound: bool,
@@ -57,12 +58,13 @@ enum DerivedDeclarator {
     },
     Function {
         parameters: ParameterSyntax,
+        entry_bounds: Vec<&'arena CHirExpr<'arena>>,
         scope: ScopeId,
         span: SourceSpan,
     },
 }
 
-fn derived_declarator_span(layer: &DerivedDeclarator) -> SourceSpan {
+fn derived_declarator_span(layer: &DerivedDeclarator<'_>) -> SourceSpan {
     match layer {
         DerivedDeclarator::Pointer { span, .. }
         | DerivedDeclarator::Array { span, .. }
@@ -71,18 +73,23 @@ fn derived_declarator_span(layer: &DerivedDeclarator) -> SourceSpan {
 }
 
 #[derive(Debug, Clone)]
-struct ParsedDeclarator {
+struct ParsedDeclarator<'arena> {
     name: SpannedName,
-    derived: Vec<DerivedDeclarator>,
+    derived: Vec<DerivedDeclarator<'arena>>,
     attributes: Vec<Attribute>,
     span: SourceSpan,
 }
 
 #[derive(Debug, Clone)]
-struct ParsedAbstractDeclarator {
-    derived: Vec<DerivedDeclarator>,
+struct ParsedAbstractDeclarator<'arena> {
+    derived: Vec<DerivedDeclarator<'arena>>,
     attributes: Vec<Attribute>,
     span: SourceSpan,
+}
+
+struct ParsedParameters<'arena> {
+    syntax: ParameterSyntax,
+    entry_bounds: Vec<&'arena CHirExpr<'arena>>,
 }
 
 struct ParsedSpecifier<'arena> {
@@ -1794,6 +1801,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.bind_parameters(&mut parameters);
                 let outer_parameters = self.current_function_parameters.replace(parameters.clone());
                 let body = self.parse_function_body(&declarator.name);
+                let body = self.prepend_parameter_bounds(body, &declarator);
                 self.current_function_parameters = outer_parameters;
                 self.validate_asm_goto_labels(body)?;
                 self.validate_statement_expression_jumps(body)?;
@@ -1871,7 +1879,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // attributes written among the specifiers. Attributes written after a
         // particular declarator belong to it alone.
         struct Pending<'arena> {
-            declarator: ParsedDeclarator,
+            declarator: ParsedDeclarator<'arena>,
             full_type: TypeId,
             symbol: SymbolId,
             initializer: Option<ObjectInitializer<'arena>>,
@@ -1897,7 +1905,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
             if !has_initializer {
-                self.validate_variable_array_bounds(&declarator.derived);
+                self.validate_variable_array_bounds(&declarator.derived, false);
             }
             if auto_type_span.is_some() && !has_initializer {
                 self.report("E2915", "auto-type-misuse", declarator.span);
@@ -2173,7 +2181,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn function_declaration_parameters(
         &mut self,
-        declarator: &ParsedDeclarator,
+        declarator: &ParsedDeclarator<'arena>,
         specifier: &ParsedSpecifier<'arena>,
         function_type: TypeId,
     ) -> Option<(ParameterSyntax, ScopeId, bool)> {
@@ -2454,7 +2462,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn infer_auto_type_base(
         &mut self,
         written: &WrittenInitializer<'arena>,
-        derived: &[DerivedDeclarator],
+        derived: &[DerivedDeclarator<'arena>],
         declarator_span: SourceSpan,
     ) -> Option<TypeId> {
         let WrittenInitializer::Expression(expression) = written else {
@@ -4215,7 +4223,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         )
     }
 
-    fn complete_identifier_parameters(&mut self, declarator: &mut ParsedDeclarator) -> Option<()> {
+    fn complete_identifier_parameters(
+        &mut self,
+        declarator: &mut ParsedDeclarator<'arena>,
+    ) -> Option<()> {
         let Some(DerivedDeclarator::Function {
             parameters: ParameterSyntax::IdentifierList { parameters },
             scope,
@@ -4258,7 +4269,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2002", "incompatible-redeclaration", declaration.name.span);
                         return None;
                     }
-                    self.validate_variable_array_bounds(&declaration.derived);
+                    self.validate_variable_array_bounds(&declaration.derived, false);
                     let unadjusted =
                         self.apply_declarator(specifier.surface.type_id(), &declaration.derived);
                     let ty = self.adjust_parameter_type(unadjusted, &declaration.derived);
@@ -4345,6 +4356,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         with_function_name.push(CHirBlockItem::Declaration(function_name_declaration));
         with_function_name.extend(items.iter().cloned());
         self.alloc_node(CHirStmt::Compound(with_function_name, *span))
+    }
+
+    fn prepend_parameter_bounds(
+        &self,
+        body: &'arena CHirStmt<'arena>,
+        declarator: &ParsedDeclarator<'arena>,
+    ) -> &'arena CHirStmt<'arena> {
+        let Some(DerivedDeclarator::Function { entry_bounds, .. }) = declarator.derived.first()
+        else {
+            return body;
+        };
+        if entry_bounds.is_empty() {
+            return body;
+        }
+        let CHirStmt::Compound(items, span) = body else {
+            unreachable!("a function definition has a compound body")
+        };
+        // Array adjustment removes only the parameter's outer array type,
+        // not its declaration-time evaluation. Ordinary entry statements let
+        // every consumer (including inlining) preserve the same effects.
+        let mut with_bounds = Vec::with_capacity(entry_bounds.len() + items.len());
+        with_bounds.extend(entry_bounds.iter().map(|expression| {
+            CHirBlockItem::Statement(self.alloc_node(CHirStmt::Expr(expression, expression.span())))
+        }));
+        with_bounds.extend(items.iter().cloned());
+        self.alloc_node(CHirStmt::Compound(with_bounds, *span))
     }
 
     fn function_body_mentions_implicit_name(&self) -> bool {
@@ -5927,7 +5964,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 if let Some(declarator) = declarator.as_ref() {
                     member_attributes.extend(declarator.attributes.iter().cloned());
                     self.validate_array_parameter_modifiers(&declarator.derived, false);
-                    self.validate_variable_array_bounds(&declarator.derived);
+                    self.validate_variable_array_bounds(&declarator.derived, false);
                 }
                 let ty = declarator
                     .as_ref()
@@ -6582,7 +6619,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.peek_kind(),
             Some(TokenKind::Star | TokenKind::LBracket | TokenKind::LParen)
         ) {
-            let declarator = self.parse_abstract_declarator_with_vla_error(vla_error_span)?;
+            let declarator =
+                self.parse_abstract_declarator_with_vla_error(vla_error_span, false)?;
             type_attributes.extend(declarator.attributes);
             declarator.derived
         } else {
@@ -6635,17 +6673,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn validate_variable_array_bounds(&mut self, derived: &[DerivedDeclarator]) {
+    fn validate_variable_array_bounds(
+        &mut self,
+        derived: &[DerivedDeclarator<'arena>],
+        array_parameter: bool,
+    ) {
         if let Some(span) = derived
             .iter()
             .enumerate()
             .find_map(|(index, layer)| match layer {
                 DerivedDeclarator::Array {
                     bound: ArrayBound::Variable,
-                    prototype_star,
                     span,
                     ..
-                } if index != 0 || !prototype_star => Some(*span),
+                } if index != 0 || !array_parameter => Some(*span),
                 _ => None,
             })
         {
@@ -6675,7 +6716,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         true
     }
 
-    fn validate_array_parameter_modifiers(&mut self, derived: &[DerivedDeclarator], allowed: bool) {
+    fn validate_array_parameter_modifiers(
+        &mut self,
+        derived: &[DerivedDeclarator<'arena>],
+        allowed: bool,
+    ) {
         if let Some(span) = derived
             .iter()
             .enumerate()
@@ -6699,14 +6744,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_abstract_declarator(&mut self) -> Option<ParsedAbstractDeclarator> {
-        self.parse_abstract_declarator_with_vla_error(None)
+    fn parse_abstract_declarator(&mut self) -> Option<ParsedAbstractDeclarator<'arena>> {
+        self.parse_abstract_declarator_with_vla_error(None, true)
     }
 
     fn parse_abstract_declarator_with_vla_error(
         &mut self,
         vla_error_span: Option<SourceSpan>,
-    ) -> Option<ParsedAbstractDeclarator> {
+        array_parameter: bool,
+    ) -> Option<ParsedAbstractDeclarator<'arena>> {
         let mut attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
@@ -6737,7 +6783,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             );
         let mut declarator = if grouped {
             let open = self.advance().expect("peeked abstract grouping");
-            let mut inner = self.parse_abstract_declarator_with_vla_error(vla_error_span)?;
+            let mut inner =
+                self.parse_abstract_declarator_with_vla_error(vla_error_span, array_parameter)?;
             let close = self.expect(TokenKind::RParen)?;
             attributes.append(&mut inner.attributes);
             inner.attributes = attributes;
@@ -6768,6 +6815,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let (parameter_qualifiers, static_bound) =
                         self.parse_array_parameter_modifiers();
                     let prototype_star = self.parse_prototype_array_star(static_bound);
+                    let mut bound_expression = None;
                     let bound = if prototype_star {
                         ArrayBound::Variable
                     } else if self.peek_kind() == Some(TokenKind::RBracket) {
@@ -6777,8 +6825,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ArrayBound::Unbounded
                     } else {
                         let expression = self.parse_assignment()?;
+                        bound_expression = Some(expression);
                         let bound = self.classify_array_bound(expression);
-                        if matches!(bound, ArrayBound::Variable) {
+                        if matches!(bound, ArrayBound::Variable) && !array_parameter {
                             if let Some(span) = vla_error_span {
                                 self.report("E2904", "not-covered: variably-modified-typeof", span);
                             } else {
@@ -6795,6 +6844,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let layer_span = self.merge_span(open.span, close.span);
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        expression: bound_expression,
                         prototype_star,
                         parameter_qualifiers,
                         static_bound,
@@ -6822,7 +6872,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let close = self.expect(TokenKind::RParen)?;
                     let layer_span = self.merge_span(open.span, close.span);
                     declarator.derived.push(DerivedDeclarator::Function {
-                        parameters,
+                        parameters: parameters.syntax,
+                        entry_bounds: parameters.entry_bounds,
                         scope: parameter_scope,
                         span: layer_span,
                     });
@@ -6847,7 +6898,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_declarator(&mut self, function_definition_possible: bool) -> Option<ParsedDeclarator> {
+    fn parse_declarator(
+        &mut self,
+        function_definition_possible: bool,
+    ) -> Option<ParsedDeclarator<'arena>> {
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
@@ -6899,6 +6953,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let (parameter_qualifiers, static_bound) =
                         self.parse_array_parameter_modifiers();
                     let prototype_star = self.parse_prototype_array_star(static_bound);
+                    let mut bound_expression = None;
                     let bound = if prototype_star {
                         ArrayBound::Variable
                     } else if self.peek_kind() == Some(TokenKind::RBracket) {
@@ -6908,11 +6963,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ArrayBound::Unbounded
                     } else {
                         let expression = self.parse_assignment()?;
+                        bound_expression = Some(expression);
                         self.classify_array_bound(expression)
                     };
                     let close = self.expect(TokenKind::RBracket)?;
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        expression: bound_expression,
                         prototype_star,
                         parameter_qualifiers,
                         static_bound,
@@ -6943,7 +7000,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.current_scope = outer_scope;
                     let close = self.expect(TokenKind::RParen)?;
                     declarator.derived.push(DerivedDeclarator::Function {
-                        parameters,
+                        parameters: parameters.syntax,
+                        entry_bounds: parameters.entry_bounds,
                         scope: parameter_scope,
                         span: self.merge_span(open.span, close.span),
                     });
@@ -7036,11 +7094,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ScopeKind::FunctionPrototype
     }
 
-    fn parse_parameter_list(&mut self, definition_possible: bool) -> ParameterSyntax {
+    fn parse_parameter_list(&mut self, definition_possible: bool) -> ParsedParameters<'arena> {
         let mut params = Vec::new();
+        let mut entry_bounds = Vec::new();
         let mut variadic = false;
         if self.peek_kind() == Some(TokenKind::RParen) {
-            return ParameterSyntax::Unspecified;
+            return ParsedParameters {
+                syntax: ParameterSyntax::Unspecified,
+                entry_bounds,
+            };
         }
         if self.peek().is_some_and(|token| {
             token.kind == TokenKind::Identifier && !self.token_starts_type_name(token)
@@ -7082,15 +7144,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     break;
                 }
             }
-            return ParameterSyntax::IdentifierList { parameters: params };
+            return ParsedParameters {
+                syntax: ParameterSyntax::IdentifierList { parameters: params },
+                entry_bounds,
+            };
         }
         if self.peek_kind() == Some(TokenKind::Void)
             && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::RParen)
         {
             self.advance();
-            return ParameterSyntax::Prototype {
-                parameters: params,
-                variadic,
+            return ParsedParameters {
+                syntax: ParameterSyntax::Prototype {
+                    parameters: params,
+                    variadic,
+                },
+                entry_bounds,
             };
         }
         let shadow_checkpoint = self.temporary_parameter_shadows.len();
@@ -7214,7 +7282,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                 };
             self.validate_array_parameter_modifiers(&derived, true);
-            self.validate_variable_array_bounds(&derived);
+            self.validate_variable_array_bounds(&derived, true);
+            if let Some(DerivedDeclarator::Array {
+                bound: ArrayBound::Variable,
+                expression: Some(expression),
+                ..
+            }) = derived.first()
+            {
+                if self
+                    .converted_expression_type(expression)
+                    .is_some_and(|inferred| is_integer_class(self.operand_type_class(inferred.ty)))
+                {
+                    entry_bounds.push(*expression);
+                } else {
+                    self.report("E2923", "invalid-array-bound", expression.span());
+                }
+            }
             let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);
             let ty = self.adjust_parameter_type(unadjusted, &derived);
             let span = self.merge_span(start, end);
@@ -7254,9 +7337,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         self.temporary_parameter_shadows.truncate(shadow_checkpoint);
-        ParameterSyntax::Prototype {
-            parameters: params,
-            variadic,
+        ParsedParameters {
+            syntax: ParameterSyntax::Prototype {
+                parameters: params,
+                variadic,
+            },
+            entry_bounds,
         }
     }
 
@@ -7273,7 +7359,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .is_some_and(|token| self.typedef_name(token).is_some())
     }
 
-    fn adjust_parameter_type(&mut self, ty: TypeId, derived: &[DerivedDeclarator]) -> TypeId {
+    fn adjust_parameter_type(
+        &mut self,
+        ty: TypeId,
+        derived: &[DerivedDeclarator<'arena>],
+    ) -> TypeId {
         match self.types.get(ty).map(|ty| ty.kind.clone()) {
             Some(TypeKind::Array { element, .. }) => {
                 let qualifiers = derived
@@ -7295,7 +7385,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn apply_declarator(&mut self, mut ty: TypeId, derived: &[DerivedDeclarator]) -> TypeId {
+    fn apply_declarator(
+        &mut self,
+        mut ty: TypeId,
+        derived: &[DerivedDeclarator<'arena>],
+    ) -> TypeId {
         for layer in derived.iter().rev() {
             ty = match layer {
                 DerivedDeclarator::Pointer { qualifiers, .. } => {
@@ -7348,20 +7442,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ty
     }
 
-    fn written_declarator(&self, declarator: &ParsedDeclarator) -> WrittenDeclarator {
+    fn written_declarator(&self, declarator: &ParsedDeclarator<'arena>) -> WrittenDeclarator {
         self.written_derived(&declarator.derived, declarator.span)
     }
 
     fn written_abstract_declarator(
         &self,
-        declarator: &ParsedAbstractDeclarator,
+        declarator: &ParsedAbstractDeclarator<'arena>,
     ) -> WrittenDeclarator {
         self.written_derived(&declarator.derived, declarator.span)
     }
 
     fn written_derived(
         &self,
-        derived: &[DerivedDeclarator],
+        derived: &[DerivedDeclarator<'arena>],
         span: SourceSpan,
     ) -> WrittenDeclarator {
         WrittenDeclarator {

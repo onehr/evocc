@@ -10,3 +10,6 @@ Clang also warns about the existing unnamed-definition-parameter extension.
 The fixture checks prototype_calls=0, entry_calls=8 and nested_calls=1,
 including recursive calls, an always-inline call and an unnamed array parameter.
 These are tailored reference executions, not original benchmark passes.
+
+Command: COMPILER -std=gnu11 -DCASE=N -c parameter-bound-errors.c -o /tmp/error.o
+gcc-14 and clang-19: cases 1, 2 and 3 each compile=1 (noninteger array bound).

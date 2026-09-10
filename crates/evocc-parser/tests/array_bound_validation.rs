@@ -139,11 +139,33 @@ fn initialized_block_scope_variable_length_array_uses_the_canonical_message() {
 #[test]
 fn parameter_variable_bound_is_adjusted_to_a_pointer() {
     let arena = Arena::default();
-    parse(
+    let unit = parse(
         "int global_bound; int parameter(int value[global_bound]);\n",
         &arena,
     )
     .expect("an array parameter creates a pointer, not a variable-length object");
+    let parameter = unit
+        .iter()
+        .find_map(|decl| match decl {
+            evocc_chir::CHirDecl::Function(function) => function.parameters.parameters().first(),
+            _ => None,
+        })
+        .unwrap();
+    assert!(matches!(
+        unit.types().get(parameter.ty).unwrap().kind,
+        evocc_types::TypeKind::Pointer(_)
+    ));
+}
+
+#[test]
+fn parameter_adjustment_does_not_admit_noninteger_bounds() {
+    for source in [
+        "void f(int a[1.5]);",
+        "void f(int a[(int *)0]);",
+        "void side(void); void f(int a[side()]);",
+    ] {
+        rejects(source, "E2923", "invalid-array-bound");
+    }
 }
 
 #[test]

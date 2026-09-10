@@ -82,9 +82,9 @@ fn star_arrays_do_not_admit_objects_definitions_or_invalid_bracket_modifiers() {
 
 #[test]
 fn prototype_star_support_does_not_enable_actual_variable_length_objects() {
+    accepts("extern int n; void f(int values[n]);");
     for source in [
         "void f(int n) { int values[n]; }",
-        "extern int n; void f(int values[n]);",
         "void f(int values[3][*]);",
     ] {
         let arena = Arena::default();

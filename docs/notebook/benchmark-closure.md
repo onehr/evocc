@@ -118,10 +118,10 @@ their remaining closure work without creating a second set of measurements.
   and replay the original initializer/place failures (row 14).
 - [ ] Close the variable-length-object requirement under an authorized contract;
   a current profile refusal is not a non-FP pass (row 15).
-  The independent prior-parameter visibility defect is locally repaired:
-  `void f(int n, int values[n]);` now reaches the existing E2203 profile
-  boundary instead of E2001. Dynamic bound execution and prototype `[*]`
-  remain separate unfinished work.
+  Prior-parameter visibility, prototype `[*]`, and outer array-parameter bound
+  effects are locally repaired: definitions evaluate bounds on entry and
+  prototypes do not. Actual variable-length storage, inner dimensions and
+  captured `sizeof` remain unfinished; pointer adjustment is not VLA support.
 - [ ] Reduce and repair every remaining non-FP diagnostic family, including
   builtins, ABI, initializers and the remaining TinyCC compile refusals
   (rows 11, 16).
@@ -193,6 +193,34 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Array parameter bounds at definition entry
+
+Tests-only `e47bf43` compiled with three declared E2203 failures and three
+existing parameter checks passing. The parser now retains the bound expression,
+adjusts the outer array parameter once, and elaborates definition-only bound
+effects as ordinary C-HIR entry statements. Recursion and inline substitution
+therefore use the existing execution and symbol-remapping paths. Prototypes,
+including nested callback prototypes and block-scope redeclarations, do not
+execute their bounds; `sizeof` of the adjusted parameter stays pointer-sized.
+
+A supplementary negative test first caught accidental admission of a floating
+bound after adjustment. The shared integer-class check now rejects floating,
+pointer and void bounds with E2923; both sealed compilers reject these cases.
+One existing test still expected E2203 for a now-admitted outer parameter; that
+row was moved to acceptance while its local-object and inner-dimension refusal
+checks remain. Neither failure was recorded as a passing run.
+
+With `CARGO_TARGET_DIR=target/frontend`, `--locked --offline -j 1`,
+`cargo test -p evocc-parser --test array_bound_validation --test gnu_typeof
+--test parameter_and_pointer_sign_conversions -p evocc-lower --test
+expression_value_flow --no-fail-fast` passes 103 tests (12 + 17 + 13 + 61).
+`cargo clippy -p evocc-parser --lib -- -D warnings`, fmt, Ruff, diff-check and
+the 43/43 instruction-shape audit pass; `cargo build -p evocc` builds the debug
+CLI. Both sealed toolchains link and execute the subject assembly for
+`tests/fixtures/parameter-bound-effects.c`, exit zero; four reference executions
+also return zero, with the exact commands and warnings in the adjacent `.out`.
+Actual dynamic objects remain OPEN and no campaign or milestone count changes.
 
 ### Volatile bit-field execution
 
