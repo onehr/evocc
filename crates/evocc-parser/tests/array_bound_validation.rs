@@ -79,6 +79,16 @@ fn variable_record_members_are_refused_even_through_typedefs() {
 }
 
 #[test]
+fn array_bounds_in_callback_prototypes_do_not_modify_the_member_type() {
+    let arena = Arena::default();
+    parse(
+        include_str!("../../../tests/fixtures/prototype-array-members.c"),
+        &arena,
+    )
+    .expect("prototype-local dimensions do not make a record member variable");
+}
+
+#[test]
 fn zero_length_arrays_have_the_sealed_oracle_layouts() {
     let source = concat!(
         "struct mid { int a; char d[0]; int b; };\n",

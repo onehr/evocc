@@ -1,0 +1,14 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL prototype-array-members.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0/O2: exit 0/0.
+clang-19 O0/O2: exit 0/0.
+Prototype-local dimensions do not turn a callback object into a variably
+modified member; both direct function-pointer members and typedefs work.
+
+Subject: target/tailored/debug/evocc --emit=asm
+         --target=aarch64-unknown-linux-gnu prototype-array-members.c
+Link/run: gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject
+          clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject
+gcc-14 subject: exit 0.
+clang-19 subject: exit 0.

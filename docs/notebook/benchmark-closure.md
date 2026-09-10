@@ -204,6 +204,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Variable record members and original-program classification
+
+Tests-only `571c7f7` compiled with 17 passes and one failure: a typedef hid
+a variable array member from the parser's written-bracket check, so an
+invalid record was silently accepted. The canonical member check now covers
+arrays, unions and pointer layers, preserving E2203. A tailored regression
+also prevents over-refusal of function-pointer members whose own prototype
+parameters have array bounds; those bounds belong to the prototype scope,
+not to the member object.
+
+`cargo test --locked --offline -j 1 -p evocc-parser
+--test array_bound_validation --test gnu_typeof --test parser_matrix
+--test parameter_and_pointer_sign_conversions -p evocc-lower
+--test expression_value_flow --test static_storage_and_discard --no-fail-fast`
+passes 146 tests (19 + 17 + 2 + 14 + 75 + 19), zero failed or ignored.
+Affected Clippy, fmt, Ruff, diff-check and the 44/44 shape audit pass.
+The callback fixture passes four reference and two subject native runs;
+the six variable-member reductions retain the measured GCC/Clang conflict.
+
+Targeted syntax probes of twelve unchanged E2203 originals identify eight
+variable-record extensions and four excluded nested definitions: GCC accepts
+all twelve and Clang rejects the named constructs. Their source-bound
+dispositions are recorded for the next campaign, not applied retroactively.
+The existing disposition unit test command (`python3 -m unittest discover
+-s tools/ladder/tests -p test_program_dispositions.py`) passes three tests;
+direct `classify_program` validation checks all twelve source digests and
+evidence paths. The applicability notebook lists every identity.
+Of the original twenty E2203 rows, two have tailored native passes, twelve
+now have evidenced prospective exclusions, and six remain dynamic-object
+cases to implement/classify. No full campaign ran; its 268 compiler-failure
+count is unchanged, and ordinary VLA support remains OPEN.
+
 ### Block-static variable-array pointers
 
 Tests-only `eb380c4` compiled with 73 passes and one E2203 failure.

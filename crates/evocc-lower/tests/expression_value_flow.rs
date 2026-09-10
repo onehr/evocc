@@ -57,6 +57,13 @@ fn static_array_pointers_retain_objects_but_recapture_dimensions_on_entry() {
 }
 
 #[test]
+fn callback_prototype_bounds_do_not_change_record_storage_or_calls() {
+    agrees(include_str!(
+        "../../../tests/fixtures/prototype-array-members.c"
+    ));
+}
+
+#[test]
 fn variable_array_typedefs_capture_sizes_at_each_declaration() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-bounds.c"

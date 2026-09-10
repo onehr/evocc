@@ -207,6 +207,31 @@ must not be relabelled to hide the over-broad refusal. New classification
 entries apply on the next actual replay, not retroactively to this sealed
 run's counts or raw outcomes.
 
+## Variable-array source classification (tailored, 2026-09-10)
+
+The twenty E2203 rows in frozen torture capture `20260909T215349Z` are not
+twenty ordinary VLA allocation defects. Targeted sealed syntax checks of
+the unchanged sources separate the following twelve non-consensus forms:
+
+| Source construct | Original identities | Measured result |
+|---|---|---|
+| Variable-sized record members, including packed/aligned and typedef forms | `20020412-1`, `20040308-1`, `20040423-1`, `20041218-2`, `20070919-1`, `align-nest`, `pr41935`, `pr82210` (8) | GCC-14 accepts; Clang-19 refuses the variable member. R02's common-extension boundary applies. |
+| Nested function definitions | `20010209-1`, `pr22061-3`, `pr22061-4`, `921017-1` (4) | GCC-14 accepts; Clang-19 refuses the nested definition. S06 applies; `921017-1` retains its original gnu89 option. |
+
+Exact commands, exit codes and first-error locations are retained in
+`tests/fixtures/variable-array-original-refusals.out`; each disposition binds
+the original source digest. No program was removed or counted as PASS, and
+the frozen receipt was not rewritten. The six reductions in
+`variable-record-members.c` also keep the implementation fail-closed through
+typedefs; ordinary callback members with prototype-local array bounds remain
+accepted and executed.
+
+Two other E2203 originals (`20040411-1`, `pr22061-2`) have tailored native
+passes recorded in `captured-array-originals.out`, not new campaign PASS
+counts. Six identities remain: `20040811-1`, `20221006-1`, `920721-2`,
+`920929-1`, `pr43220`, `vla-dealloc-1`. Their dynamic object/lifetime work and
+any separately evidenced floating-execution classification remain OPEN.
+
 ## Reference-baseline failures, not subject regressions
 
 The 17 musl failures in `20260909T132842Z/baseline-REPORT` and toybox's one

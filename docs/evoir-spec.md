@@ -6825,3 +6825,10 @@ Per reviewed S02/S03 and `tests/fixtures/static-array-pointers.{c,out}`, block-s
 Inline substitution retains one lifted static object and expresses each invocation's captured type as an ordinary address cast and checked memory place, including assignments, compound updates and array projections; it neither duplicates the static object nor weakens symbol/type validation.
 The final fixture passes both interpreters and two subject Linux executions; entry bypasses remain E2945, top-level const remains nonmodifiable, and actual static VLA objects or linked variably modified declarations remain E2203.
 This supersedes the preceding static-pointer deferral only, not the outstanding actual VLA allocation/reclamation or variably modified typeof work.
+
+### Variably modified record members and prototype scope
+
+Under the reviewed common-GNU-extension rule, a variably modified record member, including a typedef-hidden array or pointer to one, remains E2203; `tests/fixtures/variable-record-members.{c,out}` records GCC accepting all six reduced forms and Clang rejecting them.
+The check follows the canonical member type rather than only written brackets, but dimensions scoped inside a callback's parameter prototype do not make the callback member itself variably modified; `prototype-array-members.{c,out}` records four agreeing reference and two subject native executions.
+Eight unchanged torture originals require the non-consensus record extension and four additional originals require excluded nested definitions, individually evidenced in `variable-array-original-refusals.out` and bound to source digests in the existing disposition table.
+These twelve are prospective evidenced-not-applicable classifications, not new PASS results or an exclusion of ordinary variable-length automatic objects, whose allocation and reclamation remain required.

@@ -1,0 +1,30 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Unmodified sources:
+  .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/NAME.c
+Each exact source digest is in benchmark-program-dispositions.json.
+Command for each name and compiler:
+  COMPILER -std=DIALECT -w -fsyntax-only /work/NAME.c
+DIALECT is gnu11 except 921017-1, whose recorded option is gnu89.
+These are syntax classifications, not successful program executions.
+
+NAME          GCC-14 exit  Clang-19 exit  Clang first error location
+20010209-1    0            1              9:3
+20020412-1    0            1              24:10
+20040308-1    0            1              6:9
+20040423-1    0            1              8:9
+20041218-2    0            1              5:19
+20070919-1    0            1              28:19
+align-nest    0            1              10:9
+pr22061-3     0            1              7:28
+pr22061-4     0            1              7:28
+921017-1      0            1              8:5
+pr41935       0            1              9:23
+pr82210       0            1              8:57
+
+20010209-1, pr22061-3, pr22061-4, 921017-1:
+  error: function definition is not allowed here
+Other eight originals:
+  error: fields must have a constant size: 'variable length array in
+  structure' extension will never be supported
+The source-bound dispositions preserve these originals, raw failures and
+the campaign denominator; they do not claim ordinary VLA bugs are fixed.

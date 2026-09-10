@@ -6,6 +6,114 @@
     "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
   },
   "programs": {
+    "torture:20010209-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function bar; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "074bf806fb86c21a68309e68c74379237b55e0e70f8bd392353e0d00e0e40add",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20010209-1.c"
+      ]
+    },
+    "torture:20020412-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct members x[size] and a[z]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "e3ba27c686930bd2109700edb3c66a7d8b0d643f08be3cb89ae809aac6985c82",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020412-1.c"
+      ]
+    },
+    "torture:20040308-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct member i[n]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "883a9834b19af31a0abfe2993267430c91aff10bd6a825857297fdedcc508d81",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040308-1.c"
+      ]
+    },
+    "torture:20040423-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct member c[i+2]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "5e8ac68ddf0eba3acc9dd1ea5f3bcc1ed66e2f947f1c42f94eee2c562703738c",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040423-1.c"
+      ]
+    },
+    "torture:20041218-2": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size packed struct member b[n]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "4bdf83943b8a243caccf7324ffb30302f599bec398b95cf92983a51a990c6dbd",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20041218-2.c"
+      ]
+    },
+    "torture:20070919-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct member w[y]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "3a7888c44aadb10322fd4926464b368eccc9947a82378509e47036b6c7ab437b",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20070919-1.c"
+      ]
+    },
+    "torture:align-nest": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size packed struct member i[n]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "d54d5d6a5e8bb26474d0d2776b3a56c2659a6729a13a08a330bf44b7402087f5",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/align-nest.c"
+      ]
+    },
+    "torture:pr22061-3": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function foo; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "381762a13f59559ad0cdd9c341010a83e2b9923a1e520627b64faa4989e072bf",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c"
+      ]
+    },
+    "torture:pr22061-4": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function foo; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "e8366e3541c00a8b9bd99723c50ef3aa49246bf0423f71f3f4f28a6129db89d5",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c"
+      ]
+    },
+    "torture:921017-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function g, under the original gnu89 option; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "908450e7aa4c14d25ff1c34bd88daeac4a8f062baf2dd46c0fd7eaac3391be84",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921017-1.c"
+      ]
+    },
+    "torture:pr41935": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct member T b[n]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "c44599de1ebebc023e84611d0202e97c6fdd92132176a1f706e4f918304c607d",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr41935.c"
+      ]
+    },
+    "torture:pr82210": {
+      "disposition": "not-applicable",
+      "reason": "reviewed R02 common GNU extension profile excludes the variable-size struct members a[size] and b[size]; sealed GCC-14 accepts the original but Clang-19 rejects that construct, independently of ordinary VLA support",
+      "sourceSha256": "eb4c0972344f92877788bacc00e6171a74834dfb51e0647fdc9e0c6afb1daec8",
+      "evidence": [
+        "tests/fixtures/variable-array-original-refusals.out",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr82210.c"
+      ]
+    },
     "torture:920501-7": {
       "disposition": "not-applicable",
       "reason": "reviewed S06 excludes the nested function y and its jump to the enclosing function label; this is not ordinary computed-goto coverage",

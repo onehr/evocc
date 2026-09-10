@@ -6145,6 +6145,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         members: &[RecordMember<'arena>],
     ) {
         for (index, (field, member)) in fields.iter().zip(members).enumerate() {
+            // A typedef can hide every written array layer. Check the
+            // canonical type, including pointers to a variable array, rather
+            // than just this member declarator's bracket expressions.
+            if self.type_is_variably_modified(field.ty) {
+                self.report("E2203", "variable-length-object", member.written.span);
+                return;
+            }
             let is_unbounded_array = matches!(
                 self.types.get(field.ty).map(|ty| &ty.kind),
                 Some(TypeKind::Array {
@@ -9302,17 +9309,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             Some(TypeKind::Array { element, .. } | TypeKind::Pointer(element)) => {
                 self.type_is_variably_modified_from(*element, seen)
             }
-            Some(TypeKind::Function {
-                return_type,
-                parameters,
-            }) => {
+            // Bounds in a function prototype belong to its parameters, not
+            // to the object holding a pointer to that function. They neither
+            // run here nor make callback members variably modified.
+            Some(TypeKind::Function { return_type, .. }) => {
                 self.type_is_variably_modified_from(*return_type, seen)
-                    || match parameters {
-                        FunctionParameters::Unspecified => false,
-                        FunctionParameters::Prototype { types, .. } => types
-                            .iter()
-                            .any(|ty| self.type_is_variably_modified_from(*ty, seen)),
-                    }
             }
             _ => false,
         }
