@@ -2840,6 +2840,68 @@ mod tests {
     }
 
     #[test]
+    fn static_address_bytes_retain_bits_and_do_not_invent_provenance() {
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            let memory = memory_with(order);
+            let (memory, target) = memory
+                .allocate_static(10, U32, InitialState::Zeroed)
+                .unwrap();
+            let (memory, slot) = memory
+                .allocate_static(20, PTR, InitialState::Uninitialized)
+                .unwrap();
+            let bits = memory
+                .pointer_address(PointerValue::object(target))
+                .unwrap();
+            let bytes = match order {
+                ByteOrder::Little => bits.to_le_bytes(),
+                ByteOrder::Big => bits.to_be_bytes(),
+            };
+            let bytes = ByteSequence::try_from_static_initializer(bytes.to_vec()).unwrap();
+            let memory = memory.store_bytes(slot, PTR, &bytes).unwrap();
+            assert_eq!(
+                memory.load_pointer_value(slot, PTR).unwrap(),
+                PointerValue::Exposed(bits)
+            );
+            let recovered = memory.load_pointer(slot, PTR).unwrap();
+            assert_fault(
+                memory.load_integer(recovered, U32),
+                MemoryFaultKind::InvalidPointerRepresentation,
+            );
+            let (exposed, _) = memory.expose_pointer(PointerValue::object(target)).unwrap();
+            assert_eq!(exposed.load_integer(recovered, U32).unwrap(), 0);
+        }
+    }
+
+    #[test]
+    fn static_address_byte_copies_preserve_the_marker_but_runtime_writes_do_not() {
+        let memory = little_memory();
+        let (memory, source) = memory
+            .allocate_static(10, PTR, InitialState::Uninitialized)
+            .unwrap();
+        let (memory, dest) = memory
+            .allocate_static(20, PTR, InitialState::Uninitialized)
+            .unwrap();
+        let bytes =
+            ByteSequence::try_from_static_initializer(0x12340_u64.to_le_bytes().to_vec()).unwrap();
+        let memory = memory.store_bytes(source, PTR, &bytes).unwrap();
+        let memory = memory.copy_bytes(dest, source, PTR).unwrap();
+        assert_eq!(
+            memory.load_pointer_value(dest, PTR).unwrap(),
+            PointerValue::Exposed(0x12340)
+        );
+        let damaged = memory.store_integer(dest, BYTE, 0x40).unwrap();
+        assert_fault(
+            damaged.load_pointer_value(dest, PTR),
+            MemoryFaultKind::InvalidPointerRepresentation,
+        );
+        let raw = memory.store_integer(dest, PTR, 0x12340).unwrap();
+        assert_fault(
+            raw.load_pointer_value(dest, PTR),
+            MemoryFaultKind::InvalidPointerRepresentation,
+        );
+    }
+
+    #[test]
     fn pointer_slots_round_trip_and_preserve_dangling_provenance() {
         let memory = little_memory();
         let (memory, frame, scope) = memory.begin_frame().unwrap();

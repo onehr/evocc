@@ -70,6 +70,41 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
 }
 
 #[test]
+fn absolute_static_addresses_encode_bits_without_inventing_symbols() {
+    let source = include_str!("../../../tests/fixtures/absolute-static-addresses.c");
+    check(source, Ok(0), &["relocs=[(0, @object, 0)]"]);
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    for global in &module.globals {
+        if global.symbol != "symbolic" {
+            assert!(global.relocs.is_empty(), "{}", global.symbol);
+        }
+    }
+    let vram = module
+        .globals
+        .iter()
+        .find(|global| global.symbol == "vram")
+        .unwrap();
+    assert_eq!(vram.bytes, 0xa000_u64.to_le_bytes());
+}
+
+#[test]
+fn absolute_static_addresses_do_not_invent_access_or_call_provenance() {
+    check(
+        "static int *p=(int *)0x12340; int main(void){return *p;}",
+        Err("E3013"),
+        &[],
+    );
+    check(
+        "static int (*p)(void)=(int (*)(void))0x12340; int main(void){return p();}",
+        Err("E3016"),
+        &[],
+    );
+}
+
+#[test]
 fn ordered_pointer_comparisons_use_unsigned_addresses() {
     check(
         "int main(void) { int a[3]; int *p=a, *q=a+2; return (p<q) | ((p<=q)<<1) | ((q>p)<<2) | ((q>=p)<<3); }",
