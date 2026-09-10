@@ -43,6 +43,7 @@ Inst.AShr(result,lhs,rhs)|%v1080 = ashr.bits<37> %v1081, %v1082
 Inst.AccessInBounds(mem_in,pointer,mem_out,layout)|%v1342 = access_in_bounds %v1340, %v1341 [size=59, align=32]
 Inst.Add(result,lhs,rhs)|%v1020 = add.bits<37> %v1021, %v1022
 Inst.Alloca(result,mem_in,world_in,mem_out,world_out,origin,layout)|(%v1310, %v1313, %v1314) = alloca %v1311, %v1312 [origin=1313131, size=53, align=16]
+Inst.DynamicAlloca(result,mem_in,world_in,mem_out,world_out,origin,size,align)|(%v1900, %v1903, %v1904) = alloca.dynamic %v1901, %v1902, %v1905 [origin=1901901, align=32]
 Inst.And(result,lhs,rhs)|%v1100 = and.bits<37> %v1101, %v1102
 Inst.Br(target,args)|br ^b4242(%v1250, %v1251)
 Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383, %v1384, %v1385)

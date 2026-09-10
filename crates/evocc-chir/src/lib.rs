@@ -1492,6 +1492,38 @@ pub struct CHirUnit<'arena> {
 }
 
 impl<'arena> CHirUnit<'arena> {
+    /// The compiler-owned stack allocation call, never a same-named source function.
+    #[must_use]
+    pub fn stack_allocation_size(
+        &self,
+        expression: &CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let CHirExpr::Call(callee, arguments, _) = expression else {
+            return None;
+        };
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            ..
+        } = callee
+        else {
+            return None;
+        };
+        let entry = self.symbols.symbol(*symbol).ok()?;
+        if self.symbols.is_builtin_function(*symbol)
+            && spelling == "alloca"
+            && entry.spelling() == spelling
+            && facts.category() == ExprCategory::FunctionDesignator
+            && type_at_use_matches_binding(&self.types, facts.ty(), entry.ty())
+            && arguments.len() == 1
+        {
+            Some(arguments[0])
+        } else {
+            None
+        }
+    }
+
     #[must_use]
     pub fn new(
         declarations: Vec<&'arena CHirDecl<'arena>>,

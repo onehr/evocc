@@ -6403,13 +6403,15 @@ C behavior, adds no diagnostic, and has no measured cohort count yet.
 
 The existing Section 9 `copy` production supplies the omitted canonical shape
 below, and the existing assembly forms are now implemented rather than pending.
-This is instruction-shape metadata only, tested by whole-module text tests,
-not a change to C behavior; it adds no code or affected-unit count.
+This list also includes the dynamic allocation form authorized later in this
+appendix; its semantics and evidence are in that entry, not inferred from this
+instruction-shape metadata.
 
 ```text
 (<>) = copy <>, <>, <>, <> [size=<>, align=<>]
 (<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
+(<>, <>, <>) = alloca.dynamic <>, <>, <> [origin=<>, align=<>]
 ```
 
 ### Negative checked results stored into an unsigned type
@@ -6767,3 +6769,10 @@ Per reviewed S03 and the 2026-09-10 implementation authorization, an outer array
 The existing prior-parameter symbol identity is retained, and ordinary C-HIR entry expressions carry these effects through interpretation, lowering and inline substitution without reevaluating them on a body label or using them as the adjusted parameter's `sizeof`.
 The four sealed reference runs of `tests/fixtures/parameter-bound-effects.c`, the earlier `parameter-bounds.c` probe under `.evidence/builtin-probes/20260909-dynamic-objects/`, and their recorded outputs agree; both compilers reject all three `parameter-bound-errors.c` noninteger-bound cases, which use E2923 `invalid-array-bound` rather than being admitted by pointer adjustment.
 This replaces the outer-parameter E2203 boundary only: inner variable dimensions and actual dynamically sized objects still require the separately scheduled size-capture, allocation and lifetime implementation, and no original-program count is changed here.
+
+### Function-lifetime dynamic stack objects
+
+Per reviewed S02 and the 2026-09-10 implementation authorization, `__builtin_alloca(n)` evaluates and converts `n` to `size_t` once, creates fresh uninitialized storage aligned to 16 bytes, and preserves it until the containing function returns, not merely until its allocating block exits; no stack-overflow guarantee is made.
+The canonical form is `(%pointer, %mem_out, %world_out) = alloca.dynamic %mem_in, %world_in, %size [origin=N, align=A]`: `size` is `bits<64>`, the result is an object pointer, `A` is a nonzero power of two, origin uniqueness and mem/world threading match fixed `alloca`, and its effects are reads/writes All and may_trap; the interpreters use the same bounded object model and E3010 on a dangling access.
+The machine form `%p:gpr64 = stack.alloc %n, [origin=N, align=A]` subtracts aligned storage from `sp`, preserves fixed objects and spills relative to the entry frame, retains a disjoint outgoing-argument area below the current dynamic storage, and restores `sp` from `x29` on return; it does not participate in pure equality regions.
+`tests/fixtures/dynamic-stack-objects.c` and its `.out` record the sealed reference probes for block survival, separate loop/recursive allocations, fixed-frame alignment and register/stack arguments; E3046 is superseded for this builtin, actual variable-length declarations remain separate work, and original-program gains remain unmeasured.

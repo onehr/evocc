@@ -335,6 +335,17 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             }
             Ok(())
         }
+        MInst::StackAlloc {
+            dst, size, align, ..
+        } => {
+            if dst.class != RegClass::Gpr64
+                || size.class != RegClass::Gpr64
+                || !align.is_power_of_two()
+            {
+                return Err(format!("@{name} block {block}: stack.alloc needs gpr64 address/size and power-of-two alignment"));
+            }
+            Ok(())
+        }
         MInst::Adrp { dst, .. } | MInst::Adr { dst, .. } | MInst::FrameSlot { dst, .. } => {
             if dst.class != RegClass::Gpr64 {
                 return Err(format!(

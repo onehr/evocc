@@ -69,6 +69,7 @@ fn family(inst: &Inst) -> &'static str {
         Inst::ReturnAddress { .. } => "return_address",
         Inst::FrameAddress { .. } => "frame_address",
         Inst::Alloca { .. } => "alloca",
+        Inst::DynamicAlloca { .. } => "alloca.dynamic",
         Inst::LifetimeEnd { .. } => "lifetime.end",
         Inst::PointerValid { .. } => "pointer_valid",
         Inst::AccessInBounds { .. } => "access_in_bounds",

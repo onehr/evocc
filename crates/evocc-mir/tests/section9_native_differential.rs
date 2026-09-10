@@ -98,6 +98,76 @@ fn interpreted(module: &evocc_evoir::Module) -> u8 {
     u8::try_from(value.raw_bits & 0xff).expect("eight bits")
 }
 
+#[test]
+fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
+    use std::fmt::Write;
+
+    for (size, align) in [(16, 16), (16, 64), (70000, 256)] {
+        let mut source = format!(
+            "func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = const.bits<64> 35
+    (%v3, %v4, %v5) = alloca %v0, %v1 [origin=0, size={size}, align={align}]
+    %v6 = const.bits<64> 7
+    %v7 = access_in_bounds %v4, %v3 [size=8, align=8]
+    (%v8, %v9) = store %v7, %v5, %v3, %v6
+"
+        );
+        for id in 10..50 {
+            writeln!(source, "    %v{id} = const.bits<64> {}", id - 9).unwrap();
+        }
+        source.push_str(
+            "    (%v50, %v51, %v52) = alloca.dynamic %v8, %v9, %v2 [origin=1, align=16]
+    %v53 = access_in_bounds %v51, %v50 [size=8, align=8]
+    (%v54, %v55) = store %v53, %v52, %v50, %v6
+",
+        );
+        let mut sum = 10;
+        for id in 11..50 {
+            let result = id + 45;
+            writeln!(source, "    %v{result} = add.bits<64> %v{sum}, %v{id}").unwrap();
+            sum = result;
+        }
+        source.push_str(
+            "    %v95 = access_in_bounds %v54, %v3 [size=8, align=8]
+    (%v96, %v97, %v98) = load %v95, %v55, %v3 : bits<64>
+    %v99 = access_in_bounds %v97, %v50 [size=8, align=8]
+    (%v100, %v101, %v102) = load %v99, %v98, %v50 : bits<64>
+    %v103 = add.bits<64> %v94, %v96
+    %v104 = add.bits<64> %v103, %v100
+    %v105 = const.bits<64> 834
+    %v106 = sub.bits<64> %v104, %v105
+    %v107 = trunc.bits<32> %v106
+    ret %v107, %v101, %v102
+}
+",
+        );
+        let (allocated, module) = build(&source);
+        assert!(allocated[0].spilled > 0, "the fixture must really spill");
+        let frame = evocc_mir::frame_of(&allocated[0]);
+        assert!(frame.dynamic);
+        assert_eq!(frame.alignment, align);
+        assert_eq!(interpreted(&module), 0);
+        let mir = lower_module(&module).unwrap();
+        let text = evocc_mir::render_module(&mir);
+        assert_eq!(evocc_mir::parse_module(&text).unwrap(), mir);
+        let result =
+            evocc_mir::interpret_module(&mir, "main", &[], evocc_mir::MirLimits::new(1000))
+                .unwrap();
+        assert_eq!(result.results, vec![evocc_mir::MirValue::Int(0)]);
+        assert_eq!(
+            run_native(
+                &format!("dynamic-{size}-{align}"),
+                &emit_module(&allocated, &[])
+            )
+            .unwrap(),
+            0
+        );
+    }
+}
+
 const CONSTANT: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }

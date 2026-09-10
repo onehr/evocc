@@ -911,6 +911,13 @@ pub enum MInst {
         size: u64,
         align: u32,
     },
+    /// Subtract runtime-sized, aligned storage; its address lasts until return.
+    StackAlloc {
+        dst: VReg,
+        size: VReg,
+        origin: u64,
+        align: u32,
+    },
     /// Which part of Section 6's frame an address names.
     ///
     /// These are places only the frame layout knows, so like `frame.slot` they
@@ -1472,6 +1479,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::Cset { dst, .. }
         | MInst::Csel { dst, .. }
         | MInst::FrameSlot { dst, .. }
+        | MInst::StackAlloc { dst, .. }
         | MInst::SpillReload { dst, .. }
         | MInst::IncomingArg { dst, .. }
         | MInst::FrameAddress { dst, .. }
@@ -1508,6 +1516,7 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::IndirectResult
         | MInst::VaSaveArea { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
+        MInst::StackAlloc { size, .. } => vec![*size],
         MInst::Store { src, base, .. } => vec![*src, *base],
         MInst::Binary { lhs, rhs, .. }
         | MInst::Cmp { lhs, rhs, .. }

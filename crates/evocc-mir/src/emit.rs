@@ -28,6 +28,8 @@ use crate::{
 /// adjustment depends on the incoming address rather than only frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    /// Runtime allocations move sp; fixed slots must then stay relative to x29.
+    pub dynamic: bool,
     /// Total bytes the prologue subtracts, a multiple of sixteen.
     pub size: u64,
     /// Required alignment of `sp` after the prologue, at least sixteen.
@@ -143,6 +145,12 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
 
     Frame {
+        dynamic: allocated.blocks.iter().any(|block| {
+            block
+                .insts
+                .iter()
+                .any(|inst| matches!(inst, MInst::StackAlloc { .. }))
+        }),
         size,
         alignment,
         saved,
@@ -892,7 +900,7 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
         let _ = writeln!(text, "    mov sp, x16");
     }
     for (number, offset) in &frame.saved {
-        emit_frame_access(text, "str", &format!("x{number}"), *offset);
+        emit_frame_access(text, "str", &format!("x{number}"), *offset, frame);
     }
     // Section 6: a variadic callee "stores `x_k` to `x7` into it at offsets
     // `8 * k` to `56` in the prologue". Nothing before this point writes an
@@ -904,6 +912,7 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
                 "str",
                 &format!("x{number}"),
                 base + u64::from(number) * 8,
+                frame,
             );
         }
         // Reference-built callers may pass anonymous values in q0-q7 even
@@ -924,9 +933,9 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
 
 fn emit_epilogue(text: &mut String, frame: &Frame) {
     for (number, offset) in &frame.saved {
-        emit_frame_access(text, "ldr", &format!("x{number}"), *offset);
+        emit_frame_access(text, "ldr", &format!("x{number}"), *offset, frame);
     }
-    if frame.alignment > 16 {
+    if frame.alignment > 16 || frame.dynamic {
         let _ = writeln!(text, "    mov sp, x29");
     } else if frame.size != 0 {
         emit_add_immediate(text, "add", "sp", "sp", frame.size);
@@ -988,20 +997,49 @@ fn emit_add_immediate(text: &mut String, op: &str, dst: &str, src: &str, imm: u6
             let _ = writeln!(text, "    {op} {dst}, {dst}, #{low}");
         }
     } else {
-        let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
+        let scratch = physical(
+            RegClass::Gpr64,
+            if src == "x16" {
+                SCRATCH_UNIT
+            } else {
+                SCRATCH_OFFSET
+            },
+        );
         emit_immediate(text, &scratch, RegClass::Gpr64, imm);
         let _ = writeln!(text, "    {op} {dst}, {src}, {scratch}");
     }
 }
 
 /// One transfer to or from a frame slot, at whatever distance from `sp`.
-fn emit_frame_access(text: &mut String, mnemonic: &str, register: &str, offset: u64) {
-    if offset <= SCALED_LIMIT {
+fn emit_frame_address(text: &mut String, destination: &str, offset: u64, frame: &Frame) {
+    if !frame.dynamic {
+        emit_add_immediate(text, "add", destination, "sp", offset);
+    } else if frame.alignment == 16 {
+        emit_add_immediate(text, "sub", destination, "x29", frame.size - offset);
+    } else {
+        emit_add_immediate(text, "sub", destination, "x29", frame.size);
+        let _ = writeln!(
+            text,
+            "    and {destination}, {destination}, #-{}",
+            frame.alignment
+        );
+        emit_add_immediate(text, "add", destination, destination, offset);
+    }
+}
+
+fn emit_frame_access(
+    text: &mut String,
+    mnemonic: &str,
+    register: &str,
+    offset: u64,
+    frame: &Frame,
+) {
+    if offset <= SCALED_LIMIT && !frame.dynamic {
         let _ = writeln!(text, "    {mnemonic} {register}, [sp, #{offset}]");
         return;
     }
     let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
-    emit_add_immediate(text, "add", &scratch, "sp", offset);
+    emit_frame_address(text, &scratch, offset, frame);
     let _ = writeln!(text, "    {mnemonic} {register}, [{scratch}, #0]");
 }
 
@@ -1560,7 +1598,7 @@ fn emit_inst(
                 let top = frame
                     .register_save
                     .map_or(0, |(_, base)| base + REGISTER_SAVE_BYTES);
-                emit_add_immediate(text, "add", &name(*dst), "sp", top);
+                emit_frame_address(text, &name(*dst), top, frame);
             }
             // Section 5's activation-address rows (revision 0.17). The
             // prologue's `stp x29, x30, [sp, #-16]!` puts the saved link
@@ -1598,15 +1636,25 @@ fn emit_inst(
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {
             let offset = frame.slots.get(origin).copied().unwrap_or(0);
-            emit_add_immediate(text, "add", &name(*dst), "sp", offset);
+            emit_frame_address(text, &name(*dst), offset, frame);
+        }
+        MInst::StackAlloc {
+            dst, size, align, ..
+        } => {
+            // Keep a fresh outgoing-argument area below each allocation. It
+            // must never overlap either the new object or a previous one.
+            let _ = writeln!(text, "    sub x16, sp, {}", name(*size));
+            let _ = writeln!(text, "    and x16, x16, #-{}", (*align).max(16));
+            let _ = writeln!(text, "    mov {}, x16", name(*dst));
+            emit_add_immediate(text, "sub", "sp", "x16", align_up(frame.outgoing, 16));
         }
         MInst::SpillStore { src, slot } => {
             let offset = frame.spills.get(slot).copied().unwrap_or(0);
-            emit_frame_access(text, "str", &name(*src), offset);
+            emit_frame_access(text, "str", &name(*src), offset, frame);
         }
         MInst::SpillReload { dst, slot } => {
             let offset = frame.spills.get(slot).copied().unwrap_or(0);
-            emit_frame_access(text, "ldr", &name(*dst), offset);
+            emit_frame_access(text, "ldr", &name(*dst), offset, frame);
         }
         // Section 4: emission expands the copy "to `ldr`/`str` pairs of the
         // largest aligned width, unrolled up to 64 bytes and a counted loop

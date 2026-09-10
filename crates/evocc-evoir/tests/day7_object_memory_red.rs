@@ -84,7 +84,9 @@ fn dynamic_stack_size_is_a_typed_ssa_operand_and_preserves_object_lifetime() {
             origin: 77,
             layout: AccessLayout::new(13, 16),
         }],
-        vec![pointer, mem_out, world_out],
+        // The public entry API returns scalar values and effect tokens;
+        // allocation identity/layout are inspected through outcome.memory.
+        vec![mem_out, world_out],
     );
     function.params.insert(
         0,
@@ -123,7 +125,7 @@ fn dynamic_stack_size_is_a_typed_ssa_operand_and_preserves_object_lifetime() {
             .expect("dynamic allocation must use its actual size");
         let objects = result.memory.objects().collect::<Vec<_>>();
         assert_eq!(objects.len(), 1);
-        assert_eq!(objects[0].layout, AccessLayout::new(size as u64, 16));
+        assert_eq!(objects[0].layout, AccessLayout::new(size, 16));
         assert!(!objects[0].lifetime.is_alive());
     }
     for malformed in [

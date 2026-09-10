@@ -54,8 +54,8 @@ fn prefetch_keeps_address_evaluation_without_an_external_call() {
 }
 
 #[test]
-fn dynamic_stack_allocation_is_refused_before_linking() {
-    for (source, refused) in [
+fn dynamic_stack_allocation_never_becomes_an_external_call() {
+    for (source, builtin) in [
         (
             "void *f(unsigned long n){return __builtin_alloca(n);}",
             true,
@@ -73,13 +73,24 @@ fn dynamic_stack_allocation_is_refused_before_linking() {
         let mut parser = Parser::new(tokens, file, source);
         let unit = parser.parse_translation_unit_in(&arena);
         assert!(!parser.had_error(), "{:?}", parser.diagnostic());
-        let result = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu());
-        if refused {
-            let error = result.expect_err("alloca must not become an unresolved library call");
-            assert_eq!(error.code(), "E3046");
-            assert_eq!(error.to_string(), "not-lowered: dynamic-stack-allocation");
-        } else {
-            result.expect("an ordinary function with this name is not a builtin");
-        }
+        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect("dynamic storage lowers without a library fallback");
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|f| &f.blocks)
+            .flat_map(|b| &b.insts);
+        assert_eq!(
+            instructions
+                .clone()
+                .any(|i| matches!(i, evocc_evoir::Inst::DynamicAlloca { .. })),
+            builtin
+        );
+        assert_eq!(
+            instructions
+                .clone()
+                .any(|i| matches!(i, evocc_evoir::Inst::Call { callee, .. } if callee == "alloca")),
+            !builtin
+        );
     }
 }

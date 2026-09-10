@@ -755,6 +755,9 @@ enum MachineTask<'arena> {
         operator: BitBuiltinOp,
         span: SourceSpan,
     },
+    AllocateDynamic {
+        expression: &'arena CHirExpr<'arena>,
+    },
     SelectTernary {
         then_expression: &'arena CHirExpr<'arena>,
         else_expression: &'arena CHirExpr<'arena>,
@@ -2457,6 +2460,50 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                     None
                 }
+                MachineTask::AllocateDynamic { expression } => {
+                    let span = expression.span();
+                    let size = expect_machine_integer(pop_machine_value(&mut values, span)?, span)?
+                        .cast(CIntegerType::ULONG)
+                        .raw_bits() as u64;
+                    let origin = self
+                        .manifest
+                        .as_ref()
+                        .ok_or(InterpreterError::MissingAllocationManifest)?
+                        .dynamic_stack_site(expression)
+                        .ok_or(InterpreterError::UnsupportedExpression {
+                            feature: "dynamic allocation has no site",
+                            span,
+                        })?
+                        .ordinal()
+                        .raw();
+                    let frame = self.memory_frame.as_ref().ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "dynamic allocation has no frame",
+                            span,
+                        },
+                    )?;
+                    let (memory, value) = self
+                        .memory
+                        .allocate_automatic(
+                            frame.id,
+                            frame.root_scope,
+                            origin,
+                            AccessLayout::new(size, 16),
+                        )
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    let ty = PointerTypeDesc::from_expression(
+                        self.unit.symbols(),
+                        self.unit.types(),
+                        expression,
+                    )
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
+                        feature: "dynamic allocation has no pointer type",
+                        span,
+                    })?;
+                    values.push(CValue::Pointer { value, ty });
+                    None
+                }
                 MachineTask::SelectSwitch { body, span } => {
                     let controlling =
                         expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
@@ -3885,6 +3932,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::Call(callee, arguments, _) => {
+                if let Some(size) = self.unit.stack_allocation_size(expression) {
+                    tasks.push(MachineTask::AllocateDynamic { expression });
+                    tasks.push(MachineTask::EvalExpression {
+                        expression: size,
+                        allow_root_mutation: true,
+                    });
+                    return Ok(());
+                }
                 tasks.push(MachineTask::EvalCallArguments {
                     callee,
                     arguments,
@@ -9231,6 +9286,9 @@ fn type_requires_memory(types: &TypeInterner, ty: TypeId) -> bool {
 }
 
 fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) -> bool {
+    if unit.stack_allocation_size(expression).is_some() {
+        return true;
+    }
     match expression {
         // A file-scope *object* has static storage and therefore lives in
         // memory. A parameter can never legitimately be declared at file scope,

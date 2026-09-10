@@ -574,6 +574,16 @@ pub fn render_inst(inst: &MInst) -> String {
             "{}frame.slot [origin={origin}, size={size}, align={align}]",
             defined(*dst)
         ),
+        MInst::StackAlloc {
+            dst,
+            size,
+            origin,
+            align,
+        } => format!(
+            "{}stack.alloc {}, [origin={origin}, align={align}]",
+            defined(*dst),
+            use_of(*size),
+        ),
         MInst::FrameAddress { dst, place } => {
             format!("{}frame.address [{}]", defined(*dst), place.mnemonic())
         }

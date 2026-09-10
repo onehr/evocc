@@ -358,6 +358,18 @@ pub enum Inst {
         layout: AccessLayout,
     },
 
+    /// Function-lifetime automatic storage whose byte size is an SSA value.
+    DynamicAlloca {
+        result: Value,
+        mem_in: Value,
+        world_in: Value,
+        mem_out: Value,
+        world_out: Value,
+        origin: u64,
+        size: Value,
+        align: u32,
+    },
+
     /// Explicitly end one automatic object's lifetime.
     LifetimeEnd {
         mem_in: Value,
@@ -523,6 +535,12 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
             mem_out,
             world_out,
             ..
+        }
+        | Inst::DynamicAlloca {
+            result,
+            mem_out,
+            world_out,
+            ..
         } => vec![result, mem_out, world_out],
         Inst::LifetimeEnd {
             mem_out, world_out, ..
@@ -643,6 +661,12 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
         Inst::Alloca {
             mem_in, world_in, ..
         } => vec![mem_in, world_in],
+        Inst::DynamicAlloca {
+            mem_in,
+            world_in,
+            size,
+            ..
+        } => vec![mem_in, world_in, size],
         Inst::LifetimeEnd {
             mem_in,
             world_in,
@@ -932,12 +956,14 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
             may_trap: true,
             ..EffectSummary::default()
         },
-        Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => EffectSummary {
-            reads_all: true,
-            writes_all: true,
-            may_trap: true,
-            ..EffectSummary::default()
-        },
+        Inst::Alloca { .. } | Inst::DynamicAlloca { .. } | Inst::LifetimeEnd { .. } => {
+            EffectSummary {
+                reads_all: true,
+                writes_all: true,
+                may_trap: true,
+                ..EffectSummary::default()
+            }
+        }
         Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => EffectSummary {
             reads_all: true,
             may_trap: true,
@@ -1753,6 +1779,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     | Inst::Store { .. }
                     | Inst::Copy { .. }
                     | Inst::Alloca { .. }
+                    | Inst::DynamicAlloca { .. }
                     | Inst::LifetimeEnd { .. }
                     | Inst::PointerValid { .. }
                     | Inst::AccessInBounds { .. } => {
@@ -1815,7 +1842,9 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                             caller.name, block.id, index, target
                         ));
                     }
-                    Inst::Alloca { origin, .. } if !origins.insert(*origin) => {
+                    Inst::Alloca { origin, .. } | Inst::DynamicAlloca { origin, .. }
+                        if !origins.insert(*origin) =>
+                    {
                         return Err(format!("duplicate allocation origin {origin}"));
                     }
                     _ => {}
@@ -2369,6 +2398,13 @@ impl EffectState {
                 world_out,
                 ..
             }
+            | Inst::DynamicAlloca {
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                ..
+            }
             | Inst::LifetimeEnd {
                 mem_in,
                 world_in,
@@ -2616,6 +2652,32 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             expect_pointer(&result.ty, "alloca result", block)?;
             validate_layout(*layout, "alloca", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "alloca", block)
+        }
+        Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            size,
+            align,
+            ..
+        } => {
+            expect_pointer(&result.ty, "alloca.dynamic result", block)?;
+            if size.ty != EvoIRType::Bits(64) {
+                return Err(format!(
+                    "alloca.dynamic size in block {block} must be bits<64>"
+                ));
+            }
+            validate_layout(AccessLayout::new(0, *align), "alloca.dynamic", block)?;
+            expect_day7_effect_tokens(
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                "alloca.dynamic",
+                block,
+            )
         }
         Inst::LifetimeEnd {
             mem_in,
@@ -3918,7 +3980,10 @@ impl ModuleFrame {
 fn function_uses_automatic_memory(function: &Function) -> bool {
     function.blocks.iter().any(|block| {
         block.insts.iter().any(|instruction| {
-            matches!(instruction, Inst::Alloca { .. } | Inst::LifetimeEnd { .. })
+            matches!(
+                instruction,
+                Inst::Alloca { .. } | Inst::DynamicAlloca { .. } | Inst::LifetimeEnd { .. }
+            )
         })
     })
 }
@@ -5109,8 +5174,24 @@ fn execute_instruction(
             mem_out,
             world_out,
             origin,
-            layout,
+            ..
+        }
+        | Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            origin,
+            ..
         } => {
+            let layout = match inst {
+                Inst::Alloca { layout, .. } => *layout,
+                Inst::DynamicAlloca { size, align, .. } => {
+                    AccessLayout::new(read_value(values, size, block)? as u64, *align)
+                }
+                _ => unreachable!("allocation instruction"),
+            };
             let _ = read_value(values, mem_in, block)?;
             let _ = read_value(values, world_in, block)?;
             let memory_frame = memory_frame.ok_or_else(|| InterpreterError::InvalidModule {
@@ -5121,7 +5202,7 @@ fn execute_instruction(
             })?;
             let (memory, pointer) = state
                 .memory
-                .allocate_automatic(memory_frame, memory_scope, *origin, *layout)
+                .allocate_automatic(memory_frame, memory_scope, *origin, layout)
                 .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
             state.memory = memory;
             let memory_token = state.fresh_token()?;
@@ -6067,6 +6148,16 @@ pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
         } => {
             remap(mem_in, aliases);
             remap(world_in, aliases);
+        }
+        Inst::DynamicAlloca {
+            mem_in,
+            world_in,
+            size,
+            ..
+        } => {
+            remap(mem_in, aliases);
+            remap(world_in, aliases);
+            remap(size, aliases);
         }
         Inst::LifetimeEnd {
             mem_in,

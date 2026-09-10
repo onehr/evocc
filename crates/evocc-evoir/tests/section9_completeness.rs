@@ -169,6 +169,16 @@ fn sentinel_instructions() -> Vec<Inst> {
             origin: 1_313_131,
             layout: AccessLayout::new(53, 16),
         },
+        Inst::DynamicAlloca {
+            result: pointer(1900),
+            mem_in: mem(1901),
+            world_in: world(1902),
+            mem_out: mem(1903),
+            world_out: world(1904),
+            origin: 1_901_901,
+            size: value(1905, EvoIRType::Bits(64)),
+            align: 32,
+        },
         Inst::LifetimeEnd {
             mem_in: mem(1320),
             world_in: world(1321),
@@ -566,6 +576,21 @@ fn inst_schema(inst: &Inst) -> &'static str {
         } => {
             let _ = (result, mem_in, world_in, mem_out, world_out, origin, layout);
             "Inst.Alloca(result,mem_in,world_in,mem_out,world_out,origin,layout)"
+        }
+        Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            origin,
+            size,
+            align,
+        } => {
+            let _ = (
+                result, mem_in, world_in, mem_out, world_out, origin, size, align,
+            );
+            "Inst.DynamicAlloca(result,mem_in,world_in,mem_out,world_out,origin,size,align)"
         }
         Inst::LifetimeEnd {
             mem_in,

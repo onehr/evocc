@@ -301,6 +301,16 @@ fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
             remap(mem_in, aliases);
             remap(world_in, aliases);
         }
+        Inst::DynamicAlloca {
+            mem_in,
+            world_in,
+            size,
+            ..
+        } => {
+            remap(mem_in, aliases);
+            remap(world_in, aliases);
+            remap(size, aliases);
+        }
         Inst::LifetimeEnd {
             mem_in,
             world_in,
@@ -517,6 +527,15 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_out,
             ..
         } => vec![result, mem_in, world_in, mem_out, world_out],
+        Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            size,
+            ..
+        } => vec![result, mem_in, world_in, mem_out, world_out, size],
         Inst::LifetimeEnd {
             mem_in,
             world_in,

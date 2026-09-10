@@ -2443,6 +2443,15 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_out,
             ..
         } => vec![result, mem_in, world_in, mem_out, world_out],
+        Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            size,
+            ..
+        } => vec![result, mem_in, world_in, mem_out, world_out, size],
         Inst::LifetimeEnd {
             mem_in,
             world_in,

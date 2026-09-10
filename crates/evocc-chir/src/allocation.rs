@@ -41,6 +41,8 @@ pub enum AllocationSiteKind<'arena> {
     Object(SymbolId),
     /// One exact string-literal expression node, not its spelling or span.
     StringLiteral(&'arena CHirExpr<'arena>),
+    /// One compiler-owned dynamic stack allocation call.
+    DynamicStack(&'arena CHirExpr<'arena>),
     /// One exact compound-literal expression and its C storage duration.
     CompoundLiteral {
         expression: &'arena CHirExpr<'arena>,
@@ -53,14 +55,14 @@ impl<'arena> AllocationSiteKind<'arena> {
     pub fn object_symbol(self) -> Option<SymbolId> {
         match self {
             Self::Object(symbol) => Some(symbol),
-            Self::StringLiteral(_) | Self::CompoundLiteral { .. } => None,
+            Self::StringLiteral(_) | Self::DynamicStack(_) | Self::CompoundLiteral { .. } => None,
         }
     }
 
     #[must_use]
     pub fn string_literal(self) -> Option<&'arena CHirExpr<'arena>> {
         match self {
-            Self::Object(_) => None,
+            Self::Object(_) | Self::DynamicStack(_) => None,
             Self::StringLiteral(expression) => Some(expression),
             Self::CompoundLiteral { .. } => None,
         }
@@ -73,7 +75,15 @@ impl<'arena> AllocationSiteKind<'arena> {
                 expression,
                 static_storage,
             } => Some((expression, static_storage)),
-            Self::Object(_) | Self::StringLiteral(_) => None,
+            Self::Object(_) | Self::StringLiteral(_) | Self::DynamicStack(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn dynamic_stack(self) -> Option<&'arena CHirExpr<'arena>> {
+        match self {
+            Self::DynamicStack(expression) => Some(expression),
+            _ => None,
         }
     }
 }
@@ -363,6 +373,7 @@ pub struct AllocationSiteManifest<'arena> {
     object_sites: HashMap<SymbolId, usize>,
     string_sites: HashMap<usize, usize>,
     compound_sites: HashMap<usize, usize>,
+    dynamic_sites: HashMap<usize, usize>,
     string_spans: BTreeMap<SpanKey, Vec<AllocationSiteOrdinal>>,
 }
 
@@ -433,6 +444,16 @@ impl<'arena> AllocationSiteManifest<'arena> {
             return None;
         }
         self.compound_sites
+            .get(&node_identity(expression))
+            .and_then(|index| self.sites.get(*index))
+    }
+
+    #[must_use]
+    pub fn dynamic_stack_site(
+        &self,
+        expression: &CHirExpr<'arena>,
+    ) -> Option<&AllocationSite<'arena>> {
+        self.dynamic_sites
             .get(&node_identity(expression))
             .and_then(|index| self.sites.get(*index))
     }
@@ -602,6 +623,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         let mut object_sites = HashMap::new();
         let mut string_sites = HashMap::new();
         let mut compound_sites = HashMap::new();
+        let mut dynamic_sites = HashMap::new();
         let mut string_spans = BTreeMap::<SpanKey, Vec<AllocationSiteOrdinal>>::new();
         for (index, pending) in pending.into_iter().enumerate() {
             let ordinal = AllocationSiteOrdinal(
@@ -627,6 +649,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 AllocationSiteKind::CompoundLiteral { expression, .. } => {
                     compound_sites.insert(node_identity(expression), index);
                 }
+                AllocationSiteKind::DynamicStack(expression) => {
+                    dynamic_sites.insert(node_identity(expression), index);
+                }
             }
             sites.push(site);
         }
@@ -637,6 +662,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             object_sites,
             string_sites,
             compound_sites,
+            dynamic_sites,
             string_spans,
         })
     }
@@ -1421,6 +1447,14 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 }
             }
             CHirExpr::Call(callee, arguments, _) => {
+                if self.unit.stack_allocation_size(expression).is_some() {
+                    let encounter = self.encounter()?;
+                    self.strings.push(PendingSite {
+                        kind: AllocationSiteKind::DynamicStack(expression),
+                        anchor: expression.span(),
+                        encounter,
+                    });
+                }
                 for argument in arguments.iter().rev().copied() {
                     work.push(WorkItem::Expression {
                         expression: argument,

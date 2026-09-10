@@ -96,6 +96,7 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         Inst::SExt(..) => ScalarOperator::SExt,
         Inst::Trunc(..) => ScalarOperator::Trunc,
         Inst::Alloca { .. }
+        | Inst::DynamicAlloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }
         | Inst::AccessInBounds { .. }

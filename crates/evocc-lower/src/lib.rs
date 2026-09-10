@@ -122,9 +122,6 @@ pub enum LowerError {
     FrameAddress {
         span: SourceSpan,
     },
-    DynamicStackAllocation {
-        span: SourceSpan,
-    },
     FunctionPointerArithmetic {
         span: SourceSpan,
     },
@@ -181,9 +178,6 @@ impl fmt::Display for LowerError {
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
-            Self::DynamicStackAllocation { .. } => {
-                formatter.write_str("not-lowered: dynamic-stack-allocation")
-            }
             Self::FunctionPointerArithmetic { .. } => {
                 formatter.write_str("not-lowered: function-pointer-arithmetic")
             }
@@ -226,7 +220,6 @@ impl LowerError {
             Self::FrameAddress { .. } => "E3031",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
-            Self::DynamicStackAllocation { .. } => "E3046",
             _ => "E3101",
         }
     }
@@ -248,7 +241,6 @@ impl LowerError {
             | Self::UnsupportedStatement { span, .. }
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
-            | Self::DynamicStackAllocation { span }
             | Self::FunctionPointerArithmetic { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
@@ -374,6 +366,7 @@ struct FunctionLowerer<'a> {
     local_registers: BTreeMap<SymbolId, String>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
     compound_origins: BTreeMap<usize, (u64, bool)>,
+    dynamic_origins: BTreeMap<usize, u64>,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
     string_origins: BTreeMap<usize, u64>,
     blocks: Vec<DraftBlock>,
@@ -466,6 +459,9 @@ fn lower_resolved_unit(
             evocc_chir::AllocationSiteKind::CompoundLiteral { expression, .. } => {
                 source.compound_literal_site(expression)
             }
+            evocc_chir::AllocationSiteKind::DynamicStack(expression) => {
+                source.dynamic_stack_site(expression)
+            }
         };
         original
             .expect("retained allocation site belongs to the source unit")
@@ -495,7 +491,17 @@ fn lower_resolved_unit(
                 })
         })
         .collect::<BTreeMap<_, _>>();
-    let memory_profile = !linkage.aliases.is_empty()
+    let dynamic_origins = manifest
+        .sites()
+        .iter()
+        .filter_map(|site| {
+            site.kind()
+                .dynamic_stack()
+                .map(|expression| (expression as *const CHirExpr<'_> as usize, origin_of(site)))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let memory_profile = !dynamic_origins.is_empty()
+        || !linkage.aliases.is_empty()
         || !global_registers.is_empty()
         || !memory_symbols.is_empty()
         || unit.iter().any(|declaration| match declaration {
@@ -587,6 +593,7 @@ fn lower_resolved_unit(
             &global_registers,
             &allocation_origins,
             &compound_origins,
+            &dynamic_origins,
             &string_origins,
         )
         .lower(function)?;
@@ -3315,6 +3322,7 @@ impl<'a> FunctionLowerer<'a> {
         global_registers: &'a BTreeMap<SymbolId, String>,
         allocation_origins: &'a BTreeMap<SymbolId, u64>,
         compound_origins: &BTreeMap<usize, (u64, bool)>,
+        dynamic_origins: &BTreeMap<usize, u64>,
         string_origins: &BTreeMap<usize, u64>,
     ) -> Self {
         Self {
@@ -3327,6 +3335,7 @@ impl<'a> FunctionLowerer<'a> {
             local_registers: BTreeMap::new(),
             allocation_origins,
             compound_origins: compound_origins.clone(),
+            dynamic_origins: dynamic_origins.clone(),
             compound_scopes: BTreeMap::new(),
             string_origins: string_origins.clone(),
             blocks: Vec::new(),
@@ -8044,12 +8053,13 @@ impl<'a> FunctionLowerer<'a> {
                 self.lower_ternary(condition, then_value, else_value, state)
             }
             CHirExpr::Elvis(operand, fallback, _) => self.lower_elvis(operand, fallback, state),
-            CHirExpr::Call(callee, arguments, span) => self
-                .emit_call(callee, arguments, *span, state)?
-                .ok_or(LowerError::UnsupportedExpression {
-                    span: *span,
-                    feature: "void call used as a scalar expression",
-                }),
+            CHirExpr::Call(_, _, span) => {
+                self.emit_call(expression, state)?
+                    .ok_or(LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "void call used as a scalar expression",
+                    })
+            }
             CHirExpr::CheckedArithmetic {
                 op,
                 lhs,
@@ -9880,11 +9890,47 @@ impl<'a> FunctionLowerer<'a> {
 
     fn emit_call(
         &mut self,
-        callee: &'a CHirExpr<'a>,
-        arguments: &'a [&'a CHirExpr<'a>],
-        span: SourceSpan,
+        expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
+        let CHirExpr::Call(callee, arguments, span) = expression else {
+            unreachable!("call lowering receives a call expression")
+        };
+        let span = *span;
+        if let Some(size) = self.unit.stack_allocation_size(expression) {
+            let size = self.lower_expr(size, state)?;
+            let size = self.cast(size, CIntegerType::ULONG, state)?;
+            let origin = *self
+                .dynamic_origins
+                .get(&(expression as *const CHirExpr<'_> as usize))
+                .ok_or(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "dynamic allocation has no origin",
+                })?;
+            let mem_in = self.token(state, EnvKey::Memory)?.value;
+            let world_in = self.token(state, EnvKey::World)?.value;
+            let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+            let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+            let world_out = self.fresh_value(EvoIRType::World);
+            self.emit(
+                state,
+                Inst::DynamicAlloca {
+                    result: result.clone(),
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    origin,
+                    size: size.value,
+                    align: 16,
+                },
+            )?;
+            self.replace_effect_tokens(state, mem_out, Some(world_out));
+            return Ok(Some(ExprValue {
+                value: result,
+                integer: CIntegerType::ULONG,
+            }));
+        }
         let direct =
             match callee {
                 CHirExpr::Ident {
@@ -9923,7 +9969,10 @@ impl<'a> FunctionLowerer<'a> {
                                 return Ok(None);
                             }
                             "alloca" => {
-                                return Err(LowerError::DynamicStackAllocation { span });
+                                return Err(LowerError::UnsupportedExpression {
+                                    span,
+                                    feature: "malformed dynamic allocation call",
+                                });
                             }
                             _ => {}
                         }
@@ -10279,8 +10328,8 @@ impl<'a> FunctionLowerer<'a> {
             } => {
                 self.lower_varargs(*op, first, *second, *requested_ty, *span, &mut state)?;
             }
-            CHirExpr::Call(callee, arguments, span) => {
-                let _ = self.emit_call(callee, arguments, *span, &mut state)?;
+            CHirExpr::Call(..) => {
+                let _ = self.emit_call(expression, &mut state)?;
             }
             CHirExpr::Comma(left, right, _) | CHirExpr::Binary(BinaryOp::Comma, left, right, _) => {
                 let flow = self.lower_discarded_flow(left, state)?;
@@ -12697,6 +12746,15 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_out,
             ..
         } => vec![result, mem_in, world_in, mem_out, world_out],
+        Inst::DynamicAlloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            size,
+            ..
+        } => vec![result, mem_in, world_in, mem_out, world_out, size],
         Inst::LifetimeEnd {
             mem_in,
             world_in,

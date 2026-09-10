@@ -7,5 +7,14 @@ clang-19 O0: compile=0 run=0
 clang-19 O2: compile=0 run=0
 Checks: once-only size evaluation; survival beyond the allocating inner block;
 simultaneous allocations across a twelve-argument call; a 64-byte-aligned fixed
-object; distinct loop allocations; recursive frame isolation.
+object; distinct loop allocations; recursive frame isolation; variadic register
+and stack arguments consumed after dynamic allocation. All four executions above
+were repeated with the variadic case included.
 These are bounded reference probes, not a full campaign or stack-overflow test.
+
+Subject: target/tailored/debug/evocc --emit=asm
+         --target=aarch64-unknown-linux-gnu dynamic-stack-objects.c
+Link/run: gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject
+          clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject
+gcc-14 subject exit=0
+clang-19 subject exit=0

@@ -488,6 +488,12 @@ fn inst_operands(instruction: &Inst) -> Vec<&Value> {
         Inst::Alloca {
             mem_in, world_in, ..
         } => vec![mem_in, world_in],
+        Inst::DynamicAlloca {
+            mem_in,
+            world_in,
+            size,
+            ..
+        } => vec![mem_in, world_in, size],
         Inst::LifetimeEnd {
             mem_in,
             world_in,

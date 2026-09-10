@@ -590,7 +590,7 @@ fn begin_frame(
         block
             .insts
             .iter()
-            .any(|inst| matches!(inst, MInst::FrameSlot { .. }))
+            .any(|inst| matches!(inst, MInst::FrameSlot { .. } | MInst::StackAlloc { .. }))
     });
     if !needs {
         return Ok((None, None));
@@ -934,11 +934,16 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             write(frame, *dst, value);
         }
         MInst::FrameSlot {
-            dst,
-            origin,
-            size,
-            align,
+            dst, origin, align, ..
+        }
+        | MInst::StackAlloc {
+            dst, origin, align, ..
         } => {
+            let size = match inst {
+                MInst::FrameSlot { size, .. } => *size,
+                MInst::StackAlloc { size, .. } => read_bits(frame, *size)?,
+                _ => unreachable!("automatic allocation"),
+            };
             let memory_frame = frame.memory_frame.ok_or_else(|| MirError::Invalid {
                 detail: "a frame slot outside a function frame".to_owned(),
             })?;
@@ -951,7 +956,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     memory_frame,
                     memory_scope,
                     *origin,
-                    AccessLayout::new(*size, *align),
+                    AccessLayout::new(size, *align),
                 )
                 .map_err(|error| memory_error(&error))?;
             state.memory = memory;

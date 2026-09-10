@@ -27,6 +27,14 @@ Order is by correctness first, then shared-path reach. Small independent
 wrong-result fixes precede changes that require new machine constraint plumbing.
 Only one heavyweight benchmark invocation runs at once.
 
+Current tailored builds use `CARGO_TARGET_DIR=target/tailored`, with unchanged
+debug/test profiles and `--locked --offline -j 1`. On 2026-09-10 the previous
+`target/frontend/debug/deps` contained 1,097,395 files; a one-second rustc
+sample showed dependency-directory enumeration/sorting, not a hung interpreter.
+The smaller five-test build took 15m27s there, while the fresh 75-test build
+completed in 28.61s. The old cache is untouched; no runner or timeout change
+was made, and these different commands are not a normalized speed benchmark.
+
 The user's 2026-09-10 follow-up authorizes implementing the PM-decided rules
 from the sealed probes without waiting for the missing body revisions.
 Record differences in Appendix D only; do not rewrite specification-body
@@ -193,6 +201,45 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Runtime-sized function-lifetime stack storage
+
+Tests-only `0e711af` compiled and failed on the missing dynamic allocation
+text form and two E3046 lowerings. `__builtin_alloca` now has an actual
+manifest site and once-evaluated byte-size operand, becomes `alloca.dynamic`
+with mem/world threading, and reaches a native `stack.alloc` operation.
+Both interpreters preserve objects beyond the allocating block and kill them
+at function return; bounds, initializedness and alignment errors remain active.
+Fixed frame slots and spills are addressed from the entry frame when dynamic
+storage moves sp, and each allocation keeps the outgoing argument area disjoint.
+
+One first rerun failed because the IR test tried to return an object pointer
+through the scalar public entry API. That test now returns only effect tokens
+and checks the actual object layout/lifetime in the outcome; the independent
+C test still returns a pointer through an internal call and asserts E3010.
+No interpreter API or validator was relaxed to make that test pass.
+
+Using the current target and flags above, `cargo test -p evocc-evoir --test
+day7_object_memory_red -p evocc-lower --test expression_value_flow --test
+compiler_hints -p evocc-mir --test section9_native_differential -p
+evocc-proofcheck --test pointer_memory_proof --no-fail-fast` passes 75 tests
+(3 + 64 + 2 + 4 + 2). `cargo test -p evocc-evoir --test section9_completeness
+-p evocc-mir --test section6_variadic_and_assembly --test section8_emission
+--test agreement_with_the_evoir_interpreter --no-fail-fast` passes another
+47 (1 + 6 + 12 + 28): 122 distinct tailored tests, no ignored cases.
+The new native check asserts real spills at 16/64/256-byte alignment and up
+to a 70KB fixed frame; the C fixture includes recursion, repeated allocation,
+a twelve-argument call and variadic register/stack arguments after allocation.
+
+Affected-library/bin and selected-test Clippy with `-D warnings`, fmt, Ruff,
+diff-check and the 44/44 instruction-shape audit pass. The randomized semantic
+gate target compiles (`cargo check -p evocc-randgate --test
+randomized_semantic_gate`), and `cargo build -p evocc` builds the debug CLI.
+Both sealed Linux toolchains link and execute the subject fixture, exit zero;
+all four reference runs also exit zero (`dynamic-stack-objects.out`).
+Ordinary-name `alloca` recognition in original `941202-1`, real VLA declarations,
+captured sizeof and scope reclamation remain separate work. No campaign count
+or whole VLA-family closure is claimed from this result.
 
 ### Array parameter bounds at definition entry
 

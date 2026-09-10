@@ -72,6 +72,15 @@ fn pointer_memory_lowering_replays_at_the_independent_proof_boundary() {
         "a.next = &b; b.value = 9; struct Node *node = &a; int *p = values; p++; ",
         "int selected = *p + node->next->value; return identity(selected); }",
     );
+    replays(source);
+}
+
+#[test]
+fn dynamic_allocation_size_survives_independent_reassembly() {
+    replays("int identity(unsigned long n) { int *p = __builtin_alloca(n + 0); *p = 17; return *p; } int main(void) { return identity(4); }");
+}
+
+fn replays(source: &str) {
     let arena = Arena::default();
     let unit = parse(source, &arena);
     let before = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())

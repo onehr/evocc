@@ -1208,7 +1208,7 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
             }
             slots
         }
-        MInst::Mov { dst, src } => {
+        MInst::Mov { dst, src } | MInst::StackAlloc { dst, size: src, .. } => {
             if definitions {
                 vec![dst]
             } else {

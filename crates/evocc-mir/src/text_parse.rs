@@ -911,6 +911,27 @@ fn parse_defining(
         scan.finish()?;
         return Ok(MInst::FrameAddress { dst, place });
     }
+    if mnemonic == "stack.alloc" {
+        let size = scan.use_of()?;
+        scan.expect(", [origin=")?;
+        let origin = scan
+            .take_while(|c| c.is_ascii_digit())
+            .parse()
+            .map_err(|_| "an origin is an unsigned decimal")?;
+        scan.expect(", align=")?;
+        let align = scan
+            .take_while(|c| c.is_ascii_digit())
+            .parse()
+            .map_err(|_| "an alignment is an unsigned decimal")?;
+        scan.expect("]")?;
+        scan.finish()?;
+        return Ok(MInst::StackAlloc {
+            dst,
+            size,
+            origin,
+            align,
+        });
+    }
     if mnemonic == "frame.slot" {
         scan.expect("[origin=")?;
         let origin: u64 = scan

@@ -569,6 +569,26 @@ impl FunctionRenderer {
                 layout.size_bytes,
                 layout.align_bytes
             ),
+            Inst::DynamicAlloca {
+                result,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                origin,
+                size,
+                align,
+            } => format!(
+                "({}, {}, {}) = alloca.dynamic {}, {}, {} [origin={}, align={}]",
+                render_value(result),
+                render_value(mem_out),
+                render_value(world_out),
+                render_value(mem_in),
+                render_value(world_in),
+                render_value(size),
+                origin,
+                align,
+            ),
             Inst::LifetimeEnd {
                 mem_in,
                 world_in,

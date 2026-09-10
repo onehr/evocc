@@ -195,6 +195,17 @@ fn dynamic_stack_objects_end_when_the_function_returns() {
 }
 
 #[test]
+fn dynamic_stack_objects_keep_initialization_bounds_and_alignment_checks() {
+    for (source, code) in [
+        ("int main(void) { unsigned char *p = __builtin_alloca(3); return p[3]; }", "E3011"),
+        ("int main(void) { unsigned char *p = __builtin_alloca(3); return p[0]; }", "E3001"),
+        ("int main(void) { unsigned char *p = __builtin_alloca(8); *(int *)(p+1) = 7; return 0; }", "E3012"),
+    ] {
+        evaluates(source, Some(code));
+    }
+}
+
+#[test]
 fn parameter_type_queries_keep_the_queried_symbol_identity() {
     agrees(concat!(
         "int f(int n __attribute__((unused)), ",

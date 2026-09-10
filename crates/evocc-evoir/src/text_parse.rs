@@ -1071,6 +1071,34 @@ fn parse_tuple_instruction(
     if rhs.starts_with("asm ") || rhs.starts_with("asm.goto ") {
         return parse_assembly(rhs, &result_ids, values);
     }
+    if let Some(rest) = rhs.strip_prefix("alloca.dynamic ") {
+        require_count(&result_ids, 3, "alloca.dynamic results")?;
+        let (operands, attributes) = split_attributes(rest)?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 3, "alloca.dynamic operands")?;
+        let fields = attributes.split(", ").collect::<Vec<_>>();
+        require_count(&fields, 2, "alloca.dynamic attributes")?;
+        return Ok(Inst::DynamicAlloca {
+            result: Value {
+                id: result_ids[0],
+                ty: EvoIRType::Ptr(AddressSpace::Generic),
+            },
+            mem_in: operands[0].clone(),
+            world_in: operands[1].clone(),
+            size: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[1],
+                ty: operands[0].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[2],
+                ty: EvoIRType::World,
+            },
+            origin: parse_named_u64(fields[0], "origin")?,
+            align: u32::try_from(parse_named_u64(fields[1], "align")?)
+                .map_err(|_| "allocation alignment exceeds u32")?,
+        });
+    }
     if let Some(rest) = rhs.strip_prefix("alloca ") {
         require_count(&result_ids, 3, "alloca results")?;
         let (operands, attributes) = split_attributes(rest)?;

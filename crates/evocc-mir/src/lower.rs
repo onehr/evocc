@@ -438,6 +438,7 @@ fn scan_inst(
         | Inst::FrameAddress { .. }
         | Inst::PtrOffset { .. }
         | Inst::Alloca { .. }
+        | Inst::DynamicAlloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }
         | Inst::AccessInBounds { .. }
@@ -2223,6 +2224,23 @@ fn lower_inst(
                 origin: *origin,
                 size: layout.size_bytes,
                 align: layout.align_bytes,
+            });
+            lowerer.bind(result, dst);
+        }
+        Inst::DynamicAlloca {
+            result,
+            origin,
+            size,
+            align,
+            ..
+        } => {
+            let dst = lowerer.fresh(RegClass::Gpr64);
+            let size = lowerer.reg(size)?;
+            insts.push(MInst::StackAlloc {
+                dst,
+                size,
+                origin: *origin,
+                align: *align,
             });
             lowerer.bind(result, dst);
         }
