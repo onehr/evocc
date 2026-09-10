@@ -89,6 +89,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let bound = match bound {
                     ArrayBound::Fixed(value) => format!("Constant({value})"),
                     ArrayBound::Variable => "Variable".to_owned(),
+                    ArrayBound::Captured(id) => format!("Captured({id})"),
                     ArrayBound::Unbounded => "Unbounded".to_owned(),
                 };
                 format!("array({bound},{})", self.type_fingerprint(*element))

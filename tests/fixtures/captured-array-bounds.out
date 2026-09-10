@@ -7,5 +7,18 @@ clang-19 O0 exit=0
 clang-19 O2 exit=0
 
 The fixture checks capture at declaration, repeated sizeof, a typedef chain,
-separate declarators, repeated activations, constant alignment and inline calls.
+separate declarators, repeated activations, constant alignment, inline calls,
+backward jumps, unevaluated operands and variable-bound type compatibility.
 It does not claim dynamic-object allocation or scope-reclamation coverage.
+
+Additional command: COMPILER -std=gnu11 -DCASE=N
+                    -c captured-array-bound-errors.c -o /tmp/errors.o
+gcc-14 CASE=1/2/3/4/5: rejected/rejected/rejected/rejected/rejected.
+clang-19 CASE=1/2/3/4/5: rejected/rejected/rejected/rejected/rejected.
+Cases 1-3 enter a variably modified type's scope without its declaration;
+case 4 has a noninteger bound; case 5 requires sizeof(VLA) to be an ICE.
+
+Subject: target/tailored/debug/evocc --emit=asm
+         --target=aarch64-unknown-linux-gnu captured-array-bounds.c
+Assembly linked/executed with gcc-14: exit 0.
+Assembly linked/executed with clang-19 -fno-integrated-as: exit 0.

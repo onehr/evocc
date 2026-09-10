@@ -136,6 +136,9 @@ impl Qualifiers {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ArrayBound {
     Fixed(u64),
+    /// The table-local identity of the compiler-owned object capturing an
+    /// evaluated bound. It is not a count or an integer constant expression.
+    Captured(u32),
     Variable,  // VLA
     Unbounded, // incomplete array `int a[]`
 }
@@ -754,8 +757,14 @@ impl TypeInterner {
             ) => {
                 self.compatible_with(*left_element, *right_element, false)
                     && (left_bound == right_bound
-                        || matches!(left_bound, ArrayBound::Unbounded)
-                        || matches!(right_bound, ArrayBound::Unbounded))
+                        || matches!(
+                            left_bound,
+                            ArrayBound::Unbounded | ArrayBound::Variable | ArrayBound::Captured(_)
+                        )
+                        || matches!(
+                            right_bound,
+                            ArrayBound::Unbounded | ArrayBound::Variable | ArrayBound::Captured(_)
+                        ))
             }
             (
                 TypeKind::Function {
@@ -1583,7 +1592,9 @@ impl<'a> LayoutContext<'a> {
                         .ok_or(LayoutError::ArithmeticOverflow)?;
                     Ok(TypeLayout::new(size, element.align_bytes))
                 }
-                ArrayBound::Variable => Err(LayoutError::VariableLengthArray(ty)),
+                ArrayBound::Variable | ArrayBound::Captured(_) => {
+                    Err(LayoutError::VariableLengthArray(ty))
+                }
                 ArrayBound::Unbounded => Err(LayoutError::IncompleteArray(ty)),
             },
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {

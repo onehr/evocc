@@ -1895,6 +1895,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // particular declarator belong to it alone.
         struct Pending<'arena> {
             declarator: ParsedDeclarator<'arena>,
+            captures: Vec<&'arena CHirDecl<'arena>>,
             full_type: TypeId,
             symbol: SymbolId,
             initializer: Option<ObjectInitializer<'arena>>,
@@ -1919,8 +1920,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declarator, so self-references in an initializer resolve to this
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
+            let captures = if storage == StorageClass::Typedef
+                && context != DeclarationContext::File
+                && !has_initializer
+            {
+                let captures = self.capture_array_bounds(&mut declarator.derived)?;
+                full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
+                full_type = self.apply_declaration_attributes(full_type, &mut attributes, true);
+                written = self.written_declarator(&declarator);
+                captures
+            } else {
+                Vec::new()
+            };
             if !has_initializer {
                 self.validate_variable_array_bounds(&declarator.derived, false);
+                if storage != StorageClass::Typedef
+                    && self.initialized_array_contains_vla(full_type)
+                {
+                    self.report("E2203", "variable-length-object", declarator.span);
+                }
             }
             if auto_type_span.is_some() && !has_initializer {
                 self.report("E2915", "auto-type-misuse", declarator.span);
@@ -2047,6 +2065,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             pending.push(Pending {
                 declarator,
+                captures,
                 full_type,
                 symbol,
                 initializer,
@@ -2145,6 +2164,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ));
         }
         for entry in pending {
+            declarations.extend(entry.captures);
             let declaration = if storage == StorageClass::Typedef {
                 CHirDecl::Typedef(TypedefDecl {
                     symbol: entry.symbol,
@@ -2383,7 +2403,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         match bound {
             ArrayBound::Fixed(_) => Some(target),
-            ArrayBound::Variable => unreachable!("VLA targets are rejected above"),
+            ArrayBound::Variable | ArrayBound::Captured(_) => {
+                unreachable!("VLA targets are rejected above")
+            }
             ArrayBound::Unbounded => {
                 let count = match written {
                     WrittenInitializer::Expression(CHirExpr::StringLit(literal, span)) => {
@@ -2512,7 +2534,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn initialized_array_contains_vla(&self, target: TypeId) -> bool {
         match self.types.get(target).map(|canonical| &canonical.kind) {
             Some(TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             }) => true,
             Some(TypeKind::Array { element, .. }) => self.initialized_array_contains_vla(*element),
@@ -3263,7 +3285,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ..
             } => {}
             TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             } => return Err(InitializerPreflightError::InvalidObject),
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
@@ -3377,7 +3399,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ..
             } => Ok(0),
             TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             } => Err(InitializerPreflightError::InvalidObject),
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
@@ -3799,7 +3821,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some(SubobjectStep::Field { .. }) => return None,
                 };
                 if matches!(bound, ArrayBound::Fixed(size) if index >= *size)
-                    || matches!(bound, ArrayBound::Variable)
+                    || matches!(bound, ArrayBound::Variable | ArrayBound::Captured(_))
                 {
                     return None;
                 }
@@ -4154,7 +4176,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ..
             } => Some(Vec::new()),
             TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             } => None,
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
@@ -4542,7 +4564,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut labels = HashMap::new();
         let mut gotos = Vec::new();
         let mut regions = Vec::new();
-        let mut next_region = 0_u32;
+        let is_variable = |ty| self.type_is_variably_modified(ty);
+        let mut next_region = JumpRegionContext {
+            is_variable: &is_variable,
+            next: 0,
+            variable: HashSet::new(),
+            switches: Vec::new(),
+            invalid_switch_entries: Vec::new(),
+        };
         collect_jump_regions_stmt(
             body,
             &mut regions,
@@ -4550,6 +4579,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             &mut labels,
             &mut gotos,
         );
+        if let Some(span) = next_region.invalid_switch_entries.first().copied() {
+            self.report("E2945", "jump-into-variable-type-scope", span);
+            return None;
+        }
         if let Some(reference) = gotos
             .iter()
             .find(|reference| !labels.contains_key(&reference.name))
@@ -4563,6 +4596,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .get(&reference.name)
                     .is_some_and(|target| !reference.regions.starts_with(target))
         }) {
+            if labels[&reference.name].iter().any(|region| {
+                next_region.variable.contains(region) && !reference.regions.contains(region)
+            }) {
+                self.report("E2945", "jump-into-variable-type-scope", reference.span);
+                return None;
+            }
             // Revision 1.9.12 makes the construct malformed but does not
             // assign a dedicated diagnostic. Keep the established generic
             // syntax diagnostic until that contract gap is adjudicated.
@@ -6661,6 +6700,103 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     // ── declarators ────────────────────────────────────────────────────
+
+    fn capture_array_bounds(
+        &mut self,
+        derived: &mut [DerivedDeclarator<'arena>],
+    ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        let mut captures = Vec::new();
+        for layer in derived {
+            let DerivedDeclarator::Array {
+                bound: bound @ ArrayBound::Variable,
+                expression: Some(expression),
+                span,
+                ..
+            } = layer
+            else {
+                continue;
+            };
+            if !self
+                .converted_expression_type(expression)
+                .is_some_and(|inferred| is_integer_class(self.operand_type_class(inferred.ty)))
+            {
+                self.report("E2923", "invalid-array-bound", expression.span());
+                return None;
+            }
+            let ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
+            let name = SpannedName {
+                spelling: format!("__evocc.extent.{}", self.symbols.len()),
+                span: *span,
+            };
+            let symbol = self.declare_symbol(
+                &name,
+                SymbolData::Object {
+                    storage: StorageClass::Auto,
+                },
+                ty,
+            );
+            let value = self.alloc_node(CHirExpr::Cast(ty, expression, *span));
+            let written = WrittenInitializer::Expression(value);
+            let plan = self.normalize_initializer_plan(ty, &written, false)?;
+            captures.push(self.alloc_node(CHirDecl::Object(ObjectDecl {
+                symbol,
+                name,
+                ty,
+                specifier: TypeSpecifier::Builtin { ty, span: *span },
+                written: WrittenDeclarator {
+                    layers: Vec::new(),
+                    span: *span,
+                },
+                storage: StorageClass::Auto,
+                initializer: Some(ObjectInitializer::new(written, plan)),
+                asm_label: None,
+                asm_label_span: None,
+                gnu_extension_spans: Vec::new(),
+                attributes: Vec::new(),
+                span: *span,
+            })));
+            *bound = ArrayBound::Captured(symbol.raw());
+        }
+        Some(captures)
+    }
+
+    /// Elaborate a size query to reads of the declaration's captured bounds,
+    /// never to reevaluation of their source expressions.
+    fn captured_size_expression(
+        &self,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let TypeKind::Array { element, bound } = &self.types.get(ty)?.kind else {
+            return TargetDataLayout::aarch64_unknown_linux_gnu()
+                .sizeof_type(&self.types, ty)
+                .ok()
+                .map(|size| self.size_literal(size, span));
+        };
+        let count = match bound {
+            ArrayBound::Fixed(count) => self.size_literal(*count, span),
+            ArrayBound::Captured(index) => {
+                let symbol = self
+                    .symbols
+                    .symbols_in_source_order()
+                    .get(*index as usize)?;
+                if symbol.kind() != SymbolKind::Object
+                    || !symbol.spelling().starts_with("__evocc.extent.")
+                {
+                    return None;
+                }
+                self.alloc_node(CHirExpr::Ident {
+                    symbol: symbol.id(),
+                    spelling: symbol.spelling().to_owned(),
+                    facts: self.facts_for_symbol(symbol.id()),
+                    span,
+                })
+            }
+            ArrayBound::Variable | ArrayBound::Unbounded => return None,
+        };
+        let stride = self.captured_size_expression(*element, span)?;
+        Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Mul, count, stride, span)))
+    }
 
     fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
         match self.eval_integer_constant_expression(expression) {
@@ -9139,7 +9275,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         match self.types.get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             }) => true,
             Some(TypeKind::Array { element, .. } | TypeKind::Pointer(element)) => {
@@ -10436,6 +10572,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let declaration = self.finish_tag_event(event, span, Vec::new());
                     self.side_declarations.push(declaration);
                 }
+                if self.initialized_array_contains_vla(ty) {
+                    if let Some(size) = self.captured_size_expression(ty, span) {
+                        return Some(size);
+                    }
+                }
                 return Some(self.alloc_node(CHirExpr::SizeOf(ty, span)));
             }
             let operand = self.parse_unary()?;
@@ -10445,6 +10586,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 None
             })?;
             let operand_ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+            if self.initialized_array_contains_vla(operand_ty) {
+                if let Some(size) = self.captured_size_expression(operand_ty, span) {
+                    return Some(size);
+                }
+            }
             return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, operand_ty, span)));
         }
 
@@ -12969,10 +13115,39 @@ struct JumpRegionReference {
     checks_region_entry: bool,
 }
 
+struct JumpRegionContext<'a> {
+    is_variable: &'a dyn Fn(TypeId) -> bool,
+    next: u32,
+    variable: HashSet<u32>,
+    switches: Vec<Vec<u32>>,
+    invalid_switch_entries: Vec<SourceSpan>,
+}
+
+impl JumpRegionContext<'_> {
+    fn fresh(&mut self, variable: bool) -> u32 {
+        let id = self.next;
+        self.next += 1;
+        if variable {
+            self.variable.insert(id);
+        }
+        id
+    }
+
+    fn check_switch_entry(&mut self, regions: &[u32], span: SourceSpan) {
+        if self.switches.last().is_some_and(|entry| {
+            regions
+                .iter()
+                .any(|region| self.variable.contains(region) && !entry.contains(region))
+        }) {
+            self.invalid_switch_entries.push(span);
+        }
+    }
+}
+
 fn collect_jump_regions_decl(
     declaration: &CHirDecl<'_>,
     regions: &mut Vec<u32>,
-    next_region: &mut u32,
+    next_region: &mut JumpRegionContext<'_>,
     labels: &mut HashMap<String, Vec<u32>>,
     gotos: &mut Vec<JumpRegionReference>,
 ) {
@@ -12988,12 +13163,20 @@ fn collect_jump_regions_decl(
         }
         CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) | CHirDecl::Function(_) => {}
     }
+    let ty = match declaration {
+        CHirDecl::Object(object) => Some(object.ty),
+        CHirDecl::Typedef(declaration) => Some(declaration.ty),
+        _ => None,
+    };
+    if ty.is_some_and(next_region.is_variable) {
+        regions.push(next_region.fresh(true));
+    }
 }
 
 fn collect_jump_regions_stmt(
     statement: &CHirStmt<'_>,
     regions: &mut Vec<u32>,
-    next_region: &mut u32,
+    next_region: &mut JumpRegionContext<'_>,
     labels: &mut HashMap<String, Vec<u32>>,
     gotos: &mut Vec<JumpRegionReference>,
 ) {
@@ -13019,13 +13202,23 @@ fn collect_jump_regions_stmt(
                 collect_jump_regions_stmt(else_statement, regions, next_region, labels, gotos);
             }
         }
-        CHirStmt::Switch(expression, body, _)
-        | CHirStmt::While(expression, body, _)
-        | CHirStmt::Case(expression, body, _) => {
+        CHirStmt::Switch(expression, body, _) => {
+            collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+            next_region.switches.push(regions.clone());
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+            next_region.switches.pop();
+        }
+        CHirStmt::While(expression, body, _) => {
             collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
         }
-        CHirStmt::CaseRange(first, last, body, _) => {
+        CHirStmt::Case(expression, body, span) => {
+            next_region.check_switch_entry(regions, *span);
+            collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::CaseRange(first, last, body, span) => {
+            next_region.check_switch_entry(regions, *span);
             collect_jump_regions_expr(first, regions, next_region, labels, gotos);
             collect_jump_regions_expr(last, regions, next_region, labels, gotos);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
@@ -13035,6 +13228,7 @@ fn collect_jump_regions_stmt(
             collect_jump_regions_expr(condition, regions, next_region, labels, gotos);
         }
         CHirStmt::For(initializer, condition, step, body, _) => {
+            let depth = regions.len();
             match initializer {
                 CHirForInit::Empty => {}
                 CHirForInit::Expression(expression) => {
@@ -13053,8 +13247,10 @@ fn collect_jump_regions_stmt(
                 collect_jump_regions_expr(step, regions, next_region, labels, gotos);
             }
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+            regions.truncate(depth);
         }
         CHirStmt::Compound(items, _) => {
+            let depth = regions.len();
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -13065,12 +13261,14 @@ fn collect_jump_regions_stmt(
                     }
                 }
             }
+            regions.truncate(depth);
         }
         CHirStmt::Label(label, body, _) => {
             labels.insert(label.spelling.clone(), regions.clone());
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
         }
-        CHirStmt::Default(body, _) => {
+        CHirStmt::Default(body, span) => {
+            next_region.check_switch_entry(regions, *span);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
         }
         CHirStmt::Goto(label, _) => gotos.push(JumpRegionReference {
@@ -13093,7 +13291,7 @@ fn collect_jump_regions_stmt(
 fn collect_jump_regions_expr(
     expression: &CHirExpr<'_>,
     regions: &mut Vec<u32>,
-    next_region: &mut u32,
+    next_region: &mut JumpRegionContext<'_>,
     labels: &mut HashMap<String, Vec<u32>>,
     gotos: &mut Vec<JumpRegionReference>,
 ) {
@@ -13170,8 +13368,7 @@ fn collect_jump_regions_expr(
             }
         }
         CHirExpr::StatementExpr { body, .. } => {
-            let region = *next_region;
-            *next_region = next_region.saturating_add(1);
+            let region = next_region.fresh(false);
             regions.push(region);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
             regions.pop();

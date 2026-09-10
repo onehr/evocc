@@ -43,6 +43,27 @@ fn variable_array_typedefs_reject_noninteger_bounds() {
 }
 
 #[test]
+fn jumps_cannot_bypass_a_variable_type_declaration() {
+    for source in [
+        "int f(int n){goto label; typedef int A[n]; label: return 0;}",
+        "int f(int n){goto label; {typedef int A[n]; label: return 0;}}",
+        "int f(int n){switch(n){typedef int A[n]; case 1:return 0;}return 0;}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45027);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let _unit = parser.parse_translation_unit_in(&arena);
+        assert!(
+            parser.had_error(),
+            "jump skipped a variably modified declaration: {source}"
+        );
+        assert_eq!(parser.diagnostic().unwrap().code, "E2945");
+    }
+}
+
+#[test]
 fn volatile_bit_fields_execute_and_keep_neighboring_bits() {
     agrees(include_str!(
         "../../../tests/fixtures/volatile-bit-fields.c"

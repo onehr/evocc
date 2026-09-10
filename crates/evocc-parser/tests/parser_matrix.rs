@@ -458,6 +458,7 @@ fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
             let bound = match bound {
                 ArrayBound::Fixed(value) => format!("fixed:{value}"),
                 ArrayBound::Variable => "variable".into(),
+                ArrayBound::Captured(id) => format!("captured({id})"),
                 ArrayBound::Unbounded => "unbounded".into(),
             };
             format!("array({bound},{})", canonical_type(*element, types))

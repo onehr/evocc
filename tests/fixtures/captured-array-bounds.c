@@ -4,6 +4,7 @@ static int bound(int n) { ++calls; return n; }
 static unsigned long sizes(int n) {
     typedef int A[bound(n)];
     typedef A B[2];
+    _Static_assert(__builtin_types_compatible_p(A, int[99]), "variable bound compatibility");
     unsigned long before = sizeof(A);
     n = 99;
     return before + sizeof(A) + sizeof(B) + __alignof__(A);
@@ -19,6 +20,17 @@ static __attribute__((always_inline)) inline unsigned long inlined(int n) {
     return sizeof(A) + n;
 }
 
+static int jump_out_and_reenter(int n) {
+    int count = 0;
+again:;
+    typedef int A[bound(n + count)];
+    if (sizeof(A) != (unsigned long)(n + count) * sizeof(int)) return 1;
+    if (++count < 2) goto again;
+    goto out;
+out:
+    switch (count) { case 2: return 0; default: return 2; }
+}
+
 int main(void) {
     int i;
     if (sizes(3) != 52 || calls != 1) return 1;
@@ -30,5 +42,7 @@ int main(void) {
     }
     if (calls != 6) return 5;
     if (inlined(2) != 19 || inlined(4) != 37) return 6;
+    if (jump_out_and_reenter(3) || calls != 8) return 7;
+    if (sizeof(({typedef int A[bound(20)]; 42;})) != 4 || calls != 8) return 8;
     return 0;
 }

@@ -128,6 +128,15 @@ fn block_scope_variable_length_array_is_rejected_without_an_initializer() {
 }
 
 #[test]
+fn captured_typedef_sizes_do_not_fabricate_dynamic_object_storage() {
+    rejects(
+        "int local(int bound) { typedef int A[bound]; A object; return 0; }",
+        "E2203",
+        "variable-length-object",
+    );
+}
+
+#[test]
 fn initialized_block_scope_variable_length_array_uses_the_canonical_message() {
     rejects(
         "int local(int bound) { int object[bound] = { 1 }; return 0; }\n",

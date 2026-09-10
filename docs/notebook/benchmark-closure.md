@@ -202,6 +202,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Captured array sizes and forbidden scope entry
+
+Tests-only `077e6c2` compiled with 64 existing passes and three E2203
+failures. Block-scope variable array typedefs now retain bound identities,
+initialize compiler-owned size objects once per reached declaration, and
+elaborate `sizeof` into reads of those objects. Distinct captured types do
+not merge their sizes; compatibility still follows element types when a
+bound is variable. Typedef chains, sequential declarators, repeated loops,
+backward jumps, inline substitution and unevaluated operands are covered.
+
+Two further tailored RED observations were repaired before committing:
+jumping over a variable typedef had been accepted, and comparing its type
+with a fixed-bound array incorrectly folded false. The existing jump-region
+walk now rejects direct/assembly-goto or switch entry with E2945; it still
+enforces statement-expression entry restrictions and permits exits/reentry
+through the declaration. The shared type comparison handles variable bounds.
+
+`cargo test -p evocc-lower --test expression_value_flow -p evocc-parser
+--test array_bound_validation --test parser_matrix --test gnu_typeof
+--test statement_expressions -p evocc-types --test target_data_layout
+--no-fail-fast` plus the final added array-refusal guard passes 119 distinct
+tests (68 + 13 + 2 + 17 + 7 + 12), zero failed or ignored, using the target
+and offline flags above. Affected library/test/example Clippy, fmt, Ruff,
+diff-check and the 44/44 shape audit pass. Four sealed reference executions
+and two subject Linux executions exit zero; both references reject all five
+negative cases (`captured-array-bounds.out`).
+This is a size-capture implementation, not whole VLA closure: actual dynamic
+objects, runtime strides, inline remapping of types carrying captures and
+scope-aware stack reclamation remain OPEN. The existing E2203 storage and
+E2904 variably modified typeof boundaries are retained rather than replaced
+by a fabricated fixed layout. No full campaign or milestone count changed.
+
 ### Ordinary stack-allocation binding
 
 Tests-only `3a90067` compiled with two semantic failures: an implicit GNU89

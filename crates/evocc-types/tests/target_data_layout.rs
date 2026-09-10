@@ -12,6 +12,34 @@ fn plain(kind: TypeKind) -> CanonicalType {
     }
 }
 
+#[test]
+fn captured_bounds_keep_identity_without_claiming_static_size() {
+    let mut types = TypeInterner::new();
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    let int = types.intern(plain(TypeKind::Int(IntRank::Int)));
+    let a = types.intern(plain(TypeKind::Array {
+        element: int,
+        bound: ArrayBound::Captured(7),
+    }));
+    let b = types.intern(plain(TypeKind::Array {
+        element: int,
+        bound: ArrayBound::Captured(8),
+    }));
+    let fixed = types.intern(plain(TypeKind::Array {
+        element: int,
+        bound: ArrayBound::Fixed(99),
+    }));
+    assert_ne!(a, b);
+    assert!(types.compatible(a, b));
+    assert!(types.compatible(a, fixed));
+    assert!(types.compatible(fixed, a));
+    assert_eq!(target.alignof_type(&types, a), Ok(4));
+    assert_eq!(
+        target.sizeof_type(&types, a),
+        Err(LayoutError::VariableLengthArray(a))
+    );
+}
+
 fn field(name: Option<&str>, ty: evocc_types::TypeId) -> RecordField {
     RecordField {
         layout: Default::default(),

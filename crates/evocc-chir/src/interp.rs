@@ -5704,7 +5704,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ..
             } => Ok(()),
             TypeKind::Array {
-                bound: ArrayBound::Variable,
+                bound: ArrayBound::Variable | ArrayBound::Captured(_),
                 ..
             }
             | TypeKind::Void

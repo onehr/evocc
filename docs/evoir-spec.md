@@ -6783,3 +6783,10 @@ With standard builtin recognition enabled, an externally linked `alloca` with th
 `-fno-builtin` disables this ordinary-name recognition, not the explicit builtin, and a same-named static function remains an ordinary function.
 `tests/fixtures/dynamic-stack-names.c` and its `.out` record GCC-14/Clang-19 O0/O2 agreement for these forms and disagreement for an externally defined or assembly-renamed `alloca`, so a recognized call with either conflicting binding reports E2944 `ordinary-builtin-binding-conflict`, including when the definition follows the call.
 This supersedes only the earlier blanket statement that every user-defined `alloca` is unaffected; it targets original torture `941202-1`, and focused execution does not change the frozen campaign counts.
+
+### Captured variable array bounds
+
+Per reviewed S02/S03, a block-scope variable array typedef evaluates each written bound once at its declaration, retains a distinct compiler-owned size object for that bound, and answers later `sizeof` queries from the captured values, including typedef chains, multiple declarators and repeated activations; these sizes are not integer constant expressions, while alignment remains an element-type query.
+The canonical array bound carries the capture's semantic object identity rather than a placeholder count, so different captures stay distinct but a variable bound does not by itself make compatible element types incompatible; size elaboration uses ordinary C-HIR reads and arithmetic, preserving ordinary inline symbol substitution.
+Entering the scope of a variably modified declaration without passing its declaration, by direct/assembly goto or switch dispatch, reports E2945 `jump-into-variable-type-scope`; noninteger bounds retain E2923 and contexts requiring an ICE retain their own diagnostic.
+The four sealed executions of `tests/fixtures/captured-array-bounds.c` agree, and both compilers reject all five `captured-array-bound-errors.c` cases (`captured-array-bounds.out`); this size-capture slice does not yet admit actual VLA objects, variably modified typeof operands or claim their scope reclamation implemented.
