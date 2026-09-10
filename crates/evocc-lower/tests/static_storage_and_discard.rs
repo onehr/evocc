@@ -63,6 +63,16 @@ fn file_definitions_reuse_symbols_first_declared_inside_functions() {
 }
 
 #[test]
+fn wide_field_consensus_preserves_values_and_neighboring_bits() {
+    check(
+        include_str!("../../../tests/fixtures/wide-field-consensus.c"),
+        0,
+    );
+    check("struct S{unsigned long long x:35;};int main(void){struct S s={0};return (s.x-2)<0 || !((s.x+1)>=0) || 0>(s.x*2) || !(0<=(s.x^1));}", 0);
+    check("struct S{unsigned long long x:35;};int calls;int bump(void){++calls;return 2;}int main(void){struct S s={0};return (s.x-bump())<0 || calls!=1;}", 0);
+}
+
+#[test]
 fn expression_scopes_keep_their_static_objects_in_the_module() {
     for source in [
         "int f(void){if(({static int n=0; ++n;})) return 7;return 0;} int main(void){return f()!=7 || f()!=7;}",

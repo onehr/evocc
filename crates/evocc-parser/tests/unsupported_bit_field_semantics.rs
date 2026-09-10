@@ -19,6 +19,47 @@ fn diagnostic(source: &str) -> Option<(String, String)> {
 }
 
 #[test]
+fn consensus_wide_field_consumers_are_admitted() {
+    let source = include_str!("../../../tests/fixtures/wide-field-consensus.c");
+    assert_eq!(diagnostic(source), None);
+}
+
+#[test]
+fn unsigned_sign_comparisons_do_not_observe_the_disputed_precision() {
+    for expression in ["(s.x-2)<0", "(s.x+1)>=0", "0>(s.x*2)", "0<=(s.x^1)"] {
+        let source = format!("struct S {{unsigned long long x:35;}}; int f(void){{struct S s={{0}}; return {expression};}}");
+        assert_eq!(diagnostic(&source), None, "{source}");
+    }
+}
+
+#[test]
+fn nested_precision_conflicts_remain_explicit() {
+    for expression in [
+        "s.x << 1UL",
+        "+s.x + 1",
+        "(s.x >> 0) + 1",
+        "(c ? s.x : 0) + 1",
+        "(s.x ?: 0) + 1",
+        "(s.x += 0) + 1",
+        "s.x++ + 1",
+        "(0, s.x) + 1",
+        "(s.x+1)==0",
+        "(s.x+1)>0",
+        "((s.x+1)<0)+~s.x",
+        "c ? s.x : -1",
+        "s.x /= -1",
+        "s.x %= -1",
+    ] {
+        let source = format!("struct S {{unsigned long x:40;}}; unsigned long f(int c){{struct S s={{0xffffffffffUL}}; return {expression};}}");
+        assert_eq!(
+            diagnostic(&source).map(|d| d.0),
+            Some("E2939".into()),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn wide_field_arithmetic_names_the_unsupported_promotion() {
     for sign in ["signed", "unsigned"] {
         for expression in [
