@@ -24,4 +24,12 @@ union value f(void) { return (union value)7; }
 #elif CASE == 8
 union value { int member : 32; };
 union value f(void) { return (union value)7; }
+#elif CASE == 9
+union value { int member; };
+int f(void);
+union value saved = (union value)f();
+#elif CASE == 10
+union value { int member; };
+int f(void);
+void g(void) { static union value saved = (union value)f(); }
 #endif

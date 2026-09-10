@@ -6669,6 +6669,13 @@ Lowering retains the existing aggregate address-and-copy representation and pres
 Both sealed compilers at O0/O2 execute `forms.c` and reject `distinct.c` in `.evidence/builtin-probes/20260909-record-casts/`, with the exact outcomes in `results.txt`.
 No instruction or diagnostic is added; original c-testsuite `00216` reaches this missing lowering after its flexible initializer is repaired, and its full replay remains required.
 
+### Union member casts (2026-09-10 authorization)
+
+A GNU cast to a union may construct a value from a compatible member type, ignoring only top-level qualifiers and applying ordinary array/function decay: the operand is evaluated once, the result is not an lvalue, and an initializer context still requires the member's actual value to be constant when storage is static.
+The checked member initialization reuses existing allocation, copy and call representations; E2942 (`incompatible-union-cast`) rejects a missing compatible member rather than silently applying an assignment conversion, reinterpreting another tag, or discarding nested pointer qualifiers.
+Both sealed GCC-14 and Clang-19 execute `tests/fixtures/union-member-casts.c` at O0/O2 with exit zero; `union-member-cast-errors.c` cases 1–6 and 9–10 are rejected by both, case 8's full-width bit-field is accepted by both, and case 7's narrow bit-field conflicts (GCC rejects, Clang accepts) and is refused by the profile.
+No IR instruction is added; the original `960416-1` refusal in torture `20260909T215349Z` motivates this rule, while original-program replay remains deferred to the final campaign.
+
 ### Extension prefixes on expressions
 
 One or more `__extension__` prefixes on an expression leave its type, value and operand evaluation unchanged, including in a constant-expression context and a for-initializer expression.

@@ -194,6 +194,30 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Union member values and static initializer dependencies
+
+Tests-only `b589d6f` records three semantic failures and zero build errors.
+Member casts now select an actually compatible member and reuse its checked
+initializer, keeping an outer rvalue cast instead of inventing another IR
+representation. E2942 rejects incompatible types and the measured narrow
+bit-field conflict; static member values still require constant initialization.
+The C-HIR static dependency closure now visits aggregate-copy expressions as
+well as scalar stores, including ordinary nested compound initializers.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser --test
+aggregate_copies -p evocc-lower --test record_call_abi --test
+static_storage_and_discard --test relocations_and_addresses --locked
+--offline --no-fail-fast -j 1` passes 61 tests. `cargo test -p evocc-chir
+--lib --locked --offline -j 1` passes another 41, including deep initializer
+and fuel checks: 102 distinct tests, zero failed or ignored. `cargo clippy
+-p evocc-parser -p evocc-chir -p evocc-lower --lib --locked --offline -j 1
+-- -D warnings`, fmt, Ruff and diff-check pass.
+The expanded `tests/fixtures/union-member-casts.c` executes with zero exits
+under sealed GCC-14 and Clang-19 at O0/O2; fresh debug subject assembly also
+links and executes with zero exits through both toolchains (Clang uses GNU
+`as`). Original torture and milestone results remain at their measured
+campaign values; this is local verification, not campaign closure.
+
 ### Zero-byte storage and empty record arguments
 
 Tests-only `8254d99` records five semantic failures, zero build errors.

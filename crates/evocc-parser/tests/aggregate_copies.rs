@@ -49,10 +49,22 @@ fn rejects(source: &str, code: &str) {
 #[test]
 fn member_type_union_casts_are_values_with_checked_initializers() {
     accepts(include_str!("../../../tests/fixtures/union-member-casts.c"));
+    accepts("union value{int member:32;};union value f(void){return (union value)7;}");
+    accepts("union value{int member;};int f(void);_Static_assert(sizeof((union value)f())==4,\"unevaluated\");");
     rejects(
         "union value { int member; }; int f(void){((union value)1).member=2;return 0;}",
         "E2101",
     );
+}
+
+#[test]
+fn static_union_member_casts_cannot_hide_a_nonconstant_initializer() {
+    for source in [
+        "union value{int member;};int f(void);union value saved=(union value)f();",
+        "union value{int member;};int f(void);void g(void){static union value saved=(union value)f();}",
+    ] {
+        rejects(source, "E2208");
+    }
 }
 
 #[test]

@@ -8739,11 +8739,7 @@ fn reachable_memory_requirements(
                 continue;
             };
             let mut referenced = ReferencedSymbols::default();
-            for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
-                    collect_expression_symbols(value, &mut referenced);
-                }
-            }
+            collect_initializer_symbols(initializer.plan(), &mut referenced);
             classify_referenced_symbols(
                 unit,
                 linkage,
@@ -8870,6 +8866,19 @@ fn push_static_initializer_children<'arena>(
     }
 }
 
+fn collect_initializer_symbols<'arena>(
+    plan: &crate::InitPlan<'arena>,
+    output: &mut ReferencedSymbols,
+) {
+    for action in plan.actions() {
+        if let InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } =
+            action
+        {
+            collect_expression_symbols(value, output);
+        }
+    }
+}
+
 fn collect_declaration_symbols<'arena>(
     declaration: &'arena CHirDecl<'arena>,
     output: &mut ReferencedSymbols,
@@ -8878,11 +8887,7 @@ fn collect_declaration_symbols<'arena>(
         CHirDecl::Object(object) => {
             output.record(object.symbol);
             if let Some(initializer) = &object.initializer {
-                for action in initializer.plan().actions() {
-                    if let InitAction::StoreScalar { value, .. } = action {
-                        collect_expression_symbols(value, output);
-                    }
-                }
+                collect_initializer_symbols(initializer.plan(), output);
             }
         }
         CHirDecl::Function(function) => {
@@ -9031,11 +9036,7 @@ fn collect_expression_symbols<'arena>(
         }
         CHirExpr::StatementExpr { body, .. } => collect_statement_symbols(body, output),
         CHirExpr::CompoundLit(_, initializer, _) => {
-            for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
-                    collect_expression_symbols(value, output);
-                }
-            }
+            collect_initializer_symbols(initializer.plan(), output);
         }
         CHirExpr::Assign { target, value, .. } => {
             collect_expression_symbols(target, output);

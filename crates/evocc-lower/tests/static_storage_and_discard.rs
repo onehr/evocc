@@ -55,6 +55,17 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn aggregate_initializers_close_over_their_referenced_static_objects() {
+    for source in [
+        "static int x=17;struct S{int *p;};static struct S s=(struct S){&x};int main(void){return *s.p;}",
+        "static int x=17;struct S{int *p;};struct T{struct S s;};static struct T t=(struct T){(struct S){&x}};int main(void){return *t.s.p;}",
+        "static int x=17;struct S{int *p;};int main(void){struct S s=(struct S){&x};return *s.p;}",
+    ] {
+        check(source, 17);
+    }
+}
+
+#[test]
 fn zero_sized_objects_and_records_preserve_identity_and_call_values() {
     // Both halves of the mixed-link fixture are present in the parser test.
     let source = include_str!("../../../tests/fixtures/zero-sized-objects.c")

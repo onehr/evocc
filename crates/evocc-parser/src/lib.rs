@@ -2507,13 +2507,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn validate_static_initializer_plan(&mut self, plan: &InitPlan<'arena>) -> Option<()> {
-        for action in plan.actions() {
-            let InitAction::StoreScalar { value, .. } = action else {
-                continue;
-            };
-            if !self.static_initializer_expression_is_constant(value) {
-                self.report("E2208", "non-constant-static-initializer", value.span());
-                return None;
+        let mut pending = vec![plan];
+        while let Some(plan) = pending.pop() {
+            for action in plan.actions() {
+                match action {
+                    InitAction::StoreScalar { value, .. }
+                        if !self.static_initializer_expression_is_constant(value) =>
+                    {
+                        self.report("E2208", "non-constant-static-initializer", value.span());
+                        return None;
+                    }
+                    InitAction::CopyAggregate {
+                        value: CHirExpr::CompoundLit(_, initializer, _),
+                        ..
+                    } => pending.push(initializer.plan()),
+                    _ => {}
+                }
             }
         }
         Some(())
@@ -3497,6 +3506,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E2202", "invalid-initializer-type", expression.span());
                     return None;
                 }
+                // A resolved member cast remains an rvalue in the written
+                // expression, but its checked copy plan may directly name
+                // the temporary's initializer. The identity cast adds no
+                // evaluation and must not hide static initializer actions.
+                let expression = match expression {
+                    CHirExpr::Cast(cast, literal @ CHirExpr::CompoundLit(ty, _, _), _)
+                        if cast == ty =>
+                    {
+                        literal
+                    }
+                    _ => expression,
+                };
                 actions.push(InitAction::copy_aggregate(
                     path,
                     target,
@@ -10390,10 +10411,70 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
+            let operand = self.resolve_union_cast_operand(ty, operand, span)?;
             return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
         }
 
         self.parse_postfix()
+    }
+
+    /// GNU member casts construct a union value, not a reinterpretation of an
+    /// arbitrary operand. Reuse the checked initializer and allocation paths;
+    /// the surrounding Cast keeps the result non-addressable/non-modifiable.
+    fn resolve_union_cast_operand(
+        &mut self,
+        target: TypeId,
+        operand: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let TypeKind::Union(tag) = self.types.get(target)?.kind else {
+            return Some(operand);
+        };
+        let inferred = self.converted_expression_type(operand)?;
+        let source = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+        if self
+            .types
+            .compatible_ignoring_top_qualifiers(target, source)
+        {
+            return Some(operand);
+        }
+        let member = match &self.types.tag(tag)?.state {
+            TagState::Complete(TagDefinition::Union(fields)) => fields
+                .iter()
+                .enumerate()
+                .find(|(_, field)| {
+                    self.types
+                        .compatible_ignoring_top_qualifiers(field.ty, source)
+                        && field.bit_field.is_none_or(|bit| {
+                            self.canonical_integer_type(field.ty)
+                                .is_ok_and(|integer| bit.width_bits == u16::from(integer.bits()))
+                        })
+                })
+                .map(|(index, field)| (index, field.ty)),
+            _ => None,
+        };
+        let Some((index, ty)) = member else {
+            self.report("E2942", "incompatible-union-cast", span);
+            return None;
+        };
+        let written = WrittenInitializer::Expression(operand);
+        let mut actions = Vec::new();
+        self.normalize_initializer_value(
+            ty,
+            SubobjectPath::root().with_field(index),
+            &written,
+            &mut actions,
+        )?;
+        let plan = InitPlan::new(target, actions);
+        if plan.validate(&self.types).is_err() {
+            self.report("E2942", "incompatible-union-cast", span);
+            return None;
+        }
+        Some(self.alloc_node(CHirExpr::CompoundLit(
+            target,
+            ObjectInitializer::new(written, plan),
+            span,
+        )))
     }
 
     fn parse_postfix(&mut self) -> Option<&'arena CHirExpr<'arena>> {
