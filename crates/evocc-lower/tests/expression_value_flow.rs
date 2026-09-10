@@ -83,6 +83,22 @@ fn parameter_bounds_keep_scope_and_do_not_evaluate_sizeof_operands() {
 }
 
 #[test]
+fn parameter_type_queries_keep_the_queried_symbol_identity() {
+    agrees(concat!(
+        "int f(int n __attribute__((unused)), ",
+        "typeof(__builtin_choose_expr(__builtin_has_attribute(n, unused), 1L, 1)) x)",
+        "{return sizeof(x) != sizeof(long);}",
+        "int main(void){return f(1, 2);}",
+    ));
+    agrees(concat!(
+        "int f(int n __attribute__((unused)), int (*call)(",
+        "typeof(__builtin_choose_expr(__builtin_has_attribute(n, unused), 1L, 1)) x))",
+        "{return call(3);}",
+        "int g(long x){return x != 3;} int main(void){return f(1, g);}",
+    ));
+}
+
+#[test]
 fn declaration_specifier_order_preserves_storage_and_types() {
     agrees(include_str!(
         "../../../tests/fixtures/declaration-specifier-order.c"

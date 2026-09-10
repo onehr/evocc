@@ -237,6 +237,8 @@ struct TemporaryParameterShadow {
     scope: ScopeId,
     spelling: String,
     ty: TypeId,
+    storage: StorageClass,
+    attributes: Vec<Attribute>,
     span: SourceSpan,
 }
 
@@ -843,37 +845,67 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn install_temporary_parameter_shadows(&mut self) {
-        let mut installed = HashSet::new();
-        for shadow in self.temporary_parameter_shadows.clone() {
-            if shadow.scope != self.current_scope || !installed.insert(shadow.spelling.clone()) {
-                continue;
-            }
-            if self
-                .symbol_in_current_scope(&shadow.spelling)
-                .and_then(|symbol| self.symbols.symbol(symbol).ok())
-                .is_some_and(|symbol| {
-                    symbol.data()
-                        == SymbolData::Parameter {
-                            storage: StorageClass::None,
-                        }
-                        && symbol.ty() == shadow.ty
-                        && symbol.span() == shadow.span
-                })
-            {
-                continue;
-            }
-            self.symbols
-                .declare(
-                    shadow.scope,
-                    &shadow.spelling,
-                    SymbolData::Parameter {
-                        storage: StorageClass::None,
-                    },
-                    shadow.ty,
-                    shadow.span,
-                )
-                .expect("temporary parameter spellings are unique per probe");
+        let spellings = self
+            .temporary_parameter_shadows
+            .iter()
+            .map(|shadow| shadow.spelling.clone())
+            .collect::<Vec<_>>();
+        for spelling in spellings {
+            let _ = self.resolve_expression_symbol(&spelling);
         }
+    }
+
+    fn resolve_expression_symbol(&mut self, spelling: &str) -> Option<SymbolId> {
+        let declared = self
+            .symbols
+            .resolve(self.current_scope, spelling)
+            .expect("the parser current scope is always live");
+        if self.temporary_parameter_shadows.is_empty() {
+            return declared;
+        }
+        let declared_scope = declared.map(|symbol| {
+            self.symbols
+                .symbol(symbol)
+                .expect("resolved symbol belongs to the same table")
+                .scope()
+        });
+        let mut scope = Some(self.current_scope);
+        while let Some(current) = scope {
+            if declared_scope == Some(current) {
+                return declared;
+            }
+            if let Some(shadow) = self
+                .temporary_parameter_shadows
+                .iter()
+                .rev()
+                .find(|shadow| shadow.scope == current && shadow.spelling == spelling)
+                .cloned()
+            {
+                // A prior parameter already has scope, even though the full
+                // function declarator is not bound yet. Materialize it only
+                // when referenced, and let bind_parameters reuse its identity.
+                let symbol = self
+                    .symbols
+                    .declare(
+                        current,
+                        spelling,
+                        SymbolData::Parameter {
+                            storage: shadow.storage,
+                        },
+                        shadow.ty,
+                        shadow.span,
+                    )
+                    .expect("an unresolved parameter has no binding in its scope");
+                self.add_entity_attributes(symbol, &shadow.attributes);
+                return Some(symbol);
+            }
+            scope = self
+                .symbols
+                .scope(current)
+                .expect("the parser current scope ancestry is always live")
+                .parent();
+        }
+        declared
     }
 
     fn linked_symbol_in_parent_scopes(&self, spelling: &str) -> Option<SymbolId> {
@@ -4223,13 +4255,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 parameter.symbol = None;
                 continue;
             };
-            let symbol = self.declare_symbol(
-                name,
-                SymbolData::Parameter {
-                    storage: parameter.storage,
-                },
-                parameter.ty,
-            );
+            let data = SymbolData::Parameter {
+                storage: parameter.storage,
+            };
+            let symbol = self
+                .symbol_in_current_scope(&name.spelling)
+                .filter(|symbol| {
+                    self.symbols.symbol(*symbol).is_ok_and(|symbol| {
+                        symbol.data() == data
+                            && symbol.ty() == parameter.ty
+                            && symbol.span() == name.span
+                    })
+                })
+                .unwrap_or_else(|| self.declare_symbol(name, data, parameter.ty));
             self.add_entity_attributes(symbol, &parameter.attributes);
             parameter.symbol = Some(symbol);
         }
@@ -5173,9 +5211,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let (ty, tag_event) = self.parse_type_name_with_vla_error(Some(keyword.span))?;
                 (ty, TypeofOperand::TypeName, tag_event, None)
             } else {
+                // Prior parameters belong to the enclosing declarator, not
+                // to typeof's speculative scope. Keep their identities alive
+                // when rolling back declarations inside the operand.
+                self.install_temporary_parameter_shadows();
                 let transaction = self.symbols.begin_transaction();
                 let declaration_transaction = self.begin_declaration_transaction();
-                self.install_temporary_parameter_shadows();
                 let expression = self.parse_expression();
                 let inferred = expression.and_then(|expression| {
                     let inherited = match expression {
@@ -7137,7 +7178,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.validate_alignment_specifiers(ty, &parameter_attributes, false);
             let ty = self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
             params.push(ParameterDecl {
-                attributes: parameter_attributes,
+                attributes: parameter_attributes.clone(),
                 symbol: None,
                 name,
                 ty,
@@ -7152,6 +7193,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         scope: self.current_scope,
                         spelling,
                         ty,
+                        storage,
+                        attributes: parameter_attributes,
                         span,
                     });
             }
@@ -10246,16 +10289,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Identifier => {
                 let spelling = self.token_text(&tok).to_owned();
                 let resolved_spelling = implicit_function_name(&spelling).unwrap_or(&spelling);
-                let Some(symbol) = self
-                    .symbols
-                    .resolve(self.current_scope, resolved_spelling)
-                    .expect("the parser current scope is always live")
-                    .or_else(|| {
-                        (self.legacy_declarations && self.peek_kind() == Some(TokenKind::LParen))
+                let Some(symbol) =
+                    self.resolve_expression_symbol(resolved_spelling)
+                        .or_else(|| {
+                            (self.legacy_declarations
+                                && self.peek_kind() == Some(TokenKind::LParen))
                             .then(|| {
                                 self.declare_implicit_called_function(resolved_spelling, tok.span)
                             })
-                    })
+                        })
                 else {
                     self.report(
                         "E2001",

@@ -255,6 +255,10 @@ fn parameter_bounds_resolve_the_prior_parameter_type() {
         ("void f(long n, int data[sizeof(n++)]);", 8),
         ("void f(long n, int data[__alignof__(n)]);", 8),
         ("void f(int n[3], int data[sizeof(n)]);", 8),
+        (
+            "void f(int n __attribute__((unused)), int data[__builtin_has_attribute(n, unused)]);",
+            1,
+        ),
     ] {
         let arena = Arena::default();
         let unit = parse(source, &arena).unwrap_or_else(|error| panic!("{source}: {error}"));
@@ -306,6 +310,8 @@ fn parameter_bounds_shadow_outer_names_without_leaking() {
         "E2001",
     );
     rejects("void f(int n, int n[sizeof(n)]);", "E2002");
+    rejects("void f(register int n, int data[sizeof(&n)]);", "E2928");
+    rejects("void f(const int n, int data[sizeof(n++)]);", "E2101");
 }
 
 #[test]

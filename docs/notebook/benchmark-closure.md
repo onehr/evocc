@@ -111,9 +111,10 @@ their remaining closure work without creating a second set of measurements.
   and replay the original initializer/place failures (row 14).
 - [ ] Close the variable-length-object requirement under an authorized contract;
   a current profile refusal is not a non-FP pass (row 15).
-  The reduced `void f(int n, int values[n]);` also reports E2001 for the
-  earlier parameter instead of the existing E2203 profile boundary; its
-  parameter-name visibility defect remains separate from prototype `[*]`.
+  The independent prior-parameter visibility defect is locally repaired:
+  `void f(int n, int values[n]);` now reaches the existing E2203 profile
+  boundary instead of E2001. Dynamic bound execution and prototype `[*]`
+  remain separate unfinished work.
 - [ ] Reduce and repair every remaining non-FP diagnostic family, including
   builtins, ABI, initializers and the remaining TinyCC compile refusals
   (rows 11, 16).
@@ -185,6 +186,34 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Prior parameters in declaration expressions
+
+Tests-only commit `f4e0430` records four semantic failures and zero build
+errors: missing or incorrectly shadowed prior parameters in array bounds.
+The same defect silently selects the outer enumerator in
+`int matrix(long width, int (*data)[sizeof(width)])`: the old release's two
+interpreters return 16 for the reduced array-stride example, not 39.
+The shared expression-symbol lookup now materializes the actual prior
+parameter binding, including its storage and attributes, and final parameter
+binding reuses that identity. A typeof operand rolls back its own declarations
+without deleting parameter identities retained by builtin audit records.
+Two additional targeted failures pinned lost attribute metadata (0 rather
+than 1) and an inconsistent builtin record before their corresponding fixes.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser --test gnu_typeof
+--test day5_g2_bindings --test front_end_introspection -p evocc-lower
+--test expression_value_flow --test front_end_resolved_forms --locked
+--offline --no-fail-fast --quiet -j 1` passes 134 tests, zero failures or
+ignored tests. After extending the shared fixture with the array-stride
+case, the `expression_value_flow parameter_` filter passes all four selected
+tests through both interpreters. The tracked fixture
+`tests/fixtures/parameter-bound-scope.c` also exits zero with sealed GCC-14
+and Clang-19, each at `-std=gnu11 -O0` and `-O2`. Attribute-query execution
+was separately checked with GCC because Clang does not provide that builtin.
+Parser-library Clippy with `-D warnings`, workspace fmt, Ruff and diff-check
+pass. These are tailored results, not a workspace or benchmark closure;
+the original-program campaigns and their existing counts remain unchanged.
 
 ### Unevaluated type queries and constant statement branches
 
