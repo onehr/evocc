@@ -1,0 +1,12 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL parameter-bound-effects.c -o /tmp/parameters;
+         /tmp/parameters
+gcc-14 O0: compile=0 run=0
+gcc-14 O2: compile=0 run=0
+clang-19 O0: compile=0 run=0
+clang-19 O2: compile=0 run=0
+Both compilers warn that sizeof an array parameter is the adjusted pointer size.
+Clang also warns about the existing unnamed-definition-parameter extension.
+The fixture checks prototype_calls=0, entry_calls=8 and nested_calls=1,
+including recursive calls, an always-inline call and an unnamed array parameter.
+These are tailored reference executions, not original benchmark passes.

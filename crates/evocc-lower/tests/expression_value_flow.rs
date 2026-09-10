@@ -172,6 +172,13 @@ fn parameter_bounds_keep_scope_and_do_not_evaluate_sizeof_operands() {
 }
 
 #[test]
+fn parameter_bounds_execute_once_on_definition_entry_only() {
+    agrees(include_str!(
+        "../../../tests/fixtures/parameter-bound-effects.c"
+    ));
+}
+
+#[test]
 fn parameter_type_queries_keep_the_queried_symbol_identity() {
     agrees(concat!(
         "int f(int n __attribute__((unused)), ",

@@ -137,12 +137,13 @@ fn initialized_block_scope_variable_length_array_uses_the_canonical_message() {
 }
 
 #[test]
-fn parameter_variable_length_array_is_rejected() {
-    rejects(
+fn parameter_variable_bound_is_adjusted_to_a_pointer() {
+    let arena = Arena::default();
+    parse(
         "int global_bound; int parameter(int value[global_bound]);\n",
-        "E2203",
-        "variable-length-object",
-    );
+        &arena,
+    )
+    .expect("an array parameter creates a pointer, not a variable-length object");
 }
 
 #[test]

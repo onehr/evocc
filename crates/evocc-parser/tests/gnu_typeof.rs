@@ -315,13 +315,13 @@ fn parameter_bounds_shadow_outer_names_without_leaking() {
 }
 
 #[test]
-fn parameter_bounds_keep_the_variable_object_boundary_after_name_resolution() {
+fn parameter_bounds_adjust_after_name_resolution() {
     for source in [
         "void f(int n, int data[n]);",
         "void f(int n, int data[n]) {}",
         "void f(long n, void (*callback)(int data[n]));",
     ] {
-        rejects(source, "E2203");
+        accepts(source);
     }
 }
 
