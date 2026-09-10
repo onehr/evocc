@@ -1416,7 +1416,7 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
 /// `ptr<generic>`, a signature carries at most one `sret`, and the mark list is
 /// canonical, so it is empty or exactly as long as the parameter list.
 ///
-/// The size and alignment are a record type's, so neither is zero and the
+/// The size and alignment are a record type's; size may be zero, while the
 /// alignment is a power of two. The interpreters read none of this: they
 /// execute the pointer form, which the mark does not change.
 pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
@@ -1438,9 +1438,6 @@ pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Resul
             return Err(format!(
                 "parameter {index} carries a record mark but is not ptr<generic>"
             ));
-        }
-        if shape.size == 0 {
-            return Err(format!("parameter {index} marks a record of no bytes"));
         }
         if shape.align == 0 || !shape.align.is_power_of_two() {
             return Err(format!(
@@ -2587,6 +2584,11 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             layout,
         } => {
             expect_pointer(&pointer.ty, "access_in_bounds pointer", block)?;
+            if layout.size_bytes == 0 {
+                return Err(format!(
+                    "access_in_bounds in block {block} has invalid size/alignment {layout:?}"
+                ));
+            }
             validate_layout(*layout, "access_in_bounds", block)?;
             expect_day7_memory_tokens(mem_in, mem_out, "access_in_bounds", block)
         }
@@ -2754,7 +2756,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
 }
 
 fn validate_layout(layout: AccessLayout, operation: &str, block: BlockId) -> Result<(), String> {
-    if layout.size_bytes == 0 || layout.align_bytes == 0 || !layout.align_bytes.is_power_of_two() {
+    if layout.align_bytes == 0 || !layout.align_bytes.is_power_of_two() {
         return Err(format!(
             "{operation} in block {block} has invalid size/alignment {layout:?}"
         ));

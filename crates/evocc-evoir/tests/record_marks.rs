@@ -230,7 +230,6 @@ fn a_signature_carries_at_most_one_return_destination() {
 #[test]
 fn a_record_shape_is_a_real_record() {
     for (spelling, needle) in [
-        ("byval(0, 8)", "no bytes"),
         ("byval(8, 6)", "power of two"),
         ("byval(8, 0)", "power of two"),
     ] {

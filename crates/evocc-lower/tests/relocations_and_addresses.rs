@@ -70,6 +70,21 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
 }
 
 #[test]
+fn zero_length_object_accesses_still_report_bounds_and_lifetime() {
+    check("char a[0]; int main(void){return a[0];}", Err("E3011"), &[]);
+    check(
+        "int main(void){char a[0];a[0]=7;return 0;}",
+        Err("E3011"),
+        &[],
+    );
+    check(
+        "char *f(void){char a[0];return a;}int main(void){return *f();}",
+        Err("E3010"),
+        &[],
+    );
+}
+
+#[test]
 fn absolute_static_addresses_encode_bits_without_inventing_symbols() {
     let source = include_str!("../../../tests/fixtures/absolute-static-addresses.c");
     check(source, Ok(0), &["relocs=[(0, @object, 0)]"]);

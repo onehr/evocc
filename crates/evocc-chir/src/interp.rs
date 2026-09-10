@@ -1302,10 +1302,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let (layout, value) =
                         self.string_initializer_bytes(*destination_type, literal, span)?;
-                    self.memory = self
-                        .memory
-                        .store_bytes(address, layout, &value)
-                        .map_err(|error| self.memory_error(error, span))?;
+                    self.store_initializer_bytes(address, layout, &value, span)?;
                 }
                 InitAction::CopyAggregate { value, span, .. } => {
                     let CHirExpr::CompoundLit(ty, initializer, _) = value else {
@@ -1318,10 +1315,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let layout = self.access_layout(*ty, *span)?;
                     let zero = ByteSequence::try_from_bytes(vec![0; layout.size_bytes as usize])
                         .map_err(|error| self.memory_error(error, *span))?;
-                    self.memory = self
-                        .memory
-                        .store_bytes(address, layout, &zero)
-                        .map_err(|error| self.memory_error(error, *span))?;
+                    self.store_initializer_bytes(address, layout, &zero, *span)?;
                     self.initialize_static_plan(
                         MemoryBinding { address, ty: *ty },
                         initializer,
@@ -1330,6 +1324,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn store_initializer_bytes(
+        &mut self,
+        address: Pointer,
+        layout: AccessLayout,
+        bytes: &ByteSequence,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        if layout.size_bytes == 0 && bytes.is_empty() {
+            return self
+                .memory
+                .check_pointer(address)
+                .map_err(|error| self.memory_error(error, span));
+        }
+        self.memory = self
+            .memory
+            .store_bytes(address, layout, bytes)
+            .map_err(|error| self.memory_error(error, span))?;
         Ok(())
     }
 
@@ -2951,10 +2965,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let (layout, value) = self
                     .string_initializer_bytes(*destination_type, literal, *span)
                     .map_err(|_| invalid_initializer_target(target, *span))?;
-                self.memory = self
-                    .memory
-                    .store_bytes(address, layout, &value)
-                    .map_err(|error| self.memory_error(error, *span))?;
+                self.store_initializer_bytes(address, layout, &value, *span)?;
                 tasks.push(MachineTask::ContinueMemoryInitializer {
                     target,
                     index: index + 1,

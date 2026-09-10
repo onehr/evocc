@@ -992,6 +992,12 @@ fn zero_sized_aligned_arguments_do_not_skip_a_register() {
     let text = "func @after(%arg0: bits<64>, %arg1: ptr<generic> byval(0, 16), %arg2: bits<64>) -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<64>, %v1: ptr<generic>, %v2: bits<64>):\n    ret %v2\n}\n";
     let module = parse_section9_module(text.as_bytes()).unwrap();
     for target in [Target::Linux, Target::Darwin] {
+        let machine = evocc_mir::lower_module_for(target, &module, &|_| true).unwrap();
+        assert_eq!(
+            machine.functions[0].blocks[0].args.len(),
+            2,
+            "{target:?}: empty byval consumes no register or alignment filler"
+        );
         let assembly = compile_module_for(target, &module, &|_| true).unwrap();
         assert!(
             body_of(&assembly, "after").contains("mov x0, x1"),

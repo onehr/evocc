@@ -3985,7 +3985,11 @@ fn record_plan(
                 // round (measured: `after_one_16a16` takes `x1`:`x2` under
                 // clang and `x2`:`x3` under GCC-14,
                 // `.evidence/builtin-probes/20260906-b10/`).
-                if matches!(target, Target::Linux) && shape.align == 16 && next % 2 == 1 {
+                if shape.size != 0
+                    && matches!(target, Target::Linux)
+                    && shape.align == 16
+                    && next % 2 == 1
+                {
                     fillers += 1;
                 }
                 // AAPCS64 never splits a record between the last register and

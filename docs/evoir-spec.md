@@ -6139,6 +6139,13 @@ Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/absolute-static
 Static initialization preserves known symbolic pointer fragments and otherwise permits decoding a complete initialized pointer-sized representation as `ptr.from_int` would: no object or function becomes exposed merely by storing those bits, and ordinary runtime byte writes do not create this initializer marker.
 No instruction or diagnostic is added; the existing E3013/E3016 access/call failures remain, and original torture `20021010-2` plus the previously surveyed absolute-address kernel shapes still require final campaign replay.
 
+### Zero-byte objects and empty record arguments (2026-09-10 authorization)
+
+Per S09, an object may have size zero with a nonzero power-of-two alignment and a live allocation identity: zero-byte initialization/copy accesses no bytes, while an actual byte access still reports E3011 and an ended lifetime still reports E3010.
+Existing globals and `alloca` represent these objects, a zero-sized global has empty `bytes=` and `initialized=` fields, and `byval(0, A)`/`sret(0, A)` convey no argument/result bytes or alignment-filler registers.
+Both sealed GCC-14 and Clang-19 execute `tests/fixtures/zero-sized-objects.c` at O0/O2 with zero exits, and caller/callee cross-links in both reference directions agree; the fixture includes an aligned empty argument after one integer, nine integer arguments across the register/stack boundary, empty returns, and static/local empty initializers.
+No instruction or diagnostic is added, no equality between distinct zero-object addresses is promised, and the original-program gain remains unmeasured until the final campaign.
+
 ### Pending body revision: dynamic automatic objects
 
 The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.

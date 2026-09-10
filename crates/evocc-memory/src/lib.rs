@@ -2034,15 +2034,7 @@ impl MemoryState {
         owner: ObjectOwner,
         contents: AllocationContents<'_>,
     ) -> Result<(Self, Pointer), MemoryFault> {
-        if owner == ObjectOwner::External && layout.size_bytes == 0 {
-            if !layout.align_bytes.is_power_of_two() {
-                return Err(MemoryFault::InvalidAlignment {
-                    align_bytes: layout.align_bytes,
-                });
-            }
-        } else {
-            validate_access_layout(layout)?;
-        }
+        validate_object_layout(layout)?;
         if self
             .objects
             .values()
@@ -2363,7 +2355,14 @@ const fn is_valid_alignment(align_bytes: u32) -> bool {
 }
 
 fn validate_access_layout(layout: AccessLayout) -> Result<(), MemoryFault> {
-    if layout.size_bytes == 0 || layout.size_bytes > i64::MAX as u64 {
+    if layout.size_bytes == 0 {
+        return Err(MemoryFault::InvalidAccessSize { size_bytes: 0 });
+    }
+    validate_object_layout(layout)
+}
+
+fn validate_object_layout(layout: AccessLayout) -> Result<(), MemoryFault> {
+    if layout.size_bytes > i64::MAX as u64 {
         return Err(MemoryFault::InvalidAccessSize {
             size_bytes: layout.size_bytes,
         });

@@ -450,7 +450,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
     let align = u32::try_from(parse_named_u64(fields[6], "align")?)
         .map_err(|_| "global alignment exceeds u32".to_owned())?;
     let byte_text = parse_named(fields[7], "bytes")?;
-    if byte_text.is_empty() || byte_text.len() % 2 != 0 {
+    if (byte_text.is_empty() && size != 0) || byte_text.len() % 2 != 0 {
         return Err("global bytes must contain complete hexadecimal bytes".to_owned());
     }
     let mut bytes = Vec::with_capacity(byte_text.len() / 2);
@@ -586,7 +586,7 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
 /// signature carries "at most one `sret`".
 ///
 /// The size and alignment are a record's, so the alignment is a power of two
-/// and neither is zero; a mark list is canonical, so it is empty or exactly as
+/// and nonzero; the record may have zero bytes. A mark list is empty or exactly as
 /// long as the parameter list.
 fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
     if marks.is_empty() {
@@ -604,9 +604,6 @@ fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> 
             return Err(format!(
                 "parameter {index} carries a record mark but is not ptr<generic>"
             ));
-        }
-        if shape.size == 0 {
-            return Err(format!("parameter {index} marks a record of no bytes"));
         }
         if shape.align == 0 || !shape.align.is_power_of_two() {
             return Err(format!(

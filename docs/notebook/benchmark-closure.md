@@ -194,6 +194,35 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Zero-byte storage and empty record arguments
+
+Tests-only `8254d99` records five semantic failures, zero build errors.
+Object allocation now accepts zero bytes without making zero-sized memory
+accesses valid; empty initializers and copies preserve lifetime checks.
+The text reader accepts the renderer's empty byte payload only for size zero,
+and record marks retain their alignment checks while admitting empty records.
+Linux argument placement no longer inserts an alignment filler for an empty
+record. The strengthened MIR test checks the incoming argument count, not
+just an incidental `mov` that also appeared in the incorrect sequence.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-memory --lib --test
+empty_objects --locked --offline -j 1 --quiet` passes 31 tests. `cargo test
+-p evocc-lower --test static_storage_and_discard --test
+relocations_and_addresses -p evocc-evoir --test record_marks --test
+day7_object_memory_red -p evocc-mir --test section6_records --locked
+--offline --no-fail-fast -j 1 --quiet` passes 63: 94 distinct tailored tests
+in total, zero failed or ignored. The two interpreters agree on E3011 for
+reached byte accesses and E3010 for a dead zero-byte local.
+`cargo clippy -p evocc-memory -p evocc-chir -p evocc-evoir -p evocc-lower
+-p evocc-mir --lib --locked --offline -j 1 -- -D warnings`, fmt, Ruff and
+diff-check pass. A fresh debug driver emits the shared fixture with
+`--emit=asm --target=aarch64-unknown-linux-gnu`: both complete-subject native
+runs and all four `-DONLY_CALLER`/`-DONLY_CALLEE` mixed links with sealed
+GCC-14/Clang-19 exit zero. Clang uses GNU `as`; its existing address warnings
+and the assembler's zero-length `.space` warnings are not hidden as errors
+or claimed absent.
+The unchanged full-campaign counts remain the benchmark authority.
+
 ### Static absolute addresses without invented provenance
 
 Tests-only `0c9bc5f` records four semantic failures and zero build errors:
