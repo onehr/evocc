@@ -9,6 +9,13 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn variable_array_views_use_captured_strides_for_every_pointer_operation() {
+    agrees(include_str!(
+        "../../../tests/fixtures/captured-array-strides.c"
+    ));
+}
+
+#[test]
 fn variable_array_typedefs_capture_sizes_at_each_declaration() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-bounds.c"
