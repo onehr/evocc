@@ -61,6 +61,36 @@ fn emitted(target: Target) -> String {
 }
 
 #[test]
+fn ancestor_walks_have_bounded_emission_and_round_trip_machine_metadata() {
+    for depth in [1, 2, 16, 65535] {
+        let text = UNIT.replace("frame_address :", &format!("frame_address depth={depth} :"));
+        let module = parse_section9_module(text.as_bytes()).expect("ancestor frame syntax");
+        for target in [Target::Darwin, Target::Linux] {
+            let lowered = lower_module_for(target, &module, &|_| false).unwrap();
+            let machine = evocc_mir::render_module(&lowered);
+            assert!(
+                machine.contains(&format!("frame.address [fp_{depth}]")),
+                "{machine}"
+            );
+            assert_eq!(
+                evocc_mir::render_module(&evocc_mir::parse_module(&machine).unwrap()),
+                machine
+            );
+            let assembly = compile_module_for(target, &module, &|_| true).unwrap();
+            assert!(
+                assembly.len() < 5000,
+                "ancestor walks must not unroll the depth: {} bytes",
+                assembly.len()
+            );
+            assert!(
+                !assembly.contains("subs x16"),
+                "the walk must preserve condition flags"
+            );
+        }
+    }
+}
+
+#[test]
 fn each_form_lowers_to_one_frame_place_and_nothing_else() {
     let module = parse_section9_module(UNIT.as_bytes()).expect("the unit parses");
     let lowered = lower_module_for(Target::Darwin, &module, &|_| false)

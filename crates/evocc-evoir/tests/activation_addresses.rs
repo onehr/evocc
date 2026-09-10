@@ -85,6 +85,44 @@ fn interpret(text: &str) -> Vec<u64> {
 }
 
 #[test]
+fn ancestor_depth_is_canonical_metadata_and_preserves_result_validation() {
+    for depth in [1, 2, 16, 65535] {
+        let text = ROUND_TRIP.replace("frame_address :", &format!("frame_address depth={depth} :"));
+        let module = parse_section9_module(text.as_bytes()).expect("ancestor frame syntax");
+        assert_eq!(render_module(&module), text);
+        assert!(parse_section9_module(
+            text.replace("frame_address depth=", "frame_address depth=-")
+                .as_bytes()
+        )
+        .is_err());
+        assert!(parse_section9_module(
+            text.replace("frame_address depth=", "frame_address depth=0")
+                .as_bytes()
+        )
+        .is_err());
+        assert!(parse_section9_module(
+            text.replace(
+                &format!("frame_address depth={depth} : ptr<generic>"),
+                &format!("frame_address depth={depth} : ptr<stack>")
+            )
+            .as_bytes()
+        )
+        .is_err());
+    }
+    for invalid in ["0", "65536", "%v0", "1, 2"] {
+        assert!(parse_section9_module(
+            ROUND_TRIP
+                .replace(
+                    "frame_address :",
+                    &format!("frame_address depth={invalid} :")
+                )
+                .as_bytes()
+        )
+        .is_err());
+    }
+}
+
+#[test]
 fn both_forms_round_trip_through_section9() {
     let module = parse_section9_module(ROUND_TRIP.as_bytes()).expect("the unit parses");
     assert_eq!(render_module(&module), ROUND_TRIP);

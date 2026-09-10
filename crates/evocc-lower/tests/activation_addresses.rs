@@ -38,20 +38,47 @@ fn activation_addresses_lower_and_have_stable_nondereferenceable_identity() {
 }
 
 #[test]
-fn nonzero_frame_depth_remains_refused_after_parentheses() {
-    for source in [
-        "void *f(void){return __builtin_frame_address(1);}",
-        "void *f(void){return (__builtin_frame_address(2));}",
-    ] {
+fn ancestor_frames_lower_but_require_native_execution() {
+    for (argument, depth) in [("1", 1), ("2", 2), ("16", 16), ("0x100000001UL", 1)] {
+        let source = format!("int main(void){{return (__builtin_frame_address({argument}))==0;}}");
         let arena = Arena::default();
         let file = FileId::new(45021);
-        let mut lexer = Lexer::new(file, source);
+        let mut lexer = Lexer::new(file, &source);
         let tokens = std::iter::from_fn(|| lexer.next()).collect();
-        let mut parser = Parser::new(tokens, file, source);
+        let mut parser = Parser::new(tokens, file, &source);
         let unit = parser.parse_translation_unit_in(&arena);
         assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect("ancestor frame has native lowering");
+        let text = evocc_evoir::render_module(&module);
+        assert!(
+            text.contains(&format!("frame_address depth={depth} : ptr<generic>")),
+            "{text}"
+        );
+        let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+        let args = main
+            .params
+            .iter()
+            .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+            .collect::<Vec<_>>();
         assert_eq!(
-            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            evocc_evoir::interpret_module(
+                &module,
+                "main",
+                &args,
+                evocc_evoir::InterpreterLimits::new(1000)
+            )
+            .unwrap_err()
+            .code(),
+            "E3031"
+        );
+        let symbol = unit
+            .symbols()
+            .resolve(unit.symbols().file_scope(), "main")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            interp::interpret_scalar_function(&unit, symbol, interp::InterpreterLimits::new(1000))
                 .unwrap_err()
                 .code(),
             "E3031"

@@ -1,0 +1,25 @@
+Target: aarch64-linux-gnu, gnu11
+Runtime flags: -fno-omit-frame-pointer -fno-optimize-sibling-calls
+Compilers: gcc-14, clang-19 in evo-flight-lab:sealed
+
+ancestor-frame-addresses.c         GCC O0  GCC O2  Clang O0  Clang O2
+default (frame addresses)          exit 0  exit 0  exit 0    exit 0
+-DCHECK_RETURN_CHAIN               exit 3  exit 3  exit 0    exit 0
+
+ancestor-frame-operands.c -DCASE=N  GCC-14                  Clang-19
+1 return_address(-1)               accepts, constant zero  rejects range
+2 frame_address(-1)                accepts, current frame  rejects range
+3 return_address(0x100000001UL)     accepts, constant zero  accepts, caller LR
+4 frame_address(0x100000001UL)      accepts, one link       accepts, one link
+5 return_address(variable)         rejects                 rejects
+6 frame_address(variable)          rejects                 rejects
+7 frame_address(16)                accepts, 16 links       accepts, 16 links
+8 return_address(1)                accepts, constant zero  accepts, caller LR
+9 frame_address(1)                 accepts, one link       accepts, one link
+10 frame_address(65536)            accepts, 65536 links    rejects range
+11 return_address(0x100000000UL)    accepts, current LR     accepts, current LR
+
+Cases 3, 4 and 11 warn that unsigned long converts to unsigned int.
+Clang's reported depth range after that conversion is [0, 65535].
+Each compilation was bounded with timeout 5; no probe timed out.
+Assembly observations above are not executions of invalid or too-deep calls.

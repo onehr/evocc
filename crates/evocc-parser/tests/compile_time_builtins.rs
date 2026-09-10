@@ -316,7 +316,7 @@ fn builtin_return_address_accepts_only_constant_zero() {
 }
 
 #[test]
-fn builtin_frame_address_accepts_any_integer_constant_expression() {
+fn builtin_frame_address_converts_its_constant_depth_and_checks_the_target_range() {
     accepts(concat!(
         "void *zero(void) { return __builtin_frame_address(0); } ",
         "void *one(void) { return __builtin_frame_address(1); } ",
@@ -327,6 +327,14 @@ fn builtin_frame_address_accepts_any_integer_constant_expression() {
         "void *runtime_level(int level) { return __builtin_frame_address(level); }\n",
         "E2913",
     );
+    accepts("void *f(void){return __builtin_return_address(0x100000000UL);}");
+    accepts("void *f(void){return __builtin_frame_address(0x100000001UL);}");
+    for argument in ["-1", "65536"] {
+        rejects(
+            &format!("void *f(void){{return __builtin_frame_address({argument});}}"),
+            "E2913",
+        );
+    }
 }
 
 #[test]
