@@ -28,3 +28,12 @@ Additional command: COMPILER -std=gnu11 -O0 -DCASE=CASE
 Both compilers reject CASE=0 (implicit declaration); both compile and return 0
 for CASE=1 (extern prototype). GNU89's implicit builtin recognition must not
 silently admit an undeclared ordinary call in the GNU11 profile.
+
+Original-source tailored replay: gcc.c-torture/execute/941202-1.c, unchanged.
+Reference: COMPILER -std=gnu89 -OLEVEL /work/941202-1.c -o /tmp/reference
+gcc-14 O0/O2: exit 0/0; clang-19 O0/O2: exit 0/0 (legacy warnings retained).
+Subject: target/tailored/debug/evocc -std=gnu89 --emit=asm
+         --target=aarch64-unknown-linux-gnu ORIGINAL.c
+Assembly linked by gcc-14: exit 0.
+Assembly linked by clang-19 -fno-integrated-as: exit 0.
+Same sealed container and network isolation as above; no benchmark total changed.

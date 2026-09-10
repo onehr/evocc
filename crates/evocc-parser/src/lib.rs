@@ -226,6 +226,7 @@ struct EntityState {
 #[derive(Debug)]
 struct DeclarationTransaction {
     unprototyped_calls: usize,
+    standard_allocation_calls: usize,
     entity_undo: usize,
     external_entity_undo: usize,
     inherited_function_parameter_undo: usize,
@@ -282,6 +283,7 @@ pub struct Parser<'src, 'arena> {
     standard_builtins: bool,
     legacy_declarations: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
+    standard_allocation_calls: Vec<(SymbolId, SourceSpan)>,
     tokens: Vec<Token>,
     pos: usize,
     file: FileId,
@@ -499,6 +501,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             side_declarations: Vec::new(),
             builtin_declarations: Vec::new(),
             unprototyped_calls: Vec::new(),
+            standard_allocation_calls: Vec::new(),
             loop_depth: 0,
             current_function_parameters: None,
             profile_refusals: Vec::new(),
@@ -574,6 +577,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     break;
                 }
                 self.advance();
+            }
+        }
+        for (symbol, span) in std::mem::take(&mut self.standard_allocation_calls) {
+            if self
+                .entities
+                .get(&symbol)
+                .is_some_and(|state| state.has_definition || state.assembly_named)
+            {
+                self.report("E2944", "ordinary-builtin-binding-conflict", span);
             }
         }
         let definitions = decls
@@ -984,6 +996,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.declaration_transaction_depth += 1;
         DeclarationTransaction {
             unprototyped_calls: self.unprototyped_calls.len(),
+            standard_allocation_calls: self.standard_allocation_calls.len(),
             entity_undo: self.entity_undo.len(),
             external_entity_undo: self.external_entity_undo.len(),
             inherited_function_parameter_undo: self.inherited_function_parameter_undo.len(),
@@ -1017,6 +1030,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
         self.unprototyped_calls
             .truncate(transaction.unprototyped_calls);
+        self.standard_allocation_calls
+            .truncate(transaction.standard_allocation_calls);
         while self.entity_undo.len() > transaction.entity_undo {
             let (symbol, previous) = self.entity_undo.pop().expect("undo marker is bounded");
             match previous {
@@ -10675,6 +10690,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
+                    if let Some(symbol) = self.standard_allocation_target(expression) {
+                        self.standard_allocation_calls
+                            .push((symbol, expression.span()));
+                        expression = self.resolve_builtin_library_call(
+                            "__builtin_alloca",
+                            arguments,
+                            span,
+                            expression.span(),
+                        )?;
+                        continue;
+                    }
                     let Some(parameters) = parameters else {
                         self.report("E2937", "invalid-call-target", expression.span());
                         return None;
@@ -11406,6 +11432,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let close = self.advance().expect("peeked builtin closing parenthesis");
         let span = self.merge_span(keyword.span, close.span);
 
+        self.resolve_builtin_library_call(&builtin, arguments, span, keyword.span)
+    }
+
+    fn resolve_builtin_library_call(
+        &mut self,
+        builtin: &str,
+        mut arguments: Vec<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+        designator_span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
         if builtin == "__builtin_strlen" && arguments.len() == 1 {
             if let CHirExpr::StringLit(literal, _) = arguments[0] {
                 let length = literal.explicit_unit_count().or_else(|| {
@@ -11417,10 +11453,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
 
         let (external_name, return_ty, parameter_types) =
-            self.builtin_library_prototype(&builtin, keyword.span)?;
+            self.builtin_library_prototype(builtin, designator_span)?;
         let variable_prefetch_arity = builtin == "__builtin_prefetch";
         let variadic_library = matches!(
-            builtin.as_str(),
+            builtin,
             "__builtin_printf" | "__builtin_sprintf" | "__builtin_snprintf"
         );
         let valid_arity = if variable_prefetch_arity {
@@ -11431,7 +11467,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             arguments.len() == parameter_types.len()
         };
         if !valid_arity {
-            self.report("E2909", "builtin-arity", keyword.span);
+            self.report("E2909", "builtin-arity", designator_span);
             return None;
         }
         if variable_prefetch_arity
@@ -11492,7 +11528,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             Qualifiers::default(),
         );
         if builtin == "__builtin_isdigit" {
-            self.validate_builtin_library_declaration(&external_name, function_ty, keyword.span)?;
+            self.validate_builtin_library_declaration(
+                &external_name,
+                function_ty,
+                designator_span,
+            )?;
             // This GCC builtin is an integer operation, not a dependency on
             // libc's isdigit symbol. The argument appears exactly once.
             let converted = self.alloc_node(CHirExpr::Cast(return_ty, arguments[0], span));
@@ -11523,48 +11563,80 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Le, offset, nine, span)));
         }
         if matches!(
-            builtin.as_str(),
+            builtin,
             "__builtin_abs" | "__builtin_labs" | "__builtin_llabs"
         ) {
-            self.validate_builtin_library_declaration(&external_name, function_ty, keyword.span)?;
+            self.validate_builtin_library_declaration(
+                &external_name,
+                function_ty,
+                designator_span,
+            )?;
             return self.resolve_absolute_builtin(return_ty, &arguments, span);
         }
         let symbol = self.resolve_builtin_library_function(
             &external_name,
             function_ty,
             return_ty,
-            keyword.span,
+            designator_span,
         )?;
         let facts = self.facts_for_symbol(symbol);
         let callee = self.alloc_node(CHirExpr::Ident {
             symbol,
             spelling: external_name,
             facts,
-            span: keyword.span,
+            span: designator_span,
         });
         Some(self.alloc_node(CHirExpr::Call(callee, arguments, span)))
     }
 
-    fn standard_absolute_type(&mut self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+    fn standard_function_symbol(&self, expression: &CHirExpr<'_>) -> Option<SymbolId> {
         if !self.standard_builtins {
             return None;
         }
-        let CHirExpr::Ident {
-            symbol, spelling, ..
-        } = expression
-        else {
+        let CHirExpr::Ident { symbol, .. } = expression else {
             return None;
         };
         let state = self.entities.get(symbol)?;
-        if state.linkage != EntityLinkage::External || state.assembly_named {
+        if state.linkage != EntityLinkage::External {
             return None;
         }
         let declaration = self.symbols.symbol(*symbol).ok()?;
         if declaration.kind() != SymbolKind::Function {
             return None;
         }
+        Some(*symbol)
+    }
+
+    fn standard_allocation_target(&mut self, expression: &CHirExpr<'_>) -> Option<SymbolId> {
+        let symbol = self.standard_function_symbol(expression)?;
+        let declaration = self.symbols.symbol(symbol).ok()?;
+        if declaration.spelling() != "alloca" {
+            return None;
+        }
         let actual = declaration.ty();
-        let rank = match spelling.as_str() {
+        let (_, return_type, types) =
+            self.builtin_library_prototype("__builtin_alloca", expression.span())?;
+        let expected = self.intern(
+            TypeKind::Function {
+                return_type,
+                parameters: FunctionParameters::Prototype {
+                    types,
+                    variadic: false,
+                },
+            },
+            Qualifiers::default(),
+        );
+        self.types.compatible(actual, expected).then_some(symbol)
+    }
+
+    fn standard_absolute_type(&mut self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+        let symbol = self.standard_function_symbol(expression)?;
+        if self.entities.get(&symbol)?.assembly_named {
+            return None;
+        }
+        let declaration = self.symbols.symbol(symbol).ok()?;
+        let actual = declaration.ty();
+        let rank = match declaration.spelling() {
             "abs" => IntRank::Int,
             "labs" => IntRank::Long,
             "llabs" => IntRank::LongLong,
@@ -11760,11 +11832,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn declare_implicit_called_function(&mut self, spelling: &str, span: SourceSpan) -> SymbolId {
-        let return_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let (return_ty, parameters) = if spelling == "alloca" && self.standard_builtins {
+            let (_, return_type, types) = self
+                .builtin_library_prototype("__builtin_alloca", span)
+                .expect("the stack allocation prototype is defined");
+            (
+                return_type,
+                FunctionParameters::Prototype {
+                    types,
+                    variadic: false,
+                },
+            )
+        } else {
+            (
+                self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default()),
+                FunctionParameters::Unspecified,
+            )
+        };
         let function_ty = self.intern(
             TypeKind::Function {
                 return_type: return_ty,
-                parameters: FunctionParameters::Unspecified,
+                parameters,
             },
             Qualifiers::default(),
         );
@@ -11779,6 +11867,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             function_ty,
         );
+        let parameters = self
+            .parameter_syntax_from_function_type(function_ty, span)
+            .expect("the implicit declaration has a function type");
         // This is an ordinary declaration with linkage, not a builtin symbol.
         // The enclosing declaration transaction owns it and rolls it back
         // along with other operand-local declarations when necessary.
@@ -11795,7 +11886,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     layers: vec![WrittenDeclaratorLayer::Function { span }],
                     span,
                 },
-                parameters: ParameterSyntax::Unspecified,
+                parameters,
                 storage: StorageClass::Extern,
                 asm_label: None,
                 asm_label_span: None,

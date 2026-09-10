@@ -62,7 +62,7 @@ fn dynamic_stack_allocation_never_becomes_an_external_call() {
         ),
         ("void f(void){__builtin_alloca(16);}", true),
         (
-            "void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
+            "static void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
             false,
         ),
     ] {
@@ -171,4 +171,55 @@ fn conflicting_ordinary_allocation_bindings_are_explicitly_refused() {
         assert!(parser.had_error(), "conflicting builtin binding was accepted: {source}");
         assert_eq!(parser.diagnostic().unwrap().code, "E2944");
     }
+}
+
+#[test]
+fn disabled_allocation_recognition_preserves_written_functions() {
+    for source in [
+        "void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
+        "extern void *alloca(unsigned long) asm(\"replacement\"); void *f(void){return alloca(16);}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45016);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        parser.set_standard_builtins(false);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .unwrap();
+        let text = evocc_evoir::render_module(&module);
+        assert!(!text.contains("alloca.dynamic"), "{text}");
+        assert!(text.contains("call @alloca") || text.contains("call @replacement"), "{text}");
+    }
+}
+
+#[test]
+fn explicit_allocation_is_not_disabled_by_the_ordinary_name_option() {
+    let source = "void *f(unsigned long n){return __builtin_alloca(n);}";
+    let arena = Arena::default();
+    let file = FileId::new(45017);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    parser.set_standard_builtins(false);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    assert!(evocc_evoir::render_module(&module).contains("alloca.dynamic"));
+}
+
+#[test]
+fn ordinary_allocation_needs_a_declaration_outside_legacy_mode() {
+    let source = "void *f(unsigned long n){return alloca(n);}";
+    let arena = Arena::default();
+    let file = FileId::new(45018);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let _unit = parser.parse_translation_unit_in(&arena);
+    assert!(parser.had_error());
+    assert_eq!(parser.diagnostic().unwrap().code, "E2001");
 }

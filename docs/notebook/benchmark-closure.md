@@ -202,6 +202,30 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Ordinary stack-allocation binding
+
+Tests-only `3a90067` compiled with two semantic failures: an implicit GNU89
+`alloca` had the wrong return type (E2202), and conflicting external bindings
+were silently accepted. Compatible external declarations and GNU89 implicit
+calls now reuse the explicit builtin's prototype and allocation path; GNU11
+still requires a declaration, static same-name functions remain ordinary,
+and `-fno-builtin` does not disable `__builtin_alloca`.
+The external-body and assembly-rename probe results disagree across references;
+E2944 records these conflicts, including a definition following the caller.
+The former external-body control now uses a static function, the agreed case.
+
+`cargo test -p evocc-lower --test compiler_hints --test expression_value_flow
+--test front_end_builtin_integrity -p evocc-parser --test library_builtin_typing
+--test builtin_strlen --no-fail-fast` with the current target and offline flags
+passes 88 tests (7 + 64 + 1 + 11 + 5), zero failed or ignored.
+Parser/library and selected-test Clippy, fmt, Ruff, diff-check and the 44/44
+shape audit pass; `cargo build -p evocc` builds the debug executable.
+Unchanged original `941202-1.c`, with its required `-std=gnu89`, exits zero
+under both sealed references at O0/O2 and under both Linux toolchains linking
+the generated subject assembly (`dynamic-stack-names.out`). This repairs its
+specific link failure in tailored execution, not a new full-campaign result.
+Actual VLA declarations, captured sizes and scope reclamation remain OPEN.
+
 ### Runtime-sized function-lifetime stack storage
 
 Tests-only `0e711af` compiled and failed on the missing dynamic allocation
@@ -237,7 +261,7 @@ gate target compiles (`cargo check -p evocc-randgate --test
 randomized_semantic_gate`), and `cargo build -p evocc` builds the debug CLI.
 Both sealed Linux toolchains link and execute the subject fixture, exit zero;
 all four reference runs also exit zero (`dynamic-stack-objects.out`).
-Ordinary-name `alloca` recognition in original `941202-1`, real VLA declarations,
+Ordinary-name recognition is verified separately above; real VLA declarations,
 captured sizeof and scope reclamation remain separate work. No campaign count
 or whole VLA-family closure is claimed from this result.
 
