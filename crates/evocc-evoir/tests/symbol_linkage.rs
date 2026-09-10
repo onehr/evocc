@@ -13,6 +13,32 @@ fn weak_marks_round_trip_on_each_module_record() {
 }
 
 #[test]
+fn hidden_symbol_metadata_round_trips_without_changing_linkage_strength() {
+    let text = format!("global @value origin=0 kind=file visibility=hidden linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @outside size=unknown align=4 visibility=hidden\n\ndeclare @missing(mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default visibility=hidden\n\nalias @other = @value visibility=hidden\n\n{}", function("implementation", " visibility=hidden"));
+    let module = parse_section9_module(text.as_bytes()).expect("hidden is not internal linkage");
+    assert_eq!(render_module(&module), text);
+}
+
+#[test]
+fn object_section_metadata_round_trips_with_initializers_and_relocations() {
+    let text = "global @counter origin=0 kind=file visibility=external size=4 align=64 bytes=00000000 initialized=1111 section=\".data..percpu\"\nglobal @reference origin=1 kind=file visibility=external size=8 align=8 bytes=0000000000000000 initialized=11111111 section=\".data.rel.ro.refs\" relocs=[(0, @counter, 0)]\n";
+    let module = parse_section9_module(text.as_bytes()).expect("object placement survives the IR");
+    assert_eq!(render_module(&module), text);
+    for invalid in [
+        "\"\"",
+        "\"bad\\x00name\"",
+        ".data",
+        "\".data\" section=\".other\"",
+    ] {
+        let malformed = text.replace("\".data..percpu\"", invalid);
+        assert!(
+            parse_section9_module(malformed.as_bytes()).is_err(),
+            "{malformed}"
+        );
+    }
+}
+
+#[test]
 fn alias_records_name_definitions_without_allocating_another_object() {
     let text = format!("global @value origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\n\nalias @other = @value linkage=weak\nalias @alternative = @implementation\n\n{}", function("implementation", " visibility=internal"));
     let module =

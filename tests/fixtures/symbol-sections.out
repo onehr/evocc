@@ -1,0 +1,22 @@
+Target: aarch64-linux-gnu, gnu11; evo-flight-lab:sealed, network none.
+gcc-14/clang-19 -O0/-O2 -fPIC -c symbol-sections.c; link the object
+with symbol-sections-caller.c and execute: all four combinations exit 0.
+At O2, readelf -sW/-rW/-SW agrees for both compilers:
+  hidden_value and hidden_function: GLOBAL HIDDEN UND.
+  local_definition: GLOBAL HIDDEN OBJECT, size 4.
+  hidden_value address: ADR_PREL_PG_HI21 + ADD_ABS_LO12_NC (not GOT).
+  default_value address: ADR_GOT_PAGE + LD64_GOT_LO12_NC.
+  counter: .data..percpu, PROGBITS, WA, size 4, alignment 64.
+  reference: .data.rel.ro.refs, PROGBITS, WA, size 8, alignment 8.
+
+symbol-attribute-errors.c, -DCASE=N, -O2 -fPIC -c:
+case  gcc-14                         clang-19
+1     assembler rejects empty name   accepts empty name
+2     accepts, .data.good            rejects NUL escape
+3     accepts, .data.first           accepts, .data.second
+4     accepts, HIDDEN                rejects visibility mismatch
+5     accepts, DEFAULT               rejects visibility mismatch
+6     accepts, WEAK HIDDEN and GOT   accepts, WEAK HIDDEN and GOT
+7     rejects nonzero NOBITS         rejects nonzero NOBITS
+Cases 1-5 are conflicts, not consensus values; case 7 is a common refusal.
+Case 6 deliberately retains the GOT because an undefined weak address can be zero.

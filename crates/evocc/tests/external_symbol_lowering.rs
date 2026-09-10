@@ -25,6 +25,110 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn hidden_symbol_metadata_reaches_declarations_definitions_and_addressing() {
+    let source = include_str!("../../../tests/fixtures/symbol-sections.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for prefix in [
+        "extern @hidden_value ",
+        "declare @hidden_function(",
+        "global @local_definition ",
+    ] {
+        let row = text.lines().find(|line| line.starts_with(prefix)).unwrap();
+        assert!(row.contains("visibility=hidden"), "{row}");
+    }
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for symbol in ["hidden_value", "hidden_function", "local_definition"] {
+        assert!(text.contains(&format!(".hidden {symbol}")), "{text}");
+    }
+    assert!(!text.contains(":got:hidden_value"), "{text}");
+    assert!(text.contains(":got:default_value"), "{text}");
+}
+
+#[test]
+fn object_section_metadata_reaches_zero_bytes_and_symbol_relocations() {
+    let source = include_str!("../../../tests/fixtures/symbol-sections.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for (symbol, section) in [
+        ("counter", ".data..percpu"),
+        ("reference", ".data.rel.ro.refs"),
+    ] {
+        let row = text
+            .lines()
+            .find(|line| line.starts_with(&format!("global @{symbol} ")))
+            .unwrap();
+        assert!(row.contains(&format!(" section=\"{section}\"")), "{row}");
+    }
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for section in [".data..percpu", ".data.rel.ro.refs"] {
+        assert!(
+            text.contains(&format!(".section \"{section}\",\"aw\",%progbits")),
+            "{text}"
+        );
+    }
+    assert!(text.contains(".p2align 6"), "{text}");
+    assert!(text.contains(".xword counter"), "{text}");
+}
+
+#[test]
+fn conflicting_symbol_metadata_is_refused_instead_of_silently_selected() {
+    let source = include_str!("../../../tests/fixtures/symbol-attribute-errors.c");
+    for case in [1, 2, 3, 4, 5, 7] {
+        let option = format!("-DCASE={case}");
+        let output = run_with_options(source, "--emit=evoir", &[&option]);
+        assert!(!output.status.success(), "case {case} must be refused");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E2943"),
+            "case {case}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn weak_hidden_symbol_metadata_retains_nullable_got_addressing() {
+    let output = run_with_options(
+        include_str!("../../../tests/fixtures/symbol-attribute-errors.c"),
+        "--emit=asm",
+        &["-DCASE=6"],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains(".weak value") && text.contains(".hidden value"),
+        "{text}"
+    );
+    assert!(text.contains(":got:value"), "{text}");
+}
+
+#[test]
 fn block_external_storage_is_not_inferred_from_lexical_scope_or_spelling() {
     for source in [
         "char *f(void){extern char a[];return a;} int main(void){return f()==0;}",
