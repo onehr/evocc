@@ -9,6 +9,40 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn variable_array_typedefs_capture_sizes_at_each_declaration() {
+    agrees(include_str!(
+        "../../../tests/fixtures/captured-array-bounds.c"
+    ));
+}
+
+#[test]
+fn captured_array_size_is_not_an_integer_constant_expression() {
+    let source =
+        "int f(int n){typedef int A[n]; _Static_assert(sizeof(A)>0, \"runtime\"); return 0;}";
+    let arena = Arena::default();
+    let file = FileId::new(45025);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let _unit = parser.parse_translation_unit_in(&arena);
+    assert!(parser.had_error());
+    assert_eq!(parser.diagnostic().unwrap().code, "E2912");
+}
+
+#[test]
+fn variable_array_typedefs_reject_noninteger_bounds() {
+    let source = "int f(int *n){typedef int A[n]; return 0;}";
+    let arena = Arena::default();
+    let file = FileId::new(45026);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let _unit = parser.parse_translation_unit_in(&arena);
+    assert!(parser.had_error());
+    assert_eq!(parser.diagnostic().unwrap().code, "E2923");
+}
+
+#[test]
 fn volatile_bit_fields_execute_and_keep_neighboring_bits() {
     agrees(include_str!(
         "../../../tests/fixtures/volatile-bit-fields.c"

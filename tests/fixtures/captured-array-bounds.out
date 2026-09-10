@@ -1,0 +1,11 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL captured-array-bounds.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0 exit=0
+gcc-14 O2 exit=0
+clang-19 O0 exit=0
+clang-19 O2 exit=0
+
+The fixture checks capture at declaration, repeated sizeof, a typedef chain,
+separate declarators, repeated activations, constant alignment and inline calls.
+It does not claim dynamic-object allocation or scope-reclamation coverage.
