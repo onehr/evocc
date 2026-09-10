@@ -147,9 +147,6 @@ pub enum LowerError {
     VarArgs {
         span: SourceSpan,
     },
-    CheckedArithmeticWidth {
-        span: SourceSpan,
-    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -196,9 +193,6 @@ impl fmt::Display for LowerError {
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
-            Self::CheckedArithmeticWidth { .. } => {
-                formatter.write_str("not-lowered: checked-arithmetic-exceeds-128-bits")
-            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -232,7 +226,6 @@ impl LowerError {
             Self::FrameAddress { .. } => "E3031",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
-            Self::CheckedArithmeticWidth { .. } => "E3044",
             Self::DynamicStackAllocation { .. } => "E3046",
             _ => "E3101",
         }
@@ -263,7 +256,6 @@ impl LowerError {
             | Self::Asm { span }
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
-            | Self::CheckedArithmeticWidth { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -9145,15 +9137,6 @@ impl<'a> FunctionLowerer<'a> {
             evocc_chir::CheckedArithmeticOp::Mul => left_width + right_width,
             _ => left_width.max(right_width) + 1,
         };
-        let exact_type = match required {
-            0..=32 if unsigned_product => CIntegerType::UINT,
-            33..=64 if unsigned_product => CIntegerType::ULONG,
-            65..=128 if unsigned_product => CIntegerType::UINT128,
-            0..=32 => CIntegerType::INT,
-            33..=64 => CIntegerType::LONG,
-            65..=128 => CIntegerType::INT128,
-            _ => return Err(LowerError::CheckedArithmeticWidth { span }),
-        };
         let left_value = state
             .env
             .remove(&left_key)
@@ -9164,67 +9147,74 @@ impl<'a> FunctionLowerer<'a> {
             .remove(&right_key)
             .expect("retained checked operand")
             .value;
-        let left = self.cast(
-            ExprValue {
-                value: left_value,
-                integer: left.integer,
-            },
-            exact_type,
-            state,
-        )?;
-        let right = self.cast(
-            ExprValue {
-                value: right_value,
-                integer: right.integer,
-            },
-            exact_type,
-            state,
-        )?;
-        let exact = self.fresh_value(bits(exact_type));
-        self.emit(
-            state,
-            match op {
-                evocc_chir::CheckedArithmeticOp::Add => {
-                    Inst::Add(exact.clone(), left.value, right.value)
-                }
-                evocc_chir::CheckedArithmeticOp::Sub => {
-                    Inst::Sub(exact.clone(), left.value, right.value)
-                }
-                evocc_chir::CheckedArithmeticOp::Mul => {
-                    Inst::Mul(exact.clone(), left.value, right.value)
-                }
-            },
-        )?;
         let destination = canonical_integer(self.unit.types(), self.target, target_ty, span)?;
-        let stored = self.cast(
-            ExprValue {
-                value: exact.clone(),
-                integer: exact_type,
-            },
-            destination,
-            state,
-        )?;
-        let round_trip = self.cast(stored.clone(), exact_type, state)?;
-        let mut result = self.fresh_value(EvoIRType::Bits(1));
-        self.emit(
-            state,
-            Inst::ICmp(result.clone(), CmpOp::Ne, exact.clone(), round_trip.value),
-        )?;
-        if (exact_type.is_signed() && !destination.is_signed())
-            || (!exact_type.is_signed()
-                && destination.is_signed()
-                && destination.bits() <= exact_type.bits())
-        {
-            let zero = self.constant(state, exact_type, 0)?;
-            let negative = self.fresh_value(EvoIRType::Bits(1));
+        let left = ExprValue {
+            value: left_value,
+            integer: left.integer,
+        };
+        let right = ExprValue {
+            value: right_value,
+            integer: right.integer,
+        };
+        let (stored, result) = if required > 128 {
+            self.lower_checked_wide(op, left, right, destination, state)?
+        } else {
+            let exact_type = match required {
+                0..=32 if unsigned_product => CIntegerType::UINT,
+                33..=64 if unsigned_product => CIntegerType::ULONG,
+                _ if unsigned_product => CIntegerType::UINT128,
+                0..=32 => CIntegerType::INT,
+                33..=64 => CIntegerType::LONG,
+                _ => CIntegerType::INT128,
+            };
+            let left = self.cast(left, exact_type, state)?;
+            let right = self.cast(right, exact_type, state)?;
+            let exact = self.fresh_value(bits(exact_type));
             self.emit(
                 state,
-                Inst::ICmp(negative.clone(), CmpOp::SLt, exact, zero.value),
+                match op {
+                    evocc_chir::CheckedArithmeticOp::Add => {
+                        Inst::Add(exact.clone(), left.value, right.value)
+                    }
+                    evocc_chir::CheckedArithmeticOp::Sub => {
+                        Inst::Sub(exact.clone(), left.value, right.value)
+                    }
+                    evocc_chir::CheckedArithmeticOp::Mul => {
+                        Inst::Mul(exact.clone(), left.value, right.value)
+                    }
+                },
             )?;
-            let overflow = self.fresh_value(EvoIRType::Bits(1));
-            self.emit(state, Inst::Or(overflow.clone(), result, negative))?;
-            result = overflow;
-        }
+            let stored = self.cast(
+                ExprValue {
+                    value: exact.clone(),
+                    integer: exact_type,
+                },
+                destination,
+                state,
+            )?;
+            let round_trip = self.cast(stored.clone(), exact_type, state)?;
+            let mut result = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::ICmp(result.clone(), CmpOp::Ne, exact.clone(), round_trip.value),
+            )?;
+            if (exact_type.is_signed() && !destination.is_signed())
+                || (!exact_type.is_signed()
+                    && destination.is_signed()
+                    && destination.bits() <= exact_type.bits())
+            {
+                let zero = self.constant(state, exact_type, 0)?;
+                let negative = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(
+                    state,
+                    Inst::ICmp(negative.clone(), CmpOp::SLt, exact, zero.value),
+                )?;
+                let overflow = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(state, Inst::Or(overflow.clone(), result, negative))?;
+                result = overflow;
+            }
+            (stored, result)
+        };
         let volatile = self
             .unit
             .types()
@@ -9235,6 +9225,165 @@ impl<'a> FunctionLowerer<'a> {
             value: result,
             integer: CIntegerType::BOOL,
         })
+    }
+
+    /// Preserve the exact result's sign, low magnitude and overflow bit, as
+    /// the C integer kernel does. No wider IR type or trapping signed operator
+    /// is necessary, even when the mathematical product needs 256 bits.
+    fn lower_checked_wide(
+        &mut self,
+        op: evocc_chir::CheckedArithmeticOp,
+        left: ExprValue,
+        right: ExprValue,
+        destination: CIntegerType,
+        state: &State,
+    ) -> Result<(ExprValue, Value), LowerError> {
+        let (left, left_negative) = self.checked_magnitude(left, state)?;
+        let (right, mut right_negative) = self.checked_magnitude(right, state)?;
+        let zero = self.constant(state, CIntegerType::UINT128, 0)?.value;
+        let truth = self.constant(state, CIntegerType::BOOL, 1)?.value;
+        let (magnitude, negative, overflow) = if op == evocc_chir::CheckedArithmeticOp::Mul {
+            let one = self.constant(state, CIntegerType::UINT128, 1)?.value;
+            let maximum = self
+                .wide_constant(state, CIntegerType::UINT128, u128::MAX)?
+                .value;
+            let right_nonzero = self.checked_compare(state, CmpOp::Ne, &right, &zero)?;
+            // a*b exceeds UMAX iff a > UMAX/b. Use denominator 1 when b=0:
+            // the comparison is then false and the division is always defined.
+            let divisor = self.select_bits(state, &right_nonzero, &right, &one)?;
+            let limit = self.checked_binary(state, Inst::UDiv, &maximum, &divisor)?;
+            let overflow = self.checked_compare(state, CmpOp::ULt, &limit, &left)?;
+            let magnitude = self.checked_binary(state, Inst::Mul, &left, &right)?;
+            let negative =
+                self.checked_binary(state, Inst::Xor, &left_negative, &right_negative)?;
+            (magnitude, negative, overflow)
+        } else {
+            if op == evocc_chir::CheckedArithmeticOp::Sub {
+                right_negative = self.checked_binary(state, Inst::Xor, &right_negative, &truth)?;
+            }
+            let same_sign =
+                self.checked_compare(state, CmpOp::Eq, &left_negative, &right_negative)?;
+            let sum = self.checked_binary(state, Inst::Add, &left, &right)?;
+            let carry = self.checked_compare(state, CmpOp::ULt, &sum, &left)?;
+            let left_larger = self.checked_compare(state, CmpOp::ULe, &right, &left)?;
+            let difference_left = self.checked_binary(state, Inst::Sub, &left, &right)?;
+            let difference_right = self.checked_binary(state, Inst::Sub, &right, &left)?;
+            let difference =
+                self.select_bits(state, &left_larger, &difference_left, &difference_right)?;
+            let difference_negative =
+                self.select_bits(state, &left_larger, &left_negative, &right_negative)?;
+            let magnitude = self.select_bits(state, &same_sign, &sum, &difference)?;
+            let negative =
+                self.select_bits(state, &same_sign, &left_negative, &difference_negative)?;
+            let overflow = self.checked_binary(state, Inst::And, &same_sign, &carry)?;
+            (magnitude, negative, overflow)
+        };
+        // Equal opposite-signed magnitudes produce zero, never negative zero.
+        // If magnitude overflowed, representability is false regardless.
+        let nonzero = self.checked_compare(state, CmpOp::Ne, &magnitude, &zero)?;
+        let negative = self.checked_binary(state, Inst::And, &negative, &nonzero)?;
+        let fits = if destination.is_signed() {
+            let boundary = self
+                .wide_constant(
+                    state,
+                    CIntegerType::UINT128,
+                    1u128 << (destination.bits() - 1),
+                )?
+                .value;
+            let positive_fits = self.checked_compare(state, CmpOp::ULt, &magnitude, &boundary)?;
+            let negative_fits = self.checked_compare(state, CmpOp::ULe, &magnitude, &boundary)?;
+            self.select_bits(state, &negative, &negative_fits, &positive_fits)?
+        } else {
+            let maximum = self
+                .wide_constant(state, CIntegerType::UINT128, destination.mask())?
+                .value;
+            let small_enough = self.checked_compare(state, CmpOp::ULe, &magnitude, &maximum)?;
+            let nonnegative = self.checked_binary(state, Inst::Xor, &negative, &truth)?;
+            self.checked_binary(state, Inst::And, &nonnegative, &small_enough)?
+        };
+        let does_not_fit = self.checked_binary(state, Inst::Xor, &fits, &truth)?;
+        let result = self.checked_binary(state, Inst::Or, &overflow, &does_not_fit)?;
+        let negated = self.checked_binary(state, Inst::Sub, &zero, &magnitude)?;
+        let raw = self.select_bits(state, &negative, &negated, &magnitude)?;
+        let stored = self.cast(
+            ExprValue {
+                value: raw,
+                integer: CIntegerType::UINT128,
+            },
+            destination,
+            state,
+        )?;
+        Ok((stored, result))
+    }
+
+    fn checked_magnitude(
+        &mut self,
+        input: ExprValue,
+        state: &State,
+    ) -> Result<(Value, Value), LowerError> {
+        let signed = input.integer.is_signed();
+        let raw = self.cast(input, CIntegerType::UINT128, state)?.value;
+        let zero = self.constant(state, CIntegerType::UINT128, 0)?.value;
+        let negative = if signed {
+            self.checked_compare(state, CmpOp::SLt, &raw, &zero)?
+        } else {
+            self.constant(state, CIntegerType::BOOL, 0)?.value
+        };
+        let negated = self.checked_binary(state, Inst::Sub, &zero, &raw)?;
+        let magnitude = self.select_bits(state, &negative, &negated, &raw)?;
+        Ok((magnitude, negative))
+    }
+
+    fn checked_binary(
+        &mut self,
+        state: &State,
+        operator: fn(Value, Value, Value) -> Inst,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value, LowerError> {
+        let result = self.fresh_value(left.ty.clone());
+        self.emit(state, operator(result.clone(), left.clone(), right.clone()))?;
+        Ok(result)
+    }
+
+    fn checked_compare(
+        &mut self,
+        state: &State,
+        operator: CmpOp,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value, LowerError> {
+        let result = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::ICmp(result.clone(), operator, left.clone(), right.clone()),
+        )?;
+        Ok(result)
+    }
+
+    fn select_bits(
+        &mut self,
+        state: &State,
+        condition: &Value,
+        yes: &Value,
+        no: &Value,
+    ) -> Result<Value, LowerError> {
+        let condition = if condition.ty == yes.ty {
+            condition.clone()
+        } else {
+            let result = self.fresh_value(yes.ty.clone());
+            self.emit(
+                state,
+                Inst::ZExt(result.clone(), condition.clone(), yes.ty.clone()),
+            )?;
+            result
+        };
+        let zero = self.fresh_value(yes.ty.clone());
+        self.emit(state, Inst::Const(zero.clone(), 0))?;
+        let mask = self.checked_binary(state, Inst::Sub, &zero, &condition)?;
+        let difference = self.checked_binary(state, Inst::Xor, yes, no)?;
+        let selected = self.checked_binary(state, Inst::And, &difference, &mask)?;
+        self.checked_binary(state, Inst::Xor, no, &selected)
     }
 
     fn lower_bit(

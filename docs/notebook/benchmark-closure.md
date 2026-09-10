@@ -194,6 +194,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Exact wide checked arithmetic
+
+Tests-only `4198a69` compiled with ten PASS and four semantic failures:
+E2913 at the old wide-builtin parser boundary and E3044 at the old exact
+intermediate-width limit. The parser now uses the shared integer-class
+predicate, and lowering retains its existing narrow fast path while wider
+operations preserve sign, low magnitude and a separate overflow bit.
+Zero multipliers cannot cause an internal division by zero; opposite-sign
+cancellation, MIN/MAX boundaries, narrow destinations, conditional operands,
+volatile destinations and once-only evaluation are explicitly checked.
+No runtime UB obligation or validator was relaxed, and no new IR type was added.
+
+With `CARGO_TARGET_DIR=target/frontend`, `--locked --offline -j 1`:
+`cargo test -p evocc-parser --test checked_arithmetic -p evocc-lower
+--test checked_and_bit_lowering --no-fail-fast` passes 14 tests;
+`cargo test -p evocc --test external_symbol_lowering wide_` passes two;
+`cargo test -p evocc-chir --test checked_arithmetic_semantics --test
+wide_integer_boundary -p evocc-lower --test wide_integer_values --test
+fail_closed_forms` passes 24. These are 40 distinct tailored test functions,
+not original benchmark programs. `cargo clippy -p evocc-parser -p evocc-lower
+--lib -- -D warnings`, fmt, Ruff, diff-check and the instruction-shape audit
+pass. An implementation compile initially used nonexistent greater-than
+comparison variants; reversing operands for the existing comparisons fixed
+that development error, which was not counted as RED or PASS.
+
+Both GCC-14 and Clang-19 link and execute the subject assembly generated from
+`tests/fixtures/wide-checked-arithmetic.c`, exit zero; the four reference
+executions and Clang runtime prerequisite are in its adjacent `.out` file.
+The full gate, layout/replay, full survey and benchmark campaign remain
+deferred under the tailored-first instruction; all campaign numbers stay
+at their last measured values.
+
 ### Hosted wide division and spill adjacency
 
 Tests-only `27d2b6e` records 38 passing tests, nine semantic failures and

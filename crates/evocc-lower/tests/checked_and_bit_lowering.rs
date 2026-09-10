@@ -117,6 +117,32 @@ fn wide_checked_arithmetic_preserves_wrapped_results_and_overflow_flags() {
 }
 
 #[test]
+fn wide_checked_boundaries_include_cancellation_and_conditional_operands() {
+    for body in [
+        "return __builtin_add_overflow(imin, (U)1<<127, &u) || u!=0;",
+        "return __builtin_sub_overflow((U)0, imin, &u) || u!=((U)1<<127);",
+        "return !__builtin_sub_overflow((U)0, imin, &i) || i!=imin;",
+        "return !__builtin_add_overflow(imin, imin, &i) || i!=0;",
+        "return !__builtin_sub_overflow(umax, -(I)1, &u) || u!=0;",
+        "return __builtin_mul_overflow(umax, (U)0, &u) || u!=0;",
+        "return __builtin_mul_overflow(-(I)1, (U)1<<127, &i) || i!=imin;",
+        "return !__builtin_mul_overflow(imin, (I)1, &u) || u!=((U)1<<127);",
+        "return !__builtin_add_overflow(umax, imax, &i) || i!=imax-1;",
+        "unsigned char c; return __builtin_add_overflow((U)255, (U)0, &c) || c!=255;",
+        "signed char c; return __builtin_add_overflow((I)-128, (U)0, &c) || c!=-128;",
+        "U values[2]={1,umax}; int p=0,c=1; int o=__builtin_add_overflow(values[p++], c?umax:0, p++?&u:&u); return p!=2 || !o || u!=0;",
+        "volatile U v=99; int o=__builtin_add_overflow(umax,(U)1,&v); return !o || v!=0;",
+    ] {
+        lowered(
+            &format!("typedef unsigned __int128 U; typedef __int128 I; int main(void){{U umax=~(U)0,u; I imax=(I)(umax>>1),imin=-imax-1,i; {body}}}"),
+            0,
+            &["store"],
+            true,
+        );
+    }
+}
+
+#[test]
 fn bit_builtins_lower_to_total_operations_and_explicit_zero_obligations() {
     lowered("int f(unsigned x){return __builtin_clz(x)+__builtin_ctz(x)+__builtin_popcount(x);} int main(void){return f(8);}", 32, &["ctlz.bits<32>", "cttz.bits<32>", "ctpop.bits<32>", "ub.assume.bit_builtin_zero_operand"], true);
     lowered(
