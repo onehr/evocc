@@ -128,9 +128,9 @@ their remaining closure work without creating a second set of measurements.
   a current profile refusal is not a non-FP pass (row 15).
   Prior-parameter visibility, prototype `[*]`, inner/outer array-parameter
   bounds, captured sizeof and fixed-storage local pointer views are locally
-  repaired. Definitions capture sizes on entry; prototypes do not evaluate
-  them. Actual variable-length storage/reclamation, variably modified typeof,
-  static pointer declarations and legacy variable-bound definitions remain
+  repaired, including block-static pointer views. Definitions capture sizes on
+  entry; prototypes do not evaluate them. Actual variable-length
+  storage/reclamation, variably modified typeof and legacy variable-bound definitions remain
   unfinished; pointer adjustment is not full VLA support.
 - [ ] Reduce and repair every remaining non-FP diagnostic family, including
   builtins, ABI, initializers and the remaining TinyCC compile refusals
@@ -203,6 +203,28 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
+
+### Block-static variable-array pointers
+
+Tests-only `eb380c4` compiled with 73 passes and one E2203 failure.
+The shared fixed-storage declaration path now captures block-static pointer
+bounds on every reached declaration while leaving static initialization and
+identity unchanged. Inline copies use an explicit address cast to view the
+one lifted object with invocation-local dimensions. Ordinary memory places
+then handle reads, assignments and updates without weakened validation.
+
+`cargo test --locked --offline -j 1 -p evocc-lower
+--test expression_value_flow --test front_end_resolved_forms -p evocc-parser
+--test array_bound_validation --test gnu_typeof
+--test parameter_and_pointer_sign_conversions -p evocc-chir --lib
+--no-fail-fast` passes 215 tests; `cargo test --locked --offline -j 1
+-p evocc-lower --test static_storage_and_discard` adds 19: 234 distinct
+passes, zero failures or ignored. Both use the tailored target. Affected
+Clippy, fmt, Ruff, diff-check and the 44/44 instruction-shape audit pass.
+Four sealed reference runs and two subject native executions pass
+(`static-array-pointers.out`), including shared inline statics, fixed arrays
+of pointers, compound/prefix updates and address-of. Actual VLA allocation
+and scope reclamation remain OPEN; no campaign count changed.
 
 ### Local variable-array pointers over fixed storage
 

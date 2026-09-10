@@ -887,6 +887,46 @@ impl<'a> Substitution<'a, '_> {
             span,
         }))
     }
+    fn object_root(
+        &mut self,
+        symbol: SymbolId,
+        c: &Context<'a>,
+        span: SourceSpan,
+    ) -> Result<PlaceRoot<'a>, InlineError> {
+        let lifted = self.globals.contains_key(&symbol);
+        let symbol = self.symbol(symbol, c);
+        if !lifted || c.prefix.is_none() {
+            return Ok(PlaceRoot::Object { symbol });
+        }
+        let storage_ty = self
+            .unit
+            .symbols
+            .symbol(symbol)
+            .map_err(|e| self.error(span, e))?
+            .ty();
+        let view_ty = self.substituted_type(storage_ty, c);
+        if view_ty == storage_ty {
+            return Ok(PlaceRoot::Object { symbol });
+        }
+        // Lifted statics keep one storage identity, but a pointer-to-VLA
+        // view uses this invocation's captures. Express the view as a checked
+        // address cast, not different facts on the shared symbol.
+        let address = self.alloc(CHirExpr::Unary(
+            UnaryOp::AddrOf,
+            self.ident(symbol, span),
+            span,
+        ));
+        let pointer_ty = self.unit.types.intern(evocc_types::CanonicalType {
+            kind: TypeKind::Pointer(view_ty),
+            qualifiers: Default::default(),
+        });
+        Ok(PlaceRoot::PointerExpression {
+            pointer: self.alloc(CHirExpr::Cast(pointer_ty, address, span)),
+            pointer_type: PointerTypeDesc::from_canonical_pointer(&self.unit.types, pointer_ty)
+                .map_err(|e| self.error(span, e))?,
+        })
+    }
+
     fn place(
         &mut self,
         p: &MemoryPlace<'a>,
@@ -894,9 +934,7 @@ impl<'a> Substitution<'a, '_> {
         span: SourceSpan,
     ) -> Result<MemoryPlace<'a>, InlineError> {
         let root = match p.root() {
-            PlaceRoot::Object { symbol } => PlaceRoot::Object {
-                symbol: self.symbol(*symbol, c),
-            },
+            PlaceRoot::Object { symbol } => self.object_root(*symbol, c, span)?,
             PlaceRoot::PointerExpression {
                 pointer,
                 pointer_type,
@@ -1144,9 +1182,24 @@ impl<'a> Substitution<'a, '_> {
         if let Some(e) = c.memo.get(&key) {
             return Ok(e);
         }
-        if let CHirExpr::Ident { symbol, .. } = e {
+        if let CHirExpr::Ident { symbol, facts, .. } = e {
             if let Some(v) = c.constants.get(symbol) {
                 return Ok(v);
+            }
+            let root = self.object_root(*symbol, c, e.span())?;
+            if matches!(root, PlaceRoot::PointerExpression { .. }) {
+                let ty = self.substituted_type(facts.ty(), c);
+                let place =
+                    MemoryPlace::derive(&self.unit.symbols, &self.unit.types, root, Vec::new(), ty)
+                        .map_err(|err| self.error(e.span(), err))?;
+                let value = self.alloc(CHirExpr::MemoryRead {
+                    place,
+                    facts: ExprFacts::value(ty),
+                    target_span: e.span(),
+                    span: e.span(),
+                });
+                c.memo.insert(key, value);
+                return Ok(value);
             }
         }
         let mut out = e.clone();
@@ -1227,9 +1280,11 @@ impl<'a> Substitution<'a, '_> {
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
             }
             CHirExpr::Assign {
+                op,
                 place,
                 target,
                 value,
+                facts,
                 ..
             } => {
                 *place = ScalarPlace::bind(
@@ -1240,8 +1295,26 @@ impl<'a> Substitution<'a, '_> {
                 .map_err(|err| self.error(e.span(), err))?;
                 *target = self.expr(target, c)?;
                 *value = self.expr(value, c)?;
+                if let CHirExpr::MemoryRead { place, .. } = target {
+                    out = CHirExpr::MemoryAssign {
+                        op: *op,
+                        place: place.clone(),
+                        target_span: target.span(),
+                        value,
+                        facts: ExprFacts::value(place.value_ty()),
+                        span: e.span(),
+                    };
+                } else {
+                    *facts = facts.with_type(place.ty());
+                }
             }
-            CHirExpr::Update { place, target, .. } => {
+            CHirExpr::Update {
+                op,
+                place,
+                target,
+                facts,
+                ..
+            } => {
                 *place = ScalarPlace::bind(
                     &self.unit.symbols,
                     &self.unit.types,
@@ -1249,6 +1322,17 @@ impl<'a> Substitution<'a, '_> {
                 )
                 .map_err(|err| self.error(e.span(), err))?;
                 *target = self.expr(target, c)?;
+                if let CHirExpr::MemoryRead { place, .. } = target {
+                    out = CHirExpr::MemoryUpdate {
+                        op: *op,
+                        place: place.clone(),
+                        target_span: target.span(),
+                        facts: ExprFacts::value(place.value_ty()),
+                        span: e.span(),
+                    };
+                } else {
+                    *facts = facts.with_type(place.ty());
+                }
             }
             CHirExpr::MemoryAssign {
                 place,

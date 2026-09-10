@@ -6,3 +6,12 @@ clang-19 O0/O2: exit 0/0.
 Block static pointer objects keep their storage and initial zero state,
 but their pointed-to array bounds evaluate on each declaration execution.
 Both inline calls share the static visit counter and use their own stride.
+The final fixture includes inline arrays, +=/-=, prefix updates and &p.
+Clang warns that &p cannot be null; this is not a refusal or a value conflict.
+
+Subject: target/tailored/debug/evocc --emit=asm
+         --target=aarch64-unknown-linux-gnu static-array-pointers.c
+Link/run: gcc-14 /tmp/subject.s -o /tmp/subject; /tmp/subject
+          clang-19 -fno-integrated-as /tmp/subject.s -o /tmp/subject; /tmp/subject
+gcc-14 subject: exit 0.
+clang-19 subject: exit 0.

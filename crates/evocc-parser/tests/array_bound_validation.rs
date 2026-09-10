@@ -53,6 +53,25 @@ fn negative_file_scope_array_bound_is_rejected() {
 }
 
 #[test]
+fn static_pointer_capture_does_not_admit_static_vlas_or_change_const_objects() {
+    rejects(
+        "void f(int n){static int a[n];}",
+        "E2203",
+        "variable-length-object",
+    );
+    rejects(
+        "void f(int n){extern int (*p)[n];}",
+        "E2203",
+        "variable-length-object",
+    );
+    rejects(
+        "void f(int n){static int (*const p)[n]=0; p=0;}",
+        "E2101",
+        "expected-modifiable-lvalue",
+    );
+}
+
+#[test]
 fn zero_length_arrays_have_the_sealed_oracle_layouts() {
     let source = concat!(
         "struct mid { int a; char d[0]; int b; };\n",

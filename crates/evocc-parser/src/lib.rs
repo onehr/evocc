@@ -1916,10 +1916,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declarator, so self-references in an initializer resolve to this
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
-            let fixed_automatic_view = context != DeclarationContext::File
+            let fixed_block_view = context != DeclarationContext::File
                 && matches!(
                     storage,
-                    StorageClass::None | StorageClass::Auto | StorageClass::Register
+                    StorageClass::None
+                        | StorageClass::Auto
+                        | StorageClass::Register
+                        | StorageClass::Static
                 )
                 && declarator.derived.iter().any(|layer| {
                     matches!(
@@ -1936,7 +1939,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some(TypeKind::Function { .. })
                 );
             let captures = if context != DeclarationContext::File
-                && ((storage == StorageClass::Typedef && !has_initializer) || fixed_automatic_view)
+                && ((storage == StorageClass::Typedef && !has_initializer) || fixed_block_view)
             {
                 let captures = self.capture_array_bounds(&mut declarator.derived)?;
                 full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);

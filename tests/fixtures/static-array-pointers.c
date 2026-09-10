@@ -19,10 +19,17 @@ static int view(int n, int *data) {
 
 static __attribute__((always_inline)) inline int retained(int n, int *data) {
     static int (*p)[n];
+    static int (*slots[1])[n];
     static int visits;
     p = (void *)data;
+    slots[0] = p;
+    p += 1;
+    p -= 1;
+    ++p;
+    --p;
+    if (&p == 0 || slots[0] != p) return -1;
     p[1][0] = ++visits;
-    return p[1][0];
+    return slots[0][1][0];
 }
 
 int main(void) {

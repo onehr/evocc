@@ -6818,3 +6818,10 @@ Per reviewed S02/S03, an automatic pointer declaration, including a fixed array 
 The same size-capture path serves typedefs, parameters and these local declarators, and inline substitution renames the capture in both canonical types and written declarator layers without weakening allocation identity checks.
 `tests/fixtures/local-array-pointers.{c,out}` records four agreeing reference executions and two native subject executions over fixed storage, including sequential declarations, for initializers, register objects and unevaluated sizeof operands; noninteger bounds remain E2923 and entry bypasses remain E2945.
 This does not admit actual variable-sized object storage, static variably modified pointers, legacy variable-bound definitions or variably modified typeof operands, whose remaining behavior and scope reclamation are separate work.
+
+### Block-static pointers to variable arrays
+
+Per reviewed S02/S03 and `tests/fixtures/static-array-pointers.{c,out}`, block-static pointers and fixed arrays of pointers keep one static object and one-time initialization while their written pointed-to dimensions are captured at each declaration execution, as both references agree at O0/O2.
+Inline substitution retains one lifted static object and expresses each invocation's captured type as an ordinary address cast and checked memory place, including assignments, compound updates and array projections; it neither duplicates the static object nor weakens symbol/type validation.
+The final fixture passes both interpreters and two subject Linux executions; entry bypasses remain E2945, top-level const remains nonmodifiable, and actual static VLA objects or linked variably modified declarations remain E2203.
+This supersedes the preceding static-pointer deferral only, not the outstanding actual VLA allocation/reclamation or variably modified typeof work.

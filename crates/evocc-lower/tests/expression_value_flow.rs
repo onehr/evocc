@@ -98,6 +98,8 @@ fn jumps_cannot_bypass_a_variable_type_declaration() {
         "int f(int n){switch(n){typedef int A[n]; case 1:return 0;}return 0;}",
         "int f(int n){goto label; int (*p)[n]=0; label:return 0;}",
         "int f(int n){switch(n){int (*p)[n]; case 1:return 0;}return 0;}",
+        "int f(int n){goto label; static int (*p)[n]; label:return 0;}",
+        "int f(int n){switch(n){static int (*p)[n]; case 1:return 0;}return 0;}",
     ] {
         let arena = Arena::default();
         let file = FileId::new(45027);
