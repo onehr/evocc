@@ -50,6 +50,13 @@ fn local_array_pointer_declarators_capture_sizes_before_their_initializers() {
 }
 
 #[test]
+fn static_array_pointers_retain_objects_but_recapture_dimensions_on_entry() {
+    agrees(include_str!(
+        "../../../tests/fixtures/static-array-pointers.c"
+    ));
+}
+
+#[test]
 fn variable_array_typedefs_capture_sizes_at_each_declaration() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-bounds.c"

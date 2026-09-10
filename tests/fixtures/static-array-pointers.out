@@ -1,0 +1,8 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL static-array-pointers.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0/O2: exit 0/0.
+clang-19 O0/O2: exit 0/0.
+Block static pointer objects keep their storage and initial zero state,
+but their pointed-to array bounds evaluate on each declaration execution.
+Both inline calls share the static visit counter and use their own stride.
