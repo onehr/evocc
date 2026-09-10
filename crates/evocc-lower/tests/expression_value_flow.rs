@@ -36,6 +36,13 @@ fn variable_array_views_use_captured_strides_for_every_pointer_operation() {
 }
 
 #[test]
+fn multidimensional_parameters_capture_strides_on_definition_entry() {
+    agrees(include_str!(
+        "../../../tests/fixtures/parameter-array-strides.c"
+    ));
+}
+
+#[test]
 fn variable_array_typedefs_capture_sizes_at_each_declaration() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-bounds.c"

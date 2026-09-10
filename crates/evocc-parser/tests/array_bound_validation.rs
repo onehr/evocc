@@ -178,6 +178,17 @@ fn parameter_adjustment_does_not_admit_noninteger_bounds() {
 }
 
 #[test]
+fn inner_parameter_bounds_must_be_integer_even_in_prototypes() {
+    for source in [
+        "void f(int a[2][1.5]);",
+        "void f(int (*a)[(int *)0]);",
+        "void side(void); void f(int a[2][side()]);",
+    ] {
+        rejects(source, "E2923", "invalid-array-bound");
+    }
+}
+
+#[test]
 fn positive_constant_bounds_remain_valid() {
     let arena = Arena::default();
     parse(
