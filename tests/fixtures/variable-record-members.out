@@ -1,0 +1,11 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -fsyntax-only variable-record-members.c
+gcc-14: exit 0.
+clang-19: exit 1, four errors.
+  line 1:49 direct_member
+  line 3:70 typedef_member
+  line 5:67 union_member
+  line 7:75 nested_array_member
+Each error: fields must have a constant size: 'variable length array in
+structure' extension will never be supported.
+This is an oracle disagreement, not a four-way passing execution fixture.

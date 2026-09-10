@@ -72,6 +72,13 @@ fn static_pointer_capture_does_not_admit_static_vlas_or_change_const_objects() {
 }
 
 #[test]
+fn variable_record_members_are_refused_even_through_typedefs() {
+    for source in include_str!("../../../tests/fixtures/variable-record-members.c").split("\n\n") {
+        rejects(source, "E2203", "variable-length-object");
+    }
+}
+
+#[test]
 fn zero_length_arrays_have_the_sealed_oracle_layouts() {
     let source = concat!(
         "struct mid { int a; char d[0]; int b; };\n",
