@@ -25,6 +25,23 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn wide_division_keeps_live_pairs_across_helper_calls() {
+    let output = run(
+        include_str!("../../../tests/fixtures/wide-division.c"),
+        "--emit=asm",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    for name in ["__divti3", "__udivti3", "__modti3", "__umodti3"] {
+        assert!(assembly.contains(&format!("bl {name}")), "missing {name}");
+    }
+}
+
+#[test]
 fn hidden_symbol_metadata_reaches_declarations_definitions_and_addressing() {
     let source = include_str!("../../../tests/fixtures/symbol-sections.c");
     let output = run(source, "--emit=evoir");

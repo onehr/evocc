@@ -1532,3 +1532,158 @@ fn rename(text: &str, name: &impl Fn(VReg) -> String) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod spill_flag_tests {
+    use super::*;
+    use crate::{CarryOp, Cond, FlagOp, Width};
+
+    fn word(id: u32) -> VReg {
+        VReg::new(id, RegClass::Gpr64)
+    }
+    fn flags(id: u32) -> VReg {
+        VReg::new(id, RegClass::Flags)
+    }
+
+    #[test]
+    fn spill_reload_and_store_preserve_carry_adjacency() {
+        for chain in [false, true] {
+            let mut insts = vec![
+                MInst::MovImm {
+                    dst: word(0),
+                    imm: 1,
+                },
+                MInst::MovImm {
+                    dst: word(1),
+                    imm: u64::MAX,
+                },
+                MInst::MovImm {
+                    dst: word(2),
+                    imm: 7,
+                },
+                MInst::FlagBinary {
+                    op: FlagOp::Adds,
+                    dst: word(3),
+                    flags: flags(4),
+                    lhs: word(0),
+                    rhs: word(1),
+                    width: Width::X,
+                },
+            ];
+            if chain {
+                insts.push(MInst::SubCarryFlags {
+                    dst: flags(5),
+                    flags_in: flags(4),
+                    lhs: word(3),
+                    rhs: word(2),
+                    width: Width::X,
+                });
+                insts.push(MInst::Cset {
+                    dst: word(6),
+                    flags: flags(5),
+                    cond: Cond::Hi,
+                });
+            } else {
+                insts.push(MInst::CarryBinary {
+                    op: CarryOp::Adc,
+                    dst: word(6),
+                    flags: flags(4),
+                    lhs: word(3),
+                    rhs: word(2),
+                    width: Width::X,
+                });
+            }
+            let function = MFunction {
+                name: "carry_spill".into(),
+                blocks: vec![MBlock {
+                    id: 0,
+                    args: vec![],
+                    insts,
+                    term: MTerm::Ret {
+                        values: vec![word(6)],
+                    },
+                }],
+            };
+            for victims in [vec![2], vec![3], vec![2, 3, 6]] {
+                let slots = victims
+                    .iter()
+                    .enumerate()
+                    .map(|(slot, reg)| (*reg, slot as u32))
+                    .collect();
+                let rewritten = insert_spill_code(&function, &slots, &victims, &mut 100);
+                crate::validate::validate_function(&rewritten).unwrap();
+                let mut allocated = allocate(&rewritten).unwrap();
+                allocated.frame_slots = slots.len() as u32;
+                crate::verify_allocation(&allocated).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn spill_stores_after_a_flag_setting_branch_execute_on_each_edge() {
+        let function = MFunction {
+            name: "branch_spill".into(),
+            blocks: vec![
+                MBlock {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![
+                        MInst::MovImm {
+                            dst: word(0),
+                            imm: 1,
+                        },
+                        MInst::MovImm {
+                            dst: word(1),
+                            imm: 2,
+                        },
+                        MInst::FlagBinary {
+                            op: FlagOp::Adds,
+                            dst: word(3),
+                            flags: flags(4),
+                            lhs: word(0),
+                            rhs: word(1),
+                            width: Width::X,
+                        },
+                    ],
+                    term: MTerm::BCond {
+                        flags: flags(4),
+                        cond: Cond::Eq,
+                        taken: 1,
+                        taken_args: vec![],
+                        untaken: 2,
+                        untaken_args: vec![],
+                    },
+                },
+                MBlock {
+                    id: 1,
+                    args: vec![],
+                    insts: vec![],
+                    term: MTerm::Ret {
+                        values: vec![word(3)],
+                    },
+                },
+                MBlock {
+                    id: 2,
+                    args: vec![],
+                    insts: vec![],
+                    term: MTerm::Ret {
+                        values: vec![word(3)],
+                    },
+                },
+            ],
+        };
+        let rewritten = insert_spill_code(&function, &BTreeMap::from([(3, 0)]), &[3], &mut 100);
+        let mut allocated = allocate(&rewritten).unwrap();
+        allocated.frame_slots = 1;
+        crate::verify_allocation(&allocated).unwrap();
+        assert_eq!(
+            rewritten
+                .blocks
+                .iter()
+                .flat_map(|b| &b.insts)
+                .filter(|i| matches!(i, MInst::SpillStore { .. }))
+                .count(),
+            2
+        );
+    }
+}
