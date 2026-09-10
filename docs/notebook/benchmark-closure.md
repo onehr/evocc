@@ -8,18 +8,54 @@ inventory authority. Counts below overlap where a row is a subcategory.
 
 ## Execution and closure rules
 
-Each semantic family gets a minimal failing regression, a shared-path fix,
-focused tests, `tools/gate-changed.sh`, and an incremental measurement through
-`python3 tools/bench.py <affected lanes>`. A focused PASS alone is not closure.
+The 2026-09-10 instruction supersedes per-fix whole-lane measurements. Each
+semantic family gets a minimal failing regression, a shared-path fix and
+tailored validation of its affected consumers. Full survey/benchmark runs
+wait until every currently identified in-profile defect is repaired and its
+tailored tests pass. A focused PASS is recorded as locally verified, not as
+an original-program or milestone closure.
 Keep unavailable references, unsupported programs and baseline failures visible.
 No compiler changes are justified merely by reducing a diagnostic count.
-Do not rerun all lanes after every patch; the final all-lane run follows the
-incremental closures. Floating-point execution remains deferred by the user's
+Do not rerun whole lanes after every patch. After tailored validation, run
+the complete gate, isolated replay and a serial campaign through
+`python3 tools/bench.py`; classify every new failure and repeat the same
+repair loop until the reviewed completion conditions hold. Floating-point
+execution remains deferred by the user's
 standing instruction; FP-dependent milestones cannot be called complete.
 
 Order is by correctness first, then shared-path reach. Small independent
 wrong-result fixes precede changes that require new machine constraint plumbing.
 Only one heavyweight benchmark invocation runs at once.
+
+### Tailored-first execution plan (2026-09-10)
+
+Starting checkout: `21f522d`. The last torture capture remains
+`20260909T215349Z`: 1,268 PASS, 268 compiler failures, 11 FP-deferred,
+145 evidenced not-applicable and zero oracle-unusable, out of 1,692 original
+identities. The 268 unresolved programs are not 268 independent defects:
+266 are refusals, one a runtime failure and one a link failure. No planned
+improvement below is a new measurement.
+
+| Order | Remaining work | Tailored acceptance before any campaign |
+|---|---|---|
+| 1 | Source-width constant arithmetic and wide-field regressions | Existing C04 RED plus boundary values and nonconstant-overflow rejection; minimize the three lost wide-field passes, test consensus and conflicting contexts separately. Body-dependent changes remain pending the requested authority. |
+| 2 | Remaining declaration, call and initialization defects within the existing profile | One reproducer per original first-error construct; parser type assertions, C-HIR/EvoIR execution, negative compatibility tests and native execution where relevant. Include prototype parameter scope and builtin/local-function binding. |
+| 3 | Dynamic automatic objects, zero-byte objects, static addresses and integer aggregate varargs | One-time bounds, lifetime exits, invalid entry, zero-size identity/access, relocations and ABI register/stack boundaries. Reuse existing oracle probes; do not infer new IR semantics from direction-only approval. |
+| 4 | Computed branches, remaining asm operands, frame chains and kernel symbol metadata | Successor/edge validation, spills and ties, same/different function label cases, section/visibility symbols, and small linked programs. Preserve all independent validators. |
+| 5 | Integer vectors and remaining execution/type coverage | Separate header admission from execution; lane values, masks, subscript places, ABI, volatile field events, integer complex values, atomic operations and wide division boundary cases. Floating execution stays deferred. |
+| 6 | Complete original-program classification and benchmark prerequisites | Source-bound dispositions for every remaining broad refusal; retain all original options and identities, all 68 unavailable Csmith seeds and all 18 reference-baseline failures. Finish relevant adapter/workaround checks without running full campaigns. |
+| 7 | Integration and closure | Once orders 1–6 are locally verified or have evidenced permitted dispositions, run the full gate, layout corpora, isolated offline replay, then the real survey and serial benchmark campaign. Any new compiler failure reopens its family; no clean result is predicted. |
+
+Use existing test targets and fixtures, not another runner or receipt layer.
+For a shared type/IR change, build all affected construction sites and test
+parse/render/validation/execution together; for local parser defects, begin
+with parser and lowering tests only. Tailored native tests may use a handful
+of exact reproducers, but do not run the 1,692-program torture campaign,
+1,000-seed Csmith campaign or full-configuration kernel survey during the
+repair batches. Keep benchmark receipts at their measured values until the
+actual campaign runs. Tests-only RED commits must compile and fail for the
+declared behavior; implementation commits record the exact tailored command
+and result. No failure is hidden by disabling a test or changing an oracle.
 
 ## Completion checklist
 
