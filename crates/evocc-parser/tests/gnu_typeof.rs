@@ -1,11 +1,11 @@
 //! `typeof` (specification 10.1.10): a type resolved by the front end.
 
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
-use evocc_chir::{CHirDecl, CHirUnit, ParameterSyntax};
+use evocc_chir::{CHirDecl, CHirUnit, ParameterSyntax, WrittenDeclaratorLayer};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
-use evocc_types::{IntRank, TargetDataLayout, TypeKind};
+use evocc_types::{ArrayBound, IntRank, TargetDataLayout, TypeKind};
 
 fn parse<'a>(source: &str, arena: &'a Arena) -> Result<CHirUnit<'a>, String> {
     let file = SourceFile::new(
@@ -245,6 +245,78 @@ fn nested_typeof_may_resolve_an_earlier_parameter_without_panicking() {
         "h",
         &[IntRank::ULong, IntRank::ULong],
     );
+}
+
+#[test]
+fn parameter_bounds_resolve_the_prior_parameter_type() {
+    for (source, expected) in [
+        ("void f(long n, int data[sizeof(n)]);", 8),
+        ("void f(char n, int data[sizeof(n)]);", 1),
+        ("void f(long n, int data[sizeof(n++)]);", 8),
+        ("void f(long n, int data[__alignof__(n)]);", 8),
+        ("void f(int n[3], int data[sizeof(n)]);", 8),
+    ] {
+        let arena = Arena::default();
+        let unit = parse(source, &arena).unwrap_or_else(|error| panic!("{source}: {error}"));
+        let function = unit
+            .iter()
+            .find_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.name.spelling == "f" => Some(function),
+                _ => None,
+            })
+            .unwrap();
+        let parameter = &function.parameters.parameters()[1];
+        assert!(matches!(
+            unit.types().get(parameter.ty).unwrap().kind,
+            TypeKind::Pointer(_)
+        ));
+        let [WrittenDeclaratorLayer::Array { bound, .. }] = parameter.written.layers.as_slice()
+        else {
+            panic!("array parameter must preserve its written bound");
+        };
+        assert_eq!(*bound, ArrayBound::Fixed(expected), "{source}");
+    }
+}
+
+#[test]
+fn parameter_bounds_shadow_outer_names_without_leaking() {
+    for outer in ["enum { n = 2 };", "typedef char n;", "char n;"] {
+        let source = format!("{outer} void f(long n, int data[sizeof(n)]);");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena).unwrap_or_else(|error| panic!("{source}: {error}"));
+        let function = unit
+            .iter()
+            .find_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.name.spelling == "f" => Some(function),
+                _ => None,
+            })
+            .unwrap();
+        let [WrittenDeclaratorLayer::Array { bound, .. }] = function.parameters.parameters()[1]
+            .written
+            .layers
+            .as_slice()
+        else {
+            panic!("array parameter must preserve its written bound");
+        };
+        assert_eq!(*bound, ArrayBound::Fixed(8), "{source}");
+    }
+    accepts("typedef char n; void f(long n, int data[sizeof(n)]); n object;");
+    rejects(
+        "void f(long n, int data[sizeof(n)]); int object = n;",
+        "E2001",
+    );
+    rejects("void f(int n, int n[sizeof(n)]);", "E2002");
+}
+
+#[test]
+fn parameter_bounds_keep_the_variable_object_boundary_after_name_resolution() {
+    for source in [
+        "void f(int n, int data[n]);",
+        "void f(int n, int data[n]) {}",
+        "void f(long n, void (*callback)(int data[n]));",
+    ] {
+        rejects(source, "E2203");
+    }
 }
 
 #[test]

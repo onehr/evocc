@@ -76,6 +76,13 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
 }
 
 #[test]
+fn parameter_bounds_keep_scope_and_do_not_evaluate_sizeof_operands() {
+    agrees(include_str!(
+        "../../../tests/fixtures/parameter-bound-scope.c"
+    ));
+}
+
+#[test]
 fn declaration_specifier_order_preserves_storage_and_types() {
     agrees(include_str!(
         "../../../tests/fixtures/declaration-specifier-order.c"
