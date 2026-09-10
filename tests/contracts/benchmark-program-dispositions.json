@@ -6,6 +6,51 @@
     "ctest": "5c7275656d751de0e68b2d340a95b5681858ed07"
   },
   "programs": {
+    "torture:920501-7": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function y and its jump to the enclosing function label; this is not ordinary computed-goto coverage",
+      "sourceSha256": "7876deb7c4099cb42525a80cda21a55f8cc48e6cfaf4e92b5aeee8c2e469e493",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920501-7.c"
+      ]
+    },
+    "torture:comp-goto-2": {
+      "disposition": "not-applicable",
+      "reason": "reviewed S06 excludes the nested function y and its jump to the enclosing function label; the separate local computed goto does not remove that exclusion",
+      "sourceSha256": "c4d167ef0d171e1831ca6c9e009ab3d16e618fa7d0add19fbffdf55b0f5c983b",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c"
+      ]
+    },
+    "torture:pr117432": {
+      "disposition": "not-applicable",
+      "reason": "reviewed F01 excludes C23-only qux(...) and single-argument va_start(ap); the ordinary named-parameter variadic functions do not make the whole original gnu11",
+      "sourceSha256": "358d4a6891006ad25eb04f99e55096f70dba93ef0056a8a30f1da268b73025af",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr117432.c"
+      ]
+    },
+    "torture:pr123864": {
+      "disposition": "not-applicable",
+      "reason": "reviewed F09 excludes __builtin_mul_overflow_p, reached by main through foo; bracket-attribute admission does not admit that builtin",
+      "sourceSha256": "7a5499e1afefc89136bd1756451a723b1c47e8633cae3d31bc83d8a90bfa8cd6",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr123864.c"
+      ]
+    },
+    "torture:20241029-1": {
+      "disposition": "not-applicable",
+      "reason": "reviewed F09 retains the measured __builtin_puts oracle-conflict refusal; main reaches that builtin through foo",
+      "sourceSha256": "741a7c0ecb88f178c77f75342aa7affe51a61274b3c587e8b5113c04795e02ec",
+      "evidence": [
+        "docs/notebook/benchmark-applicability.md",
+        ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20241029-1.c"
+      ]
+    },
     "torture:20040709-1": {
       "disposition": "FP-deferred",
       "reason": "after the integer A-V path repair, the first refusal is T(W): main calls testW, which stores and compares long double; A-V diagnostic reductions execute correctly",

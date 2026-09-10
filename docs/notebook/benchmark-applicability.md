@@ -118,6 +118,23 @@ the six cross-function label uses and the multi-label declaration case:
 passing original result is retained. The record for `nest-stdar-1` is the
 explicit nested-function exclusion, not a second FP label.
 
+The tailored-first source review on 2026-09-10 identifies five more originals
+under already-decided exclusions, not five newly fixed compiler defects:
+
+| Original | Source-bound reason |
+|---|---|
+| 920501-7 | `x` defines nested `y`, which jumps to the enclosing `xlab`; S06 applies even under its original gnu89 option. |
+| comp-goto-2 | The same nested `y` and outer-label jump, in addition to a local indirect jump; S06 applies, not a blanket exclusion of computed goto. |
+| pr117432 | `main -> fred/corge -> qux` requires a definition with only `...` and single-argument `va_start`; R01/F01 exclude these C23 forms. |
+| pr123864 | `main -> foo` calls `__builtin_mul_overflow_p`; F09 excludes this builtin independently of the now-admitted bracket attribute. |
+| 20241029-1 | `main -> foo` reaches `__builtin_puts`; F09 retains the specific oracle-conflict refusal recorded in Appendix D, not an exclusion of ordinary declared `puts`. |
+
+Each exact upstream source and its digest is attached to the disposition
+entry. These labels apply only on the next real campaign; capture
+`20260909T215349Z` and its 268 compiler-failure count are not rewritten.
+The two nested definitions above extend the 24-source list, while ordinary
+computed goto and all in-profile integer varargs defects remain open.
+
 The same review explicitly excludes these builtin contracts:
 
 | Originals | Required out-of-profile construct |
