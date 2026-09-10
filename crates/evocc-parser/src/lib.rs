@@ -8622,7 +8622,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if !self.is_loadable_scalar(value_ty)
             && !matches!(
                 self.types.get(value_ty).map(|ty| &ty.kind),
-                Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                Some(
+                    TypeKind::Array { .. }
+                        | TypeKind::Struct(_)
+                        | TypeKind::Union(_)
+                        | TypeKind::BuiltinVaList
+                )
             )
         {
             return expression;
@@ -11619,13 +11624,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn expression_is_va_list_object(&self, expression: &CHirExpr<'arena>) -> bool {
-        let Some(InferredExpressionType {
-            ty: InferredType::Canonical(ty),
-            category: ExprCategory::LValue,
-            ..
-        }) = self.expression_type(expression)
-        else {
-            return false;
+        let ty = match expression {
+            // Projected operands retain their object identity in the checked
+            // place, even after ordinary lvalue conversion. A list returned
+            // by a call has no such place and is still not a valid operand.
+            CHirExpr::MemoryRead { place, .. } => place.value_ty(),
+            _ => {
+                let Some(InferredExpressionType {
+                    ty: InferredType::Canonical(ty),
+                    category: ExprCategory::LValue,
+                    ..
+                }) = self.expression_type(expression)
+                else {
+                    return false;
+                };
+                ty
+            }
         };
         matches!(
             self.types.get(ty).map(|ty| &ty.kind),

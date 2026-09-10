@@ -138,6 +138,9 @@ fn every_variable_argument_object_operand_must_be_builtin_va_list() {
         "int bad(int last, ...) { int ap; __builtin_va_start(ap, last); return 0; }\n",
         "int bad(void) { int ap; __builtin_va_end(ap); return 0; }\n",
         "int bad(void) { __builtin_va_list good; int bad; __builtin_va_copy(good, bad); return 0; }\n",
+        "int bad(int last, ...) { struct { int ap; } h; __builtin_va_start(h.ap, last); return 0; }\n",
+        "__builtin_va_list get(void); void bad(void) { __builtin_va_end(get()); }\n",
+        "__builtin_va_list get(void); void bad(void) { __builtin_va_list ap; __builtin_va_copy(ap, get()); }\n",
     ] {
         let arena = Arena::default();
         let diagnostic = parse(source, &arena).expect_err("non-va-list operand must be rejected");
@@ -166,6 +169,7 @@ fn va_arg_is_retained_with_its_requested_object_type() {
 fn va_arg_requires_a_va_list_and_a_non_array_non_function_object_type() {
     for source in [
         "int bad(int last, ...) { int ap; return __builtin_va_arg(ap, int); }\n",
+        "__builtin_va_list get(void); int bad(void) { return __builtin_va_arg(get(), int); }\n",
         "typedef int array_t[2]; int bad(int last, ...) { __builtin_va_list ap; return __builtin_va_arg(ap, array_t)[0]; }\n",
         "typedef int function_t(void); int bad(int last, ...) { __builtin_va_list ap; return __builtin_va_arg(ap, function_t)(); }\n",
     ] {

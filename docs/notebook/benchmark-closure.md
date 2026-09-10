@@ -187,6 +187,34 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Variadic list subobjects use ordinary value copies
+
+Tests-only commit `d9c90e8` pins the integer-only shape exposed by original
+`va-arg-13`: the C-HIR interpreter rejects the projected list with
+`function call nested outside scalar expression subset`, with no build error.
+The parser's shared projected-lvalue conversion omitted `__builtin_va_list`.
+It now retains the same checked place as a record subobject; varargs operand
+validation recovers that place without admitting a list-valued call result.
+No new value representation, interpreter operation or backend rule is needed.
+
+`tests/fixtures/projected-variadic-lists.c` checks direct members, pointer
+members, array elements, independent callee list copies, and one-time base
+and index effects. Both interpreters and canonical text round-trip pass.
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser --test
+front_end_introspection -p evocc-lower --test expression_value_flow --test
+variadic_execution --test front_end_resolved_forms --locked --offline
+--no-fail-fast --quiet -j 1` passes 93 tests, zero failures or ignored tests.
+Parser-library Clippy with `-D warnings`, fmt and Ruff pass.
+
+Both sealed reference compilers execute this fixture at O0/O2 with exit
+zero. After `cargo build -p evocc --bin evocc --locked --offline -j 1`, the
+debug subject's `--emit=asm --target=aarch64-unknown-linux-gnu` output for
+both this fixture and `parameter-bound-scope.c` is piped directly into the
+sealed GCC-14 and Clang-19 assembly/link commands; all four native runs exit
+zero (Clang uses `-fno-integrated-as`). No host capture directory is created.
+The original torture campaign remains NOT RUN for these repairs; the last
+sealed counts and the pending source-width arithmetic RED remain unchanged.
+
 ### Prior parameters in declaration expressions
 
 Tests-only commit `f4e0430` records four semantic failures and zero build
