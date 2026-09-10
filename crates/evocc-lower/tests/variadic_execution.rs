@@ -20,6 +20,43 @@ fn parse<'a>(source: &str, arena: &'a Arena) -> CHirUnit<'a> {
 const COPIED: &str = "int forwarded(__builtin_va_list ap){return __builtin_va_arg(ap,int);} int take(int n,...){__builtin_va_list ap,bp; __builtin_va_start(ap,n); int a=__builtin_va_arg(ap,int); __builtin_va_copy(bp,ap); int b=forwarded(bp); int c=__builtin_va_arg(ap,int); __builtin_va_end(bp); __builtin_va_end(ap); return a+10*b+100*c;} int main(void){signed char a=7; short b=9; return take(2,a,b);}";
 
 #[test]
+fn projected_lists_preserve_value_copies_and_once_only_address_evaluation() {
+    let arena = Arena::default();
+    let unit = parse(
+        include_str!("../../../tests/fixtures/projected-variadic-lists.c"),
+        &arena,
+    );
+    let main = unit
+        .iter()
+        .find_map(|decl| match decl {
+            CHirDecl::Function(function) if function.name.spelling == "main" => {
+                Some(function.symbol)
+            }
+            _ => None,
+        })
+        .unwrap();
+    let chir = interpret_scalar_function(&unit, main, InterpreterLimits::new(100_000));
+    assert_eq!(chir.unwrap().return_value.unwrap().raw_bits, 0);
+    let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect("list subobjects use the same value-copy path as named lists");
+    let text = evocc_evoir::render_module(&module);
+    assert!(text.contains("copy "), "{text}");
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(evocc_evoir::render_module(&parsed), text);
+    let result = interpret_module(
+        &module,
+        "main",
+        &[
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+            RuntimeValue::new(EvoIRType::World, 0),
+        ],
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(result.return_values[0].raw_bits, 0);
+}
+
+#[test]
 fn variadic_lowering_promotes_arguments_and_copies_list_state() {
     let arena = Arena::default();
     let unit = parse(COPIED, &arena);
