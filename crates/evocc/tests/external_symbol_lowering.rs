@@ -25,6 +25,21 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn wide_checked_arithmetic_reaches_machine_code() {
+    let output = run(
+        include_str!("../../../tests/fixtures/wide-checked-arithmetic.c"),
+        "--emit=asm",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    assert!(assembly.contains("mul_i:"));
+}
+
+#[test]
 fn wide_division_keeps_live_pairs_across_helper_calls() {
     let output = run(
         include_str!("../../../tests/fixtures/wide-division.c"),

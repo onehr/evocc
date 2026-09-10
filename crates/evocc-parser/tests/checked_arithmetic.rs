@@ -90,7 +90,7 @@ fn the_kernel_overflow_line_parses() {
 }
 
 #[test]
-fn checked_arithmetic_keeps_the_explicit_wide_operand_boundary() {
+fn checked_arithmetic_accepts_wide_operands_and_result_objects() {
     for ty in ["__int128", "unsigned __int128"] {
         for operation in ["add", "sub", "mul"] {
             for source in [
@@ -98,7 +98,7 @@ fn checked_arithmetic_keeps_the_explicit_wide_operand_boundary() {
                 format!("int f({ty} a){{long r;return __builtin_{operation}_overflow(1,a,&r);}}"),
                 format!("int f(void){{{ty} r;return __builtin_{operation}_overflow(1,2,&r);}}"),
             ] {
-                rejects(&source, "E2913");
+                accepts(&source);
             }
         }
     }

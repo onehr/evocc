@@ -73,60 +73,46 @@ fn file_assembly_is_preserved_and_not_executed() {
 
 #[test]
 fn checked_arithmetic_uses_exact_width_and_round_trip_representability() {
-    // The wide IR executor is delivered separately; these fixtures pin C-HIR
-    // values and the actual lowering, without pretending to execute it here.
     for (source, expected) in [
         ("int main(void){unsigned long r; return __builtin_add_overflow(-1,0,&r);}", 1),
         ("long main(void){long r; int o=__builtin_mul_overflow(70000L,70000L,&r); return o ? 0 : r;}", 4900000000),
         ("int main(void){unsigned long r; return __builtin_mul_overflow(~0ul,2,&r);}", 1),
         ("int main(void){unsigned char r; int o=__builtin_add_overflow(200,100,&r); return 100*o+r;}", 144),
         ("long main(void){long r; int o=__builtin_sub_overflow(4000000000u,-1,&r); return o ? 0 : r;}", 4000000001),
-    ] { lowered(source, expected, &["icmp.ne", "store"], false); }
+    ] { lowered(source, expected, &["icmp.ne", "store"], true); }
 }
 
 #[test]
 fn unsigned_checked_products_use_the_full_unsigned_exact_width() {
     for (arguments, expected) in [("70000ul,70000ul", 0), ("~0ul,2ul", 1), ("~0ul,~0ul", 1)] {
-        lowered(&format!("int product(unsigned long a,unsigned long b,unsigned long *r){{return __builtin_mul_overflow(a,b,r);}} int main(void){{unsigned long r; return product({arguments},&r);}}"), expected, &["mul.bits<128>", "zext.bits<128>", "trunc.bits<64>"], false);
+        lowered(&format!("int product(unsigned long a,unsigned long b,unsigned long *r){{return __builtin_mul_overflow(a,b,r);}} int main(void){{unsigned long r; return product({arguments},&r);}}"), expected, &["mul.bits<128>", "zext.bits<128>", "trunc.bits<64>"], true);
     }
     lowered(
         "int main(void){long r; return __builtin_mul_overflow(~0ul,~0ul,&r);}",
         1,
         &["mul.bits<128>", "icmp.slt"],
-        false,
+        true,
     );
     lowered("int main(void){long r; return __builtin_mul_overflow((unsigned short)65535,(unsigned short)65535,&r) || r!=4294836225L;}", 0, &["mul.bits<32>", "zext.bits<64>"], true);
 }
 
 #[test]
 fn checked_products_beyond_ir_width_still_have_defined_oracle_values() {
-    let source = "int main(void){unsigned long r; int o=__builtin_mul_overflow(~0ul,-2L,&r); return o && r==2;}";
-    let arena = Arena::default();
-    let unit = parse(source, &arena);
-    let main = unit
-        .iter()
-        .find_map(|d| match d {
-            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
-            _ => None,
-        })
-        .unwrap();
-    assert_eq!(
-        evocc_chir::interp::interpret_scalar_function(
-            &unit,
-            main,
-            evocc_chir::interp::InterpreterLimits::new(10000)
-        )
-        .unwrap()
-        .return_value
-        .unwrap()
-        .raw_bits,
-        1
+    lowered(
+        "int main(void){unsigned long r; int o=__builtin_mul_overflow(~0ul,-2L,&r); return o && r==2;}",
+        1,
+        &["mul.bits<128>", "store"],
+        true,
     );
-    assert_eq!(
-        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-            .unwrap_err()
-            .code(),
-        "E3044"
+}
+
+#[test]
+fn wide_checked_arithmetic_preserves_wrapped_results_and_overflow_flags() {
+    lowered(
+        include_str!("../../../tests/fixtures/wide-checked-arithmetic.c"),
+        0,
+        &["add.bits<128>", "sub.bits<128>", "mul.bits<128>", "store"],
+        true,
     );
 }
 

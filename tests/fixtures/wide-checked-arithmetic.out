@@ -1,0 +1,24 @@
+Probe: wide-checked-arithmetic.c, evo-flight-lab:sealed, network none
+gcc-14 -std=gnu11 -O0: execute exit=0
+gcc-14 -std=gnu11 -O2: execute exit=0
+clang-19 -std=gnu11 -O0: link failed, undefined reference to __muloti4 in mul_i
+clang-19 --rtlib=compiler-rt -std=gnu11 -O0: link failed, missing
+/usr/lib/llvm-19/lib/clang/19/lib/aarch64-unknown-linux-gnu/libclang_rt.builtins.a
+Read-only search /usr/lib and /usr/local/lib: no installed *builtins*.a,
+*clang_rt*.a or muloti4.c. Those attempts did not execute Clang code and are
+not semantic disagreements or passes.
+
+Resolved prerequisite without changing the sealed image:
+https://deb.debian.org/debian/pool/main/l/llvm-toolchain-19/libclang-rt-19-dev_19.1.7-3+b1_arm64.deb
+Archive SHA-256: fbf03af1959c43c92d990fe48a6bee9ac9f946b96641e84e693ede5ef9698f77
+Local artifact: .build/reference/compiler-runtime/libclang-rt-19-dev_19.1.7-3+b1_arm64.deb
+Installed sealed clang-19 version: 1:19.1.7-3+b1
+Command in the same sealed container, with the package mounted read-only:
+dpkg-deb -x /work/runtime/libclang-rt-19-dev_19.1.7-3+b1_arm64.deb /tmp/runtime
+clang-19 --rtlib=compiler-rt -resource-dir /tmp/runtime/usr/lib/llvm-19/lib/clang/19
+  -std=gnu11 -O0/-O2 /work/fixtures/wide-checked-arithmetic.c -o /tmp/checked
+/tmp/checked
+clang-19 compiler-rt O0 exit=0
+clang-19 compiler-rt O2 exit=0
+The helper is the official reference runtime, not a subject implementation or
+a locally invented substitute for the missing oracle operation.
