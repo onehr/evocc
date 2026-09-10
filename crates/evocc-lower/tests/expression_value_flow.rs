@@ -43,6 +43,13 @@ fn multidimensional_parameters_capture_strides_on_definition_entry() {
 }
 
 #[test]
+fn local_array_pointer_declarators_capture_sizes_before_their_initializers() {
+    agrees(include_str!(
+        "../../../tests/fixtures/local-array-pointers.c"
+    ));
+}
+
+#[test]
 fn variable_array_typedefs_capture_sizes_at_each_declaration() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-bounds.c"

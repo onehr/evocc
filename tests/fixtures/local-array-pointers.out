@@ -1,0 +1,9 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL local-array-pointers.c -o /tmp/probe
+         /tmp/probe
+gcc-14 O0/O2: exit 0/0.
+clang-19 O0/O2: exit 0/0.
+Local pointer declarators, including a fixed array of pointers, capture
+pointed-to array sizes before their initializers, once per declarator.
+Uninitialized, initialized, register, for-initializer and inline-local
+pointer objects agree; all pointed-to storage is an existing fixed array.
