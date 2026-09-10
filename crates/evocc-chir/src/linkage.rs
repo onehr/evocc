@@ -15,6 +15,9 @@ pub struct LinkageError {
 pub struct SymbolLinkage {
     pub weak: BTreeSet<SymbolId>,
     pub aliases: BTreeMap<SymbolId, SymbolId>,
+    /// An explicit default visibility is retained to detect later conflicts.
+    pub hidden: BTreeMap<SymbolId, bool>,
+    pub object_sections: BTreeMap<SymbolId, String>,
     function_names: BTreeMap<SymbolId, String>,
     assembly_targets: BTreeMap<SymbolId, SymbolId>,
 }
@@ -82,6 +85,57 @@ impl SymbolLinkage {
             let file_scope = file_declarations.contains(&(declaration as *const CHirDecl<'_>));
             if file_scope {
                 names.insert(name.clone(), symbol);
+            }
+            for attribute in attributes {
+                let is_visibility = attribute.semantic_name() == Some("visibility");
+                let is_section = attribute.semantic_name() == Some("section")
+                    && matches!(declaration, CHirDecl::Object(_));
+                if !is_visibility && !is_section {
+                    continue;
+                }
+                let error = || LinkageError {
+                    code: "E2943",
+                    message: "invalid-or-conflicting-symbol-attribute",
+                    span: attribute.span,
+                };
+                let [argument] = attribute.arguments.as_slice() else {
+                    return Err(error());
+                };
+                let inner = argument
+                    .text
+                    .strip_prefix('"')
+                    .and_then(|text| text.strip_suffix('"'))
+                    .ok_or_else(error)?;
+                let value = StringLit::single(inner, StringPrefix::None)
+                    .decoded_units()
+                    .ok_or_else(error)?
+                    .into_iter()
+                    .map(char::from_u32)
+                    .collect::<Option<String>>()
+                    .ok_or_else(error)?;
+                if value.is_empty() || value.chars().any(char::is_control) {
+                    return Err(error());
+                }
+                if is_visibility {
+                    let hidden = match value.as_str() {
+                        "default" => false,
+                        "hidden" => true,
+                        _ => return Err(error()),
+                    };
+                    if result
+                        .hidden
+                        .insert(symbol, hidden)
+                        .is_some_and(|old| old != hidden)
+                    {
+                        return Err(error());
+                    }
+                } else if result
+                    .object_sections
+                    .insert(symbol, value.clone())
+                    .is_some_and(|old| old != value)
+                {
+                    return Err(error());
+                }
             }
             let alias = attributes
                 .iter()

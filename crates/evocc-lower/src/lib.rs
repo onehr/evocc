@@ -550,6 +550,7 @@ fn lower_resolved_unit(
         let origin = origin_of(site);
         string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
         globals.push(GlobalObject {
+            section: None,
             relocs: Vec::new(),
             symbol: format!("__evocc.string.{origin}"),
             origin,
@@ -634,6 +635,7 @@ fn lower_resolved_unit(
         }
         relocs.sort_by_key(|relocation| relocation.offset);
         globals.push(GlobalObject {
+            section: None,
             symbol: format!("__evocc.compound.{}", origin_of(site)),
             origin: origin_of(site),
             kind: GlobalKind::CompoundLiteral,
@@ -700,6 +702,7 @@ fn lower_resolved_unit(
         declares.insert(
             info.name.clone(),
             FunctionDeclaration {
+                visibility: GlobalVisibility::External,
                 linkage: evocc_evoir::Linkage::Strong,
                 name: info.name.clone(),
                 variadic: info.variadic,
@@ -756,6 +759,7 @@ fn lower_resolved_unit(
         extern_objects.insert(
             entry.spelling().to_owned(),
             ExternalObject {
+                visibility: GlobalVisibility::External,
                 linkage: evocc_evoir::Linkage::Strong,
                 symbol: entry.spelling().to_owned(),
                 size,
@@ -840,6 +844,51 @@ fn lower_resolved_unit(
     for g in &mut module.extern_objects {
         if weak_names.contains(g.symbol.as_str()) {
             g.linkage = evocc_evoir::Linkage::Weak;
+        }
+    }
+    let hidden_names = linkage
+        .hidden
+        .iter()
+        .filter(|(_, hidden)| **hidden)
+        .map(|(symbol, _)| {
+            let entry = unit
+                .symbols()
+                .symbol(*symbol)
+                .expect("resolved attributed symbol");
+            linkage.function_name(*symbol, entry.spelling())
+        })
+        .collect::<BTreeSet<_>>();
+    for (name, visibility) in module
+        .functions
+        .iter_mut()
+        .map(|f| (&f.name, &mut f.visibility))
+        .chain(
+            module
+                .declares
+                .iter_mut()
+                .map(|f| (&f.name, &mut f.visibility)),
+        )
+        .chain(
+            module
+                .globals
+                .iter_mut()
+                .map(|g| (&g.symbol, &mut g.visibility)),
+        )
+        .chain(
+            module
+                .extern_objects
+                .iter_mut()
+                .map(|g| (&g.symbol, &mut g.visibility)),
+        )
+        .chain(
+            module
+                .aliases
+                .iter_mut()
+                .map(|a| (&a.name, &mut a.visibility)),
+        )
+    {
+        if *visibility == GlobalVisibility::External && hidden_names.contains(name.as_str()) {
+            *visibility = GlobalVisibility::Hidden;
         }
     }
     module.recompute_effect_summaries();
@@ -1128,6 +1177,7 @@ fn lower_globals<'a>(
     strings: &BTreeMap<usize, u64>,
     label_addresses: &BTreeMap<usize, String>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
+    let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let mut declarations = function_statics
         .iter()
         .map(|object| (object.symbol, *object))
@@ -1222,7 +1272,20 @@ fn lower_globals<'a>(
                 .symbols()
                 .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
                 .unwrap_or(false);
+            let section = linkage.object_sections.get(&object.symbol).cloned();
+            if section
+                .as_deref()
+                .is_some_and(|name| name == ".bss" || name.starts_with(".bss."))
+                && (!relocs.is_empty() || bytes.iter().any(|byte| *byte != 0))
+            {
+                return Err(LowerError::Linkage(evocc_chir::linkage::LinkageError {
+                    code: "E2943",
+                    message: "invalid-or-conflicting-symbol-attribute",
+                    span: object.span,
+                }));
+            }
             Ok(GlobalObject {
+                section,
                 relocs,
                 symbol: if file_scope {
                     symbol.spelling().to_owned()

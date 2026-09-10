@@ -333,6 +333,47 @@ fn emit_unit(
     let mut weak_functions = BTreeSet::new();
     let mut indirect_addresses = BTreeSet::new();
     if let Some(module) = module {
+        for name in module
+            .functions
+            .iter()
+            .filter(|f| f.visibility == GlobalVisibility::Hidden)
+            .map(|f| f.name.as_str())
+            .chain(
+                module
+                    .declares
+                    .iter()
+                    .filter(|f| f.visibility == GlobalVisibility::Hidden)
+                    .map(|f| f.name.as_str()),
+            )
+            .chain(
+                module
+                    .globals
+                    .iter()
+                    .filter(|g| g.visibility == GlobalVisibility::Hidden)
+                    .map(|g| g.symbol.as_str()),
+            )
+            .chain(
+                module
+                    .extern_objects
+                    .iter()
+                    .filter(|g| g.visibility == GlobalVisibility::Hidden)
+                    .map(|g| g.symbol.as_str()),
+            )
+            .chain(
+                module
+                    .aliases
+                    .iter()
+                    .filter(|a| a.visibility == GlobalVisibility::Hidden)
+                    .map(|a| a.name.as_str()),
+            )
+        {
+            let directive = if target == Target::Linux {
+                ".hidden"
+            } else {
+                ".private_extern"
+            };
+            let _ = writeln!(text, "{directive} {prefix}{name}");
+        }
         for alias in &module.aliases {
             aliases.entry(&alias.target).or_default().push(alias);
         }
@@ -367,11 +408,15 @@ fn emit_unit(
             module
                 .extern_objects
                 .iter()
+                .filter(|g| g.visibility != GlobalVisibility::Hidden || g.linkage == Linkage::Weak)
                 .map(|g| (SymbolKind::Global, g.symbol.as_str()))
                 .chain(
                     module
                         .declares
                         .iter()
+                        .filter(|f| {
+                            f.visibility != GlobalVisibility::Hidden || f.linkage == Linkage::Weak
+                        })
                         .map(|f| (SymbolKind::Function, f.name.as_str())),
                 ),
         );
@@ -410,13 +455,28 @@ fn emit_unit(
         ordered.sort_by_key(|global| global.origin);
         // A global names its section only when the section changes, so a unit
         // whose globals all hold content emits the one `.data` it always did.
-        let mut section = "";
+        let mut section = String::new();
         for global in ordered {
             let zero_filled = is_zero_filled(global);
-            let wanted = if zero_filled {
-                target.bss_section()
+            let wanted = if let Some(name) = &global.section {
+                match target {
+                    Target::Linux => format!(
+                        ".section {name:?},\"aw\",%{}",
+                        if global.has_bss_section() {
+                            "nobits"
+                        } else {
+                            "progbits"
+                        }
+                    ),
+                    Target::Darwin => match name.split_once(',') {
+                        Some((segment, name)) => format!(".section {segment:?},{name:?}"),
+                        None => format!(".section {name:?}"),
+                    },
+                }
+            } else if zero_filled {
+                target.bss_section().to_owned()
             } else {
-                target.data_section()
+                target.data_section().to_owned()
             };
             if wanted != section {
                 let _ = writeln!(text, "\n{wanted}");
@@ -429,7 +489,7 @@ fn emit_unit(
             );
             // Section 8 (revision 0.16): an internal object's symbol is local
             // to the object file, so it is defined and never declared global.
-            if global.visibility == GlobalVisibility::External {
+            if global.visibility != GlobalVisibility::Internal {
                 emit_definition_linkage(
                     &mut text,
                     target,
@@ -495,7 +555,7 @@ fn emit_aliases(
 ) {
     let prefix = target.symbol_prefix();
     for alias in aliases.into_iter().flatten() {
-        if alias.visibility == GlobalVisibility::External {
+        if alias.visibility != GlobalVisibility::Internal {
             emit_definition_linkage(text, target, &alias.name, alias.linkage == Linkage::Weak);
         }
         if target == Target::Linux {

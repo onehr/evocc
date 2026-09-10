@@ -194,6 +194,38 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Hidden symbols and explicit object sections
+
+Tests-only `11a9c29` records six semantic failures and zero build errors.
+Hidden visibility now reaches definitions, declarations, aliases and native
+symbol directives; strong hidden addresses use direct page relocations while
+weak hidden addresses retain nullable GOT access. Explicit object sections
+preserve alignment and relocations, including zero-initialized PROGBITS and
+the validated NOBITS boundary. EvoMIR reuses the canonical global text reader
+and writer instead of losing relocations through its old duplicate path.
+
+Tailored commands are `cargo test -p evocc-evoir --test symbol_linkage --test
+function_linkage --test section9_completeness -p evocc --test
+external_symbol_lowering --locked --offline --no-fail-fast -j 1` and
+`cargo test -p evocc-mir --test section8_external_symbols --test section8_linkage
+--test section8_emission --test section8_zero_runs --locked --offline
+--no-fail-fast -j 1`, with `CARGO_TARGET_DIR=target/frontend`.
+They pass 117 distinct tests, zero failed or ignored; the six initially
+filtered metadata tests are included, not added again. The first regression
+attempt exposed one stale sentinel header after adding hidden visibility;
+the expected canonical header was corrected and the test rerun, not disabled.
+Affected-library Clippy with `-D warnings`, fmt, Ruff and diff-check pass.
+
+Both sealed compilers execute `symbol-sections.c` with its reference caller
+at O0/O2, and both assemble/link and execute the subject's Linux output,
+all six exiting zero. ELF inspection checks hidden undefined/defined symbols,
+the alias, direct versus GOT relocations and sections of size/alignment 4/64
+and 8/8. Conflicting attribute probes and their exact reference outcomes are
+in `tests/fixtures/symbol-sections.out`; E2943 refuses disagreements rather
+than silently picking a reference. These are object-section/default-hidden
+visibility checks, not full ELF attribute support or a newly passing kernel
+boot. All original campaign counts remain unchanged.
+
 ### Ancestor frame addresses
 
 Tests-only `a852841` records 30 passing guards, four semantic failures and

@@ -6684,19 +6684,19 @@ Both sealed compilers at O0/O2 execute `accepted.c` under `.evidence/builtin-pro
 No instruction or diagnostic is added, and a missing operand remains an expression error.
 The mixed-link adapters previously erased this spelling before measurement, so original-program replay without that adaptation is required rather than attributing predicted gains to the focused probe.
 
-### Hidden external visibility requires body authority
+### Hidden symbol visibility
 
-Section 10.1.9's preserved-but-not-applied attribute boundary remains authoritative for `visibility("hidden")`; this entry does not authorize new symbol metadata or change default external addressing.
-Both sealed compilers emit direct page-relative address relocations and a hidden undefined symbol for `hidden.c`, versus GOT relocations and default visibility for `default.c`, under `.evidence/builtin-probes/20260909-hidden-extern/` (`results.txt`).
-K1 run `measure-20260909T133504Z` emits GOT accesses in two vDSO units (`vgettimeofday.o`, `vgetrandom.o`) and its combined vDSO link rejects dynamic relocations; individual-unit link isolation is not claimed.
-No diagnostic is allocated, and the missing IR visibility and machine-emission contract remains pending architecture review rather than a passing kernel result.
+The 2026-09-10 implementation authorization admits `visibility("hidden")` as linked-image binding, independent of C internal linkage and weak strength: global definitions spell `visibility=hidden`, and functions, declarations, extern objects and aliases optionally spell it before `linkage`; an external declaration cannot have C internal linkage.
+ELF emission marks the symbol `.hidden` and addresses strong hidden references directly, but keeps the GOT for weak hidden references so unresolved weak addresses remain null; a hidden definition is still externally callable and is not discarded as an unused static function.
+The paired `tests/fixtures/symbol-sections.c` / `symbol-sections-caller.c` probe passes both sealed compilers at O0/O2, with exact symbol/relocation observations and the `symbol-attribute-errors.c` edge cases recorded in `symbol-sections.out`; conflicting explicit default/hidden redeclarations are E2943 `invalid-or-conflicting-symbol-attribute`, and this implementation admits only those two attribute values rather than guessing another visibility's semantics.
+This replaces the earlier pending-authority entry without changing Section 10.1.9's body; the two measured vDSO units in K1 `measure-20260909T133504Z` motivate the change, and their new campaign outcomes remain unmeasured.
 
-### Object section placement requires body authority
+### Explicit object sections
 
-Section 10.1.9 explicitly preserves `section` without applying it, so this record does not authorize silently adding section metadata or native placement semantics.
-Both sealed compilers put the two objects of `.evidence/builtin-probes/20260909-object-sections/section.c` into the named sections with their declared alignment (`results.txt`).
-In K1 run `measure-20260909T133504Z`, the reference `cpuinfo.o` places its 360-byte `cpu_data` in `.data..percpu`, while the emitted object places it in `.bss`; the isolated substitution links but its boot logs a paging Oops before the timeout, and no corrected-section boot has yet established that this is the sole cause.
-One isolated failing unit is measured, no new diagnostic is allocated, and a body contract for section metadata, textual form and emission remains required.
+The same authorization admits an object's `section` as placement metadata, with canonical ` section="name"` after its initialization bitmap and before optional `relocs`, using the existing quoted-string encoding; the object identity, layout, initialization and relocation rules are unchanged, and EvoMIR preserves the same global line rather than maintaining a second serializer.
+On the GNU/Linux target, explicit writable data sections are emitted as named PROGBITS even for zero bytes, except `.bss` and `.bss.*`, which are NOBITS and may contain no nonzero initializer or relocation; absent placement retains the previous data/BSS selection.
+The sealed probes in `tests/fixtures/symbol-sections.out` agree on `.data..percpu` size/alignment 4/64 and `.data.rel.ro.refs` 8/8; empty names, embedded control bytes, conflicting section redeclarations and nonzero NOBITS initializers are E2943 (the first three have a recorded oracle disagreement), with no silent choice between reference answers.
+This replaces the earlier pending-authority entry only in this appendix: K1's isolated `cpuinfo.o` had misplaced `cpu_data` and a boot Oops, but a corrected single-unit boot has not yet established that placement was its sole cause, so one measured failing unit is not a newly passing kernel claim.
 
 ### Memory and general assembly operand probes
 

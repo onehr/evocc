@@ -66,6 +66,15 @@ fn object_section_metadata_reaches_zero_bytes_and_symbol_relocations() {
         String::from_utf8_lossy(&output.stderr)
     );
     let text = String::from_utf8(output.stdout).unwrap();
+    let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    let machine =
+        evocc_mir::lower_module_for(evocc_mir::Target::Linux, &module, &|_| false).unwrap();
+    let machine_text = evocc_mir::render_module(&machine);
+    let reread = evocc_mir::parse_module(&machine_text).unwrap();
+    assert_eq!(
+        reread.globals, module.globals,
+        "machine text must not lose object metadata or relocations"
+    );
     for (symbol, section) in [
         ("counter", ".data..percpu"),
         ("reference", ".data.rel.ro.refs"),

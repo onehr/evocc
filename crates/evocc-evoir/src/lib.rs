@@ -25,8 +25,8 @@ pub use assembly::{
     assembly_register_type, AssemblyEdge, AssemblyInput, AssemblyLabel, AssemblyOutput,
     InlineAssembly,
 };
-pub use text::{render_module, validate_section9_bytes};
-pub use text_parse::parse_section9_module;
+pub use text::{render_global, render_module, validate_section9_bytes};
+pub use text_parse::{parse_global_text, parse_section9_module};
 
 // ---------------------------------------------------------------------------
 // Core data types
@@ -763,9 +763,10 @@ pub struct Function {
     /// Link visibility (revision 1.9.70).
     ///
     /// `Internal` is the linkage of a C definition whose storage class is
-    /// `static`, including `static inline`; every other function is
-    /// `External`, which is what the canonical text spells by omitting the
-    /// field.  The machine emits no global symbol for an internal function
+    /// `static`, including `static inline`; other functions are `External`
+    /// unless a hidden-visibility attribute binds them to the linked image.
+    /// The canonical text omits the default `External` field. The machine
+    /// emits no global symbol for an internal function
     /// and drops one nothing in the module references; the interpreters are
     /// indifferent to it, since a module is executed whole.
     pub visibility: GlobalVisibility,
@@ -787,6 +788,7 @@ pub struct Module {
 /// Storage supplied by a linker, never allocated or initialized by this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalObject {
+    pub visibility: GlobalVisibility,
     pub linkage: Linkage,
     pub symbol: String,
     pub size: Option<u64>,
@@ -796,6 +798,7 @@ pub struct ExternalObject {
 /// A callable interface without an implementation or a producer-supplied effect summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDeclaration {
+    pub visibility: GlobalVisibility,
     pub linkage: Linkage,
     pub name: String,
     pub params: Vec<EvoIRType>,
@@ -824,7 +827,7 @@ impl FunctionDeclaration {
             ret_tys: self.ret_tys.clone(),
             effects: EffectSummary::top(),
             linkage: self.linkage,
-            visibility: GlobalVisibility::External,
+            visibility: self.visibility,
             blocks: Vec::new(),
             param_marks: self.param_marks.clone(),
         }
@@ -1012,6 +1015,18 @@ pub enum GlobalVisibility {
     #[default]
     External,
     Internal,
+    /// External linkage without interposition from outside the linked image.
+    Hidden,
+}
+
+impl GlobalVisibility {
+    pub const fn suffix(self) -> &'static str {
+        match self {
+            Self::External => "",
+            Self::Internal => " visibility=internal",
+            Self::Hidden => " visibility=hidden",
+        }
+    }
 }
 
 /// Symbol strength is independent of visibility and of the value's type.
@@ -1043,6 +1058,8 @@ pub struct SymbolAlias {
 /// One eagerly allocated module object and its byte initialization state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalObject {
+    /// Explicit native object placement, independent of storage and type identity.
+    pub section: Option<String>,
     pub linkage: Linkage,
     pub relocs: Vec<Relocation>,
     pub symbol: String,
@@ -1052,6 +1069,33 @@ pub struct GlobalObject {
     pub layout: AccessLayout,
     pub bytes: Vec<u8>,
     pub initialized: Vec<bool>,
+}
+
+impl GlobalObject {
+    pub fn has_bss_section(&self) -> bool {
+        self.section
+            .as_deref()
+            .is_some_and(|name| name == ".bss" || name.starts_with(".bss."))
+    }
+
+    fn validate_section(&self) -> Result<(), String> {
+        if self
+            .section
+            .as_ref()
+            .is_some_and(|name| name.is_empty() || name.chars().any(char::is_control))
+        {
+            return Err("invalid object section name".into());
+        }
+        if self.has_bss_section()
+            && (!self.relocs.is_empty() || self.bytes.iter().any(|byte| *byte != 0))
+        {
+            return Err(
+                "a NOBITS object section cannot contain initialized nonzero bytes or relocations"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1458,6 +1502,17 @@ pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Resul
 }
 
 pub fn validate_module(module: &Module) -> Result<(), String> {
+    if module
+        .extern_objects
+        .iter()
+        .any(|object| object.visibility == GlobalVisibility::Internal)
+        || module
+            .declares
+            .iter()
+            .any(|function| function.visibility == GlobalVisibility::Internal)
+    {
+        return Err("an external declaration cannot have internal linkage".into());
+    }
     let mut functions = HashMap::new();
     let mut symbols = HashSet::new();
     for name in module
@@ -1564,6 +1619,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
     let mut globals = HashMap::new();
     let mut origins = HashSet::new();
     for global in &module.globals {
+        global.validate_section()?;
         validate_layout(global.layout, "module global", 0)?;
         let size = usize::try_from(global.layout.size_bytes)
             .map_err(|_| format!("global '{}' size exceeds host limits", global.symbol))?;

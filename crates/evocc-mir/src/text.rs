@@ -18,7 +18,7 @@
 
 use std::fmt::Write as _;
 
-use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility};
+use evocc_evoir::GlobalObject;
 
 use crate::{
     AsmBody, AsmConstraint, AsmOperand, AsmValue, MBlock, MFunction, MInst, MModule, MTerm,
@@ -49,35 +49,7 @@ pub fn render_module(module: &MModule) -> String {
 /// The Section 8 data line, in the EvoIR Section 9 spelling: "globals as data
 /// ... with their EvoIR initial bytes".
 fn render_global(text: &mut String, global: &GlobalObject) {
-    let bytes: String = global
-        .bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    let initialized: String = global
-        .initialized
-        .iter()
-        .map(|bit| if *bit { '1' } else { '0' })
-        .collect();
-    let kind = match global.kind {
-        GlobalKind::File => "file",
-        GlobalKind::FunctionStatic => "function_static",
-        GlobalKind::StringLiteral => "string_literal",
-        GlobalKind::CompoundLiteral => "compound_literal",
-    };
-    let visibility = match global.visibility {
-        GlobalVisibility::External => "external",
-        GlobalVisibility::Internal => "internal",
-    };
-    let _ = writeln!(
-        text,
-        "global @{} origin={} kind={kind} visibility={visibility}{} size={} align={} bytes={bytes} initialized={initialized}",
-        global.symbol,
-        global.origin,
-        global.linkage.suffix(),
-        global.layout.size_bytes,
-        global.layout.align_bytes,
-    );
+    text.push_str(&evocc_evoir::render_global(global));
 }
 
 fn render_function(text: &mut String, function: &MFunction) {

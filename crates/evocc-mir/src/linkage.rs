@@ -37,7 +37,7 @@ pub fn emitted_functions(module: &Module) -> BTreeSet<String> {
     let mut kept = module
         .functions
         .iter()
-        .filter(|function| function.visibility == GlobalVisibility::External)
+        .filter(|function| function.visibility != GlobalVisibility::Internal)
         .map(|function| function.name.clone())
         .collect::<BTreeSet<String>>();
 

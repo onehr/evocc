@@ -119,7 +119,7 @@ impl ModuleParser<'_> {
             .get(self.position)
             .is_some_and(|line| line.starts_with("global @"))
         {
-            globals.push(parse_global(self.lines[self.position])?);
+            globals.push(parse_global_text(self.lines[self.position])?);
             self.position += 1;
         }
         if !globals.is_empty()
@@ -150,9 +150,11 @@ impl ModuleParser<'_> {
             cursor.expect(" align=")?;
             let align =
                 u32::try_from(cursor.index()?).map_err(|_| "external alignment exceeds u32")?;
+            let visibility = parse_visibility(&mut cursor)?;
             let linkage = parse_linkage(&mut cursor)?;
             cursor.finish()?;
             extern_objects.push(ExternalObject {
+                visibility,
                 linkage,
                 symbol,
                 size,
@@ -171,6 +173,7 @@ impl ModuleParser<'_> {
         {
             let header = parse_declaration_header(self.lines[self.position])?;
             declares.push(FunctionDeclaration {
+                visibility: header.visibility,
                 linkage: header.linkage,
                 variadic: header.signature.variadic,
                 name: header.name,
@@ -365,12 +368,7 @@ fn parse_alias(line: &str) -> Result<SymbolAlias, String> {
     let name = cursor.ident()?.to_owned();
     cursor.expect(" = @")?;
     let target = cursor.ident()?.to_owned();
-    let visibility = if cursor.at(" visibility=internal") {
-        cursor.expect(" visibility=internal")?;
-        GlobalVisibility::Internal
-    } else {
-        GlobalVisibility::External
-    };
+    let visibility = parse_visibility(&mut cursor)?;
     let linkage = parse_linkage(&mut cursor)?;
     cursor.finish()?;
     Ok(SymbolAlias {
@@ -381,7 +379,51 @@ fn parse_alias(line: &str) -> Result<SymbolAlias, String> {
     })
 }
 
+fn parse_visibility(cursor: &mut Cursor<'_>) -> Result<GlobalVisibility, String> {
+    if cursor.at(" visibility=internal") {
+        cursor.expect(" visibility=internal")?;
+        Ok(GlobalVisibility::Internal)
+    } else if cursor.at(" visibility=hidden") {
+        cursor.expect(" visibility=hidden")?;
+        Ok(GlobalVisibility::Hidden)
+    } else {
+        Ok(GlobalVisibility::External)
+    }
+}
+
+/// Parse one canonical global line without its terminating newline.
+/// Cross-symbol relocation and origin checks belong to module validation.
+pub fn parse_global_text(line: &str) -> Result<GlobalObject, String> {
+    crate::validate_section9_bytes(format!("{line}\n").as_bytes())?;
+    let global = parse_global(line)?;
+    crate::validate_layout(global.layout, "module global", 0)?;
+    if global.bytes.len() as u64 != global.layout.size_bytes
+        || global.initialized.len() != global.bytes.len()
+    {
+        return Err("global bytes/initialized lengths must equal its size".into());
+    }
+    global.validate_section()?;
+    if crate::render_global(&global).strip_suffix('\n') != Some(line) {
+        return Err("global is not in canonical Section 9 form".into());
+    }
+    Ok(global)
+}
+
 fn parse_global(line: &str) -> Result<GlobalObject, String> {
+    let mut section = None;
+    let without_section;
+    let line = if let Some((head, tail)) = line.split_once(" section=") {
+        let mut cursor = Cursor::new(tail);
+        section = Some(cursor.quoted()?);
+        let rest = &tail[cursor.position..];
+        if !rest.is_empty() && !rest.starts_with(" relocs=") {
+            return Err("unexpected object section suffix".into());
+        }
+        without_section = format!("{head}{rest}");
+        without_section.as_str()
+    } else {
+        line
+    };
     let (line, relocations) = line
         .split_once(" relocs=")
         .map_or((line, None), |(line, rest)| (line, Some(rest)));
@@ -444,6 +486,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
     let visibility = match parse_named(fields[4], "visibility")? {
         "external" => GlobalVisibility::External,
         "internal" => GlobalVisibility::Internal,
+        "hidden" => GlobalVisibility::Hidden,
         _ => return Err("unknown module-global visibility".to_owned()),
     };
     let size = parse_named_u64(fields[5], "size")?;
@@ -467,6 +510,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(GlobalObject {
+        section,
         linkage,
         relocs,
         symbol,
@@ -488,6 +532,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     cursor.expect(") -> (")?;
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = target_default")?;
+    let visibility = parse_visibility(&mut cursor)?;
     let linkage = parse_linkage(&mut cursor)?;
     cursor.finish()?;
     check_marks(&params, &marks)?;
@@ -495,10 +540,8 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
         name,
         convention: "target_default".to_owned(),
         alignment: 4,
-        // A `declare` names a symbol this module does not define, so it has no
-        // linkage of its own and Section 9 gives it no visibility field.
         linkage,
-        visibility: GlobalVisibility::External,
+        visibility,
         signature: Signature {
             params,
             marks,
@@ -549,16 +592,7 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = ")?;
     let convention = cursor.ident()?.to_owned();
-    // Revision 1.9.70: the trailing field is optional and has exactly one
-    // spelling.  Absence means external, and `visibility=external` is not a
-    // canonical text, so the cursor admits only the internal form and
-    // `finish` refuses anything else that follows the convention.
-    let visibility = if cursor.at(" visibility=internal") {
-        cursor.expect(" visibility=internal")?;
-        GlobalVisibility::Internal
-    } else {
-        GlobalVisibility::External
-    };
+    let visibility = parse_visibility(&mut cursor)?;
     let linkage = parse_linkage(&mut cursor)?;
     let alignment = if cursor.at(" align=") {
         cursor.expect(" align=")?;

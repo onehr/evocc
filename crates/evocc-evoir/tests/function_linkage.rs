@@ -79,7 +79,7 @@ fn an_external_function_omits_the_field() {
 }
 
 #[test]
-fn only_the_internal_spelling_is_admitted() {
+fn noncanonical_visibility_spellings_are_refused() {
     for spelling in [
         " cc = target_default visibility=external",
         " cc = target_default visibility=Internal",

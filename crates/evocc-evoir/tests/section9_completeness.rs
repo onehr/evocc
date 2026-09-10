@@ -293,6 +293,7 @@ fn sentinel_module() -> Module {
         declares: Vec::new(),
         globals: vec![
             GlobalObject {
+                section: Some(".data.sentinel".into()),
                 relocs: Vec::new(),
                 symbol: "sentinel_file".to_owned(),
                 origin: 7001,
@@ -304,6 +305,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![true, false, true],
             },
             GlobalObject {
+                section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.static.sentinel.7002".to_owned(),
                 origin: 7002,
@@ -315,6 +317,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![false, true],
             },
             GlobalObject {
+                section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.string.7003".to_owned(),
                 origin: 7003,
@@ -326,6 +329,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![true],
             },
             GlobalObject {
+                section: None,
                 symbol: "__evocc.compound.7004".into(),
                 origin: 7004,
                 kind: GlobalKind::CompoundLiteral,
@@ -344,7 +348,7 @@ fn sentinel_module() -> Module {
         functions: vec![Function {
             alignment: 256,
             linkage: evocc_evoir::Linkage::Weak,
-            visibility: evocc_evoir::GlobalVisibility::External,
+            visibility: evocc_evoir::GlobalVisibility::Hidden,
             variadic: false,
             name: "sentinel_function".to_owned(),
             params,
@@ -750,6 +754,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     }
     for global in globals {
         let GlobalObject {
+            section,
             linkage,
             symbol,
             origin,
@@ -761,6 +766,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             relocs,
         } = global;
         let _ = (
+            section,
             linkage,
             symbol,
             origin,
@@ -772,8 +778,9 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             relocs,
         );
         keys.insert(
-            "GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs)",
+            "GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section)",
         );
+        keys.insert("GlobalObject.section");
         let AccessLayout {
             size_bytes,
             align_bytes,
@@ -888,7 +895,11 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         GlobalKind::StringLiteral,
         GlobalKind::CompoundLiteral,
     ];
-    let visibility = [GlobalVisibility::External, GlobalVisibility::Internal];
+    let visibility = [
+        GlobalVisibility::External,
+        GlobalVisibility::Internal,
+        GlobalVisibility::Hidden,
+    ];
     let marks = [
         ParamMark::None,
         ParamMark::ByVal(RecordShape { size: 24, align: 8 }),
@@ -972,6 +983,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         keys.insert(match value {
             GlobalVisibility::External => "GlobalVisibility.External",
             GlobalVisibility::Internal => "GlobalVisibility.Internal",
+            GlobalVisibility::Hidden => "GlobalVisibility.Hidden",
         });
     }
     for value in marks {

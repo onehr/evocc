@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
+use evocc_evoir::GlobalObject;
 
 use crate::{
     AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
@@ -69,90 +69,7 @@ pub fn parse_module(text: &str) -> Result<MModule, String> {
 }
 
 fn parse_global(line: &str) -> Result<GlobalObject, String> {
-    if line.split(' ').nth(5) == Some("linkage=weak") {
-        let mut global = parse_global(&line.replacen(" linkage=weak", "", 1))?;
-        global.linkage = evocc_evoir::Linkage::Weak;
-        return Ok(global);
-    }
-    let rest = line
-        .strip_prefix("global @")
-        .ok_or_else(|| format!("not a global line: '{line}'"))?;
-    let mut fields = rest.split(' ');
-    let symbol = fields
-        .next()
-        .ok_or_else(|| "global has no symbol".to_owned())?
-        .to_owned();
-    let mut attribute = |key: &str| -> Result<String, String> {
-        let field = fields
-            .next()
-            .ok_or_else(|| format!("global @{symbol} has no {key}"))?;
-        field
-            .strip_prefix(&format!("{key}="))
-            .map(str::to_owned)
-            .ok_or_else(|| format!("global @{symbol} expected {key}=, found '{field}'"))
-    };
-    let origin: u64 = attribute("origin")?
-        .parse()
-        .map_err(|_| "global origin is an unsigned decimal".to_owned())?;
-    let kind = match attribute("kind")?.as_str() {
-        "file" => GlobalKind::File,
-        "function_static" => GlobalKind::FunctionStatic,
-        "string_literal" => GlobalKind::StringLiteral,
-        "compound_literal" => GlobalKind::CompoundLiteral,
-        other => return Err(format!("unknown global kind '{other}'")),
-    };
-    let visibility = match attribute("visibility")?.as_str() {
-        "external" => GlobalVisibility::External,
-        "internal" => GlobalVisibility::Internal,
-        other => return Err(format!("unknown visibility '{other}'")),
-    };
-    let size: u64 = attribute("size")?
-        .parse()
-        .map_err(|_| "global size is an unsigned decimal".to_owned())?;
-    let align: u32 = attribute("align")?
-        .parse()
-        .map_err(|_| "global align is an unsigned decimal".to_owned())?;
-    let bytes_text = attribute("bytes")?;
-    let initialized_text = attribute("initialized")?;
-    if fields.next().is_some() {
-        return Err("a global line carries exactly its enumerated fields".to_owned());
-    }
-    if bytes_text.len() as u64 != size * 2 {
-        return Err("a bytes run is exactly two hex digits per byte".to_owned());
-    }
-    let mut bytes = Vec::new();
-    for pair in bytes_text.as_bytes().chunks(2) {
-        let text = std::str::from_utf8(pair).map_err(|_| "invalid hex byte".to_owned())?;
-        if !text
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
-            return Err(format!("hex bytes are lowercase: '{text}'"));
-        }
-        bytes.push(u8::from_str_radix(text, 16).map_err(|_| "invalid hex byte".to_owned())?);
-    }
-    if initialized_text.len() as u64 != size {
-        return Err("an initialized run is exactly one bit per byte".to_owned());
-    }
-    let initialized = initialized_text
-        .chars()
-        .map(|bit| match bit {
-            '0' => Ok(false),
-            '1' => Ok(true),
-            other => Err(format!("an initialized bit is 0 or 1, found '{other}'")),
-        })
-        .collect::<Result<Vec<bool>, String>>()?;
-    Ok(GlobalObject {
-        linkage: evocc_evoir::Linkage::Strong,
-        relocs: Vec::new(),
-        symbol,
-        origin,
-        kind,
-        visibility,
-        layout: AccessLayout::new(size, align),
-        bytes,
-        initialized,
-    })
+    evocc_evoir::parse_global_text(line)
 }
 
 fn parse_function(lines: &[&str], cursor: &mut usize) -> Result<MFunction, String> {

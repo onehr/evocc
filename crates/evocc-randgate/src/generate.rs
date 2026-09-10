@@ -256,6 +256,7 @@ fn generate_globals(
             };
             let bytes = (0..8).map(|_| (rng.next_u64() & 0xff) as u8).collect();
             GlobalObject {
+                section: None,
                 linkage: evocc_evoir::Linkage::Strong,
                 relocs: Vec::new(),
                 symbol: format!("g{index}"),

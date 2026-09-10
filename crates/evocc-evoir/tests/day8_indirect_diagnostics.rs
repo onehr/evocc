@@ -313,6 +313,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
         declares: Vec::new(),
         globals: match stored {
             StoredProvenance::Object => vec![GlobalObject {
+                section: None,
                 relocs: Vec::new(),
                 symbol: "object_source".to_owned(),
                 origin: 8001,

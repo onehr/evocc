@@ -69,6 +69,52 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Render one global definition, including its placement and relocations.
+/// EvoMIR shares this object representation and its canonical line syntax.
+#[must_use]
+pub fn render_global(global: &crate::GlobalObject) -> String {
+    let bytes = global
+        .bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let initialized = global
+        .initialized
+        .iter()
+        .map(|bit| if *bit { '1' } else { '0' })
+        .collect::<String>();
+    let kind = match global.kind {
+        GlobalKind::File => "file",
+        GlobalKind::FunctionStatic => "function_static",
+        GlobalKind::StringLiteral => "string_literal",
+        GlobalKind::CompoundLiteral => "compound_literal",
+    };
+    let visibility = match global.visibility {
+        GlobalVisibility::External => "external",
+        GlobalVisibility::Internal => "internal",
+        GlobalVisibility::Hidden => "hidden",
+    };
+    let mut rendered = format!("global @{} origin={} kind={kind} visibility={visibility}{} size={} align={} bytes={bytes} initialized={initialized}", global.symbol, global.origin, global.linkage.suffix(), global.layout.size_bytes, global.layout.align_bytes);
+    if let Some(section) = &global.section {
+        rendered.push_str(" section=");
+        rendered.push_str(&quoted_string(section));
+    }
+    if !global.relocs.is_empty() {
+        rendered.push_str(" relocs=[");
+        rendered.push_str(
+            &global
+                .relocs
+                .iter()
+                .map(|r| format!("({}, @{}, {})", r.offset, r.symbol, r.addend))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+        rendered.push(']');
+    }
+    rendered.push('\n');
+    rendered
+}
+
 /// Render a module in the canonical human-readable syntax from specification
 /// Section 9.
 ///
@@ -81,49 +127,7 @@ pub fn render_module(module: &Module) -> String {
     let mut globals = module.globals.iter().collect::<Vec<_>>();
     globals.sort_by_key(|global| global.origin);
     for global in &globals {
-        let bytes = global
-            .bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        let initialized = global
-            .initialized
-            .iter()
-            .map(|bit| if *bit { '1' } else { '0' })
-            .collect::<String>();
-        rendered.push_str(&format!(
-            "global @{} origin={} kind={} visibility={}{} size={} align={} bytes={} initialized={}\n",
-            global.symbol,
-            global.origin,
-            match global.kind {
-                GlobalKind::File => "file",
-                GlobalKind::FunctionStatic => "function_static",
-                GlobalKind::StringLiteral => "string_literal",
-                GlobalKind::CompoundLiteral => "compound_literal",
-            },
-            match global.visibility {
-                GlobalVisibility::External => "external",
-                GlobalVisibility::Internal => "internal",
-            },
-            global.linkage.suffix(),
-            global.layout.size_bytes,
-            global.layout.align_bytes,
-            bytes,
-            initialized
-        ));
-        if !global.relocs.is_empty() {
-            rendered.pop();
-            rendered.push_str(" relocs=[");
-            rendered.push_str(
-                &global
-                    .relocs
-                    .iter()
-                    .map(|r| format!("({}, @{}, {})", r.offset, r.symbol, r.addend))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
-            rendered.push_str("]\n");
-        }
+        rendered.push_str(&render_global(global));
     }
     if !globals.is_empty()
         && (!module.extern_objects.is_empty()
@@ -136,12 +140,13 @@ pub fn render_module(module: &Module) -> String {
 
     for object in &module.extern_objects {
         rendered.push_str(&format!(
-            "extern @{} size={} align={}{}\n",
+            "extern @{} size={} align={}{}{}\n",
             object.symbol,
             object
                 .size
                 .map_or_else(|| "unknown".to_owned(), |size| size.to_string()),
             object.align,
+            object.visibility.suffix(),
             object.linkage.suffix()
         ));
     }
@@ -154,7 +159,7 @@ pub fn render_module(module: &Module) -> String {
     }
     for declaration in &module.declares {
         rendered.push_str(&format!(
-            "declare @{}({}) -> ({}) cc = target_default{}\n",
+            "declare @{}({}) -> ({}) cc = target_default{}{}\n",
             declaration.name,
             render_parameter_types(
                 &declaration.params,
@@ -167,6 +172,7 @@ pub fn render_module(module: &Module) -> String {
                 .map(render_type)
                 .collect::<Vec<_>>()
                 .join(", "),
+            declaration.visibility.suffix(),
             declaration.linkage.suffix()
         ));
     }
@@ -179,11 +185,7 @@ pub fn render_module(module: &Module) -> String {
             "alias @{} = @{}{}{}\n",
             alias.name,
             alias.target,
-            if alias.visibility == GlobalVisibility::Internal {
-                " visibility=internal"
-            } else {
-                ""
-            },
+            alias.visibility.suffix(),
             alias.linkage.suffix()
         ));
     }
@@ -821,12 +823,7 @@ fn render_function(function: &Function) -> String {
         .map(render_type)
         .collect::<Vec<_>>()
         .join(", ");
-    // Revision 1.9.70: the field is written only for an internal function, so
-    // every module text that predates the revision renders unchanged.
-    let visibility = match function.visibility {
-        GlobalVisibility::External => "",
-        GlobalVisibility::Internal => " visibility=internal",
-    };
+    let visibility = function.visibility.suffix();
     let alignment = if function.alignment == 4 {
         String::new()
     } else {
@@ -949,6 +946,7 @@ mod tests {
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![GlobalObject {
+                section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.string.7".to_owned(),
                 origin: 7,
