@@ -8,6 +8,95 @@ fn agrees(source: &str) {
     evaluates(source, None);
 }
 
+#[test]
+fn volatile_bit_fields_execute_and_keep_neighboring_bits() {
+    agrees(include_str!(
+        "../../../tests/fixtures/volatile-bit-fields.c"
+    ));
+}
+
+#[test]
+fn volatile_bit_fields_have_equal_traces_and_declared_container_widths() {
+    let source = include_str!("../../../tests/fixtures/volatile-bit-fields.c");
+    let arena = Arena::default();
+    let file = FileId::new(45024);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let symbol = unit
+        .iter()
+        .find_map(|decl| match decl {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        })
+        .unwrap();
+    let chir =
+        interp::interpret_scalar_function(&unit, symbol, interp::InterpreterLimits::new(100_000))
+            .unwrap();
+    assert_eq!(chir.return_value.unwrap().raw_bits, 0);
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    evocc_evoir::validate_module(&module).unwrap();
+    let text = evocc_evoir::render_module(&module);
+    assert_eq!(
+        evocc_evoir::render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),
+        text
+    );
+    let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+    let args = main
+        .params
+        .iter()
+        .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+        .collect::<Vec<_>>();
+    let ir = evocc_evoir::interpret_module(
+        &module,
+        "main",
+        &args,
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(ir.return_values[0].raw_bits, 0);
+    assert!(!chir.world.volatile_trace().is_empty());
+    assert_eq!(chir.world.volatile_trace(), ir.world.volatile_trace());
+    for (name, expected) in [
+        ("read_small", vec![("load", 32)]),
+        ("write_small", vec![("load", 32), ("store", 32)]),
+        (
+            "increment_small",
+            vec![("load", 32), ("load", 32), ("store", 32)],
+        ),
+        ("read_large", vec![("load", 64)]),
+        ("write_large", vec![("load", 64), ("store", 64)]),
+    ] {
+        let function = module.functions.iter().find(|f| f.name == name).unwrap();
+        let accesses = function
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .filter_map(|i| match i {
+                evocc_evoir::Inst::Load {
+                    result,
+                    volatile: true,
+                    ..
+                } => Some(("load", result.ty.clone())),
+                evocc_evoir::Inst::Store {
+                    value,
+                    volatile: true,
+                    ..
+                } => Some(("store", value.ty.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let expected = expected
+            .into_iter()
+            .map(|(op, width)| (op, evocc_types::EvoIRType::Bits(width)))
+            .collect::<Vec<_>>();
+        assert_eq!(accesses, expected, "{name}");
+    }
+}
+
 fn evaluates(source: &str, diagnostic: Option<&str>) {
     let arena = Arena::default();
     let file = FileId::new(45023);

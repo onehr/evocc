@@ -1,0 +1,23 @@
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Command: COMPILER -std=gnu11 -OLEVEL volatile-bit-fields.c -o /tmp/fields;
+         /tmp/fields
+gcc-14 O0: exit=0
+gcc-14 O2: exit=0
+clang-19 O0: exit=0
+clang-19 O2: exit=0
+
+O2 assembly inspection, not a claim of identical instruction sequences:
+read_small: both one 32-bit load.
+write_small: GCC one 16-bit load/store; Clang one 32-bit load/store.
+increment_small: GCC 32-bit load + 16-bit load/store;
+                 Clang two 32-bit loads + one 32-bit store.
+read_large: both one 64-bit load.
+write_large: both one 64-bit load/store.
+read_three (packed size 3): GCC three byte loads;
+                           Clang byte load at 2 + halfword load at 0.
+write_three: GCC three byte read/modify/write accesses;
+             Clang halfword and byte loads, then halfword and byte stores.
+
+The agreed numerical results do not establish a single oracle access trace.
+The reviewed declared-container rule chooses 32 bits for the small ordinary
+record, as Clang does; packed accesses must stay within their storage span.
