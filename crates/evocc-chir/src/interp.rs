@@ -1209,6 +1209,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: *span,
                 })?;
             self.initialize_static_plan(binding, initializer, *span)?;
+            self.memory = self
+                .memory
+                .finish_static_initializer(binding.address)
+                .map_err(|error| self.memory_error(error, *span))?;
             if self
                 .unit
                 .types()
@@ -1236,6 +1240,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: declaration.span,
                 })?;
             self.initialize_static_plan(binding, initializer, declaration.span)?;
+            self.memory = self
+                .memory
+                .finish_static_initializer(binding.address)
+                .map_err(|error| self.memory_error(error, declaration.span))?;
         }
         Ok(())
     }

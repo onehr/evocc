@@ -8,6 +8,7 @@ static void *truncated = (void *)(((u128)1 << 100) | 0x1234);
 static void *roundtrip = (void *)(unsigned long)(char *)0xa000;
 static callback absolute_function = (callback)0x2340;
 static void *selected = 1 ? (void *)0x3450 : (void *)0x4560;
+static void *unsigned_condition = (void *)(1 ? -1 : 1U);
 struct addresses { int tag; void *pointer; };
 static struct addresses entries[4] = {
     [0 ... 3] = {7, (void *)2}, [2] = {9, (void *)0x80}
@@ -32,5 +33,6 @@ int main(void) {
     if (*symbolic != 11) return 11;
     if ((unsigned long)encoded.pointer != 0x5670) return 12;
     if ((unsigned long)field_encoded.pointer != 0x6780) return 13;
+    if ((unsigned long)unsigned_condition != 0xffffffffUL) return 14;
     return 0;
 }

@@ -194,6 +194,30 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Static absolute addresses without invented provenance
+
+Tests-only `0c9bc5f` records four semantic failures and zero build errors:
+two lowering tests report E3026 and two memory tests reject static address
+bytes. The reviewed S12 rule is now implemented using existing global bytes,
+not fake symbols or a new IR instruction. Intermediate integer casts and
+conditional arithmetic conversions are preserved. C-HIR completes static
+initializer representations consistently with EvoIR, retaining actual symbolic
+pointer fragments and leaving arbitrary addresses unexposed.
+
+`CARGO_TARGET_DIR=target/frontend cargo test -p evocc-memory --lib -p
+evocc-lower --test relocations_and_addresses --locked --offline --no-fail-fast
+-j 1 --quiet` passes 53 tests. The follow-up `cargo test -p evocc-lower
+--test relocations_and_addresses --test static_storage_and_discard -p
+evocc-chir --lib --locked --offline --no-fail-fast -j 1 --quiet` passes 82;
+these commands cover 111 distinct tests, not 135. The final fixture also
+pins `(void *)(1 ? -1 : 1U)` to `0xffffffff`, not a sign-extended value.
+The two sealed compilers execute the fixture at O0/O2 with four zero exits;
+debug EvoCC assembly linked by each sealed toolchain also exits zero (two
+runs). `cargo clippy -p evocc-memory -p evocc-chir -p evocc-lower --lib
+--locked --offline -j 1 -- -D warnings`, fmt, Ruff and diff-check pass.
+No frozen benchmark count or original-program verdict is changed by these
+tailored results.
+
 ### Wide-field consensus and conflicting precision contexts
 
 Tests-only `36288de` records three parser semantic failures and one lowering
@@ -215,6 +239,8 @@ outputs in `tests/fixtures/wide-bit-field-contexts.out` and Appendix D.
 unsupported_bit_field_semantics -p evocc-lower --test
 static_storage_and_discard --locked --offline --no-fail-fast -j 1 --quiet`
 passes 26 tests (nine parser, 17 lowering), no failures or ignored tests.
+The fresh debug subject's assembly for the consensus fixture also links and
+executes with zero exits under both sealed native toolchains.
 These are local regression results; the original-program counts remain at
 the last sealed campaign, and the full campaign is deliberately not rerun.
 

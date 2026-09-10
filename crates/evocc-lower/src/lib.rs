@@ -1744,12 +1744,23 @@ fn apply_static_initializer(
             }
         }
         InitAction::StoreScalar { value, .. } => {
-            // Null uses the static zero representation; a non-null address
-            // needs a symbolic relocation, not fabricated pointer bytes.
+            // Absolute integer addresses have target bits but no symbol or
+            // allocation provenance. Symbolic addresses still require relocs.
             if matches!(
                 unit.types().get(destination).map(|ty| &ty.kind),
                 Some(TypeKind::Pointer(_))
             ) {
+                if let Some(integer) = absolute_static_integer(unit, target, value) {
+                    if target_bytes.len() != target.pointer_layout().size_bytes as usize {
+                        return Err(LowerError::StaticRelocation { span });
+                    }
+                    write_static_integer_bytes(
+                        integer.cast(CIntegerType::ULONG).raw_bits(),
+                        target,
+                        target_bytes,
+                    );
+                    return Ok(());
+                }
                 if static_null_pointer(unit, target, value) {
                     target_bytes.fill(0);
                     return Ok(());
@@ -1782,16 +1793,7 @@ fn apply_static_initializer(
                     })?;
             let destination_integer = canonical_integer(unit.types(), target, destination, span)?;
             let raw = integer.cast(destination_integer).raw_bits();
-            let byte_len = target_bytes.len();
-            for (index, byte) in target_bytes.iter_mut().enumerate() {
-                let shift = match target.byte_order() {
-                    evocc_types::ByteOrder::Little => index * 8,
-                    evocc_types::ByteOrder::Big => (byte_len - index - 1) * 8,
-                };
-                *byte = raw
-                    .checked_shr(u32::try_from(shift).unwrap_or(u32::MAX))
-                    .unwrap_or(0) as u8;
-            }
+            write_static_integer_bytes(raw, target, target_bytes);
         }
         InitAction::CopyAggregate { value, span, .. } => {
             let CHirExpr::CompoundLit(ty, initializer, _) = value else {
@@ -1819,6 +1821,57 @@ fn apply_static_initializer(
         }
     }
     Ok(())
+}
+
+fn write_static_integer_bytes(raw: u128, target: &TargetDataLayout, bytes: &mut [u8]) {
+    let byte_len = bytes.len();
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        let shift = match target.byte_order() {
+            evocc_types::ByteOrder::Little => index * 8,
+            evocc_types::ByteOrder::Big => (byte_len - index - 1) * 8,
+        };
+        *byte = raw
+            .checked_shr(u32::try_from(shift).unwrap_or(u32::MAX))
+            .unwrap_or(0) as u8;
+    }
+}
+
+// Recognize numeric address constants without erasing intermediate integer
+// casts. An object/function symbol deliberately cannot enter this path.
+fn absolute_static_integer(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> Option<CInteger> {
+    // Preserve the usual arithmetic conversions of an integer conditional
+    // before its surrounding pointer cast, e.g. (void *)(1 ? -1 : 1U).
+    if let Some(value) = constant_integer(unit, target, expression) {
+        return Some(value);
+    }
+    match expression {
+        CHirExpr::Cast(ty, operand, span) => {
+            let integer = match unit.types().get(*ty)?.kind {
+                TypeKind::Pointer(_) if target.pointer_layout().size_bytes == 8 => {
+                    CIntegerType::ULONG
+                }
+                _ => canonical_integer(unit.types(), target, *ty, *span).ok()?,
+            };
+            Some(absolute_static_integer(unit, target, operand)?.cast(integer))
+        }
+        CHirExpr::Ternary(condition, left, right, _) => {
+            let condition = absolute_static_integer(unit, target, condition)?.truth();
+            absolute_static_integer(unit, target, if condition { left } else { right })
+        }
+        CHirExpr::Elvis(value, fallback, _) => {
+            let value = absolute_static_integer(unit, target, value)?;
+            if value.truth() {
+                Some(value)
+            } else {
+                absolute_static_integer(unit, target, fallback)
+            }
+        }
+        _ => None,
+    }
 }
 
 fn subobject_offset(

@@ -491,9 +491,9 @@ struct PointerFragment {
 }
 
 impl PointerFragment {
-    // Static zero initialization denotes null independently of a slot's offset.
-    // Ordinary byte stores never manufacture this provenance marker.
-    const STATIC_NULL: Self = Self {
+    // Static initializer bits can denote an integer address independently of
+    // a slot's offset. Ordinary runtime stores never manufacture this marker.
+    const STATIC_INITIALIZER: Self = Self {
         pointer: PointerValue::Null,
         slot_size: 0,
         byte_index: 0,
@@ -501,15 +501,13 @@ impl PointerFragment {
 }
 
 impl ByteSequence {
-    /// Decode module initializer bytes, retaining the target's static null form.
+    /// Retain initializer bytes for a later pointer-sized address conversion.
     /// This is not a constructor for ordinary runtime byte writes.
     pub fn try_from_static_initializer(bytes: Vec<u8>) -> Result<Self, MemoryFault> {
         let mut value = Self::try_from_bytes(bytes)?;
-        for (byte, fragment) in value.bytes.iter().zip(&mut value.pointer_fragments) {
-            if *byte == 0 {
-                *fragment = Some(PointerFragment::STATIC_NULL);
-            }
-        }
+        value
+            .pointer_fragments
+            .fill(Some(PointerFragment::STATIC_INITIALIZER));
         Ok(value)
     }
 
@@ -1288,6 +1286,35 @@ impl MemoryState {
         Ok((next, pointer))
     }
 
+    /// Complete static initialization without exposing any object or function.
+    /// Existing symbolic pointer fragments are retained; initialized plain
+    /// bytes acquire only the same marker as a module's initializer bytes.
+    pub fn finish_static_initializer(&self, pointer: Pointer) -> Result<Self, MemoryFault> {
+        let object = self
+            .objects
+            .get(&pointer.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: pointer.object,
+            })?;
+        if pointer.byte_offset != 0 || object.info.owner != ObjectOwner::Static {
+            return Err(MemoryFault::ReadOnlyObject {
+                object: pointer.object,
+            });
+        }
+        let mut next = self.clone();
+        let object = next
+            .objects
+            .get_mut(&pointer.object)
+            .expect("object checked before cloning");
+        for (initialized, fragment) in object.initialized.iter().zip(&mut object.pointer_fragments)
+        {
+            if *initialized && fragment.is_none() {
+                *fragment = Some(PointerFragment::STATIC_INITIALIZER);
+            }
+        }
+        Ok(next)
+    }
+
     /// Freeze a fully initialized static object against subsequent stores.
     pub fn freeze_static(&self, pointer: Pointer) -> Result<Self, MemoryFault> {
         if pointer.object.is_null() {
@@ -2059,7 +2086,8 @@ impl MemoryState {
                 repeat_value(length, initial == InitialState::Zeroed, layout.size_bytes)?,
                 repeat_value(
                     length,
-                    (initial == InitialState::Zeroed).then_some(PointerFragment::STATIC_NULL),
+                    (initial == InitialState::Zeroed)
+                        .then_some(PointerFragment::STATIC_INITIALIZER),
                     layout.size_bytes,
                 )?,
             ),
@@ -2242,9 +2270,16 @@ impl MemoryState {
             && representation
                 .pointer_fragments
                 .iter()
-                .all(|part| *part == Some(PointerFragment::STATIC_NULL))
+                .all(|part| *part == Some(PointerFragment::STATIC_INITIALIZER))
         {
-            return Ok(PointerValue::Null);
+            let bits = decode_integer(self.config.byte_order, &representation.bytes)?;
+            let bits = u64::try_from(bits)
+                .map_err(|_| MemoryFault::InvalidPointerRepresentation { address, access })?;
+            return Ok(if bits == 0 {
+                PointerValue::Null
+            } else {
+                PointerValue::Exposed(bits)
+            });
         }
         let first = representation
             .pointer_fragments

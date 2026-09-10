@@ -6132,6 +6132,13 @@ With a signed operand of the field's declared width, arithmetic and conditional 
 The same sealed probe gives `ffffff0000000001/0` for division by `-1L`, `0/ffffffffff` for its remainder, and `1/0` for the negative wide sum's sign, at both optimization levels.
 No diagnostic is added; this records measured boundaries of the authorized narrowing, not evidence that every comparison or full-width operand is safe.
 
+### Absolute static integer addresses (2026-09-10 authorization)
+
+Per S12, an integer address constant initializes pointer storage with its target bits and no symbolic relocation; each intermediate integer cast retains its own width and signedness before the pointer-width conversion.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/absolute-static-addresses.c` with exit zero, including narrow signed/unsigned casts, 128-bit truncation, range overrides, function-pointer values, and scalar/bit-field union representations.
+Static initialization preserves known symbolic pointer fragments and otherwise permits decoding a complete initialized pointer-sized representation as `ptr.from_int` would: no object or function becomes exposed merely by storing those bits, and ordinary runtime byte writes do not create this initializer marker.
+No instruction or diagnostic is added; the existing E3013/E3016 access/call failures remain, and original torture `20021010-2` plus the previously surveyed absolute-address kernel shapes still require final campaign replay.
+
 ### Pending body revision: dynamic automatic objects
 
 The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.evidence/builtin-probes/20260909-dynamic-objects/{objects.c,results.txt}` for one-time bounds, recorded `sizeof`, prior parameters, scope exits and function-lifetime `alloca`.
