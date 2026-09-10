@@ -381,6 +381,7 @@ struct FunctionLowerer<'a> {
     address_labels: BTreeMap<String, BlockId>,
     pending_gotos: BTreeMap<String, Vec<State>>,
     object_declarations: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
+    size_symbols: &'a BTreeSet<SymbolId>,
     active_control: ControlTargets,
 }
 
@@ -528,6 +529,16 @@ fn lower_resolved_unit(
             })
         });
     let functions = index_functions(unit, target, memory_profile)?;
+    let size_symbols = unit
+        .types()
+        .captured_array_bounds()
+        .filter_map(|raw| {
+            unit.symbols()
+                .symbols_in_source_order()
+                .get(raw as usize)
+                .map(|symbol| symbol.id())
+        })
+        .collect::<BTreeSet<_>>();
     prevalidate_unit_for_lowering(unit, target, &global_register_symbols)?;
     let mut globals = Vec::new();
     let mut string_origins = BTreeMap::new();
@@ -590,6 +601,7 @@ fn lower_resolved_unit(
             &functions,
             info,
             &memory_symbols,
+            &size_symbols,
             &global_registers,
             &allocation_origins,
             &compound_origins,
@@ -3319,6 +3331,7 @@ impl<'a> FunctionLowerer<'a> {
         functions: &'a BTreeMap<SymbolId, FunctionInfo>,
         info: &'a FunctionInfo,
         memory_symbols: &'a BTreeSet<SymbolId>,
+        size_symbols: &'a BTreeSet<SymbolId>,
         global_registers: &'a BTreeMap<SymbolId, String>,
         allocation_origins: &'a BTreeMap<SymbolId, u64>,
         compound_origins: &BTreeMap<usize, (u64, bool)>,
@@ -3350,6 +3363,7 @@ impl<'a> FunctionLowerer<'a> {
             address_labels: BTreeMap::new(),
             pending_gotos: BTreeMap::new(),
             object_declarations: BTreeMap::new(),
+            size_symbols,
             active_control: ControlTargets::default(),
         }
     }
@@ -3923,6 +3937,7 @@ impl<'a> FunctionLowerer<'a> {
             // containing only `goto` silently turns live values into poison.
             if (!self.goto_names.is_empty()
                 || symbols.contains(&symbol)
+                || self.size_symbols.contains(&symbol)
                 || matches!(key, EnvKey::Address(_)))
                 && seen.insert(key)
             {
@@ -5256,20 +5271,150 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn pointer_arithmetic_scale(
-        &self,
+        &mut self,
         pointee: TypeId,
         span: SourceSpan,
-    ) -> Result<u64, LowerError> {
-        if matches!(
-            self.unit
-                .types()
-                .get(pointee)
-                .map(|canonical| &canonical.kind),
-            Some(TypeKind::Void)
-        ) {
-            return Ok(1);
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let (fixed, captures) = self
+            .target
+            .array_size_factors(self.unit.types(), pointee)
+            .map_err(|source| LowerError::Layout {
+                ty: pointee,
+                span,
+                source,
+            })?;
+        let mut size = self.constant(state, CIntegerType::ULONG, fixed)?;
+        for raw in captures {
+            let symbol = self
+                .unit
+                .symbols()
+                .symbols_in_source_order()
+                .get(raw as usize)
+                .ok_or(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "array size capture has no symbol",
+                })?;
+            let count = state.env.get(&EnvKey::Local(symbol.id())).cloned().ok_or(
+                LowerError::UnsupportedExpression {
+                    span,
+                    feature: "array size capture has no active value",
+                },
+            )?;
+            if symbol.kind() != SymbolKind::Object
+                || canonical_integer(self.unit.types(), self.target, symbol.ty(), span)?
+                    != CIntegerType::ULONG
+                || self
+                    .unit
+                    .types()
+                    .get(symbol.ty())
+                    .is_none_or(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic)
+                || count.value.ty != EvoIRType::Bits(64)
+                || count.integer != Some(CIntegerType::ULONG)
+            {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "array size capture is not size_t",
+                });
+            }
+            let wide_size = self.cast(size, CIntegerType::UINT128, state)?;
+            let wide_count = self.cast(
+                ExprValue {
+                    value: count.value,
+                    integer: CIntegerType::ULONG,
+                },
+                CIntegerType::UINT128,
+                state,
+            )?;
+            let product =
+                self.emit_raw_binary(state, Inst::Mul, &wide_size.value, &wide_count.value)?;
+            let maximum = self.constant(state, CIntegerType::UINT128, i64::MAX as u64)?;
+            let fits = self.checked_compare(state, CmpOp::ULe, &product, &maximum.value)?;
+            let zero = self.constant(state, CIntegerType::UINT128, 0)?;
+            let checked = self.select_bits(state, &fits, &product, &zero.value)?;
+            size = self.cast(
+                ExprValue {
+                    value: checked,
+                    integer: CIntegerType::UINT128,
+                },
+                CIntegerType::ULONG,
+                state,
+            )?;
         }
-        Ok(self.access_layout(pointee, span)?.size_bytes)
+        Ok(size)
+    }
+
+    fn offset_for_type(
+        &mut self,
+        base: Value,
+        index: ExprValue,
+        direction: OffsetDirection,
+        pointee: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let (fixed, captures) = self
+            .target
+            .array_size_factors(self.unit.types(), pointee)
+            .map_err(|source| LowerError::Layout {
+                ty: pointee,
+                span,
+                source,
+            })?;
+        let signedness = if index.integer.is_signed() {
+            IndexSignedness::Signed
+        } else {
+            IndexSignedness::Unsigned
+        };
+        if captures.is_empty() {
+            return self.offset_address(base, index, direction, signedness, fixed, state);
+        }
+        let scale = self.pointer_arithmetic_scale(pointee, span, state)?;
+        // Retain the full product so checked pointer arithmetic sees negative
+        // indexes and oversized deltas, not a wrapped 64-bit byte offset.
+        let wide = if index.integer.is_signed() {
+            CIntegerType::INT128
+        } else {
+            CIntegerType::UINT128
+        };
+        let index = self.cast(index, wide, state)?;
+        let narrow = self.cast(
+            index.clone(),
+            if wide.is_signed() {
+                CIntegerType::LONG
+            } else {
+                CIntegerType::ULONG
+            },
+            state,
+        )?;
+        let widened = self.cast(narrow, wide, state)?;
+        let representable = self.checked_compare(state, CmpOp::Eq, &index.value, &widened.value)?;
+        let zero = self.constant(state, CIntegerType::ULONG, 0)?;
+        let positive_scale = self.checked_compare(state, CmpOp::Ne, &scale.value, &zero.value)?;
+        let representable =
+            self.emit_raw_binary(state, Inst::And, &representable, &positive_scale)?;
+        let scale = self.cast(scale, wide, state)?;
+        let product = self.fresh_value(EvoIRType::Bits(128));
+        self.emit(
+            state,
+            Inst::Mul(product.clone(), widened.value, scale.value),
+        )?;
+        // A source index wider than the address model must not wrap during
+        // multiplication and become an in-bounds index. Preserve a checked
+        // invalid delta instead; ptr.offset reports the existing E3011.
+        let invalid = self.wide_constant(state, wide, 1_u128 << 64)?;
+        let product = self.select_bits(state, &representable, &product, &invalid.value)?;
+        self.offset_address(
+            base,
+            ExprValue {
+                value: product,
+                integer: wide,
+            },
+            direction,
+            signedness,
+            1,
+            state,
+        )
     }
 
     fn is_aggregate_type(&self, ty: TypeId) -> bool {
@@ -5690,17 +5835,12 @@ impl<'a> FunctionLowerer<'a> {
                         .expect("retained indexed address")
                         .value;
                     let promoted = self.cast(index, projection.promoted_index(), state)?;
-                    let layout = self.access_layout(projection.element_ty(), span)?;
-                    address = self.offset_address(
+                    address = self.offset_for_type(
                         address,
                         promoted,
                         OffsetDirection::Add,
-                        if projection.promoted_index().is_signed() {
-                            IndexSignedness::Signed
-                        } else {
-                            IndexSignedness::Unsigned
-                        },
-                        layout.size_bytes,
+                        projection.element_ty(),
+                        span,
                         state,
                     )?;
                 }
@@ -8853,10 +8993,9 @@ impl<'a> FunctionLowerer<'a> {
             && !right_pointer
         {
             let pointee = self.pointer_pointee_type(left_expression, span)?;
-            let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
             let promoted_type = integer_promotion(right.integer);
             let index = self.cast(right, promoted_type, state)?;
-            let value = self.offset_address(
+            let value = self.offset_for_type(
                 left.value,
                 index,
                 if operator == BinaryOp::Add {
@@ -8864,12 +9003,8 @@ impl<'a> FunctionLowerer<'a> {
                 } else {
                     OffsetDirection::Subtract
                 },
-                if promoted_type.is_signed() {
-                    IndexSignedness::Signed
-                } else {
-                    IndexSignedness::Unsigned
-                },
-                scale_bytes,
+                pointee,
+                span,
                 state,
             )?;
             return Ok(ExprValue {
@@ -8879,19 +9014,14 @@ impl<'a> FunctionLowerer<'a> {
         }
         if operator == BinaryOp::Add && !left_pointer && right_object_pointer {
             let pointee = self.pointer_pointee_type(right_expression, span)?;
-            let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
             let promoted_type = integer_promotion(left.integer);
             let index = self.cast(left, promoted_type, state)?;
-            let value = self.offset_address(
+            let value = self.offset_for_type(
                 right.value,
                 index,
                 OffsetDirection::Add,
-                if promoted_type.is_signed() {
-                    IndexSignedness::Signed
-                } else {
-                    IndexSignedness::Unsigned
-                },
-                scale_bytes,
+                pointee,
+                span,
                 state,
             )?;
             return Ok(ExprValue {
@@ -8901,12 +9031,27 @@ impl<'a> FunctionLowerer<'a> {
         }
         if operator == BinaryOp::Sub && left_object_pointer && right_object_pointer {
             let pointee = self.pointer_pointee_type(left_expression, span)?;
-            let scale = self.pointer_arithmetic_scale(pointee, span)?;
+            let scale = self.pointer_arithmetic_scale(pointee, span, state)?;
+            let mut left = left;
+            if self
+                .target
+                .array_size_factors(self.unit.types(), pointee)
+                .is_ok_and(|(_, captures)| !captures.is_empty())
+            {
+                let zero = self.constant(state, CIntegerType::LONG, 0)?;
+                left.value = self.offset_for_type(
+                    left.value,
+                    zero,
+                    OffsetDirection::Add,
+                    pointee,
+                    span,
+                    state,
+                )?;
+            }
             let left = self.cast(left, CIntegerType::ULONG, state)?;
             let right = self.cast(right, CIntegerType::ULONG, state)?;
             let bytes = self.fresh_value(EvoIRType::Bits(64));
             self.emit(state, Inst::Sub(bytes.clone(), left.value, right.value))?;
-            let scale = self.constant(state, CIntegerType::LONG, scale)?;
             let result = self.fresh_value(EvoIRType::Bits(64));
             self.emit(state, Inst::SDiv(result.clone(), bytes, scale.value))?;
             return Ok(ExprValue {
@@ -10765,21 +10910,9 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
         };
-        let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
         let promoted_type = integer_promotion(index.integer);
         let index = self.cast(index, promoted_type, state)?;
-        let value = self.offset_address(
-            pointer.value,
-            index,
-            direction,
-            if promoted_type.is_signed() {
-                IndexSignedness::Signed
-            } else {
-                IndexSignedness::Unsigned
-            },
-            scale_bytes,
-            state,
-        )?;
+        let value = self.offset_for_type(pointer.value, index, direction, pointee, span, state)?;
         Ok(ExprValue {
             value,
             integer: CIntegerType::ULONG,

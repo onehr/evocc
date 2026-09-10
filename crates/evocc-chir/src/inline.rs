@@ -902,11 +902,12 @@ impl<'a> Substitution<'a, '_> {
                 pointer_type,
             } => PlaceRoot::PointerExpression {
                 pointer: self.expr(pointer, c)?,
-                pointer_type: *pointer_type,
+                pointer_type: pointer_type
+                    .with_pointee(self.substituted_type(pointer_type.pointee(), c)),
             },
             PlaceRoot::CompoundLiteral { expression, ty } => PlaceRoot::CompoundLiteral {
                 expression: self.expr(expression, c)?,
-                ty: *ty,
+                ty: self.substituted_type(*ty, c),
             },
         };
         let mut projections = Vec::new();
@@ -915,17 +916,18 @@ impl<'a> Substitution<'a, '_> {
                 PlaceProjection::Field(f) => PlaceProjection::Field(*f),
                 PlaceProjection::Index(i) => PlaceProjection::Index(IndexProjection::new(
                     self.expr(i.index(), c)?,
-                    i.element_ty(),
+                    self.substituted_type(i.element_ty(), c),
                     i.promoted_index(),
                 )),
             });
         }
+        let value_ty = self.substituted_type(p.value_ty(), c);
         MemoryPlace::derive(
             &self.unit.symbols,
             &self.unit.types,
             root,
             projections,
-            p.value_ty(),
+            value_ty,
         )
         .map_err(|e| self.error(span, e))
     }
@@ -939,13 +941,26 @@ impl<'a> Substitution<'a, '_> {
         c.expand_calls &= expand_calls;
         let mut actions = i.plan.actions().to_vec();
         for a in &mut actions {
+            let (InitAction::StoreScalar {
+                destination_type, ..
+            }
+            | InitAction::CopyAggregate {
+                destination_type, ..
+            }
+            | InitAction::StoreString {
+                destination_type, ..
+            }
+            | InitAction::ZeroScalar {
+                destination_type, ..
+            }) = a;
+            *destination_type = self.substituted_type(*destination_type, c);
             if let InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } =
                 a
             {
                 *value = self.expr(value, c)?;
             }
         }
-        let mut plan = InitPlan::new(i.plan.target_type(), actions)
+        let mut plan = InitPlan::new(self.substituted_type(i.plan.target_type(), c), actions)
             .with_flexible_array_elements(i.plan.flexible_array_elements());
         if i.plan.zero_fills_unwritten() {
             plan = plan.with_zero_fill_unwritten();
@@ -1025,6 +1040,13 @@ impl<'a> Substitution<'a, '_> {
                 .map_err(|e| self.error(o.span, e))?;
         }
         if c.prefix.is_some() && o.storage != StorageClass::Extern {
+            o.ty = self.substituted_type(o.ty, c);
+            let (TypeSpecifier::Builtin { ty, .. }
+            | TypeSpecifier::TypedefName { ty, .. }
+            | TypeSpecifier::Tag { ty, .. }
+            | TypeSpecifier::Typeof { resolved: ty, .. }
+            | TypeSpecifier::AutoType { resolved: ty, .. }) = &mut o.specifier;
+            *ty = self.substituted_type(*ty, c);
             let s = self.fresh(c.scope, o.ty, o.storage, o.span)?;
             c.replacements.insert(o.symbol, s);
             o.symbol = s;
@@ -1064,6 +1086,36 @@ impl<'a> Substitution<'a, '_> {
         }
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
+    /// Instantiating a local type must rename its captured sizes as well as
+    /// its object uses. Tags retain their nominal identity; VM record fields
+    /// are not admitted by C, so only pointer/array layers need rebuilding.
+    fn substituted_type(&mut self, ty: TypeId, c: &Context<'a>) -> TypeId {
+        if c.replacements.is_empty() {
+            return ty;
+        }
+        let Some(mut canonical) = self.unit.types.get(ty).cloned() else {
+            return ty;
+        };
+        match &mut canonical.kind {
+            TypeKind::Pointer(pointee) => *pointee = self.substituted_type(*pointee, c),
+            TypeKind::Array { element, bound } => {
+                *element = self.substituted_type(*element, c);
+                if let evocc_types::ArrayBound::Captured(raw) = bound {
+                    if let Some(symbol) = self
+                        .unit
+                        .symbols
+                        .symbols_in_source_order()
+                        .get(*raw as usize)
+                    {
+                        *raw = self.symbol(symbol.id(), c).raw();
+                    }
+                }
+            }
+            _ => return ty,
+        }
+        self.unit.types.intern(canonical)
+    }
+
     fn expr(
         &mut self,
         e: &'a CHirExpr<'a>,
@@ -1081,9 +1133,13 @@ impl<'a> Substitution<'a, '_> {
         let mut out = e.clone();
         match &mut out {
             CHirExpr::Ident {
-                symbol, spelling, ..
+                symbol,
+                spelling,
+                facts,
+                ..
             } => {
                 *symbol = self.symbol(*symbol, c);
+                *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *spelling = self
                     .unit
                     .symbols
@@ -1093,8 +1149,11 @@ impl<'a> Substitution<'a, '_> {
                     .to_owned();
             }
             CHirExpr::LabelAddress { label, .. } => *label = self.label(label, c),
+            CHirExpr::Cast(ty, operand, _) => {
+                *ty = self.substituted_type(*ty, c);
+                *operand = self.expr(operand, c)?;
+            }
             CHirExpr::Unary(_, e, _)
-            | CHirExpr::Cast(_, e, _)
             | CHirExpr::EvaluateOnce(e, _)
             | CHirExpr::Member(e, _, _)
             | CHirExpr::PtrMember(e, _, _)
@@ -1136,9 +1195,17 @@ impl<'a> Substitution<'a, '_> {
                 *rhs = self.expr(rhs, c)?;
                 *target = self.expr(target, c)?;
             }
-            CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            CHirExpr::BuiltinVarArgs {
+                first,
+                second,
+                requested_ty,
+                facts,
+                ..
+            } => {
                 *first = self.expr(first, c)?;
                 *second = second.map(|e| self.expr(e, c)).transpose()?;
+                *requested_ty = requested_ty.map(|ty| self.substituted_type(ty, c));
+                *facts = facts.with_type(self.substituted_type(facts.ty(), c));
             }
             CHirExpr::Assign {
                 place,
@@ -1164,15 +1231,26 @@ impl<'a> Substitution<'a, '_> {
                 .map_err(|err| self.error(e.span(), err))?;
                 *target = self.expr(target, c)?;
             }
-            CHirExpr::MemoryAssign { place, value, .. } => {
+            CHirExpr::MemoryAssign {
+                place,
+                value,
+                facts,
+                ..
+            } => {
                 *place = self.place(place, c, e.span())?;
+                *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = self.expr(value, c)?;
             }
-            CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
-                *place = self.place(place, c, e.span())?
+            CHirExpr::MemoryRead { place, facts, .. }
+            | CHirExpr::MemoryUpdate { place, facts, .. } => {
+                *place = self.place(place, c, e.span())?;
+                *facts = facts.with_type(self.substituted_type(facts.ty(), c));
             }
-            CHirExpr::StatementExpr { body, value, .. } => {
+            CHirExpr::StatementExpr {
+                body, value, facts, ..
+            } => {
                 *body = self.stmt(body, c)?;
+                *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = match body {
                     CHirStmt::Compound(items, _) => items.last().and_then(|item| match item {
                         CHirBlockItem::Statement(statement) => {
@@ -1183,7 +1261,10 @@ impl<'a> Substitution<'a, '_> {
                     _ => None,
                 };
             }
-            CHirExpr::CompoundLit(_, i, _) => *i = self.initializer(i, c, c.expand_calls)?,
+            CHirExpr::CompoundLit(ty, i, _) => {
+                *ty = self.substituted_type(*ty, c);
+                *i = self.initializer(i, c, c.expand_calls)?;
+            }
             CHirExpr::Lit(..)
             | CHirExpr::FloatLit(..)
             | CHirExpr::CharLit(..)

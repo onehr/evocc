@@ -6797,3 +6797,10 @@ Per reviewed F02 and the 2026-09-10 authorization, `__builtin_strcmp` of two nar
 Literal `__builtin_strlen` likewise stops at the first NUL, without shortening the literal array's extent or evaluating arbitrary pointer expressions; nonliteral calls and operand/arity checks retain their ordinary paths.
 `tests/fixtures/literal-string-comparison.{c,out}` and original `921007-1.c` execute successfully with sealed GCC-14/Clang-19 at O0/O2, whereas the earlier `20260909-local-library-binding/{binding.c,results.txt}` records disagreement for nonliteral comparisons with a visible same-named static function, now refused as E2946 `builtin-local-binding-conflict` rather than assigned a guessed callee.
 This repairs the named original in tailored native execution and makes no new full-campaign claim or binding rule for other library functions.
+
+### Captured strides for variable array views
+
+Per reviewed S02/S03, pointer operations on variable array views use the bounds captured by the type declaration for subscripts, either order of addition, updates and pointer differences, including nested typedefs, recursion and independent inline expansions.
+Layout factorization is shared with sizeof elaboration; inline substitution renames captured object identities in types and semantic places, and control-flow edges retain active captures even without an ordinary expression use.
+Checked pointer execution retains the full scaled index and reports the existing E3011 for unrepresentable deltas or zero/overflowing captured strides, rather than wrapping to a valid offset or dividing by zero; static layouts and ordinary pointer obligations are unchanged.
+`tests/fixtures/captured-array-strides.{c,out}` records four agreeing reference executions and two subject Linux executions over existing fixed storage, not completion of actual VLA allocation, inner variable parameter dimensions or scope-aware stack reclamation.

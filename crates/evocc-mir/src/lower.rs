@@ -2150,8 +2150,14 @@ fn lower_inst(
             scale,
         } => {
             let base = lowerer.reg(base)?;
-            let bits = significant_bits(&index.ty);
-            let raw = lowerer.reg(index)?;
+            let bits = significant_bits(&index.ty).min(64);
+            // Address arithmetic is modulo the machine pointer width. The
+            // EvoIR interpreter checks the full-width delta before access.
+            let raw = if index.ty == EvoIRType::Bits(128) {
+                lowerer.pair(index)?.0
+            } else {
+                lowerer.reg(index)?
+            };
             // EvoIR Section 3.7 "decodes %index according to the mnemonic",
             // so the extension is the one the signedness names.
             let extended = match signedness {

@@ -989,6 +989,10 @@ pub struct ExprFacts {
 }
 
 impl ExprFacts {
+    pub(crate) const fn with_type(self, ty: TypeId) -> Self {
+        Self { ty, ..self }
+    }
+
     pub fn try_new(
         ty: TypeId,
         category: ExprCategory,

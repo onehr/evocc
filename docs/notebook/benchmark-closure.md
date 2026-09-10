@@ -202,6 +202,37 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Captured array strides through pointer operations
+
+Tests-only `0eafa69` compiled with 68 passes and one E2102
+`invalid-update-operands` failure. A shared layout factorization now gives
+subscripts, arithmetic, updates, pointer differences and sizeof the same
+captured bounds, without inventing a static size. Bound values travel along
+SSA edges even when only a type uses them; inline substitution renames the
+captures in types, facts and places as well as ordinary expressions.
+The existing semantic validators remain enforced.
+
+Tailored edge cases exposed two additional false-green paths: multiplying a
+wide index could wrap an invalid offset back to zero, and an overflowing
+captured size could become a usable small stride. Full-width checked offsets
+now preserve E3011 in both interpreters, including zero/overflowing strides
+before pointer-difference division. Native pointer arithmetic consumes the
+low address bits of the existing wide pair; no machine register class changes.
+
+`cargo test --locked --offline -j 1 -p evocc-lower
+--test expression_value_flow --test front_end_resolved_forms -p evocc-parser
+--test array_bound_validation --test gnu_typeof -p evocc-types
+--test target_data_layout -p evocc-mir --test section5_wide_integers
+--no-fail-fast` with `CARGO_TARGET_DIR=target/tailored` passes 157 tests
+(71 + 24 + 13 + 17 + 12 + 20), zero failed or ignored.
+The same selected tests and affected libraries pass Clippy `-D warnings`;
+fmt, Ruff, diff-check and the 44/44 instruction-shape audit pass.
+The expanded fixture passes four sealed reference runs and both Linux
+toolchains' executions of subject assembly (`captured-array-strides.out`).
+Actual VLA object storage, inner variable parameter dimensions and
+scope-aware stack reclamation remain OPEN; no full campaign ran or changed
+its measured counts.
+
 ### Literal string comparisons and embedded NUL
 
 Tests-only `b9c34e4` compiled with seven passes and two semantic failures:
@@ -250,9 +281,10 @@ and offline flags above. Affected library/test/example Clippy, fmt, Ruff,
 diff-check and the 44/44 shape audit pass. Four sealed reference executions
 and two subject Linux executions exit zero; both references reject all five
 negative cases (`captured-array-bounds.out`).
-This is a size-capture implementation, not whole VLA closure: actual dynamic
-objects, runtime strides, inline remapping of types carrying captures and
-scope-aware stack reclamation remain OPEN. The existing E2203 storage and
+This checkpoint implemented size capture, not whole VLA closure: runtime
+strides and inline remapping were subsequently addressed above; actual
+dynamic objects and scope-aware stack reclamation remain OPEN.
+The existing E2203 storage and
 E2904 variably modified typeof boundaries are retained rather than replaced
 by a fabricated fixed layout. No full campaign or milestone count changed.
 

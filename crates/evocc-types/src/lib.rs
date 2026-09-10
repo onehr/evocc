@@ -881,6 +881,18 @@ impl TypeInterner {
         self.types.len()
     }
 
+    /// Runtime size objects referenced by canonical array types. Consumers
+    /// must keep these values live even when only a type refers to them.
+    pub fn captured_array_bounds(&self) -> impl Iterator<Item = u32> + '_ {
+        self.types.iter().filter_map(|ty| match ty.kind {
+            TypeKind::Array {
+                bound: ArrayBound::Captured(symbol),
+                ..
+            } => Some(symbol),
+            _ => None,
+        })
+    }
+
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.types.is_empty()
@@ -1510,6 +1522,36 @@ impl TargetDataLayout {
             TypeKind::Void | TypeKind::Function { .. } => Ok(1),
             _ => self.layout_of(types, ty).map(|layout| layout.size_bytes),
         }
+    }
+
+    /// Factor an array's runtime byte size into a constant and captured
+    /// bounds. This does not manufacture a static layout for a variable type.
+    pub fn array_size_factors(
+        &self,
+        types: &TypeInterner,
+        mut ty: TypeId,
+    ) -> Result<(u64, Vec<u32>), LayoutError> {
+        let mut fixed = 1_u64;
+        let mut captures = Vec::new();
+        while let TypeKind::Array { element, bound } =
+            &types.get(ty).ok_or(LayoutError::UnknownType(ty))?.kind
+        {
+            match bound {
+                ArrayBound::Fixed(count) => {
+                    fixed = fixed
+                        .checked_mul(*count)
+                        .ok_or(LayoutError::ArithmeticOverflow)?;
+                }
+                ArrayBound::Captured(symbol) => captures.push(*symbol),
+                ArrayBound::Variable => return Err(LayoutError::VariableLengthArray(ty)),
+                ArrayBound::Unbounded => return Err(LayoutError::IncompleteArray(ty)),
+            }
+            ty = *element;
+        }
+        let bytes = fixed
+            .checked_mul(self.sizeof_type(types, ty)?)
+            .ok_or(LayoutError::ArithmeticOverflow)?;
+        Ok((bytes, captures))
     }
 
     /// GNU alignment queries do not make non-object types allocatable.

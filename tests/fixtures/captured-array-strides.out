@@ -3,6 +3,11 @@ Command: COMPILER -std=gnu11 -OLEVEL captured-array-strides.c -o /tmp/probe
          /tmp/probe
 gcc-14 O0/O2: exit 0/0.
 clang-19 O0/O2: exit 0/0; warns that subtraction on Row may have zero size.
-The fixture passes only positive sizes 3 and 4; no zero-size subtraction is
-executed. Subscripts, pointer updates/difference, nested typedef strides,
-branch-crossing capture use and separate always-inline invocations agree.
+The subtraction receives only positive sizes 3 and 4; no zero-size subtraction
+is executed. Subscripts, pointer updates/difference, nested typedef strides,
+branch-crossing capture use, separate always-inline invocations, statement
+expression pointer roots and recursive captures agree.
+Subject command: target/tailored/debug/evocc --emit=asm
+                 --target=aarch64-unknown-linux-gnu captured-array-strides.c
+The resulting assembly links and executes with gcc-14 and with clang-19
+(-fno-integrated-as for the existing GNU relocation spelling): exit 0/0.

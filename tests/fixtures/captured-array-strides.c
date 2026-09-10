@@ -7,6 +7,11 @@ static int view(int n, int *data, int branch) {
     if (branch) n += 100; else n += 200;
     p[1][original - 1] = 41;
     Row *q = p + 2;
+    if (q != 2 + p) return 9;
+    Row **slot = &q;
+    *slot += 1;
+    q -= 1;
+    if ((branch ? p : p) + 2 != q) return 10;
     if (q - p != 2) return 1;
     if ((char *)q - (char *)p != 8 * original) return 2;
     if (q[-1][original - 1] != 41) return 3;
@@ -25,9 +30,17 @@ static int view(int n, int *data, int branch) {
 
 static __attribute__((always_inline)) inline int inlined_view(int n, int *data) {
     typedef int Row[n];
-    Row *p = (Row *)data;
+    Row *p = ({ Row *local = (Row *)data; local; });
     p[1][0] += n;
-    return p[1][0];
+    return ({ Row *q = p; q; })[1][0];
+}
+
+static int recursive_view(int n, int *data) {
+    typedef int Row[n];
+    Row *p = (Row *)data;
+    if (n > 2 && recursive_view(n - 1, data)) return 1;
+    p[1][0] = n;
+    return (char *)&p[1] - (char *)p != 4 * n;
 }
 
 int main(void) {
@@ -36,5 +49,7 @@ int main(void) {
     if (view(4, data, 0)) return 12;
     if (inlined_view(2, data) != 2) return 13;
     if (inlined_view(6, data) != 6) return 14;
+    if (recursive_view(4, data)) return 15;
+    if (data[2] != 2 || data[3] != 3 || data[4] != 4) return 16;
     return 0;
 }

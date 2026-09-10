@@ -9,6 +9,26 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn captured_strides_cannot_wrap_an_invalid_offset_back_into_the_object() {
+    for index in [
+        "1UL << 63",
+        "(unsigned __int128)1 << 127",
+        "-((__int128)1 << 100)",
+    ] {
+        evaluates(&format!("int main(void){{int data[8]; int n=2; typedef int Row[n]; Row *p=(Row *)data; return (p+({index}))==p;}}"), Some("E3011"));
+    }
+}
+
+#[test]
+fn invalid_captured_strides_fail_before_pointer_difference_division() {
+    for bound in ["0UL", "1UL << 62", "(1UL << 62) + 1"] {
+        for use_site in ["return (p+0)==p;", "return (p-p)!=0;"] {
+            evaluates(&format!("int main(void){{int data[8]; unsigned long n={bound}; typedef int Row[n]; Row *p=(Row *)data; {use_site}}}"), Some("E3011"));
+        }
+    }
+}
+
+#[test]
 fn variable_array_views_use_captured_strides_for_every_pointer_operation() {
     agrees(include_str!(
         "../../../tests/fixtures/captured-array-strides.c"

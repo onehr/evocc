@@ -141,6 +141,46 @@ fn wide_binary(body: &str) -> String {
 }
 
 #[test]
+fn wide_pointer_indexes_keep_the_machine_address_bits() {
+    let text = func(
+        &["ptr<generic>", "bits<128>"],
+        "%v0: ptr<generic>, %v1: bits<128>",
+        "ptr<generic>",
+        "    %v2 = ptr.offset.add.signed %v0, %v1 [scale=4]\n    %v3 = pointer_valid %v90, %v2\n",
+        "%v2",
+    )
+    .replace("ret %v2, %v90, %v91", "ret %v2, %v3, %v91")
+    .replace("reads={}", "reads={all}")
+    .replace("may_trap=false", "may_trap=true");
+    let module = lower(&text);
+    every_register_is_narrow(&module);
+    let serialized = evocc_mir::render_module(&module);
+    assert_eq!(evocc_mir::parse_module(&serialized).unwrap(), module);
+    for (low, high, expected) in [(4, 0, 0x1010), (u64::MAX, u64::MAX, 0xffc)] {
+        let output = evocc_mir::interpret_module(
+            &module,
+            "main",
+            &[
+                evocc_mir::MirValue::Int(0x1000),
+                // The 128-bit argument starts at the next even register pair.
+                evocc_mir::MirValue::Int(0),
+                evocc_mir::MirValue::Int(low),
+                evocc_mir::MirValue::Int(high),
+            ],
+            evocc_mir::MirLimits::new(1000),
+        )
+        .unwrap();
+        assert_eq!(output.results, [evocc_mir::MirValue::Int(expected)]);
+    }
+    compile_module_for(
+        Target::Linux,
+        &parse_section9_module(text.as_bytes()).unwrap(),
+        &|_| true,
+    )
+    .unwrap();
+}
+
+#[test]
 fn addition_and_subtraction_carry_between_the_halves() {
     // "add: `adds lo` then `adc hi`; sub: `subs lo` then `sbc hi`"
     // (GCC-14 `add128`: `adds x0, x0, x2` / `adc x1, x1, x3`;

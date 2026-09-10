@@ -6767,35 +6767,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
-        let TypeKind::Array { element, bound } = &self.types.get(ty)?.kind else {
-            return TargetDataLayout::aarch64_unknown_linux_gnu()
-                .sizeof_type(&self.types, ty)
-                .ok()
-                .map(|size| self.size_literal(size, span));
-        };
-        let count = match bound {
-            ArrayBound::Fixed(count) => self.size_literal(*count, span),
-            ArrayBound::Captured(index) => {
-                let symbol = self
-                    .symbols
-                    .symbols_in_source_order()
-                    .get(*index as usize)?;
-                if symbol.kind() != SymbolKind::Object
-                    || !symbol.spelling().starts_with("__evocc.extent.")
-                {
-                    return None;
-                }
-                self.alloc_node(CHirExpr::Ident {
-                    symbol: symbol.id(),
-                    spelling: symbol.spelling().to_owned(),
-                    facts: self.facts_for_symbol(symbol.id()),
-                    span,
-                })
+        let (fixed, captures) = TargetDataLayout::aarch64_unknown_linux_gnu()
+            .array_size_factors(&self.types, ty)
+            .ok()?;
+        let mut size = self.size_literal(fixed, span);
+        for raw in captures {
+            let symbol = self.symbols.symbols_in_source_order().get(raw as usize)?;
+            if symbol.kind() != SymbolKind::Object
+                || !symbol.spelling().starts_with("__evocc.extent.")
+            {
+                return None;
             }
-            ArrayBound::Variable | ArrayBound::Unbounded => return None,
-        };
-        let stride = self.captured_size_expression(*element, span)?;
-        Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Mul, count, stride, span)))
+            let count = self.alloc_node(CHirExpr::Ident {
+                symbol: symbol.id(),
+                spelling: symbol.spelling().to_owned(),
+                facts: self.facts_for_symbol(symbol.id()),
+                span,
+            });
+            size = self.alloc_node(CHirExpr::Binary(BinaryOp::Mul, size, count, span));
+        }
+        Some(size)
     }
 
     fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
@@ -10207,7 +10198,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return true;
         }
         TargetDataLayout::aarch64_unknown_linux_gnu()
-            .layout_of(&self.types, pointee)
+            .array_size_factors(&self.types, pointee)
             .is_ok()
     }
 

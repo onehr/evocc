@@ -34,6 +34,13 @@ fn captured_bounds_keep_identity_without_claiming_static_size() {
     assert!(types.compatible(a, fixed));
     assert!(types.compatible(fixed, a));
     assert_eq!(target.alignof_type(&types, a), Ok(4));
+    let pair = types.intern(plain(TypeKind::Array {
+        element: a,
+        bound: ArrayBound::Fixed(2),
+    }));
+    assert_eq!(target.array_size_factors(&types, a), Ok((4, vec![7])));
+    assert_eq!(target.array_size_factors(&types, pair), Ok((8, vec![7])));
+    assert_eq!(target.array_size_factors(&types, fixed), Ok((396, vec![])));
     assert_eq!(
         target.sizeof_type(&types, a),
         Err(LayoutError::VariableLengthArray(a))

@@ -14,7 +14,7 @@ use std::{
 use evocc_common::SourceSpan;
 use evocc_memory::{
     AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, LibraryValue, MemoryConfig,
-    MemoryFault, MemoryLimits, MemoryState, OffsetDirection, Pointer, PointerValue,
+    MemoryFault, MemoryLimits, MemoryState, OffsetDirection, OffsetOperand, Pointer, PointerValue,
     ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
@@ -6320,7 +6320,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         },
                     )?;
                     consumed += 1;
-                    let element = self.access_layout(projection.element_ty(), span)?;
+                    let scale =
+                        self.pointer_arithmetic_scale(projection.element_ty(), address, span)?;
                     let signedness = if subscript.ty().is_signed() {
                         IndexSignedness::Signed
                     } else {
@@ -6332,7 +6333,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             u16::from(subscript.ty().bits()),
                             signedness,
                             OffsetDirection::Add,
-                            element.size_bytes,
+                            scale,
                         )
                         .map_err(|error| self.memory_error(error, span))?
                 }
@@ -7628,7 +7629,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         let index = index.promoted();
-        let scale_bytes = self.pointer_arithmetic_scale(pointer_type.pointee(), span)?;
+        let scale_bytes = self.pointer_arithmetic_scale(pointer_type.pointee(), pointer, span)?;
         let signedness = if index.ty().is_signed() {
             IndexSignedness::Signed
         } else {
@@ -7655,18 +7656,74 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn pointer_arithmetic_scale(
         &self,
         pointee: TypeId,
+        pointer: Pointer,
         span: SourceSpan,
     ) -> Result<u64, InterpreterError> {
-        if matches!(
-            self.unit
-                .types()
-                .get(pointee)
-                .map(|canonical| &canonical.kind),
-            Some(TypeKind::Void)
-        ) {
-            return Ok(1);
+        let (mut size, captures) = self
+            .target
+            .array_size_factors(self.unit.types(), pointee)
+            .map_err(|_| InterpreterError::UnsupportedType { ty: pointee, span })?;
+        let captured = !captures.is_empty();
+        for raw in captures {
+            let symbol = self
+                .unit
+                .symbols()
+                .symbols_in_source_order()
+                .get(raw as usize)
+                .ok_or(InterpreterError::UnsupportedExpression {
+                    span,
+                    feature: "array size capture has no symbol",
+                })?;
+            if symbol.kind() != SymbolKind::Object
+                || self.integer_type(symbol.ty(), span)? != CIntegerType::ULONG
+                || self
+                    .unit
+                    .types()
+                    .get(symbol.ty())
+                    .is_none_or(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic)
+            {
+                return Err(InterpreterError::UnsupportedExpression {
+                    span,
+                    feature: "array size capture is not size_t",
+                });
+            }
+            let count = if self.memory_mode {
+                let binding = self.require_memory_binding(symbol.id(), span)?;
+                self.memory
+                    .load_integer(binding.address, self.access_layout(symbol.ty(), span)?)
+                    .map_err(|error| self.memory_error(error, span))? as u64
+            } else {
+                self.slots
+                    .get(&symbol.id())
+                    .filter(|slot| slot.active)
+                    .and_then(|slot| slot.value)
+                    .ok_or(InterpreterError::UnsupportedExpression {
+                        span,
+                        feature: "array size capture has no active value",
+                    })?
+                    .raw_bits() as u64
+            };
+            size = size
+                .checked_mul(count)
+                .filter(|size| *size <= i64::MAX as u64)
+                .unwrap_or(0);
         }
-        Ok(self.access_layout(pointee, span)?.size_bytes)
+        if captured && size == 0 {
+            return Err(self.memory_error(
+                MemoryFault::PointerOffsetOverflow {
+                    pointer,
+                    operand: OffsetOperand::Scaled {
+                        raw_bits: 0,
+                        width_bits: 64,
+                        signedness: IndexSignedness::Unsigned,
+                        direction: OffsetDirection::Add,
+                        scale_bytes: size,
+                    },
+                },
+                span,
+            ));
+        }
+        Ok(size)
     }
 
     fn subtract_pointer_values(
@@ -7694,11 +7751,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             },
         )?;
-        let scale = i64::try_from(self.pointer_arithmetic_scale(pointer_type.pointee(), span)?)
-            .map_err(|_| InterpreterError::UnsupportedExpression {
-                feature: "pointer subtraction scale is not representable",
-                span,
-            })?;
+        let scale =
+            i64::try_from(self.pointer_arithmetic_scale(pointer_type.pointee(), left, span)?)
+                .map_err(|_| InterpreterError::UnsupportedExpression {
+                    feature: "pointer subtraction scale is not representable",
+                    span,
+                })?;
         if byte_delta % scale != 0 {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "pointer subtraction is not an exact element difference",

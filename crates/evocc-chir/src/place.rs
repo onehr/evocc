@@ -120,6 +120,10 @@ impl PointerTypeDesc {
         self.pointee
     }
 
+    pub(crate) const fn with_pointee(self, pointee: TypeId) -> Self {
+        Self { pointee, ..self }
+    }
+
     /// Equality also admits integer pointees differing only in signedness.
     /// This does not form a composite type or authorize pointer ordering.
     pub fn equality_compatible(types: &TypeInterner, left: Self, right: Self) -> bool {
