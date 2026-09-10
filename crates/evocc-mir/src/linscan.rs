@@ -1017,8 +1017,9 @@ fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
 // Spill code
 // ---------------------------------------------------------------------------
 
-/// Write each spilled value to its slot after every definition and read it
-/// back before every use, through registers that live for one instruction.
+/// Spill around indivisible flags producer/consumer chains. Reloads precede
+/// the whole chain, stores follow it, and a value defined inside the chain
+/// is forwarded to its consumers instead of being reloaded from its old slot.
 fn insert_spill_code(
     function: &MFunction,
     slots: &BTreeMap<u32, u32>,
@@ -1036,33 +1037,57 @@ fn insert_spill_code(
         + 1;
     for block in &function.blocks {
         let mut insts = Vec::new();
-        for inst in &block.insts {
-            let mut rewritten = inst.clone();
+        let mut stores = Vec::new();
+        let mut cursor = 0;
+        while cursor < block.insts.len() {
             let mut before = Vec::new();
             let mut after = Vec::new();
-            for reg in inst_uses(inst) {
-                if spilled.contains(&reg.id) {
-                    let temporary = fresh(next, reg.class);
-                    before.push(MInst::SpillReload {
-                        dst: temporary,
-                        slot: slots[&reg.id],
-                    });
-                    replace_use(&mut rewritten, reg, temporary);
+            let mut chain = Vec::new();
+            let mut temporaries = BTreeMap::new();
+            let ends_in_flags = loop {
+                let inst = &block.insts[cursor];
+                cursor += 1;
+                let mut rewritten = inst.clone();
+                for reg in inst_uses(inst) {
+                    if spilled.contains(&reg.id) {
+                        let temporary = *temporaries.entry(reg.id).or_insert_with(|| {
+                            let temporary = fresh(next, reg.class);
+                            before.push(MInst::SpillReload {
+                                dst: temporary,
+                                slot: slots[&reg.id],
+                            });
+                            temporary
+                        });
+                        replace_use(&mut rewritten, reg, temporary);
+                    }
                 }
-            }
-            for reg in inst_defs(inst) {
-                if spilled.contains(&reg.id) {
-                    let temporary = fresh(next, reg.class);
-                    replace_def(&mut rewritten, reg, temporary);
-                    after.push(MInst::SpillStore {
-                        src: temporary,
-                        slot: slots[&reg.id],
-                    });
+                let mut defines_flags = false;
+                for reg in inst_defs(inst) {
+                    defines_flags |= reg.class == RegClass::Flags;
+                    if spilled.contains(&reg.id) {
+                        let temporary = fresh(next, reg.class);
+                        temporaries.insert(reg.id, temporary);
+                        replace_def(&mut rewritten, reg, temporary);
+                        after.push(MInst::SpillStore {
+                            src: temporary,
+                            slot: slots[&reg.id],
+                        });
+                    }
                 }
-            }
+                chain.push(rewritten);
+                if !defines_flags || cursor == block.insts.len() {
+                    break defines_flags;
+                }
+            };
             insts.extend(before);
-            insts.push(rewritten);
-            insts.extend(after);
+            insts.extend(chain);
+            if ends_in_flags {
+                // The last flags value belongs to the conditional terminator.
+                // Its ordinary results must be saved on the outgoing edges.
+                stores.extend(after);
+            } else {
+                insts.extend(after);
+            }
         }
         let mut term = block.term.clone();
         let mut temporaries = BTreeMap::new();
@@ -1077,7 +1102,6 @@ fn insert_spill_code(
                 replace_term_use(&mut term, reg, temporary);
             }
         }
-        let mut stores = Vec::new();
         if let MTerm::AsmGoto { body, .. } = &block.term {
             for reg in body.defined() {
                 if spilled.contains(&reg.id) {
@@ -1092,36 +1116,43 @@ fn insert_spill_code(
                 }
             }
         }
-        // A terminator defines these values after the block's instructions.
-        // Save them on each outgoing edge, not before the assembly or in a
-        // shared successor that another predecessor can enter.
+        // Assembly outputs and deferred flags-chain stores belong to every
+        // outgoing edge, not to a shared successor another path can enter.
         let mut bridges = Vec::new();
         if !stores.is_empty() {
-            if let MTerm::AsmGoto {
-                labels,
-                fallthrough,
-                fallthrough_args,
-                ..
-            } = &mut term
-            {
-                for (target, args) in labels
+            let edges: Vec<_> = match &mut term {
+                MTerm::AsmGoto {
+                    labels,
+                    fallthrough,
+                    fallthrough_args,
+                    ..
+                } => labels
                     .iter_mut()
                     .map(|(target, args)| (target, args))
                     .chain(std::iter::once((fallthrough, fallthrough_args)))
-                {
-                    let id = next_block;
-                    next_block += 1;
-                    bridges.push(MBlock {
-                        id,
-                        args: Vec::new(),
-                        insts: stores.clone(),
-                        term: MTerm::B {
-                            target: *target,
-                            args: std::mem::take(args),
-                        },
-                    });
-                    *target = id;
-                }
+                    .collect(),
+                MTerm::BCond {
+                    taken,
+                    taken_args,
+                    untaken,
+                    untaken_args,
+                    ..
+                } => vec![(taken, taken_args), (untaken, untaken_args)],
+                _ => Vec::new(),
+            };
+            for (target, args) in edges {
+                let id = next_block;
+                next_block += 1;
+                bridges.push(MBlock {
+                    id,
+                    args: Vec::new(),
+                    insts: stores.clone(),
+                    term: MTerm::B {
+                        target: *target,
+                        args: std::mem::take(args),
+                    },
+                });
+                *target = id;
             }
         }
         blocks.push(MBlock {

@@ -343,16 +343,34 @@ pub fn interpret_module(
                     ref args,
                     ref results,
                 } => {
+                    let values = read_all(&frames[top], args)?;
                     let index = module
                         .functions
                         .iter()
-                        .position(|function| &function.name == symbol)
-                        .ok_or_else(|| MirError::Invalid {
+                        .position(|function| &function.name == symbol);
+                    if let Some(index) = index {
+                        push_call(
+                            module,
+                            &mut state,
+                            &mut frames,
+                            index,
+                            values,
+                            results.clone(),
+                        )?;
+                    } else if let Some(outputs) = wide_division_runtime(symbol, &values)? {
+                        if results.len() != outputs.len() {
+                            return Err(MirError::Invalid {
+                                detail: format!("@{symbol} requires two result registers"),
+                            });
+                        }
+                        for (&reg, value) in results.iter().zip(outputs) {
+                            write(&mut frames[top], reg, value);
+                        }
+                    } else {
+                        return Err(MirError::Invalid {
                             detail: format!("bl targets missing function @{symbol}"),
-                        })?;
-                    let values = read_all(&frames[top], args)?;
-                    let outputs = results.clone();
-                    push_call(module, &mut state, &mut frames, index, values, outputs)?;
+                        });
+                    }
                 }
                 MInst::Blr {
                     target,
@@ -491,6 +509,52 @@ pub fn interpret_module(
             }
         }
     }
+}
+
+/// Only the four pure hosted integer helpers have a model here. A module's
+/// own definition is executed first; unrelated unresolved calls stay errors.
+fn wide_division_runtime(
+    symbol: &str,
+    args: &[MirValue],
+) -> Result<Option<[MirValue; 2]>, MirError> {
+    let (signed, remainder) = match symbol {
+        "__divti3" => (true, false),
+        "__udivti3" => (false, false),
+        "__modti3" => (true, true),
+        "__umodti3" => (false, true),
+        _ => return Ok(None),
+    };
+    let [MirValue::Int(a0), MirValue::Int(a1), MirValue::Int(b0), MirValue::Int(b1)] = args else {
+        return Err(MirError::Invalid {
+            detail: format!("@{symbol} requires two integer register pairs"),
+        });
+    };
+    let left = u128::from(*a0) | (u128::from(*a1) << 64);
+    let right = u128::from(*b0) | (u128::from(*b1) << 64);
+    if right == 0 {
+        return Err(MirError::Trap {
+            imm: if remainder { 3003 } else { 3002 },
+        });
+    }
+    let value = if signed {
+        let (left, right) = (left as i128, right as i128);
+        if left == i128::MIN && right == -1 {
+            return Err(MirError::Trap { imm: 3004 });
+        }
+        (if remainder {
+            left % right
+        } else {
+            left / right
+        }) as u128
+    } else if remainder {
+        left % right
+    } else {
+        left / right
+    };
+    Ok(Some([
+        MirValue::Int(value as u64),
+        MirValue::Int((value >> 64) as u64),
+    ]))
 }
 
 fn push_call(

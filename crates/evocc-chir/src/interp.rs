@@ -7264,11 +7264,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             return eval_constant_binary_integer(operator, left, right)
                 .map_err(|error| self.integer_error(error, span));
         }
-        if matches!(operator, BinaryOp::Div | BinaryOp::Mod)
-            && (left.ty().bits() == 128 || right.ty().bits() == 128)
-        {
-            return Err(InterpreterError::WideInteger { span });
-        }
         let result = if self.unit.signed_wrapping()
             && matches!(operator, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul)
         {

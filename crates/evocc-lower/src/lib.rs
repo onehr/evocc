@@ -8948,11 +8948,6 @@ impl<'a> FunctionLowerer<'a> {
         right: ExprValue,
         integer: CIntegerType,
     ) -> Result<ExprValue, LowerError> {
-        if integer.bits() == 128 {
-            return Err(LowerError::WideInteger {
-                span: self.info.span,
-            });
-        }
         let nonzero = self.fresh_value(EvoIRType::Bits(1));
         self.emit(
             state,

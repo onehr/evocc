@@ -5705,21 +5705,6 @@ impl IntegerKernel {
         })
     }
 
-    /// Division and remainder have no value model at the widest width.
-    ///
-    /// EvoIR 10.1.19: "`sdiv`, `udiv`, `srem` and `urem` on `bits<128>` stay
-    /// `E3033` (`not-executed: wide-integer`) until a unit needs one; the
-    /// cohort's `mul_u64_u64_div_u64` divides the halves by hand."
-    fn division_is_executed(self, block: BlockId) -> Result<(), InterpreterError> {
-        if self.width > 64 {
-            return Err(InterpreterError::UnsupportedBitWidth {
-                block,
-                width: self.width,
-            });
-        }
-        Ok(())
-    }
-
     fn normalize(self, value: u128) -> u128 {
         value & self.mask
     }
@@ -5870,7 +5855,6 @@ impl IntegerKernel {
     }
 
     fn sdiv(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
-        self.division_is_executed(block)?;
         let left = self.signed(left);
         let right = self.signed(right);
         if right == 0 {
@@ -5889,7 +5873,6 @@ impl IntegerKernel {
     }
 
     fn udiv(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
-        self.division_is_executed(block)?;
         let left = self.normalize(left);
         let right = self.normalize(right);
         if right == 0 {
@@ -5902,7 +5885,6 @@ impl IntegerKernel {
     }
 
     fn srem(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
-        self.division_is_executed(block)?;
         let left = self.signed(left);
         let right = self.signed(right);
         if right == 0 {
@@ -5921,7 +5903,6 @@ impl IntegerKernel {
     }
 
     fn urem(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
-        self.division_is_executed(block)?;
         let left = self.normalize(left);
         let right = self.normalize(right);
         if right == 0 {

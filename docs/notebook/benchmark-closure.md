@@ -194,6 +194,43 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ## Progress
 
+### Hosted wide division and spill adjacency
+
+Tests-only `27d2b6e` records 38 passing tests, nine semantic failures and
+zero build errors. Division/remainder now execute through the existing
+width-aware integer kernels and lower to caller-clobber-aware runtime calls,
+with the original zero-divisor and signed MIN/-1 obligations intact.
+The live-pair C fixture then exposed a separate E4020: spill reloads/stores
+broke the required adjacency of carry-producing and consuming instructions.
+Tests-only `db5351e` pins that reproducer plus two deterministic spill cases.
+Spilling now treats each flags chain as indivisible and saves a final
+flag-producing instruction's results on each conditional outgoing edge.
+Neither validator was relaxed.
+
+With `CARGO_TARGET_DIR=target/frontend`, all commands use
+`--locked --offline -j 1`. `cargo test -p evocc-chir --test wide_integer_boundary
+-p evocc-evoir --test wide_integer_boundary -p evocc-lower --test
+wide_integer_values --test fail_closed_forms -p evocc-mir --test
+section5_wide_integers --no-fail-fast` passes 44 tests. The machine targets
+`section9_wide_integers_natively`, `section7_linear_scan`,
+`section7_allocation_verifier`, `section7_out_of_ssa`,
+`section4_inline_assembly` and `section6_variadic_and_assembly` pass 43 more;
+`cargo test -p evocc-mir --lib spill_flag_tests` passes two, and the exact CLI
+test `wide_division_keeps_live_pairs_across_helper_calls` passes one.
+Thus 90 distinct tailored tests pass, with repeated native runs not added
+again. Affected-library Clippy with `-D warnings`, fmt, Ruff and diff-check
+pass. A first test-development compile referenced a non-reexported validator;
+it was corrected before the spill RED commit and was not counted as RED.
+
+Both sealed compilers execute `tests/fixtures/wide-division.c` at O0/O2;
+both also link and execute the final subject assembly, all six exiting zero.
+The existing wide-form native matrix reports 146,157 checks on Darwin and
+146,196 on Linux, zero failures; those counts cover all tested wide forms,
+not division alone. The runtime-obligation tests now use volatile inputs
+so they do not accidentally test the separately authorized constant-wrap rule.
+Wide checked arithmetic is still separate work: its probe is measured, but
+its current lowering boundary is not closed. All campaign counts are unchanged.
+
 ### Hidden symbols and explicit object sections
 
 Tests-only `11a9c29` records six semantic failures and zero build errors.

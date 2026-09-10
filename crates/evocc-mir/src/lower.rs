@@ -364,13 +364,6 @@ fn scan_inst(
         }
     }
 
-    // Section 10: "at `N = 128`, division, remainder and the signed UB
-    // predicates" have no row. The cohort has none of them, and EvoIR keeps
-    // division `E3033`.
-    if let Some(detail) = unlowered_at_the_widest_scalar(inst) {
-        report(E4003, block, index, detail);
-    }
-
     match inst {
         // The Section 5 table, row by row.
         // Section 5's bit-counting and byte-swap row (revision 0.14). EvoIR
@@ -2731,7 +2724,8 @@ fn simple(
     Ok(())
 }
 
-/// Section 5: "`sdiv`/`udiv`, remainders by `msub`".
+/// Scalar division uses `sdiv`/`udiv` and `msub`; the hosted 128-bit form
+/// uses ordinary calls so allocation sees argument/result pairs and clobbers.
 fn divide(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -2741,6 +2735,22 @@ fn divide(
     lhs: &Value,
     rhs: &Value,
 ) -> Result<(), String> {
+    if is_pair(&result.ty) {
+        let symbol = match (is_signed, remainder) {
+            (true, false) => "__divti3",
+            (false, false) => "__udivti3",
+            (true, true) => "__modti3",
+            (false, true) => "__umodti3",
+        };
+        let args = call_args(lowerer, insts, &[lhs.clone(), rhs.clone()])?;
+        let results = call_results(lowerer, std::slice::from_ref(result))?;
+        insts.push(MInst::Bl {
+            symbol: symbol.to_owned(),
+            args,
+            results,
+        });
+        return Ok(());
+    }
     let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
     let width = width_of(class);
     let bits = significant_bits(&result.ty);
@@ -3213,21 +3223,6 @@ fn fresh_like(lowerer: &mut Lowerer, shape: &[VReg]) -> Vec<VReg> {
 fn round_to_sixteen(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, value: VReg) -> VReg {
     let raised = lowerer.binary_imm(insts, BinOp::Add, value, 15, Width::X);
     lowerer.binary_imm(insts, BinOp::And, raised, !15_u64, Width::X)
-}
-
-/// The forms Section 10 keeps refused at width 128.
-///
-/// Division and remainder still require a runtime library. The total
-/// predicates use carry chains and limb arithmetic and no longer belong here.
-fn unlowered_at_the_widest_scalar(inst: &Inst) -> Option<String> {
-    let (name, ty) = match inst {
-        Inst::SDiv(_, lhs, _) => ("sdiv", &lhs.ty),
-        Inst::UDiv(_, lhs, _) => ("udiv", &lhs.ty),
-        Inst::SRem(_, lhs, _) => ("srem", &lhs.ty),
-        Inst::URem(_, lhs, _) => ("urem", &lhs.ty),
-        _ => return None,
-    };
-    is_pair(ty).then(|| format!("{name} at bits<128>"))
 }
 
 // ---------------------------------------------------------------------------

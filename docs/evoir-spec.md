@@ -6739,3 +6739,10 @@ Per F09, `__builtin_classify_type(expr)` resolves to an `int` integer constant w
 The sealed GCC-14/Clang-19 O0/O2 probe `.evidence/builtin-probes/20260910-type-classification/classify.c` measures these values and unchanged side effects, and all four runs of `tests/fixtures/type-classification.c` return zero (`results.txt`).
 The `_Bool` result conflicts (GCC 1, Clang 4), so it reports E2941 `unsupported-type-classification`, also used for opaque target-header types with no agreed category; the conflicting void, zero/multiple-argument and type-name forms remain refused with the existing E2913, E2909 or E1003 diagnostics, respectively.
 This rule requires no floating execution or new IR node; two original torture first-error programs in `20260909T201535Z` name this builtin, and their next original-source replay, not type-query acceptance, determines their outcomes.
+
+### Hosted wide integer division
+
+Per the reviewed S08 rule and the 2026-09-10 implementation authorization, signed/unsigned division and remainder execute at `bits<128>`, preserving E3002 for division by zero, E3003 for remainder by zero and E3004 for signed MIN/-1 in either operator; other unsupported widths still retain E3033.
+Native lowering uses ordinary caller-clobber-aware calls to `__divti3`, `__udivti3`, `__modti3` and `__umodti3`, with low/high halves in x0:x1 and x2:x3 and the result in x0:x1, requiring the hosted target's libgcc or compiler-rt; no new IR opcode, register class or waived UB assumption is introduced.
+The machine interpreter models only these four unresolved helpers with that pair interface, executes a same-module function definition instead when present, and continues refusing unrelated missing callees.
+`tests/fixtures/wide-division.c` and `wide-division.out` record GCC-14/Clang-19 O0/O2 agreement on full-width values, signed remainders, stores and live pairs across calls; these tailored results do not change any original-program count, and checked arithmetic exceeding its old intermediate width remains a separate implementation item.
