@@ -55,6 +55,16 @@ fn unmarked() -> String {
 }
 
 #[test]
+fn zero_sized_record_marks_parse_render_and_validate() {
+    let text = MARKED
+        .replace("byval(8, 8)", "byval(0, 8)")
+        .replace("sret(24, 8)", "sret(0, 8)");
+    let module = parse_section9_module(text.as_bytes()).unwrap();
+    validate_module(&module).unwrap();
+    assert_eq!(render_module(&module), text);
+}
+
+#[test]
 fn the_marks_parse_render_and_round_trip() {
     let module = parse_section9_module(MARKED.as_bytes()).expect("the marked module parses");
     validate_module(&module).expect("the marked module validates");

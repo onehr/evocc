@@ -55,6 +55,16 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn zero_sized_objects_and_records_preserve_identity_and_call_values() {
+    // Both halves of the mixed-link fixture are present in the parser test.
+    let source = include_str!("../../../tests/fixtures/zero-sized-objects.c")
+        .replace("#ifndef ONLY_CALLER\n", "")
+        .replace("#ifndef ONLY_CALLEE\n", "")
+        .replace("#endif\n", "");
+    check(&source, 0);
+}
+
+#[test]
 fn file_definitions_reuse_symbols_first_declared_inside_functions() {
     check(
         include_str!("../../../tests/fixtures/block-extern-global.c"),
