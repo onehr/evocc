@@ -22,6 +22,26 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_build_preparation_can_run_without_linking_the_kernel(self) -> None:
+        import inspect
+        self.assertIn("targets", inspect.signature(substitute.relink).parameters,
+                      "prepare must precede final object installation and linking")
+
+    def test_recompiled_identical_object_is_newer_than_generated_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assembly, output = root / "asm", root / "out"
+            assembly.mkdir()
+            output.mkdir()
+            (assembly / "x.o").write_bytes(b"object")
+            (output / "x.o").write_bytes(b"object")
+            substitute.os.utime(output / "x.o", (1, 1))
+            row = {"unit": "x.o", "outcome": "assembled",
+                   "objectSha256": substitute.sha256_file(assembly / "x.o"),
+                   "recompiledAfterPrepare": True}
+            substitute.install([row], assembly, output, False)
+            self.assertGreater((output / "x.o").stat().st_mtime_ns, 1_000_000_000)
+
     def key(self, **overrides) -> str:
         fields = {
             "unit": "lib/bitrev.o",
