@@ -599,6 +599,30 @@ fn local_register_bindings_survive_ir_round_trip() {
 }
 
 #[test]
+fn link_register_operands_keep_the_binding_and_saved_return_address() {
+    let source = include_str!("../../../tests/fixtures/assembly-link-register.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert_eq!(
+        evocc_evoir::render_module(&module).as_bytes(),
+        output.stdout
+    );
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
+        assert!(assembly.contains("add x30, x30, #3"), "{assembly}");
+        assert!(assembly.contains("stp x29, x30, [sp, #-16]!"), "{assembly}");
+        assert!(assembly.contains("ldp x29, x30, [sp], #16"), "{assembly}");
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "link-register");
+}
+
+#[test]
 #[cfg(target_arch = "aarch64")]
 fn local_register_bindings_execute_inputs_outputs_and_both_goto_edges() {
     // Sealed GCC-14 and Clang-19, at both -O0 and -O2: exit 0.
