@@ -1,21 +1,23 @@
 {
   "schemaVersion": 1,
-  "run": "20260909T215349.472835Z",
-  "subject": "5aabf60c011760baef01910e7a264743041ee07a",
-  "dirty": false,
+  "run": "20260912T092730.260925Z",
+  "subject": "8f6cf84cab24c2d8640a511fa38f32439647b6ea",
+  "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd",
+  "driverSha256": "73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "torture",
-    "--no-build",
+    "kernel",
+    "--survey-only",
+    "--evocc",
+    "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
     "--jobs",
-    "2"
+    "6"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "torture"
+    "kernel"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -1271,37 +1273,55 @@
     },
     "kernel": {
       "rung": "K1/K5-K7 ramp",
-      "status": "ERROR",
-      "error": "receipt unchanged; previous evidence is not a new measurement",
-      "errorTail": [
-        "k1: relinking Image and vmlinux",
-        "k1: relink exit 2",
-        "{",
-        "  \"runId\": \"substitution\",",
-        "  \"requestedUnits\": 2072,",
-        "  \"evoccSha256\": \"8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84\",",
-        "  \"cacheHits\": 2072,",
-        "  \"counts\": {",
-        "    \"substituted\": 2072",
-        "  },",
-        "  \"refusalCodeCounts\": {},",
-        "  \"relinkExitCode\": 2,",
-        "  \"installed\": true,",
-        "  \"allowSymbolDrift\": true,",
-        "  \"imageSha256\": \"8e97ac657e34a75bf2458c4dba7bf5c544d4750c64af756fbbda13895cc6a2c0\",",
-        "  \"vmlinuxSha256\": \"1da20652101da8edd03d5323c48a48d6905d307f73ae3f4cc3dcf0b0c2720609\"",
-        "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260909T133504Z/attempt-04/substitution",
-        "k1: the relink failed; treating this allowlist as failing",
-        "k1: still failing after 3 reductions; see /Users/onehrxn/dev/30days/c30/.evidence/k1/measure-20260909T133504Z"
-      ],
+      "note": "full compilation survey; linking, boot and selftests NOT_RUN",
+      "outcomes": {
+        "assembled": 2638,
+        "refused": 161
+      },
+      "refusals": {
+        "E2202": 2,
+        "E2939": 4,
+        "E3021": 8,
+        "E3026": 29,
+        "E3029": 1,
+        "E3030": 2,
+        "E3034": 2,
+        "E3101": 113
+      },
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 2799,
+      "passed": 0,
+      "compiled": 2638,
+      "kind": "units",
+      "status": "INCOMPLETE",
+      "mode": "survey-only",
+      "testVerdict": "NOT_RUN",
+      "run": "survey-20260912T092730.260925Z",
+      "evidence": ".evidence/k1/survey-20260912T092730.260925Z",
+      "cacheHits": 0,
+      "assemblyCacheHits": 0,
+      "timing": {
+        "assemble": 51.233,
+        "compile": 1657.428,
+        "snapshot": 29.776,
+        "symbols": 42.325,
+        "total": 1800.786
+      },
       "command": [
-        "/Users/onehrxn/dev/30days/c30/tools/k1/measure.sh",
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py",
+        "--all",
+        "--no-install",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
         "--jobs",
-        "2"
+        "6",
+        "--run-id",
+        "survey-20260912T092730.260925Z"
       ],
-      "exitCode": 1,
-      "seconds": 6280.4,
+      "exitCode": 0,
+      "seconds": 1802.0,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
@@ -1331,9 +1351,9 @@
         "evidence": ".evidence/k1/measure-20260909T053908Z/survey"
       },
       "measurement": {
-        "run": "20260909T133504.882775Z",
-        "subject": "33bc3d437fa87efcc1affcb89e9ce341a366b54d",
-        "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84"
+        "run": "20260912T092730.260925Z",
+        "subject": "8f6cf84cab24c2d8640a511fa38f32439647b6ea",
+        "driverSha256": "73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00"
       }
     },
     "mbedtls": {

@@ -278,6 +278,9 @@ def main() -> int:
                 detail = row.get("error", row.get("note", ""))
             number = (f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row
                       else "unavailable" if row["status"] == "ERROR" else "not measured")
+            if row.get("mode") == "survey-only":
+                number = f"{row['compiled']}/{row['total']} assembled; boot NOT_RUN"
+                detail = "Compilation only; " + detail
             measurement = row.get("measurement", {"run": bench["run"]})
             stamp = measurement.get("run", "unknown")
             if name not in bench.get("selected", bench["benchmarks"]):

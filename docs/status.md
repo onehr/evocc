@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-09 UTC,EvoIR 1.9.90 / EvoMIR 0.28, checkout 5aabf60)
+EvoCC ── (2026-09-12 UTC,EvoIR 1.9.90 / EvoMIR 0.28, checkout 8f6cf84)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -41,14 +41,14 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260909T215349.472835Z`; checkout `5aabf60`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260912T092730.260925Z`; checkout `8f6cf84`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
 | ctest | E0b | INCOMPLETE | 209/220 programs | 20260909T171506.687331Z (previous) | E3101: 8, E3030: 1, E2102: 1 |
-| torture | E0a | INCOMPLETE | 1268/1692 programs | 20260909T215349.472835Z | E3101: 128, E2201: 22, E2001: 21 |
+| torture | E0a | INCOMPLETE | 1268/1692 programs | 20260909T215349.472835Z (previous) | E3101: 128, E2201: 22, E2001: 21 |
 | csmith | E0c | INCOMPLETE | 932/1000 programs | 20260909T193124.118062Z (previous) | original seeds; unavailable oracles are not passes |
 | zlib | E1 | PASS | 19/19 units | 20260907T141450.311159Z (previous) | mixed-link program tests |
 | zstd | E2 | INCOMPLETE | 6/44 units | 20260909T074238.247563Z (previous) | E1001: 37, E3101: 1 |
@@ -56,7 +56,7 @@ Program counts and translation-unit counts are different measures; an incomplete
 | tinycc | E5 | INCOMPLETE | 8/11 units | 20260909T132841.817643Z (previous) | E3101: 3 |
 | toybox | E6 | INCOMPLETE | 195/203 units | 20260909T132841.817643Z (previous) | E3101: 8 |
 | musl | E7 | INCOMPLETE | 1010/1339 units | 20260909T132841.817643Z (previous) | E3101: 216, E1006: 83, E2001: 14 |
-| kernel | K1/K5-K7 ramp | ERROR | unavailable | 20260909T133504.882775Z (previous) | receipt unchanged; previous evidence is not a new measurement |
+| kernel | K1/K5-K7 ramp | INCOMPLETE | 2638/2799 assembled; boot NOT_RUN | 20260912T092730.260925Z | Compilation only; E3101: 113, E3026: 29, E3021: 8 |
 | mbedtls | E4 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no benchmark adapter yet |
 | polybench | E8 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | llvm-test-suite | E9 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; mixed integer/FP suite |

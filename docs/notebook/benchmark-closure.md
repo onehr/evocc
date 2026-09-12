@@ -75,6 +75,74 @@ sections. The previously body-pending items below are now implementation
 work, not blockers. Probe disagreement still requires an explicit refused
 shape, not a guessed result or a removed runtime check.
 
+### Full kernel compilation survey (2026-09-12)
+
+Command: `python3 tools/bench.py kernel --survey-only --evocc
+/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --jobs 6`.
+Run `survey-20260912T092730.260925Z`; [capture summary](../../.evidence/k1/survey-20260912T092730.260925Z/substitution.json),
+[per-unit results](../../.evidence/k1/survey-20260912T092730.260925Z/units.jsonl),
+and [bench receipt](../../tests/contracts/bench-receipt.json).
+The measured checkout was `8f6cf84` with pre-existing receipt/status edits;
+the frozen driver SHA-256 was
+`73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00`.
+The later compiler repair below is deliberately not included in these numbers.
+
+All 2,799 original identities were checked: **2,638 assembled, 161 refused**,
+zero timeouts, zero crashes and zero assembler failures. All refusals exited
+with code 1 and a typed diagnostic. Defined-symbol comparison reported no
+missing/extra symbol sets. Recounting `units.jsonl` reproduced the summary,
+and its SHA-256 is
+`ce46e04aa698251cd23c01aa1032a1d242e6a8f3dfda9dc19481626d342528d5`.
+Comparison with `measure-20260910T160033Z/survey` found the same driver and
+zero per-unit outcome changes, not merely equal totals.
+
+Cold-run elapsed time was **1,800.786 seconds (30m01s)**: input snapshot
+29.776 s, compilation 1,657.428 s, assembly 51.233 s and symbol comparison
+42.325 s; the total also includes the final input/binary verification.
+Per-unit compiler wall time: median 2.929 s, maximum 38.349 s
+(`arch/arm64/kvm/inject_fault.o`), with six workers and the unchanged
+180-second limit. A single-job tailored compiler build and affected-crate
+tests overlapped part of this run; this is not an isolated throughput benchmark.
+The earlier 7,481.7-second measurement also linked and bisected failures, so
+dividing those totals would not establish a compiler speedup.
+
+Frontend/object cache hits were **0/0**: the old incomplete input key was
+invalidated and the object cache was populated for the first time. A subsequent
+single-object check of `lib/bitrev.o` reused the real object in 0.005 s with
+unchanged digest and timestamp; the 114 Python tests also exercise invalidation.
+The date-input guard landed after this survey process started; this fresh run
+crossed no UTC date boundary, and the stronger key conservatively misses its
+frontend cache on the next invocation. This capture adds approximately 4.4 MiB
+of compact records; emitted assembly and objects remain in the existing cache,
+not copied into another evidence tree.
+
+No objects were installed, no kernel was linked or booted, and no KUnit or
+kselftest ran. The common runner therefore correctly returns `INCOMPLETE`
+(exit 1) with `testVerdict=NOT_RUN`; the survey subprocess itself exited 0.
+No old successful mixed-kernel receipt was promoted to this composition.
+
+First-error families below partition the 161 refused units. Function/block
+names in validator messages are grouped by the violated rule; counts are
+units, not diagnostic occurrences or predictions of the next run.
+
+| Units | Code | First-error family | Example unit |
+|---:|---|---|---|
+| 78 | E3101 | Goto destination discarded | `arch/arm64/kernel/signal.o` |
+| 29 | E3026 | Static address/relocation | `drivers/base/dd.o` |
+| 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` |
+| 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` |
+| 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` |
+| 5 | E3101 | Zero pointer-offset scale | `fs/super.o` |
+| 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` |
+| 2 | E2202 | Initializer type | `drivers/firmware/efi/libstub/file.o` |
+| 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` |
+| 2 | E3030 | Aggregate varargs | `net/9p/client.o` |
+| 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` |
+| 2 | E3101 | Malformed global relocation | `drivers/acpi/acpica/exdump.o` |
+| 1 | E3029 | Computed goto | `kernel/bpf/core.o` |
+| 1 | E3101 | Case constant | `kernel/signal.o` |
+| 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` |
+
 ### Expression goto destinations (2026-09-12)
 
 The completed September 10 survey had 78 first-error refusals saying that a
@@ -88,7 +156,7 @@ runtime obligation was removed, and no new traversal framework was added.
 RED `3b7fd97` reproduces the loop step, a backward expression jump, and an
 initializer jump in `tests/fixtures/expression-goto-targets.c`. C-HIR and both
 sealed compilers returned zero while lowering reported the missing target.
-The corrected lowerer passes the same fixture through both interpreters and
+GREEN `fb05c80` passes the same fixture through both interpreters and
 Linux arm64 native assembly/link/execution. An additional unevaluated-sizeof
 case ensures a jump that is not executed cannot retain an unsupported body.
 
@@ -135,6 +203,32 @@ Clippy `-D warnings` and workspace formatting passed. The selected crates were
 passed 99 and 15 tests respectively. Ruff on the changed tools and
 `git diff --check` passed. Full mixed-link/boot, all-benchmark campaigns and
 an isolated workspace replay were not run for this tailored repair.
+
+### Next repair batch from this measurement
+
+1. **Static address initializers.** Two minimal forms have now been replayed:
+   `static void *p = (void *)0x300 + 0x1000UL;` (E3026) and
+   `static int x; static unsigned long p = (unsigned long)&x;` (E3101).
+   The candidate driver still refuses them; sealed GCC-14 and Clang-19 both
+   compile and execute checks of `0x1300` and `&x` respectively with exit 0.
+   Sources are in `.build/targeted/20260912-goto/{absolute-pointer-offset,
+   symbol-in-integer}.c`. These reproduce the `TIMER_ENTRY_STATIC` and
+   `APD_ADDR` shapes; they do not prove all 50 units share only these defects.
+   Add tests to the existing static-initializer target, use the shared address
+   evaluator/relocation path, and assert bytes/addends plus fail-closed invalid
+   dereferences. Do not fabricate provenance or relax relocation validation.
+2. **Zero-size pointer offsets and remaining asm/value boundaries.** Reduce
+   the five zero-scale and five aggregate-in-scalar cases before changing the
+   relevant shared path. Keep immediate/register constraints, aggregate ABI,
+   and volatile accesses as separate semantic tests.
+3. **Finish the existing non-floating inventory.** Follow the tailored-first
+   plan below for the remaining declaration/VLA, varargs, computed-control-flow,
+   vector/atomic and benchmark-adapter work. Every original failure needs a
+   repair or a reviewed source-bound disposition, not a guessed exclusion.
+4. **Only then run the next complete integration campaign.** Recompile with
+   the new driver, reuse only exact unchanged assembly objects, and run the
+   original benchmarks. Any changed kernel composition still gets a real
+   link/boot. Neither this survey nor the six-unit repair sample closes K6/K7.
 
 ### Tailored-first execution plan (2026-09-10)
 
