@@ -52,6 +52,36 @@ fn expression_gotos_keep_otherwise_unselected_label_destinations() {
 }
 
 #[test]
+fn constant_inline_configuration_calls_remove_unreachable_symbol_uses() {
+    for body in [
+        "if (!enabled()) return 0; return absent;",
+        "if (enabled()) return absent; return 0;",
+        "while (enabled()) return absent; return 0;",
+    ] {
+        let source = format!(
+            "extern int absent; static inline _Bool enabled(void) {{ return 0; }}
+             int main(void) {{ {body} }}"
+        );
+        let module = assert_execution(&source);
+        assert!(
+            !module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+                .any(|inst| matches!(inst, evocc_evoir::Inst::GlobalAddr { symbol, .. } if symbol == "absent")),
+            "unreachable external object still has an emitted reference: {body}"
+        );
+    }
+    // Calls with effects are not constant just because their return is zero.
+    assert_execution(
+        "int n; static inline int enabled(void){ ++n; return 0; }
+        int main(void){ if(enabled()) return 1; return n != 1; }",
+    );
+    // Unused arguments still evaluate, even when the callee returns a literal.
+    assert_execution(
+        "int n; static inline int enabled(int ignored){return 0;}
+        int main(void){ if(enabled(++n)) return 1; return n != 1; }",
+    );
+}
+
+#[test]
 fn goto_can_reach_a_label_after_the_segment_loses_fallthrough() {
     assert_execution(
         "int f(int x) { int n = 0; switch (x) {
