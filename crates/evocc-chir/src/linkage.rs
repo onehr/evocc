@@ -1,6 +1,6 @@
 //! Symbol linkage, resolved once from the declaration inventory of a unit.
 
-use crate::{CHirDecl, CHirUnit, StorageClass, StringLit, StringPrefix, SymbolId};
+use crate::{CHirDecl, CHirUnit, StorageClass, SymbolId};
 use evocc_common::SourceSpan;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -101,12 +101,9 @@ impl SymbolLinkage {
                 let [argument] = attribute.arguments.as_slice() else {
                     return Err(error());
                 };
-                let inner = argument
-                    .text
-                    .strip_prefix('"')
-                    .and_then(|text| text.strip_suffix('"'))
-                    .ok_or_else(error)?;
-                let value = StringLit::single(inner, StringPrefix::None)
+                let value = argument
+                    .string_literal()
+                    .ok_or_else(error)?
                     .decoded_units()
                     .ok_or_else(error)?
                     .into_iter()
@@ -167,12 +164,9 @@ impl SymbolLinkage {
                 let [argument] = alias.arguments.as_slice() else {
                     return Err(error());
                 };
-                let inner = argument
-                    .text
-                    .strip_prefix('"')
-                    .and_then(|s| s.strip_suffix('"'))
-                    .ok_or_else(error)?;
-                let units = StringLit::single(inner, StringPrefix::None)
+                let units = argument
+                    .string_literal()
+                    .ok_or_else(error)?
                     .decoded_units()
                     .ok_or_else(error)?;
                 let target = units

@@ -1088,6 +1088,44 @@ pub struct AttributeArgument {
     pub integer: Option<u64>,
 }
 
+impl AttributeArgument {
+    /// Recover an ordinary string-literal sequence without changing the
+    /// preserved spelling. Only token boundaries are recognized here; escape
+    /// decoding remains in StringLit, separately for each fragment.
+    #[must_use]
+    pub fn string_literal(&self) -> Option<StringLit> {
+        let mut remaining = self.text.trim_ascii();
+        let mut fragments = Vec::new();
+        while !remaining.is_empty() {
+            let contents = remaining.strip_prefix('"')?;
+            let mut escaped = false;
+            let end = contents.char_indices().find_map(|(index, character)| {
+                if escaped {
+                    escaped = false;
+                    None
+                } else if character == '\\' {
+                    escaped = true;
+                    None
+                } else if character == '"' {
+                    Some(index)
+                } else {
+                    None
+                }
+            })?;
+            fragments.push(contents[..end].to_owned());
+            remaining = contents[end + 1..].trim_ascii();
+        }
+        if fragments.is_empty() {
+            return None;
+        }
+        Some(StringLit {
+            value: fragments.concat(),
+            prefix: StringPrefix::None,
+            fragments,
+        })
+    }
+}
+
 /// A type/layout attribute applied while building the canonical type. Other
 /// applied attributes, such as linkage marks, have their own representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -2903,5 +2941,27 @@ mod tests {
             StringLit::single("\\u0061", StringPrefix::None).explicit_unit_count(),
             None,
         );
+    }
+
+    #[test]
+    fn attribute_literal_sequences_preserve_escape_boundaries() {
+        let decode = |text: &str| {
+            AttributeArgument {
+                text: text.to_owned(),
+                span: test_span(),
+                integer: None,
+            }
+            .string_literal()
+            .and_then(|literal| literal.decoded_units())
+        };
+        assert_eq!(
+            decode(r#""\x2e""data""""#),
+            Some(vec![46, 100, 97, 116, 97])
+        );
+        assert_eq!(decode(r#""\x1" "2""#), Some(vec![1, 50]));
+        assert_eq!(decode(r#""a\"b" "\\c""#), Some(vec![97, 34, 98, 92, 99]));
+        for malformed in ["", "42", "\"unterminated", "\"x\" + \"y\"", "L\"x\""] {
+            assert_eq!(decode(malformed), None, "{malformed}");
+        }
     }
 }
