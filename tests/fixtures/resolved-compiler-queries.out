@@ -39,3 +39,12 @@ Original .o.cmd argv through tools/k1/cmdrecord.py, debug subject, no installati
 arch/arm64/kernel/patching.o exit=0 seconds=22.83 compiler-assert-calls=0
 arch/arm64/kvm/mmio.o exit=0 seconds=140.09 compiler-assert-calls=0
 Timings under concurrent eight-worker release compilation, not isolated performance measurements.
+
+Required-constant RED: resolved_compiler_queries, 8 passed / 3 failed, zero build errors.
+All three fail at static-integer-machine admission: static initializer, case, conditional relocation.
+GREEN: same command, 11 passed; constant_source_width 3 passed;
+cargo test -p evocc-chir static_integer_machine: 1 passed.
+constant-query-initializers gcc-14 O2 exit=0
+constant-query-initializers clang-19 O2 exit=0
+constant-query-initializers subject-native-exit=0
+Clippy: evocc-chir, evocc-lower, evocc --all-targets -- -D warnings: PASS.

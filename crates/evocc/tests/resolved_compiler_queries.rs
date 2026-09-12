@@ -184,7 +184,9 @@ fn parameter_facts_do_not_escape_their_proven_callers_or_replace_effects() {
 
 #[test]
 fn constant_queries_are_ices_in_static_initializers() {
-    assert_constant_program(include_str!("../../../tests/fixtures/constant-query-initializers.c"));
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/constant-query-initializers.c"
+    ));
 }
 
 #[test]

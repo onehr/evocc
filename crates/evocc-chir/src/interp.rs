@@ -3887,6 +3887,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | CHirExpr::Binary(..)
                 | CHirExpr::Ternary(..)
                 | CHirExpr::Elvis(..)
+                | CHirExpr::BuiltinConstantP { .. }
                 | CHirExpr::BitBuiltin { .. }
                 | CHirExpr::SizeOf(..)
                 | CHirExpr::SizeOfExpr(..)

@@ -406,6 +406,19 @@ completed successfully with both headers at the reference `#1`, and the
 is changed. The two interrupted pre-link attempts remain incomplete; cached
 compilations are reusable only under their unchanged input/compiler keys.
 
+Full attempt `20260912T191806Z` (subject `b358bf1`, driver SHA-256
+`09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df`)
+finished **2,757 assembled / 42 refused / 0 timeout / 0 panic**. Installation,
+link and boot did not run. The refusals were 25 case constants, 16 integer
+initializers and one relocation fallback. All three minimal forms exposed the
+same missing `BuiltinConstantP` admission in the iterative static-constant
+machine, despite its normal execution dispatch already implementing the query.
+Three REDs failed without build errors. The one-line admission preserves the
+shared conservative predicate and never evaluates its operand. Fourteen CLI
+regressions plus the static-machine rejection test pass; GCC-14, Clang-19 and
+native subject execution agree on the initializer fixture. This repairs a
+constant consumer, not the language's constant-expression definition.
+
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,
 little endian, unsigned char, reserved x18, frame pointers, four-byte function
