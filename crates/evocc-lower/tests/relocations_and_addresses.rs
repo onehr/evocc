@@ -106,6 +106,24 @@ fn absolute_static_addresses_encode_bits_without_inventing_symbols() {
 }
 
 #[test]
+fn static_numeric_pointer_offsets_preserve_scaling_and_casts() {
+    check(
+        include_str!("../../../tests/fixtures/static-address-offsets.c"),
+        Ok(0),
+        &[],
+    );
+}
+
+#[test]
+fn integer_static_objects_can_carry_symbolic_address_relocations() {
+    check(
+        include_str!("../../../tests/fixtures/integer-address-relocations.c"),
+        Ok(0),
+        &["@object, 0", "@object, 8", "@object, 12", "@object, 4"],
+    );
+}
+
+#[test]
 fn absolute_static_addresses_do_not_invent_access_or_call_provenance() {
     check(
         "static int *p=(int *)0x12340; int main(void){return *p;}",
