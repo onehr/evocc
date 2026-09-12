@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "run": "20260912T092730.260925Z",
-  "subject": "8f6cf84cab24c2d8640a511fa38f32439647b6ea",
+  "run": "20260912T182636.704003Z",
+  "subject": "595ad7afd3b75f72da07630baeba836f0f56fe43",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00",
+  "driver": "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
+  "driverSha256": "89b88924833ed84642a7b571137ba53744a021d4054b0bb9684266f38882c45f",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
     "kernel",
     "--survey-only",
     "--evocc",
-    "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+    "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
     "--jobs",
-    "6"
+    "8"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
@@ -1275,38 +1275,31 @@
       "rung": "K1/K5-K7 ramp",
       "note": "full compilation survey; linking, boot and selftests NOT_RUN",
       "outcomes": {
-        "assembled": 2638,
-        "refused": 161
+        "assembled": 2797,
+        "refused": 2
       },
       "refusals": {
-        "E2202": 2,
-        "E2939": 4,
-        "E3021": 8,
-        "E3026": 29,
-        "E3029": 1,
-        "E3030": 2,
-        "E3034": 2,
-        "E3101": 113
+        "E3101": 2
       },
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 2799,
       "passed": 0,
-      "compiled": 2638,
+      "compiled": 2797,
       "kind": "units",
       "status": "INCOMPLETE",
       "mode": "survey-only",
       "testVerdict": "NOT_RUN",
-      "run": "survey-20260912T092730.260925Z",
-      "evidence": ".evidence/k1/survey-20260912T092730.260925Z",
-      "cacheHits": 0,
-      "assemblyCacheHits": 0,
+      "run": "survey-20260912T182636.704003Z",
+      "evidence": ".evidence/k1/survey-20260912T182636.704003Z",
+      "cacheHits": 307,
+      "assemblyCacheHits": 73,
       "timing": {
-        "assemble": 51.233,
-        "compile": 1657.428,
-        "snapshot": 29.776,
-        "symbols": 42.325,
-        "total": 1800.786
+        "assemble": 55.593,
+        "compile": 1068.017,
+        "snapshot": 30.896,
+        "symbols": 43.689,
+        "total": 1216.491
       },
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1314,14 +1307,14 @@
         "--all",
         "--no-install",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
         "--jobs",
-        "6",
+        "8",
         "--run-id",
-        "survey-20260912T092730.260925Z"
+        "survey-20260912T182636.704003Z"
       ],
       "exitCode": 0,
-      "seconds": 1802.0,
+      "seconds": 1216.6,
       "previous": {
         "rung": "K1/K5-K7 ramp",
         "note": "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest",
@@ -1351,9 +1344,9 @@
         "evidence": ".evidence/k1/measure-20260909T053908Z/survey"
       },
       "measurement": {
-        "run": "20260912T092730.260925Z",
-        "subject": "8f6cf84cab24c2d8640a511fa38f32439647b6ea",
-        "driverSha256": "73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00"
+        "run": "20260912T182636.704003Z",
+        "subject": "595ad7afd3b75f72da07630baeba836f0f56fe43",
+        "driverSha256": "89b88924833ed84642a7b571137ba53744a021d4054b0bb9684266f38882c45f"
       }
     },
     "mbedtls": {

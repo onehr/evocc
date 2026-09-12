@@ -12,3 +12,13 @@ Subject assembly: target/tailored/debug/evocc -O2 --emit=asm <fixture>.c
 Native: streamed to gcc-14 -x assembler - -o /tmp/program inside the same sealed image.
 inline-constant-query subject-native-exit=0
 extract-return-address subject-native-exit=0
+static-constant-branch gcc-14 O2 exit=0
+static-constant-branch clang-19 O2 exit=0
+static-constant-branch subject-native-exit=0
+Constant branch RED: resolved_compiler_queries, 2 failed, zero build errors
+(copied callee scope and retained false error call).
+GREEN: resolved_compiler_queries + constant_source_width, 8 passed;
+expression_value_flow + front_end_resolved_forms, 103 passed.
+Original-unit replay: constant-branches-20260913, 4/4 assembled, not installed.
+Subject sha256: 549aeb27363bdf6c2e9a15c6f3f424b89659c3300d2b4865dad1977a0b49cbbd
+No bl __compiletime_assert* or bl __builtin_extract_return_addr in the four assemblies.

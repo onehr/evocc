@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-12 UTC,EvoIR 1.9.92 / EvoMIR 0.29, checkout 8f6cf84)
+EvoCC ── (2026-09-12 UTC,EvoIR 1.9.92 / EvoMIR 0.29, checkout 595ad7a)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -41,7 +41,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260912T092730.260925Z`; checkout `8f6cf84`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260912T182636.704003Z`; checkout `595ad7a`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
@@ -56,7 +56,7 @@ Program counts and translation-unit counts are different measures; an incomplete
 | tinycc | E5 | INCOMPLETE | 8/11 units | 20260909T132841.817643Z (previous) | E3101: 3 |
 | toybox | E6 | INCOMPLETE | 195/203 units | 20260909T132841.817643Z (previous) | E3101: 8 |
 | musl | E7 | INCOMPLETE | 1010/1339 units | 20260909T132841.817643Z (previous) | E3101: 216, E1006: 83, E2001: 14 |
-| kernel | K1/K5-K7 ramp | INCOMPLETE | 2638/2799 assembled; boot NOT_RUN | 20260912T092730.260925Z | Compilation only; E3101: 113, E3026: 29, E3021: 8 |
+| kernel | K1/K5-K7 ramp | INCOMPLETE | 2797/2799 assembled; boot NOT_RUN | 20260912T182636.704003Z | Compilation only; E3101: 2 |
 | mbedtls | E4 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no benchmark adapter yet |
 | polybench | E8 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | llvm-test-suite | E9 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; mixed integer/FP suite |

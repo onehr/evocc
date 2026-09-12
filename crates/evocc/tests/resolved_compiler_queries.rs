@@ -86,4 +86,34 @@ fn immutable_static_values_prune_false_error_calls_without_becoming_ices() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_failed"));
+    let source = "int main(void){static const int value=7; _Static_assert(!__builtin_constant_p(value),\"profile predicate\");return __builtin_constant_p(value);}";
+    let output = run(source, "--interpret-evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"0\n");
+}
+
+#[test]
+fn static_value_propagation_preserves_escapes_volatile_reads_and_updates() {
+    for source in [
+        "int main(void){static const int value=7;const int *p=&value;return *p!=7;}",
+        "int main(void){static const volatile int value=7;return value!=7;}",
+        "static int f(void){static int value=5; ++value;return value;}int main(void){static const int expected=7;f();return f()!=expected;}",
+        "int main(void){static const int value=7; int a=0; if(a) return 2; static const int later=8; return value+later!=15;}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{source}: {mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n", "{source}: {mode}");
+        }
+    }
+    let output = run(
+        "int main(void){static const volatile int value=7;return value;}",
+        "--emit=evoir",
+    );
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("load volatile"));
 }

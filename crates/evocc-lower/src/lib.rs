@@ -422,7 +422,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
     }) {
         return Err(LowerError::Profile(refusal.clone()));
     }
-    if evocc_chir::inline::has_inline_definitions(unit, target) {
+    if evocc_chir::inline::needs_substitution(unit, target) {
         let arena = evocc_common::Arena::default();
         let rewritten = evocc_chir::inline::substitute(unit, &arena, target).map_err(|e| {
             LowerError::Inline {

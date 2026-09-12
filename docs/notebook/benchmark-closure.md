@@ -367,8 +367,20 @@ Enabling the original optimization macros exposed genuine link defects:
 and `__builtin_extract_return_addr` was an unintended external call.
 `resolved_compiler_queries` now passes both regressions; both small fixtures
 also link and return zero as native AArch64 code, matching GCC-14/Clang-19.
-The original mmu replay no longer calls the constant-parameter assertion;
-one separate assertion over a static const object remains to be folded.
+The separate static-const assertion and two copied-callee-scope failures now
+pass RED/GREEN regressions. Constant inline returns materialize only the value,
+not unselected callee-owned syntax. Non-escaping immutable static integer values
+are propagated without making them integer constant expressions or changing
+`constant_p`; volatile objects, address escapes and writes remain observable.
+`constant-branches-20260913` freshly compiled/assembled **4/4** original units
+(mmu, vsprintf, irq-gic-v3, cpuset), with no remaining compiler-assert or
+extract-return-address external calls. Its subject digest is
+`549aeb27363bdf6c2e9a15c6f3f424b89659c3300d2b4865dad1977a0b49cbbd`.
+The targeted commands in `tests/fixtures/resolved-compiler-queries.out` passed
+111 tests; package Clippy and workspace formatting passed. The new static
+fixture also links and returns zero natively and with both sealed oracles.
+The completed earlier survey `20260912T182636.704003Z` remains **2,797/2,799**,
+not retroactively 2,799: the next measurement is full compile/link/boot.
 
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,

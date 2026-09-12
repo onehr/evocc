@@ -1,0 +1,4 @@
+drivers/irqchip/irq-gic-v3.o
+kernel/cgroup/cpuset.o
+arch/arm64/mm/mmu.o
+lib/vsprintf.o

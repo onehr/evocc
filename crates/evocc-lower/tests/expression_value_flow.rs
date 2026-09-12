@@ -306,7 +306,7 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
         0,
         "C-HIR: {source}"
     );
-    if evocc_chir::inline::has_inline_definitions(&unit, &target) {
+    if evocc_chir::inline::needs_substitution(&unit, &target) {
         let rewritten = evocc_chir::inline::substitute(&unit, &arena, &target).unwrap();
         let execution = interp::interpret_scalar_function(
             &rewritten,

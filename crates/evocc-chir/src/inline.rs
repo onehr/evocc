@@ -446,12 +446,53 @@ fn constant_inline_return<'a>(
         .map(|(expression, _)| expression)
 }
 
-pub fn has_inline_definitions(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {
+pub fn needs_substitution(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {
     unit.iter().any(|d| {
         matches!(d, CHirDecl::Function(f) if f.body.is_some()
         && (f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
             || constant_inline_return(unit, f, target).is_some()))
-    })
+    }) || !static_integer_values(unit, target).is_empty()
+}
+
+// This is an execution optimization, not an extension of integer constant
+// expressions or constant_p. An address escape or volatile access prevents it.
+fn static_integer_values<'a>(
+    unit: &CHirUnit<'a>,
+    target: &TargetDataLayout,
+) -> BTreeMap<SymbolId, (&'a CHirExpr<'a>, TypeId)> {
+    let uses = inspect(unit.iter().map(Node::Decl));
+    uses.statics
+        .iter()
+        .filter_map(|(&symbol, object)| {
+            let canonical = unit.types.get(object.ty)?;
+            if !canonical.qualifiers.is_const
+                || canonical.qualifiers.is_volatile
+                || canonical.qualifiers.is_atomic
+                || uses.mutable.contains(&symbol)
+                || object.asm_label.is_some()
+                || !matches!(
+                    canonical.kind,
+                    TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)
+                )
+            {
+                return None;
+            }
+            let [InitAction::StoreScalar { path, value, .. }] =
+                object.initializer.as_ref()?.plan.actions()
+            else {
+                return None;
+            };
+            (path.is_root()
+                && crate::constant::eval_integer_constant(
+                    value,
+                    &unit.types,
+                    &unit.symbols,
+                    target,
+                )
+                .is_some())
+            .then_some((symbol, (*value, object.ty)))
+        })
+        .collect()
 }
 
 /// Rewrite into the caller-owned arena. Original nodes and symbol tables are
@@ -499,10 +540,17 @@ pub fn substitute<'a>(
         target,
         eligible,
         globals: BTreeMap::new(),
+        static_values: BTreeMap::new(),
         serial: 0,
         active: Vec::new(),
         temporaries: Vec::new(),
     };
+    for (symbol, (value, ty)) in static_integer_values(unit, target) {
+        let converted = pass.alloc(CHirExpr::Cast(ty, value, value.span()));
+        if let Some(value) = pass.repeatable_value(converted, ty) {
+            pass.static_values.insert(symbol, value);
+        }
+    }
     // Lift each function-static to one internal object, not one per clone.
     // Rewriting every body (including retained out-of-line bodies) uses this
     // same symbol. Source names and __func__ literal contents are retained.
@@ -625,6 +673,7 @@ struct Substitution<'a, 't> {
     target: &'t TargetDataLayout,
     eligible: BTreeMap<SymbolId, &'a FunctionDecl<'a>>,
     globals: BTreeMap<SymbolId, SymbolId>,
+    static_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     serial: u64,
     active: Vec<SymbolId>,
     temporaries: Vec<&'a CHirDecl<'a>>,
@@ -1212,6 +1261,11 @@ impl<'a> Substitution<'a, '_> {
             if let Some(v) = c.constants.get(symbol) {
                 return Ok(v);
             }
+            if c.expand_calls {
+                if let Some(v) = self.static_values.get(symbol) {
+                    return Ok(v);
+                }
+            }
             let root = self.object_root(*symbol, c, e.span())?;
             if matches!(root, PlaceRoot::PointerExpression { .. }) {
                 let ty = self.substituted_type(facts.ty(), c);
@@ -1590,7 +1644,12 @@ impl<'a> Substitution<'a, '_> {
             if let Some(value) = constant_inline_return(&self.unit, f, self.target) {
                 // Retain the conversion at the return boundary. In particular,
                 // a nonzero integer returned as _Bool must become one.
-                return Ok(self.alloc(CHirExpr::Cast(return_type, value, span)));
+                let converted = self.alloc(CHirExpr::Cast(return_type, value, span));
+                // Copy only the value. The source expression can contain an
+                // unselected statement expression with callee-owned objects.
+                return self
+                    .repeatable_value(converted, return_type)
+                    .ok_or_else(|| self.error(span, "constant inline result was not repeatable"));
             }
         }
         let body = f.body.unwrap();
