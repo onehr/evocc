@@ -69,6 +69,15 @@ optimization-query-effects.c exit 0; optimization-constant-query.c value/exit 1.
 Original .o.cmd emission replay (no installation, no new full measurement):
 block/blk-settings.o, arch/arm64/kvm/at.o: rc 0, no compiletime-assert calls;
 subject SHA256 f6f3cd692b621235778051b7843fb7d0a04b166e8ab3970199b69c232a7a39cd.
+
+Dispatch/representation RED: 21 passed / 2 failed, zero build errors;
+both failures were retained external calls, not incorrect interpreter values.
+GREEN: resolved_compiler_queries 24/24; expression_value_flow 79/79.
+Clippy for evocc-lower/evocc all-targets -D warnings, fmt and diff-check PASS.
+constant-representation-reads.c: GCC-14/Clang-19 -std=gnu11 -O2 and EvoCC
+generated native AArch64 all link and exit 0. Padding, volatile and runtime
+initializer guards retain the unproved branch; original evaluations remain.
+Original ptrace.o and ufshcd.o: emit rc 0, no compiletime-assert calls.
 Latest focused commands (CARGO_TARGET_DIR=target/tailored, --locked --offline -j 2):
 cargo test -p evocc --test resolved_compiler_queries: 17 passed
 cargo test -p evocc-lower --test expression_value_flow --test front_end_resolved_forms: 103 passed

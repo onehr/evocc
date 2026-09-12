@@ -433,7 +433,7 @@ out-of-line path. The address-sensitive guard also repairs a newly reproduced
 UFS label regression; `ufshcd.o` emits again but still has ten layout assertion
 calls. These measurements did not install objects or run a full link.
 
-Known remaining link constructs include the K-S01 min/max query conflict,
+Known remaining link constructs originally included the K-S01 min/max query conflict,
 KVM queries on statement-expression request constants, exhaustive masked
 switches retaining their default assertion (`ptrace.o`), and reads of constant
 compound-literal representations (`ufshcd.o`). They are not floating-point

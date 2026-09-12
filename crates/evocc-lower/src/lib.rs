@@ -8233,6 +8233,59 @@ impl<'a> FunctionLowerer<'a> {
         Ok(condition)
     }
 
+    // A constant bit mask gives an over-approximation [0, mask]. Prove that
+    // ordinary cases cover that entire interval; never assume that the
+    // mere presence of an assertion in default makes it unreachable.
+    fn switch_cases_cover_mask(
+        &self,
+        expression: &CHirExpr<'_>,
+        integer: CIntegerType,
+        cases: impl Iterator<Item = SwitchCase<'a>>,
+    ) -> bool {
+        let CHirExpr::Binary(BinaryOp::BitAnd, left, right, _) = expression else {
+            return false;
+        };
+        let Some(mask) = self
+            .result_after_evaluation(right)
+            .or_else(|| self.result_after_evaluation(left))
+        else {
+            return false;
+        };
+        let upper = mask.cast(integer).raw_bits();
+        if integer.is_signed() && upper > integer.signed_max() as u128 {
+            return false;
+        }
+        let mut intervals = Vec::new();
+        for case in cases {
+            let (first, last) = match case {
+                SwitchCase::Single(value) => (value, value),
+                SwitchCase::Range(first, last) => (first, last),
+            };
+            let (Ok(first), Ok(last)) = (
+                self.case_constant(first, integer),
+                self.case_constant(last, integer),
+            ) else {
+                return false;
+            };
+            intervals.push((first.raw_bits(), last.raw_bits()));
+        }
+        intervals.sort_unstable();
+        let mut next = 0;
+        for (first, last) in intervals {
+            if last < next {
+                continue;
+            }
+            if first > next {
+                return false;
+            }
+            if last >= upper {
+                return true;
+            }
+            next = last + 1;
+        }
+        false
+    }
+
     fn lower_switch(
         &mut self,
         expression: &'a CHirExpr<'a>,
@@ -8271,6 +8324,12 @@ impl<'a> FunctionLowerer<'a> {
             Some(key)
         };
         let (prefix, segments) = switch_segments(body, self.unit, self.target, selector_type)?;
+        let exhaustive = self.switch_cases_cover_mask(
+            expression,
+            selector_type,
+            segments.iter().filter_map(|segment| segment.case),
+        );
+        let last_case = segments.iter().rposition(|segment| segment.case.is_some());
         let mut switch_locals = state.locals.clone();
         for item in prefix {
             if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
@@ -8453,6 +8512,10 @@ impl<'a> FunctionLowerer<'a> {
                     (false_target, false_args)
                 };
                 self.terminate(&dispatch, Inst::Br(target, arguments))?;
+                continue;
+            }
+            if exhaustive && Some(index) == last_case {
+                self.terminate(&dispatch, Inst::Br(true_entry.0.block, true_args))?;
                 continue;
             }
             let condition =
@@ -10448,6 +10511,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         let result = |expression| self.result_after_evaluation(expression);
         match expression {
+            CHirExpr::MemoryRead { place, .. } => self.fresh_literal_read(place),
             CHirExpr::Call(CHirExpr::Ident { symbol, .. }, _, _) => {
                 self.functions.get(symbol)?.constant_result
             }
@@ -10482,6 +10546,210 @@ impl<'a> FunctionLowerer<'a> {
             }
             _ => None,
         }
+    }
+
+    // Prove a fresh literal's initialized representation, not a value read
+    // from an arbitrary object. The real load and initialization are retained.
+    // Applying the existing scalar/bit-field write plan to complementary
+    // initial bytes makes every unwritten bit disagree, so padding cannot
+    // accidentally become a known zero. Relocated/pointer bytes are excluded.
+    fn fresh_literal_read(&self, place: &MemoryPlace<'_>) -> Option<CInteger> {
+        let qualifiers = place.access_qualifiers();
+        if qualifiers.is_volatile || qualifiers.is_atomic {
+            return None;
+        }
+        let (ty, initializer, mut offset) = match place.root() {
+            PlaceRoot::PointerExpression { pointer, .. } => {
+                literal_address(self.unit.types(), pointer)?
+            }
+            PlaceRoot::CompoundLiteral {
+                expression: CHirExpr::CompoundLit(ty, init, _),
+                ..
+            } => (*ty, init, 0),
+            _ => return None,
+        };
+        if self.unit.types().get(ty)?.qualifiers.is_volatile {
+            return None;
+        }
+        for projection in place.projections() {
+            let delta = match projection {
+                PlaceProjection::Index(index) => {
+                    let value = constant_integer(self.unit, self.target, index.index())?;
+                    if value.ty().is_signed() && value.mathematical_value() < 0 {
+                        return None;
+                    }
+                    u64::try_from(value.raw_bits()).ok()?.checked_mul(
+                        self.target
+                            .layout_of(self.unit.types(), index.element_ty())
+                            .ok()?
+                            .size_bytes,
+                    )?
+                }
+                PlaceProjection::Field(field) => {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), field.tag())
+                        .ok()?;
+                    let field = layout
+                        .fields
+                        .iter()
+                        .find(|entry| entry.field_index == field.field_index())?;
+                    if field.bit_field.is_some() {
+                        return None;
+                    }
+                    field.byte_offset
+                }
+            };
+            offset = offset.checked_add(delta)?;
+        }
+        let integer = canonical_integer(
+            self.unit.types(),
+            self.target,
+            place.value_ty(),
+            initializer.span(),
+        )
+        .ok()?;
+        let layout = self.target.layout_of(self.unit.types(), ty).ok()?;
+        let size = usize::try_from(layout.size_bytes).ok()?;
+        // This bounds compile-time work, not source object size or acceptance.
+        if size > 4096 {
+            return None;
+        }
+        let start = usize::try_from(offset).ok()?;
+        let width = usize::from(integer.bits()).div_ceil(8);
+        let end = start.checked_add(width)?;
+        if end > size {
+            return None;
+        }
+        let mut first = vec![0x55; size];
+        let mut second = vec![0xaa; size];
+        for bytes in [&mut first, &mut second] {
+            let mut relocs = Vec::new();
+            if initializer.plan().zero_fills_unwritten() {
+                self.zero_constant_subobjects(ty, initializer, bytes)?;
+            }
+            for action in initializer.plan().actions() {
+                if !matches!(
+                    action,
+                    InitAction::ZeroScalar { .. }
+                        | InitAction::StoreScalar { .. }
+                        | InitAction::StoreString { .. }
+                ) {
+                    return None;
+                }
+                apply_static_initializer(
+                    self.unit,
+                    self.target,
+                    ty,
+                    action,
+                    bytes,
+                    &mut relocs,
+                    &BTreeMap::new(),
+                    &BTreeMap::new(),
+                    &BTreeMap::new(),
+                )
+                .ok()?;
+            }
+            if !relocs.is_empty() {
+                return None;
+            }
+        }
+        if first[start..end] != second[start..end] {
+            return None;
+        }
+        let mut raw = 0u128;
+        for (i, byte) in first[start..end].iter().enumerate() {
+            let index = match self.target.byte_order() {
+                evocc_types::ByteOrder::Little => i,
+                evocc_types::ByteOrder::Big => width - 1 - i,
+            };
+            raw |= u128::from(*byte) << (index * 8);
+        }
+        Some(CInteger::from_raw(raw, integer))
+    }
+
+    fn zero_constant_subobjects(
+        &self,
+        ty: TypeId,
+        initializer: &ObjectInitializer<'_>,
+        bytes: &mut [u8],
+    ) -> Option<()> {
+        let actions = initializer.plan().actions();
+        let mut pending = vec![(ty, SubobjectPath::root())];
+        let mut visited = 0;
+        while let Some((current, path)) = pending.pop() {
+            visited += 1;
+            if visited > 8192 {
+                return None;
+            }
+            if actions
+                .iter()
+                .any(|action| path.steps().starts_with(action.path().steps()))
+            {
+                continue;
+            }
+            match &self.unit.types().get(current)?.kind {
+                TypeKind::Array {
+                    element,
+                    bound: ArrayBound::Fixed(count),
+                } => {
+                    if *count > 8192 {
+                        return None;
+                    }
+                    pending.extend(
+                        (0..*count).map(|index| (*element, path.clone().with_index(index))),
+                    );
+                }
+                TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                    let union = matches!(self.unit.types().get(current)?.kind, TypeKind::Union(_));
+                    let TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) = &self.unit.types().tag(*tag)?.state
+                    else {
+                        return None;
+                    };
+                    let selected = union.then(|| {
+                        actions.iter().find_map(|action| {
+                            let suffix = action.path().steps().strip_prefix(path.steps())?;
+                            match suffix.first()? {
+                                SubobjectStep::Field { field_index } => Some(*field_index),
+                                _ => None,
+                            }
+                        })
+                    });
+                    for (index, field) in fields.iter().enumerate() {
+                        if field.name.is_none() && field.bit_field.is_some() {
+                            continue;
+                        }
+                        if selected.flatten().is_some_and(|selected| selected != index) {
+                            continue;
+                        }
+                        pending.push((field.ty, path.clone().with_field(index)));
+                        if union {
+                            break;
+                        }
+                    }
+                }
+                TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_) => {
+                    apply_static_initializer(
+                        self.unit,
+                        self.target,
+                        ty,
+                        &InitAction::zero_scalar(path, current),
+                        bytes,
+                        &mut Vec::new(),
+                        &BTreeMap::new(),
+                        &BTreeMap::new(),
+                        &BTreeMap::new(),
+                    )
+                    .ok()?;
+                }
+                // Optional proof only: unsupported representations retain
+                // their ordinary runtime initialization and read.
+                _ => return None,
+            }
+        }
+        Some(())
     }
 
     fn lower_ternary(
@@ -12575,6 +12843,37 @@ fn null_pointer_constant(
         return false;
     }
     constant_integer(unit, target, operand).is_some_and(|value| !value.truth())
+}
+
+fn literal_address<'s, 'a>(
+    types: &TypeInterner,
+    expression: &'s CHirExpr<'a>,
+) -> Option<(TypeId, &'s ObjectInitializer<'a>, u64)> {
+    match expression {
+        CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::MemoryRead { place, .. }, _)
+            if place.projections().is_empty() =>
+        {
+            match place.root() {
+                PlaceRoot::CompoundLiteral {
+                    expression: CHirExpr::CompoundLit(ty, initializer, _),
+                    ..
+                } => Some((*ty, initializer, 0)),
+                _ => None,
+            }
+        }
+        CHirExpr::Cast(ty, operand, _) if matches!(types.get(*ty)?.kind, TypeKind::Pointer(_)) => {
+            literal_address(types, operand)
+        }
+        CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::CompoundLit(ty, initializer, _), _) => {
+            Some((*ty, initializer, 0))
+        }
+        CHirExpr::CompoundLit(ty, initializer, _)
+            if matches!(types.get(*ty)?.kind, TypeKind::Array { .. }) =>
+        {
+            Some((*ty, initializer, 0))
+        }
+        _ => None,
+    }
 }
 
 fn constant_integer(

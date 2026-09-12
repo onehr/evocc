@@ -329,7 +329,11 @@ fn exhaustive_masked_switches_do_not_reference_an_impossible_default() {
     let source = "extern void impossible(void);int f(unsigned x){switch(x&1){case 0:return 7;case 1:return 9;default:impossible();return 3;}}int main(void){return f(0)!=7||f(1)!=9||f(2)!=7||f(~0u)!=9;}";
     assert_constant_program(source);
     let output = run(source, "--emit=evoir");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @impossible"));
 }
 
@@ -348,6 +352,24 @@ fn fresh_compound_literal_representation_reads_expose_layout_checks() {
     let source = include_str!("../../../tests/fixtures/constant-representation-reads.c");
     assert_constant_program(source);
     let output = run(source, "--emit=evoir");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid_layout"));
+}
+
+#[test]
+fn representation_facts_do_not_invent_padding_or_ignore_volatile_and_runtime_values() {
+    for source in [
+        "void observe(void);struct p{char a;int b;};int f(void){if(((unsigned char*)&(struct p){.a=3})[1]==0)observe();return 0;}",
+        "void observe(void);struct p{char a;};int f(void){if(((volatile unsigned char*)&(struct p){.a=3})[0]==3)observe();return 0;}",
+        "void observe(void);struct p{char a;};int f(int x){if(((unsigned char*)&(struct p){.a=x})[0]==3)observe();return 0;}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("call @observe"));
+    }
+    assert_constant_program("struct p{char a;};int main(void){int n=0;int a=((unsigned char*)&(struct p){.a=++n})[0];return n!=1||a!=1;}");
 }
