@@ -6364,11 +6364,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     };
                     address
                         .checked_scaled_offset(
-                            subscript.raw_bits(),
+                            if scale == 0 { 0 } else { subscript.raw_bits() },
                             u16::from(subscript.ty().bits()),
                             signedness,
                             OffsetDirection::Add,
-                            scale,
+                            scale.max(1),
                         )
                         .map_err(|error| self.memory_error(error, span))?
                 }
@@ -7672,11 +7672,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         let value = pointer
             .checked_scaled_offset(
-                index.raw_bits(),
+                if scale_bytes == 0 {
+                    0
+                } else {
+                    index.raw_bits()
+                },
                 u16::from(index.ty().bits()),
                 signedness,
                 direction,
-                scale_bytes,
+                scale_bytes.max(1),
             )
             .map_err(|error| self.memory_error(error, span))?;
         self.memory

@@ -5765,13 +5765,24 @@ impl<'a> FunctionLowerer<'a> {
         scale: u64,
         state: &mut State,
     ) -> Result<Value, LowerError> {
+        let (index, scale) = if scale == 0 {
+            // GNU zero-sized elements have zero displacement, but their index
+            // is still evaluated and consumed (including an uninitialized
+            // value). Keep ptr.offset's strictly positive scale invariant.
+            let zero = self.fresh_value(index.value.ty.clone());
+            self.emit(state, Inst::Const(zero.clone(), 0))?;
+            let offset = self.emit_raw_binary(state, Inst::Mul, &index.value, &zero)?;
+            (offset, 1)
+        } else {
+            (index.value, scale)
+        };
         let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
         self.emit(
             state,
             Inst::PtrOffset {
                 result: result.clone(),
                 base,
-                index: index.value,
+                index,
                 direction,
                 signedness,
                 scale,

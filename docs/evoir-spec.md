@@ -6853,3 +6853,10 @@ In a static address initializer, `&*p` retains the numeric pointer value and `&p
 Both sealed compilers at O0/O2 execute `tests/fixtures/absolute-place-addresses.{c,out}` with the asserted null, 8, 20 and 0x1010 values.
 This creates no allocation provenance and does not admit a load, a bit-field address or a nonconstant subscript; existing runtime access diagnostics remain unchanged.
 No diagnostic is allocated; the two measured residual units are `drivers/tty/sysrq.o` and `net/core/neighbour.o`.
+
+### Pointer arithmetic over zero-sized elements
+
+Arithmetic and indexing over a GNU zero-sized element evaluate the index normally and produce zero byte displacement, preserving the original pointer identity.
+Both sealed compilers at O0/O2 execute `tests/fixtures/zero-sized-pointer-offsets.{c,out}` with zero exits, including empty records, zero-length array elements, compound updates and prefix/postfix operations.
+Lowering consumes the evaluated index in a zero product and uses a positive unit-scale `ptr.offset`; neither its validator invariant nor runtime poison, lifetime and actual byte-access checks are relaxed.
+No diagnostic is allocated; this addresses the five measured zero-scale failures in `fs/super.o`, `kernel/auditsc.o`, `kernel/rcu/tree.o`, `net/core/sock.o` and `net/netlink/af_netlink.o`.

@@ -10,9 +10,10 @@ inventory authority. Counts below overlap where a row is a subcategory.
 
 This is the current kernel-specific index into the existing issue inventory,
 not a second tracker or a new acceptance framework. The latest compilation
-measurement is `survey-20260912T092730.260925Z`; the latest complete failed
-mixed-link attempt inspected here is `measure-20260910T160033Z`. Neither
-measured the later `fb05c80` goto repair. Earlier reports below remain history.
+measurement is `survey-20260912T092730.260925Z`; the baseline failed
+mixed-link attempt is `measure-20260910T160033Z`. Neither measured the later
+`fb05c80` goto repair. The targeted replays below measure subsequent fixes;
+they do not replace that full-survey denominator. Earlier reports remain history.
 
 **Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
 currently 2,799 target C compile records. K6 requires all required target C
@@ -41,8 +42,8 @@ existing ID only after its source-level cause is established.
 
 ### Link, execution and integration work outside the compile-count table
 
-The nVHE link failure remains OPEN; the other original link/boot failures now
-have passing isolated and five-object combined replays below. The full required-C
+The original link/boot failures now have passing isolated, five-object combined,
+and eleven-object nVHE replays below. The full required-C
 combination remains unmeasured after the repairs. The acknowledged QEMU digest drift remains in their receipts;
 it is neither a waived failure nor evidence that the compiler caused a timeout.
 
@@ -51,8 +52,9 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. [Original capture](../../.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `9d889fa`, RED `a7af1a6`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json). Final combination still OPEN. |
 | K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. [Original capture](../../.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `9d889fa`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json). Final combination still OPEN. |
 | K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. [Original log](../../.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `bddc65f`; `a4009fd` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: [replay](../../.evidence/k1/constant-inline-irq-20260912/boot/boot.json); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
-| K-L02 / P0, LOCAL_VERIFIED | Large combination fails building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | Kbuild replay dropped `-fno-PIE`, so strong external addresses used GOT relocations forbidden by the hyp relocator. RED `144a83e`; driver/backend now preserve the requested address mode and matching macros, keeping weak GOT and default PIE behavior. | Reference/native relocation probes PASS; changed gate **648 passed / 0 failed / 4 existing ignored**, Clippy/fmt PASS; K1 Python **100/100**, Ruff PASS. Original nVHE sub-link replay pending. |
+| K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | Kbuild replay dropped `-fno-PIE`; RED `144a83e`, repair `0719ce5` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in [the repaired replay](../../.evidence/k1/nvhe-configuration-20260912/boot/boot.json). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
 | K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: [replay](../../.evidence/k1/known-failures-20260912/boot/boot.json). Full required-C combination still OPEN. |
+| K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. [Original log](../../.evidence/k1/nvhe-addresses-20260912/relink.log). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
 | K-B01 / P1 | Kbuild replaced three installed objects: `alternative.o`, `signal32.o`, `vdso.o`, all under `arch/arm64/kernel/`. [Per-unit capture](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/units.jsonl). | Driver/build lane: identify the dependency or postprocessing step that rebuilt each object; preserve required Kbuild transformations. | All required C artifacts retain verified EvoCC lineage through sub-links/final link; legitimate non-C generated artifacts remain separately classified. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 | `kernel-full` adapter is `NOT_IMPLEMENTED`; complete EvoCC composition/link/boot is UNMEASURED. | Extend the existing bench/K1 path, not a parallel runner: require all target C inputs, exact object lineage, complete link and the contract's nonce-bound ordered boot/shutdown predicate. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
@@ -68,6 +70,15 @@ the link exited zero, and the unchanged boot predicate passed for Image
 `23d5eb829ed4b336e198eea82d82fc65f9d8844628b567535aed5ddd39c9db28`.
 This verifies the interaction of those five fixes/rechecks, not a 2,799-object
 boot or K6: every other target C object in this trial remains reference-built.
+
+The separate eleven-object nVHE replay `nvhe-configuration-20260912` uses
+`29704aa`'s release SHA-256
+`fbc920dd292a9e6567320f301b6391ff2ad615244fc79225e822051175f62cbf`.
+Seven unchanged assembly outputs reuse digest-checked objects; all eleven
+installed objects are retained through the successful link and nonce-bound
+boot of Image `81ddd63fba5c012aadd181217a07ff3686c663b00055df633022544e23640e4c`.
+No timeout was changed. This is an independent targeted composition, not a
+claim that all previous substitutions or all required C objects were combined.
 
 1. Keep the original 78-unit `K-C01` compile/assembly replay separate from
    runtime closure. Diagnose the remaining P0 link failures above before claiming
@@ -210,13 +221,13 @@ units, not diagnostic occurrences or predictions of the next run.
 | ID / state | Units | Code | First-error family | Example unit | Next tailored check / owner |
 |---|---:|---|---|---|---|
 | K-C01 / original compile replay PASS | 78 | E3101 | Goto destination discarded; `fb05c80` | `arch/arm64/kernel/signal.o` | All 78 affected originals compile/assemble in `initializer-and-goto-20260912`; runtime/full composition remains separate. |
-| K-C02 / OPEN, 27/29 replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` handles numeric pointer scaling/casts. Residual originals: `drivers/tty/sysrq.o` has `&*(T *)0`; `net/core/neighbour.o` has `&((T *)0)->data[index]`. Add address-only projection regressions without inventing access provenance. |
+| K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in [the two-object replay](../../.evidence/k1/absolute-place-addresses-20260912/substitution.json), with no access provenance invented. Combined runtime remains separate. |
 | K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `d387e65`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
 | K-C04 / OPEN | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | C-HIR/lowering: reduce the operand and its call/inlining path; distinguish a true nonconstant from a missed constant. |
 | K-C05 / OPEN | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | Lowering/backend: reduce the union-valued asm register output; check representation and native read/write. |
-| K-C06 / OPEN | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | Lowering: zero-sized element arithmetic, operand effects and object identity; emit valid IR without inventing size 1. |
+| K-C06 / LOCAL_VERIFIED | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`: lower the evaluated index times zero with a valid unit-scale offset; both interpreters preserve pointer identity, effects and E3001. Both oracles at O0/O2 agree; gate **1,433/0**, Clippy/fmt PASS. Original five-unit replay pending. |
 | K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
-| K-C08 / OPEN | 2 | E2202 | Initializer type | `drivers/firmware/efi/libstub/file.o` | Parser: minimize both initializers; assert types, accepted values and incompatible-type rejection. |
+| K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in [the replay](../../.evidence/k1/efi-characters-20260912/substitution.json); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
 | K-C09 / OPEN | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | Backend: explicit binding, clobber/call and spill interactions in native tests; do not silently free a reserved register. |
 | K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
