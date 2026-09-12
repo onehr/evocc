@@ -38,6 +38,24 @@ class CacheKeyTest(unittest.TestCase):
         self.assertIn("targets", inspect.signature(substitute.relink).parameters,
                       "prepare must precede final object installation and linking")
 
+    def test_relinks_keep_the_reference_build_version_and_prepare_both_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "out"
+            out.mkdir()
+            header = root / "pristine/include/generated/utsversion.h"
+            header.parent.mkdir(parents=True)
+            header.write_text('#define UTS_VERSION "#7 SMP PREEMPT fixed date"\n')
+            completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+            with patch.object(substitute.subprocess, "run", return_value=completed) as run:
+                self.assertEqual(substitute.relink(root / "src", out, root / "prepare.log", 2, ("prepare",)), 0)
+            script = run.call_args.args[0][-1]
+            self.assertIn("KBUILD_BUILD_VERSION='7'", script)
+            self.assertIn("obj=init include/generated/utsversion.h init/utsversion-tmp.h", script)
+            with patch.object(substitute.subprocess, "run", return_value=completed) as run:
+                self.assertEqual(substitute.relink(root / "src", out, root / "link.log", 2), 0)
+            self.assertIn("KBUILD_BUILD_VERSION='7'", run.call_args.args[0][-1])
+
     def test_prepare_fixed_point_ignores_only_metadata_not_changed_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
