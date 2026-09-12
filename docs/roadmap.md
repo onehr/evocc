@@ -2017,6 +2017,13 @@ Rules that hold for every rung:
 | K6 | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | link without reference objects, boot to `init` | an inliner for `i` assembly constraints, computed goto, aggregate ABI parity |
 | K7 | K6 plus kselftest in the initramfs | 6.18.44 | | kselftest pass rate | runtime correctness beyond boot |
 
+The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-12)
+separates compile refusals, link/relocation failures, runtime failures, build
+provenance and the K6/K7 measurement gaps. Its statuses are distinct from the
+receipt-backed counts in `docs/status.md`: assembled units and locally verified
+fixes do not close a boot milestone. Historical measurements remain dated;
+closing the currently known issue list still requires a real full-kernel replay.
+
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
 oracles, each a superset of the previous rung's demands); the kernel rungs

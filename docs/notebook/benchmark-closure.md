@@ -6,6 +6,79 @@ musl rerun `20260907T153648.272156Z`, compiler SHA-256
 The [evaluation](benchmark-evaluation.md) and its linked raw records are the
 inventory authority. Counts below overlap where a row is a subcategory.
 
+## Kernel boot blocker tracker (updated 2026-09-12)
+
+This is the current kernel-specific index into the existing issue inventory,
+not a second tracker or a new acceptance framework. The latest compilation
+measurement is `survey-20260912T092730.260925Z`; the latest complete failed
+mixed-link attempt inspected here is `measure-20260910T160033Z`. Neither
+measured the later `fb05c80` goto repair. Earlier reports below remain history.
+
+**Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
+currently 2,799 target C compile records. K6 requires all required target C
+objects from EvoCC, a complete link without reference-compiler C fallback,
+and the real boot predicate. Existing assembly sources, allowed assembler and
+linker tools, host build tools, generated files, and initramfs provenance must
+be accounted for separately; 2,799 C records do not prove those paths. K7 adds
+the selected runtime selftests and is not a prerequisite for reporting the
+first K6 boot. Floating-point execution remains deferred, not an assumed
+remaining dependency of this general-register-only kernel configuration.
+
+The [15 compilation families](#full-kernel-compilation-survey-2026-09-12)
+partition 161 first-error refusals, **not all defects**. Later constructs can
+be hidden by the first error, and successful assembly says nothing about
+runtime correctness. An allowed refusal in an intermediate compiler profile
+still blocks K6 if the frozen kernel requires that unit; it cannot be waived
+by shrinking the configuration or substituting a reference object.
+
+Use stable IDs, an observed failure/reproducer, affected original units and
+run, owning component, next tailored test, and closure evidence. `OPEN` means
+work or diagnosis remains; `LOCAL_VERIFIED` means regression tests passed but
+original affected programs have not all been replayed; `CLOSED` requires those
+replays and the appropriate gate. An `UNMEASURED` milestone is not a known
+compiler bug or a PASS. A newly observed failure gets its own ID or joins an
+existing ID only after its source-level cause is established.
+
+### Link, execution and integration work outside the compile-count table
+
+All September 10 failures below are still **OPEN, not rerun on current HEAD**.
+The single-unit reductions identify candidate responsibility, not the exact
+compiler defect. The acknowledged QEMU digest drift remains in their receipts;
+it is neither a waived failure nor evidence that the compiler caused a timeout.
+
+| ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
+|---|---|---|---|
+| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted: link succeeds, boot times out; serial log has an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. [Single-unit capture](../../.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json). | Lowering/backend: inspect the failing call/argument and memory path; reduce it and compare both interpreters and native execution. Do not assume an ABI root cause from the stack trace alone. | Tailored regression, original single-unit boot, then the final combination. |
+| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted: link succeeds, boot times out with no useful kernel serial trace. [Capture](../../.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json). | Backend/boot lane: locate the first divergent instruction with the same image/environment, then create a minimal native regression. Do not increase the timeout to hide it. | Cause established, tailored regression and original boot replay. |
+| K-L01 / P0 | `arch/arm64/kernel/irq.o` alone cannot link: undefined `irq_shadow_call_stack_ptr`. [Link log](../../.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log). | Lowering/symbol emission: reduce the declaration, condition and emitted reference; verify the expected symbol relationship with the reference object. | Small object/link test and the original unit links without a stub or reference fallback. |
+| K-L02 / P0 | Large combination fails building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | AArch64 emission/driver: identify the contributing object and relocation; test the addressing mode required by that sub-link and its original flags. | Native relocation check and the original nVHE sub-link accepts the EvoCC objects. |
+| K-L03 / recheck | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`; no standalone closure evidence is attached to the current index. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Reconcile with existing fixes and exact original object/link results before opening duplicate compiler fixes. | Link to an applicable passing replay, or reduce and retain a separate OPEN cause. |
+| K-B01 / P1 | Kbuild replaced three installed objects: `alternative.o`, `signal32.o`, `vdso.o`, all under `arch/arm64/kernel/`. [Per-unit capture](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/units.jsonl). | Driver/build lane: identify the dependency or postprocessing step that rebuilt each object; preserve required Kbuild transformations. | All required C artifacts retain verified EvoCC lineage through sub-links/final link; legitimate non-C generated artifacts remain separately classified. |
+| K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
+| K-G01 / K6 | `kernel-full` adapter is `NOT_IMPLEMENTED`; complete EvoCC composition/link/boot is UNMEASURED. | Extend the existing bench/K1 path, not a parallel runner: require all target C inputs, exact object lineage, complete link and the contract's nonce-bound ordered boot/shutdown predicate. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
+| K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
+
+### Execution order and update rules
+
+1. Keep `K-C01` LOCAL_VERIFIED; its 6-unit sample is not closure of all 78
+   affected originals. Diagnose the P0 boot/link failures above before claiming
+   that closing compile refusals is sufficient. Small independent static-address
+   fixes (`K-C02/03`) can proceed without another full survey.
+2. RED then GREEN per established source-level cause; use the existing test
+   targets and `tools/gate-changed.sh`. Address the remaining `K-C*` families
+   and `K-B*` integration work; update the relevant row with commit and measured
+   test/replay, not just a prose progress entry.
+3. After the known repair batch passes tailored checks, use `tools/bench.py`
+   for the full compilation/link/boot measurement and required regression
+   benchmarks. Cache exact unchanged objects, never a changed composition's
+   boot result. Every new failure reopens or adds an issue; do not claim the
+   known list guarantees boot success.
+4. `docs/status.md` remains receipt-rendered measurement only. This notebook
+   owns issue status; `docs/roadmap.md` owns milestone definitions and links
+   here. Other benchmark issues remain in the existing general inventory:
+   VLA, integer vectors, hosted-library coverage or missing adapters are not
+   automatically kernel boot prerequisites without a source/build dependency.
+
 ## Execution and closure rules
 
 ### Fast kernel survey first (2026-09-12)
@@ -125,23 +198,23 @@ First-error families below partition the 161 refused units. Function/block
 names in validator messages are grouped by the violated rule; counts are
 units, not diagnostic occurrences or predictions of the next run.
 
-| Units | Code | First-error family | Example unit |
-|---:|---|---|---|
-| 78 | E3101 | Goto destination discarded | `arch/arm64/kernel/signal.o` |
-| 29 | E3026 | Static address/relocation | `drivers/base/dd.o` |
-| 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` |
-| 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` |
-| 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` |
-| 5 | E3101 | Zero pointer-offset scale | `fs/super.o` |
-| 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` |
-| 2 | E2202 | Initializer type | `drivers/firmware/efi/libstub/file.o` |
-| 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` |
-| 2 | E3030 | Aggregate varargs | `net/9p/client.o` |
-| 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` |
-| 2 | E3101 | Malformed global relocation | `drivers/acpi/acpica/exdump.o` |
-| 1 | E3029 | Computed goto | `kernel/bpf/core.o` |
-| 1 | E3101 | Case constant | `kernel/signal.o` |
-| 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` |
+| ID / state | Units | Code | First-error family | Example unit | Next tailored check / owner |
+|---|---:|---|---|---|---|
+| K-C01 / LOCAL_VERIFIED | 78 | E3101 | Goto destination discarded; `fb05c80`, six-unit replay below | `arch/arm64/kernel/signal.o` | Lowering: retain the green expression-goto tests; replay all 78 originals at batch closure. |
+| K-C02 / OPEN | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | Lowering: numeric-pointer plus offset bytes, symbol/addend preservation, invalid-dereference refusal. |
+| K-C03 / OPEN | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | Lowering: `(unsigned long)&object` in scalar/record storage; compare native relocation and interpreter values. |
+| K-C04 / OPEN | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | C-HIR/lowering: reduce the operand and its call/inlining path; distinguish a true nonconstant from a missed constant. |
+| K-C05 / OPEN | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | Lowering/backend: reduce the union-valued asm register output; check representation and native read/write. |
+| K-C06 / OPEN | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | Lowering: zero-sized element arithmetic, operand effects and object identity; emit valid IR without inventing size 1. |
+| K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
+| K-C08 / OPEN | 2 | E2202 | Initializer type | `drivers/firmware/efi/libstub/file.o` | Parser: minimize both initializers; assert types, accepted values and incompatible-type rejection. |
+| K-C09 / OPEN | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | Backend: explicit binding, clobber/call and spill interactions in native tests; do not silently free a reserved register. |
+| K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
+| K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
+| K-C12 / OPEN | 2 | E3101 | Malformed global relocation | `drivers/acpi/acpica/exdump.o` | Lowering/IR: reduce target, extent and alignment; verify native relocation without relaxing the validator. |
+| K-C13 / OPEN | 1 | E3029 | Computed goto | `kernel/bpf/core.o` | C-HIR/lowering/backend: labels, computed dispatch, successor values and invalid target checks in a native mini-program. |
+| K-C14 / OPEN | 1 | E3101 | Case constant | `kernel/signal.o` | Parser/lowering: exact source-width constant and selected switch arm against both oracles. |
+| K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
 ### Expression goto destinations (2026-09-12)
 
@@ -374,7 +447,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 4 | Remaining native failures | `20260909T215349Z`: torture retains five raw runtime failures and one alloca link failure; four runtime failures have reviewed not-applicable evidence, while constant-overflow `920730-1` remains OPEN | `ctest torture` | PARTIAL: no lost PASS in this replay; three older lost wide-field passes remain OPEN under the narrowed conflict-only rule |
 | 5 | Kernel substitution mismatches | Fresh `measure-20260908T102907Z` boots with 76 substituted units, 64 linked; corrected NOBITS memory-image replay proves 61 and records 3 no-symbol units, zero mismatches, same linked-image digest | `kernel` | CLOSED for the identified cache/extent/zero-fill defects; original failed proof retained beside `proof-zero-fill.json` |
 | 6 | Assembly register alternatives | All twelve authorized spellings select `r` after one evaluation; native operand/branch tests pass, and the original kernel replay has no unresolved alternative or register-alias first error | `kernel` | CLOSED for the identified selection/binding defects in `20260908T123730.141577Z`; later assembly failures remain in row 7 |
-| 7 | Remaining kernel refusals | Lowering `20260909T112601Z-99781`: 2,008 clean / 790 diagnosed. Later K1 `measure-20260909T133504Z`: 2,193 assemble / 605 refuse / one assembler refusal out of 2,799, but mixed linking/boot fails | `kernel` | OPEN: targeted constant-edge replay repairs three original objects, not a new successful kernel; object sections, hidden extern visibility and zero-byte layouts remain separate blockers |
+| 7 | Kernel compilation, link and boot | `survey-20260912T092730.260925Z`: 2,638 assembled / 161 refused out of 2,799, zero timeouts/crashes/assembler failures. Link/boot NOT_RUN; September 10 link/boot failures remain unresolved | `kernel` | OPEN: [kernel tracker](#kernel-boot-blocker-tracker-updated-2026-09-12) separates K-C01–15 compilation, K-L/R link/runtime, K-B integration and K-G milestone gaps; goto fix is LOCAL_VERIFIED, not a new full-kernel pass |
 | 8 | Return and edge typing | toybox now 195/203, zero regressions; cut/httpd/sed all assemble and enter the passing mixed build, preserving all 203 original identities | `toybox` | CLOSED: return and goto-storage fixes benched in `20260908T080325.213428Z` |
 | 9 | Other toybox lowering refusals | Eight retained refusals: args/xwrap/sort call strtod, hash calls sin, seq calls fabs, printf calls strtold, od loads a long double, uptime computes FP load averages | `toybox` | FP-DEFERRED: every measured first site classified; none counted as PASS |
 | 10 | Unused system-header types | zstd now has six passing substituted units; all five pretty-function first sites clear, leaving 37 integer-NEON declarations and one E3101 | `zstd cjson` | PARTIAL: C function-name choice and storage-only declarations replayed; integer vector declarations remain OPEN |
