@@ -9,6 +9,27 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn direct_wide_field_shifts_use_declared_precision_not_storage_precision() {
+    // This harness consumes C tokens, not preprocessing directives.
+    for width in [33, 40, 52, 58, 64] {
+        let initial = if width == 64 {
+            "~0UL".to_string()
+        } else {
+            format!("(1UL << {width}) - 1")
+        };
+        agrees(&format!("struct U{{unsigned long v:{width};}}; struct S{{signed long v:{width};}}; int main(void){{struct U u={{{initial}}};struct S s={{-1}};unsigned long k=1;unsigned long expected=({initial}) << k;if((u.v << k)!=expected)return 1;if(((u.v)<<1UL)!=expected)return 2;if((s.v<<k)!=-2L)return 3;u.v=u.v<<k;return (unsigned long)u.v!=(({initial})-1);}}"));
+    }
+    agrees("struct msi_desc{unsigned long iommu_msi_iova:52;unsigned long iommu_msi_shift:6;}; unsigned long restore(struct msi_desc *desc){return desc->iommu_msi_iova << desc->iommu_msi_shift;} int main(void){struct msi_desc d={(1UL<<51)+7,12};return restore(&d)!=((1UL<<63)+28672);}");
+}
+
+#[test]
+fn direct_wide_field_shift_counts_are_checked_before_any_narrowing() {
+    for count in ["-1", "64UL", "(unsigned __int128)1 << 80"] {
+        evaluates(&format!("int main(void){{struct S{{unsigned long value:40;}}s={{3}};return s.value << ({count});}}"), Some("E3005"));
+    }
+}
+
+#[test]
 fn function_addresses_use_byte_arithmetic_without_inventing_callable_entries() {
     agrees(include_str!(
         "../../../tests/fixtures/function-address-arithmetic.c"
