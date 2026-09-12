@@ -9,11 +9,12 @@ inventory authority. Counts below overlap where a row is a subcategory.
 ## Kernel boot blocker tracker (updated 2026-09-13)
 
 This is the current kernel-specific index into the existing issue inventory,
-not a second tracker or a new acceptance framework. The latest compilation
-measurement is `survey-20260912T092730.260925Z`; the baseline failed
-mixed-link attempt is `measure-20260910T160033Z`. Neither measured the later
-`fb05c80` goto repair. The targeted replays below measure subsequent fixes;
-they do not replace that full-survey denominator. Earlier reports remain history.
+not a second tracker or a new acceptance framework. The latest full attempt
+is `20260912T191806Z`: 2,757 assembled, 42 refused, with installation/link/boot
+NOT RUN. Its 42 failures now pass targeted original-unit emission after the
+static constant-query admission fix, but that is not a new 2,799-unit result.
+The baseline failed mixed-link attempt remains `measure-20260910T160033Z`;
+earlier reports remain history.
 
 **Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
 currently 2,799 target C compile records. K6 requires all required target C
@@ -57,7 +58,8 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. [Original log](../../.evidence/k1/nvhe-addresses-20260912/relink.log). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
 | K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
-| K-G01 / K6 | `kernel-full` adapter is `NOT_IMPLEMENTED`; complete EvoCC composition/link/boot is UNMEASURED. | Extend the existing bench/K1 path, not a parallel runner: require all target C inputs, exact object lineage, complete link and the contract's nonce-bound ordered boot/shutdown predicate. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
+| K-G01 / K6 | `kernel-full` now runs the existing K1 path with complete-coverage and object-lineage guards; latest attempt `20260912T191806Z` is INCOMPLETE before installation. | Finish the remaining constant/inline link blockers, then prepare actual generated headers, recompile, verify fixed point, fully link and boot. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
+| K-S01 / decision required | §10.1.14 forbids optimization facts changing `constant_p`, while kernel min/max uses a local initialized to a positive constant to prove compatible signedness. | Both sealed compilers at O2 return 1 for `tests/fixtures/optimization-constant-query.c`; the current profile returns 0. Do not delete the resulting assertion call or silently override the rule. | Explicit authorization for optimization-time query semantics, plus query side-effect/escape guards and original-unit/native replay. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
 
 ### Execution order and update rules
@@ -418,6 +420,26 @@ shared conservative predicate and never evaluates its operand. Fourteen CLI
 regressions plus the static-machine rejection test pass; GCC-14, Clang-19 and
 native subject execution agree on the initializer fixture. This repairs a
 constant consumer, not the language's constant-expression definition.
+
+Targeted follow-up with release
+`4231b90ebd921143e4dbd0bf61d58f968a904cf1a84d0970919e370183db2b5f`:
+the original `io_uring/fs.o`, `lib/lzo/lzo1x_compress.o` and
+`arch/arm64/kvm/guest.o` now emit with no compiler-assert calls. Small acyclic
+private inline hints use the existing substitution machinery; numeric pointer
+conditions and their enclosing arithmetic fold after ordinary evaluation;
+immutable automatic declaration-prefix values remain separate from source
+constant queries. Recursive/noinline/address-sensitive functions keep their
+out-of-line path. The address-sensitive guard also repairs a newly reproduced
+UFS label regression; `ufshcd.o` emits again but still has ten layout assertion
+calls. These measurements did not install objects or run a full link.
+
+Known remaining link constructs include the K-S01 min/max query conflict,
+KVM queries on statement-expression request constants, exhaustive masked
+switches retaining their default assertion (`ptrace.o`), and reads of constant
+compound-literal representations (`ufshcd.o`). They are not floating-point
+failures. The final focused regression set is 17 CLI cases plus 79 expression
+flow and 24 resolved-form tests; all pass. Do not run another known-failing
+full link or change the query rule until its explicit decision is supplied.
 
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,

@@ -10468,6 +10468,18 @@ impl<'a> FunctionLowerer<'a> {
                 };
                 Some(CInteger::new(u64::from(truth), CIntegerType::INT))
             }
+            CHirExpr::Binary(operator, left, right, _) => {
+                eval_binary_integer(*operator, result(left)?, result(right)?).ok()
+            }
+            CHirExpr::Ternary(condition, yes, no, _) => {
+                let selected = if result(condition)?.truth() { yes } else { no };
+                let ty = evocc_chir::constant::integer_expression_type(
+                    expression,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                )?;
+                Some(result(selected)?.cast(ty))
+            }
             _ => None,
         }
     }

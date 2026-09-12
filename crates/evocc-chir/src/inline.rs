@@ -26,6 +26,7 @@ enum Node<'a> {
 #[derive(Default)]
 struct Uses<'a> {
     nodes: usize,
+    addressed_labels: bool,
     references: BTreeSet<SymbolId>,
     assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
@@ -246,6 +247,7 @@ fn inspect_with_declarations<'a>(
             },
             Node::Expr(e, callee) => {
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
+                uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
                 if let CHirExpr::Ident { symbol, .. } = e {
                     uses.references.insert(*symbol);
                 }
@@ -510,7 +512,11 @@ fn common_parameter_values<'a>(
         if callers.iter().any(|args| args.len() != parameters.len()) {
             continue;
         }
-        let mutable = inspect([Node::Stmt(body)]).mutable;
+        let body_uses = inspect([Node::Stmt(body)]);
+        if body_uses.addressed_labels {
+            continue;
+        }
+        let mutable = body_uses.mutable;
         for (index, parameter) in parameters.iter().enumerate() {
             let Some(symbol) = parameter.symbol else {
                 continue;
@@ -611,7 +617,10 @@ pub fn substitute<'a>(
             _ => None,
         })
         .collect();
-    let recursive = |symbol| {
+    let sensitive_control_flow = |symbol| {
+        if bodies[&symbol].addressed_labels {
+            return true;
+        }
         let mut pending = bodies[&symbol]
             .references
             .iter()
@@ -624,6 +633,9 @@ pub fn substitute<'a>(
             }
             if visited.insert(next) {
                 if let Some(body) = bodies.get(&next) {
+                    if body.addressed_labels {
+                        return true;
+                    }
                     pending.extend(body.references.iter().copied());
                 }
             }
@@ -647,7 +659,7 @@ pub fn substitute<'a>(
                                 .iter()
                                 .any(|a| a.semantic_name() == Some("noinline"))
                             && bodies[&f.symbol].nodes <= 128
-                            && !recursive(f.symbol)))
+                            && !sensitive_control_flow(f.symbol)))
                     && !uses.addresses.contains(&f.symbol)
                     && !matches!(
                         f.parameters,
@@ -733,6 +745,8 @@ pub fn substitute<'a>(
                     .ok_or_else(|| pass.error(f.span, "function scope missing"))?
                     .id();
                 let mut c = Context::new(scope);
+                c.mutable = bodies[&f.symbol].mutable.clone();
+                c.declaration_prefix = true;
                 if let Some(values) = parameter_values.get(&f.symbol) {
                     for (&symbol, &(value, ty)) in values {
                         let converted = pass.alloc(CHirExpr::Cast(ty, value, value.span()));
@@ -1338,7 +1352,13 @@ impl<'a> Substitution<'a, '_> {
                     && !qualifiers.is_atomic
                     && o.asm_label.is_none()
                 {
-                    c.constants.insert(original, replacement.unwrap());
+                    if c.prefix.is_some() {
+                        c.constants.insert(original, replacement.unwrap());
+                    } else {
+                        // A source object's value can prune an executed
+                        // condition without changing constant_p or an ICE.
+                        c.optimized_constants.insert(original, replacement.unwrap());
+                    }
                 }
                 // Only a straight-line, repeatable declaration prefix is
                 // known to dominate every later use. A statement-expression

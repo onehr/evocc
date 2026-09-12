@@ -1,0 +1,8 @@
+Image: evo-flight-lab:sealed, linux/arm64, network none.
+Commands: <cc> -std=gnu11 -O2 optimization-constant-query.c -o /tmp/probe; /tmp/probe
+gcc-14: compiled, returned value 1
+clang-19: compiled, returned value 1
+EvoCC: --interpret-c-hir and --interpret-evoir return 0 under the current profile.
+Section 10.1.14 explicitly forbids optimizer knowledge from changing constant_p.
+The kernel min/max unsigned-vs-positive-local check depends on the value 1.
+This is a pending specification decision, not a passing EvoCC benchmark.
