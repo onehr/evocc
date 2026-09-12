@@ -325,8 +325,25 @@ for the unit). That is not an assembled object, and it does not replace the
 result zero; GCC-14 and Clang-19 agree at O0/O2, recorded in its `.out` file.
 The changed gate passes **1,834 / 0 failed / 4 existing ignored**, across
 251 test targets; Clippy and Rust formatting pass. Both layout subject corpora
-pass, **128/128** and **22/22**, with no mismatches. The isolated replay and
-final measurement record belong in `tests/contracts/day9-acceptance-receipt.json`.
+pass, **128/128** and **22/22**, with no mismatches. The measurement record is
+`tests/contracts/day9-acceptance-receipt.json`. An isolated clone was cancelled
+by the user before any tests ran; it is **NOT RUN**, not a passing replay.
+
+### Execution priority and disk use (2026-09-13)
+
+The immediate target is the full-kernel compile/link/boot path, not another
+workspace clone. Reuse `target/tailored`, run focused tests and affected original
+units while fixing known blockers, then perform the full kernel compile, link
+and boot checks. Do not start repeated workspace replays between these fixes.
+The next observed blocker is K-C11: `kernel/bpf/core.o` still reports E3034.
+
+Historical layout runs retained 344 Cargo output directories, totalling 8.76
+GiB. These were removed without deleting probes, observations or summaries.
+The layout harness now removes its run-local Cargo output on exit, after
+recording the subject digest and measurements. The cancelled clone and this
+turn's two temporary layout build trees were also removed. Kernel source,
+reference/pristine builds, installed objects and the assembly cache are retained
+for the actual link/boot work; those are not duplicate evidence to discard.
 
 ### Kbuild option audit (2026-09-12)
 

@@ -71,6 +71,11 @@ alias_created=0
 oracle_run_ref=''
 cleanup() {
   cleanup_rc=0
+  # Measurements and the subject digest are retained, not another compiled
+  # dependency tree for every run. This directory contains only Cargo output.
+  if [ -d "$RUN_DIR/cargo-target" ] && [ ! -L "$RUN_DIR/cargo-target" ]; then
+    /bin/rm -rf -- "$RUN_DIR/cargo-target" || cleanup_rc=1
+  fi
   for name in $cleanup_names; do
     "$CONTAINER_BIN" stop "$name" >/dev/null 2>&1 || true
     "$CONTAINER_BIN" delete "$name" >/dev/null 2>&1 || cleanup_rc=1

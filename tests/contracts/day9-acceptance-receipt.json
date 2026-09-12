@@ -1,4 +1,80 @@
 {
+  "computedGotoBindings": {
+    "status": "LOCAL_VERIFIED_KERNEL_UNIT_STILL_REFUSED",
+    "implementationCommit": "bbcbbbc",
+    "redCommit": "67c0eac",
+    "red": "6 failed, 9 passed, zero build errors: unknown br.indirect and E3029",
+    "authority": "Reviewer-approved explicit storage addresses and current effects; EvoIR 1.9.92, EvoMIR 0.29",
+    "focused": {
+      "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-evoir --test indirect_edges -p evocc-lower --test computed_goto_lowering --test day6_lower_runtime_diagnostics -p evocc-mir --test section7_out_of_ssa --test section9_native_differential -p evocc-proofcheck --test copy_is_opaque --locked --offline -j 2",
+      "passed": 41,
+      "failed": 0,
+      "parserCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-parser --test array_bound_validation --locked --offline -j 2",
+      "parserPassed": 20,
+      "parserFailed": 0
+    },
+    "changedGate": {
+      "command": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 4614b46 --locked --offline -j 2",
+      "passed": 1834,
+      "failed": 0,
+      "existingIgnored": 4,
+      "testTargets": 251,
+      "clippyWarningsDenied": "PASS",
+      "rustFmt": "PASS",
+      "firstAttempt": "One stale CLI assertion still expected E3029; replaced with a positive computed-goto test and a current E3034 refusal case before the passing rerun"
+    },
+    "linuxNative": {
+      "fixture": "tests/fixtures/computed-edges.c",
+      "measuredOutput": "tests/fixtures/computed-edges.out",
+      "oracleCommand": "<gcc-14|clang-19> -std=gnu11 -O<0|2> computed-edges.c -o /tmp/reference; /tmp/reference",
+      "oracleRuns": 4,
+      "oracleExitZero": 4,
+      "subjectCommand": "target/tailored/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm tests/fixtures/computed-edges.c; sealed gcc-14 subject-final.s -o /tmp/subject; /tmp/subject",
+      "subjectExit": 0,
+      "interpreterCommands": ["target/tailored/release/evocc --interpret-c-hir tests/fixtures/computed-edges.c", "target/tailored/release/evocc --interpret-evoir tests/fixtures/computed-edges.c"],
+      "interpreterStdout": ["0", "0"]
+    },
+    "layout": {
+      "baseCommand": "tests/acceptance/day5-layout-conformance.sh --subject",
+      "baseRun": "20260912T163818Z-34328",
+      "basePassed": 128,
+      "attributedCommand": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=$PWD/tests/contracts/layout-attributed-cases.json tests/acceptance/day5-layout-conformance.sh --subject",
+      "attributedRun": "20260912T164033Z-35010",
+      "attributedPassed": 22,
+      "mismatches": 0,
+      "oracles": "ORACLE_CONSENSUS",
+      "note": "Run-local evidence root was /private/tmp/evocc-indirect-checks.9WdFjS; compiled Cargo outputs removed after measurement"
+    },
+    "scopeEntryConflict": {
+      "probeDirectory": ".evidence/builtin-probes/20260913-computed-edges",
+      "command": "<gcc-14|clang-19> -std=gnu11 -O0 -c <capture-entry.c|capture-unselected.c> -o /tmp/capture.o",
+      "gccExit": [0, 0],
+      "clangExit": [1, 1],
+      "decision": "Existing refusal-direction protocol and E2945; Appendix D records the conflict, not consensus"
+    },
+    "kernelReplay": {
+      "command": "python3 tools/k1/substitute.py --allowlist .evidence/builtin-probes/20260913-computed-edges/units.txt --no-install --no-cache --jobs 1 --timeout 180 --evocc target/tailored/release/evocc --run-id computed-edges-final-20260913",
+      "run": "computed-edges-final-20260913",
+      "unit": "kernel/bpf/core.o",
+      "requested": 1,
+      "freshCompilations": 1,
+      "cacheHits": 0,
+      "assembled": 0,
+      "refused": 1,
+      "firstDiagnostic": "E3034 at kernel/bpf/core.c:251:20: not-lowered: function-pointer-arithmetic",
+      "unitSeconds": 5.611,
+      "subjectSha256": "7a3b383dfc73fa7c1b3609190aad05b89a1ed2d0930db5700546630ebef6f66d",
+      "unitsSha256": "bf595bed4c9e462b5c24a98a2f67c9329d8d1dede70b626b56f6391e4c1034b5",
+      "installed": false,
+      "linkAndBoot": "NOT RUN"
+    },
+    "offlineReplay": "NOT RUN: user cancelled the fresh-clone replay before testing; clone removed, full-kernel blockers take priority",
+    "lintCommand": "ruff check tools tests/acceptance",
+    "lint": "PASS",
+    "grammarCommand": "python3 tools/check-textual-grammar.py",
+    "grammar": "46 renderer shapes / 46 specified / 0 disagreements; instruction-shape audit only",
+    "claimBoundary": "Targeted computed-goto implementation passes; no fresh 2799-unit survey, full-kernel link, K6 boot or K7 self-test claim"
+  },
   "integerBenchmarkRepairs": {
     "status": "OPEN_NONFLOATING_COMPLETION_NOT_ACHIEVED",
     "floatingPoint": "DEFERRED by user; no floating-point support changed",
