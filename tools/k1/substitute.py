@@ -560,16 +560,30 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
     contract = json.loads((REPO_ROOT / "contracts/build-environment.json").read_text())
     reproducibility = contract["reproducibility"]
     image = contract["buildImage"]["sealedImageTag"]
+    version_header = out_root.parent / "pristine/include/generated/utsversion.h"
+    version = re.search(r'^#define UTS_VERSION "#([0-9]+) ', version_header.read_text(), re.M)
+    if version is None:
+        raise ValueError("reference UTS_VERSION has no build number")
     script = (
         "set -eu\n"
         "umask 022\n"
         f"export KBUILD_BUILD_TIMESTAMP='{reproducibility['KBUILD_BUILD_TIMESTAMP']}' "
         f"SOURCE_DATE_EPOCH='{reproducibility['SOURCE_DATE_EPOCH']}' "
         f"KBUILD_BUILD_USER='{reproducibility['KBUILD_BUILD_USER']}' "
-        f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}'\n"
+        f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}' "
+        f"KBUILD_BUILD_VERSION='{version[1]}'\n"
         f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 "
         + " ".join(_quote(target) for target in targets) + "\n"
     )
+    if targets == ("prepare",):
+        # link-vmlinux normally creates the final version header too late for
+        # substituted consumers. Run its original Kbuild header recipes now;
+        # no C object is compiled by this header-only invocation.
+        script += (
+            "make -C /work/out -f /work/src/scripts/Makefile.build "
+            "srctree=/work/src srcroot=/work/src objtree=. ARCH=arm64 SRCARCH=arm64 "
+            "CONFIG_SHELL=/bin/sh obj=init include/generated/utsversion.h init/utsversion-tmp.h\n"
+        )
     completed = subprocess.run(
         [
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",

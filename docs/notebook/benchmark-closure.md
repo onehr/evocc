@@ -395,6 +395,17 @@ The two original units no longer contain those assertion calls; 162 targeted
 tests and both fixture native executions pass. This is targeted verification,
 not a new full-build or boot verdict.
 
+Build ordering now freezes the reference header's build number through
+`KBUILD_BUILD_VERSION` (the same frozen timestamp remains in force). The
+kernel's own header-only `scripts/Makefile.build obj=init` recipes generate
+both version headers before dependent compilation. Previously the working
+header had advanced to `#197`, and every final link would change it again,
+forcing reference recompilation after substitution. The header-only command
+completed successfully with both headers at the reference `#1`, and the
+108 K1 tests plus Ruff pass. No source, configuration or target-C denominator
+is changed. The two interrupted pre-link attempts remain incomplete; cached
+compilations are reusable only under their unchanged input/compiler keys.
+
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,
 little endian, unsigned char, reserved x18, frame pointers, four-byte function
