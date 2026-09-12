@@ -254,3 +254,33 @@ fn optional_inlining_preserves_recursive_and_noinline_calls() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("call @f"));
 }
+
+#[test]
+fn nested_numeric_pointer_conditions_keep_their_arithmetic_result() {
+    let source = "extern void invalid(void) __attribute__((error(\"sign\")));int main(void){if(!((((char *)-1<(char *)1)?2:1)&(((int *)-1<(int *)1)?2:1)))invalid();return 0;}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn immutable_automatic_constants_fold_branches_without_changing_source_queries() {
+    let source = "extern void invalid(void) __attribute__((error(\"value\")));static int f(void){const unsigned long last=41;if(last+1!=42)invalid();return __builtin_constant_p(last);}int main(void){return f();}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    assert_constant_program(source);
+    for source in [
+        "static int f(void){int x=1;++x;return x!=2;}int main(void){return f();}",
+        "static int f(void){int x=1;int *p=&x;*p=3;return x!=3;}int main(void){return f();}",
+        "static int f(int c){const int a=({if(c)goto end; 1;});int b=2;end:b=4;return b!=4;}int main(void){return f(1);}",
+    ] { assert_constant_program(source); }
+}
