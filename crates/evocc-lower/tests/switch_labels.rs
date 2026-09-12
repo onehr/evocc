@@ -45,6 +45,13 @@ fn assert_execution(source: &str) -> evocc_evoir::Module {
 }
 
 #[test]
+fn expression_gotos_keep_otherwise_unselected_label_destinations() {
+    assert_execution(include_str!(
+        "../../../tests/fixtures/expression-goto-targets.c"
+    ));
+}
+
+#[test]
 fn goto_can_reach_a_label_after_the_segment_loses_fallthrough() {
     assert_execution(
         "int f(int x) { int n = 0; switch (x) {
