@@ -1589,6 +1589,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::SizeOfExpr(_, _, _)
+            | CHirExpr::BuiltinConstantP { .. }
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }

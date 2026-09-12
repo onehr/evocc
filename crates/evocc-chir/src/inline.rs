@@ -332,6 +332,7 @@ fn inspect_with_declarations<'a>(
                     | CHirExpr::LabelAddress { .. }
                     | CHirExpr::SizeOf(..)
                     | CHirExpr::SizeOfExpr(..)
+                    | CHirExpr::BuiltinConstantP { .. }
                     | CHirExpr::AlignOf(..)
                     | CHirExpr::BuiltinTrap { .. }
                     | CHirExpr::BuiltinUnreachable { .. }
@@ -1255,6 +1256,15 @@ impl<'a> Substitution<'a, '_> {
             | CHirExpr::Member(e, _, _)
             | CHirExpr::PtrMember(e, _, _)
             | CHirExpr::BitBuiltin { operand: e, .. } => *e = self.expr(e, c)?,
+            CHirExpr::BuiltinConstantP { operand, .. } => {
+                // The operand is unevaluated. Substitute object bindings, but
+                // do not inline calls or create executed argument temporaries.
+                let expand = c.expand_calls;
+                c.expand_calls = false;
+                let rewritten = self.expr(operand, c);
+                c.expand_calls = expand;
+                *operand = rewritten?;
+            }
             CHirExpr::Binary(_, a, b, _)
             | CHirExpr::Index(a, b, _)
             | CHirExpr::Comma(a, b, _)

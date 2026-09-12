@@ -7,3 +7,8 @@ clang-19 inline-constant-query O2 exit=0
 clang-19 extract-return-address O2 exit=0
 RED: CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test resolved_compiler_queries --locked --offline -j 2
 2 failed, 0 build errors: both execute an unintended external call (E3039).
+GREEN: same command, 2 passed / 0 failed.
+Subject assembly: target/tailored/debug/evocc -O2 --emit=asm <fixture>.c
+Native: streamed to gcc-14 -x assembler - -o /tmp/program inside the same sealed image.
+inline-constant-query subject-native-exit=0
+extract-return-address subject-native-exit=0

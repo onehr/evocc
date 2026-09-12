@@ -212,6 +212,9 @@ fn parse_unit<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUni
 
 fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
     match expr {
+        CHirExpr::BuiltinConstantP { operand, .. } => {
+            format!("constant_p({})", canonical_expr(operand, types))
+        }
         CHirExpr::Lit(value, _) => format!("int({})", value.value),
         CHirExpr::FloatLit(_, _) => "float".into(),
         CHirExpr::CharLit(_, _) => "char".into(),

@@ -685,10 +685,18 @@ fn lower_resolved_unit(
         .map(|function| function.name.as_str())
         .collect::<BTreeSet<_>>();
     let mut declares = BTreeMap::new();
-    for info in functions
-        .values()
-        .filter(|info| !defined.contains(info.name.as_str()))
+    for (symbol, info) in functions
+        .iter()
+        .filter(|(_, info)| !defined.contains(info.name.as_str()))
     {
+        if unit.symbols().is_builtin_function(*symbol)
+            && matches!(
+                info.name.as_str(),
+                "__builtin_extract_return_addr" | "__builtin_prefetch" | "alloca"
+            )
+        {
+            continue;
+        }
         let aggregate_return = info.return_type.as_ref().is_some_and(|value| {
             matches!(
                 unit.types().get(value.source).map(|ty| &ty.kind),
@@ -1090,6 +1098,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(..)
             | CHirExpr::SizeOfExpr(..)
+            | CHirExpr::BuiltinConstantP { .. }
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
@@ -2300,6 +2309,7 @@ fn prevalidate_expr_for_lowering(
     global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match expression {
+        CHirExpr::BuiltinConstantP { .. } => Ok(()),
         CHirExpr::Ident {
             symbol,
             spelling,
@@ -8538,6 +8548,15 @@ impl<'a> FunctionLowerer<'a> {
                 })?;
                 self.wide_constant(state, integer.ty(), integer.raw_bits())
             }
+            CHirExpr::BuiltinConstantP { operand, .. } => {
+                let value = evocc_chir::builtin_constant_p(
+                    operand,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                    self.target,
+                );
+                self.wide_constant(state, CIntegerType::INT, u128::from(value))
+            }
             CHirExpr::CharLit(literal, _) => {
                 let integer = literal.integer_value();
                 self.wide_constant(state, integer.ty(), integer.raw_bits())
@@ -10708,6 +10727,15 @@ impl<'a> FunctionLowerer<'a> {
                     }
                     if self.unit.symbols().is_builtin_function(*symbol) {
                         match spelling.as_str() {
+                            "__builtin_extract_return_addr" => {
+                                let [argument] = arguments.as_slice() else {
+                                    return Err(LowerError::UnsupportedExpression {
+                                        span,
+                                        feature: "return-address extraction arity",
+                                    });
+                                };
+                                return self.lower_expr(argument, state).map(Some);
+                            }
                             "__builtin_prefetch" => {
                                 // A target hint is optional; evaluating its
                                 // operands is not. Keep their effects once.
@@ -12754,6 +12782,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         calls.addressed_compound |= matches!(root, CHirExpr::CompoundLit(..));
     }
     match expression {
+        CHirExpr::BuiltinConstantP { .. } => {}
         CHirExpr::LabelAddress { label, .. } => {
             calls.labels.insert(
                 expression as *const CHirExpr<'_> as usize,
@@ -13012,6 +13041,7 @@ fn live_before_stmt(
 
 fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
     match expression {
+        CHirExpr::BuiltinConstantP { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             live.insert(*symbol);
         }
@@ -13215,6 +13245,7 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
 
 fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<SymbolId>) {
     match expression {
+        CHirExpr::BuiltinConstantP { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             symbols.insert(*symbol);
         }

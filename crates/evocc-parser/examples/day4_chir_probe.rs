@@ -169,6 +169,10 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
     fn expression(&mut self, path: &str, expression: &CHirExpr<'arena>) -> String {
         self.record(path, expression.span());
         match expression {
+            CHirExpr::BuiltinConstantP { operand, .. } => {
+                let operand = self.expression(&format!("{path}.operand"), operand);
+                format!("constant_p({operand})")
+            }
             CHirExpr::Lit(value, _) => format!("int({})", value.value),
             CHirExpr::FloatLit(value, _) => format!("float({:?},{:?})", value.value, value.suffix),
             CHirExpr::CharLit(value, _) => format!("char({},{:?})", value.value, value.prefix),

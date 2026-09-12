@@ -362,6 +362,14 @@ original records with subject `89b88924833ed84642a7b571137ba53744a021d4054b0bb96
 pi/map_range, mm/mmu, both vDSO units, vsprintf, jitterentropy and fork.
 No objects were installed and no link/boot is claimed for that run.
 
+Enabling the original optimization macros exposed genuine link defects:
+`__builtin_constant_p` had been frozen to zero before inline substitution,
+and `__builtin_extract_return_addr` was an unintended external call.
+`resolved_compiler_queries` now passes both regressions; both small fixtures
+also link and return zero as native AArch64 code, matching GCC-14/Clang-19.
+The original mmu replay no longer calls the constant-parameter assertion;
+one separate assertion over a static const object remains to be folded.
+
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,
 little endian, unsigned char, reserved x18, frame pointers, four-byte function

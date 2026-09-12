@@ -94,6 +94,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::Cast(_, child, _)
         | CHirExpr::SizeOfExpr(child, _, _)
         | CHirExpr::BitBuiltin { operand: child, .. }
+        | CHirExpr::BuiltinConstantP { operand: child, .. }
         | CHirExpr::Member(child, _, _)
         | CHirExpr::PtrMember(child, _, _) => assert_expr_owned(arena, child),
         CHirExpr::Update { target, .. } => {

@@ -7008,3 +7008,9 @@ The final `-O0` selects `__NO_INLINE__=1`, positive optimization levels select `
 `-mcmodel=tiny` uses short PC-relative symbol addressing (including nullable GOT references), and requested unwind tables describe the actual generated frame, saved registers and return-address authentication state.
 `tests/fixtures/unwind-and-tiny.{c,out}` records the two sealed compilers' macro values and successful native backtraces through over-aligned/dynamic frames, plus subject execution with and without PAC.
 No diagnostic is allocated; all 2,799 command records contain optimization options and two request the tiny model/unwind tables, with full compile/boot still a separate measurement.
+
+### Return-address extraction on the fixed AArch64 target
+
+`__builtin_extract_return_addr(p)` evaluates its pointer operand exactly once and returns that same address and provenance, without an external call; `return_address` already performs the target's return-address normalization.
+Both sealed compilers at O2 execute `tests/fixtures/extract-return-address.c` with exit zero, including a side-effecting operand and a null address (`resolved-compiler-queries.out`).
+No diagnostic is allocated; the original `lib/vsprintf.o` emission exposed one observed kernel unit with an unintended unresolved builtin call, not a completed link measurement.

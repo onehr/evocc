@@ -559,6 +559,13 @@ pub enum CHirExpr<'arena> {
         Vec<&'arena CHirExpr<'arena>>,
         SourceSpan,
     ),
+    /// An unevaluated constant-knowledge query. Keep its operand so parameter
+    /// substitution can change the answer without trusting an earlier bit.
+    BuiltinConstantP {
+        operand: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     /// Front-end-complete GNU checked arithmetic. The first two operands and
     /// the destination pointer are evaluation roots, in that source order.
     CheckedArithmetic {
@@ -753,6 +760,7 @@ impl CHirExpr<'_> {
             | Self::Ternary(_, _, _, span)
             | Self::Elvis(_, _, span)
             | Self::Call(_, _, span)
+            | Self::BuiltinConstantP { span, .. }
             | Self::CheckedArithmetic { span, .. }
             | Self::BitBuiltin { span, .. }
             | Self::BuiltinTrap { span, .. }
@@ -2025,6 +2033,7 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinConstantP { .. }
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
@@ -2245,6 +2254,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
+            | CHirExpr::BuiltinConstantP { .. }
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }

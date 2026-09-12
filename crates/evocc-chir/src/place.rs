@@ -1003,6 +1003,7 @@ fn pointer_expression_type(
             conditional_pointer_type(symbols, types, operand, fallback)
         }
         CHirExpr::BuiltinVarArgs { facts, .. }
+        | CHirExpr::BuiltinConstantP { facts, .. }
         | CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),

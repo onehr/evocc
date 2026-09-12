@@ -3918,6 +3918,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))?,
             )),
             CHirExpr::CharLit(literal, _) => values.push(CValue::Integer(literal.integer_value())),
+            CHirExpr::BuiltinConstantP { operand, .. } => values.push(CValue::Integer(
+                CInteger::int(i32::from(crate::builtin_constant_p(
+                    operand,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                    &self.target,
+                ))),
+            )),
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -4460,6 +4468,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             // Argument evaluation has already run through the normal call
             // continuation; the hint itself performs no abstract memory access.
             return Ok(None);
+        }
+        if spelling == "__builtin_extract_return_addr"
+            && self.unit.symbols().is_builtin_function(*symbol)
+        {
+            let [value] = arguments.as_slice() else {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "return-address extraction arity",
+                    span: call_span,
+                });
+            };
+            return Ok(Some(*value));
         }
         let target = self
             .linkage
@@ -8193,6 +8212,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<(), InterpreterError> {
         match expression {
+            CHirExpr::BuiltinConstantP { .. } => {}
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
@@ -8497,6 +8517,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Lit(literal, _) => {
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))
             }
+            CHirExpr::BuiltinConstantP { operand, .. } => {
+                Ok(CInteger::int(i32::from(crate::builtin_constant_p(
+                    operand,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                    &self.target,
+                ))))
+            }
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -8750,6 +8778,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .map_err(|error| self.integer_error(error, span)),
                 CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
                 CHirExpr::Ident { facts, .. }
+                | CHirExpr::BuiltinConstantP { facts, .. }
                 | CHirExpr::CheckedArithmetic { facts, .. }
                 | CHirExpr::BitBuiltin { facts, .. }
                 | CHirExpr::Assign { facts, .. }
@@ -9523,6 +9552,7 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::StringLit(_, _)
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
+        | CHirExpr::BuiltinConstantP { .. }
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
@@ -9626,6 +9656,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         return true;
     }
     match expression {
+        CHirExpr::BuiltinConstantP { .. } => false,
         // A file-scope *object* has static storage and therefore lives in
         // memory. A parameter can never legitimately be declared at file scope,
         // so it is left to the signature validator instead of silently forcing
@@ -9805,6 +9836,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
+        | CHirExpr::BuiltinConstantP { .. }
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }

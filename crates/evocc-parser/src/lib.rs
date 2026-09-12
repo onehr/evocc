@@ -2607,7 +2607,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         match expression {
             CHirExpr::Lit(_, _) | CHirExpr::FloatLit(_, _) | CHirExpr::CharLit(_, _) => true,
-            CHirExpr::BitBuiltin { .. } => {
+            CHirExpr::BitBuiltin { .. } | CHirExpr::BuiltinConstantP { .. } => {
                 self.eval_integer_constant_expression(expression).is_ok()
             }
             CHirExpr::MemoryRead { .. } => false,
@@ -2710,7 +2710,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Lit(_, _)
             | CHirExpr::CharLit(_, _)
             | CHirExpr::Ident { .. }
-            | CHirExpr::BitBuiltin { .. } => self
+            | CHirExpr::BitBuiltin { .. }
+            | CHirExpr::BuiltinConstantP { .. } => self
                 .eval_integer_constant_expression(expression)
                 .ok()
                 .map(|value| value.mathematical_value() as f64),
@@ -6379,6 +6380,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// the semantic caller as E1303.
     fn eval_integer_constant_expression(&self, expression: &CHirExpr<'_>) -> Result<CInteger, ()> {
         match expression {
+            CHirExpr::BuiltinConstantP { operand, .. } => {
+                Ok(CInteger::int(i32::from(builtin_constant_p(
+                    operand,
+                    &self.types,
+                    &self.symbols,
+                    &TargetDataLayout::aarch64_unknown_linux_gnu(),
+                ))))
+            }
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
             CHirExpr::MemoryRead { .. } => Err(()),
             CHirExpr::CharLit(literal, _) => Ok(literal.integer_value()),
@@ -6494,6 +6503,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// while preserving C's unevaluated/dead operand rules.
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
+            CHirExpr::BuiltinConstantP { .. } => Ok(CIntegerType::INT),
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
             CHirExpr::MemoryRead { .. } => Err(()),
             CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
@@ -8707,6 +8717,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// false here.
     fn place_roots_register_object(&self, expression: &CHirExpr<'arena>) -> bool {
         let symbol = match expression {
+            CHirExpr::BuiltinConstantP { .. } => None,
             CHirExpr::Ident { symbol, .. } => Some(*symbol),
             CHirExpr::MemoryRead { place, .. } => match place.root() {
                 PlaceRoot::Object { symbol } => Some(*symbol),
@@ -9475,6 +9486,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
             CHirExpr::BitBuiltin { facts, .. }
+            | CHirExpr::BuiltinConstantP { facts, .. }
             | CHirExpr::BuiltinTrap { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
             | CHirExpr::BuiltinReturnAddress { facts, .. }
@@ -11282,14 +11294,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 operand,
                 result,
             });
-        Some(self.alloc_node(CHirExpr::Lit(
-            IntLit {
-                value: u64::from(result),
-                suffix: IntSuffix::None,
-                base: IntBase::Dec,
-            },
+        let ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BuiltinConstantP {
+            operand,
+            facts: ExprFacts::value(ty),
             span,
-        )))
+        }))
     }
 
     fn parse_builtin_choose_expr(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -13404,6 +13414,9 @@ fn collect_jump_regions_expr(
     gotos: &mut Vec<JumpRegionReference>,
 ) {
     match expression {
+        CHirExpr::BuiltinConstantP { operand, .. } => {
+            collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+        }
         CHirExpr::LabelAddress { label, .. } => gotos.push(JumpRegionReference {
             name: label.spelling.clone(),
             span: label.span,
@@ -13642,6 +13655,7 @@ fn place_references_symbol(place: &MemoryPlace<'_>, symbol: SymbolId) -> bool {
 
 fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> bool {
     match expression {
+        CHirExpr::BuiltinConstantP { operand, .. } => expression_references_symbol(operand, symbol),
         CHirExpr::Ident {
             symbol: referenced, ..
         } => *referenced == symbol,
@@ -13986,6 +14000,11 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
 /// When a parenthesized expression appears, preserve its original span.
 fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHirExpr<'arena> {
     match inner {
+        CHirExpr::BuiltinConstantP { operand, facts, .. } => CHirExpr::BuiltinConstantP {
+            operand,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::Lit(literal, _) => CHirExpr::Lit(*literal, paren_span),
         CHirExpr::MemoryRead {
             place,
