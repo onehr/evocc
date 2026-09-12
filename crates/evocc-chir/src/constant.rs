@@ -635,6 +635,31 @@ pub fn eval_absolute_address_constant(
             .ok()?;
             eval_binary_integer(*op, base, delta).ok()
         }
+        CHirExpr::Binary(
+            op @ (BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge),
+            left,
+            right,
+            _,
+        ) if crate::PointerTypeDesc::from_expression(symbols, types, left).is_ok()
+            && crate::PointerTypeDesc::from_expression(symbols, types, right).is_ok() =>
+        {
+            // Numeric addresses compare at pointer width, not at the signed
+            // source integer's width. Named objects still return None above.
+            eval_binary_integer(
+                *op,
+                evaluate(left)?.cast(CIntegerType::ULONG),
+                evaluate(right)?.cast(CIntegerType::ULONG),
+            )
+            .ok()
+        }
+        CHirExpr::Unary(UnaryOp::Not, operand, _) => {
+            Some(CInteger::int(i32::from(!evaluate(operand)?.truth())))
+        }
         CHirExpr::Ternary(condition, left, right, _) => evaluate(if evaluate(condition)?.truth() {
             left
         } else {

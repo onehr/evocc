@@ -25,6 +25,7 @@ enum Node<'a> {
 
 #[derive(Default)]
 struct Uses<'a> {
+    nodes: usize,
     references: BTreeSet<SymbolId>,
     assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
@@ -130,6 +131,7 @@ fn inspect_with_declarations<'a>(
     let mut work: Vec<_> = nodes.into_iter().collect();
     let mut uses = Uses::default();
     while let Some(node) = work.pop() {
+        uses.nodes += 1;
         match node {
             Node::Decl(decl) => {
                 visit(decl);
@@ -600,6 +602,34 @@ pub fn substitute<'a>(
     })?;
     uses.addresses.extend(linkage.aliases.values());
     let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
+    // Honor ordinary inline hints for small, acyclic private helpers too.
+    // The bound limits code growth; mandatory always_inline remains separate.
+    let bodies: BTreeMap<_, _> = unit
+        .iter()
+        .filter_map(|d| match d {
+            CHirDecl::Function(f) => f.body.map(|body| (f.symbol, inspect([Node::Stmt(body)]))),
+            _ => None,
+        })
+        .collect();
+    let recursive = |symbol| {
+        let mut pending = bodies[&symbol]
+            .references
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        let mut visited = BTreeSet::new();
+        while let Some(next) = pending.pop() {
+            if next == symbol {
+                return true;
+            }
+            if visited.insert(next) {
+                if let Some(body) = bodies.get(&next) {
+                    pending.extend(body.references.iter().copied());
+                }
+            }
+        }
+        false
+    };
     let eligible: BTreeMap<_, _> = unit
         .iter()
         .filter_map(|d| match d {
@@ -609,7 +639,15 @@ pub fn substitute<'a>(
                         .attributes
                         .iter()
                         .any(|a| a.semantic_name() == Some("always_inline"))
-                        || constant_inline_return(unit, f, target).is_some())
+                        || constant_inline_return(unit, f, target).is_some()
+                        || (!f.inline_spans.is_empty()
+                            && f.has_internal_linkage(unit.symbols())
+                            && !f
+                                .attributes
+                                .iter()
+                                .any(|a| a.semantic_name() == Some("noinline"))
+                            && bodies[&f.symbol].nodes <= 128
+                            && !recursive(f.symbol)))
                     && !uses.addresses.contains(&f.symbol)
                     && !matches!(
                         f.parameters,

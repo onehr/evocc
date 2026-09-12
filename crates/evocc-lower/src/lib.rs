@@ -10438,7 +10438,7 @@ impl<'a> FunctionLowerer<'a> {
     // particular, loops which omit evaluation of a source constant must not
     // use this fact: a constant-return call can still evaluate effectful args.
     fn result_after_evaluation(&self, expression: &CHirExpr<'_>) -> Option<CInteger> {
-        if let Some(value) = evocc_chir::constant::eval_executable_integer_constant(
+        if let Some(value) = evocc_chir::constant::eval_absolute_address_constant(
             expression,
             self.unit.types(),
             self.unit.symbols(),
