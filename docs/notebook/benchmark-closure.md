@@ -6,7 +6,7 @@ musl rerun `20260907T153648.272156Z`, compiler SHA-256
 The [evaluation](benchmark-evaluation.md) and its linked raw records are the
 inventory authority. Counts below overlap where a row is a subcategory.
 
-## Kernel boot blocker tracker (updated 2026-09-12)
+## Kernel boot blocker tracker (updated 2026-09-13)
 
 This is the current kernel-specific index into the existing issue inventory,
 not a second tracker or a new acceptance framework. The latest compilation
@@ -237,7 +237,7 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `2d375a0`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in [the replay](../../.evidence/k1/aggregate-variadic-20260912/substitution.json), compiler `ac5eaf9f...`; no install/boot claim. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
 | K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
-| K-C13 / OPEN | 1 | E3029 | Computed goto | `kernel/bpf/core.o` | C-HIR/lowering/backend: labels, computed dispatch, successor values and invalid target checks in a native mini-program. |
+| K-C13 / LOCAL_VERIFIED; original blocked by K-C11 | 1 | E3029 → E3034 in targeted replay | Computed goto | `kernel/bpf/core.o` | Explicit storage/effect edges now pass C-HIR, EvoIR, MIR, proof replay and native tests. The original replay is still refused for function-pointer arithmetic, not counted as assembled. See the indirect-binding checkpoint below. |
 | K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
@@ -286,10 +286,47 @@ observation, not counted as a successful assembler test. **8** of the original
 161 compile refusals remain; this is targeted repair accounting, not a fresh
 2799-unit survey.
 
-The computed-goto ruling additionally needs reconciliation: S05 demands no
-block arguments, whereas Section 2.4 still requires explicit mem/world edge
-arguments. Clarification requested: no ordinary data parameters, with effect
-parameters retained. No validator exception or implicit token was introduced.
+The reviewer resolved the computed-goto rule: indirect entries carry explicit
+local-storage object addresses and current mem/world, not ordinary C values.
+EvoIR 1.9.92 and EvoMIR 0.29 record complete indirect-edge binding and machine
+transport. This supersedes the incomplete effect-only proposal; no validator
+exception, implicit token or implicit frame-address namespace was introduced.
+
+### Explicit indirect bindings (2026-09-13)
+
+Tests-only `67c0eac` recorded **6 failed / 9 passed / zero build errors**:
+unknown `br.indirect` syntax and the existing E3029 lowering refusal. The
+implementation retains ordinary local SSA, full successor sets including
+static label relocations, positional address/effect binding, and distinct
+runtime E3048 target errors. The existing GNU signed-shift profile is unchanged;
+two stale specification clauses were corrected, and explicit legacy E3006
+obligations still execute.
+
+Targeted checks pass **41 tests** across IR, lowering, MIR and independent proof
+replay, plus **20** array-bound tests. Native cases include the reviewer's
+counter, swapped object addresses, forty-address actual spills, a copy cycle
+that overwrites the original target register, and both `asm.goto` entrance
+paths. Declaration-owned labels, suspended expression operands and captured
+array strides have dedicated value checks. Storage addresses are transported
+without reading their contents; saved operands reload only on expression
+resumption, and scope allocation/cleanup is routed onto the chosen path.
+
+The scope-entry probe disagrees: GCC-14 accepts a computed bypass of a VLA
+typedef; Clang-19 rejects it against the conservative successor set. Appendix D
+records the existing refusal-direction protocol and E2945, including the case
+where the operand names an otherwise safe target. This is not oracle consensus.
+
+The final release replay, `computed-edges-final-20260913`, freshly processed
+only `kernel/bpf/core.o` with no cache or installation. It was **refused E3034**
+at `kernel/bpf/core.c:251:20`, after the old first error E3029 (5.611 seconds
+for the unit). That is not an assembled object, and it does not replace the
+2,799-record survey or establish K6/K7. The same release executes the expanded
+`computed-edges.c` fixture through both interpreters and Linux native with
+result zero; GCC-14 and Clang-19 agree at O0/O2, recorded in its `.out` file.
+The changed gate passes **1,834 / 0 failed / 4 existing ignored**, across
+251 test targets; Clippy and Rust formatting pass. Both layout subject corpora
+pass, **128/128** and **22/22**, with no mismatches. The isolated replay and
+final measurement record belong in `tests/contracts/day9-acceptance-receipt.json`.
 
 ### Kbuild option audit (2026-09-12)
 

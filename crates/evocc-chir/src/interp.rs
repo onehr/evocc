@@ -168,6 +168,9 @@ pub enum InterpreterError {
     ComputedGoto {
         span: SourceSpan,
     },
+    InvalidIndirectBranchTarget {
+        span: SourceSpan,
+    },
     VarArgs {
         span: SourceSpan,
     },
@@ -293,6 +296,7 @@ impl InterpreterError {
             Self::UnreachableReached { .. } => "E3024",
             Self::BuiltinTrapReached { .. } => "E3047",
             Self::ComputedGoto { .. } => "E3029",
+            Self::InvalidIndirectBranchTarget { .. } => "E3048",
             Self::VarArgs { .. } => "E3030",
             Self::WideInteger { .. } => "E3033",
             Self::FrameAddressUnavailable { .. } => "E3031",
@@ -396,6 +400,7 @@ impl InterpreterError {
             Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
             Self::BuiltinTrapReached { .. } => "builtin-trap-reached".to_owned(),
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
+            Self::InvalidIndirectBranchTarget { .. } => "invalid-indirect-branch-target".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
             Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
@@ -444,6 +449,7 @@ impl InterpreterError {
             | Self::UnreachableReached { span }
             | Self::BuiltinTrapReached { span }
             | Self::ComputedGoto { span }
+            | Self::InvalidIndirectBranchTarget { span }
             | Self::VarArgs { span }
             | Self::WideInteger { span }
             | Self::FrameAddressUnavailable { span }
@@ -585,6 +591,7 @@ struct ValidatedFunctionSignature {
 
 #[derive(Debug)]
 enum MachineTask<'arena> {
+    IndirectGoto(SourceSpan),
     ApplyVarArgs {
         op: crate::VarArgsBuiltinOp,
         requested_ty: Option<TypeId>,
@@ -914,6 +921,8 @@ pub fn interpret_static_integer_expression<'arena>(
 struct SymbolOrder {
     functions: Vec<SymbolId>,
     objects: BTreeMap<String, u64>,
+    labels: BTreeMap<usize, (SymbolId, String, u64)>,
+    code_identities: u64,
 }
 
 struct Interpreter<'unit, 'arena> {
@@ -1399,9 +1408,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             expression = operand;
         }
         let mut value = match expression {
-            CHirExpr::LabelAddress { span, .. } => {
-                Err(InterpreterError::ComputedGoto { span: *span })
-            }
+            CHirExpr::LabelAddress { .. } => self.label_address_value(expression),
             CHirExpr::Ternary(condition, left, right, span)
                 if self.infer_integer_type(expression).is_err() =>
             {
@@ -1710,6 +1717,45 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let mut values = Vec::new();
         while let Some(task) = tasks.pop() {
             let outcome = match task {
+                MachineTask::IndirectGoto(span) => {
+                    let value = pop_machine_value(&mut values, span)?;
+                    let error = || InterpreterError::InvalidIndirectBranchTarget { span };
+                    let address = match value {
+                        CValue::Pointer { value, .. } => {
+                            self.memory.pointer_address(PointerValue::object(value))
+                        }
+                        CValue::FunctionPointer { value, .. } => self.memory.pointer_address(value),
+                        CValue::Uninitialized(_) => {
+                            return Err(InterpreterError::UninitializedValue { span })
+                        }
+                        _ => return Err(error()),
+                    }
+                    .map_err(|_| error())?;
+                    let PointerValue::Function(identity) = self
+                        .memory
+                        .resolve_function_pointer(PointerValue::Exposed(address))
+                        .map_err(|_| error())?
+                    else {
+                        return Err(error());
+                    };
+                    let current = tasks
+                        .iter()
+                        .rev()
+                        .find_map(|task| match task {
+                            MachineTask::FunctionEnd(end) => Some(end.symbol),
+                            _ => None,
+                        })
+                        .ok_or_else(error)?;
+                    let label = self
+                        .symbol_order()
+                        .labels
+                        .values()
+                        .find(|(owner, _, id)| *owner == current && *id == identity)
+                        .map(|(_, label, _)| label.clone())
+                        .ok_or_else(error)?;
+                    self.unwind_goto(&mut tasks, &label, span)?;
+                    None
+                }
                 MachineTask::ApplyVarArgs {
                     op,
                     requested_ty,
@@ -2770,7 +2816,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unwind_goto(tasks, &name.spelling, *span)?;
                 Ok(None)
             }
-            CHirStmt::ComputedGoto(_, span) => Err(InterpreterError::ComputedGoto { span: *span }),
+            CHirStmt::ComputedGoto(expression, span) => {
+                tasks.push(MachineTask::IndirectGoto(*span));
+                tasks.push(MachineTask::EvalExpression {
+                    expression,
+                    allow_root_mutation: true,
+                });
+                Ok(None)
+            }
             CHirStmt::Label(_, child, _) => {
                 tasks.push(MachineTask::ExecStatement(child));
                 Ok(None)
@@ -4047,7 +4100,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         })?;
                 // Function identities occupy the initial range. Frame IDs are
                 // monotonic across calls, including recursion and returned frames.
-                let identity = self.symbol_order().functions.len() as u64
+                let identity = self.symbol_order().code_identities
                     + frame.id.raw() * 2
                     + u64::from(matches!(expression, CHirExpr::BuiltinFrameAddress { .. }));
                 let pointer = PointerValue::function(identity)
@@ -4076,7 +4129,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::BuiltinVarArgs { .. } => self.schedule_varargs(expression, tasks)?,
             CHirExpr::LabelAddress { .. } => {
-                return Err(InterpreterError::ComputedGoto { span });
+                values.push(self.label_address_value(expression)?);
             }
             CHirExpr::Cast(ty, value, _) => {
                 let target = self.value_type(*ty, span)?;
@@ -4606,6 +4659,28 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .and_then(|index| index.checked_add(1))
     }
 
+    fn label_address_value(
+        &mut self,
+        expression: &CHirExpr<'arena>,
+    ) -> Result<CValue, InterpreterError> {
+        let span = expression.span();
+        let identity = self
+            .symbol_order()
+            .labels
+            .get(&(expression as *const CHirExpr<'_> as usize))
+            .map(|(_, _, id)| *id)
+            .ok_or(InterpreterError::InvalidIndirectBranchTarget { span })?;
+        let (memory, address) = self
+            .memory
+            .expose_pointer(PointerValue::Function(identity))
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory = memory;
+        Ok(CValue::Pointer {
+            value: Pointer::from_address(address),
+            ty: self.pointer_type_of_expression(expression)?,
+        })
+    }
+
     fn symbol_order(&self) -> &SymbolOrder {
         self.symbol_order.get_or_init(|| {
             let mut symbols = self
@@ -4668,7 +4743,27 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             }
             symbols.extend(functions.into_values());
+            let mut labels = BTreeMap::new();
+            let mut identities = BTreeMap::new();
+            for declaration in self.unit.iter() {
+                if let CHirDecl::Function(function) = declaration {
+                    if let Some(body) = function.body {
+                        let mut references = ReferencedSymbols::default();
+                        collect_statement_symbols(body, &mut references);
+                        for (node, label) in references.labels {
+                            let next = symbols.len() as u64 + identities.len() as u64 + 1;
+                            let identity = *identities
+                                .entry((function.symbol, label.clone()))
+                                .or_insert(next);
+                            labels.insert(node, (function.symbol, label, identity));
+                        }
+                    }
+                }
+            }
+            let code_identities = symbols.len() as u64 + identities.len() as u64;
             SymbolOrder {
+                labels,
+                code_identities,
                 functions: symbols,
                 objects: objects
                     .into_iter()
@@ -8918,6 +9013,7 @@ struct MemoryRequirements {
 #[derive(Debug, Default)]
 struct ReferencedSymbols {
     named: Vec<SymbolId>,
+    labels: BTreeMap<usize, String>,
 }
 
 impl ReferencedSymbols {
@@ -9256,6 +9352,12 @@ fn collect_expression_symbols<'arena>(
     output: &mut ReferencedSymbols,
 ) {
     match expression {
+        CHirExpr::LabelAddress { label, .. } => {
+            output.labels.insert(
+                expression as *const CHirExpr<'_> as usize,
+                label.spelling.clone(),
+            );
+        }
         CHirExpr::Ident { symbol, .. } => output.record(*symbol),
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
@@ -9314,7 +9416,6 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
-        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
@@ -9339,7 +9440,7 @@ pub fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) 
     match statement {
         CHirStmt::Asm(_) => true,
         CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
-        CHirStmt::ComputedGoto(expression, _) => expression_requires_memory(unit, expression),
+        CHirStmt::ComputedGoto(_, _) => true,
         CHirStmt::If(condition, then_statement, else_statement, _) => {
             expression_requires_memory(unit, condition)
                 || statement_requires_memory(unit, then_statement)

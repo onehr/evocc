@@ -72,6 +72,23 @@ fn static_pointer_capture_does_not_admit_static_vlas_or_change_const_objects() {
 }
 
 #[test]
+fn indirect_edges_cannot_bypass_a_captured_type_declaration() {
+    for source in [
+        "int f(int n){goto *&&inside; typedef int row[n]; inside:return sizeof(row);}",
+        "int f(int n,int c){void *p=&&inside;if(c)goto *p;{typedef int row[n];inside:return sizeof(row);}}",
+        "int f(int n,int c){void *p=&&outside;if(c)goto *p;{typedef int row[n];inside:return sizeof(row)+(&&inside!=0);}outside:return 0;}",
+    ] {
+        rejects(source, "E2945", "jump-into-variable-type-scope");
+    }
+    let arena = Arena::default();
+    parse(
+        "int f(int n){typedef int row[n];goto *&&inside;inside:return sizeof(row);}",
+        &arena,
+    )
+    .expect("entering an already active captured scope is valid");
+}
+
+#[test]
 fn variable_record_members_are_refused_even_through_typedefs() {
     for source in include_str!("../../../tests/fixtures/variable-record-members.c").split("\n\n") {
         rejects(source, "E2203", "variable-length-object");

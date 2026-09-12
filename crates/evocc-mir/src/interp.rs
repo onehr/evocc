@@ -98,16 +98,26 @@ pub struct MirOutcome {
 /// A defined failure of EvoMIR execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MirError {
+    BadBranchTarget,
     /// A `brk` was reached; the immediate names the EvoIR reason.
-    Trap { imm: u16 },
+    Trap {
+        imm: u16,
+    },
     /// The step budget was exhausted.
     BudgetExhausted,
     /// A memory fault, carrying the EvoIR diagnostic of Section 6.1.
-    Memory { code: &'static str, detail: String },
+    Memory {
+        code: &'static str,
+        detail: String,
+    },
     /// A call through a value that names no function.
-    BadCallTarget { code: &'static str },
+    BadCallTarget {
+        code: &'static str,
+    },
     /// The module could not be executed at all.
-    Invalid { detail: String },
+    Invalid {
+        detail: String,
+    },
     /// An `asm` was reached. EvoIR Section 3.11: "an interpreter cannot
     /// execute an `asm` and reports `E3021` when it reaches one, so a program
     /// containing one is verified by the native run of the EvoMIR
@@ -121,6 +131,7 @@ impl MirError {
     #[must_use]
     pub fn code(&self) -> String {
         match self {
+            Self::BadBranchTarget => "E3048".to_owned(),
             Self::Trap { imm } => format!("E{imm}"),
             Self::BudgetExhausted => "E3008".to_owned(),
             Self::Memory { code, .. } | Self::BadCallTarget { code } => (*code).to_owned(),
@@ -132,6 +143,7 @@ impl MirError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::BadBranchTarget => "invalid-indirect-branch-target".to_owned(),
             Self::Trap { imm } => format!("machine-trap-{imm}"),
             Self::BudgetExhausted => "step-budget-exceeded".to_owned(),
             Self::Memory { detail, .. } => detail.clone(),
@@ -399,6 +411,35 @@ pub fn interpret_module(
         }
 
         match block.term.clone() {
+            MTerm::Indirect { target, edges } => {
+                let pointer = match read(&frames[top], target)? {
+                    MirValue::Fn(pointer) => pointer,
+                    MirValue::Ptr(pointer) => PointerValue::Exposed(
+                        state
+                            .memory
+                            .pointer_address(PointerValue::object(pointer))
+                            .map_err(|_| MirError::BadBranchTarget)?,
+                    ),
+                    _ => return Err(MirError::BadBranchTarget),
+                };
+                let PointerValue::Function(identity) = state
+                    .memory
+                    .resolve_function_pointer(pointer)
+                    .map_err(|_| MirError::BadBranchTarget)?
+                else {
+                    return Err(MirError::BadBranchTarget);
+                };
+                let (target, args) = edges
+                    .iter()
+                    .find(|(target, _)| {
+                        state.blocks.get(&(frames[top].function, *target)) == Some(&identity)
+                    })
+                    .ok_or(MirError::BadBranchTarget)?;
+                let values = read_all(&frames[top], args)?;
+                frames[top].block = *target;
+                frames[top].incoming = values;
+                frames[top].entered = false;
+            }
             MTerm::B { target, args } => {
                 let values = read_all(&frames[top], &args)?;
                 frames[top].block = target;

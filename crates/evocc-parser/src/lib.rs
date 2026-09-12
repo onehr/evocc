@@ -4590,6 +4590,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             variable: HashSet::new(),
             switches: Vec::new(),
             invalid_switch_entries: Vec::new(),
+            indirect: Vec::new(),
         };
         collect_jump_regions_stmt(
             body,
@@ -4598,6 +4599,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             &mut labels,
             &mut gotos,
         );
+        let address_taken = gotos
+            .iter()
+            .filter(|reference| !reference.checks_region_entry)
+            .map(|reference| reference.name.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        for (span, regions) in &next_region.indirect {
+            gotos.extend(address_taken.iter().map(|name| JumpRegionReference {
+                name: name.clone(),
+                span: *span,
+                regions: regions.clone(),
+                checks_region_entry: true,
+            }));
+        }
         if let Some(span) = next_region.invalid_switch_entries.first().copied() {
             self.report("E2945", "jump-into-variable-type-scope", span);
             return None;
@@ -13201,6 +13215,7 @@ struct JumpRegionContext<'a> {
     variable: HashSet<u32>,
     switches: Vec<Vec<u32>>,
     invalid_switch_entries: Vec<SourceSpan>,
+    indirect: Vec<(SourceSpan, Vec<u32>)>,
 }
 
 impl JumpRegionContext<'_> {
@@ -13357,7 +13372,8 @@ fn collect_jump_regions_stmt(
             regions: regions.clone(),
             checks_region_entry: true,
         }),
-        CHirStmt::ComputedGoto(target, _) => {
+        CHirStmt::ComputedGoto(target, span) => {
+            next_region.indirect.push((*span, regions.clone()));
             collect_jump_regions_expr(target, regions, next_region, labels, gotos);
         }
         CHirStmt::Return(None, _)

@@ -219,11 +219,28 @@ fn broad_evoir_and_unrelated_capability_probes_remain_not_implemented() {
 }
 
 #[test]
+fn computed_goto_is_emitted_and_executed_through_the_public_driver() {
+    let source = TempSource::new("computed", "int main(void){goto *&&end;end:return 3;}\n");
+    let emitted = run(&[TARGET, "--emit=evoir", source.as_str()]);
+    assert_no_panic(&emitted);
+    assert_eq!(emitted.status.code(), Some(0));
+    assert!(emitted.stderr.is_empty());
+    assert!(String::from_utf8(emitted.stdout)
+        .unwrap()
+        .contains("br.indirect"));
+    let executed = run(&[TARGET, "--interpret-evoir", source.as_str()]);
+    assert_no_panic(&executed);
+    assert_eq!(executed.status.code(), Some(0));
+    assert!(executed.stderr.is_empty());
+    assert_eq!(executed.stdout, b"3\n");
+}
+
+#[test]
 fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
     let lowering = TempSource::new(
         "lowering",
-        "int main(void) { goto *&&end; end: return 0; }\n",
+        "void f(void) {} int main(void) { void (*p)(void) = f; p++; return 0; }\n",
     );
     let runtime = TempSource::new(
         "runtime",
@@ -269,7 +286,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
             ),
             "lowering" => assert!(
                 stderr
-                    .ends_with("error[E3029]: evoir-lowering-failed: not-lowered: computed-goto\n"),
+                    .ends_with("error[E3034]: evoir-lowering-failed: not-lowered: function-pointer-arithmetic\n"),
                 "{stderr}"
             ),
             "runtime" => assert!(

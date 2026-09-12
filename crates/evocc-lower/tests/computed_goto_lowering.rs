@@ -63,6 +63,25 @@ fn check_label_address(source: &str, expected: Result<u64, &str>, forms: &[&str]
     let unit = parse_valid(source, &arena);
     let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
         .expect("label addresses have an EvoIR representation");
+    for function in &module.functions {
+        for block in &function.blocks {
+            for instruction in block.insts.iter().chain([&block.terminator]) {
+                if let evocc_evoir::Inst::IndirectBr { edges, .. } = instruction {
+                    for edge in edges {
+                        assert!(
+                            edge.arguments.iter().all(|argument| matches!(
+                                argument.ty,
+                                evocc_evoir::EvoIRType::Ptr(_)
+                                    | evocc_evoir::EvoIRType::Mem(_)
+                                    | evocc_evoir::EvoIRType::World
+                            )),
+                            "C indirect entries transport storage addresses and effects"
+                        );
+                    }
+                }
+            }
+        }
+    }
     let text = evocc_evoir::render_module(&module);
     for form in forms {
         assert!(text.contains(form), "missing {form}: {text}");
@@ -82,7 +101,13 @@ fn check_label_address(source: &str, expected: Result<u64, &str>, forms: &[&str]
         evocc_evoir::InterpreterLimits::new(100_000),
     );
     match expected {
-        Ok(value) => assert_eq!(result.unwrap().return_values[0].raw_bits, value),
+        Ok(value) => assert_eq!(
+            result
+                .unwrap_or_else(|error| panic!("{error:?}\nsource: {source}\n{text}"))
+                .return_values[0]
+                .raw_bits,
+            value
+        ),
         Err(code) => assert_eq!(result.unwrap_err().code(), code),
     }
 }
@@ -110,6 +135,11 @@ fn computed_goto_executes_a_local_target() {
         ),
         0,
     );
+}
+
+#[test]
+fn computed_edges_match_the_native_fixture_in_both_interpreters() {
+    check_computed_goto(include_str!("../../../tests/fixtures/computed-edges.c"), 0);
 }
 
 #[test]
@@ -204,9 +234,56 @@ fn computed_goto_preserves_distinct_storage_values_and_recursive_activations() {
         ("int f(int n){int x=n;void *p=&&done;if(n)x+=f(n-1);goto *p;done:return x;}int main(void){return f(4);}", 10),
         ("int main(void){int x;void *p=&&set;goto *p;set:x=7;p=&&done;goto *p;done:return x;}", 7),
         ("int main(void){int x=0;void *p=&&done;{int y=5;x=y;goto *p;}done:return x;}", 5),
+        ("int main(void){int x=7;unsigned long p=(unsigned long)&&done;goto *(void *)p;done:return x;}", 7),
+        ("int main(void){int n=3;int *p=__builtin_alloca(n*sizeof(int));p[0]=9;goto *&&done;done:return p[0];}", 9),
+        ("int main(void){int n=3;typedef int row[n++];goto *&&done;done:return sizeof(row)+n;}", 16),
+        ("int main(void){int x=0;void *p=&&again;again:x++;if(x<3)goto *p;return x;}", 3),
+        ("int main(void){int x=7;goto *&&entry;exit:return x;entry:goto exit;}", 7),
+        ("int main(void){int x=7;static void *p=&&entry;goto dispatch;exit:return x;entry:goto exit;dispatch:goto *p;}", 7),
+        ("int main(void){int n=0;return 3+({here:if(++n<3)goto *&&here;5;});}", 8),
+        ("int main(void){int n=0;return 3+({here:if(++n<3)goto *&&here;4+({5;});});}", 12),
+        ("int main(void){int n=0;int x=3+({here:if(++n<3)goto *&&here;goto done;5;});done:return n;}", 3),
+        ("int main(void){int n=0;void *p=&&here;return 3+({here:if(++n<3)goto *p;5;});}", 8),
+        ("int f(int n){int a[6];int (*p)[n]=(void *)a;goto *&&done;done:return (char *)(p+1)-(char *)p;}int main(void){return f(3);}", 12),
     ] {
         check_computed_goto(source, expected);
     }
+}
+
+#[test]
+fn indirect_transport_does_not_read_uninitialized_contents() {
+    let source = "int main(void){int x;goto *&&done;done:return x;}";
+    let arena = Arena::default();
+    let unit = parse_valid(source, &arena);
+    assert_eq!(
+        interpret_scalar_function(
+            &unit,
+            function_symbol(&unit, "main"),
+            InterpreterLimits::new(1000)
+        )
+        .unwrap_err()
+        .code(),
+        "E3001"
+    );
+    check_label_address(source, Err("E3001"), &["br.indirect"]);
+}
+
+#[test]
+fn a_foreign_function_label_is_not_a_local_dispatch_target() {
+    let source = "void *foreign(void){here:return &&here;}int main(void){void *own=&&done;void *p=foreign();if(!own)return 1;goto *p;done:return 0;}";
+    let arena = Arena::default();
+    let unit = parse_valid(source, &arena);
+    assert_eq!(
+        interpret_scalar_function(
+            &unit,
+            function_symbol(&unit, "main"),
+            InterpreterLimits::new(1000)
+        )
+        .unwrap_err()
+        .code(),
+        "E3048"
+    );
+    check_label_address(source, Err("E3048"), &["br.indirect"]);
 }
 
 #[test]

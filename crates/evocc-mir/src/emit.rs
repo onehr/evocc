@@ -1816,6 +1816,9 @@ fn emit_term(
         }
     };
     match term {
+        MTerm::Indirect { target, .. } => {
+            let _ = writeln!(text, "    br {}", name(*target));
+        }
         MTerm::B { target, .. } => branch(text, *target),
         MTerm::BCond {
             cond,

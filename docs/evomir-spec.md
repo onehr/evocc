@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.28** | **Authoritative reference** | **2026-09-09**
+**Revision 0.29** | **Authoritative reference** | **2026-09-12**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -184,6 +184,7 @@ second successor out as the fall-through where block order allows.
 | Form | Semantics |
 |---|---|
 | `b ^target(args)` | unconditional branch |
+| `br rn [^a(args), ^b(args), ...]` | indirect transfer through a `gpr64` code address, with the complete ordered successor edges from EvoIR; simultaneously binds only the selected edge's parameters; invalid interpreted target is E3048 |
 | `b.cond ^then(args), ^else(args)` | branch on `nzcv` |
 | `cbz`/`cbnz rn, ^then(args), ^else(args)` | branch on zero / nonzero |
 | `tbz`/`tbnz rn, #bit, ^then(args), ^else(args)` | branch on one bit |
@@ -248,6 +249,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `copy` with static size | `mem.copy` |
 | `br ^b(args)` | `b ^b(args)` |
 | `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0, ^t(...), ^e(...)` (or the `b.cond` fusion above) |
+| `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, retaining the complete ordered CFG and address arguments; effect ordering is preserved as above, and Section 7 implements simultaneous entry bindings |
 | `ret v...` | `ret` listing the results |
 | `trap.<reason>` | `brk` with the reason's number |
 | `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)`, where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
@@ -491,6 +493,31 @@ block's arguments have no incoming edge and survive this pass as the
 function's parameters; the allocator removes them by assigning `x0`
 onwards. This happens before allocation, as its own pass; the lowering of
 Section 5 does not do it.
+
+**Indirect entries (revision 0.29).** A computed edge cannot be split merely
+by changing its CFG target: `block_addr` and static relocations still denote
+the original label. Its explicit SSA parameters require non-conflicting
+receiving locations across all candidate targets. Before allocation, form
+one joint parallel-copy batch from all edges into distinct destination
+parameter virtual registers. Keep all destinations live at dispatch through
+the complete CFG, so allocation assigns independent registers or private
+spill slots; only proven identical address payloads may share a location.
+These spills implement SSA transport and are not new EvoIR storage objects.
+Resolve copy cycles using the existing scratch rule. If a self-edge's copy
+overwrites the virtual register holding the target, first capture the target
+in a fresh ordinary virtual register; keep it live through the final `br`.
+Direct, conditional and assembly edges use the same destination parameters.
+The final transfer emits `br xn`, not a call, with no ABI clobber or link-register
+write. Effect tokens disappear only after their ordering constraints have
+been respected; real address operands do not disappear with them.
+
+This joint batch prepares receiving locations only: it cannot perform object
+reads, scope entry/exit or other effects for unselected edges. Such actions
+must be routed on the selected path before dispatch by explicit control flow
+as specified in EvoIR 3.9. Label identities and every CFG successor survive
+lowering, allocation and emission, including labels referenced only by a
+static relocation. Missing edges are never repaired by assuming a likely
+target.
 
 **Assembly operands.** A constraint fixes what an `asm` operand may be, and
 the allocator must satisfy it before it satisfies anything else:
@@ -751,9 +778,11 @@ instruction     := "%v" int ":" class " = " op operands
                  | store-form [" volatile"]
                  | call-form
 terminator      := "b ^" ident "(" args ")"
+                 | "br " reg " [" indirect-edge (", " indirect-edge)* "]"
                  | ("b." cond | "cbz " reg | "cbnz " reg | "tbz " reg ", #" int | "tbnz " reg ", #" int) ", ^" ident "(" args ")" ", ^" ident "(" args ")"
                  | "ret" [" " reg ("," " " reg)*]
                  | "brk #" int
+indirect-edge   := "^" ident "(" args ")"
 call-form       := "bl @" ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
 asm-form        := "%v" int ":" class " = asm" [".volatile"] " " string
                    " outputs [" asm-out ("," " " asm-out)* "]"
@@ -799,6 +828,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.29 | 2026-09-12 | Specifies computed branches with complete CFG edges, joint pre-allocation parameter transport, cycle/spill handling and live target capture, preserving direct-entry and code-label identity. Implements the approved design boundary, not a native acceptance claim. |
 | 0.28 | 2026-09-09 | A variadic callee saves `q0` to `q7` in a 128-byte vector save area and writes `vr_top`/`vr_offs = -128`, as both oracles do; the earlier `vr_offs = 0` lost every `double` a reference-compiled caller passed through an EvoCC-compiled wrapper, the cause of musl's floating-point formatting failures in the mixed link. |
 | 0.27 | 2026-09-09 | Corrects the stack-realignment instruction sequence to use the reserved scratch register, because logical instructions cannot read SP. Both sealed assemblers reject the previous spelling and accept the replacement. Authorized review correction; this changes no compiler code. |
 | 0.26 | 2026-09-09 | Specifies frame realignment (instruction spelling corrected in 0.27) when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |

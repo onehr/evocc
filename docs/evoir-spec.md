@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.91** | **Authoritative reference** | **2026-09-12**
+**Revision 1.9.92** | **Authoritative reference** | **2026-09-12**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -705,9 +705,9 @@ of it is an ordinary integer that names no object. It exists because the
 kernel writes `({ __label__ __here; __here: (unsigned long)&&__here; })`
 in `local_bh_disable` and its relatives to record an instruction address
 for lock and trace bookkeeping (the ninth survey put it first in 1,040
-units); the value is only ever compared, stored and printed. Jumping to
-one (`goto *`) remains `E3029`: the two units that write it are the
-allowed residue of 1.9.67.
+units). Since revision 1.9.92, jumping to one uses `br.indirect` (3.9).
+The label identifies a block, not a closure: each activation supplies its
+own local-object addresses through that branch's explicit edge arguments.
 
 **Activation addresses (revision 1.9.72).**
 
@@ -862,6 +862,52 @@ cond_br %cond, ^then_target(then_args...), ^else_target(else_args...)
 **Semantics.** If `%cond` is non-zero, transfers to `^then_target` with
 `then_args`. Otherwise, transfers to `^else_target` with `else_args`. The
 argument arities and types must match their respective target blocks.
+
+```text
+br.indirect %target [^b1(args...), ^b2(args...)]
+```
+
+**Indirect edge binding (revision 1.9.92, approved design).** `%target` is a
+current-block `ptr<generic>` value. The instruction has no results and
+transfers control to the block identified by its code address in this
+function. Select the edge first, then simultaneously bind that edge's
+arguments to the destination's Value IDs. It performs no memory access,
+allocation, lifetime action or volatile event. An initialized value that
+does not identify a listed local label reports `E3048`; a poison target
+retains `E3013`. Neither error is a function-call diagnostic.
+
+The list is nonempty, sorted by BlockId and contains each destination once.
+Module validation requires exactly all retained address-taken blocks of the
+function, including `block_addr` and static `@function^block` relocations.
+Function-only validation checks its locally observable required subset;
+it is not a substitute for module validation. Every argument obeys the
+unchanged local use-def rule and matches the destination position's type.
+Each edge passes each current memory/world token exactly once. Repeating
+that token on another mutually exclusive edge is allowed; stale, duplicate,
+missing or incorrectly positioned tokens are not. Direct edges, including
+two `cond_br` alternatives to the same block, retain separate bindings.
+
+The C lowering profile carries ordinary live-across data in existing local
+objects; indirect entries receive their required **storage addresses** and
+effect tokens. `Address(p)` denotes the object storing `p`, not the pointer
+value currently held by `p`. This role is constructed from the lowering
+symbol/object map, not inferred by a generic validator from pointer types,
+names or producer flags. Only live-across values need storage; captured type
+bounds also count as live. Passing an address does not read its object's
+contents or initialize it. Accesses retain lifetime/initializedness checks,
+dynamic allocations retain their specified lifetime, and prohibited entry
+into a captured variably modified scope remains `E2945`.
+
+Scope-specific allocation or cleanup must run only on the selected path.
+An implementation may route the actual target to edge adapters before doing
+those actions; merely retargeting CFG metadata does not route a code address.
+The backend must preserve label/relocation identity and implement the complete
+positional parallel copy, including copy cycles, spills and the target's
+liveness (EvoMIR Section 7). No implicit frame-address or effect channel is
+introduced. All successors participate in Sections 8/11 taint, exclusion,
+known-bits and proof reconstruction; the terminator is not added to the
+EqSat allowlist. Cloning/inlining must preserve the owner/label correspondence
+or retain the original function.
 
 ```
 ret values...
@@ -1245,6 +1291,7 @@ EffectSummary {
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
 | `block_addr` | `{}` | `{}` | false | false | false | false | false |
+| `br.indirect` | `{}` | `{}` | false | false | false | true | false |
 | `return_address`, `frame_address` | `{}` | `{}` | false | false | false | false | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
 | `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
@@ -1753,7 +1800,7 @@ each code's meaning and deliberately does not repeat the text.
 | `E3012` | The byte offset does not satisfy the access alignment. |
 | `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
 | `E3027` | `copy` ranges overlap without being identical. |
-| `E3029` | A label address is used, or a `goto *`, is lowered. |
+| `E3048` | An executed indirect branch target does not identify a listed label in the current function. |
 | `E3014` | A store targets string-literal storage. |
 | `E3018` | `lifetime.end` names a live base pointer that is not an automatic object owned by the current frame. |
 
@@ -1890,7 +1937,8 @@ twice would let a reader think two conditions are the same finding.
 | `E3041` | `symbol-declared-and-defined` | module validation |
 | `E3060` | `weak-internal-symbol` | module validation |
 | `E3061` | `alias-target-not-defined` | module validation |
-| `E3029` | `not-lowered: computed-goto` | lowering (`goto *` only since 1.9.68) |
+| `E3029` | `not-lowered: computed-goto` | legacy lowering refusal, superseded for the 3.9 indirect-edge form at 1.9.92; not a runtime target error |
+| `E3048` | `invalid-indirect-branch-target` | runtime |
 | `E3045` | `not-lowered: ordered-pointer-comparison` | lowering — executor-allocated, **withdrawn at 1.9.68** |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2853,6 +2901,7 @@ inst_body :=
 
 term_body :=
     "br " block_label "(" arg_list ")"
+  | "br.indirect " value_name " [" branch_edge (", " branch_edge)* "]"
   | "cond_br " value_name ", " block_label "(" arg_list ")"
         ", " block_label "(" arg_list ")"
   | "ret" return_operands
@@ -2860,6 +2909,7 @@ term_body :=
   | "(" result_list ") = asm.goto" volatile_marker " " asm_payload
         " labels [" asm_label_list "] fallthrough " block_label "(" arg_list ")"
 
+branch_edge     := block_label "(" arg_list ")"
 return_operands  := ε | " " value_name ("," " " value_name)*
 
 arith_op         := "add" | "sub" | "mul" | "sdiv" | "udiv" | "srem" | "urem"
@@ -2926,6 +2976,12 @@ canonical and `^entry:` is malformed. Empty branch argument lists follow the
 same rule. Formal-parameter spellings are positional `%arg0`, `%arg1`, ...;
 source parameter names are not serialized.
 
+For `br.indirect`, operand traversal visits the control target first, then each
+edge's arguments in written positional order; edges are ordered by BlockId.
+Renumbering rewrites both destination IDs and every argument ID, then restores
+destination order, without merging bindings on other terminators that happen
+to name the same destination.
+
 #### 9.3.1 Canonical Shapes
 
 The productions above are for a reader. This table is the machine-checkable form
@@ -2972,6 +3028,7 @@ ub.assume.<> <>
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 <> = frame_address depth=<> : <>
 br <>
+br.indirect <> [<>]
 cond_br <>, <>, <>
 ret
 ret <>
@@ -3520,7 +3577,7 @@ before a total operation:
 | `x % y` (signed) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero`; `signed_div_rem_no_overflow(x, y)` → `ub.assume.signed_overflow`; then `srem.bits<N> x, y` |
 | `x % y` (unsigned) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `urem.bits<N> x, y` |
 | any shift | `shift_count_defined.<signedness>(x, y)` → `ub.assume.invalid_shift_count` → shift operation |
-| signed `x << y` | count obligation; `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift`; then `shl.bits<N> x, y` |
+| signed `x << y` | count obligation only; then `shl.bits<N> x, y`, the low N bits under the GNU profile in 6.1; no new signed-left-shift obligation |
 | read of an uninitialized scalar local | `uninitialized.bits<N>` is threaded through SSA until a semantic consumer reports `E3001` |
 | reachable end of a non-`main`, non-void function | `ret` of `uninitialized.T` for the return type `T` (revision 1.9.71): C makes the fall-off undefined only when the caller uses the value, so the value is poison and its use is the ordinary poison report; the reference compilers return whatever the register holds. A non-void `main` still returns 0 at its end |
 | `__builtin_unreachable()` | `trap.unreachable_reached` reports `E3024` |
@@ -4286,7 +4343,7 @@ function-local validator must enforce:
    its signature: guards consume only the current `mem<all>`, while
    allocation, lifetime, load/store, and calls consume their declared memory
    and world inputs. At an edge or return boundary each current token is
-   forwarded exactly once. A `cond_br` may place that same current token once
+   forwarded exactly once. A `cond_br`, `asm.goto` or `br.indirect` may place that same current token once
    on each mutually exclusive successor edge; this is control-flow transport,
    not two simultaneous token uses.
 8. Day 7 executable memory operations use only `mem<all>`; each guard observes
@@ -4495,21 +4552,10 @@ and Clang-19 agree on every row.
   measured at revision 1.9.48 under both oracles), so a static initializer
   may use it, and `&&name` where no enclosing function scope declares that
   label reports `E2920`. `goto *expr` transfers control to such an address.
-  Both forms are parsed, type-checked and carried in C-HIR; lowering reports
-  `E3029`. Revision 1.9.49 corrected this entry, which had said the opposite
-  since 1.9.17 without a probe.
-
-  Neither reaches EvoIR in this revision. An indirect branch would need a
-  terminator whose successor set is decided at run time, edge arguments for each
-  successor, validator rules, and proof-checker handling, and no unit of the
-  cohort needs it: the kernel writes `({ __label__ __here; __here:
-  (unsigned long)&&__here; })` to capture an instruction address, whose cast to an
-  integer is `ptrtoint` and already outside this profile (Section 5.3), and
-  writes no `goto *` at all. Since revision 1.9.68 the label address is
-  `block_addr` and its cast is `ptr.to_int`; only `goto *` reports `E3029`
-  (`not-lowered: computed-goto`) and fails closed. The measurement that
-  opened this was the ninth survey, whose first error was `E3029` in 1,040
-  units through `local_bh_disable`.
+  Both forms are parsed, type-checked and carried in C-HIR. Label addresses
+  lower to `block_addr` (1.9.68), integer casts to `ptr.to_int`, and indirect
+  jumps to the complete edge-binding form of 3.9 (1.9.92). Static label tables
+  use 10.1.18 relocations; no cross-block SSA visibility exception is implied.
 
 **Function names.** Inside every function body the identifiers `__func__`
 and `__FUNCTION__` denote one implicitly declared object of type
@@ -4558,9 +4604,11 @@ type's width with two's-complement wrap-around, as both oracles evaluate it,
 not in host arithmetic and not as a refusal: `1 << 31` is the `int` value
 `-2147483648`, `(1 << 31) < 0` holds in a static assertion, and an enumerator
 `X = 1 << 31` has type `int` in a 4-byte enumeration (measured). This is the
-constant evaluator's arithmetic only; the runtime obligations of 10.1.5 are
-unchanged, so `1 << 31` executed at run time still carries
-`ub.assume.invalid_signed_left_shift`. Measured defect at revision 1.9.28:
+constant evaluator's arithmetic rule. Runtime signed add/subtract/multiply
+retain their obligations; signed shifts instead follow the GNU truncation
+rule of 6.1 since 1.9.88, so executed `1 << 31` needs only a valid count.
+Legacy IR predicates and explicit E3006 obligations retain their meaning.
+Measured defect at revision 1.9.28:
 the enumerator was refused as not an integer constant expression.
 
 `__int128_t` and `__uint128_t` are compiler-provided spellings of `__int128`
@@ -4791,7 +4839,8 @@ usable in static initializers, including range designators
 `expr` of pointer type. A used `&&label` lowers to `block_addr` of the
 label's block (Section 3.7, revision 1.9.68), and as a static initializer
 to a relocation against a local code symbol the backend emits for that
-block; `goto *expr` alone stays `E3029` (evidence `p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
+block; `goto *expr` uses the explicit edges of 3.9 since 1.9.92 (the earlier
+address-constant evidence is `p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
 interpreter's jump table was `E2208`, `E2001` and `E1003`.
 
 **`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
@@ -5916,6 +5965,7 @@ the stated coverage, with the stated axioms"; it is not a verified compiler.
 | | `store [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` : Type | yes |
 | Control | `br ^target(args...)` | — | block label, values | n/a |
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
+| | `br.indirect %p [^b(args), ...]` | — | code pointer, complete ordered edges and values | yes; E3048 for an invalid target |
 | | `ret values...` | — | return values | n/a |
 | | `trap.<reason>` | — | reason (`scalar_function_fell_off_end`, `unreachable_reached`) | yes |
 | Assembly | `asm [volatile]` | register outputs, `mem<all>`, `world` | template, constrained operands, clobbers, input tokens | yes; interpreter E3021 |
@@ -5968,6 +6018,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.92 | 2026-09-12 | Records the approved computed-goto edge-binding design: explicit storage addresses and effects, complete successor sets, positional parallel copies and E3048 for invalid dynamic targets. Synchronizes two stale signed-shift clauses with 1.9.88, preserving legacy IR obligations. This revision specifies behavior; implementation and native acceptance are tracked separately. |
 | 1.9.91 | 2026-09-12 | Corrects the overstrong eight-aligned relocation offset requirement: AArch64 ABS64 data relocations occupy eight bytes at byte-aligned positions. User-authorized standard alignment behavior; packed layout and pointer provenance remain intact, as do range, nonoverlap and actual load/store alignment checks. |
 | 1.9.90 | 2026-09-09 | Admits numbered `%l<N>` label references in `asm.goto`; narrows `E2939` to the measured conflicting contexts of wide bit-field arithmetic and admits the consensus ones; stops lowering unreferenced internal functions, generalising 1.9.75; defines `__alignof__` of an incomplete array member. |
 | 1.9.89 | 2026-09-09 | Corrects the claim that function alignment is unobservable in interpreters: virtual function addresses must satisfy the declared alignment and preserve identity and pointer round-trips. Authorized review correction; this changes no compiler code. |
@@ -6167,11 +6218,11 @@ An anonymous ordinary operand of `call` or `call.indirect` may append ` byval(si
 `(%mem2, %world2) = va_arg.byval %list, %mem, %world, %destination [size=N, align=A]` copies the next record into an allocated `ptr<generic>` destination and advances the same list as scalar `va_arg`, preserving initialization/provenance and linear effects; the abstract interpreter checks the recorded record shape, distinguishing it from a scalar pointer and reporting existing E3038 on a mismatch or invalid list.
 Both GCC-14 and Clang-19 O0/O2 callers and callees agree with EvoCC in both mixed-link directions (GNU assembler for the subject output); no diagnostic is added, no optimizer allowlist is extended, and original-unit gains are recorded only after replay.
 
-### Pending body revision: computed branches and label differences
+### Computed branches approved; label differences remain separate
 
 Both sealed compilers at O0/O2 execute the direct-label and relative-label dispatch tables in `.evidence/builtin-probes/20260909-memory-abi/{label-differences.c,results.txt}` with identical results.
-The reviewed indirect-successor, object-carried-value and symbol-difference rules still require their architecture-owned body revision; this entry does not relax the current validator or E3029 boundary.
-No diagnostic is allocated and no original-program gain is inferred from these probes.
+The reviewer-approved 1.9.92 Section 3.9 now specifies complete indirect edges with local storage addresses and explicit effects, without relaxing local SSA; static symbol-difference tables are separate from that absolute-address dispatch rule.
+E3048 names invalid dynamic branch targets after registry review; no original-program gain or native pass is inferred from approval or these probes.
 
 ### Integer absolute-value builtins and ordinary-call boundaries
 
@@ -6897,3 +6948,10 @@ The former Section 2.1 eight-aligned offset requirement conflicted with `tests/f
 The two measured ACPICA units are `drivers/acpi/acpica/exdump.o` and `drivers/acpi/acpica/rsdumpinfo.o`; their record has two byte fields before the pointer.
 Revision 1.9.91 follows the user's authorization to adopt [AArch64 ELF Section 5.7.5](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#575-static-data-relocations): ABS64 writes eight bytes at a byte-aligned place; pointer width is independent of access alignment.
 No diagnostic is allocated or source layout changed; bounds, nonoverlap, initializedness, target identity, provenance and executed access alignment checks remain required.
+
+### Indirect entry into a captured type scope
+
+The complete address-taken successor set of Section 3.9 is also used to check entry into captured variably modified scopes; bypassing such a declaration reports the existing E2945 at the indirect goto, including when its written operand names another member of that conservative set.
+In `.evidence/builtin-probes/20260913-computed-edges/capture-{entry,unselected}.c`, sealed GCC-14 accepts both forms while Clang-19 rejects both for bypassing the VLA typedef; `capture.out` records the conflict, resolved toward refusal under the existing review protocol.
+Entering an already active capture scope remains allowed, and its hidden dimension object address travels with the other live storage addresses rather than losing the dimension or recapturing it.
+No diagnostic is allocated, and no additional kernel unit count is claimed for these scope probes.

@@ -443,6 +443,7 @@ fn scan_inst(
         | Inst::PointerValid { .. }
         | Inst::AccessInBounds { .. }
         | Inst::Br(..)
+        | Inst::IndirectBr { .. }
         | Inst::CondBr(..)
         | Inst::Ret(_)
         | Inst::Trap(_)
@@ -1773,6 +1774,19 @@ fn lower_terminator(
     fused: Option<(VReg, Cond)>,
 ) -> Result<MTerm, String> {
     match &block.terminator {
+        Inst::IndirectBr { target, edges } => Ok(MTerm::Indirect {
+            target: lowerer.reg(target)?,
+            edges: edges
+                .iter()
+                .map(|edge| {
+                    Ok((
+                        *ids.get(&edge.target)
+                            .ok_or("indirect branch has a missing block")?,
+                        edge_args(lowerer, &edge.arguments)?,
+                    ))
+                })
+                .collect::<Result<_, String>>()?,
+        }),
         Inst::AsmGoto {
             assembly,
             labels,
@@ -4179,6 +4193,7 @@ fn thread_destination(
 /// Mutable access to the argument list of every edge a terminator has.
 fn term_edge_args(term: &mut MTerm) -> Vec<&mut Vec<VReg>> {
     match term {
+        MTerm::Indirect { edges, .. } => edges.iter_mut().map(|(_, args)| args).collect(),
         MTerm::B { args, .. } => vec![args],
         MTerm::BCond {
             taken_args,

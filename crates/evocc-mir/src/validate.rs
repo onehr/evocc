@@ -365,6 +365,17 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
 
 fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), String> {
     match term {
+        MTerm::Indirect { target, edges } => {
+            if target.class != RegClass::Gpr64 || edges.is_empty() {
+                return Err(format!(
+                    "{name}: indirect branch in block {block} needs a gpr64 target and successors"
+                ));
+            }
+            if edges.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
+                return Err("indirect successors must be unique and sorted".into());
+            }
+            Ok(())
+        }
         // An `asm.goto`'s shape is its constraint list, checked by the
         // allocation verifier of Section 9 rather than here: nothing about it
         // is a class or a count this pass knows how to judge.

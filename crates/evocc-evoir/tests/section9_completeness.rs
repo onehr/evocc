@@ -146,6 +146,13 @@ fn sentinel_instructions() -> Vec<Inst> {
         Inst::ICmp(bits(1242), CmpOp::ULt, bits(1243), bits(1244)),
         Inst::ICmp(bits(1245), CmpOp::ULe, bits(1246), bits(1247)),
         Inst::Br(4242, vec![bits(1250), bits(1251)]),
+        Inst::IndirectBr {
+            target: pointer(1252),
+            edges: vec![evocc_evoir::Edge {
+                target: 4242,
+                arguments: vec![pointer(1253), mem(1254), world(1255)],
+            }],
+        },
         Inst::CondBr(bits(1260), 4242, vec![bits(1261)], 4343, vec![bits(1262)]),
         Inst::Ret(vec![bits(1270), mem(1271), world(1272)]),
         Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
@@ -394,6 +401,10 @@ fn sentinel_module() -> Module {
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::IndirectBr { target, edges } => {
+            let _ = (target, edges);
+            "Inst.IndirectBr(target,edges)"
+        }
         Inst::PointerCast { result, operand } => {
             let _ = (result, operand);
             "Inst.PointerCast(result,operand)"

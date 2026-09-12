@@ -314,6 +314,7 @@ fn merge_one(function: &mut Function, index: usize) -> Option<()> {
             .filter(|(_, block)| match &block.terminator {
                 Inst::Br(successor, _) => *successor == target,
                 Inst::CondBr(_, first, _, second, _) => *first == target || *second == target,
+                Inst::IndirectBr { edges, .. } => edges.iter().any(|edge| edge.target == target),
                 _ => false,
             });
     let (source, predecessor) = predecessors.next()?;
@@ -361,6 +362,7 @@ fn prune_unreachable(function: &mut Function) {
             continue;
         };
         match &block.terminator {
+            Inst::IndirectBr { edges, .. } => pending.extend(edges.iter().map(|edge| edge.target)),
             Inst::Br(target, _) => pending.push(*target),
             Inst::CondBr(_, true_block, _, false_block, _) => {
                 pending.push(*true_block);

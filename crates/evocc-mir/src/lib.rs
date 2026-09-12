@@ -1385,6 +1385,11 @@ impl AsmBody {
 /// and has no fall-through.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MTerm {
+    /// Computed local branch with the complete pre-allocation edge bindings.
+    Indirect {
+        target: VReg,
+        edges: Vec<(u32, Vec<VReg>)>,
+    },
     /// `b label`.
     B { target: u32, args: Vec<VReg> },
     /// `b.cond label`.
@@ -1567,6 +1572,9 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
 #[must_use]
 pub fn term_uses(term: &MTerm) -> Vec<VReg> {
     match term {
+        MTerm::Indirect { target, edges } => std::iter::once(*target)
+            .chain(edges.iter().flat_map(|(_, args)| args.iter().copied()))
+            .collect(),
         MTerm::B { args, .. } => args.clone(),
         MTerm::BCond {
             flags,
@@ -1618,6 +1626,10 @@ pub fn term_uses(term: &MTerm) -> Vec<VReg> {
 #[must_use]
 pub fn term_edges(term: &MTerm) -> Vec<(u32, &[VReg])> {
     match term {
+        MTerm::Indirect { edges, .. } => edges
+            .iter()
+            .map(|(target, args)| (*target, args.as_slice()))
+            .collect(),
         MTerm::B { target, args } => vec![(*target, args.as_slice())],
         MTerm::BCond {
             taken,

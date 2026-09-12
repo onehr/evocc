@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{term_edges, MBlock, MFunction, MInst, MTerm, RegClass, VReg};
+use crate::{inst_defs, term_edges, MBlock, MFunction, MInst, MTerm, RegClass, VReg};
 
 /// Virtual registers at or above this number are the cycle-breaking scratch of
 /// Section 7, pre-coloured to `x16`.
@@ -49,10 +49,56 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
     }
 
     let mut next_scratch = SCRATCH_BASE;
+    let mut next_transport = split
+        .blocks
+        .iter()
+        .flat_map(|block| {
+            block
+                .args
+                .iter()
+                .copied()
+                .chain(block.insts.iter().flat_map(inst_defs))
+        })
+        .map(|value| value.id)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let mut indirect_targets = BTreeMap::new();
     let mut suffix: BTreeMap<u32, Vec<MInst>> = BTreeMap::new();
     let mut prefix: BTreeMap<u32, Vec<MInst>> = BTreeMap::new();
 
     for block in &split.blocks {
+        if let MTerm::Indirect { target, edges } = &block.term {
+            // One union parallel copy, BEFORE allocation. Target parameters
+            // have distinct virtual identities and are all live out here;
+            // scan must give them non-conflicting registers or spill slots.
+            // The branch register is another live use, not copy scratch.
+            let pairs: Vec<_> = edges
+                .iter()
+                .flat_map(|(target, args)| {
+                    parameters[target].iter().copied().zip(args.iter().copied())
+                })
+                .collect();
+            let mut moves = Vec::new();
+            if pairs
+                .iter()
+                .any(|(dst, src)| dst.id == target.id && dst.id != src.id)
+            {
+                // A self-edge may redefine the very block argument holding
+                // the computed destination. Capture it before the joint copy,
+                // in an ordinary live virtual register (not cycle scratch).
+                let saved = VReg::new(next_transport, target.class);
+                next_transport += 1;
+                moves.push(MInst::Mov {
+                    dst: saved,
+                    src: *target,
+                });
+                indirect_targets.insert(block.id, saved);
+            }
+            sequentialize(&pairs, &mut moves, &mut next_scratch);
+            suffix.entry(block.id).or_default().extend(moves);
+            continue;
+        }
         let successors = term_edges(&block.term).len();
         for (target, args) in term_edges(&block.term) {
             let destinations = parameters.get(&target).cloned().unwrap_or_default();
@@ -81,6 +127,11 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         insts.extend(block.insts.iter().cloned());
         insts.extend(suffix.remove(&block.id).unwrap_or_default());
         let mut term = block.term.clone();
+        if let MTerm::Indirect { target, .. } = &mut term {
+            if let Some(saved) = indirect_targets.get(&block.id) {
+                *target = *saved;
+            }
+        }
         clear_edge_args(&mut term);
         // The entry block's arguments are the function's parameters, bound by
         // the caller rather than by an edge, so no copy can remove them. They
@@ -105,6 +156,11 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
 
 fn clear_edge_args(term: &mut MTerm) {
     match term {
+        MTerm::Indirect { edges, .. } => {
+            for (_, args) in edges {
+                args.clear();
+            }
+        }
         MTerm::B { args, .. } => args.clear(),
         MTerm::BCond {
             taken_args,
@@ -148,6 +204,9 @@ fn retarget(term: &mut MTerm, from: usize, to: u32) {
         index += 1;
     };
     match term {
+        MTerm::Indirect { .. } => {
+            unreachable!("computed edges cannot be retargeted without address routing")
+        }
         MTerm::B { target, args } => visit(target, args),
         MTerm::BCond {
             taken,
@@ -209,7 +268,9 @@ fn split_critical_edges(function: &MFunction) -> MFunction {
     let mut inserted = Vec::new();
     for block in &mut blocks {
         let edges = term_edges(&block.term);
-        if edges.len() < 2 {
+        // A computed address still denotes the original label: retargeting
+        // just its CFG metadata to a copy block would bypass the copies.
+        if edges.len() < 2 || matches!(block.term, MTerm::Indirect { .. }) {
             continue;
         }
         let owned: Vec<(u32, Vec<VReg>)> = edges

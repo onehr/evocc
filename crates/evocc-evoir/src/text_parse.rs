@@ -1497,6 +1497,26 @@ fn parse_assembly(
 }
 
 fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> Result<Inst, String> {
+    if let Some(rest) = body.strip_prefix("br.indirect ") {
+        let (target, list) = rest.split_once(" [").ok_or("malformed indirect branch")?;
+        let mut list = list
+            .strip_suffix(']')
+            .ok_or("unclosed indirect successors")?;
+        let mut edges = Vec::new();
+        while !list.is_empty() {
+            let (head, tail) = match find_target_separator(list) {
+                Ok(index) => (&list[..index], &list[index + 2..]),
+                Err(_) => (list, ""),
+            };
+            let (target, arguments) = parse_branch_target(head, values)?;
+            edges.push(crate::Edge { target, arguments });
+            list = tail;
+        }
+        return Ok(Inst::IndirectBr {
+            target: use_value(target, values)?,
+            edges,
+        });
+    }
     if let Some(target) = body.strip_prefix("br ") {
         let (block, args) = parse_branch_target(target, values)?;
         return Ok(Inst::Br(block, args));
@@ -1538,6 +1558,7 @@ fn is_terminator_body(body: &str) -> bool {
     body == "ret"
         || body.starts_with("ret ")
         || body.starts_with("br ")
+        || body.starts_with("br.indirect ")
         || body.starts_with("cond_br ")
         || body.starts_with("trap.")
 }

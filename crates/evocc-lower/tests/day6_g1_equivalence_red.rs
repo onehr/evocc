@@ -637,7 +637,8 @@ fn branch_target(id: BlockId, args: &[Value]) -> String {
 
 fn render_inst(inst: &Inst) -> String {
     match inst {
-        Inst::Asm(_)
+        Inst::IndirectBr { .. }
+        | Inst::Asm(_)
         | Inst::AsmGoto { .. }
         | Inst::VaAccess(_)
         | Inst::BitOperation { .. }

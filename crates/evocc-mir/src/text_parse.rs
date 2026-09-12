@@ -716,6 +716,20 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 scan.finish()?;
                 return Ok(Parsed::Term(MTerm::B { target, args }));
             }
+            "br" => {
+                let target = scan.use_of()?;
+                scan.expect(" [")?;
+                let mut edges = Vec::new();
+                while !scan.text.starts_with(']') {
+                    if !edges.is_empty() {
+                        scan.expect(", ")?;
+                    }
+                    edges.push(scan.edge()?);
+                }
+                scan.expect("]")?;
+                scan.finish()?;
+                return Ok(Parsed::Term(MTerm::Indirect { target, edges }));
+            }
             "cbz" | "cbnz" => {
                 let src = scan.use_of()?;
                 scan.expect(", ")?;

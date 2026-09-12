@@ -156,3 +156,48 @@ fn negative_signed_shift_count_keeps_its_runtime_obligation() {
         "invalid-shift-count",
     );
 }
+
+#[test]
+fn gnu_left_shift_truncates_the_left_width_without_narrowing_its_count() {
+    for (source, expected) in [
+        (
+            "int main(void){int x=-1; long k=1;return x<<k;}",
+            0xffff_fffe,
+        ),
+        (
+            "int main(void){int x=1; unsigned long k=31;return x<<k;}",
+            0x8000_0000,
+        ),
+    ] {
+        let arena = Arena::default();
+        let unit = parse(source, &arena);
+        let chir =
+            interpret_scalar_function(&unit, function_symbol(&unit, "main"), ChirLimits::new(1000))
+                .unwrap();
+        assert_eq!(chir.return_value.unwrap().raw_bits, expected);
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let text = evocc_evoir::render_module(&module);
+        assert!(
+            !text.contains("signed_shl_defined") && !text.contains("invalid_signed_left_shift")
+        );
+        assert_eq!(
+            interpret_module(
+                &module,
+                "main",
+                &entry_arguments(&module),
+                EvoIrLimits::new(1000)
+            )
+            .unwrap()
+            .return_values[0]
+                .raw_bits,
+            expected as u64
+        );
+    }
+    assert_typed_runtime_diagnostic(
+        "int main(void){int x=1;unsigned long k=4294967296UL;return x << k;}",
+        "x << k",
+        IntegerError::InvalidShiftCount,
+        "E3005",
+        "invalid-shift-count",
+    );
+}

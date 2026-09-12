@@ -513,6 +513,15 @@ impl FunctionRenderer {
                 render_value(left),
                 render_value(right)
             ),
+            Inst::IndirectBr { target, edges } => format!(
+                "br.indirect {} [{}]",
+                render_value(target),
+                edges
+                    .iter()
+                    .map(|edge| self.branch_target(edge.target, &edge.arguments))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Inst::Br(target, args) => format!("br {}", self.branch_target(*target, args)),
             Inst::CondBr(condition, true_target, true_args, false_target, false_args) => format!(
                 "cond_br {}, {}, {}",

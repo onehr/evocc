@@ -42,7 +42,7 @@ STRING = re.compile(
     r'''b?r(?P<hashes>\#*)"(?P<raw>[\s\S]*?)"(?P=hashes)|'''
     r'''b?"(?P<normal>(?:[^"\\]|\\.)*)"'''
 )
-MNEMONIC = ("br", "ret", "cond_br", "trap.", "ub.assume.")
+MNEMONIC = ("br", "br.indirect", "ret", "cond_br", "trap.", "ub.assume.")
 
 
 def production_code(source: str) -> str:

@@ -289,6 +289,7 @@ enum EnvKey {
     Compound(usize),
     ReturnDestination,
     Temporary(u32),
+    TemporaryAddress(u32),
     Memory,
     World,
 }
@@ -377,6 +378,8 @@ struct FunctionLowerer<'a> {
     next_synthetic_origin: u32,
     next_placeholder: BlockId,
     goto_names: BTreeSet<String>,
+    has_computed_goto: bool,
+    indirect_branches: Vec<(State, Value)>,
     goto_counts: BTreeMap<String, usize>,
     labels: BTreeMap<String, JumpTarget>,
     case_labels: BTreeMap<usize, String>,
@@ -1168,12 +1171,48 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
         }
     }
 
+    let mut captures_by_function: BTreeMap<SymbolId, Vec<SymbolId>> = BTreeMap::new();
+    for raw in unit.types().captured_array_bounds() {
+        let Some(symbol) = unit.symbols().symbols_in_source_order().get(raw as usize) else {
+            continue;
+        };
+        let mut current = Some(symbol.scope());
+        while let Some(scope) = current.and_then(|id| unit.symbols().scope(id).ok()) {
+            if let Some(owner) = scope.function_owner() {
+                captures_by_function
+                    .entry(owner)
+                    .or_default()
+                    .push(symbol.id());
+                break;
+            }
+            current = scope.parent();
+        }
+    }
     let mut symbols = BTreeSet::new();
     for declaration_node in unit.iter() {
         declaration(unit, declaration_node, &mut symbols);
         if let CHirDecl::Function(function) = declaration_node {
             if let Some(body) = function.body {
                 statement(unit, body, &mut symbols);
+                let mut references = FunctionReferences::default();
+                collect_references_stmt(body, &mut references);
+                if references.has_computed_goto {
+                    // Captured dimensions remain live with their type even
+                    // when no ordinary expression names their hidden object.
+                    symbols.extend(
+                        captures_by_function
+                            .get(&function.symbol)
+                            .into_iter()
+                            .flatten(),
+                    );
+                    let names = references.labels.into_values().collect();
+                    let indirect = indirect_storage_symbols(body, &names);
+                    symbols.extend(indirect.into_iter().filter(|symbol| {
+                        unit.symbols().symbol(*symbol).is_ok_and(|symbol| {
+                            matches!(symbol.kind(), SymbolKind::Object | SymbolKind::Parameter)
+                        })
+                    }));
+                }
             }
         }
     }
@@ -2241,7 +2280,9 @@ fn prevalidate_stmt_for_lowering(
         | CHirStmt::Goto(_, _)
         | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => Ok(()),
-        CHirStmt::ComputedGoto(_, span) => Err(LowerError::ComputedGoto { span: *span }),
+        CHirStmt::ComputedGoto(expression, _) => {
+            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
+        }
     }
 }
 
@@ -3378,6 +3419,8 @@ impl<'a> FunctionLowerer<'a> {
             next_synthetic_origin: 0,
             next_placeholder: BREAK_TARGET_BASE,
             goto_names: BTreeSet::new(),
+            has_computed_goto: false,
+            indirect_branches: Vec::new(),
             goto_counts: BTreeMap::new(),
             labels: BTreeMap::new(),
             case_labels: BTreeMap::new(),
@@ -3402,6 +3445,7 @@ impl<'a> FunctionLowerer<'a> {
             })?;
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        self.has_computed_goto = references.has_computed_goto;
         self.goto_names = std::mem::take(&mut references.goto_names);
         self.goto_counts = std::mem::take(&mut references.goto_counts);
         self.local_registers = std::mem::take(&mut references.local_registers);
@@ -3656,6 +3700,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.terminate(state, Inst::Ret(returned))?;
             }
         }
+        self.finish_indirect_branches()?;
         let mut address_remap = BTreeMap::new();
         for (name, placeholder) in &self.address_labels {
             let target = self
@@ -3788,6 +3833,7 @@ impl<'a> FunctionLowerer<'a> {
                 continue;
             };
             let targets = match terminator {
+                Inst::IndirectBr { edges, .. } => edges.iter().map(|edge| edge.target).collect(),
                 Inst::AsmGoto {
                     labels,
                     fallthrough,
@@ -3810,6 +3856,130 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         self.blocks.retain(|block| reachable.contains(&block.id));
+        Ok(())
+    }
+
+    fn finish_indirect_branches(&mut self) -> Result<(), LowerError> {
+        let targets = self
+            .address_labels
+            .iter()
+            .map(|(name, placeholder)| {
+                self.labels
+                    .get(name)
+                    .cloned()
+                    .map(|target| (*placeholder, target))
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span: self.info.span,
+                        reason: "indirect target label was not lowered",
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for (mut state, target) in std::mem::take(&mut self.indirect_branches) {
+            let needs_scope_actions = targets.iter().any(|(_, target)| {
+                target.keys.iter().any(|key| !state.env.contains_key(key))
+                    || state.env.keys().any(|key| {
+                        matches!(
+                            key,
+                            EnvKey::Address(_) | EnvKey::Compound(_) | EnvKey::TemporaryAddress(_)
+                        ) && !target.keys.contains(key)
+                    })
+            });
+            let target_key = EnvKey::Temporary(self.next_temporary);
+            self.next_temporary += 1;
+            state.env.insert(
+                target_key,
+                BoundValue {
+                    value: target.clone(),
+                    integer: None,
+                },
+            );
+            if needs_scope_actions {
+                // Scope entry/exit is not a parallel copy. Route to the
+                // selected adapter before allocating or ending any object.
+                // The final indirect terminator also preserves the complete
+                // CFG and diagnoses a value naming no valid label.
+                for (placeholder, destination) in &targets {
+                    let keys: Vec<_> = state.env.keys().copied().collect();
+                    let chosen = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+                    let next = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+                    let label = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                    self.emit(
+                        &state,
+                        Inst::BlockAddr {
+                            result: label.clone(),
+                            block: *placeholder,
+                        },
+                    )?;
+                    let address = self.fresh_value(EvoIRType::Bits(64));
+                    let expected = self.fresh_value(EvoIRType::Bits(64));
+                    let predicate = self.fresh_value(EvoIRType::Bits(1));
+                    self.emit(
+                        &state,
+                        Inst::PointerCast {
+                            result: address.clone(),
+                            operand: state.env[&target_key].value.clone(),
+                        },
+                    )?;
+                    self.emit(
+                        &state,
+                        Inst::PointerCast {
+                            result: expected.clone(),
+                            operand: label,
+                        },
+                    )?;
+                    self.emit(
+                        &state,
+                        Inst::ICmp(predicate.clone(), CmpOp::Eq, address, expected),
+                    )?;
+                    let arguments = self.edge_values(&state, &keys)?;
+                    self.terminate(
+                        &state,
+                        Inst::CondBr(
+                            predicate,
+                            chosen.block,
+                            arguments.clone(),
+                            next.block,
+                            arguments,
+                        ),
+                    )?;
+                    self.branch(&chosen, destination.id, &destination.keys)?;
+                    state = next;
+                }
+            }
+            let mut edges = Vec::new();
+            for (_, destination) in &targets {
+                let mut arguments = Vec::new();
+                let types = self
+                    .block_mut(destination.id)?
+                    .args
+                    .iter()
+                    .map(|(_, arg)| arg.value.ty.clone())
+                    .collect::<Vec<_>>();
+                for (key, ty) in destination.keys.iter().zip(types) {
+                    if let Some(bound) = state.env.get(key) {
+                        arguments.push(bound.value.clone());
+                    } else {
+                        // Only the invalid-target fall-through can reach
+                        // this placeholder; it is never an object access.
+                        let value = self.fresh_value(ty);
+                        self.emit(&state, Inst::Uninitialized(value.clone()))?;
+                        arguments.push(value);
+                    }
+                }
+                edges.push(evocc_evoir::Edge {
+                    target: destination.id,
+                    arguments,
+                });
+            }
+            edges.sort_by_key(|edge| edge.target);
+            self.terminate(
+                &state,
+                Inst::IndirectBr {
+                    target: state.env[&target_key].value.clone(),
+                    edges,
+                },
+            )?;
+        }
         Ok(())
     }
 
@@ -3852,12 +4022,12 @@ impl<'a> FunctionLowerer<'a> {
         target: BlockId,
         keys: &[EnvKey],
     ) -> Result<(), LowerError> {
-        if !state
-            .env
-            .keys()
-            .chain(keys.iter())
-            .any(|key| matches!(key, EnvKey::Compound(_) | EnvKey::Address(_)))
-        {
+        if !state.env.keys().chain(keys.iter()).any(|key| {
+            matches!(
+                key,
+                EnvKey::Compound(_) | EnvKey::Address(_) | EnvKey::TemporaryAddress(_)
+            )
+        }) {
             let arguments = self.edge_values(state, keys)?;
             return self.terminate(state, Inst::Br(target, arguments));
         }
@@ -3866,7 +4036,10 @@ impl<'a> FunctionLowerer<'a> {
             .env
             .keys()
             .copied()
-            .filter(|key| matches!(key, EnvKey::Compound(_)) && !keys.contains(key))
+            .filter(|key| {
+                matches!(key, EnvKey::Compound(_) | EnvKey::TemporaryAddress(_))
+                    && !keys.contains(key)
+            })
             .collect::<Vec<_>>();
         self.end_compound_storage(&leaving, &mut state)?;
         let leaving = state
@@ -3985,7 +4158,9 @@ impl<'a> FunctionLowerer<'a> {
             .env
             .iter()
             .filter_map(|(key, bound)| match key {
-                EnvKey::Temporary(_) | EnvKey::Compound(_) => Some((bound.value.id, *key)),
+                EnvKey::Temporary(_) | EnvKey::TemporaryAddress(_) | EnvKey::Compound(_) => {
+                    Some((bound.value.id, *key))
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -4807,7 +4982,11 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 Ok(Flow::default())
             }
-            CHirStmt::ComputedGoto(_, span) => Err(LowerError::ComputedGoto { span: *span }),
+            CHirStmt::ComputedGoto(expression, _) => {
+                let target = self.lower_expr(expression, &mut state)?.value;
+                self.indirect_branches.push((state, target));
+                Ok(Flow::default())
+            }
             CHirStmt::Label(label, nested, _) => self.lower_label(
                 label.spelling.as_str(),
                 nested,
@@ -5036,7 +5215,11 @@ impl<'a> FunctionLowerer<'a> {
             return Ok(None);
         };
         let symbols = live_before_stmt(nested, live_after.clone());
-        let keys = self.keys_for(&template, &symbols, &[]);
+        let mut keys = self.keys_for(&template, &symbols, &[]);
+        let indirect_entry = self.has_computed_goto && self.address_labels.contains_key(name);
+        if indirect_entry {
+            keys.retain(|key| !matches!(key, EnvKey::Local(_) | EnvKey::Temporary(_)));
+        }
         let label_state = self.new_block_from(&template, &keys, BlockRole::Ordinary)?;
         let target = JumpTarget {
             id: label_state.block,
@@ -5361,12 +5544,6 @@ impl<'a> FunctionLowerer<'a> {
                     span,
                     feature: "array size capture has no symbol",
                 })?;
-            let count = state.env.get(&EnvKey::Local(symbol.id())).cloned().ok_or(
-                LowerError::UnsupportedExpression {
-                    span,
-                    feature: "array size capture has no active value",
-                },
-            )?;
             if symbol.kind() != SymbolKind::Object
                 || canonical_integer(self.unit.types(), self.target, symbol.ty(), span)?
                     != CIntegerType::ULONG
@@ -5375,14 +5552,18 @@ impl<'a> FunctionLowerer<'a> {
                     .types()
                     .get(symbol.ty())
                     .is_none_or(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic)
-                || count.value.ty != EvoIRType::Bits(64)
-                || count.integer != Some(CIntegerType::ULONG)
             {
                 return Err(LowerError::UnsupportedExpression {
                     span,
                     feature: "array size capture is not size_t",
                 });
             }
+            let count = if self.memory_symbols.contains(&symbol.id()) {
+                let address = self.object_address(symbol.id(), span, state)?;
+                self.emit_memory_load(address, symbol.ty(), false, span, state)?
+            } else {
+                self.local(state, symbol.id(), span)?
+            };
             let wide_size = self.cast(size, CIntegerType::UINT128, state)?;
             let wide_count = self.cast(
                 ExprValue {
@@ -5554,6 +5735,15 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<Value, LowerError> {
         let layout = self.access_layout(ty, span)?;
+        self.emit_alloca_with_layout(layout, origin, state)
+    }
+
+    fn emit_alloca_with_layout(
+        &mut self,
+        layout: AccessLayout,
+        origin: u64,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
@@ -8632,6 +8822,56 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "statement expression body is not a compound statement",
             });
         };
+        let mut temporary_storage = Vec::new();
+        if self.has_computed_goto
+            && contains_targeted_label(
+                body,
+                &self.address_labels.keys().cloned().collect(),
+                &BTreeMap::new(),
+            )
+        {
+            let retained = state
+                .env
+                .iter()
+                .filter_map(|(key, bound)| {
+                    if let EnvKey::Temporary(id) = key {
+                        (!state.env.contains_key(&EnvKey::TemporaryAddress(*id)))
+                            .then_some((*id, bound.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            for (id, bound) in retained {
+                let layout = evocc_evoir::evoir_access_layout(&bound.value.ty)
+                    .map_err(|message| LowerError::InvalidGeneratedSsa { message })?
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span,
+                        reason: "indirect expression temporary has no storage layout",
+                    })?;
+                let origin = self.synthetic_origin()?;
+                let address = self.emit_alloca_with_layout(layout, origin, state)?;
+                self.emit_memory_store_with_layout(
+                    address.clone(),
+                    ExprValue {
+                        value: bound.value.clone(),
+                        integer: bound.integer.unwrap_or(CIntegerType::ULONG),
+                    },
+                    layout,
+                    false,
+                    state,
+                )?;
+                let key = EnvKey::TemporaryAddress(id);
+                state.env.insert(
+                    key,
+                    BoundValue {
+                        value: address,
+                        integer: None,
+                    },
+                );
+                temporary_storage.push((key, bound, layout));
+            }
+        }
         let prefix = if let Some(value) = value {
             let Some(CHirBlockItem::Statement(final_statement)) = items.last() else {
                 return Err(LowerError::UnsupportedExpression {
@@ -8735,6 +8975,35 @@ impl<'a> FunctionLowerer<'a> {
             continued.locals.remove(&object.symbol);
         }
         self.end_compound_storage(&storage, &mut continued)?;
+        // Resuming the enclosing expression needs its saved operands. Binding
+        // an indirect edge does not: a jump out of this expression must not
+        // read an operand which that path never uses.
+        for (key, bound, layout) in &temporary_storage {
+            let EnvKey::TemporaryAddress(id) = key else {
+                unreachable!("only expression storage is retained here");
+            };
+            let address = self.token(&continued, *key)?.value;
+            let loaded = self.emit_typed_memory_load(
+                address,
+                bound.value.ty.clone(),
+                bound.integer.unwrap_or(CIntegerType::ULONG),
+                false,
+                &mut continued,
+                *layout,
+            )?;
+            continued.env.insert(
+                EnvKey::Temporary(*id),
+                BoundValue {
+                    value: loaded.value,
+                    integer: bound.integer,
+                },
+            );
+        }
+        let temporary_keys = temporary_storage
+            .iter()
+            .map(|(key, _, _)| *key)
+            .collect::<Vec<_>>();
+        self.end_compound_storage(&temporary_keys, &mut continued)?;
         *state = continued;
         Ok(result)
     }
@@ -12145,6 +12414,7 @@ fn contains_targeted_label(
 
 #[derive(Default)]
 struct FunctionReferences {
+    has_computed_goto: bool,
     local_registers: BTreeMap<SymbolId, String>,
     direct: BTreeSet<SymbolId>,
     any: bool,
@@ -12188,7 +12458,10 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_references_expr(expression, calls)
         }
-        CHirStmt::ComputedGoto(expression, _) => collect_references_expr(expression, calls),
+        CHirStmt::ComputedGoto(expression, _) => {
+            calls.has_computed_goto = true;
+            collect_references_expr(expression, calls);
+        }
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             collect_references_expr(condition, calls);
             collect_references_stmt(then_branch, calls);
@@ -12844,6 +13117,135 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
     }
 }
 
+/// Conservative live-ins at indirect entries, closed over direct and indirect
+/// backedges. A lexical suffix alone misses a target that jumps to an earlier
+/// ordinary label. Values confined to other paths keep their SSA treatment.
+fn indirect_storage_symbols(body: &CHirStmt<'_>, names: &BTreeSet<String>) -> BTreeSet<SymbolId> {
+    type Live = BTreeSet<SymbolId>;
+    type Labels = BTreeMap<String, Live>;
+    fn expression_edges(
+        references: FunctionReferences,
+        live: &mut Live,
+        previous: &Labels,
+        labels: &mut Labels,
+        names: &BTreeSet<String>,
+    ) {
+        for name in references
+            .goto_names
+            .iter()
+            .chain(names.iter().filter(|_| references.has_computed_goto))
+        {
+            live.extend(previous.get(name).into_iter().flatten());
+        }
+        // Expressions in declarations, conditions and returns can own labels,
+        // even when the corresponding &&label occurs elsewhere in the body.
+        for name in references.defined_labels {
+            labels.entry(name).or_default().extend(live.iter().copied());
+        }
+    }
+    fn visit(
+        statement: &CHirStmt<'_>,
+        after: &Live,
+        previous: &Labels,
+        labels: &mut Labels,
+        names: &BTreeSet<String>,
+    ) -> Live {
+        let mut live = after.clone();
+        match statement {
+            CHirStmt::Compound(items, _) => {
+                for item in items.iter().rev() {
+                    match item {
+                        CHirBlockItem::Statement(statement) => {
+                            live = visit(statement, &live, previous, labels, names)
+                        }
+                        CHirBlockItem::Declaration(declaration) => {
+                            collect_symbols_item(
+                                &CHirBlockItem::Declaration(declaration),
+                                &mut live,
+                            );
+                            let mut references = FunctionReferences::default();
+                            collect_references_decl(declaration, &mut references);
+                            expression_edges(references, &mut live, previous, labels, names);
+                        }
+                    }
+                }
+            }
+            CHirStmt::Label(label, child, _) => {
+                live = visit(child, after, previous, labels, names);
+                labels
+                    .entry(label.spelling.clone())
+                    .or_default()
+                    .extend(live.iter().copied());
+            }
+            CHirStmt::Goto(label, _) => {
+                live = previous.get(&label.spelling).cloned().unwrap_or_default()
+            }
+            CHirStmt::ComputedGoto(expression, _) => {
+                live.clear();
+                for name in names {
+                    live.extend(previous.get(name).into_iter().flatten());
+                }
+                collect_symbols_expr(expression, &mut live);
+            }
+            CHirStmt::Return(_, _) => {
+                live.clear();
+                collect_symbols_stmt(statement, &mut live);
+                let mut references = FunctionReferences::default();
+                collect_references_stmt(statement, &mut references);
+                expression_edges(references, &mut live, previous, labels, names);
+            }
+            CHirStmt::If(condition, yes, no, _) => {
+                live = visit(yes, after, previous, labels, names);
+                live.extend(no.map_or_else(
+                    || after.clone(),
+                    |no| visit(no, after, previous, labels, names),
+                ));
+                collect_symbols_expr(condition, &mut live);
+                let mut references = FunctionReferences::default();
+                collect_references_expr(condition, &mut references);
+                expression_edges(references, &mut live, previous, labels, names);
+            }
+            CHirStmt::For(_, _, _, child, _)
+            | CHirStmt::While(_, child, _)
+            | CHirStmt::DoWhile(child, _, _)
+            | CHirStmt::Switch(_, child, _)
+            | CHirStmt::Case(_, child, _)
+            | CHirStmt::CaseRange(_, _, child, _)
+            | CHirStmt::Default(child, _) => {
+                // Loop/case control can revisit any nested use. This is an
+                // over-approximation, not a whole-function memoryization.
+                collect_symbols_stmt(statement, &mut live);
+                let nested = visit(child, &live, previous, labels, names);
+                live.extend(nested);
+                let mut references = FunctionReferences::default();
+                collect_references_stmt(statement, &mut references);
+                expression_edges(references, &mut live, previous, labels, names);
+            }
+            _ => {
+                collect_symbols_stmt(statement, &mut live);
+                let mut references = FunctionReferences::default();
+                collect_references_stmt(statement, &mut references);
+                // A statement-expression can contain labels and transfers;
+                // conservatively retain its entire expression continuation.
+                expression_edges(references, &mut live, previous, labels, names);
+            }
+        }
+        live
+    }
+    let mut labels = Labels::new();
+    loop {
+        let previous = labels.clone();
+        visit(body, &Live::new(), &previous, &mut labels, names);
+        if labels == previous {
+            break;
+        }
+    }
+    names
+        .iter()
+        .flat_map(|name| labels.get(name).into_iter().flatten().copied())
+        .collect()
+}
+
 fn replace_inst_target(instruction: &mut Inst, old: BlockId, new: BlockId) {
     match instruction {
         Inst::Br(target, _) => {
@@ -12933,6 +13335,16 @@ fn remap_inst(
         remap_value(value, value_map)?;
     }
     match instruction {
+        Inst::IndirectBr { edges, .. } => {
+            for edge in edges.iter_mut() {
+                edge.target = *block_map.get(&edge.target).ok_or_else(|| {
+                    LowerError::InvalidGeneratedSsa {
+                        message: "indirect edge has no final identity".into(),
+                    }
+                })?;
+            }
+            edges.sort_by_key(|edge| edge.target);
+        }
         Inst::BlockAddr { block, .. } => {
             *block = *block_map
                 .get(block)
@@ -12986,6 +13398,9 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::IndirectBr { target, edges } => std::iter::once(target)
+            .chain(edges.iter_mut().flat_map(|edge| &mut edge.arguments))
+            .collect(),
         Inst::PointerCast { result, operand } => vec![result, operand],
         Inst::BitOperation {
             result, operand, ..

@@ -84,3 +84,68 @@ fn a_null_indirect_target_is_a_branch_error_not_a_call_error() {
         "E3048"
     );
 }
+
+#[test]
+fn a_legacy_explicit_signed_shift_obligation_is_still_executable() {
+    let source = "func @legacy(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 4294967295\n    %v3 = const.bits<64> 1\n    %v4 = signed_shl_defined.signed %v2, %v3\n    ub.assume.invalid_signed_left_shift %v4\n    %v5 = shl.bits<32> %v2, %v3\n    ret %v5, %v0, %v1\n}\n";
+    let module = parse_section9_module(source.as_bytes()).unwrap();
+    let args = [
+        RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+        RuntimeValue::new(EvoIRType::World, 0),
+    ];
+    assert_eq!(
+        interpret_module(&module, "legacy", &args, InterpreterLimits::new(100))
+            .unwrap_err()
+            .code(),
+        "E3006"
+    );
+}
+
+#[test]
+fn relocation_only_destinations_and_current_tokens_are_validated() {
+    let mut module = parse_section9_module(COUNTER.as_bytes()).unwrap();
+    let f = &mut module.functions[0];
+    let label = f.blocks[1]
+        .insts
+        .iter()
+        .find_map(|i| {
+            if let evocc_evoir::Inst::BlockAddr { result, block: 3 } = i {
+                Some(result.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    // A runtime null value does not make the second label disappear: it
+    // remains address-taken solely by the static table's relocation.
+    for i in &mut f.blocks[1].insts {
+        if matches!(i, evocc_evoir::Inst::BlockAddr { block: 3, .. }) {
+            *i = evocc_evoir::Inst::PtrNull(label.clone());
+        }
+    }
+    let text = format!("global @table origin=100 kind=file visibility=internal size=8 align=8 bytes=0000000000000000 initialized=11111111 relocs=[(0, @computed_counter^b3, 0)]\n\n{}", render_module(&module));
+    let mut module = parse_section9_module(text.as_bytes()).unwrap();
+    // Retain an ordinary path to b3, so removing its indirect edge tests the
+    // relocation-derived set rather than just the reachability rule.
+    if let evocc_evoir::Inst::CondBr(_, _, _, target, args) =
+        &mut module.functions[0].blocks[1].terminator
+    {
+        *target = 3;
+        args.remove(0);
+    }
+    validate_module(&module).unwrap();
+    if let evocc_evoir::Inst::IndirectBr { edges, .. } =
+        &mut module.functions[0].blocks[2].terminator
+    {
+        edges.pop();
+    }
+    assert!(validate_module(&module).unwrap_err().contains("successor"));
+    let stale = COUNTER.replace(
+        "    br.indirect %v25",
+        "    %v36 = access_in_bounds %v27, %v26 [size=4, align=4]\n    br.indirect %v25",
+    );
+    assert!(parse_section9_module(stale.as_bytes())
+        .unwrap_err()
+        .to_string()
+        .contains("token"));
+}

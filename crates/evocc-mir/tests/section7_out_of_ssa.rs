@@ -27,6 +27,61 @@ fn moves(block: &MBlock) -> Vec<(u32, u32)> {
         .collect()
 }
 
+#[test]
+fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
+    let x = |id| VReg::new(id, RegClass::Gpr64);
+    let function = MFunction {
+        name: "dispatch".into(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![x(0), x(1)],
+                insts: vec![],
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![x(0), x(1)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![x(2), x(3)],
+                insts: vec![],
+                term: MTerm::Indirect {
+                    target: x(2),
+                    edges: vec![(1, vec![x(3), x(2)]), (2, vec![x(2), x(3)])],
+                },
+            },
+            MBlock {
+                id: 2,
+                args: vec![x(4), x(5)],
+                insts: vec![],
+                term: MTerm::Ret { values: vec![x(4)] },
+            },
+        ],
+    };
+    let after = out_of_ssa(&function);
+    let block = find(&after, 1);
+    let mut values = std::collections::BTreeMap::from([(2, 101), (3, 202)]);
+    for (dst, src) in moves(block) {
+        values.insert(dst, values[&src]);
+    }
+    let MTerm::Indirect { target, edges } = &block.term else {
+        panic!("indirect terminator disappeared");
+    };
+    assert_eq!(
+        values[&target.id], 101,
+        "parallel copies must not overwrite the computed target"
+    );
+    assert_eq!(
+        (values[&2], values[&3], values[&4], values[&5]),
+        (202, 101, 101, 202)
+    );
+    assert_eq!(
+        edges.iter().map(|(target, _)| *target).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+}
+
 fn find(function: &MFunction, id: u32) -> &MBlock {
     function
         .blocks

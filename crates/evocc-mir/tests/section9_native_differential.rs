@@ -99,6 +99,138 @@ fn interpreted(module: &evocc_evoir::Module) -> u8 {
 }
 
 #[test]
+fn computed_edges_keep_label_identity_and_simultaneous_parameter_locations() {
+    use std::fmt::Write;
+    let counter = include_str!("../../../tests/fixtures/computed-counter.evoir")
+        .replace("@computed_counter", "@main");
+    let cycle = counter
+        .replace("    br ^b1(%v2, %v7, %v8)", "    (%v36, %v37, %v38) = alloca %v7, %v8 [origin=1, size=4, align=4]\n    %v39 = const.bits<32> 10\n    %v42 = access_in_bounds %v37, %v36 [size=4, align=4]\n    (%v43, %v44) = store %v42, %v38, %v36, %v39\n    br ^b1(%v2, %v36, %v43, %v44)")
+        .replace("^b1(%v9: ptr<generic>,", "^b1(%v9: ptr<generic>, %v40: ptr<generic>,")
+        .replace("^b2(%v25: ptr<generic>,", "^b2(%v25: ptr<generic>, %v41: ptr<generic>,")
+        .replace("^b2(%v23, %v9,", "^b2(%v23, %v40, %v9,")
+        .replace("^b2(%v24, %v9,", "^b2(%v24, %v40, %v9,")
+        .replace("^b1(%v26, %v27,", "^b1(%v41, %v26, %v27,");
+    let mut pressure = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n");
+    let mut next = 2;
+    let mut fresh = || {
+        let id = next;
+        next += 1;
+        id
+    };
+    let (mut mem, mut world) = (0, 1);
+    let mut pointers = Vec::new();
+    for value in 1..=40 {
+        let (p, m, w, c, guard, m2, w2) = (
+            fresh(),
+            fresh(),
+            fresh(),
+            fresh(),
+            fresh(),
+            fresh(),
+            fresh(),
+        );
+        writeln!(pressure, "    (%v{p}, %v{m}, %v{w}) = alloca %v{mem}, %v{world} [origin={}, size=4, align=4]\n    %v{c} = const.bits<32> {value}\n    %v{guard} = access_in_bounds %v{m}, %v{p} [size=4, align=4]\n    (%v{m2}, %v{w2}) = store %v{guard}, %v{w}, %v{p}, %v{c}", value-1).unwrap();
+        (mem, world) = (m2, w2);
+        pointers.push(p);
+    }
+    let (a, b) = (fresh(), fresh());
+    writeln!(
+        pressure,
+        "    %v{a} = block_addr ^b1 : ptr<generic>\n    %v{b} = block_addr ^b2 : ptr<generic>"
+    )
+    .unwrap();
+    let args = |ps: &[u32], m, w| {
+        ps.iter()
+            .map(|p| format!("%v{p}"))
+            .chain([format!("%v{m}"), format!("%v{w}")])
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let reversed = pointers.iter().rev().copied().collect::<Vec<_>>();
+    writeln!(
+        pressure,
+        "    br.indirect %v{a} [^b1({}), ^b2({})]",
+        args(&pointers, mem, world),
+        args(&reversed, mem, world)
+    )
+    .unwrap();
+    for block in [1, 2] {
+        let ps = (0..40).map(|_| fresh()).collect::<Vec<_>>();
+        (mem, world) = (fresh(), fresh());
+        let parameters = ps
+            .iter()
+            .map(|p| format!("%v{p}: ptr<generic>"))
+            .chain([format!("%v{mem}: mem<all>"), format!("%v{world}: world")])
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(pressure, "\n^b{block}({parameters}):").unwrap();
+        let mut sum = fresh();
+        writeln!(pressure, "    %v{sum} = const.bits<32> 0").unwrap();
+        for (i, p) in ps.iter().enumerate() {
+            let (guard, value, m, w, weight, product, total) = (
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+            );
+            writeln!(pressure, "    %v{guard} = access_in_bounds %v{mem}, %v{p} [size=4, align=4]\n    (%v{value}, %v{m}, %v{w}) = load %v{guard}, %v{world}, %v{p} : bits<32>\n    %v{weight} = const.bits<32> {}\n    %v{product} = mul.bits<32> %v{value}, %v{weight}\n    %v{total} = add.bits<32> %v{sum}, %v{product}", i+1).unwrap();
+            (sum, mem, world) = (total, m, w);
+        }
+        writeln!(pressure, "    ret %v{sum}, %v{mem}, %v{world}").unwrap();
+    }
+    pressure.push_str("}\n");
+    let alternate = pressure.replace(&format!("br.indirect %v{a}"), &format!("br.indirect %v{b}"));
+    for (name, source, expected, spills) in [
+        ("computed-counter", counter, 3, false),
+        ("computed-cycle", cycle, 11, false),
+        ("computed-pressure-first", pressure, 22140_u64, true),
+        ("computed-pressure-second", alternate, 11480, true),
+    ] {
+        let (allocated, module) = build(&source);
+        if spills {
+            assert!(allocated[0].spilled > 0, "must really test spill transport");
+        }
+        assert_eq!(interpreted(&module), (expected & 255) as u8);
+        let mir = lower_module(&module).unwrap();
+        assert_eq!(
+            evocc_mir::parse_module(&evocc_mir::render_module(&mir)).unwrap(),
+            mir
+        );
+        assert_eq!(
+            evocc_mir::interpret_module(&mir, "main", &[], evocc_mir::MirLimits::new(10000))
+                .unwrap()
+                .results,
+            vec![evocc_mir::MirValue::Int(expected)]
+        );
+        let asm = emit_module(&allocated, &module.globals);
+        assert_eq!(
+            run_native(name, &asm).unwrap(),
+            (expected & 255) as i32,
+            "{name}\n{asm}"
+        );
+    }
+}
+
+#[test]
+fn assembly_and_computed_edges_share_the_same_parameter_entry() {
+    for (name, template) in [
+        ("asm-fallthrough-entry", ""),
+        ("asm-taken-entry", "b %l[again]"),
+    ] {
+        let source = include_str!("../../../tests/fixtures/computed-counter.evoir")
+            .replace("@computed_counter", "@main")
+            .replace("volatile=false, atomic=false, io=false", "volatile=true, atomic=false, io=true")
+            .replace("    br ^b1(%v2, %v7, %v8)", &format!("    (%v36, %v37) = asm.goto \"{template}\" %v7, %v8 outputs [] inputs [] clobbers [] labels [(\"again\", ^b1(%v2, %v36, %v37))] fallthrough ^b1(%v2, %v36, %v37)"));
+        let (allocated, module) = build(&source);
+        let asm = emit_module(&allocated, &module.globals);
+        assert_eq!(run_native(name, &asm).unwrap(), 3, "{name}\n{asm}");
+    }
+}
+
+#[test]
 fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
     use std::fmt::Write;
 

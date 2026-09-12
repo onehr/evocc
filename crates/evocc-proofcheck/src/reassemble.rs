@@ -208,6 +208,12 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
     match instruction {
+        Inst::IndirectBr { target, edges } => {
+            remap(target, aliases);
+            for value in edges.iter_mut().flat_map(|edge| &mut edge.arguments) {
+                remap(value, aliases);
+            }
+        }
         Inst::PointerCast { operand, .. } => remap(operand, aliases),
         Inst::BitOperation { operand, .. } => remap(operand, aliases),
         Inst::VaAccess(access) => {
@@ -431,6 +437,9 @@ fn remap_identity(value: &mut Value, identities: &HashMap<u32, u32>) -> Result<(
 #[allow(clippy::too_many_lines)]
 fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::IndirectBr { target, edges } => std::iter::once(target)
+            .chain(edges.iter_mut().flat_map(|edge| &mut edge.arguments))
+            .collect(),
         Inst::PointerCast { result, operand } => vec![result, operand],
         Inst::BitOperation {
             result, operand, ..

@@ -995,6 +995,9 @@ fn resolve(merged: &BTreeMap<u32, VReg>, reg: VReg) -> VReg {
 
 fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
     match term {
+        MTerm::Indirect { target, edges } => std::iter::once(target)
+            .chain(edges.iter_mut().flat_map(|(_, args)| args))
+            .collect(),
         MTerm::B { .. } | MTerm::Brk { .. } => Vec::new(),
         MTerm::BCond { flags, .. } => vec![flags],
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => vec![src],
@@ -1421,6 +1424,12 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
 
 fn replace_term_use(term: &mut MTerm, from: VReg, to: VReg) {
     match term {
+        MTerm::Indirect { target, edges } => {
+            swap_reg(target, from, to);
+            for value in edges.iter_mut().flat_map(|(_, args)| args) {
+                swap_reg(value, from, to);
+            }
+        }
         MTerm::B { .. } | MTerm::Brk { .. } => {}
         MTerm::BCond { flags, .. } => swap_reg(flags, from, to),
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => swap_reg(src, from, to),

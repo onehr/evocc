@@ -616,6 +616,15 @@ pub fn render_term(function: &MFunction, term: &MTerm) -> String {
                 edge(function, *fallthrough, fallthrough_args)
             )
         }
+        MTerm::Indirect { target, edges } => format!(
+            "br {} [{}]",
+            use_of(*target),
+            edges
+                .iter()
+                .map(|(target, args)| edge(function, *target, args))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         MTerm::B { target, args } => format!("b {}", edge(function, *target, args)),
         MTerm::BCond {
             cond,

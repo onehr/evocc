@@ -48,6 +48,7 @@ Inst.And(result,lhs,rhs)|%v1100 = and.bits<37> %v1101, %v1102
 Inst.Br(target,args)|br ^b4242(%v1250, %v1251)
 Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383, %v1384, %v1385)
 Inst.CondBr(condition,true_target,true_args,false_target,false_args)|cond_br %v1260, ^b4242(%v1261), ^b4343(%v1262)
+Inst.IndirectBr(target,edges)|br.indirect %v1252 [^b4242(%v1253, %v1254, %v1255)]
 Inst.Const(result,immediate)|%v1000 = const.bits<37> 987654321
 Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout)|(%v1376, %v1377) = copy %v1368, %v1369, %v1366, %v1367 [size=64, align=16]
 Inst.DivisorNonZero(result,divisor)|%v1160 = divisor_nonzero %v1161

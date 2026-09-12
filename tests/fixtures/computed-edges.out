@@ -1,0 +1,21 @@
+Sealed image: evo-flight-lab:sealed
+Digest: sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Source: computed-edges.c
+Source SHA-256: 6c878e82ade62d3c97544717bbb9f074c7922c71cbdf7de922806d25d26400d0
+Command: <compiler> -std=gnu11 -O<level> computed-edges.c -o /tmp/reference; /tmp/reference
+gcc-14 (Debian 14.2.0-19) 14.2.0
+Debian clang version 19.1.7 (3+b1)
+gcc-14 O0 exit=0
+gcc-14 O2 exit=0
+clang-19 O0 exit=0
+clang-19 O2 exit=0
+
+Subject command: target/tailored/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm tests/fixtures/computed-edges.c
+Subject SHA-256: 7a3b383dfc73fa7c1b3609190aad05b89a1ed2d0930db5700546630ebef6f66d
+Assembly SHA-256: 79a1fe6c48ab135194d1d6a075503e759819fc76e74df5885127e768f63022d5
+Native command: gcc-14 subject-final.s -o /tmp/subject; /tmp/subject
+EvoCC native exit=0
+Subject command: target/tailored/release/evocc --interpret-c-hir tests/fixtures/computed-edges.c
+stdout: 0
+Subject command: target/tailored/release/evocc --interpret-evoir tests/fixtures/computed-edges.c
+stdout: 0

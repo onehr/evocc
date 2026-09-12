@@ -182,6 +182,11 @@ fn cross_edges(
         }
     };
     match &block.terminator {
+        Inst::IndirectBr { edges, .. } => {
+            for edge in edges {
+                carry(edge.target, &edge.arguments);
+            }
+        }
         Inst::AsmGoto {
             labels,
             fallthrough,

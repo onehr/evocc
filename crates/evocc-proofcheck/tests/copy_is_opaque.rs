@@ -102,3 +102,55 @@ fn copy_is_excluded_reassembled_verbatim_and_replayed_independently() {
     assert!(output.stdout.is_empty());
     assert!(output.stderr.is_empty());
 }
+
+#[test]
+fn computed_edges_survive_renumbering_and_cannot_change_under_a_scalar_proof() {
+    let source = include_str!("../../../tests/fixtures/computed-counter.evoir").replace(
+        "    %v6 = access_in_bounds",
+        "    %v36 = const.bits<32> 0\n    %v37 = add.bits<32> %v5, %v36\n    %v6 = access_in_bounds",
+    ).replace("store %v6, %v4, %v2, %v5", "store %v6, %v4, %v2, %v37");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    validate_module(&outcome.module).unwrap();
+    assert!(
+        outcome.report.optimized_values > 0,
+        "replay must be nontrivial"
+    );
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.after, render_module(&outcome.module)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    let output = replay();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut forged = outcome.module.clone();
+    let branch = forged.functions[0]
+        .blocks
+        .iter_mut()
+        .find_map(|block| {
+            if let evocc_evoir::Inst::IndirectBr { target, edges } = &mut block.terminator {
+                Some((target, edges))
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    branch.1[0].arguments[0] = branch.0.clone();
+    // Same type and local definition, but not the object's original address.
+    // General SSA validation cannot establish the C variable correspondence.
+    validate_module(&forged).unwrap();
+    fs::write(&files.after, render_module(&forged)).unwrap();
+    assert!(
+        !replay().status.success(),
+        "scalar proof must not authorize changed edge bindings"
+    );
+}

@@ -20,6 +20,8 @@ mod text_parse;
 mod variadic;
 pub use variadic::{call_argument_marks, VariadicAccess, VariadicOp};
 
+/// A terminator edge: positional SSA bindings, independent of its producer.
+pub use assembly::AssemblyEdge as Edge;
 pub use assembly::{
     assembly_address_type, assembly_clobber, assembly_memory_constraint, assembly_register_binding,
     assembly_register_type, AssemblyEdge, AssemblyInput, AssemblyLabel, AssemblyOutput,
@@ -205,6 +207,8 @@ impl TrapReason {
 /// cannot be confused with ordinary call arguments or results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inst {
+    /// Select one complete, explicitly bound successor by its code address.
+    IndirectBr { target: Value, edges: Vec<Edge> },
     BitOperation {
         result: Value,
         operand: Value,
@@ -484,6 +488,7 @@ pub enum Inst {
 #[must_use]
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::IndirectBr { .. } => vec![],
         Inst::PointerCast { result, .. } => vec![result],
         Inst::BitOperation { result, .. } => vec![result],
         Inst::VaAccess(access) => access.results(),
@@ -577,6 +582,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::IndirectBr { target, edges } => std::iter::once(target)
+            .chain(edges.iter().flat_map(|edge| &edge.arguments))
+            .collect(),
         Inst::PointerCast { operand, .. } => vec![operand],
         Inst::BitOperation { operand, .. } => vec![operand],
         Inst::VaAccess(access) => access.operands(),
@@ -940,6 +948,10 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 #[allow(clippy::too_many_lines)]
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
+        Inst::IndirectBr { .. } => EffectSummary {
+            may_trap: true,
+            ..EffectSummary::default()
+        },
         Inst::PointerCast { .. } => EffectSummary::default(),
         Inst::BitOperation { .. } => EffectSummary::default(),
         Inst::Asm(_) | Inst::AsmGoto { .. } => EffectSummary {
@@ -1311,6 +1323,28 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
         }
 
         match &block.terminator {
+            Inst::IndirectBr { target, edges } => {
+                if target.ty != EvoIRType::Ptr(AddressSpace::Generic) {
+                    return Err("indirect branch target must be ptr<generic>".into());
+                }
+                if edges.is_empty()
+                    || edges
+                        .windows(2)
+                        .any(|pair| pair[0].target >= pair[1].target)
+                {
+                    return Err("indirect successors must be nonempty, unique and sorted".into());
+                }
+                for edge in edges {
+                    validate_edge(&blocks, block.id, edge.target, &edge.arguments)?;
+                    validate_effect_edge(
+                        &blocks,
+                        block.id,
+                        edge.target,
+                        &edge.arguments,
+                        &effects,
+                    )?;
+                }
+            }
             Inst::AsmGoto {
                 labels,
                 fallthrough,
@@ -1372,8 +1406,40 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
         }
     }
 
+    validate_indirect_destinations(func, &address_taken_blocks(func), false)?;
     validate_reachability(func, entry.id)?;
 
+    Ok(())
+}
+
+fn address_taken_blocks(function: &Function) -> HashSet<BlockId> {
+    function
+        .blocks
+        .iter()
+        .flat_map(|block| &block.insts)
+        .filter_map(|inst| {
+            if let Inst::BlockAddr { block, .. } = inst {
+                Some(*block)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn validate_indirect_destinations(
+    function: &Function,
+    required: &HashSet<BlockId>,
+    exact: bool,
+) -> Result<(), String> {
+    for block in &function.blocks {
+        if let Inst::IndirectBr { edges, .. } = &block.terminator {
+            let actual: HashSet<_> = edges.iter().map(|edge| edge.target).collect();
+            if !required.is_subset(&actual) || (exact && &actual != required) {
+                return Err(format!("indirect branch in block {} has an incomplete or foreign address-taken successor set", block.id));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1466,7 +1532,8 @@ fn validate_matching_access_guard(
     }
 }
 
-fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
+/// Target-profile scalar representation layout, also used for compiler-created storage.
+pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
     let size = match ty {
         EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),
         EvoIRType::F32 => 4,
@@ -1610,6 +1677,17 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         .map_err(|message| format!("function '{}': {message}", function.name))?;
         validate_ssa(function)
             .map_err(|message| format!("function '{}': {message}", function.name))?;
+        let mut taken = address_taken_blocks(function);
+        for relocation in module.globals.iter().flat_map(|global| &global.relocs) {
+            if let Some((owner, label)) = relocation.symbol.split_once("^b") {
+                if owner == function.name {
+                    if let Ok(block) = label.parse::<BlockId>() {
+                        taken.insert(block);
+                    }
+                }
+            }
+        }
+        validate_indirect_destinations(function, &taken, true)?;
     }
     for declaration in &module.declares {
         validate_record_marks(&declaration.params, &declaration.param_marks)
@@ -2115,7 +2193,12 @@ fn require_local_value(
 fn is_terminator(inst: &Inst) -> bool {
     matches!(
         inst,
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) | Inst::AsmGoto { .. }
+        Inst::Br(..)
+            | Inst::CondBr(..)
+            | Inst::IndirectBr { .. }
+            | Inst::Ret(..)
+            | Inst::Trap(..)
+            | Inst::AsmGoto { .. }
     )
 }
 
@@ -2281,6 +2364,7 @@ fn validate_reachability(func: &Function, entry: BlockId) -> Result<(), String> 
             return Err(format!("reachable block {} is missing", block_id));
         };
         match &block.terminator {
+            Inst::IndirectBr { edges, .. } => pending.extend(edges.iter().map(|edge| edge.target)),
             Inst::AsmGoto {
                 labels,
                 fallthrough,
@@ -2881,7 +2965,11 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
         Inst::Trunc(result, source, target) => {
             validate_conversion(result, source, target, Conversion::Truncate, block)
         }
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) => Err(format!(
+        Inst::Br(..)
+        | Inst::CondBr(..)
+        | Inst::IndirectBr { .. }
+        | Inst::Ret(..)
+        | Inst::Trap(..) => Err(format!(
             "terminator found in instruction list of block {}",
             block
         )),
@@ -3455,6 +3543,9 @@ impl ExecutionState {
 /// A defined failure from EvoIR validation or execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterpreterError {
+    InvalidIndirectBranchTarget {
+        block: BlockId,
+    },
     MemorySetup {
         error: MemoryFault,
     },
@@ -3564,6 +3655,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::InvalidIndirectBranchTarget { .. } => "E3048",
             Self::MemorySetup { .. } => "E3007",
             Self::MemoryAccess { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
@@ -3591,6 +3683,7 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::InvalidIndirectBranchTarget { .. } => "invalid-indirect-branch-target".into(),
             Self::MemorySetup { error } => {
                 format!("interpreter-memory-setup-failed: {error}")
             }
@@ -3630,6 +3723,9 @@ impl InterpreterError {
 impl fmt::Display for InterpreterError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidIndirectBranchTarget { block } => {
+                write!(formatter, "invalid indirect branch target in block {block}")
+            }
             Self::MemorySetup { error } => {
                 write!(formatter, "EvoIR memory setup failed: {error}")
             }
@@ -3789,7 +3885,14 @@ pub fn interpret_function_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
-    let state = ExecutionState::for_target(target, func.alignment)?;
+    let mut state = ExecutionState::for_target(target, func.alignment)?;
+    state.functions.insert(func.name.clone(), 1);
+    for (index, block) in func.blocks.iter().enumerate() {
+        state
+            .blocks
+            .insert((func.name.clone(), block.id), index as u64 + 2);
+    }
+    state.next_activation = func.blocks.len() as u64 + 2;
     interpret_function_in_state(func, entry_args, limits, state)
 }
 
@@ -3893,6 +3996,12 @@ fn interpret_function_in_state(
 
         charge_step(&mut steps, limits, block.id)?;
         match &block.terminator {
+            Inst::IndirectBr { target, edges } => {
+                let edge =
+                    select_indirect_edge(&state, &func.name, block.id, target, edges, &values)?;
+                incoming = copy_values(&edge.arguments, block.id, &values)?;
+                program_counter = edge.target;
+            }
             Inst::Br(target, arguments) => {
                 incoming = copy_values(arguments, block.id, &values)?;
                 program_counter = *target;
@@ -4456,6 +4565,20 @@ fn interpret_module_in_state(
                 }
             }
             FrameAction::Terminator(terminator) => match terminator {
+                Inst::IndirectBr { target, edges } => {
+                    let function = &module.functions[frames[frame_index].function_index].name;
+                    let edge = select_indirect_edge(
+                        &state,
+                        function,
+                        block_id,
+                        &target,
+                        &edges,
+                        &frames[frame_index].values,
+                    )?;
+                    let incoming =
+                        copy_values(&edge.arguments, block_id, &frames[frame_index].values)?;
+                    set_module_frame_block(&mut frames[frame_index], edge.target, incoming);
+                }
                 Inst::Br(target, arguments) => {
                     let incoming = copy_values(&arguments, block_id, &frames[frame_index].values)?;
                     set_module_frame_block(&mut frames[frame_index], target, incoming);
@@ -5496,13 +5619,52 @@ fn execute_instruction(
                 .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
             write_internal(values, result, InternalValue::Pointer(pointer));
         }
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) => {
+        Inst::Br(..)
+        | Inst::CondBr(..)
+        | Inst::IndirectBr { .. }
+        | Inst::Ret(..)
+        | Inst::Trap(..) => {
             return Err(InterpreterError::InvalidFunction {
                 message: format!("terminator appears in instructions of block {block}"),
             });
         }
     }
     Ok(())
+}
+
+fn select_indirect_edge<'a>(
+    state: &ExecutionState,
+    function: &str,
+    block: BlockId,
+    target: &Value,
+    edges: &'a [Edge],
+    values: &HashMap<u32, InternalValue>,
+) -> Result<&'a Edge, InterpreterError> {
+    let error = || InterpreterError::InvalidIndirectBranchTarget { block };
+    let pointer = match read_internal(values, target, block)? {
+        InternalValue::FunctionPointer(pointer) => pointer,
+        InternalValue::Pointer(pointer) => PointerValue::Exposed(
+            state
+                .memory
+                .pointer_address(PointerValue::object(pointer))
+                .map_err(|_| error())?,
+        ),
+        InternalValue::Uninitialized => {
+            return Err(InterpreterError::InvalidPointerRepresentation { block })
+        }
+        InternalValue::Bits(_) => return Err(error()),
+    };
+    let pointer = state
+        .memory
+        .resolve_function_pointer(pointer)
+        .map_err(|_| error())?;
+    let PointerValue::Function(identity) = pointer else {
+        return Err(error());
+    };
+    edges
+        .iter()
+        .find(|edge| state.blocks.get(&(function.to_owned(), edge.target)) == Some(&identity))
+        .ok_or_else(error)
 }
 
 fn read_value(
@@ -6081,6 +6243,12 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::IndirectBr { target, edges } => {
+            remap(target, aliases);
+            for value in edges.iter_mut().flat_map(|edge| &mut edge.arguments) {
+                remap(value, aliases);
+            }
+        }
         Inst::PointerCast { operand, .. } => remap(operand, aliases),
         Inst::BitOperation { operand, .. } => remap(operand, aliases),
         Inst::VaAccess(access) => {
