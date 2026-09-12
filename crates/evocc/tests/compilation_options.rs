@@ -283,3 +283,28 @@ fn automatic_initialization_and_protection_cover_vararg_storage() {
         "{ir}"
     );
 }
+
+#[test]
+fn optimization_options_select_the_measured_macro_state() {
+    let source = "#ifdef __OPTIMIZE__\nOPT\n#endif\n#ifdef __OPTIMIZE_SIZE__\nSIZE\n#endif\n#ifdef __NO_INLINE__\nNOINLINE\n#endif\n";
+    for (flags, expected) in [
+        (vec!["-E", "-O2"], "OPT"),
+        (vec!["-E", "-O2", "-O0"], "NOINLINE"),
+        (vec!["-E", "-Os"], "OPT\nSIZE"),
+        (vec!["-E", "-Os", "-O3"], "OPT"),
+        (vec!["-E", "-O2", "-U__OPTIMIZE__"], ""),
+    ] {
+        assert_eq!(successful(run(&flags, source)).trim(), expected);
+    }
+}
+
+#[test]
+fn tiny_addresses_and_unwind_metadata_follow_effective_options() {
+    let source = "static int x; int *f(void){ return &x; }";
+    let asm = successful(run(&["--emit=asm", "-mcmodel=tiny", "-fasynchronous-unwind-tables"], source));
+    assert!(asm.contains("    adr ") && !asm.contains("    adrp "), "{asm}");
+    assert!(asm.contains(".cfi_startproc") && asm.contains(".cfi_endproc"), "{asm}");
+    assert!(asm.contains(".cfi_def_cfa 29, 16"), "{asm}");
+    let off = successful(run(&["--emit=asm", "-fasynchronous-unwind-tables", "-fno-asynchronous-unwind-tables"], source));
+    assert!(!off.contains(".cfi_startproc"));
+}
