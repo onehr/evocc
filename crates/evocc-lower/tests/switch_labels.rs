@@ -94,6 +94,48 @@ fn constant_inline_configuration_calls_remove_unreachable_symbol_uses() {
 }
 
 #[test]
+fn constant_configuration_results_retain_calls_and_argument_evaluation() {
+    for (definition, guard) in [
+        (
+            "static inline _Bool enabled(int n){return 0 && n;}",
+            "enabled(++n) && n > 0",
+        ),
+        (
+            "static inline _Bool enabled(int n){return 256;}",
+            "!enabled(++n)",
+        ),
+        (
+            "static inline unsigned char enabled(int n){return 256;}",
+            "enabled(++n)",
+        ),
+    ] {
+        let source = format!(
+            "extern int absent(int); {definition}
+             int main(void){{int n=0;if({guard})return absent(n);return n!=1;}}"
+        );
+        let module = assert_execution(&source);
+        let calls: Vec<_> = module
+            .functions
+            .iter()
+            .flat_map(|f| &f.blocks)
+            .flat_map(|b| &b.insts)
+            .filter_map(|inst| match inst {
+                evocc_evoir::Inst::Call { callee, .. } => Some(callee.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            calls.contains(&"enabled"),
+            "parameter evaluation must keep its real call"
+        );
+        assert!(
+            !calls.contains(&"absent"),
+            "unreachable external call remains: {source}"
+        );
+    }
+}
+
+#[test]
 fn goto_can_reach_a_label_after_the_segment_loses_fallthrough() {
     assert_execution(
         "int f(int x) { int n = 0; switch (x) {
