@@ -136,7 +136,7 @@ def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str],
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def input_snapshot(src_root: Path, pristine: Path) -> str:
+def input_snapshot(src_root: Path, pristine: Path, *, content_only: bool = False) -> str:
     """Hash both read-only input trees once, including newly added headers.
 
     This deliberately over-invalidates instead of guessing dependencies from
@@ -168,7 +168,10 @@ def input_snapshot(src_root: Path, pristine: Path) -> str:
                     item = [str(root), relative, "symlink", target]
                 elif path.is_file():
                     stat = path.stat()
-                    item = [str(root), relative, stat.st_mode, stat.st_mtime_ns, sha256_file(path)]
+                    item = [str(root), relative]
+                    if not content_only:
+                        item.extend([stat.st_mode, stat.st_mtime_ns])
+                    item.append(sha256_file(path))
                 else:
                     item = [str(root), relative, "directory"]
                 digest.update(json.dumps(item, separators=(",", ":")).encode())
@@ -493,7 +496,11 @@ def install(rows: list[dict], asm_root: Path, out_root: Path, allow_drift: bool)
         destination = out_root / unit
         destination.parent.mkdir(parents=True, exist_ok=True)
         same = destination.is_file() and sha256_file(destination) == row["objectSha256"]
-        if not same:
+        # A genuinely repeated compilation consumed the prepared headers even
+        # when its output is byte-identical. Do not make Kbuild run GCC merely
+        # because the retained object predates those headers. Ordinary cache
+        # reuse still leaves the object untouched.
+        if not same or row.get("recompiledAfterPrepare"):
             shutil.copyfile(asm_root / unit, destination)
             os.utime(destination, None)
         row["installUnchanged"] = same
@@ -533,8 +540,9 @@ def save_state(k1_root: Path, units: list[str]) -> None:
     state_path(k1_root).write_text(json.dumps(sorted(units), indent=2) + "\n", encoding="utf-8")
 
 
-def relink(src_root: Path, out_root: Path, log: Path, jobs: int) -> int:
-    """Relink Image and vmlinux with the reference make invocation."""
+def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
+           targets: tuple[str, ...] = ("Image", "vmlinux")) -> int:
+    """Run the reference make invocation, including its preparation target."""
     contract = json.loads((REPO_ROOT / "contracts/build-environment.json").read_text())
     reproducibility = contract["reproducibility"]
     image = contract["buildImage"]["sealedImageTag"]
@@ -545,7 +553,8 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int) -> int:
         f"SOURCE_DATE_EPOCH='{reproducibility['SOURCE_DATE_EPOCH']}' "
         f"KBUILD_BUILD_USER='{reproducibility['KBUILD_BUILD_USER']}' "
         f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}'\n"
-        f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 Image vmlinux\n"
+        f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 "
+        + " ".join(_quote(target) for target in targets) + "\n"
     )
     completed = subprocess.run(
         [
@@ -561,6 +570,59 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int) -> int:
     )
     log.write_text(completed.stdout + "\n--- stderr ---\n" + completed.stderr, encoding="utf-8")
     return completed.returncode
+
+
+def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
+                            asm_root: Path, pristine: Path, out_root: Path,
+                            run_dir: Path) -> dict:
+    """Compile against the headers produced by this composition's vDSO.
+
+    This is build ordering, not a survey-cache shortcut. Recompile every
+    selected object rather than assuming GCC's dependency set equals EvoCC's.
+    A second prepare must reach a fixed point before the final link.
+    """
+    result = {"prepareExitCode": relink(args.src_root, out_root,
+              run_dir / "prepare.log", args.relink_jobs, ("prepare",))}
+    if result["prepareExitCode"] != 0:
+        return result
+    before = input_snapshot(args.src_root, out_root)
+    compiler = sha256_file(args.evocc)
+    selected = [row for row in rows if row["outcome"] == "substituted"]
+    def compile_one(old):
+        row = emit_assembly(old["unit"], records[old["unit"]], args.evocc,
+                            args.src_root, out_root, asm_root, args.timeout)
+        row["compileInputRoot"] = str(out_root)
+        row["compileInputSnapshotSha256"] = before
+        return row
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        compiled = list(pool.map(compile_one, selected))
+    assemble_batch(compiled, records, asm_root, out_root, use_cache=not args.no_cache)
+    check_symbol_parity(compiled, asm_root, pristine, args.k1_root / "symbols")
+    if before != input_snapshot(args.src_root, out_root) or compiler != sha256_file(args.evocc):
+        raise ValueError("prepared inputs changed while compiling dependent objects")
+    for row in compiled:
+        # The vDSO already ran through preparation: leaving identical objects
+        # untouched prevents unnecessary regeneration of vdso-offsets.h.
+        if not row["unit"].startswith("arch/arm64/kernel/vdso/"):
+            row["recompiledAfterPrepare"] = True
+    install(compiled, asm_root, out_root, args.allow_symbol_drift)
+    failed = [row["unit"] for row in compiled if row["outcome"] != "substituted"]
+    restore(failed, pristine, out_root)
+    replacement = {row["unit"]: row for row in compiled}
+    rows[:] = [replacement.get(row["unit"], row) for row in rows]
+    result["recompiledUnits"] = len(compiled)
+    result["failedUnits"] = failed
+    result["compileInputSnapshotSha256"] = before
+    if failed:
+        return result
+    # Kbuild's GEN Makefile rewrites identical bytes on every prepare. The
+    # fixed point concerns consumed content, not that housekeeping timestamp;
+    # normal survey caching remains sensitive to metadata as before.
+    stable = input_snapshot(args.src_root, out_root, content_only=True)
+    result["verifyPrepareExitCode"] = relink(args.src_root, out_root,
+        run_dir / "prepare-verify.log", args.relink_jobs, ("prepare",))
+    result["preparedInputsStable"] = stable == input_snapshot(args.src_root, out_root, content_only=True)
+    return result
 
 
 def main() -> int:
@@ -723,9 +785,17 @@ def main() -> int:
         print(f"k1: installed {len(substituted)} EvoCC objects", flush=True)
 
     relink_code = None
+    preparation = None
     if not args.no_install and not args.no_relink:
-        print("k1: relinking Image and vmlinux", flush=True)
-        relink_code = relink(args.src_root, out_root, run_dir / "relink.log", args.relink_jobs)
+        print("k1: preparing generated headers and recompiling their consumers", flush=True)
+        preparation = recompile_after_prepare(rows, records, args, asm_root, pristine,
+                                               out_root, run_dir)
+        ready = (preparation.get("prepareExitCode") == 0
+                 and preparation.get("verifyPrepareExitCode") == 0
+                 and preparation.get("preparedInputsStable")
+                 and not preparation.get("failedUnits"))
+        relink_code = (relink(args.src_root, out_root, run_dir / "relink.log", args.relink_jobs)
+                       if ready else 1)
         print(f"k1: relink exit {relink_code}", flush=True)
         for row in rows:
             if row["outcome"] != "substituted":
@@ -770,6 +840,7 @@ def main() -> int:
         "refusalCodeCounts": dict(sorted(refusal_codes.items())),
         "substitutedUnits": sorted(substituted),
         "relinkExitCode": relink_code,
+        "preparation": preparation,
         "installed": not args.no_install,
         "allowSymbolDrift": args.allow_symbol_drift,
         "imageSha256": sha256_file(out_root / "arch/arm64/boot/Image")
@@ -785,7 +856,7 @@ def main() -> int:
     )
     print(json.dumps({k: v for k, v in summary.items() if k != "substitutedUnits"}, indent=2))
     print(f"evidence: {run_dir}")
-    if relink_code not in (None, 0):
+    if relink_code not in (None, 0) or counts.get("rebuilt-by-kbuild", 0):
         return 1
     return 0
 

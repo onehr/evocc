@@ -27,6 +27,22 @@ class CacheKeyTest(unittest.TestCase):
         self.assertIn("targets", inspect.signature(substitute.relink).parameters,
                       "prepare must precede final object installation and linking")
 
+    def test_prepare_fixed_point_ignores_only_metadata_not_changed_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / "src", root / "out"
+            source.mkdir()
+            output.mkdir()
+            header = output / "offsets.h"
+            header.write_text("#define OFFSET 4\n")
+            old = substitute.input_snapshot(source, output)
+            content = substitute.input_snapshot(source, output, content_only=True)
+            substitute.os.utime(header, (1, 1))
+            self.assertNotEqual(old, substitute.input_snapshot(source, output))
+            self.assertEqual(content, substitute.input_snapshot(source, output, content_only=True))
+            header.write_text("#define OFFSET 8\n")
+            self.assertNotEqual(content, substitute.input_snapshot(source, output, content_only=True))
+
     def test_recompiled_identical_object_is_newer_than_generated_headers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

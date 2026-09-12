@@ -55,7 +55,7 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | Kbuild replay dropped `-fno-PIE`; RED `144a83e`, repair `0719ce5` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in [the repaired replay](../../.evidence/k1/nvhe-configuration-20260912/boot/boot.json). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
 | K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: [replay](../../.evidence/k1/known-failures-20260912/boot/boot.json). Full required-C combination still OPEN. |
 | K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. [Original log](../../.evidence/k1/nvhe-addresses-20260912/relink.log). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
-| K-B01 / P1 | Kbuild replaced three installed objects: `alternative.o`, `signal32.o`, `vdso.o`, all under `arch/arm64/kernel/`. [Per-unit capture](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/units.jsonl). | Driver/build lane: identify the dependency or postprocessing step that rebuilt each object; preserve required Kbuild transformations. | All required C artifacts retain verified EvoCC lineage through sub-links/final link; legitimate non-C generated artifacts remain separately classified. |
+| K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 | `kernel-full` adapter is `NOT_IMPLEMENTED`; complete EvoCC composition/link/boot is UNMEASURED. | Extend the existing bench/K1 path, not a parallel runner: require all target C inputs, exact object lineage, complete link and the contract's nonce-bound ordered boot/shutdown predicate. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
@@ -242,6 +242,26 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
 ### Targeted compile repairs after relocations (2026-09-12)
+
+The affected-crate Cargo gate passed **1851 tests, 0 failed, 4 existing long
+campaign tests ignored**. Command: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 3977afc --locked --offline -j2`.
+The first run found the old short-circuit CFG golden and blanket aggregate
+varargs rejection; their replacements retain value assertions and keep the
+floating-record refusal. The final Clippy-only adjustment uses a borrowed
+one-element slice: `cargo clippy --workspace --all-targets --locked --offline -j2 -- -D warnings`
+then passed; the memory **31/31** and variadic **7/7** tests were rerun.
+
+Build ordering was separately verified on two vDSO producers plus the three
+dependent consumers. `prepared-headers-20260912-v2` prepares with the installed
+composition, freshly recompiles all five with its generated headers, reaches
+a content fixed point and links successfully. All five object hashes survive
+the link; the vmlinux proof confirms its three direct consumers, while the
+two vDSO objects belong to their separate sub-link, not direct vmlinux symbols.
+The resulting Image boots and shuts down with the new nonce; QEMU digest drift
+was explicitly acknowledged. The first attempt stopped because Kbuild rewrites
+identical Makefile bytes with a new timestamp; the revised check ignores only
+metadata at the preparation fixed point, while normal survey cache keys retain
+their metadata sensitivity. **104/104** K1 Python tests and Ruff pass.
 
 `aggregate-variadic-20260912` freshly compiles both original 9p failures with
 symbol parity: **2/2**, no cache/install/relink. The fixture checks 4/16/24-byte
