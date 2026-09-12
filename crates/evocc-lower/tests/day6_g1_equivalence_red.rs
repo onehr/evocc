@@ -916,6 +916,7 @@ fn render_inst(inst: &Inst) -> String {
             format!("{} = block_addr ^b{block}", value(result))
         }
         Inst::Alloca { .. }
+        | Inst::DynamicAlloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }
         | Inst::AccessInBounds { .. } => "<day7-memory>".to_owned(),
@@ -1036,12 +1037,14 @@ fn independent_local_effects(function: &Function) -> IndependentEffectSummary {
                 may_trap: true,
                 ..IndependentEffectSummary::default()
             },
-            Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => IndependentEffectSummary {
-                reads_all: true,
-                writes_all: true,
-                may_trap: true,
-                ..IndependentEffectSummary::default()
-            },
+            Inst::Alloca { .. } | Inst::DynamicAlloca { .. } | Inst::LifetimeEnd { .. } => {
+                IndependentEffectSummary {
+                    reads_all: true,
+                    writes_all: true,
+                    may_trap: true,
+                    ..IndependentEffectSummary::default()
+                }
+            }
             Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => IndependentEffectSummary {
                 reads_all: true,
                 may_trap: true,

@@ -132,21 +132,39 @@ fn automatic_null_pointers_remain_supported() {
 }
 
 #[test]
-fn static_pointer_bits_are_not_fabricated_without_relocations() {
-    for source in [
-        "void *p = (void *)1;",
-        "void *p = (void *)(unsigned long)2;",
+fn static_pointer_bits_do_not_fabricate_access_provenance() {
+    for (source, address) in [
+        ("void *p = (void *)1;", 1_u64),
+        ("void *p = (void *)(unsigned long)2;", 2),
     ] {
         let output = run(source, "--emit=evoir");
         assert!(
-            !output.status.success(),
-            "a raw integer is not pointer provenance"
-        );
-        assert!(
-            String::from_utf8_lossy(&output.stderr).contains("E3026"),
+            output.status.success(),
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+        // Absolute static integer addresses preserve target bits, not access
+        // provenance (specification's 2026-09-10 authorization).
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        let pointer = module
+            .globals
+            .iter()
+            .find(|global| global.symbol == "p")
+            .unwrap();
+        assert_eq!(pointer.bytes, address.to_le_bytes());
+        assert!(pointer.relocs.is_empty());
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let access = run(
+                &format!("{source} int main(void){{return *(int *)p;}}"),
+                mode,
+            );
+            assert!(!access.status.success());
+            assert!(
+                String::from_utf8_lossy(&access.stderr).contains("E3013"),
+                "{mode}: {}",
+                String::from_utf8_lossy(&access.stderr)
+            );
+        }
     }
     agrees(
         "void *p = (void *)0; int *q = 0; int main(void) { return p == 0 && q == 0; }",
