@@ -181,3 +181,34 @@ fn parameter_facts_do_not_escape_their_proven_callers_or_replace_effects() {
         assert!(String::from_utf8_lossy(&output.stdout).contains("load volatile"));
     }
 }
+
+#[test]
+fn constant_queries_are_ices_in_static_initializers() {
+    assert_constant_program(include_str!("../../../tests/fixtures/constant-query-initializers.c"));
+}
+
+#[test]
+fn constant_queries_are_ices_in_case_labels() {
+    assert_constant_program(
+        "int fallback(int x); int main(void){switch(32){case __builtin_constant_p(2)?2<<4:fallback(2):return 0;default:return 1;}}",
+    );
+}
+
+#[test]
+fn constant_queries_select_static_relocations_without_evaluating_the_other_arm() {
+    assert_constant_program(
+        "int fallback(int x); static int object=7;static int *p=(__builtin_constant_p(2)?2:fallback(2))?&object:0;int main(void){return *p!=7;}",
+    );
+}
+
+fn assert_constant_program(source: &str) {
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+}
