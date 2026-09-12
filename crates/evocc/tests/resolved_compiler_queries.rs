@@ -117,3 +117,42 @@ fn static_value_propagation_preserves_escapes_volatile_reads_and_updates() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("load volatile"));
 }
+
+#[test]
+fn constant_inline_leaf_results_remove_false_error_calls() {
+    let source = include_str!("../../../tests/fixtures/constant-call-results.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_failed"));
+    let output = run(source, "--interpret-evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"0\n");
+}
+
+#[test]
+fn common_private_parameter_values_preserve_calls_and_effects() {
+    let source = include_str!("../../../tests/fixtures/private-constant-parameter.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_failed"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("call @map"));
+    let output = run(source, "--interpret-evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"0\n");
+}
