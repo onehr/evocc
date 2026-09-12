@@ -1565,6 +1565,7 @@ pub struct CHirUnit<'arena> {
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
+    automatic_zero: bool,
     profile_refusals: Vec<ProfileRefusal>,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
@@ -1619,6 +1620,7 @@ impl<'arena> CHirUnit<'arena> {
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
+            automatic_zero: false,
             profile_refusals: Vec::new(),
             resolved_linkage: std::sync::OnceLock::new(),
         }
@@ -1649,6 +1651,27 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn signed_wrapping(&self) -> bool {
         self.signed_wrapping
+    }
+
+    /// Implicit initialization is a declaration operation, never a load fallback.
+    pub fn set_automatic_zero(&mut self, enabled: bool) {
+        self.automatic_zero = enabled;
+    }
+
+    #[must_use]
+    pub fn zero_initialize_automatic(&self, object: &ObjectDecl<'_>) -> bool {
+        self.automatic_zero
+            && object.initializer.is_none()
+            && !matches!(object.storage, StorageClass::Static | StorageClass::Extern)
+            && !object.attributes.iter().any(|attribute| {
+                attribute.semantic_name() == Some("uninitialized")
+                    && matches!(
+                        attribute.placement,
+                        AttributePlacement::DeclarationSpecifiers
+                            | AttributePlacement::BeforeDeclarator
+                            | AttributePlacement::AfterDeclarator
+                    )
+            })
     }
 
     #[must_use]

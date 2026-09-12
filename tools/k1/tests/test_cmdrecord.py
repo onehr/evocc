@@ -171,6 +171,19 @@ class DecodeTest(unittest.TestCase):
                 self.assertEqual([flag for flag in argv if flag in flags], written)
                 self.assertFalse(set(flags).intersection(omitted))
 
+    def test_hosted_and_automatic_initialization_options_keep_override_order(self) -> None:
+        flags = ["-ffreestanding", "-fhosted", "-ftrivial-auto-var-init=zero",
+                 "-ftrivial-auto-var-init=uninitialized"]
+        for written in (flags, flags[::-1]):
+            self.record_file.write_text(
+                RECORD.replace(" -O2 ", f" -O2 {' '.join(written)} "), encoding="utf-8"
+            )
+            argv, omitted = cmdrecord.evocc_argv(
+                self.record(), Path("/bin/evocc"), self.src, self.out
+            )
+            self.assertEqual([flag for flag in argv if flag in flags], written)
+            self.assertFalse(set(flags).intersection(omitted))
+
     def test_wide_character_layout_reaches_the_subject_in_written_order(self) -> None:
         flags = ["-fshort-wchar", "-fno-short-wchar"]
         for written in (flags, flags[::-1]):

@@ -94,6 +94,8 @@ struct DriverOptions {
     optimize_scalar_evoir: bool,
     signed_wrapping: bool,
     standard_builtins: bool,
+    hosted: bool,
+    automatic_zero: bool,
     legacy_declarations: bool,
     short_wchar: bool,
     position_independence: PositionIndependence,
@@ -242,6 +244,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut optimize_scalar_evoir = false;
     let mut signed_wrapping = false;
     let mut standard_builtins = true;
+    let mut hosted = true;
+    let mut automatic_zero = false;
     let mut legacy_declarations = false;
     let mut short_wchar = false;
     let mut position_independence = PositionIndependence::Pie(2);
@@ -263,6 +267,16 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
             "-fno-builtin" => standard_builtins = false,
             "-fbuiltin" => standard_builtins = true,
+            "-ffreestanding" => {
+                hosted = false;
+                standard_builtins = false;
+            }
+            "-fhosted" => {
+                hosted = true;
+                standard_builtins = true;
+            }
+            "-ftrivial-auto-var-init=zero" => automatic_zero = true,
+            "-ftrivial-auto-var-init=uninitialized" => automatic_zero = false,
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
             "-fpic" => position_independence = PositionIndependence::Pic(1),
@@ -366,6 +380,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         optimize_scalar_evoir,
         signed_wrapping,
         standard_builtins,
+        hosted,
+        automatic_zero,
         legacy_declarations,
         short_wchar,
         position_independence,
@@ -485,6 +501,10 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
+    pp.define(
+        "__STDC_HOSTED__".to_owned(),
+        decoded_tokens(if options.hosted { "1" } else { "0" })?,
+    );
     let (pic, pie) = options.position_independence.macro_levels();
     for (name, level) in [
         ("__PIC__", pic),
@@ -678,6 +698,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     }
     let mut unit = parser.parse_translation_unit_in(&arena);
     unit.set_signed_wrapping(options.signed_wrapping);
+    unit.set_automatic_zero(options.automatic_zero);
     if parser.had_error() {
         // A build reports the first diagnostic only. The error limit bounds the
         // declaration loop, not the reports made while parsing one

@@ -6987,3 +6987,10 @@ The complete address-taken successor set of Section 3.9 is also used to check en
 In `.evidence/builtin-probes/20260913-computed-edges/capture-{entry,unselected}.c`, sealed GCC-14 accepts both forms while Clang-19 rejects both for bypassing the VLA typedef; `capture.out` records the conflict, resolved toward refusal under the existing review protocol.
 Entering an already active capture scope remains allowed, and its hidden dimension object address travels with the other live storage addresses rather than losing the dimension or recapturing it.
 No diagnostic is allocated, and no additional kernel unit count is claimed for these scope probes.
+
+### Explicit automatic initialization and hosted environment options
+
+`-ftrivial-auto-var-init=zero` adds a zero representation initializer, including padding, at each executed declaration of an otherwise uninitialized automatic object; typed pointer subobjects receive Null provenance, explicit initializers are unchanged, and the declaration attribute `uninitialized` exempts that object.
+The final `-ftrivial-auto-var-init=uninitialized` restores ordinary uninitialized semantics; storage activation or merely transporting its address does not execute the implicit initializer.
+`-ffreestanding` sets `__STDC_HOSTED__=0` and disables ordinary-name library builtin substitution, `-fhosted` restores both, and later explicit `-fbuiltin`/`-fno-builtin` options override substitution independently; reserved `__builtin_*` spellings remain available.
+Both sealed compilers at O0/O2 execute `tests/fixtures/automatic-zero.{c,out}` with exit zero; the option occurs in all 2,799 frozen commands, but this targeted measurement is not a full-kernel result and introduces no diagnostic.

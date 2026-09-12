@@ -1,4 +1,19 @@
 {
+  "automaticInitializationAndHostedOptions": {
+    "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "323f285",
+    "red": "3 failed tests: unsupported options, zero build errors",
+    "testCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test compilation_options --locked --offline -j 2",
+    "passed": 4,
+    "projectionCommand": "python3 -m unittest discover -s tools/k1/tests -p test_cmdrecord.py",
+    "projectionPassed": 18,
+    "nativeMeasurements": "tests/fixtures/automatic-zero.out",
+    "subjectNativeExit": 0,
+    "clippyCommand": "CARGO_TARGET_DIR=target/tailored cargo clippy -p evocc -p evocc-lower -p evocc-chir --all-targets --locked --offline -j 2 -- -D warnings",
+    "clippy": "PASS",
+    "remainingOptions": ["stack protector", "return-address signing", "strict alignment", "other omitted-option classification"],
+    "fullCompileAndBoot": "NOT RUN"
+  },
   "volatileUnionRepresentations": {
     "status": "TARGETED_ORIGINAL_REPLAY_PASS_NOT_FULL_KERNEL_BOOT",
     "redCommit": "ca1a32b",

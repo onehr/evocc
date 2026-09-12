@@ -94,3 +94,17 @@ fn hosted_mode_and_automatic_initialization_follow_the_last_option() {
         "0"
     );
 }
+
+#[test]
+fn freestanding_disables_only_ordinary_library_name_substitution() {
+    let source = "int abs(int x){return x+100;} int main(void){volatile int x=-7; return abs(x)+__builtin_abs(x);}";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        for (options, expected) in [
+            (vec![mode, "-ffreestanding"], "100"),
+            (vec![mode, "-ffreestanding", "-fbuiltin"], "14"),
+            (vec![mode, "-fbuiltin", "-ffreestanding"], "100"),
+        ] {
+            assert_eq!(successful(run(&options, source)).trim(), expected);
+        }
+    }
+}

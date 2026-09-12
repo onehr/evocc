@@ -1,0 +1,10 @@
+2026-09-13; evo-flight-lab:sealed; linux/arm64; network disabled.
+gcc-14/clang-19 -std=gnu11 -O0/-O2 -ftrivial-auto-var-init=zero automatic-zero.c; execute:
+gcc-14 O0 exit=0
+gcc-14 O2 exit=0
+clang-19 O0 exit=0
+clang-19 O2 exit=0
+Both preprocessors: __STDC_HOSTED__ under -ffreestanding = 0;
+-ffreestanding -fhosted = 1.
+target/tailored/release/evocc --emit=asm -ftrivial-auto-var-init=zero automatic-zero.c
+Sealed gcc-14 assembled and linked emitted stdin; native exit=0.

@@ -5277,6 +5277,25 @@ impl<'a> FunctionLowerer<'a> {
         state.locals.insert(object.symbol);
         let Some(initializer) = &object.initializer else {
             state.env.remove(&EnvKey::Local(object.symbol));
+            if self.unit.zero_initialize_automatic(object) {
+                let value = if matches!(
+                    self.unit.types().get(object.ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Pointer(_))
+                ) {
+                    let pointer = self.fresh_value(self.c_value_type(object.ty, object.span)?.0);
+                    self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                    pointer
+                } else {
+                    self.constant(state, integer, 0)?.value
+                };
+                state.env.insert(
+                    EnvKey::Local(object.symbol),
+                    BoundValue {
+                        value,
+                        integer: Some(integer),
+                    },
+                );
+            }
             return Ok(());
         };
         let stored = match initializer.plan.actions() {
@@ -6974,6 +6993,45 @@ impl<'a> FunctionLowerer<'a> {
             return Ok(());
         }
         let Some(initializer) = &object.initializer else {
+            if self.unit.zero_initialize_automatic(object) {
+                let address = self.token(state, EnvKey::Address(object.symbol))?.value;
+                let layout = self.access_layout(object.ty, object.span)?;
+                // The implicit initializer includes padding. Typed stores then
+                // attach Null provenance to pointer subobjects without changing
+                // the target's all-zero representation.
+                let mut offset = 0;
+                while offset < layout.size_bytes {
+                    let size = [8, 4, 2, 1]
+                        .into_iter()
+                        .find(|size| *size <= layout.size_bytes - offset)
+                        .unwrap();
+                    let integer = match size {
+                        8 => CIntegerType::ULONG,
+                        4 => CIntegerType::UINT,
+                        2 => CIntegerType::USHORT,
+                        _ => CIntegerType::UCHAR,
+                    };
+                    let at = self.constant_offset_address(address.clone(), offset, state)?;
+                    let zero = self.constant(state, integer, 0)?;
+                    self.emit_memory_store_with_layout(
+                        at,
+                        zero,
+                        AccessLayout::new(size, layout.align_bytes.min(size as u32)),
+                        false,
+                        state,
+                    )?;
+                    offset += size;
+                }
+                self.emit_zero_initializer_at(
+                    address,
+                    object.ty,
+                    SubobjectPath::root(),
+                    &[],
+                    object.span,
+                    state,
+                    layout.align_bytes,
+                )?;
+            }
             return Ok(());
         };
         let address = self.token(state, EnvKey::Address(object.symbol))?.value;

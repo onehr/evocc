@@ -33,6 +33,8 @@ PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 PASSED_THROUGH = (
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
     "-fbuiltin", "-fno-builtin",
+    "-ffreestanding", "-fhosted",
+    "-ftrivial-auto-var-init=zero", "-ftrivial-auto-var-init=uninitialized",
     "-fshort-wchar", "-fno-short-wchar",
     "-fpic", "-fPIC", "-fpie", "-fPIE", "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",
 )

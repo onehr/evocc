@@ -2891,6 +2891,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         slot.value = None;
         let Some(initializer) = &declaration.initializer else {
+            if self.unit.zero_initialize_automatic(declaration) {
+                slot.value = Some(CInteger::new(0, ty));
+            }
             return Ok(());
         };
         let action = initializer.plan().actions().first().ok_or(
@@ -2973,6 +2976,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             )?;
         }
         let Some(initializer) = &declaration.initializer else {
+            if self.unit.zero_initialize_automatic(declaration) {
+                let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
+                let layout = self.access_layout(declaration.ty, declaration.span)?;
+                if layout.size_bytes != 0 {
+                    let bytes = ByteSequence::try_from_bytes(vec![0; layout.size_bytes as usize])
+                        .map_err(|error| self.memory_error(error, declaration.span))?;
+                    self.memory = self
+                        .memory
+                        .store_bytes(binding.address, layout, &bytes)
+                        .map_err(|error| self.memory_error(error, declaration.span))?;
+                }
+                self.zero_initialize_subobjects(
+                    binding.address,
+                    declaration.ty,
+                    SubobjectPath::root(),
+                    &[],
+                    declaration.span,
+                )?;
+            }
             return Ok(());
         };
         if initializer.plan().zero_fills_unwritten() {
