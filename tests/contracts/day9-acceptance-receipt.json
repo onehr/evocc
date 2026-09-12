@@ -1,4 +1,25 @@
 {
+  "directWideFieldShifts": {
+    "status": "TARGETED_ORIGINAL_REPLAYS_PASS_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "bc172e5",
+    "red": "2 failed tests, E2939, zero build errors",
+    "focusedCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-lower --test expression_value_flow direct_wide_field --locked --offline -j 2",
+    "focusedPassed": 2,
+    "parserCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-parser --test unsupported_bit_field_semantics --locked --offline -j 2",
+    "parserPassed": 9,
+    "cliCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test internal_function_reachability --locked --offline -j 2",
+    "cliPassed": 7,
+    "oracleMeasurements": "tests/fixtures/wide-field-shift.out",
+    "subjectNativeExit": 0,
+    "kernelCommand": "python3 tools/k1/substitute.py --allowlist .evidence/builtin-probes/20260913-wide-field-shift/units.txt --no-install --no-cache --jobs 2 --timeout 180 --evocc target/tailored/release/evocc --run-id wide-field-shift-20260913",
+    "kernelRun": "wide-field-shift-20260913",
+    "requested": 4,
+    "freshCompilations": 4,
+    "assembled": 4,
+    "refused": 0,
+    "installed": false,
+    "linkAndBoot": "NOT RUN"
+  },
   "functionAddressArithmetic": {
     "status": "TARGETED_ORIGINAL_REPLAYS_PASS_NOT_FULL_KERNEL_BOOT",
     "redCommit": "01c041d",

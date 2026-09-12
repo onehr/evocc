@@ -1,0 +1,17 @@
+Image: evo-flight-lab:sealed (sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2)
+Command: <compiler> -std=gnu11 -O<level> wide-field-shift-probe.c -o /tmp/probe; /tmp/probe
+gcc-14 O0 and O2 (identical):
+width=33 direct=1fffffffe paren=1fffffffe
+width=40 direct=fffffffffe paren=fffffffffe
+width=52 direct=ffffffffffffe paren=ffffffffffffe
+width=58 direct=3fffffffffffffe paren=3fffffffffffffe
+clang-19 O0 and O2 (identical):
+width=33 direct=3fffffffe paren=3fffffffe
+width=40 direct=1fffffffffe paren=1fffffffffe
+width=52 direct=1ffffffffffffe paren=1ffffffffffffe
+width=58 direct=7fffffffffffffe paren=7fffffffffffffe
+Conflict is intentional in the adjudicated declared-base profile, not PASS consensus.
+The profile-value fixture wide-field-shift.c exits 33 on GCC-14 O0/O2 and 0 on Clang-19 O0/O2.
+Updated frozen MSI shape uses 58/6 bits: Clang-19 O2 and EvoCC native both exit 0.
+Subject command: target/tailored/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm tests/fixtures/wide-field-shift.c
+Native command: sealed gcc-14 subject.s -o /tmp/subject; /tmp/subject

@@ -19,7 +19,7 @@ fn direct_wide_field_shifts_use_declared_precision_not_storage_precision() {
         };
         agrees(&format!("struct U{{unsigned long v:{width};}}; struct S{{signed long v:{width};}}; int main(void){{struct U u={{{initial}}};struct S s={{-1}};unsigned long k=1;unsigned long expected=({initial}) << k;if((u.v << k)!=expected)return 1;if(((u.v)<<1UL)!=expected)return 2;if((s.v<<k)!=-2L)return 3;u.v=u.v<<k;return (unsigned long)u.v!=(({initial})-1);}}"));
     }
-    agrees("struct msi_desc{unsigned long iommu_msi_iova:52;unsigned long iommu_msi_shift:6;}; unsigned long restore(struct msi_desc *desc){return desc->iommu_msi_iova << desc->iommu_msi_shift;} int main(void){struct msi_desc d={(1UL<<51)+7,12};return restore(&d)!=((1UL<<63)+28672);}");
+    agrees("struct msi_desc{unsigned long iommu_msi_iova:58;unsigned long iommu_msi_shift:6;}; unsigned long restore(struct msi_desc *desc){return desc->iommu_msi_iova << desc->iommu_msi_shift;} int main(void){struct msi_desc d={(1UL<<51)+7,12};return restore(&d)!=((1UL<<63)+28672);}");
 }
 
 #[test]

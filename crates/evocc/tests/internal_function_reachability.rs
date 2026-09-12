@@ -25,7 +25,7 @@ fn unused_internal_bodies_do_not_require_execution_support() {
     for declaration in [
         "static int hidden(int n){asm(\"\"::\"i\"(n));return n;}",
         "static int hidden(void *p){goto *p;}",
-        "static long hidden(void){struct S{unsigned long x:40;}s={3};return s.x<<1;}",
+        "static long hidden(void){struct S{unsigned long x:40;}s={3};return ~s.x;}",
         "static int hidden(void){struct __attribute__((scalar_storage_order(\"big-endian\"))) S{int x;}s={1};return s.x;}",
         "static void hidden(void){__builtin_exit(0);}",
         "static int hidden(void){return __builtin_puts(\"unused\");}",
@@ -71,7 +71,7 @@ fn live_references_retain_the_body_and_its_refusals() {
         "unsigned long (*pointer)(void)=hidden;",
         "asm(\".quad hidden\");",
     ] {
-        let source = format!("static unsigned long hidden(void){{struct S{{unsigned long x:40;}}s={{3}};return s.x<<1;}}{reference}");
+        let source = format!("static unsigned long hidden(void){{struct S{{unsigned long x:40;}}s={{3}};return ~s.x;}}{reference}");
         let output = run(&source, "--emit=evoir");
         assert!(
             !output.status.success(),
@@ -132,7 +132,7 @@ fn function_linkage_is_inherited_from_its_first_declaration() {
 
 #[test]
 fn deferred_profile_diagnostics_keep_their_source_order() {
-    let body = "long selected(void){struct S{unsigned long x:40;}s={3};return s.x<<1;}";
+    let body = "long selected(void){struct S{unsigned long x:40;}s={3};return ~s.x;}";
     let tail = "int broken(void){return missing;}";
     let output = run(&format!("{body}{tail}"), "--parse-only");
     let text = String::from_utf8_lossy(&output.stderr);
@@ -152,7 +152,7 @@ fn directly_interpreting_an_unused_body_preserves_its_profile_refusal() {
     use evocc_lex::Lexer;
     use evocc_parser::Parser;
 
-    let source = "static long hidden(void){struct S{unsigned long x:40;}s={3};return s.x<<1;}int main(void){return 0;}";
+    let source = "static long hidden(void){struct S{unsigned long x:40;}s={3};return ~s.x;}int main(void){return 0;}";
     let arena = Arena::default();
     let file = FileId::new(1);
     let mut lexer = Lexer::new(file, source);

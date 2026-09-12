@@ -9648,7 +9648,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         consumer: &CHirExpr<'_>,
     ) -> Option<()> {
         if operator == BinaryOp::Shl {
-            // A wide shift count never widens the shifted operand.
+            // The approved direct-read profile obtains the declared base
+            // integer before shifting. Neither the storage width nor the
+            // right operand's width determines its arithmetic precision.
+            // This does not adjudicate a comma/conditional/update rvalue.
+            if self.expression_record_field(left).is_some() {
+                return Some(());
+            }
             return self.require_supported_promotion_at(left, consumer);
         }
         if matches!(

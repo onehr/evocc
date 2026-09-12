@@ -12,7 +12,7 @@
 } while (0)
 
 struct msi_desc {
-    unsigned long iommu_msi_iova : 52;
+    unsigned long iommu_msi_iova : 58;
     unsigned long iommu_msi_shift : 6;
 };
 

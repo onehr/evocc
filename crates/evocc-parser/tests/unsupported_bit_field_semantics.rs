@@ -66,7 +66,7 @@ fn unsigned_sign_comparisons_do_not_observe_the_disputed_precision() {
 #[test]
 fn nested_precision_conflicts_remain_explicit() {
     for expression in [
-        "s.x << 1UL",
+        "(0, s.x) << 1UL",
         "+s.x + 1",
         "(s.x >> 0) + 1",
         "(c ? s.x : 0) + 1",
@@ -109,7 +109,7 @@ fn wide_field_arithmetic_names_the_unsupported_promotion() {
             "s.x & 1",
             "s.x | 1",
             "s.x ^ 1",
-            "s.x << 1",
+            "(+s.x) << 1",
             "-s.x",
             "~s.x",
             "sizeof(s.x + 0)",
@@ -133,7 +133,7 @@ fn unsupported_updates_and_default_argument_promotions_remain_explicit() {
     for statement in [
         "s.x /= -1;",
         "s.x %= -1;",
-        "s.x <<= 1UL;",
+        "s.x = (+s.x) << 1UL;",
         "take(0,s.x);",
         "old(s.x);",
     ] {

@@ -4281,8 +4281,10 @@ whose other operand's promoted type is narrower than the field's declared
 type. The consensus contexts are admitted with the declared type as the
 operation type, which is what both oracles compute there. The measured
 kernel shape `desc->iommu_msi_iova << desc->iommu_msi_shift`
-(`include/linux/msi.h`, 150 units) is in the conflicting class and stays
-refused unless the function holding it is not lowered (next paragraph).
+(`include/linux/msi.h`, 150 units) is in the conflicting class. The later
+full-kernel adjudication below explicitly chooses declared-base precision for
+a direct bit-field read used as the left operand of a shift; the other
+disputed expression categories retain their existing refusal boundaries.
 
 **Unreferenced internal functions (revision 1.9.90).** A function with
 internal linkage that nothing in the unit references by call, address,
@@ -6224,6 +6226,13 @@ Following the full-kernel adjudication, GNU function-pointer addition/subtractio
 Function-pointer difference is the mathematical byte-address difference with type `long`, checked for signed representability (existing E3004); a reconstructed call retains the existing null, known-target and signature checks, and an interpreter's inability to resolve dynamic native code is not a claim that such code is invalid in native execution.
 Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/function-address-arithmetic.c` with zero exit, covering signed offsets, every update form, array/member/static places, single evaluation and a recovered real entry; the existing E3015/E3016/E3019 runtime boundaries are not weakened, and E3034 is withdrawn for this defined lowering.
 The affected original units are `arch/arm64/net/bpf_jit_comp.o`, `kernel/bpf/verifier.o` and `kernel/bpf/core.o`; their actual outcomes are recorded only after replay, not inferred from this rule.
+
+### Direct wide-field shifts: bounded declared-base profile
+
+The full-kernel adjudication chooses the declared standard integer base type as the operation type when a direct (possibly parenthesized) bit-field read wider than `int` is the left operand of `<<`; storage width still controls later stores, not arithmetic precision, and this also applies to the read/shift/store of `<<=`.
+After that type is selected, existing Section 6.1 GNU shift semantics apply: legal counts produce the low N bits even for negative signed left operands, while the independently decoded count retains its full width and invalid counts report E3005, never a newly generated E3006.
+`tests/fixtures/wide-field-shift-probe.c` and `wide-field-shift.out` record GCC-14/Clang-19 O0/O2 disagreement for widths 33/40/52/58; this is an explicit Clang-style profile choice, not oracle consensus, and comma/conditional/unary-result/assignment-result precision is not broadened by it.
+The frozen `include/linux/msi.h` uses a 58-bit `iommu_msi_iova` and 6-bit `iommu_msi_shift`; four original IRQ/MSI units are affected, with actual results counted only after replay.
 
 ### Computed branches approved; label differences remain separate
 
