@@ -156,3 +156,28 @@ fn common_private_parameter_values_preserve_calls_and_effects() {
     );
     assert_eq!(output.stdout, b"0\n");
 }
+
+#[test]
+fn parameter_facts_do_not_escape_their_proven_callers_or_replace_effects() {
+    for source in [
+        "static int f(int x){return x;}int main(void){return f(1)+f(2)!=3;}",
+        "static int f(int x){return x;}int main(void){int (*p)(int)=f;return f(1)+p(2)!=3;}",
+        "static int f(int x){int *p=&x;*p=4;return x;}int main(void){return f(1)!=4;}",
+        "static int f(int x){++x;return x;}int main(void){return f(1)!=2;}",
+        "static int f(int x){return __builtin_constant_p(x);}int main(void){return f(1);}",
+        "static __attribute__((always_inline)) inline int f(signed char x){return x;}int main(void){return f(255)!=-1;}",
+        "static __attribute__((always_inline)) inline int f(int x){return x+x;}int main(void){int x=1;int y=f(x++);return x!=2||y!=2;}",
+    ] {
+        let output = run(source, "--interpret-evoir");
+        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(output.stdout, b"0\n", "{source}");
+    }
+    for source in [
+        "static __attribute__((always_inline)) inline int f(volatile int x){return x;}int main(void){return f(7);}",
+        "static int f(volatile int x){return x;}int main(void){return f(7);}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("load volatile"));
+    }
+}

@@ -382,6 +382,19 @@ fixture also links and returns zero natively and with both sealed oracles.
 The completed earlier survey `20260912T182636.704003Z` remains **2,797/2,799**,
 not retroactively 2,799: the next measurement is full compile/link/boot.
 
+The full build exposed two more constant-call links before its final link:
+`patch_map` receives one common index at every direct call, and KVM flag checks
+use an always-inline `__fls` leaf with a constant argument. Two minimal REDs
+preserved the false external assertions. The fix keeps ordinary calls and
+their effects, propagates only equal converted values at every closed-world
+private call site, and materializes pure constant inline returns. Escaped,
+assembly-referenced, mutated and volatile parameters are not substituted.
+The guard tests also found that non-inlined volatile parameters were previously
+kept in value-only SSA: they now use the ordinary qualified-object path.
+The two original units no longer contain those assertion calls; 162 targeted
+tests and both fixture native executions pass. This is targeted verification,
+not a new full-build or boot verdict.
+
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,
 little endian, unsigned char, reserved x18, frame pointers, four-byte function

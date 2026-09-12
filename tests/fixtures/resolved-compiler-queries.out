@@ -22,3 +22,20 @@ expression_value_flow + front_end_resolved_forms, 103 passed.
 Original-unit replay: constant-branches-20260913, 4/4 assembled, not installed.
 Subject sha256: 549aeb27363bdf6c2e9a15c6f3f424b89659c3300d2b4865dad1977a0b49cbbd
 No bl __compiletime_assert* or bl __builtin_extract_return_addr in the four assemblies.
+
+Constant-call RED: resolved_compiler_queries, 5 passed / 2 failed, zero build errors;
+both failures retain call @constant_failed in emitted EvoIR.
+gcc-14 constant-call-results O2 exit=0
+gcc-14 private-constant-parameter O2 exit=0
+clang-19 constant-call-results O2 exit=0
+clang-19 private-constant-parameter O2 exit=0
+constant-call-results subject-native-exit=0
+private-constant-parameter subject-native-exit=0
+GREEN: resolved_compiler_queries 8; constant_source_width 3;
+expression_value_flow 79; front_end_resolved_forms 24;
+adjusted_parameter_identity 1; function_parameter_identity 2;
+inline_assembly_lowering 45: 162 passed, zero failures.
+Original .o.cmd argv through tools/k1/cmdrecord.py, debug subject, no installation:
+arch/arm64/kernel/patching.o exit=0 seconds=22.83 compiler-assert-calls=0
+arch/arm64/kvm/mmio.o exit=0 seconds=140.09 compiler-assert-calls=0
+Timings under concurrent eight-worker release compilation, not isolated performance measurements.

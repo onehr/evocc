@@ -31,6 +31,7 @@ struct Uses<'a> {
     mutable: BTreeSet<SymbolId>,
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
     owns_statements: bool,
+    calls: Vec<(SymbolId, &'a [&'a CHirExpr<'a>])>,
 }
 
 /// Replaying an immutable parameter's argument must not read mutable storage
@@ -225,7 +226,7 @@ fn inspect_with_declarations<'a>(
                         // Memory constraints implicitly take the operand's
                         // address. Replacing its object with a value is invalid
                         // even when the initializer or argument is constant.
-                        if matches!(o.constraint.as_str(), "Q" | "Qo") {
+                        if matches!(o.constraint.as_str(), "m" | "Q" | "Qo") {
                             if let CHirExpr::Ident { symbol, .. } = o.expression {
                                 uses.mutable.insert(*symbol);
                             }
@@ -260,6 +261,9 @@ fn inspect_with_declarations<'a>(
                 }
                 match e {
                     CHirExpr::Call(f, args, _) => {
+                        if let CHirExpr::Ident { symbol, .. } = f {
+                            uses.calls.push((*symbol, args));
+                        }
                         work.push(Node::Expr(f, true));
                         for a in args {
                             work.push(Node::Expr(a, false));
@@ -450,8 +454,94 @@ pub fn needs_substitution(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> boo
     unit.iter().any(|d| {
         matches!(d, CHirDecl::Function(f) if f.body.is_some()
         && (f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
-            || constant_inline_return(unit, f, target).is_some()))
+            || constant_inline_return(unit, f, target).is_some()
+            || f.has_internal_linkage(unit.symbols())))
     }) || !static_integer_values(unit, target).is_empty()
+}
+
+type ParameterConstants<'a> = BTreeMap<SymbolId, BTreeMap<SymbolId, (&'a CHirExpr<'a>, TypeId)>>;
+
+// Closed-world facts only: every direct caller must pass the same converted
+// value, and neither address-taking nor assembly may supply another caller.
+// Keep calls (including noinline calls) and all argument evaluations intact.
+fn common_parameter_values<'a>(
+    unit: &CHirUnit<'a>,
+    target: &TargetDataLayout,
+    uses: &Uses<'a>,
+    linkage: &crate::linkage::SymbolLinkage,
+) -> ParameterConstants<'a> {
+    let mut calls = BTreeMap::<_, Vec<_>>::new();
+    for &(symbol, args) in &uses.calls {
+        calls.entry(symbol).or_default().push(args);
+    }
+    let assembly_names: BTreeSet<_> = uses
+        .assembly
+        .iter()
+        .flat_map(|assembly| {
+            assembly.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$')))
+        })
+        .collect();
+    let mut result = BTreeMap::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Function(function) = declaration else {
+            continue;
+        };
+        let Some(body) = function.body else { continue };
+        let ParameterSyntax::Prototype {
+            parameters,
+            variadic: false,
+        } = &function.parameters
+        else {
+            continue;
+        };
+        let name = linkage.function_name(function.symbol, &function.name.spelling);
+        if !function.has_internal_linkage(unit.symbols())
+            || uses.addresses.contains(&function.symbol)
+            || assembly_names.contains(name)
+            || assembly_names.contains(format!("_{name}").as_str())
+        {
+            continue;
+        }
+        let Some(callers) = calls.get(&function.symbol) else {
+            continue;
+        };
+        if callers.iter().any(|args| args.len() != parameters.len()) {
+            continue;
+        }
+        let mutable = inspect([Node::Stmt(body)]).mutable;
+        for (index, parameter) in parameters.iter().enumerate() {
+            let Some(symbol) = parameter.symbol else {
+                continue;
+            };
+            let Some(integer) = crate::constant::canonical_integer_type(unit.types(), parameter.ty)
+            else {
+                continue;
+            };
+            let qualifiers = unit.types.get(parameter.ty).unwrap().qualifiers;
+            if mutable.contains(&symbol) || qualifiers.is_volatile || qualifiers.is_atomic {
+                continue;
+            }
+            let mut values = callers.iter().map(|args| {
+                crate::constant::eval_executable_integer_constant(
+                    args[index],
+                    unit.types(),
+                    unit.symbols(),
+                    target,
+                )
+                .map(|value| value.cast(integer))
+            });
+            let Some(Some(first)) = values.next() else {
+                continue;
+            };
+            if values.all(|value| value == Some(first)) {
+                result
+                    .entry(function.symbol)
+                    .or_insert_with(BTreeMap::new)
+                    .insert(symbol, (callers[0][index], parameter.ty));
+            }
+        }
+    }
+    result
 }
 
 // This is an execution optimization, not an extension of integer constant
@@ -509,6 +599,7 @@ pub fn substitute<'a>(
         message: e.message.to_owned(),
     })?;
     uses.addresses.extend(linkage.aliases.values());
+    let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
     let eligible: BTreeMap<_, _> = unit
         .iter()
         .filter_map(|d| match d {
@@ -604,6 +695,14 @@ pub fn substitute<'a>(
                     .ok_or_else(|| pass.error(f.span, "function scope missing"))?
                     .id();
                 let mut c = Context::new(scope);
+                if let Some(values) = parameter_values.get(&f.symbol) {
+                    for (&symbol, &(value, ty)) in values {
+                        let converted = pass.alloc(CHirExpr::Cast(ty, value, value.span()));
+                        if let Some(value) = pass.repeatable_value(converted, ty) {
+                            c.optimized_constants.insert(symbol, value);
+                        }
+                    }
+                }
                 pass.temporaries.clear();
                 pass.active.push(f.symbol);
                 let mut rewritten = pass.stmt(body, &mut c)?;
@@ -641,6 +740,7 @@ struct Context<'a> {
     scope: ScopeId,
     replacements: BTreeMap<SymbolId, SymbolId>,
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    optimized_constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     mutable: BTreeSet<SymbolId>,
     declaration_prefix: bool,
     memo: HashMap<(usize, bool), &'a CHirExpr<'a>>,
@@ -656,6 +756,7 @@ impl Context<'_> {
             scope,
             replacements: BTreeMap::new(),
             constants: BTreeMap::new(),
+            optimized_constants: BTreeMap::new(),
             mutable: BTreeSet::new(),
             declaration_prefix: false,
             memo: HashMap::new(),
@@ -1262,6 +1363,9 @@ impl<'a> Substitution<'a, '_> {
                 return Ok(v);
             }
             if c.expand_calls {
+                if let Some(v) = c.optimized_constants.get(symbol) {
+                    return Ok(v);
+                }
                 if let Some(v) = self.static_values.get(symbol) {
                     return Ok(v);
                 }
@@ -1639,6 +1743,58 @@ impl<'a> Substitution<'a, '_> {
         };
         if parameters.len() != args.len() {
             return Err(self.error(span, "inline argument arity mismatch"));
+        }
+        // A literal call to a single-return leaf has no parameter addresses,
+        // local lifetime or body effects. Fold its substituted return value
+        // without introducing a result object that hides the constant again.
+        if let CHirStmt::Compound(items, _) = f.body.unwrap() {
+            if let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() {
+                let mut constants = Context::new(scope);
+                constants.expand_calls = false;
+                let mut all_constant = true;
+                for (parameter, argument) in parameters.iter().zip(args) {
+                    let qualifiers = self.unit.types.get(parameter.ty).unwrap().qualifiers;
+                    if qualifiers.is_volatile || qualifiers.is_atomic {
+                        all_constant = false;
+                        break;
+                    }
+                    let converted = self.alloc(CHirExpr::Cast(parameter.ty, argument, span));
+                    if crate::constant::eval_executable_integer_constant(
+                        converted,
+                        &self.unit.types,
+                        &self.unit.symbols,
+                        self.target,
+                    )
+                    .is_none()
+                    {
+                        all_constant = false;
+                        break;
+                    }
+                    if let Some(symbol) = parameter.symbol {
+                        if let Some(value) = self.repeatable_value(converted, parameter.ty) {
+                            constants.constants.insert(symbol, value);
+                        } else {
+                            all_constant = false;
+                        }
+                    }
+                }
+                if all_constant && !inspect([Node::Expr(value, false)]).owns_statements {
+                    let value = self.expr(value, &mut constants)?;
+                    let converted = self.alloc(CHirExpr::Cast(return_type, value, span));
+                    if crate::constant::eval_executable_integer_constant(
+                        converted,
+                        &self.unit.types,
+                        &self.unit.symbols,
+                        self.target,
+                    )
+                    .is_some()
+                    {
+                        if let Some(value) = self.repeatable_value(converted, return_type) {
+                            return Ok(value);
+                        }
+                    }
+                }
+            }
         }
         if args.is_empty() {
             if let Some(value) = constant_inline_return(&self.unit, f, self.target) {

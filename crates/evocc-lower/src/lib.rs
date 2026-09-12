@@ -994,10 +994,14 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | ParameterSyntax::IdentifierList { parameters } = &function.parameters
             {
                 for parameter in parameters {
-                    if matches!(
-                        unit.types().get(parameter.ty).map(|ty| &ty.kind),
-                        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
-                    ) {
+                    if unit.types().get(parameter.ty).is_some_and(|ty| {
+                        ty.qualifiers.is_volatile
+                            || ty.qualifiers.is_atomic
+                            || matches!(
+                                ty.kind,
+                                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
+                            )
+                    }) {
                         if let Some(symbol) = parameter.symbol {
                             out.insert(symbol);
                         }
@@ -3693,7 +3697,10 @@ impl<'a> FunctionLowerer<'a> {
                     integer: value_type.integer,
                 },
                 value_type.source,
-                false,
+                self.unit
+                    .types()
+                    .get(declared)
+                    .is_some_and(|ty| ty.qualifiers.is_volatile),
                 declaration.span,
                 &mut entry,
             )?;
