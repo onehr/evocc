@@ -3812,7 +3812,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .symbols()
                     .symbol(*symbol)
                     .is_ok_and(|symbol| symbol.enumerator_value().is_some()),
-                CHirExpr::Cast(ty, ..) => self.integer_type(*ty, span).is_ok(),
+                // Numeric pointer round trips use the same iterative casts
+                // and fuel as other constants. The operand whitelist still
+                // excludes object reads, addresses and calls.
+                CHirExpr::Cast(ty, ..) => matches!(
+                    self.value_type(*ty, span),
+                    Ok(ValueType::Integer(_) | ValueType::Pointer(_))
+                ),
                 _ => false,
             };
             if !admitted {

@@ -224,19 +224,41 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in [the two-object replay](../../.evidence/k1/absolute-place-addresses-20260912/substitution.json), with no access provenance invented. Combined runtime remains separate. |
 | K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `d387e65`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
 | K-C04 / OPEN | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | C-HIR/lowering: reduce the operand and its call/inlining path; distinguish a true nonconstant from a missed constant. |
-| K-C05 / OPEN | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | Lowering/backend: reduce the union-valued asm register output; check representation and native read/write. |
-| K-C06 / LOCAL_VERIFIED | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`: lower the evaluated index times zero with a valid unit-scale offset; both interpreters preserve pointer identity, effects and E3001. Both oracles at O0/O2 agree; gate **1,433/0**, Clippy/fmt PASS. Original five-unit replay pending. |
+| K-C05 / original compile replay PASS | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | RED `fabe30a`: register operands transfer the complete four-/eight-byte object representation using ordinary guarded loads/stores and existing assembly effects. Both oracle and subject native fixtures pass; all five originals assemble and match symbols in `aggregate-and-case-20260912`. |
+| K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in [the replay](../../.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json). |
 | K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
 | K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in [the replay](../../.evidence/k1/efi-characters-20260912/substitution.json); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
 | K-C09 / OPEN | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | Backend: explicit binding, clobber/call and spill interactions in native tests; do not silently free a reserved register. |
 | K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
-| K-C12 / OPEN | 2 | E3101 | Malformed global relocation | `drivers/acpi/acpica/exdump.o` | Lowering/IR: reduce target, extent and alignment; verify native relocation without relaxing the validator. |
+| K-C12 / BODY_CONFLICT | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | Both sealed compilers O0/O2 pass `tests/fixtures/packed-pointer-relocations.{c,out}`. Section 2.1 expressly requires 8-aligned relocation offsets; Appendix D records this conflict, preserving the validator until body-change authority is given. Proposed correction: retain eight-byte width, bounds, ordering, nonoverlap and provenance, but permit byte-aligned placement. |
 | K-C13 / OPEN | 1 | E3029 | Computed goto | `kernel/bpf/core.o` | C-HIR/lowering/backend: labels, computed dispatch, successor values and invalid target checks in a native mini-program. |
-| K-C14 / OPEN | 1 | E3101 | Case constant | `kernel/signal.o` | Parser/lowering: exact source-width constant and selected switch arm against both oracles. |
+| K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
 ### Expression goto destinations (2026-09-12)
+
+The later `aggregate-and-case-20260912` replay verifies five ticket-lock union
+assembly users and `kernel/signal.o`: **6/6 assembled**, no installation/link,
+release SHA-256 `05fbe3ae873e0424691a5f39c0e0b272503ef1347399c508cf89150e95098657`,
+per-unit record SHA-256 `0a6a5380ae0f5691e50aaf8b6c8203bb390d549ae40e21f908c6ab158f316e23`.
+Together the disjoint targeted runs have replayed **141 of the original 161
+refused identities successfully**, across their recorded repair binaries;
+this is not a fresh assembled count for all 2,799 units. Twenty original
+identities remain in the open families, including the two K-C12 body-conflict
+units, and the full no-fallback link, boot and selected selftests remain OPEN.
+
+The first pointer-case patch failed the existing static-initializer fuel
+regression: a recursive folding shortcut bypassed the explicit budget. That
+shortcut was removed rather than weakening the test; the final implementation
+admits the numeric casts in the existing iterative evaluator. The failed gate
+is not counted as a pass.
+The corrected affected gate then passed **1,435 tests / 0 failures / 3 existing
+ignored**, Clippy `-D warnings`, and workspace formatting; K1 Python tests
+passed **101/101** and Ruff/diff-check were clean. Command:
+`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 tools/gate-changed.sh fabe30a --locked --offline -q -j1 -- --test-threads=4`.
+This is the affected-crate gate, not the still-pending full workspace/offline
+replay and full-composition milestone acceptance.
 
 The later targeted replay `initializer-and-goto-20260912` examines exactly
 the 128 originals from K-C01/02/03 using release SHA-256

@@ -6860,3 +6860,23 @@ Arithmetic and indexing over a GNU zero-sized element evaluate the index normall
 Both sealed compilers at O0/O2 execute `tests/fixtures/zero-sized-pointer-offsets.{c,out}` with zero exits, including empty records, zero-length array elements, compound updates and prefix/postfix operations.
 Lowering consumes the evaluated index in a zero product and uses a positive unit-scale `ptr.offset`; neither its validator invariant nor runtime poison, lifetime and actual byte-access checks are relaxed.
 No diagnostic is allocated; this addresses the five measured zero-scale failures in `fs/super.o`, `kernel/auditsc.o`, `kernel/rcu/tree.o`, `net/core/sock.o` and `net/netlink/af_netlink.o`.
+
+### Small aggregate register assembly operands
+
+A four- or eight-byte record used as a general-register assembly operand transfers its complete object representation as `bits<32>` or `bits<64>`, not its address or a guessed active union member.
+Outputs use the existing write-only/read-write rules and write back all representation bytes on every outgoing edge; explicit register inputs load the representation, while memory operands keep their address-only behavior.
+Both sealed compilers at O0/O2 execute `tests/fixtures/aggregate-register-operands.{c,out}` with zero exits; existing access guards, effect tokens and reached-assembly E3021 remain unchanged, and other aggregate sizes retain E3021.
+No diagnostic is allocated; this addresses the five measured nVHE ticket-lock union operand failures.
+
+### Numeric pointer round trips in integer case labels
+
+An integer case label formed by casting an integer constant to a pointer and back retains the target-width numeric value, without allocating or accessing an object.
+Both sealed compilers at O0/O2 execute `tests/fixtures/address-case-constants.{c,out}` with zero exits for the kernel's zero/one signal-info sentinels and a distinct default case.
+The shared static integer evaluator processes the numeric casts through its existing iterative machine and explicit fuel budget; this does not make a symbolic address a known integer or change executed pointer provenance checks.
+No diagnostic is allocated; the measured original unit is `kernel/signal.o`.
+
+### Unresolved packed relocation alignment conflict
+
+Section 2.1 requires every eight-byte relocation to start at an eight-aligned offset, but `tests/fixtures/packed-pointer-relocations.{c,out}` measures both sealed compilers at O0/O2 accepting initialized pointers at offsets 2 and 12 in a 20-byte packed array.
+The two measured ACPICA units are `drivers/acpi/acpica/exdump.o` and `drivers/acpi/acpica/rsdumpinfo.o`; their record has two byte fields before the pointer.
+The existing E3101 validator refusal is retained pending authority to amend the body; no new diagnostic, altered source layout or permissive validator change is introduced here.

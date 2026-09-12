@@ -4351,7 +4351,13 @@ impl<'a> FunctionLowerer<'a> {
                     }
                     _ => return Err(refuse(format!("{} output place", operand.constraint))),
                 };
-                let (ir, integer) = self.c_value_type(ty, operand.span)?;
+                let (ir, integer) = self.assembly_register_value_type(ty, operand.span)?;
+                let layout = match operand.expression {
+                    CHirExpr::MemoryRead { place, .. } => {
+                        self.place_access_layout(place, operand.span)?
+                    }
+                    _ => self.access_layout(ty, operand.span)?,
+                };
                 let volatile = self
                     .unit
                     .types()
@@ -4359,12 +4365,14 @@ impl<'a> FunctionLowerer<'a> {
                     .is_some_and(|ty| ty.qualifiers.is_volatile);
                 let address_key = self.retain_temporary(address.clone(), &mut state);
                 temporary_keys.push(address_key);
-                result_types.push(ir);
-                writebacks.push((address_key, ty, integer, volatile));
+                result_types.push(ir.clone());
+                writebacks.push((address_key, layout, integer, volatile));
                 if constraint.starts_with('+') {
                     Some(
-                        self.emit_memory_load(address, ty, volatile, operand.span, &mut state)?
-                            .value,
+                        self.emit_typed_memory_load(
+                            address, ir, integer, volatile, &mut state, layout,
+                        )?
+                        .value,
                     )
                 } else {
                     None
@@ -4410,6 +4418,19 @@ impl<'a> FunctionLowerer<'a> {
                     operand.expression,
                     operand.span,
                     &mut state,
+                )?
+                .value
+            } else if let Some(ty) = self.record_value_type(operand.expression) {
+                let (ir, integer) = self.assembly_register_value_type(ty, operand.span)?;
+                let address = self.lower_expr(operand.expression, &mut state)?.value;
+                let layout = self.access_layout(ty, operand.span)?;
+                self.emit_typed_memory_load(
+                    address,
+                    ir,
+                    integer,
+                    self.aggregate_source_is_volatile(operand.expression),
+                    &mut state,
+                    layout,
                 )?
                 .value
             } else {
@@ -4578,18 +4599,19 @@ impl<'a> FunctionLowerer<'a> {
         }
         let mut normal = Vec::new();
         for (label, mut successor) in successors {
-            for ((address, ty, integer, volatile), result) in writebacks.iter().zip(&result_keys) {
+            for ((address, layout, integer, volatile), result) in
+                writebacks.iter().zip(&result_keys)
+            {
                 let address = self.token(&successor, *address)?.value;
                 let value = ExprValue {
                     value: self.token(&successor, *result)?.value,
                     integer: *integer,
                 };
-                self.emit_memory_store(
+                self.emit_memory_store_with_layout(
                     address,
                     value,
-                    *ty,
+                    *layout,
                     *volatile,
-                    source.span,
                     &mut successor,
                 )?;
             }
@@ -5124,6 +5146,28 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "object subvalue is neither an integer nor pointer",
             }),
         }
+    }
+
+    fn assembly_register_value_type(
+        &self,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<(EvoIRType, CIntegerType), LowerError> {
+        if !self.is_aggregate_type(ty) {
+            return self.c_value_type(ty, span);
+        }
+        let layout = self.access_layout(ty, span)?;
+        let integer = match layout.size_bytes {
+            4 => CIntegerType::UINT,
+            8 => CIntegerType::ULONG,
+            size => {
+                return Err(LowerError::AsmOperand {
+                    span,
+                    reason: format!("r aggregate size {size}"),
+                })
+            }
+        };
+        Ok((bits(integer), integer))
     }
 
     fn fnptr_type(&self, function_ty: TypeId, span: SourceSpan) -> Result<EvoIRType, LowerError> {
@@ -6315,6 +6359,18 @@ impl<'a> FunctionLowerer<'a> {
         layout: AccessLayout,
     ) -> Result<ExprValue, LowerError> {
         let (result_ty, integer) = self.c_value_type(ty, span)?;
+        self.emit_typed_memory_load(address, result_ty, integer, volatile, state, layout)
+    }
+
+    fn emit_typed_memory_load(
+        &mut self,
+        address: Value,
+        result_ty: EvoIRType,
+        integer: CIntegerType,
+        volatile: bool,
+        state: &mut State,
+        layout: AccessLayout,
+    ) -> Result<ExprValue, LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
         self.emit(
