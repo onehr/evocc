@@ -1004,6 +1004,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             write(frame, *dst, MirValue::Ptr(pointer));
         }
         MInst::Load {
+            align,
             dst,
             base,
             offset,
@@ -1013,7 +1014,10 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
                 .map_err(|error| memory_error(&error))?;
-            let access = layout_for(kind.size_bytes());
+            let mut access = layout_for(kind.size_bytes());
+            if *align != 0 {
+                access.align_bytes = *align;
+            }
             let value = match kind {
                 LoadKind::P => {
                     let pointer = if *volatile {
@@ -1075,6 +1079,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             write(frame, *dst, value);
         }
         MInst::Store {
+            align,
             src,
             base,
             offset,
@@ -1084,7 +1089,10 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
                 .map_err(|error| memory_error(&error))?;
-            let access = layout_for(kind.size_bytes());
+            let mut access = layout_for(kind.size_bytes());
+            if *align != 0 {
+                access.align_bytes = *align;
+            }
             let value = read(frame, *src)?;
             match (kind, value) {
                 (StoreKind::P, MirValue::Ptr(pointer)) => {

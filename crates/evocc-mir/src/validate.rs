@@ -242,6 +242,13 @@ fn expect_flags(name: &str, block: u32, reg: VReg, role: &str) -> Result<(), Str
 }
 
 fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
+    if let MInst::Load { align, .. } | MInst::Store { align, .. } = inst {
+        if *align != 0 && !align.is_power_of_two() {
+            return Err(format!(
+                "@{name} block {block}: memory alignment must be a power of two"
+            ));
+        }
+    }
     match inst {
         MInst::Cmp { dst, lhs, rhs, .. } => {
             expect_flags(name, block, *dst, "a cmp result")?;

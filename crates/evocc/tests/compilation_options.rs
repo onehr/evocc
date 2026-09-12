@@ -111,7 +111,7 @@ fn freestanding_disables_only_ordinary_library_name_substitution() {
 
 #[test]
 fn stack_protection_selects_source_arrays_and_frame_addresses() {
-    let source = "extern void use(void *); int plain(int a) { int n=a; return n; } void array(void) { char a[2]; use(a); } void scalar(void) { int n=1; use(&n); } void heap(int *p) { use(&*p); } void parameter(int a) { use(&a); } __attribute__((no_stack_protector)) void exempt(void) { char a[20]; use(a); } void persistent(void) { static char a[20]; use(a); }";
+    let source = "extern void use(void *); int plain(int a) { int n=a; return n; } void array(void) { char a[2]; use(a); } void scalar(void) { int n=1; use(&n); } void heap(int *p) { use(&*p); } void parameter(int a) { use(&a); } __attribute__((no_stack_protector)) void exempt(void) { char a[20]; use(a); } void persistent(void) { static char a[20]; use(a); } void literal(void) { use(&(int){3}); } void literal_array(void) { use((int[]){1,2}); }";
     let ir = successful(run(&["--emit=evoir", "-fstack-protector-strong"], source));
     let protected = ir
         .lines()
@@ -120,7 +120,13 @@ fn stack_protection_selects_source_arrays_and_frame_addresses() {
         .collect::<Vec<_>>();
     assert_eq!(
         protected,
-        ["func @array", "func @scalar", "func @parameter"]
+        [
+            "func @array",
+            "func @scalar",
+            "func @parameter",
+            "func @literal",
+            "func @literal_array"
+        ]
     );
     let disabled = successful(run(
         &[
@@ -247,4 +253,33 @@ fn strict_alignment_expands_unaligned_values_but_retains_native_results() {
         source,
     ));
     assert!(!ordinary.contains("ldrb w17"));
+    let ir = successful(run(&["--emit=evoir"], source));
+    let module = evocc_evoir::parse_section9_module(ir.as_bytes()).unwrap();
+    let mir = evocc_mir::lower_module_for(evocc_mir::Target::Linux, &module, &|_| false).unwrap();
+    let text = evocc_mir::render_module(&mir);
+    assert_eq!(evocc_mir::parse_module(&text).unwrap(), mir);
+    assert!(evocc_mir::parse_module(&text.replace("[align=1]", "[align=3]")).is_err());
+    assert_eq!(
+        evocc_mir::interpret_module(&mir, "main", &[], evocc_mir::MirLimits::new(100_000))
+            .unwrap_or_else(|error| panic!("{error:?}\n{text}"))
+            .results,
+        vec![evocc_mir::MirValue::Int(0)]
+    );
+}
+
+#[test]
+fn automatic_initialization_and_protection_cover_vararg_storage() {
+    let source = "long v(int n,...) { __builtin_va_list ap; __builtin_va_start(ap,n); long x=__builtin_va_arg(ap,long); __builtin_va_end(ap); return x; } int main(void) { return v(0,7L)!=7; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(
+            successful(run(&[mode, "-ftrivial-auto-var-init=zero"], source)).trim(),
+            "0"
+        );
+    }
+    let ir = successful(run(&["--emit=evoir", "-fstack-protector-strong"], source));
+    assert!(
+        ir.lines()
+            .any(|line| line.starts_with("func @v(") && line.ends_with(" stack_protect")),
+        "{ir}"
+    );
 }

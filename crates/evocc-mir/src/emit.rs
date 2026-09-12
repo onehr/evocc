@@ -26,6 +26,7 @@ pub enum RelocationModel {
 /// Native instrumentation selected by the effective target command.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
+    pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
     pub stack_guard: StackGuard,
@@ -53,6 +54,7 @@ pub enum StackGuard {
 /// adjustment depends on the incoming address rather than only frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
     pub stack_guard: Option<(u64, StackGuard)>,
@@ -173,6 +175,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
 
     Frame {
+        strict_alignment: false,
         sign_returns: false,
         general_registers_only: false,
         stack_guard: None,
@@ -819,6 +822,7 @@ fn emit_function(
 ) {
     let mut frame = frame_of(allocated);
     frame.sign_returns = options.sign_returns;
+    frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
     if stack_protect {
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
@@ -1444,8 +1448,36 @@ fn emit_inst(
             base,
             offset,
             kind,
+            align,
             ..
         } => {
+            if frame.strict_alignment && *align != 0 && u64::from(*align) < kind.size_bytes() {
+                let _ = writeln!(text, "    mov x16, #0");
+                for byte in 0..kind.size_bytes() {
+                    let _ = writeln!(
+                        text,
+                        "    ldrb w17, [{}, #{}]\n    orr x16, x16, x17, lsl #{}",
+                        name(*base),
+                        offset + byte as i64,
+                        byte * 8
+                    );
+                }
+                if *kind == LoadKind::Sw {
+                    let _ = writeln!(text, "    sxtw {}, w16", name(*dst));
+                } else {
+                    let _ = writeln!(
+                        text,
+                        "    mov {}, {}",
+                        spell(*dst, load_class(*kind, dst.class)),
+                        if load_class(*kind, dst.class) == RegClass::Gpr32 {
+                            "w16"
+                        } else {
+                            "x16"
+                        }
+                    );
+                }
+                return;
+            }
             let _ = writeln!(
                 text,
                 "    {} {}, [{}, #{offset}]",
@@ -1459,8 +1491,22 @@ fn emit_inst(
             base,
             offset,
             kind,
+            align,
             ..
         } => {
+            if frame.strict_alignment && *align != 0 && u64::from(*align) < kind.size_bytes() {
+                for byte in 0..kind.size_bytes() {
+                    let _ = writeln!(
+                        text,
+                        "    lsr x16, {}, #{}\n    strb w16, [{}, #{}]",
+                        spell(*src, RegClass::Gpr64),
+                        byte * 8,
+                        name(*base),
+                        offset + byte as i64
+                    );
+                }
+                return;
+            }
             let _ = writeln!(
                 text,
                 "    {} {}, [{}, #{offset}]",

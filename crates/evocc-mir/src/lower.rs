@@ -575,6 +575,7 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 struct Lowerer {
+    access_alignments: HashMap<u32, u32>,
     function_name: String,
     next_vreg: u32,
     next_block: u32,
@@ -1032,6 +1033,7 @@ fn lower_function(
     let _ = entry;
 
     let mut lowerer = Lowerer {
+        access_alignments: HashMap::new(),
         function_name: function.name.clone(),
         next_vreg: 0,
         next_block: u32::try_from(function.blocks.len()).unwrap_or(u32::MAX),
@@ -1296,7 +1298,9 @@ fn lower_block(
                     untaken_args: carried,
                 },
             });
-            for reg in lowerer.map.values_mut() {
+            // Both limbs are local SSA values. A checked operation splits
+            // the block, so the continuation must use both new bindings.
+            for reg in lowerer.map.values_mut().chain(lowerer.high.values_mut()) {
                 if let Some(fresh) = rebind.get(&reg.id) {
                     *reg = *fresh;
                 }
@@ -1343,6 +1347,7 @@ fn lower_block(
                 // thirty-two-bit integer, so it is read sign-extended.
                 let offs = lowerer.fresh(RegClass::Gpr64);
                 insts.push(MInst::Load {
+                    align: 0,
                     dst: offs,
                     base: ap,
                     offset: VA_GR_OFFS,
@@ -1421,6 +1426,7 @@ fn lower_block(
                 let next = params[width + 2];
                 let mut body = Vec::new();
                 body.push(MInst::Store {
+                    align: 0,
                     src: next,
                     base: list,
                     offset: VA_GR_OFFS,
@@ -1429,6 +1435,7 @@ fn lower_block(
                 });
                 let top = lowerer.fresh(RegClass::Gpr64);
                 body.push(MInst::Load {
+                    align: 0,
                     dst: top,
                     base: list,
                     offset: VA_GR_TOP,
@@ -1455,6 +1462,7 @@ fn lower_block(
                 let mut body = vec![
                     MInst::MovImm { dst: zero, imm: 0 },
                     MInst::Store {
+                        align: 0,
                         src: zero,
                         base: list,
                         offset: VA_GR_OFFS,
@@ -1482,6 +1490,7 @@ fn lower_block(
                 let mut body = Vec::new();
                 let raw = lowerer.fresh(RegClass::Gpr64);
                 body.push(MInst::Load {
+                    align: 0,
                     dst: raw,
                     base: list,
                     offset: VA_STACK,
@@ -1495,6 +1504,7 @@ fn lower_block(
                 };
                 let bumped = lowerer.binary_imm(&mut body, BinOp::Add, address, slot, Width::X);
                 body.push(MInst::Store {
+                    align: 0,
                     src: bumped,
                     base: list,
                     offset: VA_STACK,
@@ -1523,6 +1533,7 @@ fn lower_block(
                     let src = if shape.size > 16 {
                         let src = lowerer.fresh(RegClass::Gpr64);
                         body.push(MInst::Load {
+                            align: 0,
                             dst: src,
                             base: address,
                             offset: 0,
@@ -1557,6 +1568,7 @@ fn lower_block(
                         let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
                         let dst = lowerer.fresh(class);
                         body.push(MInst::Load {
+                            align: 0,
                             dst,
                             base: address,
                             offset: 0,
@@ -1570,12 +1582,7 @@ fn lower_block(
                 for (old, fresh) in carried.iter().zip(params.iter()) {
                     rebind.insert(old.id, *fresh);
                 }
-                for reg in lowerer.map.values_mut() {
-                    if let Some(fresh) = rebind.get(&reg.id) {
-                        *reg = *fresh;
-                    }
-                }
-                for reg in lowerer.high.values_mut() {
+                for reg in lowerer.map.values_mut().chain(lowerer.high.values_mut()) {
                     if let Some(fresh) = rebind.get(&reg.id) {
                         *reg = *fresh;
                     }
@@ -2309,10 +2316,18 @@ fn lower_inst(
         // Section 5: `lifetime.end` lowers to nothing, and `pointer_valid` and
         // `access_in_bounds` are "the guards the front end already lowered into
         // ub.assume obligations; the instruction itself has no machine effect".
-        Inst::LifetimeEnd { .. } | Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => {}
+        Inst::LifetimeEnd { .. } | Inst::PointerValid { .. } => {}
+        Inst::AccessInBounds {
+            mem_out, layout, ..
+        } => {
+            lowerer
+                .access_alignments
+                .insert(mem_out.id, layout.align_bytes);
+        }
         Inst::Load {
             result,
             address,
+            mem_in,
             volatile,
             ..
         } => {
@@ -2320,7 +2335,17 @@ fn lower_inst(
             let kind = load_kind(&result.ty)?;
             let base = lowerer.reg(address)?;
             let dst = lowerer.fresh(class);
+            let align = lowerer
+                .access_alignments
+                .get(&mem_in.id)
+                .copied()
+                .unwrap_or(1);
             insts.push(MInst::Load {
+                align: if u64::from(align) == kind.size_bytes() {
+                    0
+                } else {
+                    align
+                },
                 dst,
                 base,
                 offset: 0,
@@ -2332,13 +2357,24 @@ fn lower_inst(
         Inst::Store {
             address,
             value,
+            mem_in,
             volatile,
             ..
         } => {
             let kind = store_kind(&value.ty)?;
             let base = lowerer.reg(address)?;
             let src = lowerer.reg(value)?;
+            let align = lowerer
+                .access_alignments
+                .get(&mem_in.id)
+                .copied()
+                .unwrap_or(1);
             insts.push(MInst::Store {
+                align: if u64::from(align) == kind.size_bytes() {
+                    0
+                } else {
+                    align
+                },
                 src,
                 base,
                 offset: 0,
@@ -3260,6 +3296,7 @@ fn lower_va_start(
         lowerer.binary_imm(insts, BinOp::Add, stack, stack_bytes, Width::X)
     };
     insts.push(MInst::Store {
+        align: 0,
         src: stack,
         base: ap,
         offset: VA_STACK,
@@ -3275,6 +3312,7 @@ fn lower_va_start(
     let vector_top = lowerer.binary_imm(insts, BinOp::Add, top, 128, Width::X);
     for (offset, address) in [(VA_GR_TOP, top), (VA_VR_TOP, vector_top)] {
         insts.push(MInst::Store {
+            align: 0,
             src: address,
             base: ap,
             offset,
@@ -3290,6 +3328,7 @@ fn lower_va_start(
         imm: u64::from(offs as u32),
     });
     insts.push(MInst::Store {
+        align: 0,
         src: gr_offs,
         base: ap,
         offset: VA_GR_OFFS,
@@ -3302,6 +3341,7 @@ fn lower_va_start(
         imm: u64::from((-128_i32) as u32),
     });
     insts.push(MInst::Store {
+        align: 0,
         src: vr_offs,
         base: ap,
         offset: VA_VR_OFFS,
@@ -3563,37 +3603,75 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
         Inst::Load {
             result,
             address,
+            mem_in,
             volatile,
             ..
         } if is_pair(&result.ty) => {
             let base = lowerer.reg(address)?;
             let (low, high) = lowerer.fresh_pair();
-            insts.push(MInst::Ldp {
-                rt1: low,
-                rt2: high,
-                base,
-                offset: 0,
-                writeback: false,
-                volatile: *volatile,
-            });
+            let align = lowerer
+                .access_alignments
+                .get(&mem_in.id)
+                .copied()
+                .unwrap_or(1);
+            if align < 8 {
+                for (dst, offset) in [(low, 0), (high, 8)] {
+                    insts.push(MInst::Load {
+                        align,
+                        dst,
+                        base,
+                        offset,
+                        kind: LoadKind::X,
+                        volatile: *volatile,
+                    });
+                }
+            } else {
+                insts.push(MInst::Ldp {
+                    rt1: low,
+                    rt2: high,
+                    base,
+                    offset: 0,
+                    writeback: false,
+                    volatile: *volatile,
+                });
+            }
             lowerer.bind_pair(result, low, high);
         }
         Inst::Store {
             address,
             value,
+            mem_in,
             volatile,
             ..
         } if is_pair(&value.ty) => {
             let base = lowerer.reg(address)?;
             let (low, high) = lowerer.pair(value)?;
-            insts.push(MInst::Stp {
-                rt1: low,
-                rt2: high,
-                base,
-                offset: 0,
-                writeback: false,
-                volatile: *volatile,
-            });
+            let align = lowerer
+                .access_alignments
+                .get(&mem_in.id)
+                .copied()
+                .unwrap_or(1);
+            if align < 8 {
+                for (src, offset) in [(low, 0), (high, 8)] {
+                    insts.push(MInst::Store {
+                        align,
+                        src,
+                        base,
+                        offset,
+                        kind: StoreKind::X,
+                        volatile: *volatile,
+                    });
+                }
+            } else {
+                insts.push(MInst::Stp {
+                    rt1: low,
+                    rt2: high,
+                    base,
+                    offset: 0,
+                    writeback: false,
+                    volatile: *volatile,
+                });
+            }
         }
         _ => return Ok(false),
     }
@@ -3956,6 +4034,7 @@ fn load_chunk(
     for (piece, width) in chunk_pieces(size) {
         let dst = lowerer.fresh(RegClass::Gpr64);
         insts.push(MInst::Load {
+            align: 0,
             dst,
             base,
             offset: i64::try_from(offset + piece).unwrap_or(0),
@@ -3991,6 +4070,7 @@ fn store_chunk(
             lowerer.word_binary_imm(insts, BinOp::Lsr, src, piece * 8)
         };
         insts.push(MInst::Store {
+            align: 0,
             src: value,
             base,
             offset: i64::try_from(offset + piece).unwrap_or(0),

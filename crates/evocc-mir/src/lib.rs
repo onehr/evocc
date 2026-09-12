@@ -667,6 +667,8 @@ pub enum MInst {
     },
     /// `ldr rd, [rn, #off]` in all of its widths.
     Load {
+        /// Zero means the form's natural alignment; otherwise a checked power of two.
+        align: u32,
         dst: VReg,
         base: VReg,
         offset: i64,
@@ -675,6 +677,7 @@ pub enum MInst {
     },
     /// `str rd, [rn, #off]` in all of its widths.
     Store {
+        align: u32,
         src: VReg,
         base: VReg,
         offset: i64,

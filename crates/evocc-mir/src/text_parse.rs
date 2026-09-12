@@ -243,6 +243,22 @@ impl<'a> Scan<'a> {
         Ok(())
     }
 
+    fn access_alignment(&mut self) -> Result<u32, String> {
+        if !self.text.starts_with(" [align=") {
+            return Ok(0);
+        }
+        self.expect(" [align=")?;
+        let value = self
+            .take_while(|ch| ch.is_ascii_digit())
+            .parse::<u32>()
+            .map_err(|_| "invalid memory alignment")?;
+        self.expect("]")?;
+        if !value.is_power_of_two() {
+            return Err("memory alignment must be a power of two".into());
+        }
+        Ok(value)
+    }
+
     fn take_while(&mut self, accept: impl Fn(char) -> bool) -> &'a str {
         let end = self
             .text
@@ -801,8 +817,10 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             scan.expect(", ")?;
             let offset = scan.signed_immediate()?;
             scan.expect("]")?;
+            let align = scan.access_alignment()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Store {
+                align,
                 src,
                 base,
                 offset,
@@ -1007,8 +1025,10 @@ fn parse_defining(
         scan.expect(", ")?;
         let offset = scan.signed_immediate()?;
         scan.expect("]")?;
+        let align = scan.access_alignment()?;
         scan.finish()?;
         return Ok(MInst::Load {
+            align,
             dst,
             base,
             offset,

@@ -7,6 +7,8 @@ void heap(int *p) { use(&*p); }
 void parameter(int a) { use(&a); }
 __attribute__((no_stack_protector)) void exempt(void) { char a[20]; use(a); }
 void persistent(void) { static char a[20]; use(a); }
+void literal(void) { use(&(int){3}); }
+void literal_array(void) { use((int[]){1,2}); }
 int multiple(int c) { char a[16]; use(a); if (c) return 1; return 2; }
 void *address(void) { return __builtin_return_address(0); }
 __attribute__((noinline)) int overalign(void) {

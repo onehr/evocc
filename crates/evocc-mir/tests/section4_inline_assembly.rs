@@ -399,6 +399,7 @@ fn memory_operand() -> Case {
                 },
                 constant(w(1), 201),
                 MInst::Store {
+                    align: 0,
                     src: w(1),
                     base: g(3),
                     offset: 0,
@@ -520,6 +521,7 @@ fn address_operand() -> Case {
                 },
                 constant(w(1), 77),
                 MInst::Store {
+                    align: 0,
                     src: w(1),
                     base: g(3),
                     offset: 0,

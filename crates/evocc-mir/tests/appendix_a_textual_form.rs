@@ -35,6 +35,7 @@ fn appendix_a_module() -> MModule {
                 args: vec![v0, v1],
                 insts: vec![
                     MInst::Load {
+                        align: 0,
                         dst: v2,
                         base: v0,
                         offset: 0,
@@ -42,6 +43,7 @@ fn appendix_a_module() -> MModule {
                         volatile: false,
                     },
                     MInst::Load {
+                        align: 0,
                         dst: v3,
                         base: v1,
                         offset: 0,
@@ -107,6 +109,7 @@ fn every_form() -> MModule {
                             kind: evocc_mir::SymbolKind::Global,
                         },
                         MInst::Load {
+                            align: 0,
                             dst: w(6),
                             base: g(5),
                             offset: 4,
@@ -114,6 +117,7 @@ fn every_form() -> MModule {
                             volatile: true,
                         },
                         MInst::Store {
+                            align: 0,
                             src: w(6),
                             base: g(5),
                             offset: -8,

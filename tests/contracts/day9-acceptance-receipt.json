@@ -1,4 +1,16 @@
 {
+  "strictAlignment": {
+    "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "f766aea",
+    "red": "1 unsupported-mstrict-align failure, zero build errors",
+    "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test compilation_options --locked --offline -j 2",
+    "passed": 11,
+    "mirCommand": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-mir --test section5_wide_integers --test section4_semantics --test appendix_a_textual_form --test section8_emission --test section6_variadic_and_assembly --locked --offline -j 2",
+    "mirPassed": 77,
+    "nativeMeasurements": "tests/fixtures/strict-alignment.out",
+    "additionalRegressions": "Both 128-bit limbs rebound after a checked-operation split; automatic zeroing of opaque va_list storage; implicit and compound-literal frame addresses participate in strong stack protection.",
+    "fullCompileAndBoot": "NOT RUN"
+  },
   "protectedFrames": {
     "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
     "redCommit": "191eca4",

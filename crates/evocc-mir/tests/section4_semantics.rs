@@ -462,6 +462,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                     },
                     MInst::MovImm { dst: g(2), imm: 5 },
                     MInst::Store {
+                        align: 0,
                         src: g(2),
                         base: g(0),
                         offset: 0,
@@ -470,6 +471,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                     },
                     MInst::MovImm { dst: g(3), imm: 9 },
                     MInst::Store {
+                        align: 0,
                         src: g(3),
                         base: g(1),
                         offset: 0,
@@ -477,6 +479,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                         volatile: false,
                     },
                     MInst::Load {
+                        align: 0,
                         dst: g(4),
                         base: g(0),
                         offset: 0,
@@ -768,6 +771,7 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
                         align: 8,
                     },
                     MInst::Store {
+                        align: 0,
                         src: g(0),
                         base: g(1),
                         offset: 0,
@@ -782,6 +786,7 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
                         volatile: evocc_memory::CopyVolatility::None,
                     },
                     MInst::Load {
+                        align: 0,
                         dst: g(3),
                         base: g(2),
                         offset: 0,

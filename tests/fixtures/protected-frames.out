@@ -13,3 +13,5 @@ __FP_FAST_FMAF32x, __FP_FAST_FMAF64, __STDC_IEC_559_COMPLEX__, __STDC_IEC_559__,
 __STDC_IEC_60559_BFP__, __STDC_IEC_60559_COMPLEX__;
 it sets __GCC_IEC_559 and __GCC_IEC_559_COMPLEX to 0.
 The frozen GCC -mstrict-align has no predefined-macro delta.
+Both sealed compilers protect addressed scalar and array compound literals.
+Both also protect a variadic function using va_start/va_arg/va_end on its local list.

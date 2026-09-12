@@ -38,6 +38,7 @@ PASSED_THROUGH = (
     "-fstack-protector-strong", "-fno-stack-protector",
     "-mbranch-protection=pac-ret", "-mbranch-protection=none",
     "-mgeneral-regs-only", "-mno-general-regs-only",
+    "-mstrict-align", "-mno-strict-align",
     "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",
     "-fshort-wchar", "-fno-short-wchar",
     "-fpic", "-fPIC", "-fpie", "-fPIE", "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",

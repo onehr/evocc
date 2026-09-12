@@ -14,6 +14,17 @@ strip authentication bits. General-register-only emission omits SIMD vararg
 saves; it does not enable floating-point lowering. Positive, failure and
 over-aligned/dynamic-frame results are in `tests/fixtures/protected-frames.out`.
 
+Strict-alignment addendum (2026-09-13): scalar MIR loads/stores retain the
+EvoIR access guard's alignment as optional ` [align=N]` after the address;
+N is a positive power of two, and omission retains natural alignment.
+The abstract operation still transfers the whole value, including pointer
+provenance. Under `-mstrict-align`, emission expands an insufficiently aligned
+scalar access into byte loads/stores using reserved scratch registers;
+128-bit pairs use two individually alignment-qualified halves. Ordinary
+copy already chooses its largest safe width. `-mno-strict-align` restores
+ordinary emission; the last option wins. Measurements are in
+`tests/fixtures/strict-alignment.out`.
+
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
 specification, which this document cites by section) and the assembly text

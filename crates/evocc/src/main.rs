@@ -291,6 +291,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-mbranch-protection=none" => codegen.sign_returns = false,
             "-mgeneral-regs-only" => codegen.general_registers_only = true,
             "-mno-general-regs-only" => codegen.general_registers_only = false,
+            "-mstrict-align" => codegen.strict_alignment = true,
+            "-mno-strict-align" => codegen.strict_alignment = false,
             "-mstack-protector-guard=sysreg" => guard_is_sysreg = true,
             "-mstack-protector-guard=global" => guard_is_sysreg = false,
             _ if arg.starts_with("-mstack-protector-guard-reg=") => {

@@ -3461,12 +3461,18 @@ impl<'a> FunctionLowerer<'a> {
             && (references.objects.iter().any(|(symbol, ty)| {
                 references.frame_addresses.contains(symbol)
                     || self.type_contains_array(*ty, &mut BTreeSet::new())
-            }) || self
-                .info
-                .parameter_symbols
-                .iter()
-                .flatten()
-                .any(|symbol| references.frame_addresses.contains(symbol))
+            }) || references.addressed_compound
+                || references.compound_scopes.values().any(|sites| {
+                    sites
+                        .values()
+                        .any(|(ty, _)| self.type_contains_array(*ty, &mut BTreeSet::new()))
+                })
+                || self
+                    .info
+                    .parameter_symbols
+                    .iter()
+                    .flatten()
+                    .any(|symbol| references.frame_addresses.contains(symbol))
                 || references.direct.iter().any(|symbol| {
                     self.unit.symbols().is_builtin_function(*symbol)
                         && self
@@ -6927,12 +6933,12 @@ impl<'a> FunctionLowerer<'a> {
                 ..
             }
             | TypeKind::Void
-            | TypeKind::BuiltinVaList
             | TypeKind::Function { .. } => Err(LowerError::UnsupportedType {
                 ty,
                 span,
                 feature: "object cannot be zero-initialized",
             }),
+            TypeKind::BuiltinVaList => Ok(()),
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
                 let is_union = matches!(kind, TypeKind::Union(_));
                 let definition = self
@@ -12593,6 +12599,7 @@ fn contains_targeted_label(
 struct FunctionReferences {
     objects: BTreeMap<SymbolId, TypeId>,
     frame_addresses: BTreeSet<SymbolId>,
+    addressed_compound: bool,
     has_computed_goto: bool,
     local_registers: BTreeMap<SymbolId, String>,
     direct: BTreeSet<SymbolId>,
@@ -12744,6 +12751,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         if let CHirExpr::Ident { symbol, .. } = root {
             calls.frame_addresses.insert(*symbol);
         }
+        calls.addressed_compound |= matches!(root, CHirExpr::CompoundLit(..));
     }
     match expression {
         CHirExpr::LabelAddress { label, .. } => {
@@ -12772,6 +12780,9 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
             collect_references_expr(target, calls);
         }
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            if let CHirExpr::Ident { symbol, .. } = first {
+                calls.frame_addresses.insert(*symbol);
+            }
             collect_references_expr(first, calls);
             if let Some(second) = second {
                 collect_references_expr(second, calls);

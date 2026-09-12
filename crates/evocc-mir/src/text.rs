@@ -257,30 +257,42 @@ pub fn render_inst(inst: &MInst) -> String {
             page_prefix(*kind)
         ),
         MInst::Load {
+            align,
             dst,
             base,
             offset,
             kind,
             volatile,
         } => format!(
-            "{}{}{} [{}, #{offset}]",
+            "{}{}{} [{}, #{offset}]{}",
             defined(*dst),
             kind.mnemonic(),
             volatile_marker(*volatile),
-            use_of(*base)
+            use_of(*base),
+            if *align == 0 {
+                String::new()
+            } else {
+                format!(" [align={align}]")
+            }
         ),
         MInst::Store {
+            align,
             src,
             base,
             offset,
             kind,
             volatile,
         } => format!(
-            "{}{} {}, [{}, #{offset}]",
+            "{}{} {}, [{}, #{offset}]{}",
             kind.mnemonic(),
             volatile_marker(*volatile),
             use_of(*src),
-            use_of(*base)
+            use_of(*base),
+            if *align == 0 {
+                String::new()
+            } else {
+                format!(" [align={align}]")
+            }
         ),
         MInst::Binary {
             op,

@@ -210,6 +210,7 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
             args: vec![g(0), g(1)],
             insts: vec![
                 MInst::Load {
+                    align: 0,
                     dst: w(2),
                     base: g(0),
                     offset: 0,
@@ -217,6 +218,7 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
                     volatile: false,
                 },
                 MInst::Load {
+                    align: 0,
                     dst: w(3),
                     base: g(1),
                     offset: 0,

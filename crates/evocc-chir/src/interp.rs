@@ -5860,12 +5860,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
-            | TypeKind::TargetBuiltin(_)
-            | TypeKind::BuiltinVaList => {
+            | TypeKind::TargetBuiltin(_) => {
                 let value = self.zero_value(ty, span)?;
                 self.store_initialized_value(address, ty, value, span)?;
                 Ok(())
             }
+            TypeKind::BuiltinVaList => Ok(()),
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),

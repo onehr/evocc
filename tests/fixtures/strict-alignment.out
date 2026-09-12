@@ -1,0 +1,9 @@
+2026-09-13, sealed linux/arm64, network disabled.
+gcc-14 / clang-19 -O0 -mstrict-align strict-alignment.c: both native exit 0.
+gcc-14 / clang-19 -O2 -mstrict-align -S strict-alignment.c: read_value uses eight ldrb operations.
+EvoCC --emit=asm --target=aarch64-unknown-linux-gnu -mstrict-align strict-alignment.c,
+linked and executed with sealed gcc-14: native exit 0.
+MIR textual roundtrip preserves align=1; malformed align=3 is refused;
+MIR main returns 0, including packed pointer and 128-bit accesses.
+The initial MIR execution exposed an old high-limb SSA binding after a UB split;
+both limb bindings now follow the continuation's explicit block arguments.
