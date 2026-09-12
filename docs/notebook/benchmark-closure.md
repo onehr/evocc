@@ -25,7 +25,8 @@ new all-benchmark campaign or turn cached execution into a fresh boot.
    Assembly containing external includes/incbin stays fresh. Preserve unchanged
    installed objects; do not build a new runner or a boot-verdict cache.
 4. Invalidate the incomplete source-only cache: include the source/reference
-   input snapshot, including headers and generated files, in frontend reuse.
+   input snapshot, including headers, generated files and predefined-date
+   inputs, in frontend reuse.
    Record fresh/cache counts and time per step. Use six compiler workers on
    the otherwise idle 12-core/64-GiB host, and only one heavyweight run.
 5. Run the complete survey, seal its compact per-unit report and rank first

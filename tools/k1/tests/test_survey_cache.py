@@ -172,6 +172,10 @@ class AssemblyReuseTest(unittest.TestCase):
             self.assertNotEqual(changed, generated)
             (src / "new.h").write_text("int added;\n")
             self.assertNotEqual(generated, snapshot(src, build))
+            with patch.dict(substitute.os.environ, {"SOURCE_DATE_EPOCH": "0"}):
+                epoch = snapshot(src, build)
+            with patch.dict(substitute.os.environ, {"SOURCE_DATE_EPOCH": "86400"}):
+                self.assertNotEqual(epoch, snapshot(src, build), "__DATE__ is also a compiler input")
 
     def test_identical_assembly_reuses_object_but_changed_or_corrupt_inputs_do_not(self):
         with tempfile.TemporaryDirectory() as tmp:

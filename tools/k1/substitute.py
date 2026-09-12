@@ -144,6 +144,10 @@ def input_snapshot(src_root: Path, pristine: Path) -> str:
     No copies or persistent per-file manifests are made.
     """
     digest = hashlib.sha256()
+    # The driver's __DATE__ uses SOURCE_DATE_EPOCH or the current UTC date.
+    # A day boundary conservatively invalidates reuse, including mid-run.
+    digest.update(json.dumps([os.environ.get("SOURCE_DATE_EPOCH"),
+                              dt.datetime.now(dt.timezone.utc).date().isoformat()]).encode())
     roots = (src_root.resolve(), pristine.resolve())
     def walk_error(error):
         raise error
