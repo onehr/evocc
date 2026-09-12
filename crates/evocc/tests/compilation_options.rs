@@ -208,3 +208,43 @@ fn effective_codegen_modes_control_the_frozen_predefined_set() {
         "3 1"
     );
 }
+
+#[test]
+fn strict_alignment_expands_unaligned_values_but_retains_native_results() {
+    let source = include_str!("../../../tests/fixtures/strict-alignment.c");
+    let asm = successful(run(&["--emit=asm", "-mstrict-align"], source));
+    let read = asm
+        .split("read_value:\n")
+        .nth(1)
+        .unwrap()
+        .split(".size read_value")
+        .next()
+        .unwrap();
+    assert_eq!(
+        read.lines()
+            .filter(|line| line.trim_start().starts_with("ldrb "))
+            .count(),
+        8,
+        "{read}"
+    );
+    let write = asm
+        .split("write_value:\n")
+        .nth(1)
+        .unwrap()
+        .split(".size write_value")
+        .next()
+        .unwrap();
+    assert_eq!(
+        write
+            .lines()
+            .filter(|line| line.trim_start().starts_with("strb "))
+            .count(),
+        8,
+        "{write}"
+    );
+    let ordinary = successful(run(
+        &["--emit=asm", "-mstrict-align", "-mno-strict-align"],
+        source,
+    ));
+    assert!(!ordinary.contains("ldrb w17"));
+}
