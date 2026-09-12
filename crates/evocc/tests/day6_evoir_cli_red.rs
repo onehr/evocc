@@ -240,7 +240,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
     let lowering = TempSource::new(
         "lowering",
-        "void f(void) {} int main(void) { void (*p)(void) = f; p++; return 0; }\n",
+        "struct S { double x; }; int f(int, ...); int pass(struct S s) { return f(1, s); }\n",
     );
     let runtime = TempSource::new(
         "runtime",
@@ -285,8 +285,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
                 "{stderr}"
             ),
             "lowering" => assert!(
-                stderr
-                    .ends_with("error[E3034]: evoir-lowering-failed: not-lowered: function-pointer-arithmetic\n"),
+                stderr.ends_with("error[E3030]: evoir-lowering-failed: not-lowered: varargs\n"),
                 "{stderr}"
             ),
             "runtime" => assert!(

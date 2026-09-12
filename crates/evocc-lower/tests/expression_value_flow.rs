@@ -25,6 +25,14 @@ fn function_address_arithmetic_keeps_invalid_call_targets_fail_closed() {
         "int main(void){long (*p)(long)=0; return (p+0)(2);}",
         Some("E3015"),
     );
+    evaluates(
+        "long f(long x){return x;} int main(void){int (*p)(int)=(void *)(f+1); --p; return p(2);}",
+        Some("E3019"),
+    );
+    evaluates(
+        "int main(void){typedef int (*F)(void); F p=(F)~0UL, q=(F)0; return (p-q)!=0;}",
+        Some("E3004"),
+    );
 }
 
 #[test]

@@ -5600,6 +5600,39 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Value, LowerError> {
+        if matches!(base.ty, EvoIRType::FnPtr { .. }) {
+            // GNU function addresses use byte arithmetic. Do not attach a
+            // nonzero offset to Function provenance: expose and reconstruct.
+            let ty = base.ty.clone();
+            let base = self.cast(
+                ExprValue {
+                    value: base,
+                    integer: CIntegerType::ULONG,
+                },
+                CIntegerType::ULONG,
+                state,
+            )?;
+            let index = self.cast(index, CIntegerType::ULONG, state)?;
+            let address = self.fresh_value(EvoIRType::Bits(64));
+            self.emit(
+                state,
+                match direction {
+                    OffsetDirection::Add => Inst::Add(address.clone(), base.value, index.value),
+                    OffsetDirection::Subtract => {
+                        Inst::Sub(address.clone(), base.value, index.value)
+                    }
+                },
+            )?;
+            let result = self.fresh_value(ty);
+            self.emit(
+                state,
+                Inst::PointerCast {
+                    result: result.clone(),
+                    operand: address,
+                },
+            )?;
+            return Ok(result);
+        }
         let (fixed, captures) = self
             .target
             .array_size_factors(self.unit.types(), pointee)
@@ -5699,21 +5732,6 @@ impl<'a> FunctionLowerer<'a> {
             _ => return None,
         };
         self.is_aggregate_type(ty).then_some(ty)
-    }
-
-    fn is_function_pointer_type(&self, ty: TypeId) -> bool {
-        let Some(TypeKind::Pointer(pointee)) =
-            self.unit.types().get(ty).map(|canonical| &canonical.kind)
-        else {
-            return false;
-        };
-        matches!(
-            self.unit
-                .types()
-                .get(*pointee)
-                .map(|canonical| &canonical.kind),
-            Some(TypeKind::Function { .. })
-        )
     }
 
     fn synthetic_origin(&mut self) -> Result<u64, LowerError> {
@@ -9338,18 +9356,7 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         let left_pointer = matches!(left.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. });
         let right_pointer = matches!(right.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. });
-        let left_object_pointer = matches!(left.value.ty, EvoIRType::Ptr(_));
-        let right_object_pointer = matches!(right.value.ty, EvoIRType::Ptr(_));
-        if matches!(operator, BinaryOp::Add | BinaryOp::Sub)
-            && (matches!(left.value.ty, EvoIRType::FnPtr { .. })
-                || matches!(right.value.ty, EvoIRType::FnPtr { .. }))
-        {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
-        if matches!(operator, BinaryOp::Add | BinaryOp::Sub)
-            && left_object_pointer
-            && !right_pointer
-        {
+        if matches!(operator, BinaryOp::Add | BinaryOp::Sub) && left_pointer && !right_pointer {
             let pointee = self.pointer_pointee_type(left_expression, span)?;
             let promoted_type = integer_promotion(right.integer);
             let index = self.cast(right, promoted_type, state)?;
@@ -9370,7 +9377,7 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             });
         }
-        if operator == BinaryOp::Add && !left_pointer && right_object_pointer {
+        if operator == BinaryOp::Add && !left_pointer && right_pointer {
             let pointee = self.pointer_pointee_type(right_expression, span)?;
             let promoted_type = integer_promotion(left.integer);
             let index = self.cast(left, promoted_type, state)?;
@@ -9387,7 +9394,28 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             });
         }
-        if operator == BinaryOp::Sub && left_object_pointer && right_object_pointer {
+        if operator == BinaryOp::Sub && left_pointer && right_pointer {
+            if matches!(left.value.ty, EvoIRType::FnPtr { .. })
+                || matches!(right.value.ty, EvoIRType::FnPtr { .. })
+            {
+                let left = self.cast(left, CIntegerType::UINT128, state)?;
+                let right = self.cast(right, CIntegerType::UINT128, state)?;
+                let difference =
+                    self.emit_raw_binary(state, Inst::Sub, &left.value, &right.value)?;
+                let result = self.cast(
+                    ExprValue {
+                        value: difference.clone(),
+                        integer: CIntegerType::INT128,
+                    },
+                    CIntegerType::LONG,
+                    state,
+                )?;
+                let round_trip = self.cast(result.clone(), CIntegerType::INT128, state)?;
+                let fits =
+                    self.checked_compare(state, CmpOp::Eq, &difference, &round_trip.value)?;
+                self.emit(state, Inst::UbAssume(fits, UbReason::SignedOverflow))?;
+                return Ok(result);
+            }
             let pointee = self.pointer_pointee_type(left_expression, span)?;
             let scale = self.pointer_arithmetic_scale(pointee, span, state)?;
             let mut left = left;
@@ -11061,9 +11089,6 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
-        if operator != AssignmentOp::Simple && self.is_function_pointer_type(place.ty()) {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
         if self.memory_symbols.contains(&place.symbol()) {
             let address = self.object_address(place.symbol(), span, state)?;
             let address_key = self.retain_temporary(address.clone(), state);
@@ -11083,7 +11108,10 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 let original =
                     self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?;
-                if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+                if matches!(
+                    original.value.ty,
+                    EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                ) {
                     self.compute_pointer_assignment(
                         operator,
                         original,
@@ -11219,11 +11247,11 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
-        if self.is_function_pointer_type(place.ty()) {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
         let original = self.local(state, place.symbol(), span)?;
-        if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+        if matches!(
+            original.value.ty,
+            EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+        ) {
             let one = self.constant(state, CIntegerType::INT, 1)?;
             let updated = self.compute_pointer_assignment(
                 if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
@@ -11350,11 +11378,10 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        if self.is_function_pointer_type(pointer_ty) {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
-        if !matches!(pointer.value.ty, EvoIRType::Ptr(_))
-            || !matches!(index.value.ty, EvoIRType::Bits(_))
+        if !matches!(
+            pointer.value.ty,
+            EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+        ) || !matches!(index.value.ty, EvoIRType::Bits(_))
         {
             return Err(LowerError::UnsupportedExpression {
                 span,
@@ -11398,9 +11425,6 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        if operator != AssignmentOp::Simple && self.is_function_pointer_type(place.value_ty()) {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
         let bit_field = self.place_bit_field(place, target_span)?;
         let address = self.lower_place_address(place, target_span, state)?;
         let address_key = self.retain_temporary(address.clone(), state);
@@ -11466,7 +11490,10 @@ impl<'a> FunctionLowerer<'a> {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
             let original = original.expect("memory compound assignment loaded its left value");
-            if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+            if matches!(
+                original.value.ty,
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+            ) {
                 self.compute_pointer_assignment(
                     operator,
                     original,
@@ -11502,9 +11529,6 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        if self.is_function_pointer_type(place.value_ty()) {
-            return Err(LowerError::FunctionPointerArithmetic { span });
-        }
         let address = self.lower_place_address(place, target_span, state)?;
         let bit_field = self.place_bit_field(place, target_span)?;
         let access_layout = self.place_access_layout(place, target_span)?;
@@ -11527,7 +11551,10 @@ impl<'a> FunctionLowerer<'a> {
                 access_layout,
             )?
         };
-        if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+        if matches!(
+            original.value.ty,
+            EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+        ) {
             let one = self.constant(state, CIntegerType::INT, 1)?;
             let updated = self.compute_pointer_assignment(
                 if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {

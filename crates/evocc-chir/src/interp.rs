@@ -7414,10 +7414,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CValue::Pointer { value, ty } => {
                 self.offset_pointer_value(value, ty, CInteger::int(1), direction, span)
             }
-            CValue::FunctionPointer { .. } => Err(InterpreterError::UnsupportedExpression {
-                feature: "function pointer update",
-                span,
-            }),
+            CValue::FunctionPointer { value, ty } => {
+                self.offset_function_value(value, ty, CInteger::int(1), direction, span)
+            }
             CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "aggregate update",
                 span,
@@ -7611,6 +7610,46 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             (CValue::Integer(left), CValue::Integer(right)) => self
                 .runtime_integer_binary(operator, left, right, span)
                 .map(CValue::Integer),
+            (CValue::FunctionPointer { value, ty }, CValue::Integer(index))
+                if matches!(operator, BinaryOp::Add | BinaryOp::Sub) =>
+            {
+                self.offset_function_value(
+                    value,
+                    ty,
+                    index,
+                    if operator == BinaryOp::Add {
+                        OffsetDirection::Add
+                    } else {
+                        OffsetDirection::Subtract
+                    },
+                    span,
+                )
+            }
+            (CValue::Integer(index), CValue::FunctionPointer { value, ty })
+                if operator == BinaryOp::Add =>
+            {
+                self.offset_function_value(value, ty, index, OffsetDirection::Add, span)
+            }
+            (
+                CValue::FunctionPointer { value: left, .. },
+                CValue::FunctionPointer { value: right, .. },
+            ) if operator == BinaryOp::Sub => {
+                let left = self
+                    .memory
+                    .pointer_address(left)
+                    .map_err(|error| self.memory_error(error, span))?;
+                let right = self
+                    .memory
+                    .pointer_address(right)
+                    .map_err(|error| self.memory_error(error, span))?;
+                let difference = i128::from(left) - i128::from(right);
+                let value = i64::try_from(difference)
+                    .map_err(|_| self.integer_error(IntegerError::SignedOverflow, span))?;
+                Ok(CValue::Integer(CInteger::new(
+                    value as u64,
+                    CIntegerType::LONG,
+                )))
+            }
             (CValue::Pointer { value, ty }, CValue::Integer(index))
                 if matches!(operator, BinaryOp::Add | BinaryOp::Sub) =>
             {
@@ -7781,6 +7820,33 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             }),
         }
+    }
+
+    fn offset_function_value(
+        &self,
+        pointer: PointerValue,
+        ty: PointerTypeDesc,
+        index: CInteger,
+        direction: OffsetDirection,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let address = self
+            .memory
+            .pointer_address(pointer)
+            .map_err(|error| self.memory_error(error, span))?;
+        let index = index.cast(CIntegerType::ULONG).raw_bits() as u64;
+        let address = match direction {
+            OffsetDirection::Add => address.wrapping_add(index),
+            OffsetDirection::Subtract => address.wrapping_sub(index),
+        };
+        Ok(CValue::FunctionPointer {
+            value: if address == 0 {
+                PointerValue::Null
+            } else {
+                PointerValue::Exposed(address)
+            },
+            ty,
+        })
     }
 
     fn offset_pointer_value(
@@ -7964,14 +8030,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         let left =
             self.load_memory_value_with_layout(address, ty, qualifiers, target_span, layout)?;
-        if let CValue::Pointer {
-            value,
-            ty: pointer_type,
-        } = left
-        {
-            let direction = match operator {
-                AssignmentOp::Add => OffsetDirection::Add,
-                AssignmentOp::Subtract => OffsetDirection::Subtract,
+        if matches!(
+            left,
+            CValue::Pointer { .. } | CValue::FunctionPointer { .. }
+        ) {
+            let binary = match operator {
+                AssignmentOp::Add => BinaryOp::Add,
+                AssignmentOp::Subtract => BinaryOp::Sub,
                 _ => {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "invalid compound pointer assignment operator",
@@ -7979,8 +8044,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     });
                 }
             };
-            let index = expect_machine_integer(right, span)?;
-            let result = self.offset_pointer_value(value, pointer_type, index, direction, span)?;
+            let result = self.apply_machine_binary(binary, left, right, span)?;
             return self
                 .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
         }

@@ -1925,7 +1925,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3031` | `not-lowered: frame-address` | lowering (levels above zero only since 1.9.72) |
 | `E3032` | `not-lowered: pointer-difference` | lowering — **withdrawn at 1.9.67** |
 | `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
-| `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
+| `E3034` | `not-lowered: function-pointer-arithmetic` | legacy lowering refusal, superseded by exposed-address arithmetic |
 | `E3035` | `not-lowered: global-register-variable` | lowering — **withdrawn at 1.9.67** (implicit `asm`) |
 | `E3042` | `not-lowered: checked-arithmetic-width` | lowering — executor-allocated, **withdrawn at 1.9.67** |
 | `E3043` | `not-lowered: object-function-pointer-conversion` | lowering — executor-allocated, **withdrawn at 1.9.67** |
@@ -4906,7 +4906,7 @@ execute since revision 1.9.61 (Section 3.12, 10.1.19). Measured defect at revisi
 affect compatibility (C11 6.7.6.3p15): `int (*)(const clockid_t, struct ts *)`
 and `int (*)(clockid_t, struct ts *)` are compatible (evidence
 `p31-residue.c`, `o`). Function pointer arithmetic `p + n`, `p - n` and the
-compound forms scale by one at the front end (GNU; evidence `fnarith`); because Function provenance admits only offset zero (Section 4), lowering reports `E3034` (`not-lowered: function-pointer-arithmetic`) at the operation and fails closed. Measured defect at
+compound forms scale by one (GNU; evidence `fnarith`). Under the approved full-kernel adjudication, these operations use the existing 3.7 exposed-address conversion path, not a nonzero Function-provenance offset; see Appendix D, "Function addresses and byte arithmetic". The former E3034 lowering refusal is superseded for these forms. Measured defect at
 revision 1.9.52: `E2202` in three units and `E2102` in one.
 
 **The `\e` escape.** `'\e'` is the GNU escape for 27 (evidence
@@ -6217,6 +6217,13 @@ Under S04, integer/pointer records pass by value using AAPCS64 general-register/
 An anonymous ordinary operand of `call` or `call.indirect` may append ` byval(size, align)` to its value reference; the pointer must be `ptr<generic>`, size may be zero, alignment must be a nonzero power of two, and neither fixed operands nor effect tokens may carry a call-site mark (`sret` remains signature-only).
 `(%mem2, %world2) = va_arg.byval %list, %mem, %world, %destination [size=N, align=A]` copies the next record into an allocated `ptr<generic>` destination and advances the same list as scalar `va_arg`, preserving initialization/provenance and linear effects; the abstract interpreter checks the recorded record shape, distinguishing it from a scalar pointer and reporting existing E3038 on a mismatch or invalid list.
 Both GCC-14 and Clang-19 O0/O2 callers and callees agree with EvoCC in both mixed-link directions (GNU assembler for the subject output); no diagnostic is added, no optimizer allowlist is extended, and original-unit gains are recorded only after replay.
+
+### Function addresses and byte arithmetic
+
+Following the full-kernel adjudication, GNU function-pointer addition/subtraction and their compound/prefix/postfix forms use byte scale one through `ptr.to_int`, pointer-width arithmetic and `ptr.from_int.fnptr`, with the original lvalue and integer operand each evaluated once; no interior address acquires named Function provenance.
+Function-pointer difference is the mathematical byte-address difference with type `long`, checked for signed representability (existing E3004); a reconstructed call retains the existing null, known-target and signature checks, and an interpreter's inability to resolve dynamic native code is not a claim that such code is invalid in native execution.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/function-address-arithmetic.c` with zero exit, covering signed offsets, every update form, array/member/static places, single evaluation and a recovered real entry; the existing E3015/E3016/E3019 runtime boundaries are not weakened, and E3034 is withdrawn for this defined lowering.
+The affected original units are `arch/arm64/net/bpf_jit_comp.o`, `kernel/bpf/verifier.o` and `kernel/bpf/core.o`; their actual outcomes are recorded only after replay, not inferred from this rule.
 
 ### Computed branches approved; label differences remain separate
 
