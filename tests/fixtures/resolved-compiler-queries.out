@@ -54,6 +54,11 @@ all 42 refused units from 20260912T191806Z emit successfully, no installation.
 Inline/pointer RED: 12 passed / 2 failed; GREEN 14 passed.
 Nested/automatic RED: 14 passed / 2 failed; GREEN 16 passed.
 Address-sensitive inline RED: 1 failed; GREEN all 17 passed.
+
+Optimization-query authorization: 2026-09-13, EvoIR 1.9.93.
+RED command: CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test resolved_compiler_queries --locked --offline -j 2
+RED result: 15 passed / 5 failed, zero build errors. Four wrong-value failures
+(unpropagated query facts), one E3039 from the retained constant-required call.
 Latest focused commands (CARGO_TARGET_DIR=target/tailored, --locked --offline -j 2):
 cargo test -p evocc --test resolved_compiler_queries: 17 passed
 cargo test -p evocc-lower --test expression_value_flow --test front_end_resolved_forms: 103 passed

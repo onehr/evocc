@@ -86,7 +86,7 @@ fn immutable_static_values_prune_false_error_calls_without_becoming_ices() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_failed"));
-    let source = "int main(void){static const int value=7; _Static_assert(!__builtin_constant_p(value),\"profile predicate\");return __builtin_constant_p(value);}";
+    let source = "int main(void){static const int value=7; return !__builtin_constant_p(value);}";
     let output = run(source, "--interpret-evoir");
     assert!(
         output.status.success(),
@@ -164,7 +164,7 @@ fn parameter_facts_do_not_escape_their_proven_callers_or_replace_effects() {
         "static int f(int x){return x;}int main(void){int (*p)(int)=f;return f(1)+p(2)!=3;}",
         "static int f(int x){int *p=&x;*p=4;return x;}int main(void){return f(1)!=4;}",
         "static int f(int x){++x;return x;}int main(void){return f(1)!=2;}",
-        "static int f(int x){return __builtin_constant_p(x);}int main(void){return f(1);}",
+        "static int f(int x){return __builtin_constant_p(x);}int main(void){return !f(1);}",
         "static __attribute__((always_inline)) inline int f(signed char x){return x;}int main(void){return f(255)!=-1;}",
         "static __attribute__((always_inline)) inline int f(int x){return x+x;}int main(void){int x=1;int y=f(x++);return x!=2||y!=2;}",
     ] {
@@ -268,8 +268,8 @@ fn nested_numeric_pointer_conditions_keep_their_arithmetic_result() {
 }
 
 #[test]
-fn immutable_automatic_constants_fold_branches_without_changing_source_queries() {
-    let source = "extern void invalid(void) __attribute__((error(\"value\")));static int f(void){const unsigned long last=41;if(last+1!=42)invalid();return __builtin_constant_p(last);}int main(void){return f();}";
+fn immutable_automatic_constants_resolve_optimization_time_queries() {
+    let source = "extern void invalid(void) __attribute__((error(\"value\")));static int f(void){const unsigned long last=41;if(last+1!=42)invalid();return __builtin_constant_p(last);}int main(void){return !f();}";
     let output = run(source, "--emit=evoir");
     assert!(
         output.status.success(),
@@ -288,5 +288,38 @@ fn immutable_automatic_constants_fold_branches_without_changing_source_queries()
 #[test]
 fn optional_inline_hints_preserve_address_taken_label_identity() {
     let source = "static inline int f(int n){if(n)return 0;here:return (unsigned long)&&here!=0;}int main(void){return f(1);}";
+    assert_constant_program(source);
+}
+
+#[test]
+fn optimization_constant_queries_resolve_local_values_in_both_interpreters() {
+    let source = include_str!("../../../tests/fixtures/optimization-constant-query.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"1\n", "{mode}");
+    }
+}
+
+#[test]
+fn optimization_queries_preserve_effects_and_resolve_kernel_request_values() {
+    let source = include_str!("../../../tests/fixtures/optimization-query-effects.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_required"));
+}
+
+#[test]
+fn query_facts_do_not_initialize_objects_across_incoming_jumps() {
+    let source = "int main(void){goto next;{int x=7;next:return __builtin_constant_p(x);}}";
     assert_constant_program(source);
 }

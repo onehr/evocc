@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.92** | **Authoritative reference** | **2026-09-12**
+**Revision 1.9.93** | **Authoritative reference** | **2026-09-13**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4062,13 +4062,19 @@ compilers document as permitted, never a vote.
 - `__builtin_constant_p(e)`: `e` is parsed and type-checked but never
   evaluated. The result has type `int` and is an integer constant expression.
   It is `1` when `e` is an integer constant expression or a string literal,
-  and `0` otherwise, in particular for address constants (`&g` is `0` in both
-  oracles), objects, parameters and every expression with side effects.
-  `ORACLE_CONFLICT`: a `const`-qualified local initialised with a constant is
-  `0` in GCC-14 at `-O0` and `1` in Clang-19; both compilers document `0` as
-  always permitted, so this profile answers `0`. The predicate is one
-  function shared by the parser, the C-HIR interpreter and lowering; no
-  optimizer knowledge may change its answer.
+  and may also be `1` when optimization proves its value constant. The
+  proof may use immutable dominating initializers and substituted call
+  arguments; it may not execute the operand, assume an unknown object value,
+  ignore volatile reads, or discard effects from the original initialization
+  or argument evaluation. Without such a proof the answer is `0`, including
+  symbolic address constants and expressions with side effects. This does not
+  make an object or a statement expression a source integer constant expression.
+  The shared predicate answers from the typed operand; C-HIR execution and
+  lowering apply the same proved substitutions before answering runtime
+  queries. Required source-constant contexts use the facts available when
+  resolved. Revision 1.9.93 supersedes the earlier prohibition on optimization
+  knowledge: sealed GCC-14 and Clang-19 at `-O2` both return `1` for the local
+  positive-value query in `tests/fixtures/optimization-constant-query.c`.
 - `__alignof__(type-name)` and `__alignof__(expression)`: the alignment of the
   type, or of the expression's type before lvalue conversion, as an integer
   constant expression of type `size_t`; the expression is not evaluated. It
@@ -6029,6 +6035,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.93 | 2026-09-13 | Authorizes optimization-time constant queries with proved values, unevaluated operands and preserved initializer/argument effects. Source ICE admission is unchanged. |
 | 1.9.92 | 2026-09-12 | Records the approved computed-goto edge-binding design: explicit storage addresses and effects, complete successor sets, positional parallel copies and E3048 for invalid dynamic targets. Synchronizes two stale signed-shift clauses with 1.9.88, preserving legacy IR obligations. This revision specifies behavior; implementation and native acceptance are tracked separately. |
 | 1.9.91 | 2026-09-12 | Corrects the overstrong eight-aligned relocation offset requirement: AArch64 ABS64 data relocations occupy eight bytes at byte-aligned positions. User-authorized standard alignment behavior; packed layout and pointer provenance remain intact, as do range, nonoverlap and actual load/store alignment checks. |
 | 1.9.90 | 2026-09-09 | Admits numbered `%l<N>` label references in `asm.goto`; narrows `E2939` to the measured conflicting contexts of wide bit-field arithmetic and admits the consensus ones; stops lowering unreferenced internal functions, generalising 1.9.75; defines `__alignof__` of an incomplete array member. |
