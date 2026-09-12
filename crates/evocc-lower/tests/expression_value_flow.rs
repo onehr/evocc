@@ -228,7 +228,8 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
             _ => None,
         })
         .unwrap();
-    let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    let module = evocc_lower::lower_unit(&unit, &target)
         .unwrap_or_else(|error| panic!("{source}: {error:?}"));
     let function = module.functions.iter().find(|f| f.name == "main").unwrap();
     let arguments = function
@@ -257,13 +258,8 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
         0,
         "C-HIR: {source}"
     );
-    if evocc_chir::inline::has_inline_definitions(&unit) {
-        let rewritten = evocc_chir::inline::substitute(
-            &unit,
-            &arena,
-            &TargetDataLayout::aarch64_unknown_linux_gnu(),
-        )
-        .unwrap();
+    if evocc_chir::inline::has_inline_definitions(&unit, &target) {
+        let rewritten = evocc_chir::inline::substitute(&unit, &arena, &target).unwrap();
         let execution = interp::interpret_scalar_function(
             &rewritten,
             symbol,

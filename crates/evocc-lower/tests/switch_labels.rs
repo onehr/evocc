@@ -79,6 +79,18 @@ fn constant_inline_configuration_calls_remove_unreachable_symbol_uses() {
         "int n; static inline int enabled(int ignored){return 0;}
         int main(void){ if(enabled(++n)) return 1; return n != 1; }",
     );
+    assert_execution(
+        "static inline _Bool enabled(void){return 256;}
+        int main(void){return enabled() != 1;}",
+    );
+    assert_execution(
+        "static inline unsigned char enabled(void){return 256;}
+        int main(void){return enabled() != 0;}",
+    );
+    assert_execution(
+        "static inline int enabled(void){return 0;}
+        int main(void){return __builtin_constant_p(enabled());}",
+    );
 }
 
 #[test]

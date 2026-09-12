@@ -1,4 +1,4 @@
-//! Source-level substitution of explicitly always-inline calls.
+//! Source-level substitution of always-inline calls and constant inline leaves.
 //!
 //! This pass produces ordinary C-HIR objects, statements and expressions.
 //! It does not add a second execution path or relax an assembly constraint.
@@ -426,8 +426,47 @@ pub fn without_unreferenced_functions<'u, 'a>(
     Ok(std::borrow::Cow::Owned(rewritten))
 }
 
-pub fn has_inline_definitions(unit: &CHirUnit<'_>) -> bool {
-    unit.iter().any(|d| matches!(d, CHirDecl::Function(f) if f.body.is_some() && f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))))
+/// A no-argument internal inline leaf has no parameter initialization, local
+/// lifetime, or body effects to preserve. Its literal return can expose a
+/// configuration condition before unreachable external references are lowered.
+/// This is an optimization fact, not a source-language constant expression.
+fn constant_inline_return<'a>(
+    unit: &CHirUnit<'a>,
+    function: &FunctionDecl<'a>,
+    target: &TargetDataLayout,
+) -> Option<&'a CHirExpr<'a>> {
+    if !function.has_internal_linkage(unit.symbols())
+        || function.inline_spans.is_empty()
+        || function
+            .attributes
+            .iter()
+            .any(|attribute| attribute.semantic_name() == Some("noinline"))
+        || !matches!(&function.parameters,
+            ParameterSyntax::Prototype { parameters, variadic: false }
+            if parameters.is_empty())
+    {
+        return None;
+    }
+    let TypeKind::Function { return_type, .. } = unit.types().get(function.ty)?.kind else {
+        return None;
+    };
+    crate::constant::canonical_integer_type(unit.types(), return_type)?;
+    let CHirStmt::Compound(items, _) = function.body? else {
+        return None;
+    };
+    let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() else {
+        return None;
+    };
+    crate::constant::eval_executable_integer_constant(value, unit.types(), unit.symbols(), target)?;
+    Some(value)
+}
+
+pub fn has_inline_definitions(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {
+    unit.iter().any(|d| {
+        matches!(d, CHirDecl::Function(f) if f.body.is_some()
+        && (f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
+            || constant_inline_return(unit, f, target).is_some()))
+    })
 }
 
 /// Rewrite into the caller-owned arena. Original nodes and symbol tables are
@@ -449,9 +488,11 @@ pub fn substitute<'a>(
         .filter_map(|d| match d {
             CHirDecl::Function(f)
                 if f.body.is_some()
-                    && f.attributes
+                    && (f
+                        .attributes
                         .iter()
                         .any(|a| a.semantic_name() == Some("always_inline"))
+                        || constant_inline_return(unit, f, target).is_some())
                     && !uses.addresses.contains(&f.symbol)
                     && !matches!(
                         f.parameters,
@@ -1550,6 +1591,13 @@ impl<'a> Substitution<'a, '_> {
         };
         if parameters.len() != args.len() {
             return Err(self.error(span, "inline argument arity mismatch"));
+        }
+        if args.is_empty() {
+            if let Some(value) = constant_inline_return(&self.unit, f, self.target) {
+                // Retain the conversion at the return boundary. In particular,
+                // a nonzero integer returned as _Bool must become one.
+                return Ok(self.alloc(CHirExpr::Cast(return_type, value, span)));
+            }
         }
         let body = f.body.unwrap();
         let uses = inspect([Node::Stmt(body)]);
