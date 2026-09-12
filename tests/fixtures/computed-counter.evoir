@@ -1,0 +1,31 @@
+func @computed_counter(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    (%v2, %v3, %v4) = alloca %v0, %v1 [origin=0, size=4, align=4]
+    %v5 = const.bits<32> 0
+    %v6 = access_in_bounds %v3, %v2 [size=4, align=4]
+    (%v7, %v8) = store %v6, %v4, %v2, %v5
+    br ^b1(%v2, %v7, %v8)
+
+^b1(%v9: ptr<generic>, %v10: mem<all>, %v11: world):
+    %v12 = access_in_bounds %v10, %v9 [size=4, align=4]
+    (%v13, %v14, %v15) = load %v12, %v11, %v9 : bits<32>
+    %v16 = const.bits<32> 1
+    %v17 = add.bits<32> %v13, %v16
+    %v18 = access_in_bounds %v14, %v9 [size=4, align=4]
+    (%v19, %v20) = store %v18, %v15, %v9, %v17
+    %v21 = const.bits<32> 3
+    %v22 = icmp.ult %v17, %v21
+    %v23 = block_addr ^b1 : ptr<generic>
+    %v24 = block_addr ^b3 : ptr<generic>
+    cond_br %v22, ^b2(%v23, %v9, %v19, %v20), ^b2(%v24, %v9, %v19, %v20)
+
+^b2(%v25: ptr<generic>, %v26: ptr<generic>, %v27: mem<all>, %v28: world):
+    br.indirect %v25 [^b1(%v26, %v27, %v28), ^b3(%v26, %v27, %v28)]
+
+^b3(%v29: ptr<generic>, %v30: mem<all>, %v31: world):
+    %v32 = access_in_bounds %v30, %v29 [size=4, align=4]
+    (%v33, %v34, %v35) = load %v32, %v31, %v29 : bits<32>
+    ret %v33, %v34, %v35
+}

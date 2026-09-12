@@ -1,4 +1,4 @@
-//! Label addresses lower to code pointers; indirect jumps remain fail-closed.
+//! Label addresses and indirect jumps preserve local objects and edge bindings.
 
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
 use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
@@ -42,7 +42,7 @@ fn function_symbol(unit: &CHirUnit<'_>, name: &str) -> SymbolId {
         .unwrap_or_else(|| panic!("fixture defines {name}"))
 }
 
-fn assert_execution_and_lowering_refuse(source: &str) {
+fn check_computed_goto(source: &str, expected: u64) {
     let arena = Arena::default();
     let unit = parse_valid(source, &arena);
     let interpreter = interpret_scalar_function(
@@ -50,13 +50,12 @@ fn assert_execution_and_lowering_refuse(source: &str) {
         function_symbol(&unit, "main"),
         InterpreterLimits::new(100_000),
     )
-    .expect_err("C-HIR execution must fail closed");
-    assert_eq!(interpreter.code(), "E3029");
-
-    let lowering = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect_err("computed goto must not reach EvoIR");
-    assert_eq!(lowering.code(), "E3029");
-    assert_eq!(lowering.to_string(), "not-lowered: computed-goto");
+    .expect("C-HIR executes the selected label in the current activation");
+    assert_eq!(
+        interpreter.return_value.unwrap().raw_bits,
+        u128::from(expected)
+    );
+    check_label_address(source, Ok(expected), &["br.indirect"]);
 }
 
 fn check_label_address(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
@@ -103,11 +102,14 @@ fn label_addresses_have_stable_distinct_code_identity() {
 }
 
 #[test]
-fn computed_goto_is_preserved_but_execution_and_lowering_fail_closed() {
-    assert_execution_and_lowering_refuse(concat!(
-        "int main(void) { void *target = &&done; goto *target; ",
-        "done: return 0; }\n",
-    ));
+fn computed_goto_executes_a_local_target() {
+    check_computed_goto(
+        concat!(
+            "int main(void) { void *target = &&done; goto *target; ",
+            "done: return 0; }\n",
+        ),
+        0,
+    );
 }
 
 #[test]
@@ -184,11 +186,27 @@ fn code_addresses_do_not_acquire_object_provenance() {
 }
 
 #[test]
-fn static_label_address_initializer_reaches_the_typed_execution_boundary() {
-    assert_execution_and_lowering_refuse(concat!(
-        "int main(void) { static void *targets[2] = { [0 ... 1] = &&done }; ",
-        "goto *targets[0]; done: return 0; }\n",
-    ));
+fn static_label_address_initializer_dispatches_to_the_selected_label() {
+    check_computed_goto(
+        concat!(
+            "int main(void) { static void *targets[2] = { [0 ... 1] = &&done }; ",
+            "goto *targets[0]; done: return 0; }\n",
+        ),
+        0,
+    );
+}
+
+#[test]
+fn computed_goto_preserves_distinct_storage_values_and_recursive_activations() {
+    for (source, expected) in [
+        ("int main(void){int x=0;void *p=&&again;goto *p;again:if(++x<3)goto *p;return x;}", 3),
+        ("int main(void){int x=5,y=9;void *p=&&left;goto *p;left:y+=x;p=&&right;goto *p;right:x+=y;return x*100+y;}", 1914),
+        ("int f(int n){int x=n;void *p=&&done;if(n)x+=f(n-1);goto *p;done:return x;}int main(void){return f(4);}", 10),
+        ("int main(void){int x;void *p=&&set;goto *p;set:x=7;p=&&done;goto *p;done:return x;}", 7),
+        ("int main(void){int x=0;void *p=&&done;{int y=5;x=y;goto *p;}done:return x;}", 5),
+    ] {
+        check_computed_goto(source, expected);
+    }
 }
 
 #[test]
