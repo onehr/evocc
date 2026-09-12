@@ -23,9 +23,9 @@ use evocc_chir::{
 use evocc_common::SourceSpan;
 use evocc_evoir::{
     inst_results, validate_module, AccessLayout, AssemblyEdge, AssemblyInput, AssemblyLabel,
-    AssemblyOutput, Block, BlockArg, BlockId, CmpOp, ExternalObject, Function, FunctionDeclaration,
-    FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, InlineAssembly,
-    Inst, Module, OffsetDirection, TrapReason, UbReason, Value,
+    AssemblyOutput, Block, BlockArg, BlockId, CmpOp, CopyVolatility, ExternalObject, Function,
+    FunctionDeclaration, FunctionParam, GlobalKind, GlobalObject, GlobalVisibility,
+    IndexSignedness, InlineAssembly, Inst, Module, OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
     canonical_marks, enum_integer_rank, AddressSpace, ArrayBound, BitFieldLayout, EvoIRType,
@@ -125,6 +125,9 @@ pub enum LowerError {
     FunctionPointerArithmetic {
         span: SourceSpan,
     },
+    VolatileAggregate {
+        span: SourceSpan,
+    },
     WideInteger {
         span: SourceSpan,
     },
@@ -181,6 +184,9 @@ impl fmt::Display for LowerError {
             Self::FunctionPointerArithmetic { .. } => {
                 formatter.write_str("not-lowered: function-pointer-arithmetic")
             }
+            Self::VolatileAggregate { .. } => {
+                formatter.write_str("volatile-aggregate-copy-unsupported")
+            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
@@ -220,6 +226,7 @@ impl LowerError {
             Self::FrameAddress { .. } => "E3031",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
+            Self::VolatileAggregate { .. } => "E2922",
             _ => "E3101",
         }
     }
@@ -242,6 +249,7 @@ impl LowerError {
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
             | Self::FunctionPointerArithmetic { span }
+            | Self::VolatileAggregate { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -4864,7 +4872,10 @@ impl<'a> FunctionLowerer<'a> {
                                 destination,
                                 source.value,
                                 expected.source,
-                                self.aggregate_source_is_volatile(expression),
+                                CopyVolatility::new(
+                                    self.aggregate_source_is_volatile(expression),
+                                    false,
+                                ),
                                 *span,
                                 &mut state,
                             )?;
@@ -5791,6 +5802,18 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<(), LowerError> {
+        self.emit_representation_copy(destination, source, ty, CopyVolatility::None, span, state)
+    }
+
+    fn emit_representation_copy(
+        &mut self,
+        destination: Value,
+        source: Value,
+        ty: TypeId,
+        volatile: CopyVolatility,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
         if !matches!(destination.ty, EvoIRType::Ptr(_)) || !matches!(source.ty, EvoIRType::Ptr(_)) {
             return Err(LowerError::UnsupportedExpression {
                 span,
@@ -5802,6 +5825,9 @@ impl<'a> FunctionLowerer<'a> {
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
         let world_out = self.fresh_value(EvoIRType::World);
         let layout = self.access_layout(ty, span)?;
+        if !volatile.supports(layout) {
+            return Err(LowerError::VolatileAggregate { span });
+        }
         self.emit(
             state,
             Inst::Copy {
@@ -5812,6 +5838,7 @@ impl<'a> FunctionLowerer<'a> {
                 mem_out: mem_out.clone(),
                 world_out: world_out.clone(),
                 layout,
+                volatile,
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
@@ -5820,6 +5847,11 @@ impl<'a> FunctionLowerer<'a> {
 
     fn aggregate_source_is_volatile(&self, expression: &CHirExpr<'_>) -> bool {
         match expression {
+            CHirExpr::Unary(UnaryOp::Deref, pointer, span) => self
+                .pointer_pointee_type(pointer, *span)
+                .ok()
+                .and_then(|ty| self.unit.types().get(ty))
+                .is_some_and(|ty| ty.qualifiers.is_volatile),
             CHirExpr::Cast(_, operand, _) => self.aggregate_source_is_volatile(operand),
             CHirExpr::MemoryRead { place, .. } => place.access_qualifiers().is_volatile,
             CHirExpr::Ident { facts, .. }
@@ -5843,11 +5875,11 @@ impl<'a> FunctionLowerer<'a> {
         destination: Value,
         source: Value,
         ty: TypeId,
-        volatile: bool,
+        volatile: CopyVolatility,
         span: SourceSpan,
         state: &mut State,
     ) -> Result<(), LowerError> {
-        if !volatile {
+        if volatile == CopyVolatility::None {
             return self.emit_copy(destination, source, ty, span, state);
         }
         let kind = self
@@ -5912,15 +5944,20 @@ impl<'a> FunctionLowerer<'a> {
                         field_layout.byte_offset,
                         state,
                     )?;
-                    self.emit_aggregate_transfer(destination, source, field.ty, true, span, state)?;
+                    self.emit_aggregate_transfer(
+                        destination,
+                        source,
+                        field.ty,
+                        volatile,
+                        span,
+                        state,
+                    )?;
                 }
                 Ok(())
             }
-            TypeKind::Union(_) => Err(LowerError::UnsupportedType {
-                ty,
-                span,
-                feature: "volatile union copy has no selected-member authority",
-            }),
+            TypeKind::Union(_) => {
+                self.emit_representation_copy(destination, source, ty, volatile, span, state)
+            }
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),
@@ -5937,7 +5974,14 @@ impl<'a> FunctionLowerer<'a> {
                     let destination =
                         self.constant_offset_address(destination.clone(), offset, state)?;
                     let source = self.constant_offset_address(source.clone(), offset, state)?;
-                    self.emit_aggregate_transfer(destination, source, element, true, span, state)?;
+                    self.emit_aggregate_transfer(
+                        destination,
+                        source,
+                        element,
+                        volatile,
+                        span,
+                        state,
+                    )?;
                 }
                 Ok(())
             }
@@ -5946,8 +5990,8 @@ impl<'a> FunctionLowerer<'a> {
                 ..
             } => Ok(()),
             TypeKind::Pointer(_) | TypeKind::Int(_) | TypeKind::Enum(_) => {
-                let value = self.emit_memory_load(source, ty, true, span, state)?;
-                self.emit_memory_store(destination, value, ty, true, span, state)?;
+                let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
+                self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
                 Ok(())
             }
             _ => Err(LowerError::UnsupportedType {
@@ -7206,17 +7250,19 @@ impl<'a> FunctionLowerer<'a> {
                         .remove(&action_key)
                         .expect("retained initializer destination")
                         .value;
-                    let volatile = self
+                    let volatile_destination = self
                         .unit
                         .types()
                         .get(*destination_type)
-                        .is_some_and(|ty| ty.qualifiers.is_volatile)
-                        || self.aggregate_source_is_volatile(value);
+                        .is_some_and(|ty| ty.qualifiers.is_volatile);
                     self.emit_aggregate_transfer(
                         action_address,
                         source.value,
                         *destination_type,
-                        volatile,
+                        CopyVolatility::new(
+                            self.aggregate_source_is_volatile(value),
+                            volatile_destination,
+                        ),
                         *span,
                         state,
                     )?;
@@ -10723,7 +10769,7 @@ impl<'a> FunctionLowerer<'a> {
                     destination.clone(),
                     source.value,
                     expected.source,
-                    self.aggregate_source_is_volatile(argument),
+                    CopyVolatility::new(self.aggregate_source_is_volatile(argument), false),
                     argument.span(),
                     state,
                 )?;
@@ -11013,6 +11059,7 @@ impl<'a> FunctionLowerer<'a> {
                         size_bytes: 32,
                         align_bytes: 8,
                     },
+                    volatile: CopyVolatility::None,
                 },
             )?;
             self.replace_effect_tokens(state, mem_out, Some(world_out));
@@ -11447,7 +11494,7 @@ impl<'a> FunctionLowerer<'a> {
                 address.clone(),
                 source.value,
                 place.value_ty(),
-                volatile || self.aggregate_source_is_volatile(assigned),
+                CopyVolatility::new(self.aggregate_source_is_volatile(assigned), volatile),
                 span,
                 state,
             )?;

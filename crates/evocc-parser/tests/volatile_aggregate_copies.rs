@@ -36,11 +36,21 @@ fn rejects(source: &str) {
 }
 
 #[test]
-fn volatile_union_copy_is_refused() {
+fn oversized_volatile_union_copy_is_refused() {
     rejects(concat!(
-        "union U { int narrow; long wide; }; ",
+        "union U { int narrow; long wide[2]; }; ",
         "void f(volatile union U *to, volatile union U *from) { *to = *from; }\n",
     ));
+}
+
+#[test]
+fn naturally_aligned_word_union_has_an_exact_representation_access() {
+    let arena = Arena::default();
+    parse(
+        "union U { int word; char bytes[4]; }; void f(volatile union U *to, volatile union U *from) { *to = *from; }",
+        &arena,
+    )
+    .expect("one supported-width volatile representation access per side");
 }
 
 #[test]

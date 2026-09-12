@@ -1219,7 +1219,17 @@ fn parse_tuple_instruction(
             });
         }
     }
-    if let Some(rest) = rhs.strip_prefix("copy ") {
+    if let Some((rest, volatile)) = [
+        crate::CopyVolatility::None,
+        crate::CopyVolatility::Read,
+        crate::CopyVolatility::Write,
+        crate::CopyVolatility::ReadWrite,
+    ]
+    .into_iter()
+    .find_map(|volatile| {
+        rhs.strip_prefix(&format!("copy{} ", volatile.suffix()))
+            .map(|rest| (rest, volatile))
+    }) {
         require_count(&result_ids, 2, "copy results")?;
         let (operands, attributes) = split_attributes(rest)?;
         let operands = parse_values(operands, values, false)?;
@@ -1238,6 +1248,7 @@ fn parse_tuple_instruction(
                 ty: EvoIRType::World,
             },
             layout: parse_layout(attributes)?,
+            volatile,
         });
     }
     if let Some(rest) = rhs.strip_prefix("call ") {

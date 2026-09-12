@@ -484,8 +484,10 @@ pub fn render_inst(inst: &MInst) -> String {
             src,
             size,
             align,
+            volatile,
         } => format!(
-            "mem.copy [{}], [{}], #{size}, #{align}",
+            "mem.copy{} [{}], [{}], #{size}, #{align}",
+            volatile.suffix(),
             use_of(*dst),
             use_of(*src)
         ),

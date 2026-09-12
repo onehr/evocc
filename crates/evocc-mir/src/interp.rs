@@ -1418,14 +1418,17 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             src,
             size,
             align,
+            volatile,
         } => {
             let destination = read_pointer(frame, *dst)?;
             let source = read_pointer(frame, *src)?;
             let layout = AccessLayout::new(*size, *align);
-            state.memory = state
+            let (memory, world) = state
                 .memory
-                .copy_bytes(destination, source, layout)
+                .copy_with_volatile(&state.world, destination, source, layout, *volatile)
                 .map_err(|error| memory_error(&error))?;
+            state.memory = memory;
+            state.world = world;
         }
         // Section 4: "`ldp`/`stp rt1, rt2, [rn, #off]` | two registers,
         // prologue and epilogue only". The pair is two adjacent eight-byte

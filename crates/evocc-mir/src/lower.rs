@@ -1538,6 +1538,7 @@ fn lower_block(
                         src,
                         size: shape.size,
                         align: shape.align.min(8),
+                        volatile: evocc_memory::CopyVolatility::None,
                     });
                 } else if let VariadicOp::Arg(result) = &access.op {
                     if is_pair(&result.ty) {
@@ -2352,6 +2353,7 @@ fn lower_inst(
             destination,
             source,
             layout,
+            volatile,
             ..
         } => {
             let dst = lowerer.reg(destination)?;
@@ -2361,6 +2363,7 @@ fn lower_inst(
                 src,
                 size: layout.size_bytes,
                 align: layout.align_bytes,
+                volatile: *volatile,
             });
         }
         Inst::Call {

@@ -239,7 +239,7 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
 | K-C13 / original compile replay PASS | 1 | E3029 → E3034 → assembled | Computed goto | `kernel/bpf/core.o` | Explicit storage/effect edges pass C-HIR, EvoIR, MIR, proof replay and native tests. After the shared function-address fix, the original compiles/assembles with symbol parity in `function-addresses-20260913`. |
 | K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
-| K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
+| K-C15 / TARGETED PASS | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | Exact-width representation copy preserves initializedness, pointer fragments and independent read/write events; original replay `volatile-union-20260913`: 1/1 assembled, not installed or booted. |
 
 ### Targeted compile repairs after relocations (2026-09-12)
 
@@ -335,7 +335,10 @@ The immediate target is the full-kernel compile/link/boot path, not another
 workspace clone. Reuse `target/tailored`, run focused tests and affected original
 units while fixing known blockers, then perform the full kernel compile, link
 and boot checks. Do not start repeated workspace replays between these fixes.
-The next observed blocker is K-C11: `kernel/bpf/core.o` still reports E3034.
+The last eight known source blockers now pass their targeted original-unit
+compile/assembly replays: three function-address units, four wide-field units
+and one volatile-union unit. These are separate measurements, not a new
+2,799-unit survey. K-B02's effective build options precede full link/boot.
 
 Historical layout runs retained 344 Cargo output directories, totalling 8.76
 GiB. These were removed without deleting probes, observations or summaries.
@@ -344,6 +347,9 @@ recording the subject digest and measurements. The cancelled clone and this
 turn's two temporary layout build trees were also removed. Kernel source,
 reference/pristine builds, installed objects and the assembly cache are retained
 for the actual link/boot work; those are not duplicate evidence to discard.
+The unused `target/frontend/debug` and `target/debug` caches have also been
+removed; free space is now 62 GiB. They are rebuildable outputs, not source or
+unique measurements. `target/tailored` remains the active compiler/test tree.
 
 ### Kbuild option audit (2026-09-12)
 

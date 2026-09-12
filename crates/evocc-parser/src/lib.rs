@@ -9216,7 +9216,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return false;
         }
         match &target.kind {
-            TypeKind::Union(_) => true,
+            TypeKind::Union(_) => !self
+                .target_layout
+                .layout_of(&self.types, target_ty)
+                .is_ok_and(|layout| {
+                    matches!(layout.size_bytes, 1 | 2 | 4 | 8)
+                        && u64::from(layout.align_bytes) >= layout.size_bytes
+                }),
             TypeKind::Struct(tag) => self.types.tag(*tag).is_some_and(|tag| {
                 matches!(
                     &tag.state,

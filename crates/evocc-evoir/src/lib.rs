@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-pub use evocc_memory::{AccessLayout, IndexSignedness, OffsetDirection};
+pub use evocc_memory::{AccessLayout, CopyVolatility, IndexSignedness, OffsetDirection};
 use evocc_memory::{
     ByteSequence, FrameId, InitialState, LibraryValue, MemoryConfig, MemoryFault, MemoryLimits,
     MemoryState, Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
@@ -431,6 +431,7 @@ pub enum Inst {
         mem_out: Value,
         world_out: Value,
         layout: AccessLayout,
+        volatile: CopyVolatility,
     },
 
     /// Target-scaled, provenance-preserving pointer arithmetic.
@@ -997,7 +998,14 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
             may_trap: true,
             ..EffectSummary::default()
         },
-        Inst::Copy { .. } | Inst::VaAccess(_) => EffectSummary {
+        Inst::Copy { volatile, .. } => EffectSummary {
+            reads_all: true,
+            writes_all: true,
+            volatile: *volatile != CopyVolatility::None,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::VaAccess(_) => EffectSummary {
             reads_all: true,
             writes_all: true,
             may_trap: true,
@@ -2841,6 +2849,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             mem_out,
             world_out,
             layout,
+            volatile,
         } => {
             expect_pointer(&destination.ty, "copy destination", block)?;
             expect_pointer(&source.ty, "copy source", block)?;
@@ -2849,6 +2858,9 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                     "copy in block {block} has invalid alignment {}",
                     layout.align_bytes
                 ));
+            }
+            if !volatile.supports(*layout) {
+                return Err(format!("volatile copy in block {block} requires one naturally aligned 1/2/4/8-byte access"));
             }
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "copy", block)
         }
@@ -5578,15 +5590,18 @@ fn execute_instruction(
             mem_out,
             world_out,
             layout,
+            volatile,
         } => {
             let _ = read_value(values, mem_in, block)?;
             let _ = read_value(values, world_in, block)?;
             let destination = read_pointer(values, destination, block)?;
             let source = read_pointer(values, source, block)?;
-            state.memory = state
+            let (memory, world) = state
                 .memory
-                .copy_bytes(destination, source, *layout)
+                .copy_with_volatile(&state.world, destination, source, *layout, *volatile)
                 .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            state.memory = memory;
+            state.world = world;
             let next_memory_token = state.fresh_token()?;
             let next_world_token = state.fresh_token()?;
             write_value(values, mem_out, next_memory_token);

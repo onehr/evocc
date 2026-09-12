@@ -247,6 +247,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
 | `store [volatile]` | `str` of the matching width, `str.p` for a pointer |
 | `copy` with static size | `mem.copy` |
+| `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; validated size 1/2/4/8 and alignment >= size guarantee exactly one source load and one destination store, with only the specified sides observable; initializedness and pointer metadata follow ordinary `mem.copy` |
 | `br ^b(args)` | `b ^b(args)` |
 | `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0, ^t(...), ^e(...)` (or the `b.cond` fusion above) |
 | `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, retaining the complete ordered CFG and address arguments; effect ordering is preserved as above, and Section 7 implements simultaneous entry bindings |
@@ -774,7 +775,7 @@ instruction     := "%v" int ":" class " = " op operands
                  | "%v" int ":" class ", %v" int ":flags = " ("adds"|"subs") ".w"|".x" operands   ; a register and the flags
                  | "%v" int ":" class " = " op ".w"|".x" operands        ; width suffix on two-width forms
                  | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
-                 | "mem.copy [" reg "], [" reg "], #" int ", #" int
+                 | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " [" reg "], [" reg "], #" int ", #" int
                  | store-form [" volatile"]
                  | call-form
 terminator      := "b ^" ident "(" args ")"

@@ -1689,6 +1689,7 @@ fn emit_inst(
             src,
             size,
             align,
+            ..
         } => {
             let unit = [8_u64, 4, 2, 1]
                 .into_iter()

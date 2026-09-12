@@ -483,6 +483,7 @@ fn a_frame_and_a_copy_beyond_their_immediates_take_two_instructions() {
                     src: g(1),
                     size: 70_000,
                     align: 8,
+                    volatile: evocc_memory::CopyVolatility::None,
                 },
             ],
             term: MTerm::Ret { values: Vec::new() },
@@ -516,5 +517,37 @@ fn a_frame_and_a_copy_beyond_their_immediates_take_two_instructions() {
             }
         }
         Err(reason) => println!("skipped: {reason}"),
+    }
+}
+
+#[test]
+fn exact_volatile_copy_never_splits_the_source_access() {
+    let g = |id| VReg::new(id, RegClass::Gpr64);
+    for (size, load, store) in [
+        (1, "ldrb w16", "strb w16"),
+        (2, "ldrh w16", "strh w16"),
+        (4, "ldr w16", "str w16"),
+        (8, "ldr x16", "str x16"),
+    ] {
+        let function = MFunction {
+            name: "snapshot".to_owned(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: vec![g(0), g(1)],
+                insts: vec![MInst::MemCopy {
+                    dst: g(0),
+                    src: g(1),
+                    size,
+                    align: size as u32,
+                    volatile: evocc_memory::CopyVolatility::Read,
+                }],
+                term: MTerm::Ret { values: Vec::new() },
+            }],
+        };
+        let allocated = allocate(&out_of_ssa(&function)).unwrap();
+        verify_allocation(&allocated).unwrap();
+        let text = emit_module(&[allocated], &[]);
+        assert_eq!(text.matches(load).count(), 1, "{text}");
+        assert_eq!(text.matches(store).count(), 1, "{text}");
     }
 }

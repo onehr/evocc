@@ -104,6 +104,40 @@ fn copy_is_excluded_reassembled_verbatim_and_replayed_independently() {
 }
 
 #[test]
+fn volatile_copy_access_kind_survives_independent_reconstruction() {
+    let source = MODULE
+        .replace("= copy ", "= copy.volatile.read ")
+        .replace("volatile=false", "volatile=true");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values >= 2);
+    let files = ProofFiles::new();
+    fs::write(&files.before, source).unwrap();
+    fs::write(&files.after, render_module(&outcome.module)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    let result = replay();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    // Both modules are well typed and volatile, but changing the event from
+    // a read to a write is not authorized by a scalar equality proof.
+    fs::write(
+        &files.after,
+        render_module(&outcome.module).replace("copy.volatile.read ", "copy.volatile.write "),
+    )
+    .unwrap();
+    assert!(!replay().status.success());
+}
+
+#[test]
 fn computed_edges_survive_renumbering_and_cannot_change_under_a_scalar_proof() {
     let source = include_str!("../../../tests/fixtures/computed-counter.evoir").replace(
         "    %v6 = access_in_bounds",

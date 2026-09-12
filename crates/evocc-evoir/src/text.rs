@@ -689,10 +689,12 @@ impl FunctionRenderer {
                 mem_out,
                 world_out,
                 layout,
+                volatile,
             } => {
                 let results = render_values(&[mem_out.clone(), world_out.clone()]);
                 format!(
-                    "({results}) = copy {}, {}, {}, {} [size={}, align={}]",
+                    "({results}) = copy{} {}, {}, {}, {} [size={}, align={}]",
+                    volatile.suffix(),
                     render_value(mem_in),
                     render_value(world_in),
                     render_value(destination),

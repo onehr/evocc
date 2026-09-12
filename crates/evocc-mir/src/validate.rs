@@ -327,11 +327,22 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_general(name, block, *lhs, "a wide multiply operand")?;
             expect_general(name, block, *rhs, "a wide multiply operand")
         }
-        MInst::MemCopy { dst, src, .. } => {
+        MInst::MemCopy {
+            dst,
+            src,
+            size,
+            align,
+            volatile,
+        } => {
             if dst.class != RegClass::Gpr64 || src.class != RegClass::Gpr64 {
                 return Err(format!(
                     "@{name} block {block}: a mem.copy addresses two gpr64 values"
                 ));
+            }
+            if !align.is_power_of_two()
+                || !volatile.supports(evocc_memory::AccessLayout::new(*size, *align))
+            {
+                return Err(format!("@{name} block {block}: volatile mem.copy requires one naturally aligned 1/2/4/8-byte access"));
             }
             Ok(())
         }

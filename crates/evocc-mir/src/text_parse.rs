@@ -832,7 +832,13 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 results,
             }));
         }
-        if mnemonic == "mem.copy" {
+        if let Some(volatile) = match mnemonic {
+            "mem.copy" => Some(evocc_memory::CopyVolatility::None),
+            "mem.copy.volatile.read" => Some(evocc_memory::CopyVolatility::Read),
+            "mem.copy.volatile.write" => Some(evocc_memory::CopyVolatility::Write),
+            "mem.copy.volatile.readwrite" => Some(evocc_memory::CopyVolatility::ReadWrite),
+            _ => None,
+        } {
             scan.expect("[")?;
             let dst = scan.use_of()?;
             scan.expect("], [")?;
@@ -847,6 +853,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 src,
                 size,
                 align: u32::try_from(align).map_err(|_| "an alignment is small".to_owned())?,
+                volatile,
             }));
         }
         // Section 6 (revision 0.18): the `x8` marker carries no operand.

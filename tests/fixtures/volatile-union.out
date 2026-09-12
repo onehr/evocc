@@ -1,0 +1,12 @@
+Image: evo-flight-lab:sealed (sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2)
+Command: <gcc-14|clang-19> -std=gnu11 -O<0|2> volatile-union.c -o /tmp/probe; /tmp/probe
+gcc-14 O0 exit=0
+gcc-14 O2 exit=0
+clang-19 O0 exit=0
+clang-19 O2 exit=0
+Command: <gcc-14|clang-19> -std=gnu11 -O2 -S volatile-union.c -o /tmp/probe.s
+Both snapshot functions read the source once: ldr w0, [x0]. Clang additionally stores a nonvolatile temporary at sp+12.
+Both publish functions use one ldr wN, [x1] and one str wN, [x0].
+Frozen kernel: kernel/rcu/tasks.h:1992 initializes union rcu_special trs using READ_ONCE(t->trc_reader_special).
+CONFIG_LTO_NONE=y selects asm-generic/rwonce.h __READ_ONCE: (*(const volatile __unqual_scalar_typeof(x) *)&(x)).
+include/linux/sched.h union rcu_special is four u8 fields overlaid with u32 s, size=4 and align=4.

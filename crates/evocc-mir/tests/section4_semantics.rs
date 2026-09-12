@@ -779,6 +779,7 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
                         src: g(1),
                         size: 8,
                         align: 8,
+                        volatile: evocc_memory::CopyVolatility::None,
                     },
                     MInst::Load {
                         dst: g(3),
@@ -792,10 +793,21 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
             }],
         }],
     };
-    let value = interpret_module(&module, "main", &[int(0x1234)], MirLimits::new(1000))
-        .expect("run")
-        .results;
-    assert_eq!(value, vec![MirValue::Int(0x1234)]);
+    for (mode, count) in [
+        (evocc_memory::CopyVolatility::None, 0),
+        (evocc_memory::CopyVolatility::Read, 1),
+        (evocc_memory::CopyVolatility::ReadWrite, 2),
+    ] {
+        let mut variant = module.clone();
+        let MInst::MemCopy { volatile, .. } = &mut variant.functions[0].blocks[0].insts[3] else {
+            panic!("copy")
+        };
+        *volatile = mode;
+        let value =
+            interpret_module(&variant, "main", &[int(0x1234)], MirLimits::new(1000)).expect("run");
+        assert_eq!(value.results, vec![MirValue::Int(0x1234)]);
+        assert_eq!(value.world.volatile_trace().len(), count);
+    }
 }
 
 #[test]
@@ -829,6 +841,7 @@ fn mem_copy_of_an_uninitialized_source_moves_representation_not_values() {
                         src: g(1),
                         size: 8,
                         align: 8,
+                        volatile: evocc_memory::CopyVolatility::None,
                     },
                 ],
                 term: MTerm::Ret { values: Vec::new() },

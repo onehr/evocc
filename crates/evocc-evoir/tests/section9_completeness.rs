@@ -229,7 +229,8 @@ fn sentinel_instructions() -> Vec<Inst> {
             world_in: world(1369),
             mem_out: mem(1376),
             world_out: world(1377),
-            layout: AccessLayout::new(64, 16),
+            layout: AccessLayout::new(8, 16),
+            volatile: evocc_evoir::CopyVolatility::ReadWrite,
         },
         Inst::PtrOffset {
             result: pointer(1370),
@@ -669,6 +670,7 @@ fn inst_schema(inst: &Inst) -> &'static str {
             mem_out,
             world_out,
             layout,
+            volatile,
         } => {
             let _ = (
                 destination,
@@ -678,8 +680,9 @@ fn inst_schema(inst: &Inst) -> &'static str {
                 mem_out,
                 world_out,
                 layout,
+                volatile,
             );
-            "Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout)"
+            "Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout,volatile)"
         }
         Inst::PtrOffset {
             result,

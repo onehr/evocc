@@ -544,6 +544,55 @@ pub enum VolatileDirection {
     Store,
 }
 
+/// Observable sides of an exact-width representation copy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CopyVolatility {
+    #[default]
+    None,
+    Read,
+    Write,
+    ReadWrite,
+}
+
+impl CopyVolatility {
+    #[must_use]
+    pub const fn new(read: bool, write: bool) -> Self {
+        match (read, write) {
+            (false, false) => Self::None,
+            (true, false) => Self::Read,
+            (false, true) => Self::Write,
+            (true, true) => Self::ReadWrite,
+        }
+    }
+
+    #[must_use]
+    pub const fn reads(self) -> bool {
+        matches!(self, Self::Read | Self::ReadWrite)
+    }
+
+    #[must_use]
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::ReadWrite)
+    }
+
+    #[must_use]
+    pub const fn suffix(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Read => ".volatile.read",
+            Self::Write => ".volatile.write",
+            Self::ReadWrite => ".volatile.readwrite",
+        }
+    }
+
+    #[must_use]
+    pub const fn supports(self, access: AccessLayout) -> bool {
+        matches!(self, Self::None)
+            || (matches!(access.size_bytes, 1 | 2 | 4 | 8)
+                && access.align_bytes as u64 >= access.size_bytes)
+    }
+}
+
 /// Shared runtime code/message pair for program-semantic memory failures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MemoryDiagnostic {
@@ -568,6 +617,12 @@ pub enum ObservedPointer {
 pub enum ObservedValue {
     RawTargetBits(Vec<u8>),
     Pointer(ObservedPointer),
+    /// Unknown padding remains unknown even though a single hardware access
+    /// transfers the complete representation. Provenance is copied in memory.
+    Representation {
+        bytes: Vec<u8>,
+        initialized: Vec<bool>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1591,6 +1646,54 @@ impl MemoryState {
         self.copy_representation(destination, source, access, false)
     }
 
+    /// Exact-width volatile copy, sharing the ordinary representation transfer
+    /// so padding and pointer metadata are not turned into scalar values.
+    pub fn copy_with_volatile(
+        &self,
+        world: &WorldState,
+        destination: Pointer,
+        source: Pointer,
+        access: AccessLayout,
+        volatile: CopyVolatility,
+    ) -> Result<(Self, WorldState), MemoryFault> {
+        if !volatile.supports(access) {
+            return Err(MemoryFault::InvalidAccessSize {
+                size_bytes: access.size_bytes,
+            });
+        }
+        let memory = self.copy_bytes(destination, source, access)?;
+        if volatile == CopyVolatility::None {
+            return Ok((memory, world.clone()));
+        }
+        let resolved = self.resolve_pointer(source)?;
+        let range = self.checked_range(resolved, access)?;
+        let object = &self.objects[&resolved.object];
+        let observed = ObservedValue::Representation {
+            bytes: clone_slice(&object.bytes[range.clone()], access.size_bytes)?,
+            initialized: clone_slice(&object.initialized[range], access.size_bytes)?,
+        };
+        let mut world = world.clone();
+        if volatile.reads() {
+            world = self.append_world(
+                &world,
+                VolatileDirection::Load,
+                source,
+                access,
+                observed.clone(),
+            )?;
+        }
+        if volatile.writes() {
+            world = memory.append_world(
+                &world,
+                VolatileDirection::Store,
+                destination,
+                access,
+                observed,
+            )?;
+        }
+        Ok((memory, world))
+    }
+
     /// Execute the specified external library subset against abstract storage.
     /// Copies preserve initialization and provenance; comparisons actually read bytes.
     pub fn call_library(
@@ -2517,6 +2620,52 @@ mod tests {
     const BYTE: AccessLayout = AccessLayout::new(1, 1);
     const U16: AccessLayout = AccessLayout::new(2, 2);
     const U32: AccessLayout = AccessLayout::new(4, 4);
+
+    #[test]
+    fn volatile_copy_transports_unknown_bytes_and_reports_one_requested_access() {
+        let memory = little_memory();
+        let (memory, source) = memory
+            .allocate_static(0, U32, InitialState::Uninitialized)
+            .unwrap();
+        let (memory, destination) = memory
+            .allocate_static(1, U32, InitialState::Uninitialized)
+            .unwrap();
+        let memory = memory.store_integer(source, BYTE, 7).unwrap();
+        let world = WorldState::new(WorldLimits {
+            max_volatile_events: 10,
+        });
+        let (copied, world) = memory
+            .copy_with_volatile(&world, destination, source, U32, CopyVolatility::Read)
+            .unwrap();
+        assert_eq!(copied.load_integer(destination, BYTE).unwrap(), 7);
+        assert!(matches!(
+            copied.load_integer(destination, U32),
+            Err(MemoryFault::UninitializedRead { .. })
+        ));
+        let [event] = world.volatile_trace() else {
+            panic!("exactly one source read")
+        };
+        assert_eq!(event.direction, VolatileDirection::Load);
+        assert_eq!(event.access, U32);
+        let ObservedValue::Representation { initialized, .. } = &event.value else {
+            panic!("representation trace retains initializedness")
+        };
+        assert_eq!(initialized, &[true, false, false, false]);
+        let (_, world) = copied
+            .copy_with_volatile(
+                &world,
+                destination,
+                destination,
+                U32,
+                CopyVolatility::ReadWrite,
+            )
+            .unwrap();
+        assert_eq!(
+            world.volatile_trace().len(),
+            3,
+            "self-copy must not erase volatile events"
+        );
+    }
     const PTR: AccessLayout = AccessLayout::new(8, 8);
 
     fn limits() -> MemoryLimits {

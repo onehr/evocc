@@ -809,8 +809,15 @@ Access checks are those of `store` on both ranges (`E3009`-`E3013`). `copy`
 is the lowering of every C aggregate copy: assignment, copy-initialization,
 argument passing and return by value of a record or union (10.1.3); no other
 source form produces it, and no rewrite family may introduce, remove or
-reorder one. It is never `volatile`; a volatile aggregate access is a sequence
-of member accesses (10.1.3).
+reorder one. Ordinary `copy` is not volatile. Exact-width whole-union access
+uses `copy.volatile.read`, `copy.volatile.write` or `copy.volatile.readwrite`
+with the same operands and results: these require N in {1,2,4,8} and A >= N,
+emit one source read and/or one destination write respectively (read first),
+and transfer the same representation metadata without interpreting padding.
+Each observable event records its width and the bytes' initializedness; even
+an identical-range copy retains the requested events. No atomicity or MMIO
+contract is implied. Larger/misaligned unions remain E2922; ordinary volatile
+record member access follows 10.1.3.
 
 **Semantics.**
 
@@ -1300,6 +1307,7 @@ EffectSummary {
 | `load` (normal) | `{All}` | `{}` | false | false | false | true | false |
 | `store` (normal) | `{}` | `{All}` | false | false | false | true | false |
 | `copy` | `{All}` | `{All}` | false | false | false | true | false |
+| `copy.volatile.read/write/readwrite` | `{All}` | `{All}` | true | false | false | true | false |
 | `load volatile` | `{All}` | `{}` | true | false | false | true | false |
 | `store volatile` | `{}` | `{All}` | true | false | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
@@ -2883,7 +2891,7 @@ inst_body :=
         " " value_name ", " value_name ", " value_name " : " type
   | "(" value_name ", " value_name ") = store" volatile_marker
         " " value_name ", " value_name ", " value_name ", " value_name
-  | "(" value_name ", " value_name ") = copy "
+  | "(" value_name ", " value_name ") = copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " "
         value_name ", " value_name ", " value_name ", " value_name
         " [size=" integer ", align=" integer "]"
   | value_name " = ptr.offset." direction "." index_signedness " "
@@ -3477,11 +3485,12 @@ value and returning one by value each lower to one `copy` of the type's size
 at the type's alignment (Section 3). The C-HIR interpreter performs the same
 byte-and-bitmap transfer. A `volatile`-qualified record without bit-field
 members is copied member by member with `volatile` scalar accesses in
-declaration order. A `volatile` union has no member the copy could select,
-and a `volatile` bit-field has no portable access width, mask or trace
-granularity, so both report `E2922`
-(`volatile-aggregate-copy-unsupported`) and fail closed; the kernel cohort
-contains neither. `_Atomic` objects remain outside this profile (`E2702`). The padding bytes of an initialized
+declaration order. A complete, naturally aligned 1/2/4/8-byte `volatile`
+union is read or written as one representation access through Section 3.8,
+without selecting a member; unsupported sizes/alignment and volatile record
+copies containing bit-fields retain `E2922` (`volatile-aggregate-copy-unsupported`).
+The whole-union `READ_ONCE` at `kernel/rcu/tasks.h:1992` is a measured consumer.
+`_Atomic` objects remain outside this profile (`E2702`). The padding bytes of an initialized
 aggregate are uninitialized, and after a copy so are the destination's
 (measured: after `b = a`, GCC-14 leaves `a`'s padding bytes in `b`, Clang-19
 zeros them; both are consistent with "unspecified", so the profile transfers
@@ -3852,7 +3861,7 @@ front end that still emits it is defective.
 | `E2918` | `goto` into a statement expression |
 | `E2919` | initializer for a flexible array member outside file scope |
 | `E2920` | `goto` names a label no enclosing function scope declares |
-| `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
+| `E2922` | a volatile union outside the exact-width/alignment rule, or a volatile record copy with bit-field members |
 | `E2923` | array bound folds to a negative value |
 | `E2924` | an attribute specifier precedes a statement that is not a null statement |
 | `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
@@ -6220,6 +6229,13 @@ An anonymous ordinary operand of `call` or `call.indirect` may append ` byval(si
 `(%mem2, %world2) = va_arg.byval %list, %mem, %world, %destination [size=N, align=A]` copies the next record into an allocated `ptr<generic>` destination and advances the same list as scalar `va_arg`, preserving initialization/provenance and linear effects; the abstract interpreter checks the recorded record shape, distinguishing it from a scalar pointer and reporting existing E3038 on a mismatch or invalid list.
 Both GCC-14 and Clang-19 O0/O2 callers and callees agree with EvoCC in both mixed-link directions (GNU assembler for the subject output); no diagnostic is added, no optimizer allowlist is extended, and original-unit gains are recorded only after replay.
 
+### Whole-union volatile representation access
+
+The approved full-kernel adjudication admits one exact-width representation read/write for a complete naturally aligned 1/2/4/8-byte volatile union, through Section 3.8's existing `copy` family with explicit read/write sides; selected-member authority is neither required nor invented, and larger/misaligned shapes retain E2922.
+The shared memory transfer preserves every byte's initializedness and pointer fragments, while its world events retain unknown-byte information and record only the requested side once; it adds no fence, atomicity, MMIO or optimizer eligibility.
+Both sealed compilers at O0/O2 run `tests/fixtures/volatile-union.c` successfully; `volatile-union.out` records O2 assembly's single source-width access and the exact frozen `CONFIG_LTO_NONE`/`rwonce.h`/`tasks.h:1992` source chain.
+One original first-error unit, `kernel/rcu/update.o`, is affected; source acceptance, IR/MIR text/validator/interpreters, native execution and original-unit replay remain distinct measurements.
+
 ### Function addresses and byte arithmetic
 
 Following the full-kernel adjudication, GNU function-pointer addition/subtraction and their compound/prefix/postfix forms use byte scale one through `ptr.to_int`, pointer-width arithmetic and `ptr.from_int.fnptr`, with the original lvalue and integer operand each evaluated once; no interior address acquires named Function provenance.
@@ -6483,7 +6499,7 @@ appendix; its semantics and evidence are in that entry, not inferred from this
 instruction-shape metadata.
 
 ```text
-(<>) = copy <>, <>, <>, <> [size=<>, align=<>]
+(<>) = copy<> <>, <>, <>, <> [size=<>, align=<>]
 (<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 (<>, <>, <>) = alloca.dynamic <>, <>, <> [origin=<>, align=<>]

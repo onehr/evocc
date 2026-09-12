@@ -1,4 +1,35 @@
 {
+  "volatileUnionRepresentations": {
+    "status": "TARGETED_ORIGINAL_REPLAY_PASS_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "ca1a32b",
+    "red": "2 failed tests, E2922 and missing copy syntax, zero build errors",
+    "focusedCommands": [
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-evoir --test copy_instruction --locked --offline -j 2: 7 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-lower --test aggregate_copy_lowering --locked --offline -j 2: 8 passed before the additional frozen READ_ONCE fixture",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-lower --test aggregate_copy_lowering frozen --locked --offline -j 2: 1 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-memory --lib volatile --locked --offline -j 2: 4 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-mir --test section8_emission exact_volatile --locked --offline -j 2: 1 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-mir --test section4_semantics mem_copy --locked --offline -j 2: 2 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-proofcheck --test copy_is_opaque volatile_copy --locked --offline -j 2: 1 passed",
+      "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-evoir --test section9_completeness --locked --offline -j 2: 1 passed"
+    ],
+    "clippyCommand": "CARGO_TARGET_DIR=target/tailored cargo clippy -p evocc-memory -p evocc-evoir -p evocc-chir -p evocc-parser -p evocc-lower -p evocc-mir -p evocc-proofcheck --all-targets --locked --offline -j 2 -- -D warnings",
+    "clippy": "PASS",
+    "nativeMeasurements": "tests/fixtures/volatile-union.out",
+    "oracleRuns": 4,
+    "oracleExitZero": 4,
+    "subjectNativeExit": 0,
+    "kernelCommand": "python3 tools/k1/substitute.py --allowlist .evidence/builtin-probes/20260913-volatile-union/units.txt --no-install --no-cache --jobs 1 --timeout 180 --evocc target/tailored/release/evocc --run-id volatile-union-20260913",
+    "kernelRun": "volatile-union-20260913",
+    "requested": 1,
+    "freshCompilations": 1,
+    "assembled": 1,
+    "refused": 0,
+    "subjectSha256": "e3a51d1c9743c9f435a6ad51a4049ef80e72333a7a08203ef84e46d71c740f6d",
+    "unitsSha256": "3fa9016ae0d48d558e9cb225145a53fee57a80ee6cd3f1347be9a7ecc45bd76f",
+    "installed": false,
+    "linkAndBoot": "NOT RUN"
+  },
   "directWideFieldShifts": {
     "status": "TARGETED_ORIGINAL_REPLAYS_PASS_NOT_FULL_KERNEL_BOOT",
     "redCommit": "bc172e5",

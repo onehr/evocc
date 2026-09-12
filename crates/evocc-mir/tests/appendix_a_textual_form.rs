@@ -176,6 +176,7 @@ fn every_form() -> MModule {
                             src: g(20),
                             size: 16,
                             align: 8,
+                            volatile: evocc_memory::CopyVolatility::None,
                         },
                         MInst::WideMultiply {
                             op: evocc_mir::WideMul::Smull,

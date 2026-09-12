@@ -903,6 +903,7 @@ pub enum MInst {
         src: VReg,
         size: u64,
         align: u32,
+        volatile: evocc_memory::CopyVolatility,
     },
     /// The `frame.slot` pseudo-form of Section 4: "the address of a fresh
     /// object of S bytes at alignment A, one per dynamic execution of the

@@ -13,9 +13,9 @@ use std::{
 
 use evocc_common::SourceSpan;
 use evocc_memory::{
-    AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, LibraryValue, MemoryConfig,
-    MemoryFault, MemoryLimits, MemoryState, OffsetDirection, OffsetOperand, Pointer, PointerValue,
-    ScopeId as MemoryScopeId, WorldLimits, WorldState,
+    AccessLayout, ByteSequence, CopyVolatility, FrameId, IndexSignedness, InitialState,
+    LibraryValue, MemoryConfig, MemoryFault, MemoryLimits, MemoryState, OffsetDirection,
+    OffsetOperand, Pointer, PointerValue, ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
     enum_integer_rank, ArrayBound, BitFieldLayout, FunctionParameters, Qualifiers, TagDefinition,
@@ -127,6 +127,9 @@ pub struct InterpretOutcome {
 pub enum InterpreterError {
     Profile(crate::ProfileRefusal),
     Linkage(crate::linkage::LinkageError),
+    VolatileAggregate {
+        span: SourceSpan,
+    },
     IndirectCallDynamicSignatureMismatch {
         span: SourceSpan,
     },
@@ -266,6 +269,7 @@ impl InterpreterError {
         match self {
             Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
+            Self::VolatileAggregate { .. } => "E2922",
             Self::ReadOfUninitializedObject { .. } | Self::UninitializedValue { .. } => "E3001",
             Self::Integer {
                 error: IntegerError::DivisionByZero,
@@ -333,6 +337,7 @@ impl InterpreterError {
         match self {
             Self::Profile(error) => error.message.to_owned(),
             Self::Linkage(error) => error.message.to_owned(),
+            Self::VolatileAggregate { .. } => "volatile-aggregate-copy-unsupported".to_owned(),
             Self::UninitializedValue { .. } => "read-of-uninitialized-object".to_owned(),
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
@@ -442,6 +447,7 @@ impl InterpreterError {
             Self::FunctionHasNoBody { span, .. }
             | Self::UnsupportedFunctionSignature { span, .. }
             | Self::UnsupportedType { span, .. }
+            | Self::VolatileAggregate { span }
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
             | Self::Asm { span }
@@ -7252,10 +7258,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 Ok(())
             }
-            TypeKind::Union(_) => Err(InterpreterError::UnsupportedExpression {
-                feature: "volatile union copy has no selected-member authority",
-                span,
-            }),
+            TypeKind::Union(_) => {
+                let layout = self.access_layout(destination_type, span)?;
+                let volatile = CopyVolatility::new(
+                    source_qualifiers.is_volatile,
+                    destination_qualifiers.is_volatile,
+                );
+                if !volatile.supports(layout) {
+                    return Err(InterpreterError::VolatileAggregate { span });
+                }
+                let (memory, world) = self
+                    .memory
+                    .copy_with_volatile(&self.world, destination, source, layout, volatile)
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.memory = memory;
+                self.world = world;
+                Ok(())
+            }
             _ => Err(InterpreterError::UnsupportedExpression {
                 feature: "volatile aggregate copy reached non-aggregate",
                 span,

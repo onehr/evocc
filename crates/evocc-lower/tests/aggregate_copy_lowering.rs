@@ -60,8 +60,8 @@ fn volatile_union_snapshots_preserve_representation_and_only_requested_events() 
         let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
         let text = render_module(&module);
         assert_eq!(
-            evocc_evoir::parse_section9_module(text.as_bytes()).unwrap(),
-            module
+            render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),
+            text
         );
         let chir = interpret_scalar_function(
             &unit,
@@ -96,6 +96,43 @@ fn volatile_union_snapshots_preserve_representation_and_only_requested_events() 
                 .iter()
                 .all(|event| event.access.size_bytes == 4));
         }
+    }
+}
+
+#[test]
+fn frozen_read_once_union_copy_runs_once_and_preserves_pointer_members() {
+    use evocc_memory::VolatileDirection::{Load, Store};
+    let source = include_str!("../../../tests/fixtures/volatile-union.c");
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let chir = interpret_scalar_function(
+        &unit,
+        function_symbol(&unit, "main"),
+        CHirLimits::new(200_000),
+    )
+    .unwrap();
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let ir = interpret_module(
+        &module,
+        "main",
+        &[
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+            RuntimeValue::new(EvoIRType::World, 0),
+        ],
+        EvoIrLimits::new(200_000),
+    )
+    .unwrap();
+    assert_eq!(chir.return_value.unwrap().raw_bits, 0);
+    assert_eq!(ir.return_values[0].raw_bits, 0);
+    for world in [&chir.world, &ir.world] {
+        assert_eq!(
+            world
+                .volatile_trace()
+                .iter()
+                .map(|event| (event.direction, event.access.size_bytes))
+                .collect::<Vec<_>>(),
+            [(Load, 4), (Load, 4), (Store, 4), (Load, 8)]
+        );
     }
 }
 

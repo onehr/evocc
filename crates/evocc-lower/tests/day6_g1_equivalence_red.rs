@@ -868,10 +868,12 @@ fn render_inst(inst: &Inst) -> String {
             mem_out,
             world_out,
             layout,
+            volatile,
         } => format!(
-            "({}, {}) = copy {}, {}, {}, {} [size={}, align={}]",
+            "({}, {}) = copy{} {}, {}, {}, {} [size={}, align={}]",
             value(mem_out),
             value(world_out),
+            volatile.suffix(),
             value(mem_in),
             value(world_in),
             value(destination),

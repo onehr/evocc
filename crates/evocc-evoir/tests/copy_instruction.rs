@@ -146,10 +146,20 @@ fn copy_transfers_initializedness_without_reading_padding() {
         ),
         "%v18, %v19, %v20",
     );
-    assert_eq!(
-        execute(&text).unwrap_err(),
-        "E3001: read-of-uninitialized-object"
-    );
+    for mnemonic in ["copy", "copy.volatile.read"] {
+        let variant = text.replace("= copy ", &format!("= {mnemonic} ")).replace(
+            "volatile=false",
+            if mnemonic == "copy" {
+                "volatile=false"
+            } else {
+                "volatile=true"
+            },
+        );
+        assert_eq!(
+            execute(&variant).unwrap_err(),
+            "E3001: read-of-uninitialized-object"
+        );
+    }
 }
 
 #[test]
@@ -173,8 +183,18 @@ fn copying_pointer_bytes_preserves_their_provenance() {
         ),
         "%v25, %v26, %v27",
     );
-    let outcome = execute(&text).expect("copied pointer representation must remain usable");
-    assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 42));
+    for mnemonic in ["copy", "copy.volatile.read", "copy.volatile.readwrite"] {
+        let variant = text.replace("= copy ", &format!("= {mnemonic} ")).replace(
+            "volatile=false",
+            if mnemonic == "copy" {
+                "volatile=false"
+            } else {
+                "volatile=true"
+            },
+        );
+        let outcome = execute(&variant).expect("copied pointer representation must remain usable");
+        assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 42));
+    }
 }
 
 fn copy_only_text(

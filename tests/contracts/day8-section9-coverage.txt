@@ -50,7 +50,7 @@ Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381
 Inst.CondBr(condition,true_target,true_args,false_target,false_args)|cond_br %v1260, ^b4242(%v1261), ^b4343(%v1262)
 Inst.IndirectBr(target,edges)|br.indirect %v1252 [^b4242(%v1253, %v1254, %v1255)]
 Inst.Const(result,immediate)|%v1000 = const.bits<37> 987654321
-Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout)|(%v1376, %v1377) = copy %v1368, %v1369, %v1366, %v1367 [size=64, align=16]
+Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout,volatile)|(%v1376, %v1377) = copy.volatile.readwrite %v1368, %v1369, %v1366, %v1367 [size=8, align=16]
 Inst.DivisorNonZero(result,divisor)|%v1160 = divisor_nonzero %v1161
 Inst.FuncAddr(result,symbol)|%v1300 = func_addr @sentinel_function_target : fnptr<(bits<37>, mem<all>, world)->(bits<37>, mem<all>, world)>
 Inst.GlobalAddr(result,symbol)|%v1290 = global_addr @sentinel_global_target : ptr<global>

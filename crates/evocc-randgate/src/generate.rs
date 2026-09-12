@@ -1721,6 +1721,7 @@ impl FunctionGen<'_> {
             mem_out: mem_out.clone(),
             world_out: world_out.clone(),
             layout: buffer.layout,
+            volatile: evocc_evoir::CopyVolatility::None,
         });
         block.mem = mem_out;
         block.world = world_out;
