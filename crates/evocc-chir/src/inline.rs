@@ -27,6 +27,9 @@ enum Node<'a> {
 struct Uses<'a> {
     nodes: usize,
     addressed_labels: bool,
+    constant_queries: bool,
+    entry_labels: bool,
+    jumps: bool,
     references: BTreeSet<SymbolId>,
     assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
@@ -165,89 +168,109 @@ fn inspect_with_declarations<'a>(
                     CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
                 }
             }
-            Node::Stmt(s) => match s {
-                CHirStmt::Compound(items, _) => {
-                    for i in items {
-                        work.push(match i {
-                            CHirBlockItem::Declaration(d) => Node::Decl(d),
-                            CHirBlockItem::Statement(s) => Node::Stmt(s),
-                        });
+            Node::Stmt(s) => {
+                uses.entry_labels |= matches!(
+                    s,
+                    CHirStmt::Label(..)
+                        | CHirStmt::Case(..)
+                        | CHirStmt::CaseRange(..)
+                        | CHirStmt::Default(..)
+                );
+                uses.jumps |= matches!(
+                    s,
+                    CHirStmt::Goto(..)
+                        | CHirStmt::ComputedGoto(..)
+                        | CHirStmt::Return(..)
+                        | CHirStmt::Break(..)
+                        | CHirStmt::Continue(..)
+                ) || matches!(s, CHirStmt::Asm(a) if !a.labels.is_empty());
+                match s {
+                    CHirStmt::Compound(items, _) => {
+                        for i in items {
+                            work.push(match i {
+                                CHirBlockItem::Declaration(d) => Node::Decl(d),
+                                CHirBlockItem::Statement(s) => Node::Stmt(s),
+                            });
+                        }
                     }
-                }
-                CHirStmt::Expr(e, _) | CHirStmt::ComputedGoto(e, _) => {
-                    work.push(Node::Expr(e, false))
-                }
-                CHirStmt::Return(e, _) => {
-                    if let Some(e) = e {
+                    CHirStmt::Expr(e, _) | CHirStmt::ComputedGoto(e, _) => {
+                        work.push(Node::Expr(e, false))
+                    }
+                    CHirStmt::Return(e, _) => {
+                        if let Some(e) = e {
+                            work.push(Node::Expr(e, false));
+                        }
+                    }
+                    CHirStmt::If(e, a, b, _) => {
                         work.push(Node::Expr(e, false));
+                        work.push(Node::Stmt(a));
+                        if let Some(b) = b {
+                            work.push(Node::Stmt(b));
+                        }
                     }
-                }
-                CHirStmt::If(e, a, b, _) => {
-                    work.push(Node::Expr(e, false));
-                    work.push(Node::Stmt(a));
-                    if let Some(b) = b {
+                    CHirStmt::Switch(e, b, _)
+                    | CHirStmt::While(e, b, _)
+                    | CHirStmt::Case(e, b, _) => {
+                        work.push(Node::Expr(e, false));
                         work.push(Node::Stmt(b));
                     }
-                }
-                CHirStmt::Switch(e, b, _) | CHirStmt::While(e, b, _) | CHirStmt::Case(e, b, _) => {
-                    work.push(Node::Expr(e, false));
-                    work.push(Node::Stmt(b));
-                }
-                CHirStmt::DoWhile(b, e, _) => {
-                    work.push(Node::Expr(e, false));
-                    work.push(Node::Stmt(b));
-                }
-                CHirStmt::For(i, c, u, b, _) => {
-                    match i {
-                        CHirForInit::Empty => {}
-                        CHirForInit::Expression(e) => work.push(Node::Expr(e, false)),
-                        CHirForInit::Declaration(ds) => {
-                            for d in ds {
-                                work.push(Node::Decl(d));
+                    CHirStmt::DoWhile(b, e, _) => {
+                        work.push(Node::Expr(e, false));
+                        work.push(Node::Stmt(b));
+                    }
+                    CHirStmt::For(i, c, u, b, _) => {
+                        match i {
+                            CHirForInit::Empty => {}
+                            CHirForInit::Expression(e) => work.push(Node::Expr(e, false)),
+                            CHirForInit::Declaration(ds) => {
+                                for d in ds {
+                                    work.push(Node::Decl(d));
+                                }
                             }
                         }
-                    }
-                    for e in c.iter().chain(u) {
-                        work.push(Node::Expr(e, false));
-                    }
-                    work.push(Node::Stmt(b));
-                }
-                CHirStmt::Label(_, b, _) | CHirStmt::Default(b, _) => work.push(Node::Stmt(b)),
-                CHirStmt::CaseRange(a, b, s, _) => {
-                    work.push(Node::Expr(a, false));
-                    work.push(Node::Expr(b, false));
-                    work.push(Node::Stmt(s));
-                }
-                CHirStmt::Asm(a) => {
-                    uses.assembly.push(&a.template);
-                    for o in &a.outputs {
-                        if let CHirExpr::Ident { symbol, .. } = o.expression {
-                            uses.mutable.insert(*symbol);
+                        for e in c.iter().chain(u) {
+                            work.push(Node::Expr(e, false));
                         }
+                        work.push(Node::Stmt(b));
                     }
-                    for o in &a.inputs {
-                        // Memory constraints implicitly take the operand's
-                        // address. Replacing its object with a value is invalid
-                        // even when the initializer or argument is constant.
-                        if matches!(o.constraint.as_str(), "m" | "Q" | "Qo") {
+                    CHirStmt::Label(_, b, _) | CHirStmt::Default(b, _) => work.push(Node::Stmt(b)),
+                    CHirStmt::CaseRange(a, b, s, _) => {
+                        work.push(Node::Expr(a, false));
+                        work.push(Node::Expr(b, false));
+                        work.push(Node::Stmt(s));
+                    }
+                    CHirStmt::Asm(a) => {
+                        uses.assembly.push(&a.template);
+                        for o in &a.outputs {
                             if let CHirExpr::Ident { symbol, .. } = o.expression {
                                 uses.mutable.insert(*symbol);
                             }
                         }
+                        for o in &a.inputs {
+                            // Memory constraints implicitly take the operand's
+                            // address. Replacing its object with a value is invalid
+                            // even when the initializer or argument is constant.
+                            if matches!(o.constraint.as_str(), "m" | "Q" | "Qo") {
+                                if let CHirExpr::Ident { symbol, .. } = o.expression {
+                                    uses.mutable.insert(*symbol);
+                                }
+                            }
+                        }
+                        for o in a.inputs.iter().chain(&a.outputs) {
+                            work.push(Node::Expr(o.expression, false));
+                        }
                     }
-                    for o in a.inputs.iter().chain(&a.outputs) {
-                        work.push(Node::Expr(o.expression, false));
-                    }
+                    CHirStmt::Break(_)
+                    | CHirStmt::Continue(_)
+                    | CHirStmt::Goto(_, _)
+                    | CHirStmt::Null(_)
+                    | CHirStmt::AttributedNull(..) => {}
                 }
-                CHirStmt::Break(_)
-                | CHirStmt::Continue(_)
-                | CHirStmt::Goto(_, _)
-                | CHirStmt::Null(_)
-                | CHirStmt::AttributedNull(..) => {}
-            },
+            }
             Node::Expr(e, callee) => {
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
+                uses.constant_queries |= matches!(e, CHirExpr::BuiltinConstantP { .. });
                 if let CHirExpr::Ident { symbol, .. } = e {
                     uses.references.insert(*symbol);
                 }
@@ -461,6 +484,11 @@ pub fn needs_substitution(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> boo
             || constant_inline_return(unit, f, target).is_some()
             || f.has_internal_linkage(unit.symbols())))
     }) || !static_integer_values(unit, target).is_empty()
+        || has_constant_queries(unit)
+}
+
+pub(crate) fn has_constant_queries(unit: &CHirUnit<'_>) -> bool {
+    inspect(unit.iter().map(Node::Decl)).constant_queries
 }
 
 type ParameterConstants<'a> = BTreeMap<SymbolId, BTreeMap<SymbolId, (&'a CHirExpr<'a>, TypeId)>>;
@@ -599,6 +627,17 @@ pub fn substitute<'a>(
     unit: &CHirUnit<'a>,
     arena: &'a Arena,
     target: &TargetDataLayout,
+) -> Result<CHirUnit<'a>, InlineError> {
+    substitute_for_execution(unit, arena, target, false)
+}
+
+/// Keep definitions when the reference interpreter can request any function
+/// as its entry. The value/query rewriting is otherwise the lowering pass.
+pub(crate) fn substitute_for_execution<'a>(
+    unit: &CHirUnit<'a>,
+    arena: &'a Arena,
+    target: &TargetDataLayout,
+    keep_definitions: bool,
 ) -> Result<CHirUnit<'a>, InlineError> {
     let mut uses = inspect(unit.iter().map(Node::Decl));
     let linkage = crate::linkage::SymbolLinkage::derive(unit).map_err(|e| InlineError {
@@ -759,7 +798,8 @@ pub fn substitute<'a>(
                 pass.active.push(f.symbol);
                 let mut rewritten = pass.stmt(body, &mut c)?;
                 pass.active.pop();
-                if f.has_internal_linkage(pass.unit.symbols())
+                if !keep_definitions
+                    && f.has_internal_linkage(pass.unit.symbols())
                     && pass.eligible.contains_key(&f.symbol)
                 {
                     continue;
@@ -944,6 +984,39 @@ impl<'a> Substitution<'a, '_> {
             return None;
         }
         self.reference_value(expression)
+    }
+
+    /// A stored result may be known even when producing it has effects. Use
+    /// this only after retaining the original initializer/argument execution;
+    /// never use it to remove a call or evaluate an unevaluated query operand.
+    fn value_after_execution(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        ty: TypeId,
+    ) -> Option<&'a CHirExpr<'a>> {
+        if let Some(value) = self.repeatable_value(expression, ty) {
+            return Some(value);
+        }
+        match expression {
+            CHirExpr::Cast(cast_ty, operand, span) => {
+                let value = self.value_after_execution(operand, *cast_ty)?;
+                let converted = self.alloc(CHirExpr::Cast(*cast_ty, value, *span));
+                let converted = self.alloc(CHirExpr::Cast(ty, converted, *span));
+                self.repeatable_value(converted, ty)
+            }
+            CHirExpr::StatementExpr {
+                body,
+                value: Some(value),
+                facts,
+                span,
+            } if !inspect([Node::Stmt(body)]).jumps => {
+                let value = self.value_after_execution(value, facts.ty())?;
+                let converted = self.alloc(CHirExpr::Cast(ty, value, *span));
+                self.repeatable_value(converted, ty)
+            }
+            CHirExpr::Comma(_, value, _) => self.value_after_execution(value, ty),
+            _ => None,
+        }
     }
 
     /// Remove unselected statement ownership from an already-proven stable
@@ -1343,7 +1416,7 @@ impl<'a> Substitution<'a, '_> {
                     }
                     _ => None,
                 };
-                let replacement = value.and_then(|value| self.repeatable_value(value, o.ty));
+                let replacement = value.and_then(|value| self.value_after_execution(value, o.ty));
                 let repeatable = replacement.is_some();
                 let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
                 if repeatable
@@ -1355,15 +1428,15 @@ impl<'a> Substitution<'a, '_> {
                     if c.prefix.is_some() {
                         c.constants.insert(original, replacement.unwrap());
                     } else {
-                        // A source object's value can prune an executed
-                        // condition without changing constant_p or an ICE.
+                        // This is a proved runtime value, not source ICE
+                        // admission. Queries may now use the same knowledge.
                         c.optimized_constants.insert(original, replacement.unwrap());
                     }
                 }
-                // Only a straight-line, repeatable declaration prefix is
-                // known to dominate every later use. A statement-expression
-                // initializer can jump past a subsequent declaration.
-                if !repeatable {
+                // An unknown runtime value does not break dominance. Only
+                // an initializer with a source control transfer can jump past
+                // subsequent declarations before their values are established.
+                if value.is_some_and(|value| inspect([Node::Expr(value, false)]).jumps) {
                     c.declaration_prefix = false;
                 }
             }
@@ -1420,13 +1493,11 @@ impl<'a> Substitution<'a, '_> {
             if let Some(v) = c.constants.get(symbol) {
                 return Ok(v);
             }
-            if c.expand_calls {
-                if let Some(v) = c.optimized_constants.get(symbol) {
-                    return Ok(v);
-                }
-                if let Some(v) = self.static_values.get(symbol) {
-                    return Ok(v);
-                }
+            if let Some(v) = c.optimized_constants.get(symbol) {
+                return Ok(v);
+            }
+            if let Some(v) = self.static_values.get(symbol) {
+                return Ok(v);
             }
             let root = self.object_root(*symbol, c, e.span())?;
             if matches!(root, PlaceRoot::PointerExpression { .. }) {
@@ -1643,6 +1714,14 @@ impl<'a> Substitution<'a, '_> {
         let mut out = s.clone();
         match &mut out {
             CHirStmt::Compound(items, _) => {
+                // An entry label can bypass a declaration's initialization.
+                // Without one, each lexical initializer dominates later uses
+                // of its own immutable symbol, even after another statement.
+                let incoming = inspect([Node::Stmt(s)]).entry_labels;
+                let outer_prefix = c.declaration_prefix;
+                if !incoming {
+                    c.declaration_prefix = true;
+                }
                 let mut result = Vec::new();
                 for i in items.iter() {
                     match i {
@@ -1650,11 +1729,15 @@ impl<'a> Substitution<'a, '_> {
                             .extend(self.decl(d, c)?.into_iter().map(CHirBlockItem::Declaration)),
                         CHirBlockItem::Statement(s) => {
                             c.declaration_prefix = false;
-                            result.push(CHirBlockItem::Statement(self.stmt(s, c)?))
+                            result.push(CHirBlockItem::Statement(self.stmt(s, c)?));
+                            if !incoming {
+                                c.declaration_prefix = true;
+                            }
                         }
                     }
                 }
                 *items = result;
+                c.declaration_prefix = outer_prefix;
             }
             CHirStmt::Return(e, span) if c.end.is_some() => {
                 let mut items = Vec::new();
@@ -1954,7 +2037,7 @@ impl<'a> Substitution<'a, '_> {
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
                 {
-                    if let Some(replacement) = self.repeatable_value(arg, ty) {
+                    if let Some(replacement) = self.value_after_execution(arg, ty) {
                         c.constants.insert(original, replacement);
                     }
                 }

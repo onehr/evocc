@@ -129,11 +129,11 @@ fn builtin_has_attribute(
         })
 }
 
-/// The exact conservative predicate frozen for `__builtin_constant_p`.
+/// The shared predicate for a typed `__builtin_constant_p` operand.
 ///
-/// This function deliberately knows only source-language integer constant
-/// expressions and string literals. Object values, address constants, calls,
-/// side effects, and optimizer facts all fail closed.
+/// Proved optimization facts are materialized by the C-HIR substitution pass,
+/// shared by execution and lowering. This evaluator never reads a runtime
+/// object or executes an operand to discover a value.
 #[must_use]
 pub fn builtin_constant_p(
     expression: &CHirExpr<'_>,

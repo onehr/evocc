@@ -896,6 +896,24 @@ pub fn interpret_scalar_function_with_target(
             span,
         }
     })?;
+    if crate::inline::has_constant_queries(unit) {
+        let arena = evocc_common::Arena::default();
+        let resolved = crate::inline::substitute_for_execution(unit, &arena, target, true)
+            .map_err(|error| InterpreterError::UnsupportedExpression {
+                feature: "constant-query substitution",
+                span: error.span,
+            })?;
+        return interpret_resolved_function(&resolved, function, target, limits);
+    }
+    interpret_resolved_function(unit, function, target, limits)
+}
+
+fn interpret_resolved_function(
+    unit: &CHirUnit<'_>,
+    function: SymbolId,
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+) -> Result<InterpretOutcome, InterpreterError> {
     let linkage = unit.symbol_linkage().map_err(InterpreterError::Linkage)?;
     let requirements = reachable_memory_requirements(unit, function, linkage);
     let memory_mode = requirements.requires_memory;

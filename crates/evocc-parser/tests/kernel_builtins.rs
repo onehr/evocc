@@ -123,7 +123,7 @@ fn builtin_expect_returns_long_and_evaluates_only_its_first_operand() {
 }
 
 #[test]
-fn builtin_constant_p_uses_the_frozen_conservative_predicate_without_evaluation() {
+fn builtin_constant_p_uses_proved_local_values_without_evaluation() {
     assert_eq!(
         run(concat!(
             "int global_value; enum { ENUM_VALUE = 3 }; ",
@@ -141,7 +141,9 @@ fn builtin_constant_p_uses_the_frozen_conservative_predicate_without_evaluation(
             "int main(void) { return probe(5); }\n"
         ))
         .unwrap(),
-        15
+        // Literals and immutable local initializers are known; the externally
+        // callable parameter, global object, address and update remain unknown.
+        303
     );
 }
 

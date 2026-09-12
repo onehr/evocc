@@ -59,6 +59,16 @@ Optimization-query authorization: 2026-09-13, EvoIR 1.9.93.
 RED command: CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test resolved_compiler_queries --locked --offline -j 2
 RED result: 15 passed / 5 failed, zero build errors. Four wrong-value failures
 (unpropagated query facts), one E3039 from the retained constant-required call.
+GREEN: resolved_compiler_queries 20/20; evocc-chir 137/137; lower
+expression_value_flow 79/79, front_end_resolved_forms 24/24 and builtin integrity
+passed; parser kernel_builtins 7/7 and constant_expression_closure 5/5.
+Clippy: cargo clippy -p evocc-chir -p evocc-parser -p evocc-lower -p evocc
+--all-targets --locked --offline -j 2 -- -D warnings (CARGO_TARGET_DIR=target/tailored), PASS.
+Native and sealed GCC-14/Clang-19, -std=gnu11 -O2:
+optimization-query-effects.c exit 0; optimization-constant-query.c value/exit 1.
+Original .o.cmd emission replay (no installation, no new full measurement):
+block/blk-settings.o, arch/arm64/kvm/at.o: rc 0, no compiletime-assert calls;
+subject SHA256 f6f3cd692b621235778051b7843fb7d0a04b166e8ab3970199b69c232a7a39cd.
 Latest focused commands (CARGO_TARGET_DIR=target/tailored, --locked --offline -j 2):
 cargo test -p evocc --test resolved_compiler_queries: 17 passed
 cargo test -p evocc-lower --test expression_value_flow --test front_end_resolved_forms: 103 passed
