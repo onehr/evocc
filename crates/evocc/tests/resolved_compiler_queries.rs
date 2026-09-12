@@ -214,3 +214,43 @@ fn assert_constant_program(source: &str) {
         assert_eq!(output.stdout, b"0\n", "{mode}");
     }
 }
+
+#[test]
+fn small_inline_helpers_specialize_distinct_constant_arguments() {
+    let source = "extern void invalid_size(void) __attribute__((error(\"size\")));static inline void check(unsigned long n){if(n>64)invalid_size();}int main(void){check(16);check(48);return 0;}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid_size"));
+    assert_constant_program(source);
+}
+
+#[test]
+fn numeric_pointer_conditions_fold_with_unsigned_pointer_width() {
+    let source = "extern void invalid_sign(void) __attribute__((error(\"sign\")));int main(void){if((unsigned char *)-1 < (unsigned char *)1)invalid_sign();if(!((void *)0<(void *)1))invalid_sign();return 0;}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid_sign"));
+}
+
+#[test]
+fn optional_inlining_preserves_recursive_and_noinline_calls() {
+    for source in [
+        "static inline int f(int n){return n?f(n-1)+1:0;}int main(void){return f(3)!=3;}",
+        "static __attribute__((noinline)) inline int f(int n){return n+1;}int main(void){return f(3)!=4;}",
+        "static inline int f(void){static int n;return ++n;}int main(void){f();return f()!=2;}",
+        "static inline int f(int n){return n+n;}int main(void){int n=2;int r=f(n++);return r!=4||n!=3;}",
+    ] {
+        assert_constant_program(source);
+    }
+    let output=run("static __attribute__((noinline)) inline int f(int n){return n+1;}int main(void){return f(3);}","--emit=evoir");
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("call @f"));
+}
