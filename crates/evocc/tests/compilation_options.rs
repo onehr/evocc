@@ -108,3 +108,85 @@ fn freestanding_disables_only_ordinary_library_name_substitution() {
         }
     }
 }
+
+#[test]
+fn stack_protection_selects_source_arrays_and_frame_addresses() {
+    let source = "extern void use(void *); int plain(int a) { int n=a; return n; } void array(void) { char a[2]; use(a); } void scalar(void) { int n=1; use(&n); } void heap(int *p) { use(&*p); } void parameter(int a) { use(&a); } __attribute__((no_stack_protector)) void exempt(void) { char a[20]; use(a); } void persistent(void) { static char a[20]; use(a); }";
+    let ir = successful(run(&["--emit=evoir", "-fstack-protector-strong"], source));
+    let protected = ir
+        .lines()
+        .filter(|line| line.starts_with("func @") && line.contains(" stack_protect"))
+        .map(|line| line.split('(').next().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        protected,
+        ["func @array", "func @scalar", "func @parameter"]
+    );
+    let disabled = successful(run(
+        &[
+            "--emit=evoir",
+            "-fstack-protector-strong",
+            "-fno-stack-protector",
+        ],
+        source,
+    ));
+    assert!(!disabled.contains(" stack_protect"));
+    evocc_evoir::parse_section9_module(ir.as_bytes())
+        .expect("the protection marker survives textual interchange");
+}
+
+#[test]
+fn stack_guard_uses_the_requested_register_offset_and_checks_each_return() {
+    let source =
+        "extern void use(void *); int f(int c) { char a[16]; use(a); if(c) return 1; return 2; }";
+    let asm = successful(run(
+        &[
+            "--emit=asm",
+            "-fstack-protector-strong",
+            "-mstack-protector-guard=sysreg",
+            "-mstack-protector-guard-reg=sp_el0",
+            "-mstack-protector-guard-offset=64",
+        ],
+        source,
+    ));
+    assert!(asm.contains("mrs x16, sp_el0"), "{asm}");
+    assert!(asm.contains("[x16, #64]"), "{asm}");
+    assert!(asm.contains("__stack_chk_fail"), "{asm}");
+    assert!(
+        asm.matches("cmp x16, x17").count()
+            >= asm.lines().filter(|line| line.trim() == "ret").count(),
+        "{asm}"
+    );
+}
+
+#[test]
+fn return_signing_matches_frame_lifetime_and_final_override() {
+    let source = "extern int g(int); int f(int n) { return g(n) + 1; } void *address(void) { return __builtin_return_address(0); }";
+    let asm = successful(run(&["--emit=asm", "-mbranch-protection=pac-ret"], source));
+    assert!(asm.contains("paciasp\n    stp x29, x30"), "{asm}");
+    assert!(
+        asm.contains("ldp x29, x30, [sp], #16\n    autiasp\n    ret"),
+        "{asm}"
+    );
+    assert!(
+        asm.contains("xpaclri"),
+        "return-address builtin must remove signing bits: {asm}"
+    );
+    let disabled = successful(run(
+        &[
+            "--emit=asm",
+            "-mbranch-protection=pac-ret",
+            "-mbranch-protection=none",
+        ],
+        source,
+    ));
+    assert!(!disabled.contains("paciasp"));
+    assert!(!disabled.contains("autiasp"));
+}
+
+#[test]
+fn general_register_only_varargs_never_save_vector_registers() {
+    let source = "long f(int n, ...) { __builtin_va_list a; __builtin_va_start(a,n); long x=__builtin_va_arg(a,long); __builtin_va_end(a); return x; }";
+    let asm = successful(run(&["--emit=asm", "-mgeneral-regs-only"], source));
+    assert!(!asm.contains("stp q"), "{asm}");
+}
