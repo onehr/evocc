@@ -1,0 +1,7 @@
+Sealed image: evo-flight-lab:sealed
+Digest: sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Command: <compiler> -std=gnu11 -O<level> packed-relocation-accesses.c -o /tmp/packed-probe; /tmp/packed-probe
+gcc-14 O0 packed-relocation-accesses exit=0
+gcc-14 O2 packed-relocation-accesses exit=0
+clang-19 O0 packed-relocation-accesses exit=0
+clang-19 O2 packed-relocation-accesses exit=0

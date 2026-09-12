@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.90** | **Authoritative reference** | **2026-09-09**
+**Revision 1.9.91** | **Authoritative reference** | **2026-09-12**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -226,8 +226,14 @@ provenance. A duplicate global symbol or malformed initializer closure makes
 the module invalid. Ordinary scalar, array, record, and string/byte
 initializers are represented directly as bytes. A pointer-valued static
 initializer is a **relocation** (revision 1.9.65): the global carries a list
-`relocs=[(offset, @symbol, addend), ...]`, each naming eight bytes at an
-8-aligned `offset` inside the object, a target and a signed byte `addend`.
+`relocs=[(offset, @symbol, addend), ...]`, each naming eight bytes at a
+byte `offset` inside the object, a target and a signed byte `addend`.
+The offset need not be a multiple of eight: packed fields retain their
+source layout, as required by AArch64 ELF ABS64 data relocations (revision
+1.9.91). Installing a relocation uses byte alignment while preserving its
+complete pointer representation and provenance; later loads/stores retain
+their own checked access alignment rather than inheriting natural pointer
+alignment from the relocation width.
 A target is a symbol from any of the four tables (global, external object,
 function, external function), or, since revision 1.9.69, a block of a
 function of this module written `@function^block` (for example
@@ -5962,6 +5968,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.91 | 2026-09-12 | Corrects the overstrong eight-aligned relocation offset requirement: AArch64 ABS64 data relocations occupy eight bytes at byte-aligned positions. User-authorized standard alignment behavior; packed layout and pointer provenance remain intact, as do range, nonoverlap and actual load/store alignment checks. |
 | 1.9.90 | 2026-09-09 | Admits numbered `%l<N>` label references in `asm.goto`; narrows `E2939` to the measured conflicting contexts of wide bit-field arithmetic and admits the consensus ones; stops lowering unreferenced internal functions, generalising 1.9.75; defines `__alignof__` of an incomplete array member. |
 | 1.9.89 | 2026-09-09 | Corrects the claim that function alignment is unobservable in interpreters: virtual function addresses must satisfy the declared alignment and preserve identity and pointer round-trips. Authorized review correction; this changes no compiler code. |
 | 1.9.88 | 2026-09-09 | Admits the `p` constraint and the `%a` address modifier (the kernel's `prfm pldl1keep, %a0`); defines signed left shift in the GNU profile as the truncated bit pattern for a valid count, dropping the `signed_shl_defined` obligation as both oracles do; adds `align=N` to function headers for `aligned` on functions with maximum-of-declarations merging. |
@@ -6875,8 +6882,9 @@ Both sealed compilers at O0/O2 execute `tests/fixtures/address-case-constants.{c
 The shared static integer evaluator processes the numeric casts through its existing iterative machine and explicit fuel budget; this does not make a symbolic address a known integer or change executed pointer provenance checks.
 No diagnostic is allocated; the measured original unit is `kernel/signal.o`.
 
-### Unresolved packed relocation alignment conflict
+### Packed relocation alignment correction
 
-Section 2.1 requires every eight-byte relocation to start at an eight-aligned offset, but `tests/fixtures/packed-pointer-relocations.{c,out}` measures both sealed compilers at O0/O2 accepting initialized pointers at offsets 2 and 12 in a 20-byte packed array.
+The former Section 2.1 eight-aligned offset requirement conflicted with `tests/fixtures/packed-pointer-relocations.{c,out}`, where both sealed compilers at O0/O2 accept initialized pointers at offsets 2 and 12 in a 20-byte packed array.
 The two measured ACPICA units are `drivers/acpi/acpica/exdump.o` and `drivers/acpi/acpica/rsdumpinfo.o`; their record has two byte fields before the pointer.
-The existing E3101 validator refusal is retained pending authority to amend the body; no new diagnostic, altered source layout or permissive validator change is introduced here.
+Revision 1.9.91 follows the user's authorization to adopt [AArch64 ELF Section 5.7.5](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#575-static-data-relocations): ABS64 writes eight bytes at a byte-aligned place; pointer width is independent of access alignment.
+No diagnostic is allocated or source layout changed; bounds, nonoverlap, initializedness, target identity, provenance and executed access alignment checks remain required.

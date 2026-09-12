@@ -168,6 +168,11 @@ sections. The previously body-pending items below are now implementation
 work, not blockers. Probe disagreement still requires an explicit refused
 shape, not a guessed result or a removed runtime check.
 
+On 2026-09-12 the user separately authorized the standard byte-aligned static
+data relocation rule explained for K-C12. Revision 1.9.91 corrects that
+specific Section 2.1 body restriction; this is not general authority to
+rewrite unrelated rules or weaken executed access checks.
+
 ### Full kernel compilation survey (2026-09-12)
 
 Command: `python3 tools/bench.py kernel --survey-only --evocc
@@ -231,10 +236,61 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C09 / OPEN | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | Backend: explicit binding, clobber/call and spill interactions in native tests; do not silently free a reserved register. |
 | K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
-| K-C12 / BODY_CONFLICT | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | Both sealed compilers O0/O2 pass `tests/fixtures/packed-pointer-relocations.{c,out}`. Section 2.1 expressly requires 8-aligned relocation offsets; Appendix D records this conflict, preserving the validator until body-change authority is given. Proposed correction: retain eight-byte width, bounds, ordering, nonoverlap and provenance, but permit byte-aligned placement. |
+| K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
 | K-C13 / OPEN | 1 | E3029 | Computed goto | `kernel/bpf/core.o` | C-HIR/lowering/backend: labels, computed dispatch, successor values and invalid target checks in a native mini-program. |
 | K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
+
+### Byte-aligned static relocations (2026-09-12)
+
+The standard ABS64 data relocation patches eight bytes at a byte offset;
+it does not require a naturally aligned pointer slot. The correction removes
+only the validator's offset-modulo-eight restriction, installs relocations
+with byte alignment, and lets the shared pointer memory API accept actual
+power-of-two access alignment independently of the target pointer width.
+The existing byte/provenance representation and assembler emitter are reused.
+
+`3d8f6c1` records five new failing tests with no build errors. The focused
+GREEN command passed **100/100**:
+`CARGO_TARGET_DIR=target/tailored cargo test -p evocc-memory --lib -p evocc-evoir --test relocations_and_addresses -p evocc-lower --test relocations_and_addresses --locked --offline --no-fail-fast -j 2`.
+Tests cover offsets 0..7, the exact 2/12 packed layout, object/function/exposed
+addresses, byte copies and field updates, and retained overflow, range,
+overlap, symbol, initializedness, E3011/E3012/E3013 and both byte-order checks.
+
+The two fixtures `packed-pointer-relocations.c` and
+`packed-relocation-accesses.c` pass sealed GCC-14 and Clang-19 at O0/O2
+(**8 zero exits**); EvoCC assembly linked with sealed GCC-14 also executes
+both successfully (**2 zero exits**). `readelf -rW` confirms ABS64 at offsets
+`0x2` and `0xc` in the first subject object, with no padding inserted.
+The small oracle observations accompany the fixtures; native temporary
+assembly stays under `.build/k1/packed-relocation-probes`.
+
+Original replay command:
+`python3 tools/k1/substitute.py --allowlist .build/k1/packed-relocation-units.txt --evocc /Users/onehrxn/dev/30days/c30/target/tailored/release/evocc --no-install --run-id packed-relocations-20260912 --jobs 2 --timeout 180`.
+Both `drivers/acpi/acpica/exdump.o` and `drivers/acpi/acpica/rsdumpinfo.o`
+compile, assemble and match reference defined symbols, with **0 refusals**
+and **0 cache hits**. Subject SHA-256:
+`0b9f8f22c5bc583b212ec6cbcfae2396f6cdae7a5da72edba0dd31307c7fe8bb`;
+per-unit record SHA-256:
+`3644d115c169f2a8ffac6b153eb4feadc1552522f10c56c5797be636b1289a86`.
+No objects were installed and no full-kernel link, boot or selftest was run.
+
+Layout regression commands: `C30_JQ=/usr/bin/jq C30_TIMEOUT=/opt/homebrew/bin/gtimeout C30_DAY5_LAYOUT_EVIDENCE_ROOT=/tmp/evocc-packed-layout-20260912 bash tests/acceptance/day5-layout-conformance.sh --subject`, and the same command with
+`C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json`.
+They measured **128/128** and **22/22**, zero mismatches and oracle consensus
+(runs `20260912T125559Z-67250` and `20260912T125753Z-84275`). The first
+attributed invocation omitted its case-set selector and was rejected before
+execution (`manifest caseCount differs`); it is not counted as a test pass.
+Temporary build trees remain outside the repository, under the stated `/tmp`
+root. `ruff check tools tests/acceptance`, formatting, diff-check and the
+status renderer check pass; the full-survey receipt remains unchanged.
+
+The completed affected-crate gate passed **1,845 tests / 0 failures / 4
+pre-existing ignored**, Clippy `-D warnings` and workspace formatting:
+`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh 855686e --locked --offline -q -j1 -- --test-threads=4`.
+It covers the eleven affected/reverse-dependent crates, not a new full
+workspace or isolated-clone milestone replay; those remain part of the
+final campaign after the remaining known defects are repaired.
 
 ### Expression goto destinations (2026-09-12)
 
@@ -242,11 +298,12 @@ The later `aggregate-and-case-20260912` replay verifies five ticket-lock union
 assembly users and `kernel/signal.o`: **6/6 assembled**, no installation/link,
 release SHA-256 `05fbe3ae873e0424691a5f39c0e0b272503ef1347399c508cf89150e95098657`,
 per-unit record SHA-256 `0a6a5380ae0f5691e50aaf8b6c8203bb390d549ae40e21f908c6ab158f316e23`.
-Together the disjoint targeted runs have replayed **141 of the original 161
-refused identities successfully**, across their recorded repair binaries;
-this is not a fresh assembled count for all 2,799 units. Twenty original
-identities remain in the open families, including the two K-C12 body-conflict
-units, and the full no-fallback link, boot and selected selftests remain OPEN.
+Together with the later two-unit packed relocation replay, the disjoint
+targeted runs have replayed **143 of the original 161 refused identities
+successfully**, across their recorded repair binaries; this is not a fresh
+assembled count for all 2,799 units. Eighteen original identities remain in
+the open families, and the full no-fallback link, boot and selected selftests
+remain OPEN.
 
 The first pointer-case patch failed the existing static-initializer fuel
 regression: a recursive folding shortcut bypassed the explicit budget. That

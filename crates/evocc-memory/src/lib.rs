@@ -2194,7 +2194,11 @@ impl MemoryState {
     }
 
     fn require_pointer_layout(&self, access: AccessLayout) -> Result<(), MemoryFault> {
-        if access != self.config.pointer_layout {
+        // The target fixes representation width, not the alignment of every
+        // pointer field. Packed accesses carry their actual checked alignment.
+        if access.size_bytes != self.config.pointer_layout.size_bytes
+            || !is_valid_alignment(access.align_bytes)
+        {
             return Err(MemoryFault::InvalidPointerLayout { layout: access });
         }
         Ok(())
@@ -2978,8 +2982,11 @@ mod tests {
                 memory.load_pointer(slot, packed_pointer).unwrap(),
                 Pointer::NULL
             );
-            assert!(next.load_pointer(slot, PTR).is_err());
-            assert!(next.store_pointer(slot, PTR, target).is_err());
+            assert_fault(next.load_pointer(slot, PTR), MemoryFaultKind::Misaligned);
+            assert_fault(
+                next.store_pointer(slot, PTR, target),
+                MemoryFaultKind::Misaligned,
+            );
             for invalid in [
                 AccessLayout::new(4, 1),
                 AccessLayout::new(8, 0),

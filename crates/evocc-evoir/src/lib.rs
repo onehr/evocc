@@ -1681,8 +1681,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         global.symbol
                     )
                 })?;
-            if relocation.offset % 8 != 0
-                || relocation.offset < previous_end
+            if relocation.offset < previous_end
                 || !(symbols.contains(relocation.symbol.as_str()) || valid_code_target)
                 || (functions.contains_key(relocation.symbol.as_str()) && relocation.addend != 0)
                 || global.bytes[relocation.offset as usize..end as usize]
@@ -5684,7 +5683,9 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
             }
             state.memory = state
                 .memory
-                .store_pointer_value(destination, AccessLayout::new(8, 8), pointer)
+                // A data relocation patches bytes, including packed fields;
+                // the subsequent load/store carries its own access alignment.
+                .store_pointer_value(destination, AccessLayout::new(8, 1), pointer)
                 .map_err(|error| InterpreterError::MemorySetup { error })?;
         }
     }
