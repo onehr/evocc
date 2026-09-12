@@ -284,3 +284,9 @@ fn immutable_automatic_constants_fold_branches_without_changing_source_queries()
         "static int f(int c){const int a=({if(c)goto end; 1;});int b=2;end:b=4;return b!=4;}int main(void){return f(1);}",
     ] { assert_constant_program(source); }
 }
+
+#[test]
+fn optional_inline_hints_preserve_address_taken_label_identity() {
+    let source = "static inline int f(int n){if(n)return 0;here:return (unsigned long)&&here!=0;}int main(void){return f(1);}";
+    assert_constant_program(source);
+}
