@@ -52,6 +52,7 @@ fn chain() -> Module {
     let doubled = fresh(bits.clone());
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,

@@ -6994,3 +6994,10 @@ No diagnostic is allocated, and no additional kernel unit count is claimed for t
 The final `-ftrivial-auto-var-init=uninitialized` restores ordinary uninitialized semantics; storage activation or merely transporting its address does not execute the implicit initializer.
 `-ffreestanding` sets `__STDC_HOSTED__=0` and disables ordinary-name library builtin substitution, `-fhosted` restores both, and later explicit `-fbuiltin`/`-fno-builtin` options override substitution independently; reserved `__builtin_*` spellings remain available.
 Both sealed compilers at O0/O2 execute `tests/fixtures/automatic-zero.{c,out}` with exit zero; the option occurs in all 2,799 frozen commands, but this targeted measurement is not a full-kernel result and introduces no diagnostic.
+
+### Strong frame protection and native command options
+
+With final `-fstack-protector-strong`, lowering marks functions containing automatic arrays (including aggregate members), dynamic stack allocation or source references to local-frame addresses; addressable parameters count as frame objects, and a definition's `no_stack_protector` attribute or final `-fno-stack-protector` suppresses the mark.
+The canonical function header adds optional ` stack_protect` after its optional alignment, omitted when false, preserved through textual/proof reconstruction; it requests a native guard check, not an extra abstract C operation or implicit EvoIR token channel.
+`tests/fixtures/protected-frames.{c,out}` and `protected-frames-failure.c` give native exits 0 and 77 for the subject and both sealed compilers; GCC/Clang differ on addressed-parameter selection, for which this profile explicitly chooses protection, while option-dependent predefined macros retain the frozen GCC-14 values of Section 10.4.
+The remaining original options independently select the guard's symbol or system-register/byte-offset source, return-address PAC and general-register-only generation; the 2,732 protected-command and 2,792 PAC-command counts overlap, introduce no diagnostic and are not boot evidence.

@@ -28,7 +28,8 @@ use evocc_evoir::{
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
-use evocc_mir::{compile_module_with_relocation, NativeStop, RelocationModel, Target as MirTarget};
+use evocc_mir::emit::{CodegenOptions, StackGuard};
+use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target as MirTarget};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
@@ -96,6 +97,8 @@ struct DriverOptions {
     standard_builtins: bool,
     hosted: bool,
     automatic_zero: bool,
+    stack_protector: bool,
+    codegen: CodegenOptions,
     legacy_declarations: bool,
     short_wchar: bool,
     position_independence: PositionIndependence,
@@ -246,6 +249,11 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut standard_builtins = true;
     let mut hosted = true;
     let mut automatic_zero = false;
+    let mut stack_protector = false;
+    let mut codegen = CodegenOptions::default();
+    let mut guard_is_sysreg = false;
+    let mut guard_register = None;
+    let mut guard_offset = None;
     let mut legacy_declarations = false;
     let mut short_wchar = false;
     let mut position_independence = PositionIndependence::Pie(2);
@@ -277,6 +285,31 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-ftrivial-auto-var-init=zero" => automatic_zero = true,
             "-ftrivial-auto-var-init=uninitialized" => automatic_zero = false,
+            "-fstack-protector-strong" => stack_protector = true,
+            "-fno-stack-protector" => stack_protector = false,
+            "-mbranch-protection=pac-ret" => codegen.sign_returns = true,
+            "-mbranch-protection=none" => codegen.sign_returns = false,
+            "-mgeneral-regs-only" => codegen.general_registers_only = true,
+            "-mno-general-regs-only" => codegen.general_registers_only = false,
+            "-mstack-protector-guard=sysreg" => guard_is_sysreg = true,
+            "-mstack-protector-guard=global" => guard_is_sysreg = false,
+            _ if arg.starts_with("-mstack-protector-guard-reg=") => {
+                let register = arg.trim_start_matches("-mstack-protector-guard-reg=");
+                if !matches!(
+                    register,
+                    "sp_el0" | "tpidr_el0" | "tpidrro_el0" | "tpidr_el1" | "tpidr_el2"
+                ) {
+                    return Err(format!("unsupported stack guard register `{register}`"));
+                }
+                guard_register = Some(register.to_owned());
+            }
+            _ if arg.starts_with("-mstack-protector-guard-offset=") => {
+                guard_offset = Some(
+                    arg.trim_start_matches("-mstack-protector-guard-offset=")
+                        .parse::<i64>()
+                        .map_err(|_| format!("invalid stack guard offset `{arg}`"))?,
+                );
+            }
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
             "-fpic" => position_independence = PositionIndependence::Pic(1),
@@ -368,6 +401,12 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-Oeq-scalar requires --emit=evoir, --emit=asm or --interpret-evoir".to_owned(),
         );
     }
+    if guard_is_sysreg {
+        codegen.stack_guard = StackGuard::SystemRegister {
+            register: guard_register.ok_or("sysreg stack guard requires its register")?,
+            offset: guard_offset.ok_or("sysreg stack guard requires its byte offset")?,
+        };
+    }
     Ok(DriverOptions {
         mode,
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
@@ -382,6 +421,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         standard_builtins,
         hosted,
         automatic_zero,
+        stack_protector,
+        codegen,
         legacy_declarations,
         short_wchar,
         position_independence,
@@ -501,6 +542,43 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
+    for (name, enabled, value) in [
+        ("__SSP_STRONG__", options.stack_protector, "3"),
+        (
+            "__ARM_FEATURE_PAC_DEFAULT",
+            options.codegen.sign_returns,
+            "1",
+        ),
+    ] {
+        pp.undefine(name);
+        if enabled {
+            pp.define(name.to_owned(), decoded_tokens(value)?);
+        }
+    }
+    if options.codegen.general_registers_only {
+        for name in [
+            "__ARM_FEATURE_FMA",
+            "__ARM_FEATURE_NUMERIC_MAXMIN",
+            "__ARM_FP",
+            "__ARM_FP16_ARGS",
+            "__ARM_FP16_FORMAT_IEEE",
+            "__ARM_NEON",
+            "__FP_FAST_FMA",
+            "__FP_FAST_FMAF",
+            "__FP_FAST_FMAF32",
+            "__FP_FAST_FMAF32x",
+            "__FP_FAST_FMAF64",
+            "__STDC_IEC_559_COMPLEX__",
+            "__STDC_IEC_559__",
+            "__STDC_IEC_60559_BFP__",
+            "__STDC_IEC_60559_COMPLEX__",
+        ] {
+            pp.undefine(name);
+        }
+        for name in ["__GCC_IEC_559", "__GCC_IEC_559_COMPLEX"] {
+            pp.define(name.to_owned(), decoded_tokens("0")?);
+        }
+    }
     pp.define(
         "__STDC_HOSTED__".to_owned(),
         decoded_tokens(if options.hosted { "1" } else { "0" })?,
@@ -699,6 +777,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let mut unit = parser.parse_translation_unit_in(&arena);
     unit.set_signed_wrapping(options.signed_wrapping);
     unit.set_automatic_zero(options.automatic_zero);
+    unit.set_stack_protector(options.stack_protector);
     if parser.had_error() {
         // A build reports the first diagnostic only. The error limit bounds the
         // declaration loop, not the reports made while parsing one
@@ -873,11 +952,12 @@ fn emit_asm(options: &DriverOptions, module: &Module) -> ExitCode {
     let target = match options.target {
         DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
     };
-    let text = match compile_module_with_relocation(
+    let text = match compile_module_with_options(
         target,
         module,
         &|_| true,
         options.position_independence.relocation(),
+        &options.codegen,
     ) {
         Ok(text) => text,
         Err(stop) => {

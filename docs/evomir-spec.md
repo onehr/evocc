@@ -2,6 +2,18 @@
 
 **Revision 0.29** | **Authoritative reference** | **2026-09-12**
 
+Native command-option addendum (2026-09-13): validated EvoIR `stack_protect`
+marks select an extra private canary slot above local storage; emission loads
+the configured global or sysreg-plus-byte-offset guard at entry and compares
+it before every normal return, calling `__stack_chk_fail` on mismatch.
+The original validated module and effective codegen options remain explicit
+inputs to native emission, including through allocation; neither is inferred
+from standalone MIR text. `pac-ret` signs LR with the incoming SP before saving
+it and authenticates after restoring that same SP; return-address builtins
+strip authentication bits. General-register-only emission omits SIMD vararg
+saves; it does not enable floating-point lowering. Positive, failure and
+over-aligned/dynamic-frame results are in `tests/fixtures/protected-frames.out`.
+
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
 specification, which this document cites by section) and the assembly text

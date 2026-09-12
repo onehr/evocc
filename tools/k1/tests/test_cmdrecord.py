@@ -173,7 +173,10 @@ class DecodeTest(unittest.TestCase):
 
     def test_hosted_and_automatic_initialization_options_keep_override_order(self) -> None:
         flags = ["-ffreestanding", "-fhosted", "-ftrivial-auto-var-init=zero",
-                 "-ftrivial-auto-var-init=uninitialized"]
+                 "-ftrivial-auto-var-init=uninitialized", "-fstack-protector-strong",
+                 "-fno-stack-protector", "-mbranch-protection=pac-ret", "-mbranch-protection=none",
+                 "-mstack-protector-guard=sysreg", "-mstack-protector-guard-reg=sp_el0",
+                 "-mstack-protector-guard-offset=1240", "-mgeneral-regs-only"]
         for written in (flags, flags[::-1]):
             self.record_file.write_text(
                 RECORD.replace(" -O2 ", f" -O2 {' '.join(written)} "), encoding="utf-8"

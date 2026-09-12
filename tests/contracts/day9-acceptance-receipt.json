@@ -1,4 +1,18 @@
 {
+  "protectedFrames": {
+    "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "191eca4",
+    "red": "4 missing-option failures, 4 passing tests, zero build errors",
+    "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test compilation_options -p evocc-evoir --test section9_completeness -p evocc-mir --test section8_emission --locked --offline -j 2",
+    "passed": {"compilation_options": 9, "section9_completeness": 1, "section8_emission": 13},
+    "nativeMeasurements": "tests/fixtures/protected-frames.out",
+    "nativeSubjectExits": {"normal_overaligned_and_dynamic": 0, "changed_guard_reaches_failure": 77},
+    "clippyCommand": "CARGO_TARGET_DIR=target/tailored cargo clippy -p evocc -p evocc-mir -p evocc-lower -p evocc-evoir -p evocc-chir --all-targets --locked --offline -j 2 -- -D warnings",
+    "clippy": "PASS",
+    "projectionCommand": "python3 -m unittest discover -s tools/k1/tests -p test_cmdrecord.py",
+    "projectionPassed": 18,
+    "fullCompileAndBoot": "NOT RUN"
+  },
   "automaticInitializationAndHostedOptions": {
     "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
     "redCommit": "323f285",

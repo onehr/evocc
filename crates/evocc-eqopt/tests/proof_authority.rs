@@ -21,6 +21,7 @@ fn identity_module() -> Module {
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            stack_protect: false,
             alignment: 4,
             linkage: evocc_evoir::Linkage::Strong,
             visibility: evocc_evoir::GlobalVisibility::External,

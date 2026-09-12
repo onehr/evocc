@@ -72,6 +72,7 @@ fn module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,
@@ -162,6 +163,7 @@ fn sparsely_numbered_module() -> Module {
     let result = value(6, EvoIRType::Bits(32));
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,
@@ -280,6 +282,7 @@ fn aliasing_module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,
@@ -400,6 +403,7 @@ fn nested_negation_module() -> Module {
     let world = value(9, EvoIRType::World);
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,

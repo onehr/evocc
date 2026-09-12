@@ -40,6 +40,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
     let memory = value(2, EvoIRType::Mem(Region::All));
     let world = value(3, EvoIRType::World);
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,

@@ -35,6 +35,10 @@ PASSED_THROUGH = (
     "-fbuiltin", "-fno-builtin",
     "-ffreestanding", "-fhosted",
     "-ftrivial-auto-var-init=zero", "-ftrivial-auto-var-init=uninitialized",
+    "-fstack-protector-strong", "-fno-stack-protector",
+    "-mbranch-protection=pac-ret", "-mbranch-protection=none",
+    "-mgeneral-regs-only", "-mno-general-regs-only",
+    "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",
     "-fshort-wchar", "-fno-short-wchar",
     "-fpic", "-fPIC", "-fpie", "-fPIE", "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",
 )
@@ -175,7 +179,7 @@ def evocc_argv(
             projected.append("-I" + translate_path(value[2:], src_root, out_root))
         elif value.startswith(("-D", "-U")) and len(value) > 2:
             projected.append(value)
-        elif value in PASSED_THROUGH or value.startswith("-std="):
+        elif value in PASSED_THROUGH or value.startswith(("-std=", "-mstack-protector-guard-reg=", "-mstack-protector-guard-offset=")):
             projected.append(value)
         elif value.startswith("-fmacro-prefix-map="):
             projected.append(

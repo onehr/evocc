@@ -239,6 +239,7 @@ fn build(shape: &Shape) -> Option<Module> {
         extern_objects: Vec::new(),
         declares: Vec::new(),
         functions: vec![Function {
+            stack_protect: false,
             alignment: 4,
             linkage: Linkage::Strong,
             visibility: GlobalVisibility::External,

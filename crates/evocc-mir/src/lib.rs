@@ -42,8 +42,8 @@ pub use linscan::{
 };
 pub use lower::{lower_module, lower_module_for, lower_module_with, Refusal};
 pub use native::{
-    compile_module, compile_module_for, compile_module_with, compile_module_with_relocation,
-    native_corpus_entry, Driver, NativeStop, Toolchain,
+    compile_module, compile_module_for, compile_module_with, compile_module_with_options,
+    compile_module_with_relocation, native_corpus_entry, Driver, NativeStop, Toolchain,
 };
 pub use regalloc::out_of_ssa;
 pub use text::render_module;

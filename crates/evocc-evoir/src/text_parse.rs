@@ -24,6 +24,7 @@ struct Signature {
 }
 
 struct Header {
+    stack_protect: bool,
     alignment: u32,
     name: String,
     convention: String,
@@ -276,6 +277,7 @@ impl ModuleParser<'_> {
         self.position += 1;
 
         Ok(Function {
+            stack_protect: header.stack_protect,
             alignment: header.alignment,
             variadic: header.signature.variadic,
             name: header.name,
@@ -540,6 +542,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
+        stack_protect: false,
         alignment: 4,
         linkage,
         visibility,
@@ -601,10 +604,15 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     } else {
         4
     };
+    let stack_protect = cursor.at(" stack_protect");
+    if stack_protect {
+        cursor.expect(" stack_protect")?;
+    }
     cursor.finish()?;
     Ok(Header {
         name,
         convention,
+        stack_protect,
         alignment,
         visibility,
         linkage,

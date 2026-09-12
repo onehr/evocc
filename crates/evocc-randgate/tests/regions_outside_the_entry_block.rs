@@ -76,6 +76,7 @@ fn world(id: u32) -> Value {
 /// ```
 fn later_block(insts: Vec<Inst>, root: Value) -> Module {
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
@@ -270,6 +271,7 @@ fn a_region_two_edges_from_the_entry_block_is_admitted() {
     let zero = value(12, 8);
     let sum = value(13, 8);
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
@@ -369,6 +371,7 @@ fn a_tainted_edge_argument_keeps_a_later_block_ineligible() {
     let zero = value(9, 8);
     let sum = value(10, 8);
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
@@ -499,6 +502,7 @@ fn a_value_wider_than_the_profiles_bound_is_an_excluded_seed() {
     let sum = wide(3);
     let flag = value(4, 1);
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,

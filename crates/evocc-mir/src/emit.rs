@@ -23,6 +23,24 @@ pub enum RelocationModel {
     Static,
 }
 
+/// Native instrumentation selected by the effective target command.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CodegenOptions {
+    pub sign_returns: bool,
+    pub general_registers_only: bool,
+    pub stack_guard: StackGuard,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StackGuard {
+    #[default]
+    Global,
+    SystemRegister {
+        register: String,
+        offset: i64,
+    },
+}
+
 /// Where every part of one frame lives, measured in bytes above `sp` after the
 /// prologue has lowered it.
 ///
@@ -35,6 +53,9 @@ pub enum RelocationModel {
 /// adjustment depends on the incoming address rather than only frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    pub sign_returns: bool,
+    pub general_registers_only: bool,
+    pub stack_guard: Option<(u64, StackGuard)>,
     /// Runtime allocations move sp; fixed slots must then stay relative to x29.
     pub dynamic: bool,
     /// Total bytes the prologue subtracts, a multiple of sixteen.
@@ -152,6 +173,9 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
 
     Frame {
+        sign_returns: false,
+        general_registers_only: false,
+        stack_guard: None,
         dynamic: allocated.blocks.iter().any(|block| {
             block
                 .insts
@@ -323,6 +347,7 @@ pub fn emit_module_unit(
         assembly,
         None,
         RelocationModel::PositionIndependent,
+        &CodegenOptions::default(),
     )
 }
 
@@ -331,6 +356,7 @@ pub(crate) fn emit_linked_module(
     functions: &[Allocated],
     module: &Module,
     relocation: RelocationModel,
+    options: &CodegenOptions,
 ) -> String {
     emit_unit(
         target,
@@ -339,6 +365,7 @@ pub(crate) fn emit_linked_module(
         &module.assembly,
         Some(module),
         relocation,
+        options,
     )
 }
 
@@ -349,6 +376,7 @@ fn emit_unit(
     assembly: &[String],
     module: Option<&Module>,
     relocation: RelocationModel,
+    options: &CodegenOptions,
 ) -> String {
     let prefix = target.symbol_prefix();
     let mut text = String::new();
@@ -473,6 +501,13 @@ fn emit_unit(
             weak_functions.contains(function.name.as_str()),
             &indirect_addresses,
             alignment,
+            options,
+            module.is_some_and(|module| {
+                module
+                    .functions
+                    .iter()
+                    .any(|source| source.name == function.name && source.stack_protect)
+            }),
         );
         emit_aliases(
             &mut text,
@@ -770,6 +805,7 @@ struct SymbolEmission<'a> {
     indirect_addresses: &'a BTreeSet<(SymbolKind, &'a str)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_function(
     text: &mut String,
     target: Target,
@@ -778,8 +814,16 @@ fn emit_function(
     weak: bool,
     indirect_addresses: &BTreeSet<(SymbolKind, &str)>,
     alignment: u32,
+    options: &CodegenOptions,
+    stack_protect: bool,
 ) {
-    let frame = frame_of(allocated);
+    let mut frame = frame_of(allocated);
+    frame.sign_returns = options.sign_returns;
+    frame.general_registers_only = options.general_registers_only;
+    if stack_protect {
+        frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
+        frame.size += 16;
+    }
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
     // `visibility` is `internal` is emitted without `.globl`, so its symbol is
@@ -912,6 +956,9 @@ fn emit_blocks(
 }
 
 fn emit_prologue(text: &mut String, frame: &Frame) {
+    if frame.sign_returns {
+        let _ = writeln!(text, "    paciasp");
+    }
     let _ = writeln!(text, "    stp x29, x30, [sp, #-16]!");
     let _ = writeln!(text, "    mov x29, sp");
     if frame.size != 0 {
@@ -924,6 +971,11 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "str", &format!("x{number}"), *offset, frame);
+    }
+    if let Some((offset, guard)) = &frame.stack_guard {
+        emit_guard_load(text, guard);
+        let _ = writeln!(text, "    mov x17, x16");
+        emit_frame_access(text, "str", "x17", *offset, frame);
     }
     // Section 6: a variadic callee "stores `x_k` to `x7` into it at offsets
     // `8 * k` to `56` in the prologue". Nothing before this point writes an
@@ -942,14 +994,16 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
         // when this function only forwards the list. Use the reserved
         // scratch register so large outgoing areas cannot overflow stp's
         // signed, scaled offset; no argument register is clobbered.
-        emit_add_immediate(text, "add", "x16", "sp", base + REGISTER_SAVE_BYTES);
-        for number in (0..8).step_by(2) {
-            let _ = writeln!(
-                text,
-                "    stp q{number}, q{}, [x16, #{}]",
-                number + 1,
-                number * 16
-            );
+        if !frame.general_registers_only {
+            emit_add_immediate(text, "add", "x16", "sp", base + REGISTER_SAVE_BYTES);
+            for number in (0..8).step_by(2) {
+                let _ = writeln!(
+                    text,
+                    "    stp q{number}, q{}, [x16, #{}]",
+                    number + 1,
+                    number * 16
+                );
+            }
         }
     }
 }
@@ -964,6 +1018,29 @@ fn emit_epilogue(text: &mut String, frame: &Frame) {
         emit_add_immediate(text, "add", "sp", "sp", frame.size);
     }
     let _ = writeln!(text, "    ldp x29, x30, [sp], #16");
+    if frame.sign_returns {
+        let _ = writeln!(text, "    autiasp");
+    }
+}
+
+fn emit_guard_load(text: &mut String, guard: &StackGuard) {
+    match guard {
+        StackGuard::Global => {
+            let _ = writeln!(text, "    adrp x16, :got:__stack_chk_guard\n    ldr x16, [x16, :got_lo12:__stack_chk_guard]\n    ldr x16, [x16]");
+        }
+        StackGuard::SystemRegister { register, offset } => {
+            let _ = writeln!(text, "    mrs x16, {register}");
+            if *offset >= 0 && *offset <= 32760 && offset % 8 == 0 {
+                let _ = writeln!(text, "    ldr x16, [x16, #{offset}]");
+            } else {
+                // LR is already saved and restored by the common epilogue;
+                // x17 may hold the saved canary and must survive this load.
+                emit_immediate(text, "x30", RegClass::Gpr64, offset.unsigned_abs());
+                let op = if *offset < 0 { "sub" } else { "add" };
+                let _ = writeln!(text, "    {op} x16, x16, x30\n    ldr x16, [x16]");
+            }
+        }
+    }
 }
 
 /// The `movz`/`movk` sequence Section 4 names for `mov rd, #imm`.
@@ -1627,7 +1704,11 @@ fn emit_inst(
             // prologue's `stp x29, x30, [sp, #-16]!` puts the saved link
             // register at `x29 + 8`, and the frame pointer is `x29` itself.
             crate::FramePlace::SavedLinkRegister => {
-                let _ = writeln!(text, "    ldr {}, [x29, #8]", name(*dst));
+                if frame.sign_returns {
+                    let _ = writeln!(text, "    mov x17, x30\n    ldr x30, [x29, #8]\n    xpaclri\n    mov {}, x30\n    mov x30, x17", name(*dst));
+                } else {
+                    let _ = writeln!(text, "    ldr {}, [x29, #8]", name(*dst));
+                }
             }
             crate::FramePlace::FramePointer => {
                 let _ = writeln!(text, "    mov {}, x29", name(*dst));
@@ -1892,6 +1973,16 @@ fn emit_term(
             branch(text, *fallthrough);
         }
         MTerm::Ret { .. } => {
+            if let Some((offset, guard)) = &frame.stack_guard {
+                emit_frame_access(text, "ldr", "x17", *offset, frame);
+                emit_guard_load(text, guard);
+                let ok = format!("{}{function}_guard{}", target.label_prefix(), *relaxations);
+                *relaxations += 1;
+                let _ = writeln!(
+                    text,
+                    "    cmp x16, x17\n    b.eq {ok}\n    bl __stack_chk_fail\n    brk #0\n{ok}:"
+                );
+            }
             emit_epilogue(text, frame);
             let _ = writeln!(text, "    ret");
         }

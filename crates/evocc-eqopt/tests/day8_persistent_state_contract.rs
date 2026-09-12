@@ -69,6 +69,7 @@ fn input_module() -> Module {
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            stack_protect: false,
             alignment: 4,
             variadic: false,
             linkage: evocc_evoir::Linkage::Strong,

@@ -1,0 +1,15 @@
+2026-09-13; sealed GCC-14 and Clang-19; linux/arm64; network disabled.
+Reference options: -O0 -fstack-protector-strong -mstack-protector-guard=global -mbranch-protection=pac-ret.
+protected-frames.c, including over-aligned and dynamic frames: both exit 0.
+protected-frames-failure.c, guard changed before return: both exit 77 through __stack_chk_fail.
+EvoCC debug subject, same semantic flags, sealed GNU assembler/linker/runtime: exits 0 and 77 respectively.
+Sysreg probe: -mstack-protector-guard=sysreg -mstack-protector-guard-reg=sp_el0 -mstack-protector-guard-offset=64.
+Initial selection fixture: GCC protects array, scalar, multiple, main; Clang also protects parameter.
+The profile explicitly protects addressed parameters; this is not identical GCC selection.
+Predefined macros follow the frozen GCC-14 table: __SSP_STRONG__=3 (Clang=2), __ARM_FEATURE_PAC_DEFAULT=1.
+General-register-only removes GCC's __ARM_FP, __ARM_FP16_ARGS, __ARM_FP16_FORMAT_IEEE, __ARM_NEON,
+__ARM_FEATURE_FMA, __ARM_FEATURE_NUMERIC_MAXMIN, __FP_FAST_FMA, __FP_FAST_FMAF, __FP_FAST_FMAF32,
+__FP_FAST_FMAF32x, __FP_FAST_FMAF64, __STDC_IEC_559_COMPLEX__, __STDC_IEC_559__,
+__STDC_IEC_60559_BFP__, __STDC_IEC_60559_COMPLEX__;
+it sets __GCC_IEC_559 and __GCC_IEC_559_COMPLEX to 0.
+The frozen GCC -mstrict-align has no predefined-macro delta.

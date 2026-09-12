@@ -785,6 +785,8 @@ impl EffectSummary {
 /// A function in EvoIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
+    /// Source-selected strong stack protection; native guard policy is a target option.
+    pub stack_protect: bool,
     /// Alignment of the first instruction; absent from text when it is four.
     pub alignment: u32,
     pub linkage: Linkage,
@@ -849,6 +851,7 @@ pub struct FunctionDeclaration {
 impl FunctionDeclaration {
     fn signature(&self) -> Function {
         Function {
+            stack_protect: false,
             alignment: 4,
             name: self.name.clone(),
             variadic: self.variadic,
@@ -6496,6 +6499,7 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6535,6 +6539,7 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6585,6 +6590,7 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6647,6 +6653,7 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6730,6 +6737,7 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6796,6 +6804,7 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6913,6 +6922,7 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -6988,6 +6998,7 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7062,6 +7073,7 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7095,6 +7107,7 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7168,6 +7181,7 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7212,6 +7226,7 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7291,6 +7306,7 @@ mod tests {
             }
         };
         let main = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7366,6 +7382,7 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7793,6 +7810,7 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7860,6 +7878,7 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7894,6 +7913,7 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -7942,6 +7962,7 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8002,6 +8023,7 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8107,6 +8129,7 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8283,6 +8306,7 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                stack_protect: false,
                 alignment: 4,
                 linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
@@ -8325,6 +8349,7 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8345,6 +8370,7 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8373,6 +8399,7 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                stack_protect: false,
                 alignment: 4,
                 linkage: crate::Linkage::Strong,
                 visibility: crate::GlobalVisibility::External,
@@ -8399,6 +8426,7 @@ mod tests {
         }
 
         let invalid_void = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8424,6 +8452,7 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8515,6 +8544,7 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8601,6 +8631,7 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8688,6 +8719,7 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8712,6 +8744,7 @@ mod tests {
             ),
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8736,6 +8769,7 @@ mod tests {
             ),
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8759,6 +8793,7 @@ mod tests {
             ),
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8782,6 +8817,7 @@ mod tests {
             ),
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8805,6 +8841,7 @@ mod tests {
             ),
             (
                 Function {
+                    stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
                     visibility: crate::GlobalVisibility::External,
@@ -8847,6 +8884,7 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8956,6 +8994,7 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,
@@ -8985,6 +9024,7 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
             visibility: crate::GlobalVisibility::External,

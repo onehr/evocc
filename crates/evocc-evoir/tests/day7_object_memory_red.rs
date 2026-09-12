@@ -13,6 +13,7 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
     let mem = value(0, EvoIRType::Mem(Region::All));
     let world = value(1, EvoIRType::World);
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,

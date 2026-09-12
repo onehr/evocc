@@ -398,6 +398,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
     let addend = u64::from(rng.next_u64() as u8);
 
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,
@@ -595,6 +596,7 @@ fn generate_function(
     generator.close(block, Inst::Ret(returned));
 
     Function {
+        stack_protect: false,
         alignment: 4,
         variadic: false,
         linkage: evocc_evoir::Linkage::Strong,

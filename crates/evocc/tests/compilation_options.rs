@@ -190,3 +190,21 @@ fn general_register_only_varargs_never_save_vector_registers() {
     let asm = successful(run(&["--emit=asm", "-mgeneral-regs-only"], source));
     assert!(!asm.contains("stp q"), "{asm}");
 }
+
+#[test]
+fn effective_codegen_modes_control_the_frozen_predefined_set() {
+    let source = "__SSP_STRONG__ __ARM_FEATURE_PAC_DEFAULT\n#ifdef __ARM_FP\nBAD_FLOAT\n#endif\n#ifdef __ARM_NEON\nBAD_VECTOR\n#endif\n";
+    assert_eq!(
+        successful(run(
+            &[
+                "-E",
+                "-fstack-protector-strong",
+                "-mbranch-protection=pac-ret",
+                "-mgeneral-regs-only"
+            ],
+            source
+        ))
+        .trim(),
+        "3 1"
+    );
+}

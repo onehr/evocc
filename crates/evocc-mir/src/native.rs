@@ -97,6 +97,22 @@ pub fn compile_module_with_relocation(
     keep: &dyn Fn(&str) -> bool,
     relocation: RelocationModel,
 ) -> Result<String, NativeStop> {
+    compile_module_with_options(
+        target,
+        module,
+        keep,
+        relocation,
+        &crate::emit::CodegenOptions::default(),
+    )
+}
+
+pub fn compile_module_with_options(
+    target: Target,
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+    relocation: RelocationModel,
+    options: &crate::emit::CodegenOptions,
+) -> Result<String, NativeStop> {
     // Section 8 (revision 0.16) drops an internal function nothing references
     // before emission. It is answered here rather than after lowering because
     // an unreferenced `static inline` stub from a shared header calls
@@ -130,7 +146,7 @@ pub fn compile_module_with_relocation(
         functions.push(allocated);
     }
     Ok(crate::emit::emit_linked_module(
-        target, &functions, module, relocation,
+        target, &functions, module, relocation, options,
     ))
 }
 

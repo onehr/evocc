@@ -3453,6 +3453,28 @@ impl<'a> FunctionLowerer<'a> {
             })?;
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        let stack_protect = self.unit.stack_protector()
+            && !declaration
+                .attributes
+                .iter()
+                .any(|a| a.semantic_name() == Some("no_stack_protector"))
+            && (references.objects.iter().any(|(symbol, ty)| {
+                references.frame_addresses.contains(symbol)
+                    || self.type_contains_array(*ty, &mut BTreeSet::new())
+            }) || self
+                .info
+                .parameter_symbols
+                .iter()
+                .flatten()
+                .any(|symbol| references.frame_addresses.contains(symbol))
+                || references.direct.iter().any(|symbol| {
+                    self.unit.symbols().is_builtin_function(*symbol)
+                        && self
+                            .unit
+                            .symbols()
+                            .symbol(*symbol)
+                            .is_ok_and(|entry| entry.spelling() == "alloca")
+                }));
         self.has_computed_goto = references.has_computed_goto;
         self.goto_names = std::mem::take(&mut references.goto_names);
         self.goto_counts = std::mem::take(&mut references.goto_counts);
@@ -3763,6 +3785,7 @@ impl<'a> FunctionLowerer<'a> {
             self.info.span,
         )?;
         let mut function = Function {
+            stack_protect,
             alignment: self
                 .unit
                 .symbols()
@@ -3790,6 +3813,28 @@ impl<'a> FunctionLowerer<'a> {
         allocation::share_allocation_sites(&mut function)?;
         renumber_function(&mut function)?;
         Ok((function, label_addresses))
+    }
+
+    fn type_contains_array(&self, ty: TypeId, visiting: &mut BTreeSet<TypeId>) -> bool {
+        if !visiting.insert(ty) {
+            return false;
+        }
+        match self.unit.types().get(ty).map(|ty| &ty.kind) {
+            Some(TypeKind::Array { .. }) => true,
+            Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => self
+                .unit
+                .types()
+                .tag(*tag)
+                .is_some_and(|tag| match &tag.state {
+                    TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) => fields
+                        .iter()
+                        .any(|field| self.type_contains_array(field.ty, visiting)),
+                    _ => false,
+                }),
+            _ => false,
+        }
     }
 
     fn return_types(&self) -> Vec<EvoIRType> {
@@ -12546,6 +12591,8 @@ fn contains_targeted_label(
 
 #[derive(Default)]
 struct FunctionReferences {
+    objects: BTreeMap<SymbolId, TypeId>,
+    frame_addresses: BTreeSet<SymbolId>,
     has_computed_goto: bool,
     local_registers: BTreeMap<SymbolId, String>,
     direct: BTreeSet<SymbolId>,
@@ -12666,6 +12713,9 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
 
 fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionReferences) {
     if let CHirDecl::Object(object) = declaration {
+        if !matches!(object.storage, StorageClass::Static | StorageClass::Extern) {
+            calls.objects.insert(object.symbol, object.ty);
+        }
         if object.storage == StorageClass::Register {
             if let Some(register) = &object.asm_label {
                 calls
@@ -12686,6 +12736,15 @@ fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionRefer
 }
 
 fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionReferences) {
+    if let CHirExpr::Unary(UnaryOp::AddrOf, operand, _) = expression {
+        let mut root = *operand;
+        while let CHirExpr::Member(base, _, _) = root {
+            root = base;
+        }
+        if let CHirExpr::Ident { symbol, .. } = root {
+            calls.frame_addresses.insert(*symbol);
+        }
+    }
     match expression {
         CHirExpr::LabelAddress { label, .. } => {
             calls.labels.insert(

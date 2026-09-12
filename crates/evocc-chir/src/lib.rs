@@ -1566,6 +1566,7 @@ pub struct CHirUnit<'arena> {
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
     automatic_zero: bool,
+    stack_protector: bool,
     profile_refusals: Vec<ProfileRefusal>,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
@@ -1621,6 +1622,7 @@ impl<'arena> CHirUnit<'arena> {
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
             automatic_zero: false,
+            stack_protector: false,
             profile_refusals: Vec::new(),
             resolved_linkage: std::sync::OnceLock::new(),
         }
@@ -1656,6 +1658,15 @@ impl<'arena> CHirUnit<'arena> {
     /// Implicit initialization is a declaration operation, never a load fallback.
     pub fn set_automatic_zero(&mut self, enabled: bool) {
         self.automatic_zero = enabled;
+    }
+
+    pub fn set_stack_protector(&mut self, enabled: bool) {
+        self.stack_protector = enabled;
+    }
+
+    #[must_use]
+    pub fn stack_protector(&self) -> bool {
+        self.stack_protector
     }
 
     #[must_use]

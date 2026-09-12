@@ -43,6 +43,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
         visibility: evocc_evoir::GlobalVisibility::External,
