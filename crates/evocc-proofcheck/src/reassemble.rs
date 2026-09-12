@@ -214,6 +214,9 @@ fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
             remap(&mut access.list, aliases);
             remap(&mut access.mem_in, aliases);
             remap(&mut access.world_in, aliases);
+            if let evocc_evoir::VariadicOp::ArgRecord { destination, .. } = &mut access.op {
+                remap(destination, aliases);
+            }
         }
         Inst::Asm(assembly) => {
             for value in assembly.operands_mut() {
@@ -440,8 +443,10 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
                 &mut access.mem_out,
                 &mut access.world_out,
             ];
-            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
-                values.push(result);
+            match &mut access.op {
+                evocc_evoir::VariadicOp::Arg(result) => values.push(result),
+                evocc_evoir::VariadicOp::ArgRecord { destination, .. } => values.push(destination),
+                _ => {}
             }
             values
         }
@@ -603,6 +608,7 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let mut values = results.iter_mut().collect::<Vec<_>>();
             values.push(callee);

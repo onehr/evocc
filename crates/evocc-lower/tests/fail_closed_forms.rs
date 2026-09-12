@@ -156,15 +156,15 @@ fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
 }
 
 #[test]
-fn aggregate_variable_arguments_fail_closed_with_only_e3030() {
+fn floating_record_variable_arguments_remain_outside_the_integer_abi() {
     for (ordinal, source) in [
         (
             5,
-            "struct S { int x; }; int f(int n, ...); int main(void) { struct S s = {7}; return f(1, s); }\n",
+            "struct S { double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
         ),
         (
             6,
-            "struct S { int x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return s.x; }\n",
+            "struct S { double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
         ),
     ] {
         assert_lowering_error(

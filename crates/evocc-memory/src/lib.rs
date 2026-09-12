@@ -2107,7 +2107,14 @@ impl MemoryState {
         let alignment = u64::from(layout.align_bytes.max(8));
         // Use semantic allocation origins, not local allocation order, so
         // equivalent executions retain identical target pointer bytes.
-        let mut hash = origin.site ^ origin.instance.rotate_left(32);
+        // Mix the two coordinates separately. XORing the raw site with a
+        // rotated instance made (site, 1) alias (site ^ (1 << 32), 0),
+        // precisely the shape of temporaries in two different functions.
+        let mut hash = origin.site;
+        hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        hash =
+            (hash ^ (hash >> 31)).wrapping_add(origin.instance.wrapping_mul(0x9e37_79b9_7f4a_7c15));
         hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         hash ^= hash >> 31;
@@ -2598,6 +2605,20 @@ mod tests {
             .allocate_static(20, BYTE, InitialState::Zeroed)
             .unwrap();
         assert!(second.object().raw() > first.object().raw());
+    }
+
+    #[test]
+    fn allocation_site_bits_do_not_cancel_dynamic_instance_bits() {
+        let memory = little_memory();
+        let (memory, frame, scope) = memory.begin_frame().unwrap();
+        let site = 1_u64 << 63;
+        let (memory, first) = memory.allocate_automatic(frame, scope, site, BYTE).unwrap();
+        let (memory, second) = memory.allocate_automatic(frame, scope, site, BYTE).unwrap();
+        let (_, other) = memory
+            .allocate_automatic(frame, scope, site | (1_u64 << 32), BYTE)
+            .unwrap();
+        assert_ne!(first.object(), second.object());
+        assert_ne!(second.object(), other.object());
     }
 
     #[test]

@@ -241,6 +241,7 @@ fn sentinel_instructions() -> Vec<Inst> {
             scale: 67,
         },
         Inst::Call {
+            arg_marks: Vec::new(),
             results: vec![bits(1380), bits(1381)],
             callee: "sentinel_direct_callee".to_owned(),
             args: vec![bits(1382), bits(1383)],
@@ -250,6 +251,7 @@ fn sentinel_instructions() -> Vec<Inst> {
             world_out: world(1387),
         },
         Inst::IndirectCall {
+            arg_marks: Vec::new(),
             results: vec![bits(1390), bits(1391)],
             callee: function_pointer(1392),
             args: vec![bits(1393), bits(1394)],
@@ -687,6 +689,7 @@ fn inst_schema(inst: &Inst) -> &'static str {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let _ = (results, callee, args, mem_in, world_in, mem_out, world_out);
             "Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)"
@@ -699,6 +702,7 @@ fn inst_schema(inst: &Inst) -> &'static str {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let _ = (results, callee, args, mem_in, world_in, mem_out, world_out);
             "Inst.IndirectCall(results,callee,args,mem_in,world_in,mem_out,world_out)"

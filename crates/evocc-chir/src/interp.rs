@@ -3717,7 +3717,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     requested_ty.ok_or(InterpreterError::VarArgs { span })?,
                     span,
                 )?;
-                if matches!(target, ValueType::Aggregate(_)) {
+                if matches!(target, ValueType::Aggregate(ty) if !crate::is_integer_variadic_record(self.unit.types(), ty))
+                {
                     return Err(InterpreterError::VarArgs { span });
                 }
                 let identity = self.memory.argument_list(list).map_err(fault)?;
@@ -3734,6 +3735,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
                         Some(TypeKind::Function { .. })
                     ),
+                    (CValue::Aggregate { ty, .. }, ValueType::Aggregate(expected)) => {
+                        self.same_aggregate_type(ty, expected)
+                    }
                     _ => false,
                 };
                 if !matches {
@@ -4723,7 +4727,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let anonymous = arguments.split_off(signature.parameters.len());
         if anonymous
             .iter()
-            .any(|value| matches!(value, CValue::Aggregate { .. }))
+            .any(|value| matches!(value, CValue::Aggregate { ty, .. } if !crate::is_integer_variadic_record(self.unit.types(), *ty)))
         {
             return Err(InterpreterError::VarArgs { span: binding_span });
         }
@@ -4814,8 +4818,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .begin_frame()
                 .map_err(|error| self.memory_error(error, binding_span))?;
             self.memory = memory;
+            // Anonymous records are values just like named record parameters:
+            // preserve a copy before executing the callee, including va_copy.
+            let mut anonymous_values = Vec::with_capacity(anonymous.len());
+            for value in anonymous {
+                let value = if let CValue::Aggregate { ty, .. } = value {
+                    let layout = self.access_layout(ty, binding_span)?;
+                    let (memory, destination) = self
+                        .memory
+                        .allocate_automatic(frame, root_scope, self.temporary_origin_site, layout)
+                        .map_err(|error| self.memory_error(error, binding_span))?;
+                    self.memory = memory;
+                    self.store_memory_value(
+                        destination,
+                        ty,
+                        Qualifiers::default(),
+                        value,
+                        binding_span,
+                    )?
+                } else {
+                    value
+                };
+                anonymous_values.push(value);
+            }
             self.memory_frame = Some(MemoryFrame {
-                anonymous,
+                anonymous: anonymous_values,
                 id: frame,
                 root_scope,
                 current_scope: root_scope,

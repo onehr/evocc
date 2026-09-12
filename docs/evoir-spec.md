@@ -6160,11 +6160,12 @@ The reviewed VLA/alloca rules have positive GCC-14/Clang-19 O0/O2 probes in `.ev
 Both compilers reject `goto-in.c`, which jumps into the scope of a variable-length object.
 `parameter-bounds.c` in the same directory separately measures prototype-only bounds as unevaluated and definition-entry bounds as evaluated once, with all four runs reporting `prototype=0 entry=1 result=8`; no diagnostic is allocated or changed, and the body revision and original-program impact count remain pending.
 
-### Pending body revision: integer aggregate variable arguments
+### Integer aggregate variable arguments (2026-09-10 authorization)
 
-Both sealed compilers at O0/O2 agree on the 4/16/24-byte aggregate layouts, list copying and register/stack exhaustion in `.evidence/builtin-probes/20260909-memory-abi/{varargs.c,results.txt}`.
-These are probes for the reviewed integer-aggregate AAPCS64 rule, not floating-point/HFA admission or implemented-subject evidence.
-No diagnostic is allocated; the architecture-owned body revision and original-program closure measurements remain pending.
+Under S04, integer/pointer records pass by value using AAPCS64 general-register/stack slots through 16 bytes and a pointer to a caller-owned copy above 16 bytes; floating/vector/HFA records remain deferred, and the 4/16/24-byte and mixed-call probes are `.evidence/builtin-probes/20260909-memory-abi/{varargs.c,results.txt}` and `.evidence/builtin-probes/20260912-aggregate-varargs/mixed-objects-results.txt`.
+An anonymous ordinary operand of `call` or `call.indirect` may append ` byval(size, align)` to its value reference; the pointer must be `ptr<generic>`, size may be zero, alignment must be a nonzero power of two, and neither fixed operands nor effect tokens may carry a call-site mark (`sret` remains signature-only).
+`(%mem2, %world2) = va_arg.byval %list, %mem, %world, %destination [size=N, align=A]` copies the next record into an allocated `ptr<generic>` destination and advances the same list as scalar `va_arg`, preserving initialization/provenance and linear effects; the abstract interpreter checks the recorded record shape, distinguishing it from a scalar pointer and reporting existing E3038 on a mismatch or invalid list.
+Both GCC-14 and Clang-19 O0/O2 callers and callees agree with EvoCC in both mixed-link directions (GNU assembler for the subject output); no diagnostic is added, no optimizer allowlist is extended, and original-unit gains are recorded only after replay.
 
 ### Pending body revision: computed branches and label differences
 
@@ -6419,6 +6420,7 @@ instruction-shape metadata.
 (<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 (<>, <>, <>) = alloca.dynamic <>, <>, <> [origin=<>, align=<>]
+(<>) = va_arg.byval <>, <>, <>, <> [size=<>, align=<>]
 ```
 
 ### Negative checked results stored into an unsigned type

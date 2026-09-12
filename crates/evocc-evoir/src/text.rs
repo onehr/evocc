@@ -403,6 +403,12 @@ impl FunctionRenderer {
                         "({results}) = va_arg.{} {list}, {mem}, {world}",
                         render_type(&value.ty)
                     ),
+                    crate::VariadicOp::ArgRecord { destination, shape } => {
+                        format!(
+                        "({results}) = va_arg.byval {list}, {mem}, {world}, {} [size={}, align={}]",
+                        render_value(destination), shape.size, shape.align
+                    )
+                    }
                 }
             }
             Inst::Asm(assembly) => self.assembly(assembly, false),
@@ -712,6 +718,7 @@ impl FunctionRenderer {
                 results,
                 callee,
                 args,
+                arg_marks,
                 mem_in,
                 world_in,
                 mem_out,
@@ -720,7 +727,7 @@ impl FunctionRenderer {
                 let mut rendered_results = results.iter().map(render_value).collect::<Vec<_>>();
                 rendered_results.push(render_value(mem_out));
                 rendered_results.push(render_value(world_out));
-                let mut rendered_args = args.iter().map(render_value).collect::<Vec<_>>();
+                let mut rendered_args = render_call_args(args, arg_marks);
                 rendered_args.push(render_value(mem_in));
                 rendered_args.push(render_value(world_in));
                 format!(
@@ -733,6 +740,7 @@ impl FunctionRenderer {
                 results,
                 callee,
                 args,
+                arg_marks,
                 mem_in,
                 world_in,
                 mem_out,
@@ -741,7 +749,7 @@ impl FunctionRenderer {
                 let mut rendered_results = results.iter().map(render_value).collect::<Vec<_>>();
                 rendered_results.push(render_value(mem_out));
                 rendered_results.push(render_value(world_out));
-                let mut rendered_args = args.iter().map(render_value).collect::<Vec<_>>();
+                let mut rendered_args = render_call_args(args, arg_marks);
                 rendered_args.push(render_value(mem_in));
                 rendered_args.push(render_value(world_in));
                 format!(
@@ -813,6 +821,19 @@ fn render_mark(mark: ParamMark) -> String {
         ParamMark::ByVal(shape) => format!(" byval({}, {})", shape.size, shape.align),
         ParamMark::Sret(shape) => format!(" sret({}, {})", shape.size, shape.align),
     }
+}
+
+fn render_call_args(args: &[Value], marks: &[ParamMark]) -> Vec<String> {
+    args.iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            format!(
+                "{}{}",
+                render_value(arg),
+                render_mark(marks.get(index).copied().unwrap_or(ParamMark::None))
+            )
+        })
+        .collect()
 }
 
 fn render_parameters(mut parameters: Vec<String>, variadic: bool) -> String {
@@ -1329,6 +1350,7 @@ mod tests {
             ),
             (
                 Inst::Call {
+                    arg_marks: Vec::new(),
                     results: vec![bits(0)],
                     callee: "callee".to_owned(),
                     args: vec![bits(1)],
@@ -1341,6 +1363,7 @@ mod tests {
             ),
             (
                 Inst::IndirectCall {
+                    arg_marks: Vec::new(),
                     results: vec![bits(0)],
                     callee: function_pointer(6),
                     args: vec![bits(1)],

@@ -1039,6 +1039,33 @@ fn parse_tuple_instruction(
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
     let result_ids = parse_result_ids(&body[1..close])?;
     let rhs = &body[close + 4..];
+    if let Some(rest) = rhs.strip_prefix("va_arg.byval ") {
+        require_count(&result_ids, 2, "record variadic access results")?;
+        let (operands, attributes) = split_attributes(rest)?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 4, "record variadic access operands")?;
+        let layout = parse_layout(attributes)?;
+        return Ok(Inst::VaAccess(crate::VariadicAccess {
+            op: crate::VariadicOp::ArgRecord {
+                destination: operands[3].clone(),
+                shape: RecordShape {
+                    size: layout.size_bytes,
+                    align: layout.align_bytes,
+                },
+            },
+            list: operands[0].clone(),
+            mem_in: operands[1].clone(),
+            world_in: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[0],
+                ty: operands[1].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[1],
+                ty: EvoIRType::World,
+            },
+        }));
+    }
     if rhs.starts_with("va_start ") || rhs.starts_with("va_end ") || rhs.starts_with("va_arg.") {
         let (opcode, operands) = rhs.split_once(' ').ok_or("malformed variadic access")?;
         let operands = parse_values(operands, values, false)?;
@@ -1219,13 +1246,13 @@ fn parse_tuple_instruction(
         let args_text = rest[open + 1..]
             .strip_suffix(')')
             .ok_or_else(|| "malformed call arguments".to_owned())?;
-        let args = parse_values(args_text, values, true)?;
+        let (args, arg_marks) = parse_call_values(args_text, values)?;
         if let Some(symbol) = callee_text.strip_prefix('@') {
             validate_ident(symbol)?;
             let signature = signatures
                 .get(symbol)
                 .ok_or_else(|| format!("call to missing function '{symbol}'"))?;
-            return build_direct_call(result_ids, symbol, args, signature);
+            return build_direct_call(result_ids, symbol, args, arg_marks, signature);
         }
         let callee = use_value(callee_text, values)?;
         let EvoIRType::FnPtr {
@@ -1243,7 +1270,7 @@ fn parse_tuple_instruction(
             marks: marks.clone(),
             results: results.clone(),
         };
-        return build_indirect_call(result_ids, callee, args, &signature);
+        return build_indirect_call(result_ids, callee, args, arg_marks, &signature);
     }
     Err("unknown multi-result Section 9 instruction form".to_owned())
 }
@@ -1252,6 +1279,7 @@ fn build_direct_call(
     result_ids: Vec<u32>,
     symbol: &str,
     args: Vec<Value>,
+    arg_marks: Vec<ParamMark>,
     signature: &Signature,
 ) -> Result<Inst, String> {
     let (ordinary_results, mem_out, world_out) = call_results(result_ids, signature)?;
@@ -1260,6 +1288,7 @@ fn build_direct_call(
         results: ordinary_results,
         callee: symbol.to_owned(),
         args: ordinary_args,
+        arg_marks,
         mem_in,
         world_in,
         mem_out,
@@ -1271,6 +1300,7 @@ fn build_indirect_call(
     result_ids: Vec<u32>,
     callee: Value,
     args: Vec<Value>,
+    arg_marks: Vec<ParamMark>,
     signature: &Signature,
 ) -> Result<Inst, String> {
     let (ordinary_results, mem_out, world_out) = call_results(result_ids, signature)?;
@@ -1279,6 +1309,7 @@ fn build_indirect_call(
         results: ordinary_results,
         callee,
         args: ordinary_args,
+        arg_marks,
         mem_in,
         world_in,
         mem_out,
@@ -1632,6 +1663,34 @@ fn parse_values(
     text.split(", ")
         .map(|value| use_value(value, values))
         .collect()
+}
+
+fn parse_call_values(
+    text: &str,
+    values: &HashMap<u32, EvoIRType>,
+) -> Result<(Vec<Value>, Vec<ParamMark>), String> {
+    let mut cursor = Cursor::new(text);
+    let mut args = Vec::new();
+    let mut marks = Vec::new();
+    while !cursor.remaining().is_empty() {
+        args.push(cursor.value(values)?);
+        marks.push(cursor.record_mark()?);
+        if !cursor.remaining().is_empty() {
+            cursor.expect(", ")?;
+        }
+    }
+    if marks.len() < 2
+        || marks[marks.len() - 2..]
+            .iter()
+            .any(|mark| *mark != ParamMark::None)
+    {
+        return Err("call effects cannot carry record marks".into());
+    }
+    marks.truncate(marks.len() - 2);
+    if marks.iter().all(|mark| *mark == ParamMark::None) {
+        marks.clear();
+    }
+    Ok((args, marks))
 }
 
 fn use_value(text: &str, values: &HashMap<u32, EvoIRType>) -> Result<Value, String> {

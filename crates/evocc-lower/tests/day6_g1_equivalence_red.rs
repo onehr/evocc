@@ -288,40 +288,26 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     %v1 = const.bits<32> 0
     %v2 = const.bits<32> 0
     %v3 = icmp.ne %v1, %v2
-    br ^b1(%v0)
-
-^b1(%v4: bits<32>):
-    %v5 = const.bits<1> 0
-    br ^b2(%v4, %v5)
-
-^b2(%v6: bits<32>, %v7: bits<1>):
+    %v4 = zext.bits<32> %v3
+    %v5 = const.bits<32> 1
+    %v6 = const.bits<32> 0
+    %v7 = icmp.ne %v5, %v6
     %v8 = zext.bits<32> %v7
-    %v9 = const.bits<32> 1
-    %v10 = const.bits<32> 0
-    %v11 = icmp.ne %v9, %v10
-    br ^b3(%v6, %v8)
-
-^b3(%v12: bits<32>, %v13: bits<32>):
-    %v14 = const.bits<1> 1
-    br ^b4(%v12, %v13, %v14)
-
-^b4(%v15: bits<32>, %v16: bits<32>, %v17: bits<1>):
-    %v18 = zext.bits<32> %v17
-    %v19 = const.bits<32> 100
-    %v20 = signed_mul_defined %v15, %v19
-    ub.assume.signed_overflow %v20
-    %v21 = mul.bits<32> %v15, %v19
-    %v22 = const.bits<32> 10
-    %v23 = signed_mul_defined %v16, %v22
-    ub.assume.signed_overflow %v23
-    %v24 = mul.bits<32> %v16, %v22
-    %v25 = signed_add_defined %v21, %v24
-    ub.assume.signed_overflow %v25
-    %v26 = add.bits<32> %v21, %v24
-    %v27 = signed_add_defined %v26, %v18
-    ub.assume.signed_overflow %v27
-    %v28 = add.bits<32> %v26, %v18
-    ret %v28
+    %v9 = const.bits<32> 100
+    %v10 = signed_mul_defined %v0, %v9
+    ub.assume.signed_overflow %v10
+    %v11 = mul.bits<32> %v0, %v9
+    %v12 = const.bits<32> 10
+    %v13 = signed_mul_defined %v4, %v12
+    ub.assume.signed_overflow %v13
+    %v14 = mul.bits<32> %v4, %v12
+    %v15 = signed_add_defined %v11, %v14
+    ub.assume.signed_overflow %v15
+    %v16 = add.bits<32> %v11, %v14
+    %v17 = signed_add_defined %v16, %v8
+    ub.assume.signed_overflow %v17
+    %v18 = add.bits<32> %v16, %v8
+    ret %v18
 }
 "#,
         },
@@ -928,6 +914,7 @@ fn render_inst(inst: &Inst) -> String {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let mut rendered_results = results.iter().map(value).collect::<Vec<_>>();
             rendered_results.push(value(mem_out));
@@ -949,6 +936,7 @@ fn render_inst(inst: &Inst) -> String {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let mut rendered_results = results.iter().map(value).collect::<Vec<_>>();
             rendered_results.push(value(mem_out));

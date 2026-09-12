@@ -18,7 +18,7 @@ mod assembly;
 mod text;
 mod text_parse;
 mod variadic;
-pub use variadic::{VariadicAccess, VariadicOp};
+pub use variadic::{call_argument_marks, VariadicAccess, VariadicOp};
 
 pub use assembly::{
     assembly_address_type, assembly_clobber, assembly_memory_constraint, assembly_register_binding,
@@ -445,6 +445,9 @@ pub enum Inst {
         results: Vec<Value>,
         callee: String,
         args: Vec<Value>,
+        /// Call-site byval marks for anonymous records; fixed marks live on
+        /// the callee signature. Empty, or one mark per ordinary argument.
+        arg_marks: Vec<ParamMark>,
         mem_in: Value,
         world_in: Value,
         mem_out: Value,
@@ -456,6 +459,7 @@ pub enum Inst {
         results: Vec<Value>,
         callee: Value,
         args: Vec<Value>,
+        arg_marks: Vec<ParamMark>,
         mem_in: Value,
         world_in: Value,
         mem_out: Value,
@@ -575,7 +579,7 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
         Inst::PointerCast { operand, .. } => vec![operand],
         Inst::BitOperation { operand, .. } => vec![operand],
-        Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
+        Inst::VaAccess(access) => access.operands(),
         Inst::Asm(assembly) => assembly.operands(),
         Inst::AsmGoto {
             assembly,
@@ -1491,8 +1495,8 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
 /// canonical, so it is empty or exactly as long as the parameter list.
 ///
 /// The size and alignment are a record type's; size may be zero, while the
-/// alignment is a power of two. The interpreters read none of this: they
-/// execute the pointer form, which the mark does not change.
+/// alignment is a power of two. Fixed arguments execute the pointer form;
+/// anonymous arguments also retain the mark as the abstract va_arg type.
 pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
     if marks.is_empty() {
         return Ok(());
@@ -1854,6 +1858,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     results,
                     callee,
                     args,
+                    arg_marks,
                     mem_in,
                     world_in,
                     mem_out,
@@ -1868,6 +1873,11 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         caller.name, block.id, index, callee
                     )
                 })?;
+                variadic::validate_anonymous_marks(
+                    args,
+                    arg_marks,
+                    target.params.len().saturating_sub(2),
+                )?;
                 validate_call_signature(
                     caller, block.id, index, target, results, args, mem_in, world_in, mem_out,
                     world_out,
@@ -2779,6 +2789,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             results,
             callee,
             args,
+            arg_marks,
             mem_in,
             world_in,
             mem_out,
@@ -2811,6 +2822,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             actual_returns.push(mem_out.ty.clone());
             actual_returns.push(world_out.ty.clone());
             let fixed = params.len().saturating_sub(2);
+            variadic::validate_anonymous_marks(args, arg_marks, fixed)?;
             let parameters_match = if *variadic {
                 args.len() >= fixed
                     && actual_params[..fixed] == params[..fixed]
@@ -3347,7 +3359,7 @@ pub struct InterpreterOutcome {
 }
 
 struct ExecutionState {
-    argument_lists: evocc_memory::ArgumentLists<(EvoIRType, InternalValue)>,
+    argument_lists: evocc_memory::ArgumentLists<(EvoIRType, ParamMark, InternalValue)>,
     memory: MemoryState,
     world: WorldState,
     globals: HashMap<String, Pointer>,
@@ -3936,7 +3948,7 @@ struct CallReturnBinding {
 }
 
 struct ModuleFrame {
-    anonymous: Vec<(EvoIRType, InternalValue)>,
+    anonymous: Vec<(EvoIRType, ParamMark, InternalValue)>,
     function_index: usize,
     block: BlockId,
     incoming: Vec<InternalValue>,
@@ -3956,7 +3968,7 @@ impl ModuleFrame {
         function_index: usize,
         block: BlockId,
         incoming: Vec<InternalValue>,
-        anonymous: Vec<(EvoIRType, InternalValue)>,
+        anonymous: Vec<(EvoIRType, ParamMark, InternalValue)>,
         return_binding: Option<CallReturnBinding>,
         memory_frame: Option<FrameId>,
         memory_scope: Option<ScopeId>,
@@ -4164,6 +4176,7 @@ fn interpret_module_in_state(
                     results,
                     callee,
                     args,
+                    arg_marks,
                     mem_in,
                     world_in,
                     mem_out,
@@ -4227,6 +4240,7 @@ fn interpret_module_in_state(
                     let anonymous = separate_anonymous_arguments(
                         &module.functions[callee_index],
                         &args,
+                        &arg_marks,
                         &mut call_arguments,
                     );
                     let callee_activation = state.begin_activation()?;
@@ -4248,6 +4262,7 @@ fn interpret_module_in_state(
                     results,
                     callee,
                     args,
+                    arg_marks,
                     mem_in,
                     world_in,
                     mem_out,
@@ -4394,6 +4409,7 @@ fn interpret_module_in_state(
                     let anonymous = separate_anonymous_arguments(
                         &module.functions[callee_index],
                         &args,
+                        &arg_marks,
                         &mut call_arguments,
                     );
                     let callee_activation = state.begin_activation()?;
@@ -4711,8 +4727,9 @@ fn write_internal(values: &mut HashMap<u32, InternalValue>, result: &Value, valu
 fn separate_anonymous_arguments(
     function: &Function,
     arguments: &[Value],
+    marks: &[ParamMark],
     incoming: &mut Vec<InternalValue>,
-) -> Vec<(EvoIRType, InternalValue)> {
+) -> Vec<(EvoIRType, ParamMark, InternalValue)> {
     let named = function.params.len().saturating_sub(2);
     if !function.variadic {
         return Vec::new();
@@ -4720,13 +4737,20 @@ fn separate_anonymous_arguments(
     arguments[named..]
         .iter()
         .zip(incoming.drain(named..arguments.len()))
-        .map(|(argument, value)| (argument.ty.clone(), value))
+        .enumerate()
+        .map(|(index, (argument, value))| {
+            (
+                argument.ty.clone(),
+                marks.get(named + index).copied().unwrap_or(ParamMark::None),
+                value,
+            )
+        })
         .collect()
 }
 
 fn execute_variadic_access(
     access: &VariadicAccess,
-    anonymous: &[(EvoIRType, InternalValue)],
+    anonymous: &[(EvoIRType, ParamMark, InternalValue)],
     block: BlockId,
     values: &mut HashMap<u32, InternalValue>,
     state: &mut ExecutionState,
@@ -4740,11 +4764,31 @@ fn execute_variadic_access(
         VariadicOp::End => None,
         VariadicOp::Arg(result) => {
             let identity = state.memory.argument_list(list).map_err(fault)?;
-            let (ty, value) = state.argument_lists.read(identity).map_err(fault)?;
-            if ty != &result.ty {
+            let (ty, mark, value) = state.argument_lists.read(identity).map_err(fault)?;
+            if ty != &result.ty || *mark != ParamMark::None {
                 return Err(fault(MemoryFault::InvalidArgumentList));
             }
             write_internal(values, result, *value);
+            Some(state.argument_lists.advance(identity).map_err(fault)?)
+        }
+        VariadicOp::ArgRecord { destination, shape } => {
+            let identity = state.memory.argument_list(list).map_err(fault)?;
+            let (_, mark, value) = state.argument_lists.read(identity).map_err(fault)?;
+            if *mark != ParamMark::ByVal(*shape) {
+                return Err(fault(MemoryFault::InvalidArgumentList));
+            }
+            let InternalValue::Pointer(source) = *value else {
+                return Err(fault(MemoryFault::InvalidArgumentList));
+            };
+            let destination = read_pointer(values, destination, block)?;
+            state.memory = state
+                .memory
+                .copy_bytes(
+                    destination,
+                    source,
+                    AccessLayout::new(shape.size, shape.align),
+                )
+                .map_err(fault)?;
             Some(state.argument_lists.advance(identity).map_err(fault)?)
         }
     };
@@ -6043,6 +6087,9 @@ pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
             remap(&mut access.list, aliases);
             remap(&mut access.mem_in, aliases);
             remap(&mut access.world_in, aliases);
+            if let VariadicOp::ArgRecord { destination, .. } = &mut access.op {
+                remap(destination, aliases);
+            }
         }
         Inst::Asm(assembly) => {
             for value in assembly.operands_mut() {
@@ -6334,6 +6381,7 @@ mod tests {
                     argument("world", world_in.clone()),
                 ],
                 insts: vec![Inst::Call {
+                    arg_marks: Vec::new(),
                     results: vec![],
                     callee: "side_effect".to_owned(),
                     args: vec![],
@@ -6602,6 +6650,7 @@ mod tests {
 
         let mut stale = function.clone();
         stale.blocks[0].insts.push(Inst::Call {
+            arg_marks: Vec::new(),
             results: vec![],
             callee: "stale".to_owned(),
             args: vec![],
@@ -7006,6 +7055,7 @@ mod tests {
                 insts: vec![
                     Inst::Const(argument_value.clone(), 41),
                     Inst::Call {
+                        arg_marks: Vec::new(),
                         results: vec![result.clone()],
                         callee: "identity".to_owned(),
                         args: vec![argument_value],
@@ -7085,6 +7135,7 @@ mod tests {
                     address,
                     Inst::Const(argument_value.clone(), 41),
                     Inst::IndirectCall {
+                        arg_marks: Vec::new(),
                         results: vec![result.clone()],
                         callee,
                         args: vec![argument_value],
@@ -7194,6 +7245,7 @@ mod tests {
                         Inst::Const(one.clone(), 1),
                         Inst::Sub(next_n.clone(), recur_n, one),
                         Inst::Call {
+                            arg_marks: Vec::new(),
                             results: vec![result.clone()],
                             callee: "countdown".to_owned(),
                             args: vec![next_n],

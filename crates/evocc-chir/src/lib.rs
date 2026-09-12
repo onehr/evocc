@@ -55,6 +55,48 @@ pub mod interp;
 pub mod place;
 pub mod semantic;
 
+/// Records in the general-register variadic class. Pointer members are values,
+/// not an instruction to classify the pointed-to object. Floating and vector
+/// records require the separate homogeneous-aggregate ABI class.
+#[must_use]
+pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
+    use evocc_types::{TagDefinition, TagState, TypeKind};
+    fn member(types: &TypeInterner, ty: TypeId, active: &mut Vec<TagId>) -> bool {
+        match types.get(ty).map(|ty| &ty.kind) {
+            Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => {
+                if active.contains(tag) {
+                    return false;
+                }
+                let Some(tag_info) = types.tag(*tag) else {
+                    return false;
+                };
+                let TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                ) = &tag_info.state
+                else {
+                    return false;
+                };
+                active.push(*tag);
+                let accepted = fields.iter().all(|field| member(types, field.ty, active));
+                active.pop();
+                accepted
+            }
+            Some(TypeKind::Array { element, .. }) => member(types, *element, active),
+            Some(
+                TypeKind::Int(_)
+                | TypeKind::Enum(_)
+                | TypeKind::Pointer(_)
+                | TypeKind::GnuInt128(_),
+            ) => true,
+            _ => false,
+        }
+    }
+    matches!(
+        types.get(ty).map(|ty| &ty.kind),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+    ) && member(types, ty, &mut Vec::new())
+}
+
 pub use allocation::{
     AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
     AllocationSiteOrdinal,

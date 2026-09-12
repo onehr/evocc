@@ -456,6 +456,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
                     Inst::Const(one.clone(), 1),
                     Inst::Sub(next_depth.clone(), deep_depth, one.clone()),
                     Inst::Call {
+                        arg_marks: Vec::new(),
                         results: vec![returned.clone()],
                         callee: "r0".to_owned(),
                         args: vec![next_depth],
@@ -1920,6 +1921,7 @@ impl FunctionGen<'_> {
         let mem_out = self.fresh(memory_type());
         let world_out = self.fresh(world_type());
         block.insts.push(Inst::Call {
+            arg_marks: Vec::new(),
             results: results.clone(),
             callee: signature.name.clone(),
             args,
@@ -1955,6 +1957,7 @@ impl FunctionGen<'_> {
         let mem_out = self.fresh(memory_type());
         let world_out = self.fresh(world_type());
         block.insts.push(Inst::IndirectCall {
+            arg_marks: Vec::new(),
             results: results.clone(),
             callee,
             args,

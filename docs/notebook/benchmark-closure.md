@@ -234,14 +234,29 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
 | K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in [the replay](../../.evidence/k1/efi-characters-20260912/substitution.json); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
 | K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `67ad4cf`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in [the replay](../../.evidence/k1/link-register-20260912/substitution.json). |
-| K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
+| K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `2d375a0`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in [the replay](../../.evidence/k1/aggregate-variadic-20260912/substitution.json), compiler `ac5eaf9f...`; no install/boot claim. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
 | K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
 | K-C13 / OPEN | 1 | E3029 | Computed goto | `kernel/bpf/core.o` | C-HIR/lowering/backend: labels, computed dispatch, successor values and invalid target checks in a native mini-program. |
 | K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
-### Byte-aligned static relocations (2026-09-12)
+### Targeted compile repairs after relocations (2026-09-12)
+
+`aggregate-variadic-20260912` freshly compiles both original 9p failures with
+symbol parity: **2/2**, no cache/install/relink. The fixture checks 4/16/24-byte
+records, copied lists, direct/indirect calls and register exhaustion; both
+interpreters and all eight GCC/Clang O0/O2 mixed-call directions pass. EvoCC
+assembly uses the configured GNU assembler; attempting Clang's assembler on
+its explicit `:pg_hi21:` spelling failed and is retained as a toolchain-format
+observation, not counted as a successful assembler test. **8** of the original
+161 compile refusals remain; this is targeted repair accounting, not a fresh
+2799-unit survey.
+
+The computed-goto ruling additionally needs reconciliation: S05 demands no
+block arguments, whereas Section 2.4 still requires explicit mem/world edge
+arguments. Clarification requested: no ordinary data parameters, with effect
+parameters retained. No validator exception or implicit token was introduced.
 
 The following short-circuit repair passed the **45/45** assembly CLI tests
 and **112/112** switch, expression-value, side-effect and statement-expression
@@ -261,6 +276,8 @@ passed **44/44**; `tools/gate-changed.sh 3977afc --locked --offline --lib -q -j 
 passed **37/37** library tests plus all-target Clippy and fmt. This is a
 targeted gate, not a new full-workspace or full-kernel result; **16** of the
 original 161 compile refusals still need work after this repair.
+
+### Byte-aligned static relocations (2026-09-12)
 
 The standard ABS64 data relocation patches eight bytes at a byte offset;
 it does not require a naturally aligned pointer slot. The correction removes

@@ -10317,7 +10317,9 @@ impl<'a> FunctionLowerer<'a> {
                         feature: "anonymous argument lacks default promotion",
                     });
                 };
-                if self.is_aggregate_type(*ty) {
+                if self.is_aggregate_type(*ty)
+                    && !evocc_chir::is_integer_variadic_record(self.unit.types(), *ty)
+                {
                     return Err(LowerError::VarArgs {
                         span: argument.span(),
                     });
@@ -10392,6 +10394,27 @@ impl<'a> FunctionLowerer<'a> {
         } else {
             None
         };
+        let mut arg_marks = Vec::with_capacity(parameter_types.len());
+        for (index, expected) in parameter_types.iter().enumerate() {
+            let mark = if index >= fixed_parameter_count && self.is_aggregate_type(expected.source)
+            {
+                let layout = self
+                    .target
+                    .layout_of(self.unit.types(), expected.source)
+                    .map_err(|source| LowerError::Layout {
+                        ty: expected.source,
+                        span,
+                        source,
+                    })?;
+                ParamMark::ByVal(RecordShape {
+                    size: layout.size_bytes,
+                    align: layout.align_bytes,
+                })
+            } else {
+                ParamMark::None
+            };
+            arg_marks.push(mark);
+        }
         let mut argument_keys = Vec::new();
         for (argument, expected) in arguments.iter().zip(&parameter_types) {
             let value = if self.is_aggregate_type(expected.source) {
@@ -10459,6 +10482,7 @@ impl<'a> FunctionLowerer<'a> {
             // The return destination is a fixed parameter. Anonymous
             // arguments follow the entire fixed signature, including it.
             args.insert(fixed_parameter_count, destination.clone());
+            arg_marks.insert(fixed_parameter_count, ParamMark::None);
             Some(destination)
         } else {
             None
@@ -10474,11 +10498,13 @@ impl<'a> FunctionLowerer<'a> {
         }
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
         let world_out = self.fresh_value(EvoIRType::World);
+        let arg_marks = canonical_marks(arg_marks, args.len());
         let call = if let Some(callee) = direct_name {
             Inst::Call {
                 results: results.clone(),
                 callee,
                 args,
+                arg_marks,
                 mem_in,
                 world_in,
                 mem_out: mem_out.clone(),
@@ -10497,6 +10523,7 @@ impl<'a> FunctionLowerer<'a> {
                 results: results.clone(),
                 callee,
                 args,
+                arg_marks,
                 mem_in,
                 world_in,
                 mem_out: mem_out.clone(),
@@ -10694,23 +10721,46 @@ impl<'a> FunctionLowerer<'a> {
             self.replace_effect_tokens(state, mem_out, Some(world_out));
             return Ok(None);
         }
+        let mut record_shape = None;
         let result = if op == VarArgsBuiltinOp::Arg {
             let ty = requested_ty.ok_or(LowerError::VarArgs { span })?;
             if self.is_aggregate_type(ty) {
-                return Err(LowerError::VarArgs { span });
+                if !evocc_chir::is_integer_variadic_record(self.unit.types(), ty) {
+                    return Err(LowerError::VarArgs { span });
+                }
+                let layout = self
+                    .target
+                    .layout_of(self.unit.types(), ty)
+                    .map_err(|source| LowerError::Layout { ty, span, source })?;
+                record_shape = Some(RecordShape {
+                    size: layout.size_bytes,
+                    align: layout.align_bytes,
+                });
+                let origin = self.synthetic_origin()?;
+                Some(ExprValue {
+                    value: self.emit_alloca(ty, span, origin, state)?,
+                    integer: CIntegerType::ULONG,
+                })
+            } else {
+                let value_type = function_value_type(self.unit.types(), self.target, ty, span)?;
+                Some(ExprValue {
+                    value: self.fresh_value(value_type.ir),
+                    integer: value_type.integer,
+                })
             }
-            let value_type = function_value_type(self.unit.types(), self.target, ty, span)?;
-            Some(ExprValue {
-                value: self.fresh_value(value_type.ir),
-                integer: value_type.integer,
-            })
         } else {
             None
         };
         let op = match op {
             VarArgsBuiltinOp::Start => VariadicOp::Start,
             VarArgsBuiltinOp::End => VariadicOp::End,
-            VarArgsBuiltinOp::Arg => VariadicOp::Arg(result.as_ref().unwrap().value.clone()),
+            VarArgsBuiltinOp::Arg => match record_shape {
+                Some(shape) => VariadicOp::ArgRecord {
+                    destination: result.as_ref().unwrap().value.clone(),
+                    shape,
+                },
+                None => VariadicOp::Arg(result.as_ref().unwrap().value.clone()),
+            },
             VarArgsBuiltinOp::Copy => unreachable!("copy returned above"),
         };
         let mem_in = self.token(state, EnvKey::Memory)?.value;
@@ -12948,8 +12998,10 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
                 &mut access.mem_out,
                 &mut access.world_out,
             ];
-            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
-                values.push(result);
+            match &mut access.op {
+                evocc_evoir::VariadicOp::Arg(result) => values.push(result),
+                evocc_evoir::VariadicOp::ArgRecord { destination, .. } => values.push(destination),
+                _ => {}
             }
             values
         }
@@ -13111,6 +13163,7 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             let mut values = results.iter_mut().collect::<Vec<_>>();
             values.push(callee);

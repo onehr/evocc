@@ -143,6 +143,7 @@ fn null_module() -> Module {
                     Inst::PtrNull(callee.clone()),
                     Inst::Const(argument_value.clone(), 41),
                     Inst::IndirectCall {
+                        arg_marks: Vec::new(),
                         results: vec![result.clone()],
                         callee,
                         args: vec![argument_value],
@@ -184,6 +185,7 @@ fn static_signature_mismatch_module() -> Module {
                     },
                     Inst::Const(argument_value.clone(), 41),
                     Inst::IndirectCall {
+                        arg_marks: Vec::new(),
                         results: vec![result.clone()],
                         callee,
                         args: vec![argument_value],
@@ -293,6 +295,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
             },
             Inst::Const(argument_value.clone(), 41),
             Inst::IndirectCall {
+                arg_marks: Vec::new(),
                 results: vec![result.clone()],
                 callee: loaded_callee,
                 args: vec![argument_value],

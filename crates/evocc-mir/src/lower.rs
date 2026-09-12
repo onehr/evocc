@@ -13,8 +13,8 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use evocc_evoir::{
-    inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly, Inst, Module,
-    TrapReason, UbReason, Value, VariadicOp,
+    call_argument_marks, inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly,
+    Inst, Module, TrapReason, UbReason, Value, VariadicOp,
 };
 use evocc_types::{param_mark, EvoIRType, ParamMark, RecordShape};
 
@@ -462,6 +462,7 @@ fn scan_inst(
             results,
             args,
             callee,
+            arg_marks,
             ..
         } => {
             let marks = module
@@ -477,8 +478,9 @@ fn scan_inst(
                         .map(|declaration| declaration.param_marks.as_slice())
                 })
                 .unwrap_or(&[]);
+            let marks = call_argument_marks(marks, arg_marks, args.len());
             let positions =
-                record_plan(target, &marked_types(&arg_types(args), marks), true).positions;
+                record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
             if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
                 report(
                     E4010,
@@ -516,12 +518,14 @@ fn scan_inst(
             results,
             args,
             callee,
+            arg_marks,
             ..
         } => {
             let marks: Vec<ParamMark> = match &callee.ty {
                 EvoIRType::FnPtr { marks, .. } => marks.clone(),
                 _ => Vec::new(),
             };
+            let marks = call_argument_marks(&marks, arg_marks, args.len());
             let positions =
                 record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
             if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
@@ -1306,11 +1310,26 @@ fn lower_block(
         // computed address". The procedure branches, so it is written here,
         // where a block can be split, exactly as the `ub.assume` row above is.
         if let Inst::VaAccess(access) = inst {
-            if let VariadicOp::Arg(result) = &access.op {
-                let (slot, alignment) = variadic_slot(&result.ty)
-                    .ok_or_else(|| format!("a va_arg of {:?}", result.ty))?;
+            if let Some((slot, alignment)) = variadic_access_slot(&access.op) {
                 let ap = lowerer.reg(&access.list)?;
-                let carried = live_across(lowerer, block, index + 1);
+                let mut carried = live_across(lowerer, block, index + 1);
+                // The destination is an input of this instruction, so a last
+                // use still has to cross the register/stack selection blocks.
+                let destination_index = if let VariadicOp::ArgRecord { destination, .. } =
+                    &access.op
+                {
+                    let destination = lowerer.reg(destination)?;
+                    Some(
+                        if let Some(index) = carried.iter().position(|reg| *reg == destination) {
+                            index
+                        } else {
+                            carried.push(destination);
+                            carried.len() - 1
+                        },
+                    )
+                } else {
+                    None
+                };
                 let width = carried.len();
 
                 let from_registers = lowerer.fresh_block();
@@ -1499,29 +1518,51 @@ fn lower_block(
                 let params = fresh_like(lowerer, &shape);
                 let address = params[width];
                 let mut body = Vec::new();
-                if is_pair(&result.ty) {
-                    let (low, high) = lowerer.fresh_pair();
-                    body.push(MInst::Ldp {
-                        rt1: low,
-                        rt2: high,
-                        base: address,
-                        offset: 0,
-                        writeback: false,
-                        volatile: false,
+                if let VariadicOp::ArgRecord { shape, .. } = &access.op {
+                    let src = if shape.size > 16 {
+                        let src = lowerer.fresh(RegClass::Gpr64);
+                        body.push(MInst::Load {
+                            dst: src,
+                            base: address,
+                            offset: 0,
+                            kind: LoadKind::P,
+                            volatile: false,
+                        });
+                        src
+                    } else {
+                        address
+                    };
+                    body.push(MInst::MemCopy {
+                        dst: params[destination_index.expect("record destination is carried")],
+                        src,
+                        size: shape.size,
+                        align: shape.align.min(8),
                     });
-                    lowerer.bind_pair(result, low, high);
-                } else {
-                    let kind = load_kind(&result.ty)?;
-                    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
-                    let dst = lowerer.fresh(class);
-                    body.push(MInst::Load {
-                        dst,
-                        base: address,
-                        offset: 0,
-                        kind,
-                        volatile: false,
-                    });
-                    lowerer.bind(result, dst);
+                } else if let VariadicOp::Arg(result) = &access.op {
+                    if is_pair(&result.ty) {
+                        let (low, high) = lowerer.fresh_pair();
+                        body.push(MInst::Ldp {
+                            rt1: low,
+                            rt2: high,
+                            base: address,
+                            offset: 0,
+                            writeback: false,
+                            volatile: false,
+                        });
+                        lowerer.bind_pair(result, low, high);
+                    } else {
+                        let kind = load_kind(&result.ty)?;
+                        let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+                        let dst = lowerer.fresh(class);
+                        body.push(MInst::Load {
+                            dst,
+                            base: address,
+                            offset: 0,
+                            kind,
+                            volatile: false,
+                        });
+                        lowerer.bind(result, dst);
+                    }
                 }
                 let mut rebind: HashMap<u32, VReg> = HashMap::new();
                 for (old, fresh) in carried.iter().zip(params.iter()) {
@@ -2078,7 +2119,7 @@ fn lower_inst(
         Inst::VaAccess(access) => match &access.op {
             VariadicOp::Start => lower_va_start(lowerer, insts, &access.list)?,
             VariadicOp::End => {}
-            VariadicOp::Arg(_) => {
+            VariadicOp::Arg(_) | VariadicOp::ArgRecord { .. } => {
                 return Err("a va_arg is lowered with its block".to_owned());
             }
         },
@@ -2312,11 +2353,12 @@ fn lower_inst(
             results,
             callee,
             args,
+            arg_marks,
             ..
         } => {
-            let marks = signatures.marks(callee);
-            let plan = record_plan(target, &marked_types(&arg_types(args), marks), true);
-            let (mut arguments, returned) = call_arguments(lowerer, insts, args, marks, &plan)?;
+            let marks = call_argument_marks(signatures.marks(callee), arg_marks, args.len());
+            let plan = record_plan(target, &marked_types(&arg_types(args), &marks), true);
+            let (mut arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
             if external(callee) {
                 // Section 6, revision 0.5: across the host boundary "a caller
                 // extends an argument narrower than 32 bits to 32 bits". The
@@ -2366,6 +2408,7 @@ fn lower_inst(
             results,
             callee,
             args,
+            arg_marks,
             ..
         } => {
             // Revision 1.9.73 puts the marks inside the pointer's own type,
@@ -2375,6 +2418,7 @@ fn lower_inst(
                 EvoIRType::FnPtr { marks, .. } => marks.clone(),
                 _ => Vec::new(),
             };
+            let marks = call_argument_marks(&marks, arg_marks, args.len());
             let plan = record_plan(target, &marked_types(&arg_types(args), &marks), true);
             let pointer = lowerer.reg(callee)?;
             let (arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
@@ -3147,6 +3191,18 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u64) {
 
 /// The size rounded up to eight (`S8`) and the alignment (`A`) of one
 /// `va_arg` type, or nothing when the type has no Section 6 procedure.
+fn variadic_access_slot(op: &VariadicOp) -> Option<(u64, u64)> {
+    match op {
+        VariadicOp::Arg(result) => variadic_slot(&result.ty),
+        VariadicOp::ArgRecord { shape, .. } if shape.size > 16 => Some((8, 8)),
+        VariadicOp::ArgRecord { shape, .. } => Some((
+            shape.size.div_ceil(8) * 8,
+            u64::from(shape.align).clamp(8, 16),
+        )),
+        VariadicOp::Start | VariadicOp::End => None,
+    }
+}
+
 fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
     match ty {
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Some((8, 8)),
