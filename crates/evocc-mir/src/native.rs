@@ -18,7 +18,8 @@ use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for, emitted_functions, lower_module_for, out_of_ssa, verify_allocation, Target,
+    allocate_for, emitted_functions, lower_module_for, out_of_ssa, verify_allocation,
+    RelocationModel, Target,
 };
 
 /// Where the native pipeline stopped.
@@ -86,6 +87,16 @@ pub fn compile_module_for(
     module: &Module,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String, NativeStop> {
+    compile_module_with_relocation(target, module, keep, RelocationModel::PositionIndependent)
+}
+
+/// Compile with an explicit address model; allocation and ABI checks are unchanged.
+pub fn compile_module_with_relocation(
+    target: Target,
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+    relocation: RelocationModel,
+) -> Result<String, NativeStop> {
     // Section 8 (revision 0.16) drops an internal function nothing references
     // before emission. It is answered here rather than after lowering because
     // an unreferenced `static inline` stub from a shared header calls
@@ -118,7 +129,9 @@ pub fn compile_module_for(
         })?;
         functions.push(allocated);
     }
-    Ok(crate::emit::emit_linked_module(target, &functions, module))
+    Ok(crate::emit::emit_linked_module(
+        target, &functions, module, relocation,
+    ))
 }
 
 /// Lower, allocate, verify and emit every function of one EvoIR module.

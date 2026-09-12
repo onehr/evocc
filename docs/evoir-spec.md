@@ -6839,3 +6839,10 @@ Static numeric pointer offsets retain pointee scaling and all intermediate integ
 To retain Section 3.7's exposure when a symbolic initializer casts an address to an integer, including a cast back to a pointer, its relocation admits the optional fourth field `exposed`: `(offset, @symbol, addend, exposed)` exposes that target at module initialization, while the existing three-field form does not.
 This field changes neither the emitted address bytes nor access checks; raw numeric addresses and ordinary pointer relocations do not expose unrelated objects, and E3013 remains required for an unexposed integer-derived dereference.
 No diagnostic is allocated; the preceding survey attributes 29 refusals to numeric pointer offsets and 21 to integer address initializers, pending original-unit replay.
+
+### Explicit position-independence options
+
+The default address model retains EvoMIR Section 8's PIE-safe recipe, but explicit `-fno-pic`/`-fno-PIC`/`-fno-pie`/`-fno-PIE` selects direct page-relative addresses for strong undefined symbols, while weak undefined symbols retain nullable GOT addresses.
+The last PIC/PIE option controls both code generation and the four `__PIC__`/`__pic__`/`__PIE__`/`__pie__` macros: `-fpic` and `-fpie` select level 1, uppercase variants level 2, PIC omits the PIE pair, and disabling the mode undefines all four before explicit command-line macro actions.
+Both sealed compilers agree in `tests/fixtures/relocation-mode.{c,out}`; this is an explicit build-mode extension, not permission to disable PIE in an existing benchmark or to alter weak-symbol resolution.
+No diagnostic is allocated; Kbuild replay must preserve these recorded options, addressing the observed nVHE `Unexpected RELA type 311` link failure without changing the kernel relocation checker.

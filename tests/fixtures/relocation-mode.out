@@ -1,0 +1,26 @@
+Sealed image: evo-flight-lab:sealed
+Digest: sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Both gcc-14 and clang-19: -O2 <mode> -c relocation-mode.c; readelf -rW object
+Mode      strong object/function                 weak object/function
+-fno-PIE  ADR_PREL_PG_HI21 + ADD_ABS_LO12_NC       ADR_GOT_PAGE + LD64_GOT_LO12_NC
+-fPIE     ADR_GOT_PAGE + LD64_GOT_LO12_NC          ADR_GOT_PAGE + LD64_GOT_LO12_NC
+-fPIC     ADR_GOT_PAGE + LD64_GOT_LO12_NC          ADR_GOT_PAGE + LD64_GOT_LO12_NC
+Both compilers: <options> -dM -E -x c /dev/null
+Options             __PIC__/__pic__    __PIE__/__pie__
+-fno-PIE             absent             absent
+-fPIC                2                  absent
+-fpic                1                  absent
+-fPIE                2                  2
+-fpie                1                  1
+-fPIC -fno-PIE       absent             absent
+-fno-PIC -fPIE       2                  2
+
+Subject assembly from the tailored debug driver was linked with the companion
+definition/weak-null check in relocation-mode-main.c using both drivers and GNU as (Clang explicitly
+-fno-integrated-as): -fno-PIE -no-pie, -fPIE -pie, -fPIC -pie.
+gcc-14 subject fno-PIE exit=0
+gcc-14 subject fPIE exit=0
+gcc-14 subject fPIC exit=0
+clang-19 subject fno-PIE exit=0
+clang-19 subject fPIE exit=0
+clang-19 subject fPIC exit=0

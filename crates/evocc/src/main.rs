@@ -28,7 +28,7 @@ use evocc_evoir::{
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
-use evocc_mir::{compile_module_for, NativeStop, Target as MirTarget};
+use evocc_mir::{compile_module_with_relocation, NativeStop, RelocationModel, Target as MirTarget};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
@@ -58,6 +58,30 @@ enum DriverTarget {
     Aarch64UnknownLinuxGnu,
 }
 
+#[derive(Clone, Copy)]
+enum PositionIndependence {
+    Disabled,
+    Pic(u8),
+    Pie(u8),
+}
+
+impl PositionIndependence {
+    fn macro_levels(self) -> (u8, u8) {
+        match self {
+            Self::Disabled => (0, 0),
+            Self::Pic(level) => (level, 0),
+            Self::Pie(level) => (level, level),
+        }
+    }
+
+    fn relocation(self) -> RelocationModel {
+        match self {
+            Self::Disabled => RelocationModel::Static,
+            _ => RelocationModel::PositionIndependent,
+        }
+    }
+}
+
 struct DriverOptions {
     mode: DriverMode,
     target: DriverTarget,
@@ -72,6 +96,7 @@ struct DriverOptions {
     standard_builtins: bool,
     legacy_declarations: bool,
     short_wchar: bool,
+    position_independence: PositionIndependence,
     /// Report every diagnostic rather than the first.
     ///
     /// A build wants one unambiguous first-error site. Surveying a body of
@@ -219,6 +244,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut standard_builtins = true;
     let mut legacy_declarations = false;
     let mut short_wchar = false;
+    let mut position_independence = PositionIndependence::Pie(2);
     let mut survey = false;
     let mut index = 0;
 
@@ -239,6 +265,13 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-fbuiltin" => standard_builtins = true,
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
+            "-fpic" => position_independence = PositionIndependence::Pic(1),
+            "-fPIC" => position_independence = PositionIndependence::Pic(2),
+            "-fpie" => position_independence = PositionIndependence::Pie(1),
+            "-fPIE" => position_independence = PositionIndependence::Pie(2),
+            "-fno-pic" | "-fno-PIC" | "-fno-pie" | "-fno-PIE" => {
+                position_independence = PositionIndependence::Disabled;
+            }
             "--target" => {
                 index += 1;
                 let value = args
@@ -335,6 +368,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         standard_builtins,
         legacy_declarations,
         short_wchar,
+        position_independence,
         survey,
     })
 }
@@ -451,6 +485,18 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
+    let (pic, pie) = options.position_independence.macro_levels();
+    for (name, level) in [
+        ("__PIC__", pic),
+        ("__pic__", pic),
+        ("__PIE__", pie),
+        ("__pie__", pie),
+    ] {
+        pp.undefine(name);
+        if level != 0 {
+            pp.define(name.to_owned(), decoded_tokens(&level.to_string())?);
+        }
+    }
     let wchar_rank = options.target_layout().wide_character_rank();
     let wchar_type = evocc_chir::integer::integer_type_for_rank(wchar_rank);
     let wchar_bits = wchar_type.bits();
@@ -806,7 +852,12 @@ fn emit_asm(options: &DriverOptions, module: &Module) -> ExitCode {
     let target = match options.target {
         DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
     };
-    let text = match compile_module_for(target, module, &|_| true) {
+    let text = match compile_module_with_relocation(
+        target,
+        module,
+        &|_| true,
+        options.position_independence.relocation(),
+    ) {
         Ok(text) => text,
         Err(stop) => {
             match &stop {

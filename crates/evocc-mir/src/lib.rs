@@ -32,7 +32,9 @@ pub mod validate;
 use std::fmt;
 
 pub use allocverify::{verify_allocation, VerifierRefusal};
-pub use emit::{emit_module, emit_module_for, emit_module_unit, frame_of, Frame, Target};
+pub use emit::{
+    emit_module, emit_module_for, emit_module_unit, frame_of, Frame, RelocationModel, Target,
+};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linkage::emitted_functions;
 pub use linscan::{
@@ -40,8 +42,8 @@ pub use linscan::{
 };
 pub use lower::{lower_module, lower_module_for, lower_module_with, Refusal};
 pub use native::{
-    compile_module, compile_module_for, compile_module_with, native_corpus_entry, Driver,
-    NativeStop, Toolchain,
+    compile_module, compile_module_for, compile_module_with, compile_module_with_relocation,
+    native_corpus_entry, Driver, NativeStop, Toolchain,
 };
 pub use regalloc::out_of_ssa;
 pub use text::render_module;

@@ -16,6 +16,13 @@ use crate::{
     MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul, Width,
 };
 
+/// Address materialization selected by the caller's build options.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelocationModel {
+    PositionIndependent,
+    Static,
+}
+
 /// Where every part of one frame lives, measured in bytes above `sp` after the
 /// prologue has lowered it.
 ///
@@ -309,13 +316,21 @@ pub fn emit_module_unit(
     globals: &[GlobalObject],
     assembly: &[String],
 ) -> String {
-    emit_unit(target, functions, globals, assembly, None)
+    emit_unit(
+        target,
+        functions,
+        globals,
+        assembly,
+        None,
+        RelocationModel::PositionIndependent,
+    )
 }
 
 pub(crate) fn emit_linked_module(
     target: Target,
     functions: &[Allocated],
     module: &Module,
+    relocation: RelocationModel,
 ) -> String {
     emit_unit(
         target,
@@ -323,6 +338,7 @@ pub(crate) fn emit_linked_module(
         &module.globals,
         &module.assembly,
         Some(module),
+        relocation,
     )
 }
 
@@ -332,6 +348,7 @@ fn emit_unit(
     globals: &[GlobalObject],
     assembly: &[String],
     module: Option<&Module>,
+    relocation: RelocationModel,
 ) -> String {
     let prefix = target.symbol_prefix();
     let mut text = String::new();
@@ -416,14 +433,20 @@ fn emit_unit(
             module
                 .extern_objects
                 .iter()
-                .filter(|g| g.visibility != GlobalVisibility::Hidden || g.linkage == Linkage::Weak)
+                .filter(|g| {
+                    g.linkage == Linkage::Weak
+                        || (relocation == RelocationModel::PositionIndependent
+                            && g.visibility != GlobalVisibility::Hidden)
+                })
                 .map(|g| (SymbolKind::Global, g.symbol.as_str()))
                 .chain(
                     module
                         .declares
                         .iter()
                         .filter(|f| {
-                            f.visibility != GlobalVisibility::Hidden || f.linkage == Linkage::Weak
+                            f.linkage == Linkage::Weak
+                                || (relocation == RelocationModel::PositionIndependent
+                                    && f.visibility != GlobalVisibility::Hidden)
                         })
                         .map(|f| (SymbolKind::Function, f.name.as_str())),
                 ),

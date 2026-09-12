@@ -33,6 +33,7 @@ PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 PASSED_THROUGH = (
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
     "-fbuiltin", "-fno-builtin",
+    "-fpic", "-fPIC", "-fpie", "-fPIE", "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",
 )
 
 SOURCE_DECLARATION = re.compile(r"^source_[^ ]+ := (.+)$")
