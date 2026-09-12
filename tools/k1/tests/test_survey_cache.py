@@ -7,6 +7,8 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 _spec = importlib.util.spec_from_file_location(
     "k1_substitute", Path(__file__).resolve().parents[1] / "substitute.py"
@@ -146,6 +148,91 @@ class CacheFileTest(unittest.TestCase):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text('{"version": 0, "entries": {"k": {}}}', encoding="utf-8")
         self.assertEqual(substitute.load_cache(self.path), {})
+
+
+class AssemblyReuseTest(unittest.TestCase):
+    def test_input_snapshot_changes_for_headers_generated_inputs_and_new_files(self):
+        snapshot = getattr(substitute, "input_snapshot", None)
+        self.assertTrue(callable(snapshot), "source-only cache ignores included and generated inputs")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src, build = root / "src", root / "build"
+            src.mkdir()
+            build.mkdir()
+            header = src / "a.h"
+            header.write_text("#define A 1\n")
+            original = snapshot(src, build)
+            before = header.stat()
+            header.write_text("#define A 2\n")
+            substitute.os.utime(header, ns=(before.st_atime_ns, before.st_mtime_ns))
+            changed = snapshot(src, build)
+            self.assertNotEqual(original, changed)
+            (build / "generated.h").write_text("int generated;\n")
+            generated = snapshot(src, build)
+            self.assertNotEqual(changed, generated)
+            (src / "new.h").write_text("int added;\n")
+            self.assertNotEqual(generated, snapshot(src, build))
+
+    def test_identical_assembly_reuses_object_but_changed_or_corrupt_inputs_do_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asm = root / "asm"
+            pristine = root / "pristine"
+            asm.mkdir()
+            pristine.mkdir()
+            record_file = pristine / ".a.o.cmd"
+            record_file.write_text("savedcmd_a.o := gcc-14 -c -o a.o /work/src/a.c\n")
+            records = {"a.o": substitute.parse_record(record_file)}
+            assembly = asm / "a.s"
+            assembly.write_text(".text\n")
+            calls = []
+
+            def assemble(command, **kwargs):
+                calls.append(command)
+                (asm / "a.o").write_bytes(b"assembled:" + assembly.read_bytes())
+                return SimpleNamespace(stdout="OK a.o\n", stderr="", returncode=0)
+
+            def run():
+                rows = [{"unit": "a.o", "outcome": "emitted",
+                         "assemblySha256": substitute.sha256_file(assembly)}]
+                substitute.assemble_batch(rows, records, asm, pristine)
+                self.assertEqual(rows[0]["outcome"], "assembled")
+                return rows[0]
+
+            with patch.object(substitute.subprocess, "run", side_effect=assemble):
+                run()
+                unchanged = run()
+                self.assertEqual(len(calls), 1, "identical assembly was assembled twice")
+                self.assertTrue(unchanged.get("assemblyFromCache"))
+                (asm / "a.o").write_bytes(b"corrupt")
+                run()
+                self.assertEqual(len(calls), 2)
+                assembly.write_text(".text\nret\n")
+                run()
+                self.assertEqual(len(calls), 3)
+                record_file.write_text("savedcmd_a.o := gcc-14 -Wa,-march=armv8-a -c -o a.o /work/src/a.c\n")
+                records["a.o"] = substitute.parse_record(record_file)
+                run()
+                self.assertEqual(len(calls), 4)
+                assembly.write_text('.incbin "kernel/config_data.gz"\n')
+                run()
+                run()
+                self.assertEqual(len(calls), 6, "external assembly inputs cannot use a text-only key")
+
+    def test_identical_installed_object_preserves_its_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asm, out = root / "asm", root / "out"
+            asm.mkdir()
+            out.mkdir()
+            for directory in (asm, out):
+                (directory / "a.o").write_bytes(b"same object")
+            substitute.os.utime(out / "a.o", ns=(1000000000, 1000000000))
+            rows = [{"unit": "a.o", "outcome": "assembled", "missingSymbols": [],
+                     "extraSymbols": [], "objectSha256": substitute.sha256_file(asm / "a.o")}]
+            substitute.install(rows, asm, out, False)
+            self.assertEqual((out / "a.o").stat().st_mtime_ns, 1000000000)
+            self.assertEqual(rows[0]["outcome"], "substituted")
 
 
 if __name__ == "__main__":

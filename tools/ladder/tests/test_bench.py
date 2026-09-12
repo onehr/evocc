@@ -64,6 +64,21 @@ class BenchmarkEntryTest(unittest.TestCase):
         row = bench.metrics("torture", receipt)
         self.assertEqual((row["status"], row["passed"], row["total"]), ("INCOMPLETE", 2, 4))
 
+    def test_kernel_survey_only_never_claims_a_boot(self):
+        options = {option for action in bench.parser()._actions for option in action.option_strings}
+        self.assertIn("--survey-only", options, "full compilation survey still requires link/bisection")
+        args = bench.parser().parse_args(["kernel", "--survey-only", "--jobs", "6"])
+        command, _ = bench.command("kernel", args, Path("/tmp/compiler"))
+        self.assertIn("--no-install", command)
+        self.assertIn("--all", command)
+        self.assertIn("/tmp/compiler", command)
+        row = bench.metrics("kernel", {"mode": "survey-only", "requestedUnits": 2,
+                                      "counts": {"assembled": 2}, "refusalsByFirstCode": {}})
+        self.assertEqual(row["compiled"], 2)
+        self.assertEqual(row["passed"], 0)
+        self.assertEqual(row["testVerdict"], "NOT_RUN")
+        self.assertEqual(row["status"], "INCOMPLETE")
+
     def test_profile_closure_does_not_claim_deferred_programs_passed(self):
         values = {'programs': 3, 'outcomes': {'pass': 1, 'refused': 2},
                   'dispositionCounts': {'PASS': 1, 'compiler-failure': 0, 'not-applicable': 1, 'FP-deferred': 1, 'oracle-unusable': 0}}
