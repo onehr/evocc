@@ -115,6 +115,15 @@ fn static_numeric_pointer_offsets_preserve_scaling_and_casts() {
 }
 
 #[test]
+fn static_place_addresses_do_not_read_through_their_numeric_base() {
+    check(
+        include_str!("../../../tests/fixtures/absolute-place-addresses.c"),
+        Ok(0),
+        &[],
+    );
+}
+
+#[test]
 fn integer_static_objects_can_carry_symbolic_address_relocations() {
     check(
         include_str!("../../../tests/fixtures/integer-address-relocations.c"),
