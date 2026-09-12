@@ -1,0 +1,360 @@
+{
+  "allowSymbolDrift": true,
+  "assemblerImage": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+  "assemblyCacheHits": 367,
+  "boot": {
+    "verdict": "NOT_RUN"
+  },
+  "cacheHits": 800,
+  "completeComposition": false,
+  "counts": {
+    "assembled": 2757,
+    "refused": 42
+  },
+  "driverSha256": "09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df",
+  "evidence": ".evidence/k1/20260912T191806Z",
+  "evoccSha256": "09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df",
+  "freshCompilations": 1999,
+  "imageSha256": "af053a63dea8301e1629da2a2c7b6694c4b83010debbe78e91921fd4c4f425ba",
+  "inputSnapshotSha256": "fd16a5dcfd49f53df706bdc9a96ee42ad42cbe710d505e39f4b8ad2ae3bb3ace",
+  "installed": false,
+  "jobs": 8,
+  "mode": "full-kernel",
+  "omittedOptions": {
+    "-Wa,-march=armv8.5-a": {
+      "classification": "forwarded-to-assembler",
+      "units": 2799
+    },
+    "-Wall": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wcast-function-type": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wenum-conversion": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=date-time": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=designated-init": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=implicit-function-declaration": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=implicit-int": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=incompatible-pointer-types": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=return-type": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Werror=strict-prototypes": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wextra": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wformat-overflow": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wframe-larger-than=2048": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wimplicit-fallthrough=5": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wmissing-declarations": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2797
+    },
+    "-Wmissing-format-attribute": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wmissing-include-dirs": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wmissing-prototypes": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2797
+    },
+    "-Wno-address-of-packed-member": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-alloc-size-larger-than": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-array-bounds": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-dangling-pointer": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-format-overflow": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-format-security": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-format-truncation": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-frame-address": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-main": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-maybe-uninitialized": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-missing-field-initializers": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-override-init": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-packed-not-aligned": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-pointer-sign": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-psabi": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-shift-negative-value": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-sign-compare": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-stringop-overflow": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-stringop-truncation": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-trigraphs": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-type-limits": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-unused-but-set-variable": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-unused-const-variable": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wno-unused-parameter": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wold-style-definition": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wp,-MMD,<dependency-file>": {
+      "classification": "replaced-output-or-dependency-action",
+      "units": 2799
+    },
+    "-Wpacked-not-aligned": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wrestrict": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wstringop-truncation": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wundef": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wunused": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-Wunused-but-set-variable": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wunused-const-variable": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2
+    },
+    "-Wvla-larger-than=1": {
+      "classification": "diagnostic-policy-not-code-generation",
+      "units": 2799
+    },
+    "-c": {
+      "classification": "replaced-output-or-dependency-action",
+      "units": 2799
+    },
+    "-fconserve-stack": {
+      "classification": "optimization-hint-no-transform-equivalence",
+      "units": 2799
+    },
+    "-femit-struct-debug-baseonly": {
+      "classification": "debug-metadata-not-implemented-not-a-boot-claim",
+      "units": 2799
+    },
+    "-femit-struct-debug-detailed=any": {
+      "classification": "debug-metadata-not-implemented-not-a-boot-claim",
+      "units": 1
+    },
+    "-ffixed-x18": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2
+    },
+    "-fmin-function-alignment=4": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-allow-store-data-races": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-builtin-wcslen": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-code-hoisting": {
+      "classification": "optimization-hint-no-transform-equivalence",
+      "units": 1
+    },
+    "-fno-common": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-data-sections": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 8
+    },
+    "-fno-delete-null-pointer-checks": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-function-sections": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 8
+    },
+    "-fno-omit-frame-pointer": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-optimize-sibling-calls": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-stack-check": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-stack-clash-protection": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-strict-aliasing": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-fno-var-tracking": {
+      "classification": "debug-metadata-not-implemented-not-a-boot-claim",
+      "units": 2799
+    },
+    "-fstrict-flex-arrays=3": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-funsigned-char": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-g": {
+      "classification": "debug-metadata-not-implemented-not-a-boot-claim",
+      "units": 2799
+    },
+    "-mabi=lp64": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-mlittle-endian": {
+      "classification": "existing-target-or-conservative-behavior",
+      "units": 2799
+    },
+    "-o": {
+      "classification": "replaced-output-or-dependency-action",
+      "units": 2799
+    }
+  },
+  "preparation": null,
+  "refusalCodeCounts": {
+    "E3026": 1,
+    "E3101": 41
+  },
+  "refusalsByFirstCode": {
+    "E3026": 1,
+    "E3101": 41
+  },
+  "relinkExitCode": null,
+  "requestedUnits": 2799,
+  "runId": "20260912T191806Z",
+  "seconds": {
+    "assemble": 55.02,
+    "compile": 934.965,
+    "snapshot": 29.849,
+    "symbols": 41.735,
+    "total": 1081.048
+  },
+  "status": "INCOMPLETE",
+  "substitutedUnits": [],
+  "unitsSha256": "ff67d8d1d6aed20dce2e8bfd7711582c6b5ec6f011d62347e528391e27412538",
+  "vmlinuxSha256": "b852aa79a89c5d702f2290f8d4e3c703f8257a102d505fc934fa3b078feecb6a"
+}
