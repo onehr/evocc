@@ -251,6 +251,19 @@ floating-record refusal. The final Clippy-only adjustment uses a borrowed
 one-element slice: `cargo clippy --workspace --all-targets --locked --offline -j2 -- -D warnings`
 then passed; the memory **31/31** and variadic **7/7** tests were rerun.
 
+Final independent replay of committed `6df3eac` used
+`git clone --no-local --no-hardlinks` into a new checkout with a fresh Cargo
+target. `cargo test --workspace --no-fail-fast --locked --offline -j2`
+passed **2,216 tests, 0 failed, 4 existing ignored**, across 292 test targets
+including doctests. Full-workspace/all-target Clippy with `-D warnings`, fmt,
+Ruff, diff-check and **104/104** K1 Python tests passed there. Both existing
+`day5-layout-conformance.sh --subject` runs rebuilt their probe independently:
+base **128/128** and attributed **22/22**, both `ORACLE_CONSENSUS`, no mismatches.
+The original broad log is a temporary replay artifact (SHA-256
+`1b80b415c891e6a097441c0c19aa5cffd802ca4f5ef98749027f170bee8d7eaa`),
+not another copied kernel evidence tree. These results validate this committed
+repair batch; no later full-kernel survey or boot composition is inferred.
+
 Build ordering was separately verified on two vDSO producers plus the three
 dependent consumers. `prepared-headers-20260912-v2` prepares with the installed
 composition, freshly recompiles all five with its generated headers, reaches
@@ -277,6 +290,35 @@ The computed-goto ruling additionally needs reconciliation: S05 demands no
 block arguments, whereas Section 2.4 still requires explicit mem/world edge
 arguments. Clarification requested: no ordinary data parameters, with effect
 parameters retained. No validator exception or implicit token was introduced.
+
+### Kbuild option audit (2026-09-12)
+
+K-B02 is a separate full-configuration blocker, not another member of the
+161 first-error refusals. Re-enumerating the same 2,799 pristine records with
+`tools/k1/substitute.py::target_c_records` and
+`tools/k1/cmdrecord.py::evocc_argv` confirms these omitted options. Counts for
+mutually exclusive modes below use the **last** option in each original argv,
+not the number of occurrences; the rows overlap.
+
+| Required recorded behavior | Units | Current result / next implementation |
+|---|---:|---|
+| `-ftrivial-auto-var-init=zero` | 2,799 | Driver rejects the option; projection drops it. Implement explicit automatic initialization while retaining the default poison semantics without the option. |
+| `-fstack-protector-strong` | 2,732 | Driver rejects the option; projection drops it. Implement the recorded `sp_el0` guard at offset 1240 and retain the 67 final `-fno-stack-protector` overrides. |
+| `-mbranch-protection=pac-ret` | 2,792 | Driver rejects the option; projection drops it. Implement return-address protection and retain the seven final `none` overrides. |
+| `-mstrict-align` | 1 | `arch/arm64/kernel/pi/map_range.o`; inspect generated accesses and implement the option before claiming its required early-boot mode. |
+| `-ffreestanding` | 41 | Audit predefined macros and builtin consumption instead of treating it as an optimization-only omission. |
+
+The three driver refusals above were reproduced on compiler `ac5eaf9f...`
+using `tests/fixtures/signed-wrapping.c`; each exits 1 with `unsupported option`.
+Other omitted flags still need classification into already-equivalent target
+defaults, diagnostics/debug data, assembler/dependency plumbing, or required
+code generation. For example, x18 is already reserved, but that does not prove
+every omitted machine option equivalent. Neither a successful five-object boot
+nor a future 2,799-object assembly count closes this audit. No flag was silently
+accepted, no frozen configuration changed, and no additional full survey ran
+for this read-only audit.
+
+### Earlier targeted replay checkpoints
 
 The following short-circuit repair passed the **45/45** assembly CLI tests
 and **112/112** switch, expression-value, side-effect and statement-expression
