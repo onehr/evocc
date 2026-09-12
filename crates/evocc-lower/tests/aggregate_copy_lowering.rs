@@ -47,6 +47,59 @@ fn copy_count(module: &Module) -> usize {
 }
 
 #[test]
+fn volatile_union_snapshots_preserve_representation_and_only_requested_events() {
+    use evocc_memory::VolatileDirection::{Load, Store};
+    for (source_qualifier, destination_qualifier, directions) in [
+        ("const volatile", "", vec![Load]),
+        ("", "volatile", vec![Store]),
+        ("const volatile", "volatile", vec![Load, Store]),
+    ] {
+        let source = format!("union U{{struct{{unsigned char a,b,c,d;}}bytes;unsigned word;}};union U source={{.word=0x44332211}};{destination_qualifier} union U destination;int main(void){{destination=*({source_qualifier} union U *)&source;return ((union U *)&destination)->word!=0x44332211;}}");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let text = render_module(&module);
+        assert_eq!(
+            evocc_evoir::parse_section9_module(text.as_bytes()).unwrap(),
+            module
+        );
+        let chir = interpret_scalar_function(
+            &unit,
+            function_symbol(&unit, "main"),
+            CHirLimits::new(200_000),
+        )
+        .unwrap();
+        let ir = interpret_module(
+            &module,
+            "main",
+            &[
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+                RuntimeValue::new(EvoIRType::World, 0),
+            ],
+            EvoIrLimits::new(200_000),
+        )
+        .unwrap();
+        assert_eq!(chir.return_value.unwrap().raw_bits, 0);
+        assert_eq!(ir.return_values[0].raw_bits, 0);
+        for world in [&chir.world, &ir.world] {
+            assert_eq!(
+                world
+                    .volatile_trace()
+                    .iter()
+                    .map(|event| event.direction)
+                    .collect::<Vec<_>>(),
+                directions,
+                "{text}"
+            );
+            assert!(world
+                .volatile_trace()
+                .iter()
+                .all(|event| event.access.size_bytes == 4));
+        }
+    }
+}
+
+#[test]
 fn record_and_union_assignments_each_emit_one_opaque_copy() {
     for source in [
         "struct S { int x; long y; }; void f(struct S *p, struct S *q) { *p = *q; }\n",

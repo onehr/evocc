@@ -76,6 +76,58 @@ fn copy_has_one_canonical_text_form_and_real_effects() {
 }
 
 #[test]
+fn volatile_representation_copy_is_exact_width_and_round_trips() {
+    use evocc_memory::VolatileDirection::{Load, Store};
+    for (spelling, directions) in [
+        ("copy.volatile.read", vec![Load]),
+        ("copy.volatile.write", vec![Store]),
+        ("copy.volatile.readwrite", vec![Load, Store]),
+    ] {
+        let text = initialized_copy_text()
+            .replace("= copy ", &format!("= {spelling} "))
+            .replace("volatile=false", "volatile=true");
+        let module =
+            parse_section9_module(text.as_bytes()).expect("exact-width volatile copy parses");
+        assert_eq!(render_module(&module), text);
+        let outcome = execute(&text).expect("representation padding is not a scalar read");
+        assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 0x11223344));
+        assert_eq!(
+            outcome
+                .world
+                .volatile_trace()
+                .iter()
+                .map(|event| event.direction)
+                .collect::<Vec<_>>(),
+            directions
+        );
+        assert!(outcome
+            .world
+            .volatile_trace()
+            .iter()
+            .all(|event| event.access.size_bytes == 8));
+        for attributes in [
+            "size=8, align=4",
+            "size=16, align=8",
+            "size=0, align=8",
+            "size=3, align=8",
+        ] {
+            assert!(
+                parse_section9_module(
+                    text.replace("size=8, align=8]", &format!("{attributes}]"))
+                        .as_bytes()
+                )
+                .is_err(),
+                "{attributes}"
+            );
+        }
+        assert!(
+            parse_section9_module(text.replace("volatile=true", "volatile=false").as_bytes())
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn copy_transfers_initializedness_without_reading_padding() {
     let text = module_text(
         "bits<8>, mem<all>, world",
