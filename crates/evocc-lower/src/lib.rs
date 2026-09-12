@@ -2079,9 +2079,9 @@ fn prevalidate_unit_for_lowering(
                         &mut labels,
                         global_register_symbols,
                     )?;
-                    let mut goto_names = BTreeSet::new();
-                    collect_goto_names(body, &mut goto_names);
-                    if goto_names.iter().any(|name| !labels.contains_key(name)) {
+                    let mut references = FunctionReferences::default();
+                    collect_references_stmt(body, &mut references);
+                    if !references.goto_names.is_subset(&references.defined_labels) {
                         return Err(LowerError::InvalidControlFlow {
                             span: function.span,
                             reason: "goto targets a label absent from its function",
@@ -3379,9 +3379,9 @@ impl<'a> FunctionLowerer<'a> {
                 span: declaration.span,
                 reason: "attempted to lower a declaration without a body",
             })?;
-        collect_goto_names(body, &mut self.goto_names);
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        self.goto_names = std::mem::take(&mut references.goto_names);
         self.local_registers = std::mem::take(&mut references.local_registers);
         self.compound_scopes = std::mem::take(&mut references.compound_scopes);
         for name in references.labels.values().collect::<BTreeSet<_>>() {
@@ -11942,45 +11942,6 @@ fn contains_targeted_label(
     }
 }
 
-fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
-    match statement {
-        CHirStmt::Asm(assembly) => {
-            names.extend(assembly.labels.iter().map(|label| label.spelling.clone()));
-        }
-        CHirStmt::Goto(label, _) => {
-            names.insert(label.spelling.clone());
-        }
-        CHirStmt::ComputedGoto(_, _) => {}
-        CHirStmt::If(_, then_branch, else_branch, _) => {
-            collect_goto_names(then_branch, names);
-            if let Some(else_branch) = else_branch {
-                collect_goto_names(else_branch, names);
-            }
-        }
-        CHirStmt::Switch(_, body, _)
-        | CHirStmt::While(_, body, _)
-        | CHirStmt::Case(_, body, _)
-        | CHirStmt::CaseRange(_, _, body, _)
-        | CHirStmt::DoWhile(body, _, _)
-        | CHirStmt::Label(_, body, _)
-        | CHirStmt::Default(body, _) => collect_goto_names(body, names),
-        CHirStmt::For(_, _, _, body, _) => collect_goto_names(body, names),
-        CHirStmt::Compound(items, _) => {
-            for item in items {
-                if let CHirBlockItem::Statement(statement) = item {
-                    collect_goto_names(statement, names);
-                }
-            }
-        }
-        CHirStmt::Expr(_, _)
-        | CHirStmt::Return(_, _)
-        | CHirStmt::Break(_)
-        | CHirStmt::Continue(_)
-        | CHirStmt::AttributedNull(_, _)
-        | CHirStmt::Null(_) => {}
-    }
-}
-
 #[derive(Default)]
 struct FunctionReferences {
     local_registers: BTreeMap<SymbolId, String>,
@@ -11988,6 +11949,10 @@ struct FunctionReferences {
     any: bool,
     labels: BTreeMap<usize, String>,
     defined_labels: BTreeSet<String>,
+    // Expression evaluation can transfer control too (notably scoped_guard's
+    // for-step statement expression). Use the same complete reference walk;
+    // the discarded sizeof operand is intentionally not an execution root.
+    goto_names: BTreeSet<String>,
     scope: usize,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
 }
@@ -12003,6 +11968,9 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
     match statement {
         CHirStmt::Asm(assembly) => {
             calls.any = true;
+            calls
+                .goto_names
+                .extend(assembly.labels.iter().map(|label| label.spelling.clone()));
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
                 collect_references_expr(operand.expression, calls);
             }
@@ -12068,10 +12036,12 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
             collect_references_stmt(statement, calls)
         }
         CHirStmt::Default(statement, _) => collect_references_stmt(statement, calls),
+        CHirStmt::Goto(label, _) => {
+            calls.goto_names.insert(label.spelling.clone());
+        }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
-        | CHirStmt::Goto(_, _)
         | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }

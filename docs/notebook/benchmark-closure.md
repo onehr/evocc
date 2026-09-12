@@ -75,6 +75,67 @@ sections. The previously body-pending items below are now implementation
 work, not blockers. Probe disagreement still requires an explicit refused
 shape, not a guessed result or a removed runtime check.
 
+### Expression goto destinations (2026-09-12)
+
+The completed September 10 survey had 78 first-error refusals saying that a
+goto target was not lowered. Kernel `scoped_guard` places its goto inside the
+for-step statement expression and the destination inside `if (0)`. The
+statement-only collector missed that reference and allowed branch selection
+to discard the destination. The repair reuses the existing expression-aware
+function-reference walk for both target checks and lowering; no validator or
+runtime obligation was removed, and no new traversal framework was added.
+
+RED `3b7fd97` reproduces the loop step, a backward expression jump, and an
+initializer jump in `tests/fixtures/expression-goto-targets.c`. C-HIR and both
+sealed compilers returned zero while lowering reported the missing target.
+The corrected lowerer passes the same fixture through both interpreters and
+Linux arm64 native assembly/link/execution. An additional unevaluated-sizeof
+case ensures a jump that is not executed cannot retain an unsupported body.
+
+Tailored release SHA-256:
+`8c63d6026820dfcb60d19c205cb61515c1c5294321e0ba2ad9c6e8aa3e5ba3dc`.
+Six original units, one per represented top-level source directory, were
+replayed through `cmdrecord.evocc_argv(parse_record(record), driver, src,
+pristine)` with the original `--emit=asm --survey` arguments and 180-second
+limit. Their output was discarded after checking compilation; this is not
+an assembly/link/boot measurement.
+
+| Original unit | Before | Tailored replay |
+|---|---|---|
+| `arch/arm64/kernel/signal.o` | missing goto target | assembly emitted |
+| `drivers/base/core.o` | missing goto target | E3026 static relocation |
+| `fs/dcache.o` | missing goto target | assembly emitted |
+| `io_uring/cmd_net.o` | missing goto target | assembly emitted |
+| `kernel/events/core.o` | missing goto target | E3026 static relocation |
+| `lib/bug.o` | missing goto target | assembly emitted |
+
+This sample establishes four new successful emissions and two moved frontiers,
+not 78 new passes or a new full-survey count. The frozen full survey continues
+to use the earlier release binary. Next: reduce the static relocation and
+integer-valued address initializer families, then zero-size pointer arithmetic
+and the remaining asm/ABI/control-flow inventory. Keep the broader tailored
+plan below; floating execution is still deferred.
+
+The affected gate exposed two pre-existing test migrations: the scalar golden
+renderer had no `DynamicAlloca` arm, and an older CLI test still required
+E3026 for absolute integer pointer initializers admitted on September 10.
+The former now classifies the instruction with its allocation family; the
+latter asserts exact target bytes, no invented relocations, and E3013 from
+both interpreters on attempted dereference. No compiler acceptance rule was
+changed to satisfy these stale tests.
+
+Validation: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1
+tools/gate-changed.sh 8f6cf84 --locked --offline -q -j1 -- --test-threads=4`
+passed: 729 tests, zero failures, three pre-existing ignored long campaigns;
+Clippy `-D warnings` and workspace formatting passed. The selected crates were
+`evocc`, `evocc-eqopt`, `evocc-lower`, `evocc-policy`, `evocc-proofcheck`, and
+`evocc-randgate`, not the entire workspace. The two Python commands
+`python3 -m unittest discover -s tools/k1/tests -q` and
+`python3 -m unittest discover -s tools/ladder/tests -p test_bench.py -q`
+passed 99 and 15 tests respectively. Ruff on the changed tools and
+`git diff --check` passed. Full mixed-link/boot, all-benchmark campaigns and
+an isolated workspace replay were not run for this tailored repair.
+
 ### Tailored-first execution plan (2026-09-10)
 
 Starting checkout: `21f522d`. The last torture capture remains

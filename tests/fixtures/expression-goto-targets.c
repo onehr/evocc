@@ -35,8 +35,21 @@ done:
     return value;
 }
 
+int unevaluated_expression(void)
+{
+    int size = sizeof(({ goto unused; 1; }));
+    if (0) {
+unused: ;
+        /* This binding is accepted by the oracles, not by this lowerer. */
+        register unsigned long value __asm__("x30") = 0;
+        __asm__("" : "+r" (value));
+    }
+    return size;
+}
+
 int main(void)
 {
     return loop_step() != 1 || backward_expression() != 3 ||
-           initializer_expression(0) != 7 || initializer_expression(1) != 9;
+           initializer_expression(0) != 7 || initializer_expression(1) != 9 ||
+           unevaluated_expression() != sizeof(int);
 }
