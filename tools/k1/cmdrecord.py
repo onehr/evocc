@@ -52,6 +52,31 @@ SOURCE_DECLARATION = re.compile(r"^source_[^ ]+ := (.+)$")
 SAVED_COMMAND = re.compile(r"^savedcmd_([^ ]+) := (.+)$")
 
 
+def omitted_option_class(option: str) -> str:
+    """Explicit boot-relevance audit; unknown options are never assumed inert."""
+    if option.startswith("-Wa,"):
+        return "forwarded-to-assembler"
+    if option.startswith("-Wp,-MMD,") or option in ("-c", "-o") or not option.startswith("-"):
+        return "replaced-output-or-dependency-action"
+    if option.startswith("-W"):
+        return "diagnostic-policy-not-code-generation"
+    if option == "-g" or option.startswith("-femit-struct-debug-") or option == "-fno-var-tracking":
+        return "debug-metadata-not-implemented-not-a-boot-claim"
+    if option in ("-fconserve-stack", "-fno-code-hoisting"):
+        return "optimization-hint-no-transform-equivalence"
+    if option in (
+        "-mlittle-endian", "-mabi=lp64", "-funsigned-char", "-ffixed-x18",
+        "-fno-common", "-fno-data-sections", "-fno-function-sections",
+        "-fmin-function-alignment=4", "-fno-omit-frame-pointer",
+        "-fno-optimize-sibling-calls", "-fno-strict-aliasing",
+        "-fno-delete-null-pointer-checks", "-fno-allow-store-data-races",
+        "-fno-stack-check", "-fno-stack-clash-protection",
+        "-fstrict-flex-arrays=3", "-fno-builtin-wcslen",
+    ):
+        return "existing-target-or-conservative-behavior"
+    return "UNREVIEWED"
+
+
 class RecordError(RuntimeError):
     """The ``.o.cmd`` record does not have the shape this lane requires."""
 

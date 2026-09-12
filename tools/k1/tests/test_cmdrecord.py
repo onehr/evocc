@@ -27,6 +27,11 @@ RECORD = (
 
 
 class DecodeTest(unittest.TestCase):
+    def test_boot_option_audit_does_not_label_new_instrumentation_inert(self):
+        self.assertEqual(cmdrecord.omitted_option_class("-funknown-hardening"), "UNREVIEWED")
+        self.assertEqual(cmdrecord.omitted_option_class("-g"), "debug-metadata-not-implemented-not-a-boot-claim")
+        self.assertEqual(cmdrecord.omitted_option_class("-ffixed-x18"), "existing-target-or-conservative-behavior")
+
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)

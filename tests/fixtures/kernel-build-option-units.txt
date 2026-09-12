@@ -1,0 +1,7 @@
+arch/arm64/kernel/pi/map_range.o
+arch/arm64/mm/mmu.o
+arch/arm64/kernel/vdso/vgettimeofday.o
+arch/arm64/kernel/vdso/vgetrandom.o
+lib/vsprintf.o
+crypto/jitterentropy.o
+kernel/fork.o

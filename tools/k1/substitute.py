@@ -65,6 +65,7 @@ from cmdrecord import (  # noqa: E402
     assemble_argv,
     evocc_argv,
     is_target_c_compile,
+    omitted_option_class,
     parse_record,
     record_path,
     source_path,
@@ -526,6 +527,19 @@ def state_path(k1_root: Path) -> Path:
     return k1_root / "substituted.json"
 
 
+def complete_coverage(rows: list[dict], wanted: list[str], outcome: str) -> bool:
+    """One successful, unchanged object for every original target-C record."""
+    if not wanted or len(rows) != len(wanted) or len(set(wanted)) != len(wanted):
+        return False
+    if {row["unit"] for row in rows} != set(wanted):
+        return False
+    return all(row.get("outcome") == outcome and (
+        outcome != "substituted" or (
+            row.get("installedSha256")
+            and row.get("objectSha256AfterRelink") == row["installedSha256"]
+        )) for row in rows)
+
+
 def load_state(k1_root: Path) -> list[str]:
     path = state_path(k1_root)
     if not path.is_file():
@@ -607,7 +621,8 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
             row["recompiledAfterPrepare"] = True
     install(compiled, asm_root, out_root, args.allow_symbol_drift)
     failed = [row["unit"] for row in compiled if row["outcome"] != "substituted"]
-    restore(failed, pristine, out_root)
+    if not getattr(args, "require_all", False):
+        restore(failed, pristine, out_root)
     replacement = {row["unit"]: row for row in compiled}
     rows[:] = [replacement.get(row["unit"], row) for row in rows]
     result["recompiledUnits"] = len(compiled)
@@ -641,6 +656,8 @@ def main() -> int:
     parser.add_argument("--no-install", action="store_true", help="survey only; change nothing")
     parser.add_argument("--no-relink", action="store_true")
     parser.add_argument("--allow-symbol-drift", action="store_true")
+    parser.add_argument("--require-all", action="store_true", help="no reference target-C fallback or exclusions")
+    parser.add_argument("--boot", action="store_true", help="boot only a complete, verified composition")
     parser.add_argument(
         "--cache",
         type=Path,
@@ -654,6 +671,14 @@ def main() -> int:
 
     if not args.allowlist and not args.all:
         parser.error("one of --allowlist or --all is required")
+    if args.require_all and (not args.all or args.allowlist or args.no_install or args.no_relink):
+        parser.error("--require-all needs --all and an actual full link")
+    if args.boot and not args.require_all:
+        parser.error("--boot requires --require-all")
+    if args.require_all:
+        # Reference optimization may remove symbols; never exclude their
+        # translation unit. The full linker decides required symbol closure.
+        args.allow_symbol_drift = True
     pristine = args.k1_root / "pristine"
     out_root = args.k1_root / "out"
     if not pristine.is_dir() or not out_root.is_dir():
@@ -698,6 +723,18 @@ def main() -> int:
 
     asm_root = args.k1_root / "evocc-out"
     asm_root.mkdir(parents=True, exist_ok=True)
+    omitted_options = {}
+    for record in records.values():
+        _, omitted = evocc_argv(record, args.evocc, args.src_root, pristine)
+        for option in set(omitted):
+            if not option.startswith("-"):
+                continue
+            key = "-Wp,-MMD,<dependency-file>" if option.startswith("-Wp,-MMD,") else option
+            entry = omitted_options.setdefault(key, {"units": 0, "classification": omitted_option_class(option)})
+            entry["units"] += 1
+    unreviewed = [key for key, value in omitted_options.items() if value["classification"] == "UNREVIEWED"]
+    if args.require_all and unreviewed:
+        raise ValueError(f"unreviewed effective build options: {unreviewed}")
 
     cache_path = args.cache or (args.k1_root / "survey-cache.json")
     cache = {} if args.no_cache else load_cache(cache_path)
@@ -774,10 +811,12 @@ def main() -> int:
 
     previously = load_state(args.k1_root)
     substituted: list[str] = []
-    if not args.no_install:
+    compilation_complete = complete_coverage(rows, wanted, "assembled")
+    install_permitted = not args.no_install and (not args.require_all or compilation_complete)
+    if install_permitted:
         retained = {row["unit"] for row in rows if row["outcome"] == "assembled"
                     and (args.allow_symbol_drift or not (row.get("missingSymbols") or row.get("extraSymbols")))}
-        restored = restore([unit for unit in previously if unit not in retained], pristine, out_root)
+        restored = [] if args.require_all else restore([unit for unit in previously if unit not in retained], pristine, out_root)
         print(f"k1: restored {len(restored)} previously substituted objects", flush=True)
         install(rows, asm_root, out_root, args.allow_symbol_drift)
         substituted = [row["unit"] for row in rows if row["outcome"] == "substituted"]
@@ -786,7 +825,7 @@ def main() -> int:
 
     relink_code = None
     preparation = None
-    if not args.no_install and not args.no_relink:
+    if install_permitted and not args.no_relink:
         print("k1: preparing generated headers and recompiling their consumers", flush=True)
         preparation = recompile_after_prepare(rows, records, args, asm_root, pristine,
                                                out_root, run_dir)
@@ -831,6 +870,7 @@ def main() -> int:
         "freshCompilations": len(fresh),
         "inputSnapshotSha256": inputs_sha256,
         "assemblerImage": sealed_image(),
+        "omittedOptions": dict(sorted(omitted_options.items())),
         "jobs": args.jobs,
         "seconds": {"snapshot": round(snapshot_seconds, 3), "compile": round(emission_seconds, 3),
                     "assemble": round(assembly_seconds, 3), "symbols": round(symbols_seconds, 3),
@@ -841,7 +881,7 @@ def main() -> int:
         "substitutedUnits": sorted(substituted),
         "relinkExitCode": relink_code,
         "preparation": preparation,
-        "installed": not args.no_install,
+        "installed": install_permitted,
         "allowSymbolDrift": args.allow_symbol_drift,
         "imageSha256": sha256_file(out_root / "arch/arm64/boot/Image")
         if (out_root / "arch/arm64/boot/Image").is_file()
@@ -851,11 +891,29 @@ def main() -> int:
         else None,
     }
     summary["unitsSha256"] = sha256_file(run_dir / "units.jsonl")
+    if args.require_all:
+        whole = relink_code == 0 and complete_coverage(rows, wanted, "substituted")
+        boot = {"verdict": "NOT_RUN"}
+        if args.boot and whole:
+            subprocess.run([str(REPO_ROOT / "tools/k1/boot.sh"),
+                            str(out_root / "arch/arm64/boot/Image"), str(run_dir / "boot")], check=False)
+            boot_path = run_dir / "boot/boot.json"
+            if boot_path.exists():
+                boot = json.loads(boot_path.read_text())
+            whole = whole and boot.get("imageSha256") == summary["imageSha256"]
+        summary.update(mode="full-kernel", completeComposition=whole, boot=boot,
+                       driverSha256=evocc_sha256,
+                       status="PASS" if whole and boot["verdict"] == "PASS" else "INCOMPLETE",
+                       evidence=str(run_dir.relative_to(REPO_ROOT)))
+        (REPO_ROOT / "tests/contracts/kernel-full-receipt.json").write_text(
+            json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (run_dir / "substitution.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps({k: v for k, v in summary.items() if k != "substitutedUnits"}, indent=2))
     print(f"evidence: {run_dir}")
+    if args.require_all:
+        return int(summary["status"] != "PASS")
     if relink_code not in (None, 0) or counts.get("rebuilt-by-kbuild", 0):
         return 1
     return 0

@@ -44,7 +44,7 @@ CATALOG = {
     "jq": ("E10", None, "no adapter; floating-point rung deferred"),
     "lua": ("E11", None, "no adapter; floating-point rung deferred"),
     "sqlite": ("E12", None, "no adapter; floating-point rung deferred"),
-    "kernel-full": ("K6", None, "K1 measures mixed link, not a fully EvoCC-built kernel"),
+    "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
     "kernel-selftest": ("K7", None, "no kselftest adapter yet"),
 }
 
@@ -89,6 +89,13 @@ def select(names):
 def command(name, args, binary):
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if name == "kernel-full":
+        if args.reuse_kernel_survey:
+            raise ValueError("kernel-full reuses verified object caches, not a mixed-link allowlist")
+        if args.allow_qemu_drift:
+            env["K1_ALLOW_QEMU_DRIFT"] = "1"
+        return [sys.executable, str(ROOT / "tools/k1/substitute.py"), "--all", "--require-all", "--boot",
+                "--evocc", str(binary), "--jobs", str(args.jobs)], env
     if name == "kernel":
         env["K1_EVOCC"] = str(binary)
         if args.survey_only:
@@ -121,6 +128,8 @@ def command(name, args, binary):
 
 
 def lane_receipt(name):
+    if name == "kernel-full":
+        return ROOT / "tests/contracts/kernel-full-receipt.json"
     stem = "e0" if name in ("ctest", "torture") else name
     return ROOT / ("tests/contracts/k1-mixed-link-receipt.json" if name == "kernel"
                    else f"tests/contracts/ladder-{stem}-receipt.json")
@@ -130,7 +139,17 @@ def metrics(name, data):
     """Normalize claim ceilings, without rewriting a lane's raw outcomes."""
     row = {"rung": CATALOG[name][0], "note": CATALOG[name][2], "outcomes": {},
            "refusals": {}, "baselineFailures": 0, "failingUnits": data.get("failingUnits", [])}
-    if name in ("ctest", "torture"):
+    if name == "kernel-full":
+        total = data["requestedUnits"]
+        counts = data["counts"]
+        complete = data.get("completeComposition") is True and counts == {"substituted": total}
+        boot = data.get("boot", {})
+        passed = complete and boot.get("verdict") == "PASS" and boot.get("imageSha256") == data.get("imageSha256")
+        row.update(total=total, passed=total if passed else 0, compiled=sum(counts.get(key, 0) for key in ("assembled", "substituted")),
+                   kind="units", outcomes=counts, status="PASS" if passed else "INCOMPLETE",
+                   testVerdict=boot.get("verdict", "NOT_RUN"), evidence=data.get("evidence"),
+                   refusals=data.get("refusalsByFirstCode", {}))
+    elif name in ("ctest", "torture"):
         values = data["suites"][name]
         row.update(total=values["programs"], passed=values["outcomes"].get("pass", 0),
                    outcomes=values["outcomes"], kind="programs",

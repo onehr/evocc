@@ -28,6 +28,15 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertEqual(env["K1_ALLOW_QEMU_DRIFT"], "1")
         self.assertNotIn("--max-bisections", command)
 
+    def test_full_kernel_pass_requires_complete_composition_and_the_same_booted_image(self):
+        data = {"requestedUnits": 2, "counts": {"substituted": 2}, "completeComposition": True,
+                "imageSha256": "image", "boot": {"verdict": "PASS", "imageSha256": "image"}}
+        self.assertEqual(bench.metrics("kernel-full", data)["status"], "PASS")
+        for change in ({"completeComposition": False}, {"counts": {"substituted": 1, "refused": 1}},
+                       {"boot": {"verdict": "PASS", "imageSha256": "another"}},
+                       {"boot": {"verdict": "TIMEOUT", "imageSha256": "image"}}):
+            self.assertEqual(bench.metrics("kernel-full", {**data, **change})["passed"], 0)
+
     def setUp(self):
         self.assertIsNotNone(bench, "the benchmark entry point is not implemented")
 

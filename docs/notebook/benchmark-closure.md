@@ -353,6 +353,30 @@ unique measurements. `target/tailored` remains the active compiler/test tree.
 
 ### Kbuild option audit (2026-09-12)
 
+Implementation follow-up, 2026-09-13: `09444c4`, `2dd204d`, `12acefa` and
+`755e1dd` now preserve automatic zero initialization, hosted/builtin state,
+strong guards, PAC returns, general-register-only mode, strict alignment,
+optimization macros, tiny symbol addresses and requested unwind tables.
+`build-options-20260913` freshly compiles/assembles **7/7** representative
+original records with subject `89b88924833ed84642a7b571137ba53744a021d4054b0bb9684266f38882c45f`:
+pi/map_range, mm/mmu, both vDSO units, vsprintf, jitterentropy and fork.
+No objects were installed and no link/boot is claimed for that run.
+
+The remaining projection omissions are now explicitly classified in
+`cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,
+little endian, unsigned char, reserved x18, frame pointers, four-byte function
+alignment and non-common/non-split symbols match existing target behavior.
+The disabled alias/null/store-race/tail-call/stack-check transformations are
+not performed; flexible arrays retain their declared bounds, and ordinary
+wcslen has no builtin substitution. Conservation/hoisting flags are optimization
+hints, `-Wa` is passed to the assembler, dependency/output actions are replaced
+by the existing build driver, and warnings remain a separate diagnostic policy.
+**DWARF source/type debug information is not implemented**; `-g` and struct
+debug flags do not become an execution/boot claim. The frozen configuration
+does not enable BTF, and requested runtime unwind tables are implemented.
+Any new unclassified option blocks full-composition mode. The historical
+refusals below describe the pre-implementation audit, not current behavior.
+
 K-B02 is a separate full-configuration blocker, not another member of the
 161 first-error refusals. Re-enumerating the same 2,799 pristine records with
 `tools/k1/substitute.py::target_c_records` and
