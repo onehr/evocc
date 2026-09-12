@@ -9,6 +9,25 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn function_addresses_use_byte_arithmetic_without_inventing_callable_entries() {
+    agrees(include_str!(
+        "../../../tests/fixtures/function-address-arithmetic.c"
+    ));
+}
+
+#[test]
+fn function_address_arithmetic_keeps_invalid_call_targets_fail_closed() {
+    evaluates(
+        "long f(long x){return x;} int main(void){long (*p)(long)=f; return (p+1)(2);}",
+        Some("E3016"),
+    );
+    evaluates(
+        "int main(void){long (*p)(long)=0; return (p+0)(2);}",
+        Some("E3015"),
+    );
+}
+
+#[test]
 fn captured_strides_cannot_wrap_an_invalid_offset_back_into_the_object() {
     for index in [
         "1UL << 63",

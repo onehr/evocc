@@ -100,7 +100,7 @@ fn ancestor_frame_address_lowers_and_execution_fails_closed_with_e3031() {
 }
 
 #[test]
-fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
+fn function_pointer_arithmetic_uses_exposed_address_instructions() {
     let cases = [
         "typedef int (*fn)(void); fn f(fn pointer, long offset) { return pointer + offset; }\n",
         "typedef int (*fn)(void); fn f(fn pointer, long offset) { return offset + pointer; }\n",
@@ -135,17 +135,15 @@ fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
                 ));
             }
             match lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()) {
-                Err(error)
-                    if error.code() == "E3034"
-                        && error.to_string() == "not-lowered: function-pointer-arithmetic" =>
-                {
-                    None
-                }
                 Err(error) => Some(format!(
-                    "case {index}: expected E3034, got {} {error}",
+                    "case {index}: expected address arithmetic, got {} {error}",
                     error.code()
                 )),
-                Ok(_) => Some(format!("case {index}: lowering unexpectedly succeeded")),
+                Ok(module) => {
+                    let text = evocc_evoir::render_module(&module);
+                    (!text.contains("ptr.to_int") || !text.contains("ptr.from_int.fnptr"))
+                        .then(|| format!("case {index}: missing exposed-address conversion"))
+                }
             }
         })
         .collect::<Vec<_>>();
