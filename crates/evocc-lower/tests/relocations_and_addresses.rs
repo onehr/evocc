@@ -85,6 +85,25 @@ fn zero_length_object_accesses_still_report_bounds_and_lifetime() {
 }
 
 #[test]
+fn zero_sized_pointer_offsets_evaluate_indices_without_moving() {
+    check(
+        include_str!("../../../tests/fixtures/zero-sized-pointer-offsets.c"),
+        Ok(0),
+        &["ptr.offset"],
+    );
+}
+
+#[test]
+fn zero_sized_pointer_offsets_do_not_discard_poison_indices() {
+    check(
+        "struct empty {}; struct empty objects[4];
+         int main(void){int index;struct empty *p=objects;p+=index;return p!=objects;}",
+        Err("E3001"),
+        &[],
+    );
+}
+
+#[test]
 fn absolute_static_addresses_encode_bits_without_inventing_symbols() {
     let source = include_str!("../../../tests/fixtures/absolute-static-addresses.c");
     check(source, Ok(0), &["relocs=[(0, @object, 0)]"]);
