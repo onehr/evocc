@@ -143,6 +143,15 @@ fn static_place_addresses_do_not_read_through_their_numeric_base() {
 }
 
 #[test]
+fn numeric_pointer_round_trips_can_select_integer_case_labels() {
+    check(
+        include_str!("../../../tests/fixtures/address-case-constants.c"),
+        Ok(0),
+        &[],
+    );
+}
+
+#[test]
 fn integer_static_objects_can_carry_symbolic_address_relocations() {
     check(
         include_str!("../../../tests/fixtures/integer-address-relocations.c"),

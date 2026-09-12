@@ -32,6 +32,16 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn small_aggregate_register_operands_transfer_the_complete_representation() {
+    let source = include_str!("../../../tests/fixtures/aggregate-register-operands.c");
+    let text = emits(source);
+    assert!(text.contains("bits<32>"));
+    assert!(text.contains("bits<64>"));
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "aggregate-register-operands");
+}
+
+#[test]
 fn general_and_memory_operands_use_existing_canonical_constraints() {
     let canonical = MEMORY_OPERANDS
         .replace("\"m\"", "\"Q\"")
