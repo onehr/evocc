@@ -270,6 +270,7 @@ struct FunctionInfo {
     parameter_symbols: Vec<Option<SymbolId>>,
     parameter_types: Vec<FunctionValueType>,
     return_type: Option<FunctionValueType>,
+    constant_result: Option<CInteger>,
     participant: bool,
     span: SourceSpan,
 }
@@ -2605,6 +2606,7 @@ fn index_functions(
                     .map(|ty| function_value_type(unit.types(), target, *ty, entry.span()))
                     .collect::<Result<Vec<_>, _>>()?,
                 return_type,
+                constant_result: None,
                 participant: variadic,
                 span: entry.span(),
             },
@@ -2858,6 +2860,8 @@ fn function_info(
         parameter_symbols,
         parameter_types,
         return_type,
+        constant_result: evocc_chir::constant::inline_constant_result(unit, function, target)
+            .map(|(_, value)| value),
         participant: matches!(
             parameters,
             FunctionParameters::Prototype { variadic: true, .. }
@@ -7142,7 +7146,7 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
-        let mut known_truth = constant_truth(self.unit, self.target, condition);
+        let mut known_truth = self.result_after_evaluation(condition).map(CInteger::truth);
         if known_truth.is_some()
             && (self.contains_addressed_label(then_branch)
                 || else_branch.is_some_and(|branch| self.contains_addressed_label(branch)))
@@ -9841,7 +9845,7 @@ impl<'a> FunctionLowerer<'a> {
         condition: &CHirExpr<'_>,
         arms: &[&CHirExpr<'_>],
     ) -> Option<bool> {
-        let truth = constant_truth(self.unit, self.target, condition)?;
+        let truth = self.result_after_evaluation(condition)?.truth();
         if !self.address_labels.is_empty() {
             let mut references = FunctionReferences::default();
             for arm in arms {
@@ -9856,6 +9860,44 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         Some(truth)
+    }
+
+    // Used only where lowering still evaluates the entire condition. In
+    // particular, loops which omit evaluation of a source constant must not
+    // use this fact: a constant-return call can still evaluate effectful args.
+    fn result_after_evaluation(&self, expression: &CHirExpr<'_>) -> Option<CInteger> {
+        if let Some(value) = evocc_chir::constant::eval_executable_integer_constant(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        ) {
+            return Some(value);
+        }
+        let result = |expression| self.result_after_evaluation(expression);
+        match expression {
+            CHirExpr::Call(CHirExpr::Ident { symbol, .. }, _, _) => {
+                self.functions.get(symbol)?.constant_result
+            }
+            CHirExpr::Comma(_, right, _) => result(right),
+            CHirExpr::Cast(ty, operand, _) => Some(result(operand)?.cast(
+                canonical_integer(self.unit.types(), self.target, *ty, expression.span()).ok()?,
+            )),
+            CHirExpr::Unary(UnaryOp::Not, operand, _) => Some(CInteger::new(
+                u64::from(!result(operand)?.truth()),
+                CIntegerType::INT,
+            )),
+            CHirExpr::Binary(op @ (BinaryOp::And | BinaryOp::Or), left, right, _) => {
+                let left = result(left)?.truth();
+                let truth = if (*op == BinaryOp::And && !left) || (*op == BinaryOp::Or && left) {
+                    left
+                } else {
+                    result(right)?.truth()
+                };
+                Some(CInteger::new(u64::from(truth), CIntegerType::INT))
+            }
+            _ => None,
+        }
     }
 
     fn lower_ternary(

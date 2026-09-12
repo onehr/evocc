@@ -435,30 +435,14 @@ fn constant_inline_return<'a>(
     function: &FunctionDecl<'a>,
     target: &TargetDataLayout,
 ) -> Option<&'a CHirExpr<'a>> {
-    if !function.has_internal_linkage(unit.symbols())
-        || function.inline_spans.is_empty()
-        || function
-            .attributes
-            .iter()
-            .any(|attribute| attribute.semantic_name() == Some("noinline"))
-        || !matches!(&function.parameters,
+    if !matches!(&function.parameters,
             ParameterSyntax::Prototype { parameters, variadic: false }
             if parameters.is_empty())
     {
         return None;
     }
-    let TypeKind::Function { return_type, .. } = unit.types().get(function.ty)?.kind else {
-        return None;
-    };
-    crate::constant::canonical_integer_type(unit.types(), return_type)?;
-    let CHirStmt::Compound(items, _) = function.body? else {
-        return None;
-    };
-    let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() else {
-        return None;
-    };
-    crate::constant::eval_executable_integer_constant(value, unit.types(), unit.symbols(), target)?;
-    Some(value)
+    crate::constant::inline_constant_result(unit, function, target)
+        .map(|(expression, _)| expression)
 }
 
 pub fn has_inline_definitions(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {

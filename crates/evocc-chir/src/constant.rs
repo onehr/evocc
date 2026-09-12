@@ -14,9 +14,47 @@ use crate::integer::{
 };
 use crate::{
     record_member_path, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
-    CHirUnit, FrontEndBuiltinRecord, InitAction, PlaceProjection, SymbolId, SymbolKind,
+    CHirUnit, FrontEndBuiltinRecord, InitAction, PlaceProjection, PlaceRoot, SymbolId, SymbolKind,
     SymbolTable, TagMembers, UnaryOp,
 };
+
+/// A constant-return fact about an internal inline definition, not a C integer
+/// constant expression. A consumer must still evaluate the call and arguments
+/// unless it separately proves that their execution can be removed.
+pub fn inline_constant_result<'a>(
+    unit: &CHirUnit<'a>,
+    function: &crate::FunctionDecl<'a>,
+    target: &TargetDataLayout,
+) -> Option<(&'a CHirExpr<'a>, CInteger)> {
+    if !function.has_internal_linkage(unit.symbols())
+        || function.inline_spans.is_empty()
+        || function
+            .attributes
+            .iter()
+            .any(|attribute| attribute.semantic_name() == Some("noinline"))
+        || !matches!(
+            &function.parameters,
+            crate::ParameterSyntax::Prototype {
+                variadic: false,
+                ..
+            }
+        )
+    {
+        return None;
+    }
+    let TypeKind::Function { return_type, .. } = unit.types().get(function.ty)?.kind else {
+        return None;
+    };
+    let integer = canonical_integer_type(unit.types(), return_type)?;
+    let CHirStmt::Compound(items, _) = function.body? else {
+        return None;
+    };
+    let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() else {
+        return None;
+    };
+    let result = eval_executable_integer_constant(value, unit.types(), unit.symbols(), target)?;
+    Some((value, result.cast(integer)))
+}
 
 /// Declaration identity designated by a `__builtin_has_attribute` operand.
 ///
@@ -517,6 +555,52 @@ pub fn eval_absolute_address_constant(
     }
     let evaluate = |expression| eval_absolute_address_constant(expression, types, symbols, target);
     match expression {
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+            if let CHirExpr::Unary(UnaryOp::Deref, pointer, _) = operand {
+                return evaluate(pointer);
+            }
+            let CHirExpr::MemoryRead { place, .. } = operand else {
+                return None;
+            };
+            let PlaceRoot::PointerExpression { pointer, .. } = place.root() else {
+                // Named objects require a symbolic relocation, not guessed bits.
+                return None;
+            };
+            let mut address = evaluate(pointer)?.cast(CIntegerType::ULONG);
+            for projection in place.projections() {
+                let offset = match projection {
+                    PlaceProjection::Field(field) => {
+                        let layout = target.record_layout(types, field.tag()).ok()?;
+                        let member = layout
+                            .fields
+                            .iter()
+                            .find(|entry| entry.field_index == field.field_index())?;
+                        if member.bit_field.is_some() {
+                            return None;
+                        }
+                        CInteger::new(member.byte_offset, CIntegerType::ULONG)
+                    }
+                    PlaceProjection::Index(index) => {
+                        let value = eval_executable_integer_constant(
+                            index.index(),
+                            types,
+                            symbols,
+                            target,
+                        )?
+                        .cast(CIntegerType::ULONG);
+                        let size = target.sizeof_type(types, index.element_ty()).ok()?;
+                        eval_binary_integer(
+                            BinaryOp::Mul,
+                            value,
+                            CInteger::new(size, CIntegerType::ULONG),
+                        )
+                        .ok()?
+                    }
+                };
+                address = eval_binary_integer(BinaryOp::Add, address, offset).ok()?;
+            }
+            Some(address)
+        }
         CHirExpr::Cast(ty, operand, _) => {
             let integer = match types.get(*ty)?.kind {
                 TypeKind::Pointer(_) if target.pointer_layout().size_bytes == 8 => {

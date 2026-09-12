@@ -6846,3 +6846,10 @@ The default address model retains EvoMIR Section 8's PIE-safe recipe, but explic
 The last PIC/PIE option controls both code generation and the four `__PIC__`/`__pic__`/`__PIE__`/`__pie__` macros: `-fpic` and `-fpie` select level 1, uppercase variants level 2, PIC omits the PIE pair, and disabling the mode undefines all four before explicit command-line macro actions.
 Both sealed compilers agree in `tests/fixtures/relocation-mode.{c,out}`; this is an explicit build-mode extension, not permission to disable PIE in an existing benchmark or to alter weak-symbol resolution.
 No diagnostic is allocated; Kbuild replay must preserve these recorded options, addressing the observed nVHE `Unexpected RELA type 311` link failure without changing the kernel relocation checker.
+
+### Address-only projections of static numeric pointers
+
+In a static address initializer, `&*p` retains the numeric pointer value and `&p->member[index]` adds the existing target-layout projection offsets without reading the pointed-to storage, including a zero base used by the kernel's offset tables.
+Both sealed compilers at O0/O2 execute `tests/fixtures/absolute-place-addresses.{c,out}` with the asserted null, 8, 20 and 0x1010 values.
+This creates no allocation provenance and does not admit a load, a bit-field address or a nonconstant subscript; existing runtime access diagnostics remain unchanged.
+No diagnostic is allocated; the two measured residual units are `drivers/tty/sysrq.o` and `net/core/neighbour.o`.

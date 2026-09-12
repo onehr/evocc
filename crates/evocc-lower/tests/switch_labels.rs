@@ -133,6 +133,25 @@ fn constant_configuration_results_retain_calls_and_argument_evaluation() {
             "unreachable external call remains: {source}"
         );
     }
+    for (definition, expected_counter) in [
+        ("int enabled(int n){return 0;}", 0),
+        ("static inline int enabled(int n){return n-1;}", 0),
+        ("static inline int enabled(int n){++counter;return 0;}", 1),
+    ] {
+        let source = format!(
+            "extern int absent(int); int counter; {definition}
+             int main(void){{int n=0;if(enabled(++n))return absent(n);
+             return n!=1 || counter!={expected_counter};}}"
+        );
+        let module = assert_execution(&source);
+        assert!(module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+            .any(|inst| matches!(inst, evocc_evoir::Inst::Call {callee, ..} if callee == "absent")),
+            "an unproved or interposable return was treated as constant: {source}");
+    }
+    assert_execution(
+        "static inline int enabled(int n){return 0;}
+         int main(void){int n=1;return __builtin_constant_p(enabled(n));}",
+    );
 }
 
 #[test]
