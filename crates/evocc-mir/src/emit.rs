@@ -26,6 +26,8 @@ pub enum RelocationModel {
 /// Native instrumentation selected by the effective target command.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
+    pub tiny_addresses: bool,
+    pub unwind_tables: bool,
     pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
@@ -54,6 +56,7 @@ pub enum StackGuard {
 /// adjustment depends on the incoming address rather than only frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    pub unwind_tables: bool,
     pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
@@ -175,6 +178,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
 
     Frame {
+        unwind_tables: false,
         strict_alignment: false,
         sign_returns: false,
         general_registers_only: false,
@@ -805,6 +809,7 @@ fn instructions_in(body: &str) -> usize {
 /// The address slot is linker storage, not an abstract C memory operation.
 struct SymbolEmission<'a> {
     target: Target,
+    tiny_addresses: bool,
     indirect_addresses: &'a BTreeSet<(SymbolKind, &'a str)>,
 }
 
@@ -821,6 +826,7 @@ fn emit_function(
     stack_protect: bool,
 ) {
     let mut frame = frame_of(allocated);
+    frame.unwind_tables = options.unwind_tables;
     frame.sign_returns = options.sign_returns;
     frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
@@ -845,6 +851,9 @@ fn emit_function(
         let _ = writeln!(text, ".type {}, %function", allocated.name);
     }
     let _ = writeln!(text, "{prefix}{}:", allocated.name);
+    if frame.unwind_tables {
+        let _ = writeln!(text, ".cfi_startproc");
+    }
     emit_prologue(text, &frame);
 
     // Appendix A's width suffix, not the operand's declared class, decides how
@@ -872,6 +881,7 @@ fn emit_function(
         &mut body,
         &SymbolEmission {
             target,
+            tiny_addresses: options.tiny_addresses,
             indirect_addresses,
         },
         allocated,
@@ -886,6 +896,7 @@ fn emit_function(
             &mut body,
             &SymbolEmission {
                 target,
+                tiny_addresses: options.tiny_addresses,
                 indirect_addresses,
             },
             allocated,
@@ -896,6 +907,9 @@ fn emit_function(
         );
     }
     text.push_str(&body);
+    if frame.unwind_tables {
+        let _ = writeln!(text, ".cfi_endproc");
+    }
     if target == Target::Linux {
         let _ = writeln!(text, ".size {0}, .-{0}", allocated.name);
     }
@@ -962,9 +976,21 @@ fn emit_blocks(
 fn emit_prologue(text: &mut String, frame: &Frame) {
     if frame.sign_returns {
         let _ = writeln!(text, "    paciasp");
+        if frame.unwind_tables {
+            let _ = writeln!(text, ".cfi_negate_ra_state");
+        }
     }
     let _ = writeln!(text, "    stp x29, x30, [sp, #-16]!");
+    if frame.unwind_tables {
+        let _ = writeln!(
+            text,
+            ".cfi_def_cfa_offset 16\n.cfi_offset 29, -16\n.cfi_offset 30, -8"
+        );
+    }
     let _ = writeln!(text, "    mov x29, sp");
+    if frame.unwind_tables {
+        let _ = writeln!(text, ".cfi_def_cfa 29, 16");
+    }
     if frame.size != 0 {
         emit_add_immediate(text, "sub", "sp", "sp", frame.size);
     }
@@ -975,6 +1001,9 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "str", &format!("x{number}"), *offset, frame);
+        if frame.unwind_tables {
+            emit_saved_register_cfi(text, *number, *offset, frame);
+        }
     }
     if let Some((offset, guard)) = &frame.stack_guard {
         emit_guard_load(text, guard);
@@ -1015,6 +1044,9 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
 fn emit_epilogue(text: &mut String, frame: &Frame) {
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "ldr", &format!("x{number}"), *offset, frame);
+        if frame.unwind_tables {
+            let _ = writeln!(text, ".cfi_restore {number}");
+        }
     }
     if frame.alignment > 16 || frame.dynamic {
         let _ = writeln!(text, "    mov sp, x29");
@@ -1022,9 +1054,53 @@ fn emit_epilogue(text: &mut String, frame: &Frame) {
         emit_add_immediate(text, "add", "sp", "sp", frame.size);
     }
     let _ = writeln!(text, "    ldp x29, x30, [sp], #16");
+    if frame.unwind_tables {
+        let _ = writeln!(text, ".cfi_def_cfa 31, 0\n.cfi_restore 29\n.cfi_restore 30");
+    }
     if frame.sign_returns {
         let _ = writeln!(text, "    autiasp");
+        if frame.unwind_tables {
+            let _ = writeln!(text, ".cfi_negate_ra_state");
+        }
     }
+}
+
+fn emit_saved_register_cfi(text: &mut String, register: u8, offset: u64, frame: &Frame) {
+    if frame.alignment == 16 {
+        let relative = i128::from(offset) - i128::from(frame.size) - 16;
+        let _ = writeln!(text, ".cfi_offset {register}, {relative}");
+        return;
+    }
+    // DW_CFA_expression: saved location = (x29 - size) & -alignment + offset.
+    // Derive it from the stable frame pointer, not a dynamically moving SP.
+    let mut expression = vec![0x8d]; // DW_OP_breg29
+    let mut signed = -(frame.size as i64);
+    loop {
+        let byte = (signed as u8) & 0x7f;
+        signed >>= 7;
+        let done = (signed == 0 && byte & 0x40 == 0) || (signed == -1 && byte & 0x40 != 0);
+        expression.push(byte | if done { 0 } else { 0x80 });
+        if done {
+            break;
+        }
+    }
+    let unsigned = |bytes: &mut Vec<u8>, mut value: u64| loop {
+        let byte = (value as u8) & 0x7f;
+        value >>= 7;
+        bytes.push(byte | if value == 0 { 0 } else { 0x80 });
+        if value == 0 {
+            break;
+        }
+    };
+    expression.push(0x10); // DW_OP_constu
+    unsigned(&mut expression, frame.alignment);
+    expression.extend([0x1f, 0x1a, 0x23]); // neg, and, plus_uconst
+    unsigned(&mut expression, offset);
+    let _ = write!(text, ".cfi_escape 0x10, {register}, {}", expression.len());
+    for byte in expression {
+        let _ = write!(text, ", {byte}");
+    }
+    text.push('\n');
 }
 
 fn emit_guard_load(text: &mut String, guard: &StackGuard) {
@@ -1397,6 +1473,22 @@ fn emit_inst(
             );
         }
         MInst::Adrp { dst, symbol, kind } => {
+            if symbols.tiny_addresses {
+                if symbols
+                    .indirect_addresses
+                    .contains(&(*kind, symbol.as_str()))
+                {
+                    let _ = writeln!(text, "    ldr {}, :got:{symbol}", name(*dst));
+                } else {
+                    let _ = writeln!(
+                        text,
+                        "    adr {}, {}{symbol}",
+                        name(*dst),
+                        target.symbol_prefix()
+                    );
+                }
+                return;
+            }
             if symbols
                 .indirect_addresses
                 .contains(&(*kind, symbol.as_str()))
@@ -1424,6 +1516,10 @@ fn emit_inst(
             symbol,
             kind,
         } => {
+            if symbols.tiny_addresses {
+                let _ = writeln!(text, "    mov {}, {}", name(*dst), name(*src));
+                return;
+            }
             if symbols
                 .indirect_addresses
                 .contains(&(*kind, symbol.as_str()))
@@ -2019,6 +2115,9 @@ fn emit_term(
             branch(text, *fallthrough);
         }
         MTerm::Ret { .. } => {
+            if frame.unwind_tables {
+                let _ = writeln!(text, ".cfi_remember_state");
+            }
             if let Some((offset, guard)) = &frame.stack_guard {
                 emit_frame_access(text, "ldr", "x17", *offset, frame);
                 emit_guard_load(text, guard);
@@ -2031,6 +2130,9 @@ fn emit_term(
             }
             emit_epilogue(text, frame);
             let _ = writeln!(text, "    ret");
+            if frame.unwind_tables {
+                let _ = writeln!(text, ".cfi_restore_state");
+            }
         }
         MTerm::Brk { imm } => {
             let _ = writeln!(text, "    brk #{imm}");

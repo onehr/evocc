@@ -1,4 +1,16 @@
 {
+  "effectiveOptimizationAndUnwindOptions": {
+    "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
+    "redCommit": "3db1943",
+    "red": "2 unsupported-option failures, 11 passing tests, zero build errors",
+    "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc --test compilation_options --locked --offline -j 2",
+    "passed": 13,
+    "projectionCommand": "python3 -m unittest discover -s tools/k1/tests -p test_cmdrecord.py",
+    "projectionPassed": 18,
+    "nativeMeasurements": "tests/fixtures/unwind-and-tiny.out",
+    "nativeExits": {"GCC": 0, "Clang": 0, "subject": 0, "subjectWithPAC": 0},
+    "fullCompileAndBoot": "NOT RUN"
+  },
   "strictAlignment": {
     "status": "TARGETED_GREEN_NOT_FULL_KERNEL_BOOT",
     "redCommit": "f766aea",

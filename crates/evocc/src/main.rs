@@ -93,6 +93,7 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+    optimization: u8,
     signed_wrapping: bool,
     standard_builtins: bool,
     hosted: bool,
@@ -245,6 +246,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
+    let mut optimization = 0;
     let mut signed_wrapping = false;
     let mut standard_builtins = true;
     let mut hosted = true;
@@ -271,6 +273,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
+            "-O0" => optimization = 0,
+            "-O" | "-O1" | "-O2" | "-O3" | "-Og" => optimization = 1,
+            "-Os" => optimization = 2,
+            "-mcmodel=tiny" => codegen.tiny_addresses = true,
+            "-mcmodel=small" => codegen.tiny_addresses = false,
+            "-fasynchronous-unwind-tables" | "-funwind-tables" => codegen.unwind_tables = true,
+            "-fno-asynchronous-unwind-tables" | "-fno-unwind-tables" => {
+                codegen.unwind_tables = false
+            }
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
             "-fno-builtin" => standard_builtins = false,
@@ -419,6 +430,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         optimize_scalar_evoir,
+        optimization,
         signed_wrapping,
         standard_builtins,
         hosted,
@@ -545,6 +557,9 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
     for (name, enabled, value) in [
+        ("__OPTIMIZE__", options.optimization != 0, "1"),
+        ("__OPTIMIZE_SIZE__", options.optimization == 2, "1"),
+        ("__NO_INLINE__", options.optimization == 0, "1"),
         ("__SSP_STRONG__", options.stack_protector, "3"),
         (
             "__ARM_FEATURE_PAC_DEFAULT",

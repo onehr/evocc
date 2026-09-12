@@ -130,7 +130,8 @@ class DecodeTest(unittest.TestCase):
         # The source operand appears once, as the final argument.
         self.assertEqual(argv.count(str(self.src / "lib/bitrev.c")), 1)
         # Code generation flags the front end has no use for are named, not guessed at.
-        self.assertIn("-O2", omitted)
+        self.assertIn("-O2", argv)
+        self.assertNotIn("-O2", omitted)
         self.assertIn("-mlittle-endian", omitted)
         self.assertIn("-c", omitted)
         self.assertIn("-Wp,-MMD,lib/.bitrev.o.d", omitted)

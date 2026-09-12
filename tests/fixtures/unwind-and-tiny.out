@@ -1,0 +1,10 @@
+2026-09-13, sealed linux/arm64, network disabled.
+gcc-14 and clang-19 -O0 -mcmodel=tiny -fasynchronous-unwind-tables
+unwind-and-tiny.c: both exit 0, including real backtrace through a dynamically
+allocated, over-aligned frame and a nullable weak symbol address.
+EvoCC --emit=asm with the same address/unwind options, assembled/linked by
+sealed gcc-14: exit 0. Repeated with -mbranch-protection=pac-ret: exit 0.
+Both sealed preprocessors -dM -E -x c /dev/null:
+-O0: __NO_INLINE__=1, no __OPTIMIZE__ or __OPTIMIZE_SIZE__.
+-O2 / -O3: __OPTIMIZE__=1, no other two macros.
+-Os: __OPTIMIZE__=1 and __OPTIMIZE_SIZE__=1, no __NO_INLINE__.

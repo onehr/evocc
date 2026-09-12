@@ -25,6 +25,14 @@ copy already chooses its largest safe width. `-mno-strict-align` restores
 ordinary emission; the last option wins. Measurements are in
 `tests/fixtures/strict-alignment.out`.
 
+The effective tiny code model emits `adr` for direct symbol addresses and
+literal GOT loads for interposable addresses. Requested unwind tables use
+the stable x29 CFA, explicit saved-register locations (DWARF expressions for
+over-aligned frames), per-return state restoration and PAC state toggles;
+they do not depend on the dynamically moving SP. The last explicit table
+enable/disable option wins. Native backtrace measurements are in
+`tests/fixtures/unwind-and-tiny.out`.
+
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
 specification, which this document cites by section) and the assembly text

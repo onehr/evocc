@@ -7001,3 +7001,10 @@ With final `-fstack-protector-strong`, lowering marks functions containing autom
 The canonical function header adds optional ` stack_protect` after its optional alignment, omitted when false, preserved through textual/proof reconstruction; it requests a native guard check, not an extra abstract C operation or implicit EvoIR token channel.
 `tests/fixtures/protected-frames.{c,out}` and `protected-frames-failure.c` give native exits 0 and 77 for the subject and both sealed compilers; GCC/Clang differ on addressed-parameter selection, for which this profile explicitly chooses protection, while option-dependent predefined macros retain the frozen GCC-14 values of Section 10.4.
 The remaining original options independently select the guard's symbol or system-register/byte-offset source, return-address PAC and general-register-only generation; the 2,732 protected-command and 2,792 PAC-command counts overlap, introduce no diagnostic and are not boot evidence.
+
+### Effective optimization and address-model options
+
+The final `-O0` selects `__NO_INLINE__=1`, positive optimization levels select `__OPTIMIZE__=1`, and `-Os` also selects `__OPTIMIZE_SIZE__=1`, before explicit command-line macro overrides; these settings do not promise GCC's optimization algorithms or change C definedness.
+`-mcmodel=tiny` uses short PC-relative symbol addressing (including nullable GOT references), and requested unwind tables describe the actual generated frame, saved registers and return-address authentication state.
+`tests/fixtures/unwind-and-tiny.{c,out}` records the two sealed compilers' macro values and successful native backtraces through over-aligned/dynamic frames, plus subject execution with and without PAC.
+No diagnostic is allocated; all 2,799 command records contain optimization options and two request the tiny model/unwind tables, with full compile/boot still a separate measurement.

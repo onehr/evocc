@@ -31,6 +31,10 @@ PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 
 #: Options the front end consumes as written.
 PASSED_THROUGH = (
+    "-O", "-O0", "-O1", "-O2", "-O3", "-Os", "-Og",
+    "-mcmodel=tiny", "-mcmodel=small",
+    "-fasynchronous-unwind-tables", "-funwind-tables",
+    "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
     "-fbuiltin", "-fno-builtin",
     "-ffreestanding", "-fhosted",
