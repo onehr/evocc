@@ -583,6 +583,21 @@ fn symbolic_immediates_do_not_admit_dynamic_addresses_or_numeric_only_constraint
 }
 
 #[test]
+fn short_circuit_guards_do_not_lower_unselected_assembly_immediates() {
+    let source = include_str!("../../../tests/fixtures/guarded-assembly-immediates.c");
+    for mode in ["--emit=evoir", "--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "guarded-immediates");
+}
+
+#[test]
 fn local_register_bindings_survive_ir_round_trip() {
     let output = run(FIXED_REGISTERS, "--emit=evoir");
     assert!(
