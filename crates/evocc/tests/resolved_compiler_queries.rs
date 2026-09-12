@@ -323,3 +323,31 @@ fn query_facts_do_not_initialize_objects_across_incoming_jumps() {
     let source = "int main(void){goto next;{int x=7;next:return __builtin_constant_p(x);}}";
     assert_constant_program(source);
 }
+
+#[test]
+fn exhaustive_masked_switches_do_not_reference_an_impossible_default() {
+    let source = "extern void impossible(void);int f(unsigned x){switch(x&1){case 0:return 7;case 1:return 9;default:impossible();return 3;}}int main(void){return f(0)!=7||f(1)!=9||f(2)!=7||f(~0u)!=9;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @impossible"));
+}
+
+#[test]
+fn masked_switch_folding_preserves_effects_fallthrough_and_uncovered_defaults() {
+    for source in [
+        "int f(unsigned x){switch(x&3){case 0:return 7;case 1:return 9;default:return 11;}}int main(void){return f(2)!=11||f(3)!=11;}",
+        "int main(void){int x=2;int y=0;switch(x++&1){case 0:y=1;default:y+=2;break;case 1:y=7;}return x!=3||y!=3;}",
+        "int f(unsigned x){switch(x&3){case 0 ... 2:return 7;case 3:return 9;default:return 4;}}int main(void){return f(2)!=7||f(3)!=9;}",
+        "int main(void){int y=0;goto in;switch(y&1){case 0:return 3;case 1:return 4;default:in:return 0;}}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn fresh_compound_literal_representation_reads_expose_layout_checks() {
+    let source = include_str!("../../../tests/fixtures/constant-representation-reads.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid_layout"));
+}
