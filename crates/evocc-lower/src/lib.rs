@@ -377,6 +377,7 @@ struct FunctionLowerer<'a> {
     next_synthetic_origin: u32,
     next_placeholder: BlockId,
     goto_names: BTreeSet<String>,
+    goto_counts: BTreeMap<String, usize>,
     labels: BTreeMap<String, JumpTarget>,
     case_labels: BTreeMap<usize, String>,
     address_labels: BTreeMap<String, BlockId>,
@@ -3377,6 +3378,7 @@ impl<'a> FunctionLowerer<'a> {
             next_synthetic_origin: 0,
             next_placeholder: BREAK_TARGET_BASE,
             goto_names: BTreeSet::new(),
+            goto_counts: BTreeMap::new(),
             labels: BTreeMap::new(),
             case_labels: BTreeMap::new(),
             address_labels: BTreeMap::new(),
@@ -3401,6 +3403,7 @@ impl<'a> FunctionLowerer<'a> {
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
         self.goto_names = std::mem::take(&mut references.goto_names);
+        self.goto_counts = std::mem::take(&mut references.goto_counts);
         self.local_registers = std::mem::take(&mut references.local_registers);
         self.compound_scopes = std::mem::take(&mut references.compound_scopes);
         for name in references.labels.values().collect::<BTreeSet<_>>() {
@@ -9418,7 +9421,20 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let known_truth = self.known_expression_truth(left, &[right]);
+        let skips_right = matches!(
+            (operator, known_truth),
+            (BinaryOp::And, Some(false)) | (BinaryOp::Or, Some(true))
+        ) && !self.expression_has_external_entry(right);
         let left = self.lower_condition(left, state)?;
+        if skips_right {
+            // Evaluate the left operand, including its calls and obligations,
+            // but do not demand execution support from a skipped operand.
+            // Its own labels/gotos are harmless; incoming edges are not.
+            return Ok(ExprValue {
+                value: left,
+                integer: CIntegerType::INT,
+            });
+        }
         let keys = self.expression_join_keys(state, &[right]);
         let mut right_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let skip_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
@@ -9927,6 +9943,17 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         Some(truth)
+    }
+
+    fn expression_has_external_entry(&self, expression: &CHirExpr<'_>) -> bool {
+        let mut references = FunctionReferences::default();
+        collect_references_expr(expression, &mut references);
+        references.has_case_label
+            || references.defined_labels.iter().any(|label| {
+                self.address_labels.contains_key(label)
+                    || self.goto_counts.get(label).copied().unwrap_or(0)
+                        > references.goto_counts.get(label).copied().unwrap_or(0)
+            })
     }
 
     // Used only where lowering still evaluates the entire condition. In
@@ -12077,11 +12104,17 @@ struct FunctionReferences {
     // for-step statement expression). Use the same complete reference walk;
     // the discarded sizeof operand is intentionally not an execution root.
     goto_names: BTreeSet<String>,
+    goto_counts: BTreeMap<String, usize>,
+    has_case_label: bool,
     scope: usize,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
 }
 
 fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferences) {
+    calls.has_case_label |= matches!(
+        statement,
+        CHirStmt::Case(..) | CHirStmt::CaseRange(..) | CHirStmt::Default(..)
+    );
     let parent = calls.scope;
     if matches!(
         statement,
@@ -12095,6 +12128,9 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
             calls
                 .goto_names
                 .extend(assembly.labels.iter().map(|label| label.spelling.clone()));
+            for label in &assembly.labels {
+                *calls.goto_counts.entry(label.spelling.clone()).or_default() += 1;
+            }
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
                 collect_references_expr(operand.expression, calls);
             }
@@ -12162,6 +12198,7 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
         CHirStmt::Default(statement, _) => collect_references_stmt(statement, calls),
         CHirStmt::Goto(label, _) => {
             calls.goto_names.insert(label.spelling.clone());
+            *calls.goto_counts.entry(label.spelling.clone()).or_default() += 1;
         }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)

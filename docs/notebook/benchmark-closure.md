@@ -228,7 +228,7 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C01 / original compile replay PASS | 78 | E3101 | Goto destination discarded; `fb05c80` | `arch/arm64/kernel/signal.o` | All 78 affected originals compile/assemble in `initializer-and-goto-20260912`; runtime/full composition remains separate. |
 | K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in [the two-object replay](../../.evidence/k1/absolute-place-addresses-20260912/substitution.json), with no access provenance invented. Combined runtime remains separate. |
 | K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `d387e65`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
-| K-C04 / OPEN | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | C-HIR/lowering: reduce the operand and its call/inlining path; distinguish a true nonconstant from a missed constant. |
+| K-C04 / original compile replay PASS | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | RED `f312954`: the netfilter `__builtin_constant_p` guard was false, but lowering still visited its short-circuited right operand. Evaluate the left operand and retain its obligations, omit only a skipped right operand with no incoming label edge. All six originals assemble and match symbols in [the replay](../../.evidence/k1/guarded-immediates-20260912/substitution.json). No immediate constraint is weakened. |
 | K-C05 / original compile replay PASS | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | RED `fabe30a`: register operands transfer the complete four-/eight-byte object representation using ordinary guarded loads/stores and existing assembly effects. Both oracle and subject native fixtures pass; all five originals assemble and match symbols in `aggregate-and-case-20260912`. |
 | K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in [the replay](../../.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json). |
 | K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
@@ -242,6 +242,15 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
 ### Byte-aligned static relocations (2026-09-12)
+
+The following short-circuit repair passed the **45/45** assembly CLI tests
+and **112/112** switch, expression-value, side-effect and statement-expression
+tests; the affected `--lib` gate, all-target Clippy and fmt also passed.
+`guarded-immediates-20260912` uses compiler `1c60ac7b...`: all six originals
+assemble with symbol parity, no cache hits and no installation. The O2 sealed
+probe agrees on exit zero; Clang O0 refuses the unreachable immediate, recorded
+explicitly rather than claimed as consensus at all optimization levels.
+Together with the preceding x30 replay, **10** original compile refusals remain.
 
 The next targeted baseline, `remaining-compile-20260912`, rechecked all 18
 then-open identities against compiler `0b9f8f22...`: 18 refused, no new
