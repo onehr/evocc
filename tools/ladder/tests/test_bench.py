@@ -19,6 +19,15 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_full_kernel_uses_strict_composition_not_the_mixed_link_bisection(self):
+        args = bench.parser().parse_args(["kernel-full", "--jobs", "2", "--allow-qemu-drift"])
+        command, env = bench.command("kernel-full", args, Path("/tmp/compiler"))
+        self.assertIn("--require-all", command)
+        self.assertIn("--boot", command)
+        self.assertIn("--all", command)
+        self.assertEqual(env["K1_ALLOW_QEMU_DRIFT"], "1")
+        self.assertNotIn("--max-bisections", command)
+
     def setUp(self):
         self.assertIsNotNone(bench, "the benchmark entry point is not implemented")
 

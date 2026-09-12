@@ -22,6 +22,17 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_full_kernel_coverage_requires_each_original_object_and_fresh_hash(self) -> None:
+        check = getattr(substitute, "complete_coverage", None)
+        self.assertTrue(callable(check), "full link must not silently use reference C objects")
+        row = {"unit": "a.o", "outcome": "substituted", "installedSha256": "abc",
+               "objectSha256AfterRelink": "abc"}
+        self.assertTrue(check([row], ["a.o"], "substituted"))
+        self.assertFalse(check([row], ["a.o", "b.o"], "substituted"))
+        self.assertFalse(check([row, row], ["a.o"], "substituted"))
+        self.assertFalse(check([{**row, "objectSha256AfterRelink": "reference"}], ["a.o"], "substituted"))
+        self.assertFalse(check([], [], "substituted"))
+
     def test_build_preparation_can_run_without_linking_the_kernel(self) -> None:
         import inspect
         self.assertIn("targets", inspect.signature(substitute.relink).parameters,
