@@ -25,6 +25,71 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn position_independent_options_preserve_external_address_semantics() {
+    let source = include_str!("../../../tests/fixtures/relocation-mode.c");
+    for (options, indirect) in [
+        (vec![], true),
+        (vec!["-fPIC"], true),
+        (vec!["-fPIE"], true),
+        (vec!["-fno-PIE"], false),
+        (vec!["-fno-pic"], false),
+        (vec!["-fPIC", "-fno-PIE"], false),
+        (vec!["-fno-PIC", "-fPIE"], true),
+    ] {
+        let output = run_with_options(source, "--emit=asm", &options);
+        assert!(
+            output.status.success(),
+            "{options:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        for name in ["data", "callback"] {
+            assert_eq!(
+                text.contains(&format!(":got:{name}")),
+                indirect,
+                "{options:?}: {text}"
+            );
+        }
+        for name in ["weak_data", "weak_callback"] {
+            assert!(
+                text.contains(&format!(":got:{name}")),
+                "{options:?}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn position_independent_macros_follow_the_last_codegen_option() {
+    for (options, pic, pie) in [
+        (vec![], 2, 2),
+        (vec!["-fpic"], 1, 0),
+        (vec!["-fPIC"], 2, 0),
+        (vec!["-fpie"], 1, 1),
+        (vec!["-fPIE"], 2, 2),
+        (vec!["-fno-PIE"], 0, 0),
+        (vec!["-fno-pic"], 0, 0),
+        (vec!["-fPIC", "-fno-PIE"], 0, 0),
+        (vec!["-fno-PIC", "-fPIE"], 2, 2),
+    ] {
+        let source = format!(
+            "#ifndef __PIC__\n#define __PIC__ 0\n#endif\n\
+             #ifndef __pic__\n#define __pic__ 0\n#endif\n\
+             #ifndef __PIE__\n#define __PIE__ 0\n#endif\n\
+             #ifndef __pie__\n#define __pie__ 0\n#endif\n\
+             _Static_assert(__PIC__=={pic} && __pic__=={pic},\"PIC\");\n\
+             _Static_assert(__PIE__=={pie} && __pie__=={pie},\"PIE\");\n"
+        );
+        let output = run_with_options(&source, "--parse-only", &options);
+        assert!(
+            output.status.success(),
+            "{options:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn wide_checked_arithmetic_reaches_machine_code() {
     let output = run(
         include_str!("../../../tests/fixtures/wide-checked-arithmetic.c"),
