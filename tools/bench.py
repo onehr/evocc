@@ -62,6 +62,7 @@ def parser():
     p.add_argument("--budget", type=positive, default=40, help="toybox/musl bisection probes")
     p.add_argument("--allow-qemu-drift", action="store_true", help="acknowledge and record the installed QEMU digest")
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
+    p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
     return p
 
 
@@ -90,6 +91,12 @@ def command(name, args, binary):
     env["PYTHONUNBUFFERED"] = "1"
     if name == "kernel":
         env["K1_EVOCC"] = str(binary)
+        if args.survey_only:
+            cmd = [sys.executable, str(ROOT / "tools/k1/substitute.py"), "--all", "--no-install",
+                   "--evocc", str(binary), "--jobs", str(args.jobs)]
+            if run := getattr(args, "survey_run", None):
+                cmd += ["--run-id", run]
+            return cmd, env
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
         cmd = [str(ROOT / "tools/k1/measure.sh"), "--jobs", str(args.jobs)]
@@ -146,6 +153,19 @@ def metrics(name, data):
         row.update(total=data["programs"], passed=data["agreeing"], outcomes=dict(outcomes),
                    kind="programs", refusals=data.get("refusalsByCode", {}))
     elif name == "kernel":
+        if data.get("mode") == "survey-only":
+            total = data["requestedUnits"]
+            counts = data["counts"]
+            if not isinstance(total, int) or total <= 0 or any(n < 0 for n in counts.values()) or sum(counts.values()) != total:
+                raise ValueError("kernel survey counts disagree with denominator")
+            row.update(total=total, passed=0, compiled=counts.get("assembled", 0),
+                       kind="units", outcomes=counts, status="INCOMPLETE", mode="survey-only",
+                       testVerdict="NOT_RUN", refusals=data.get("refusalsByFirstCode", {}),
+                       run=data.get("runId"), evidence=data.get("evidence"),
+                       cacheHits=data.get("cacheHits", 0), assemblyCacheHits=data.get("assemblyCacheHits", 0),
+                       timing=data.get("seconds", {}),
+                       note="full compilation survey; linking, boot and selftests NOT_RUN")
+            return row
         row.update(total=data["survey"]["requestedUnits"],
                    passed=data["unitsCompiledByEvoccInABootingKernel"], kind="units",
                    compiled=data["survey"]["outcomeCounts"].get("assembled", 0),
@@ -198,7 +218,14 @@ def metrics(name, data):
     return row
 
 
-def read_result(name, before, expected):
+def read_result(name, before, expected, survey_run=None):
+    if survey_run:
+        directory = ROOT / ".evidence/k1" / survey_run
+        data = json.loads((directory / "substitution.json").read_text())
+        if data["evoccSha256"] != expected or data["unitsSha256"] != sha256(directory / "units.jsonl"):
+            raise ValueError("kernel survey compiler or per-unit digest differs")
+        data.update(mode="survey-only", evidence=str(directory.relative_to(ROOT)))
+        return metrics(name, data)
     path = lane_receipt(name)
     after = path.read_bytes()
     if before == after:
@@ -261,6 +288,9 @@ def main(argv=None):
     if not selected:
         parser().print_help()
         return 2
+    if args.survey_only and (selected != ["kernel"] or args.reuse_kernel_survey):
+        print("--survey-only requires kernel alone and cannot reuse a prior survey", file=sys.stderr)
+        return 2
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/frontend")).resolve()
     binary = (args.evocc or target / "release/evocc").resolve()
     if args.dry_run:
@@ -284,6 +314,7 @@ def main(argv=None):
             return 2
         driver = sha256(binary)
         run = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        args.survey_run = f"survey-{run}" if args.survey_only else None
         directory = ROOT / ".evidence/bench" / run
         directory.mkdir(parents=True)
         prior = json.loads((ROOT / RECEIPT).read_text()) if (ROOT / RECEIPT).exists() else {}
@@ -327,7 +358,7 @@ def main(argv=None):
                     code, tail = execute(cmd, env)
                     if sha256(binary) != driver:
                         raise ValueError("compiler changed during evaluation")
-                    row = read_result(name, before, driver)
+                    row = read_result(name, before, driver, args.survey_run)
                     if code:
                         row.update(status="ERROR", error=f"runner exit {code}", errorTail=tail)
                 except (OSError, KeyError, TypeError, ValueError) as error:

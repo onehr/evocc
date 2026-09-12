@@ -8,7 +8,39 @@ inventory authority. Counts below overlap where a row is a subcategory.
 
 ## Execution and closure rules
 
-The 2026-09-10 instruction supersedes per-fix whole-lane measurements. Each
+### Fast kernel survey first (2026-09-12)
+
+The latest request authorizes one complete kernel compilation survey before
+resuming the tailored-first compiler repairs below. It does not authorize a
+new all-benchmark campaign or turn cached execution into a fresh boot.
+
+1. Preserve the user's completed `20260910T160033Z` run: 2,638 assembled and
+   161 refused out of 2,799; its mixed link still failed. Reuse its current
+   release binary, not an unnecessary compiler rebuild.
+2. Add a survey-only option to `tools/bench.py kernel`, using the existing
+   per-unit runner, denominator and watchdog. Publish compilation outcomes
+   separately from linking/boot, which remain NOT_RUN in this mode.
+3. RED-first, reuse an assembled object only for identical assembly, assembler
+   arguments and immutable toolchain identity, with the object's digest checked.
+   Assembly containing external includes/incbin stays fresh. Preserve unchanged
+   installed objects; do not build a new runner or a boot-verdict cache.
+4. Invalidate the incomplete source-only cache: include the source/reference
+   input snapshot, including headers and generated files, in frontend reuse.
+   Record fresh/cache counts and time per step. Use six compiler workers on
+   the otherwise idle 12-core/64-GiB host, and only one heavyweight run.
+5. Run the complete survey, seal its compact per-unit report and rank first
+   errors by source construct. Resume compiler RED/GREEN on the largest shared
+   in-profile defect, then the remaining VLA/ABI/control-flow/type inventory.
+   Keep all original failures and floating-point deferrals visible.
+
+The existing dirty bench receipt and rendered status came from the user's
+run and must be preserved as historical measurements, not reverted. The
+19-GiB free-space check rules out making another kernel tree or archiving
+duplicate assembly for every trial. Full link/boot is a later explicit step;
+unchanged individual objects never justify skipping a changed combination.
+
+Except for the explicitly requested survey above, the 2026-09-10 instruction
+supersedes per-fix whole-lane measurements. Each
 semantic family gets a minimal failing regression, a shared-path fix and
 tailored validation of its affected consumers. Full survey/benchmark runs
 wait until every currently identified in-profile defect is repaired and its

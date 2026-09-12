@@ -199,7 +199,7 @@ class AssemblyReuseTest(unittest.TestCase):
                 self.assertEqual(rows[0]["outcome"], "assembled")
                 return rows[0]
 
-            with patch.object(substitute.subprocess, "run", side_effect=assemble):
+            with patch.object(substitute.subprocess, "run", side_effect=assemble), patch.object(substitute, "verify_image"):
                 run()
                 unchanged = run()
                 self.assertEqual(len(calls), 1, "identical assembly was assembled twice")
@@ -214,10 +214,13 @@ class AssemblyReuseTest(unittest.TestCase):
                 records["a.o"] = substitute.parse_record(record_file)
                 run()
                 self.assertEqual(len(calls), 4)
+                with patch.object(substitute, "sealed_image", return_value="sha256:" + "b" * 64):
+                    run()
+                self.assertEqual(len(calls), 5)
                 assembly.write_text('.incbin "kernel/config_data.gz"\n')
                 run()
                 run()
-                self.assertEqual(len(calls), 6, "external assembly inputs cannot use a text-only key")
+                self.assertEqual(len(calls), 7, "external assembly inputs cannot use a text-only key")
 
     def test_identical_installed_object_preserves_its_timestamp(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -35,13 +35,11 @@ Per-unit outcomes are closed and mutually exclusive:
 A refused unit is never quietly replaced by its GCC object: the GCC object is
 what is already there, and the unit is simply not counted.
 
-The front-end pass over every unit is the slow part of a survey and its answer
-depends on three things only: the driver binary, the unit's source, and the
-command the record dictates. Those three are hashed into a cache key, so a
-re-run examines the units whose inputs changed and reuses the rest. A timeout
-is never cached, because it is a fact about the machine rather than about the
-unit, and an emitted answer is reused only while its assembly is still on
-disk. ``--no-cache`` examines everything.
+Frontend reuse binds the driver, command and source/reference input trees,
+including headers and generated files. Object reuse instead binds the emitted
+assembly, assembler command and immutable image: a new compiler may produce
+the same object. External assembly includes are always reassembled. Timeouts
+are never cached. ``--no-cache`` examines everything.
 """
 
 from __future__ import annotations
@@ -107,7 +105,7 @@ def diagnostic_codes(stderr: str) -> list[str]:
 
 #: Bumped when the shape of a cached answer changes, so an old cache is
 #: ignored rather than misread.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 #: Outcomes of the front-end pass that are a function of the inputs alone and
 #: may therefore be reused. A ``timeout`` is not: it says how loaded the
@@ -120,26 +118,75 @@ CACHEABLE_OUTCOMES = frozenset({"emitted", "refused", "not-a-target-c-compile"})
 CACHE_CHECKPOINT = 100
 
 
-def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str]) -> str:
-    """The identity of one survey answer.
-
-    Everything the front-end pass reads is in the key: which driver ran, which
-    source it read, and the command it was given. Two runs that agree on all
-    three must get the same answer, and a run that differs in any of them gets
-    a miss rather than a stale row.
-    """
+def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str],
+              inputs_sha256: str = "") -> str:
+    """The identity of one survey answer, including its input tree snapshot."""
     payload = json.dumps(
         {
             "version": CACHE_VERSION,
             "unit": unit,
             "evocc": evocc_sha256,
             "source": source_sha256,
+            "inputs": inputs_sha256,
             "argv": list(argv),
         },
         sort_keys=True,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def input_snapshot(src_root: Path, pristine: Path) -> str:
+    """Hash both read-only input trees once, including newly added headers.
+
+    This deliberately over-invalidates instead of guessing dependencies from
+    the reference compiler's .cmd file, which may not match EvoCC's includes.
+    No copies or persistent per-file manifests are made.
+    """
+    digest = hashlib.sha256()
+    roots = (src_root.resolve(), pristine.resolve())
+    def walk_error(error):
+        raise error
+
+    for root in roots:
+        for parent, directories, files in os.walk(root, onerror=walk_error):
+            directories.sort()
+            for name in sorted(directories + files):
+                path = Path(parent) / name
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    target = os.readlink(path)
+                    resolved = path.resolve()
+                    if target != "/work/src" and not any(
+                        resolved == base or base in resolved.parents for base in roots
+                    ):
+                        raise ValueError(f"input symlink leaves the measured trees: {path}")
+                    item = [str(root), relative, "symlink", target]
+                elif path.is_file():
+                    stat = path.stat()
+                    item = [str(root), relative, stat.st_mode, stat.st_mtime_ns, sha256_file(path)]
+                else:
+                    item = [str(root), relative, "directory"]
+                digest.update(json.dumps(item, separators=(",", ":")).encode())
+                digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def sealed_image() -> str:
+    image = json.loads((REPO_ROOT / "contracts/build-environment.json").read_text())["buildImage"]["executionReference"]
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
+        raise ValueError("assembly reuse requires an immutable toolchain image")
+    return image
+
+
+def verify_image(expected: str) -> None:
+    # The local runtime takes a name, not a bare digest. Verify its resolution
+    # around execution; the cache key is the immutable descriptor, never the tag.
+    result = subprocess.run([CONTAINER_BIN, "image", "inspect", "evo-flight-lab:sealed"],
+                            capture_output=True, text=True, check=True)
+    actual = json.loads(result.stdout)[0]["configuration"]["descriptor"]["digest"]
+    if actual != expected:
+        raise ValueError("installed assembler image differs from the sealed toolchain")
 
 
 def load_cache(path: Path) -> dict[str, dict]:
@@ -265,26 +312,53 @@ def emit_assembly(
 
 
 def assemble_batch(
-    rows: list[dict], records: dict[str, Record], asm_root: Path, pristine: Path
+    rows: list[dict], records: dict[str, Record], asm_root: Path, pristine: Path,
+    *, use_cache: bool = True,
 ) -> None:
-    """Assemble every emitted unit in one container run with the reference GCC."""
+    """Reuse exact objects; assemble misses in one immutable container."""
     emitted = [row for row in rows if row["outcome"] == "emitted"]
     if not emitted:
         return
-    script_lines = ["#!/bin/sh", "cd /work/asm || exit 2", ""]
+    image = sealed_image()
+    cache_path = asm_root / "assembly-cache.json"
+    cache = load_cache(cache_path) if use_cache else {}
+    keys = {}
+    fresh = []
     for row in emitted:
         unit = row["unit"]
+        assembly = assembly_path(asm_root, unit)
+        argv = assemble_argv(records[unit], TARGET_COMPILER, f"/work/asm/{unit[:-2]}.s", f"/work/asm/{unit}")
+        # Includes/incbin may depend on files outside this text. They are cheap
+        # exceptions: execute them afresh instead of inventing an asm parser.
+        if not re.search(rb"\.(?:include|incbin)\b", assembly.read_bytes()):
+            keys[unit] = cache_key(unit, image, sha256_file(assembly), argv)
+        previous = cache.get(keys.get(unit))
+        obj = asm_root / unit
+        if previous and obj.is_file() and previous.get("objectSha256") == sha256_file(obj):
+            row.update(outcome="assembled", object=str(obj),
+                       objectSha256=previous["objectSha256"], assemblyFromCache=True)
+        else:
+            row["assemblyFromCache"] = False
+            fresh.append(row)
+    print(f"k1: object cache: {len(emitted) - len(fresh)} reused, {len(fresh)} to assemble", flush=True)
+    if not fresh:
+        return
+    # Inline .incbin paths are relative to the original Kbuild output tree.
+    script_lines = ["#!/bin/sh", "cd /work/build || exit 2", ""]
+    for row in fresh:
+        unit = row["unit"]
         record = records[unit]
-        argv = assemble_argv(record, TARGET_COMPILER, f"{unit[:-2]}.s", unit)
+        argv = assemble_argv(record, TARGET_COMPILER, f"/work/asm/{unit[:-2]}.s", f"/work/asm/{unit}")
         quoted = " ".join(_quote(argument) for argument in argv)
-        script_lines.append(f"mkdir -p '{os.path.dirname(unit) or '.'}'")
+        script_lines.append(f"mkdir -p '/work/asm/{os.path.dirname(unit) or '.'}'")
         script_lines.append(
-            f"if {quoted} 2>'{unit}.aserr'; then echo 'OK {unit}';"
+            f"if {quoted} 2>'/work/asm/{unit}.aserr'; then echo 'OK {unit}';"
             f" else echo 'FAIL {unit}'; fi"
         )
     (asm_root / "assemble.sh").write_text("\n".join(script_lines) + "\n", encoding="utf-8")
     (asm_root / "assemble.sh").chmod(0o755)
 
+    verify_image(image)
     completed = subprocess.run(
         [
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
@@ -296,12 +370,13 @@ def assemble_batch(
         text=True,
         check=False,
     )
+    verify_image(image)
     verdicts = {}
     for line in completed.stdout.splitlines():
         parts = line.split(None, 1)
         if len(parts) == 2 and parts[0] in {"OK", "FAIL"}:
             verdicts[parts[1]] = parts[0]
-    for row in emitted:
+    for row in fresh:
         unit = row["unit"]
         verdict = verdicts.get(unit)
         if verdict != "OK":
@@ -316,6 +391,10 @@ def assemble_batch(
         row["outcome"] = "assembled"
         row["object"] = str(asm_root / unit)
         row["objectSha256"] = sha256_file(asm_root / unit)
+        if unit in keys and use_cache:
+            cache[keys[unit]] = {"objectSha256": row["objectSha256"]}
+    if use_cache:
+        save_cache(cache_path, cache)
 
 
 def _quote(argument: str) -> str:
@@ -409,8 +488,11 @@ def install(rows: list[dict], asm_root: Path, out_root: Path, allow_drift: bool)
             continue
         destination = out_root / unit
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(asm_root / unit, destination)
-        os.utime(destination, None)
+        same = destination.is_file() and sha256_file(destination) == row["objectSha256"]
+        if not same:
+            shutil.copyfile(asm_root / unit, destination)
+            os.utime(destination, None)
+        row["installUnchanged"] = same
         row["outcome"] = "substituted"
         row["installedSha256"] = row["objectSha256"]
 
@@ -478,6 +560,7 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int) -> int:
 
 
 def main() -> int:
+    started = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--allowlist", type=Path, help="file of unit paths, one per line")
     parser.add_argument("--all", action="store_true", help="every target C compilation")
@@ -553,6 +636,9 @@ def main() -> int:
     cache_path = args.cache or (args.k1_root / "survey-cache.json")
     cache = {} if args.no_cache else load_cache(cache_path)
     evocc_sha256 = sha256_file(args.evocc)
+    print("k1: snapshotting source and reference inputs", flush=True)
+    inputs_sha256 = input_snapshot(args.src_root, pristine)
+    snapshot_seconds = time.monotonic() - started
     keys: dict[str, str] = {}
     reused: list[dict] = []
     fresh: list[str] = []
@@ -566,7 +652,7 @@ def main() -> int:
         except (RecordError, OSError):
             fresh.append(unit)
             continue
-        key = cache_key(unit, evocc_sha256, source_sha256, argv)
+        key = cache_key(unit, evocc_sha256, source_sha256, argv, inputs_sha256)
         keys[unit] = key
         answer = reusable(cache.get(key), unit, asm_root)
         if answer is None:
@@ -583,6 +669,7 @@ def main() -> int:
     print(f"k1: EvoCC over {len(fresh)} units", flush=True)
     produced: list[dict] = []
     since_checkpoint = 0
+    emission_started = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for row in pool.map(
             lambda unit: emit_assembly(
@@ -607,15 +694,24 @@ def main() -> int:
     rows.extend(produced)
     rows.extend(reused)
 
+    emission_seconds = time.monotonic() - emission_started
+    assembly_started = time.monotonic()
     print("k1: assembling with the reference GCC in the sealed container", flush=True)
-    assemble_batch(rows, records, asm_root, pristine)
+    assemble_batch(rows, records, asm_root, pristine, use_cache=not args.no_cache)
+    assembly_seconds = time.monotonic() - assembly_started
+    symbols_started = time.monotonic()
     print("k1: comparing defined symbols against the reference objects", flush=True)
     check_symbol_parity(rows, asm_root, pristine, args.k1_root / "symbols")
+    symbols_seconds = time.monotonic() - symbols_started
+    if inputs_sha256 != input_snapshot(args.src_root, pristine) or evocc_sha256 != sha256_file(args.evocc):
+        raise ValueError("compiler or input trees changed during the survey")
 
     previously = load_state(args.k1_root)
     substituted: list[str] = []
     if not args.no_install:
-        restored = restore(previously, pristine, out_root)
+        retained = {row["unit"] for row in rows if row["outcome"] == "assembled"
+                    and (args.allow_symbol_drift or not (row.get("missingSymbols") or row.get("extraSymbols")))}
+        restored = restore([unit for unit in previously if unit not in retained], pristine, out_root)
         print(f"k1: restored {len(restored)} previously substituted objects", flush=True)
         install(rows, asm_root, out_root, args.allow_symbol_drift)
         substituted = [row["unit"] for row in rows if row["outcome"] == "substituted"]
@@ -641,7 +737,11 @@ def main() -> int:
     for row in rows:
         counts[row["outcome"]] = counts.get(row["outcome"], 0) + 1
     refusal_codes: dict[str, int] = {}
+    first_codes: dict[str, int] = {}
     for row in rows:
+        if row.get("diagnosticCodes"):
+            code = row["diagnosticCodes"][0]
+            first_codes[code] = first_codes.get(code, 0) + 1
         for code in row.get("diagnosticCodes", []):
             refusal_codes[code] = refusal_codes.get(code, 0) + 1
 
@@ -653,7 +753,16 @@ def main() -> int:
         "requestedUnits": len(wanted),
         "evoccSha256": evocc_sha256,
         "cacheHits": len(reused),
+        "assemblyCacheHits": sum(bool(row.get("assemblyFromCache")) for row in rows),
+        "freshCompilations": len(fresh),
+        "inputSnapshotSha256": inputs_sha256,
+        "assemblerImage": sealed_image(),
+        "jobs": args.jobs,
+        "seconds": {"snapshot": round(snapshot_seconds, 3), "compile": round(emission_seconds, 3),
+                    "assemble": round(assembly_seconds, 3), "symbols": round(symbols_seconds, 3),
+                    "total": round(time.monotonic() - started, 3)},
         "counts": counts,
+        "refusalsByFirstCode": dict(sorted(first_codes.items())),
         "refusalCodeCounts": dict(sorted(refusal_codes.items())),
         "substitutedUnits": sorted(substituted),
         "relinkExitCode": relink_code,
@@ -666,6 +775,7 @@ def main() -> int:
         if (out_root / "vmlinux").is_file()
         else None,
     }
+    summary["unitsSha256"] = sha256_file(run_dir / "units.jsonl")
     (run_dir / "substitution.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
