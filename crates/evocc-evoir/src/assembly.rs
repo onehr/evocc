@@ -63,7 +63,9 @@ pub fn assembly_register_binding(constraint: &str) -> Result<(&str, Option<u8>),
     let number = register
         .strip_prefix('x')
         .and_then(|text| text.parse::<u8>().ok());
-    let Some(number) = number.filter(|n| matches!(n, 0..=15 | 19..=28)) else {
+    // x30 is saved by every function prologue. It remains unavailable to
+    // ordinary allocation, but a short-lived explicit asm operand may use it.
+    let Some(number) = number.filter(|n| matches!(n, 0..=15 | 19..=28 | 30)) else {
         return Err(format!(
             "unsupported assembly register binding {constraint}"
         ));

@@ -6562,6 +6562,13 @@ Both sealed compilers at O0/O2 execute `.evidence/builtin-probes/20260908-local-
 The `r0/r1/r7/r8` aliases are independently measured at both optimization levels in `.evidence/builtin-probes/20260908-register-aliases/results.txt`; 2,260 first errors in `measure-20260908T102907Z` name `=r@r0` before normalization.
 No new diagnostic code is introduced; the one independently measured wrong-result reduction is not a count of affected musl units, which the original-unit replay must determine.
 
+### Explicit link-register assembly operands
+
+An explicit local `x30` binding is admitted at the assembly boundary, including tied/read-write results on every outgoing edge, while `x30` remains excluded from general allocation and each function saves/restores its incoming link register.
+The existing boundary copies constrain only the asm interval, so subsequent calls cannot overwrite an uncollected output; scratch/platform/frame/stack register bindings and operand/clobber conflicts remain refused with E3021.
+Both sealed compilers execute `tests/fixtures/assembly-link-register.c` at O0/O2 with exit zero (`.evidence/builtin-probes/20260912-link-register/results.txt`); no diagnostic code is added.
+Two original kernel compile identities, `arch/arm64/kernel/process.o` and `arch/arm64/kernel/stacktrace.o`, reach this binding; their subsequent replay determines closure.
+
 ### Unnamed parameters in function definitions
 
 A function definition may omit a parameter name while retaining its canonical parameter type and positional call-interface slot; all arguments are evaluated and converted normally, but an omitted name introduces no source identifier or named parameter object.

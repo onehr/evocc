@@ -382,7 +382,7 @@ fn pin_assembly(
     let mut requested = BTreeMap::new();
     for operand in source.numbered() {
         if let Some(number) = operand.fixed_register {
-            if !CALLER_SAVED.contains(&number) && !CALLEE_SAVED.contains(&number) {
+            if !CALLER_SAVED.contains(&number) && !CALLEE_SAVED.contains(&number) && number != 30 {
                 return Err(format!("unsupported assembly register binding x{number}"));
             }
             let reg = operand

@@ -49,7 +49,7 @@ fn verify_assembly(
             ));
         }
         if let Some(expected) = operand.fixed_register {
-            if !matches!(expected, 0..=15 | 19..=28) || number(operand) != Some(expected) {
+            if !matches!(expected, 0..=15 | 19..=28 | 30) || number(operand) != Some(expected) {
                 return Err(refuse(
                     block,
                     format!("assembly binding x{expected} does not match its assigned register"),

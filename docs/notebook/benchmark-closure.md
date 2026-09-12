@@ -233,7 +233,7 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in [the replay](../../.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json). |
 | K-C07 / OPEN | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Parser/C-HIR: probe the exact promotion/type-query contexts; retain documented conflict boundaries rather than waiving units. |
 | K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in [the replay](../../.evidence/k1/efi-characters-20260912/substitution.json); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
-| K-C09 / OPEN | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | Backend: explicit binding, clobber/call and spill interactions in native tests; do not silently free a reserved register. |
+| K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `67ad4cf`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in [the replay](../../.evidence/k1/link-register-20260912/substitution.json). |
 | K-C10 / OPEN | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | C-HIR/lowering/backend: exact aggregate argument/va_arg shape across register and stack ABI boundaries. |
 | K-C11 / OPEN | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Lowering: probe the exact GNU address arithmetic and preserve reached-call validity checks. |
 | K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
@@ -242,6 +242,16 @@ units, not diagnostic occurrences or predictions of the next run.
 | K-C15 / OPEN | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | C-HIR/lowering: reduce whole-union access, preserve copied bits and the required volatile event order. |
 
 ### Byte-aligned static relocations (2026-09-12)
+
+The next targeted baseline, `remaining-compile-20260912`, rechecked all 18
+then-open identities against compiler `0b9f8f22...`: 18 refused, no new
+failure classes. After the explicit link-register fix, `link-register-20260912`
+assembles both affected originals with compiler `97ce544d...`, no symbol
+drift or cache hits, and no install/relink. Validation: the assembly CLI suite
+passed **44/44**; `tools/gate-changed.sh 3977afc --locked --offline --lib -q -j 2`
+passed **37/37** library tests plus all-target Clippy and fmt. This is a
+targeted gate, not a new full-workspace or full-kernel result; **16** of the
+original 161 compile refusals still need work after this repair.
 
 The standard ABS64 data relocation patches eight bytes at a byte offset;
 it does not require a naturally aligned pointer slot. The correction removes
