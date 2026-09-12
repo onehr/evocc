@@ -57,6 +57,40 @@ fn projected_lists_preserve_value_copies_and_once_only_address_evaluation() {
 }
 
 #[test]
+fn integer_aggregate_arguments_follow_the_variadic_sequence() {
+    let arena = Arena::default();
+    let unit = parse(
+        include_str!("../../../tests/fixtures/aggregate-variadic-values.c"),
+        &arena,
+    );
+    let symbol = unit
+        .iter()
+        .find_map(|decl| match decl {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        })
+        .unwrap();
+    let result = interpret_scalar_function(&unit, symbol, InterpreterLimits::new(100_000));
+    assert_eq!(result.unwrap().return_value.unwrap().raw_bits, 0);
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let text = evocc_evoir::render_module(&module);
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(evocc_evoir::render_module(&parsed), text);
+    let result = interpret_module(
+        &parsed,
+        "main",
+        &[
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+            RuntimeValue::new(EvoIRType::World, 0),
+        ],
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(result.return_values[0].raw_bits, 0);
+}
+
+#[test]
 fn variadic_lowering_promotes_arguments_and_copies_list_state() {
     let arena = Arena::default();
     let unit = parse(COPIED, &arena);
