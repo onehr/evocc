@@ -46,3 +46,41 @@ fn symbolic_relocations_round_trip_and_validate_their_byte_ranges() {
         assert!(parse_section9_module(invalid.as_bytes()).is_err());
     }
 }
+
+#[test]
+fn symbolic_relocations_accept_byte_offsets_without_weakening_range_checks() {
+    for offset in 0..8 {
+        let size = offset + 8;
+        let text = format!(
+            "global @a origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\nglobal @p origin=1 kind=file visibility=internal size={size} align=1 bytes={} initialized={} relocs=[({offset}, @a, 0)]\n",
+            "00".repeat(size),
+            "1".repeat(size),
+        );
+        let module = parse_section9_module(text.as_bytes())
+            .unwrap_or_else(|error| panic!("byte offset {offset}: {error:?}"));
+        assert_eq!(render_module(&module), text);
+    }
+
+    let text = "global @a origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\nglobal @p origin=1 kind=file visibility=internal size=20 align=1 bytes=0102000000000000000003040000000000000000 initialized=11111111111111111111 relocs=[(2, @a, 0), (12, @a, 0)]\n";
+    assert_eq!(
+        render_module(&parse_section9_module(text.as_bytes()).unwrap()),
+        text
+    );
+    for invalid in [
+        text.replace("(12, @a, 0)", "(13, @a, 0)"),
+        text.replace("(12, @a, 0)", "(18446744073709551615, @a, 0)"),
+        text.replace("(12, @a, 0)", "(9, @a, 0)"),
+        text.replace("(2, @a, 0), (12, @a, 0)", "(12, @a, 0), (2, @a, 0)"),
+        text.replace("(12, @a, 0)", "(12, @absent, 0)"),
+        text.replace("bytes=010200", "bytes=010201"),
+        text.replace(
+            "initialized=11111111111111111111",
+            "initialized=11011111111111111111",
+        ),
+    ] {
+        assert!(
+            parse_section9_module(invalid.as_bytes()).is_err(),
+            "{invalid}"
+        );
+    }
+}

@@ -219,6 +219,68 @@ fn static_addresses_relocate_objects_members_and_functions() {
 }
 
 #[test]
+fn packed_static_pointer_fields_keep_their_byte_layout() {
+    let source = include_str!("../../../tests/fixtures/packed-pointer-relocations.c");
+    check(source, Ok(0), &["[size=8, align=1]"]);
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let entries = module
+        .globals
+        .iter()
+        .find(|g| g.symbol == "entries")
+        .unwrap();
+    assert_eq!(
+        (entries.layout.size_bytes, entries.layout.align_bytes),
+        (20, 1)
+    );
+    assert_eq!(
+        entries.relocs.iter().map(|r| r.offset).collect::<Vec<_>>(),
+        [2, 12]
+    );
+    assert_eq!(
+        [
+            entries.bytes[0],
+            entries.bytes[1],
+            entries.bytes[10],
+            entries.bytes[11]
+        ],
+        [1, 2, 3, 4]
+    );
+}
+
+#[test]
+fn packed_relocations_preserve_object_function_and_exposed_addresses() {
+    check(
+        include_str!("../../../tests/fixtures/packed-relocation-accesses.c"),
+        Ok(0),
+        &["[size=8, align=1]", "exposed"],
+    );
+}
+
+#[test]
+fn packed_relocations_do_not_weaken_pointee_checks() {
+    for (initializer, code) in [
+        ("(int *)((char *)object+1)", "E3012"),
+        ("object+2", "E3011"),
+    ] {
+        check(
+            &format!(
+                "int object[2]={{7,9}};struct __attribute__((packed)) ref{{char c;int *p;}};static struct ref r={{1,{initializer}}};int main(void){{return *r.p;}}"
+            ),
+            Err(code),
+            &[],
+        );
+    }
+    check(
+        "int object=7;struct __attribute__((packed)) ref{char c;int *p;};static struct ref r={1,&object};int main(void){unsigned long address;__builtin_memcpy(&address,&r.p,8);return *(int *)address;}",
+        Err("E3013"),
+        &[],
+    );
+}
+
+#[test]
 fn static_address_conditions_recognize_typed_null_pointer_values() {
     for condition in ["f == (fn_type)0", "(fn_type)(void *)0 == f"] {
         check(

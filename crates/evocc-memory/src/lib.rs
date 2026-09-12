@@ -2955,6 +2955,49 @@ mod tests {
     }
 
     #[test]
+    fn pointer_width_and_access_alignment_are_independent() {
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            let memory = memory_with(order);
+            let (memory, target) = memory
+                .allocate_static(10, U32, InitialState::Zeroed)
+                .unwrap();
+            let (memory, record) = memory
+                .allocate_static(20, AccessLayout::new(10, 1), InitialState::Zeroed)
+                .unwrap();
+            let slot = record.checked_offset(1).unwrap();
+            let packed_pointer = AccessLayout::new(8, 1);
+            let next = memory.store_pointer(slot, packed_pointer, target).unwrap();
+            assert_eq!(next.load_pointer(slot, packed_pointer).unwrap(), target);
+            assert_eq!(next.load_integer(record, BYTE).unwrap(), 0);
+            assert_eq!(
+                next.load_integer(record.checked_offset(9).unwrap(), BYTE)
+                    .unwrap(),
+                0
+            );
+            assert_eq!(
+                memory.load_pointer(slot, packed_pointer).unwrap(),
+                Pointer::NULL
+            );
+            assert!(next.load_pointer(slot, PTR).is_err());
+            assert!(next.store_pointer(slot, PTR, target).is_err());
+            for invalid in [
+                AccessLayout::new(4, 1),
+                AccessLayout::new(8, 0),
+                AccessLayout::new(8, 3),
+            ] {
+                assert_fault(
+                    next.load_pointer(slot, invalid),
+                    MemoryFaultKind::InvalidPointerLayout,
+                );
+                assert_fault(
+                    next.store_pointer(slot, invalid, target),
+                    MemoryFaultKind::InvalidPointerLayout,
+                );
+            }
+        }
+    }
+
+    #[test]
     fn integer_provenance_is_resolved_at_access_in_the_current_snapshot() {
         let memory = little_memory();
         let (memory, target) = memory
