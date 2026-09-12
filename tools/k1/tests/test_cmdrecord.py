@@ -171,6 +171,19 @@ class DecodeTest(unittest.TestCase):
                 self.assertEqual([flag for flag in argv if flag in flags], written)
                 self.assertFalse(set(flags).intersection(omitted))
 
+    def test_wide_character_layout_reaches_the_subject_in_written_order(self) -> None:
+        flags = ["-fshort-wchar", "-fno-short-wchar"]
+        for written in (flags, flags[::-1]):
+            with self.subTest(flags=written):
+                self.record_file.write_text(
+                    RECORD.replace(" -O2 ", f" -O2 {' '.join(written)} "), encoding="utf-8"
+                )
+                argv, omitted = cmdrecord.evocc_argv(
+                    self.record(), Path("/bin/evocc"), self.src, self.out
+                )
+                self.assertEqual([flag for flag in argv if flag in flags], written)
+                self.assertFalse(set(flags).intersection(omitted))
+
     def test_a_dangling_option_value_is_refused(self) -> None:
         dangling = self.out / "lib/.dangling.o.cmd"
         dangling.write_text(
