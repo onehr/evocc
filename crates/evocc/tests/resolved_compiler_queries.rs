@@ -373,3 +373,42 @@ fn representation_facts_do_not_invent_padding_or_ignore_volatile_and_runtime_val
     }
     assert_constant_program("struct p{char a;};int main(void){int n=0;int a=((unsigned char*)&(struct p){.a=++n})[0];return n!=1||a!=1;}");
 }
+
+#[test]
+fn constant_facts_cross_internal_inline_exits_but_not_source_jumps() {
+    let source = "void invalid(void);struct s{unsigned n;};static inline struct s*get(struct s*p){return p;}unsigned f(struct s*p){return({__auto_type a=get(p)->n;__auto_type b=2;if(!__builtin_constant_p(b))invalid();a<b?a:b;});}int main(void){struct s s={5};return f(&s)!=2;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn constant_scalar_literals_and_same_object_address_relations_prune_branches() {
+    let source = "void invalid(void);struct list{void*next;void*prev;};static struct list node;int main(void){if((int){0}!=0||(int){1}!=1)invalid();if((struct list*)&node.prev<=&node||(struct list*)&node.prev>=&node+1)invalid();return 0;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn finite_conditional_results_prove_bounds_without_skipping_calls() {
+    let source = "void invalid(void);static int calls;int choose(int n){++calls;return n;}int f(int n){if(58<((choose(n)?52:48)-12))invalid();return 0;}int main(void){f(0);f(1);return calls!=2;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
