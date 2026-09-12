@@ -32,7 +32,7 @@ GlobalKind.CompoundLiteral|kind=compound_literal
 GlobalKind.File|kind=file
 GlobalKind.FunctionStatic|kind=function_static
 GlobalKind.StringLiteral|kind=string_literal
-GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3)]
+GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3, exposed)]
 GlobalObject.section|section=".data.sentinel"
 GlobalVisibility.External|visibility=external
 GlobalVisibility.Internal|visibility=internal

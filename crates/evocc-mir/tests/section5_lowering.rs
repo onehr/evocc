@@ -88,6 +88,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::SpillStore { .. } => "spill.store".to_owned(),
                     MInst::SpillReload { .. } => "spill.reload".to_owned(),
                     MInst::FrameSlot { .. } => "frame.slot".to_owned(),
+                    MInst::StackAlloc { .. } => "stack.alloc".to_owned(),
                     MInst::FrameAddress { place, .. } => {
                         format!("frame.address.{}", place.mnemonic())
                     }

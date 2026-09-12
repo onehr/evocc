@@ -1129,6 +1129,8 @@ pub struct Relocation {
     pub offset: u64,
     pub symbol: String,
     pub addend: i64,
+    /// The static initializer converted this address to an integer.
+    pub exposed: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -5674,6 +5676,12 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
             let destination = state.globals[&global.symbol]
                 .checked_offset(relocation.offset as i64)
                 .map_err(|error| InterpreterError::MemorySetup { error })?;
+            if relocation.exposed {
+                (state.memory, _) = state
+                    .memory
+                    .expose_pointer(pointer)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+            }
             state.memory = state
                 .memory
                 .store_pointer_value(destination, AccessLayout::new(8, 8), pointer)

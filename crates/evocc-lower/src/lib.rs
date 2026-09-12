@@ -1335,10 +1335,10 @@ fn symbolic_address(
     origins: &BTreeMap<SymbolId, u64>,
     strings: &BTreeMap<usize, u64>,
     label_addresses: &BTreeMap<usize, String>,
-) -> Result<(String, i64), LowerError> {
+) -> Result<(String, i64, bool), LowerError> {
     let span = expression.span();
     let error = || LowerError::StaticRelocation { span };
-    let symbol_address = |id: SymbolId| -> Result<(String, i64), LowerError> {
+    let symbol_address = |id: SymbolId| -> Result<(String, i64, bool), LowerError> {
         let symbol = unit.symbols().symbol(id).map_err(|_| error())?;
         if symbol.kind() == SymbolKind::Function {
             Ok((
@@ -1347,13 +1347,15 @@ fn symbolic_address(
                     .function_name(id, symbol.spelling())
                     .to_owned(),
                 0,
+                false,
             ))
         } else if has_linked_object_storage(unit, id) {
-            Ok((symbol.spelling().to_owned(), 0))
+            Ok((symbol.spelling().to_owned(), 0, false))
         } else if symbol.storage_class() == Some(StorageClass::Static) {
             Ok((
                 format!("__evocc.static.{}", origins.get(&id).ok_or_else(error)?),
                 0,
+                false,
             ))
         } else {
             Err(error())
@@ -1363,7 +1365,7 @@ fn symbolic_address(
         CHirExpr::LabelAddress { .. } => label_addresses
             .get(&(expression as *const CHirExpr<'_> as usize))
             .cloned()
-            .map(|symbol| (symbol, 0))
+            .map(|symbol| (symbol, 0, false))
             .ok_or_else(error),
         CHirExpr::Cast(ty, operand, _) => {
             let canonical = unit.types().get(*ty).ok_or_else(error)?;
@@ -1376,7 +1378,7 @@ fn symbolic_address(
             {
                 return Err(error());
             }
-            symbolic_address(
+            let (symbol, offset, exposed) = symbolic_address(
                 unit,
                 target,
                 operand,
@@ -1384,7 +1386,12 @@ fn symbolic_address(
                 origins,
                 strings,
                 label_addresses,
-            )
+            )?;
+            Ok((
+                symbol,
+                offset,
+                exposed || !matches!(canonical.kind, TypeKind::Pointer(_)),
+            ))
         }
         CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => symbolic_address(
             unit,
@@ -1416,13 +1423,13 @@ fn symbolic_address(
             let origin = strings
                 .get(&(expression as *const CHirExpr<'_> as usize))
                 .ok_or_else(error)?;
-            Ok((format!("__evocc.string.{origin}"), 0))
+            Ok((format!("__evocc.string.{origin}"), 0, false))
         }
         CHirExpr::CompoundLit(..) => {
             let origin = strings
                 .get(&(expression as *const CHirExpr<'_> as usize))
                 .ok_or_else(error)?;
-            Ok((format!("__evocc.compound.{origin}"), 0))
+            Ok((format!("__evocc.compound.{origin}"), 0, false))
         }
         CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
             let direct = matches!(expression, CHirExpr::Member(..));
@@ -1445,7 +1452,7 @@ fn symbolic_address(
             {
                 return Err(error());
             }
-            let (symbol, mut offset) = symbolic_address(
+            let (symbol, mut offset, exposed) = symbolic_address(
                 unit,
                 target,
                 base,
@@ -1468,7 +1475,7 @@ fn symbolic_address(
                     .checked_add(i64::try_from(delta).map_err(|_| error())?)
                     .ok_or_else(error)?;
             }
-            Ok((symbol, offset))
+            Ok((symbol, offset, exposed))
         }
         CHirExpr::MemoryRead { place, .. }
             if address_of
@@ -1477,7 +1484,7 @@ fn symbolic_address(
                     .get(place.value_ty())
                     .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. })) =>
         {
-            let (symbol, mut offset) = match place.root() {
+            let (symbol, mut offset, exposed) = match place.root() {
                 PlaceRoot::Object { symbol } => symbol_address(*symbol)?,
                 PlaceRoot::PointerExpression { pointer, .. } => symbolic_address(
                     unit,
@@ -1533,10 +1540,10 @@ fn symbolic_address(
                 };
                 offset = offset.checked_add(delta).ok_or_else(error)?;
             }
-            Ok((symbol, offset))
+            Ok((symbol, offset, exposed))
         }
         CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
-            let (symbol, offset) = symbolic_address(
+            let (symbol, offset, exposed) = symbolic_address(
                 unit,
                 target,
                 pointer,
@@ -1562,7 +1569,7 @@ fn symbolic_address(
                 offset.checked_sub(delta)
             }
             .ok_or_else(error)?;
-            Ok((symbol, offset))
+            Ok((symbol, offset, exposed))
         }
         CHirExpr::Ternary(condition, left, right, _) => {
             let condition = if let Ok(value) =
@@ -1597,7 +1604,10 @@ fn symbolic_address(
                         label_addresses,
                     )?)
                 };
-                (a == b) == (*op == BinaryOp::Eq)
+                // Exposure records a conversion, not part of address identity.
+                (a.as_ref().map(|(symbol, offset, _)| (symbol, offset))
+                    == b.as_ref().map(|(symbol, offset, _)| (symbol, offset)))
+                    == (*op == BinaryOp::Eq)
             } else {
                 symbolic_address(
                     unit,
@@ -1839,7 +1849,7 @@ fn apply_static_initializer(
                     target_bytes.fill(0);
                     return Ok(());
                 }
-                let (symbol, addend) = symbolic_address(
+                let (symbol, addend, exposed) = symbolic_address(
                     unit,
                     target,
                     value,
@@ -1856,15 +1866,43 @@ fn apply_static_initializer(
                     offset: offset as u64,
                     symbol,
                     addend,
+                    exposed,
                 });
                 return Ok(());
             }
-            let integer =
-                evocc_chir::interp::interpret_static_integer_expression(unit, value, target)
-                    .map_err(|_| LowerError::UnsupportedExpression {
+            let integer = match evocc_chir::interp::interpret_static_integer_expression(
+                unit, value, target,
+            ) {
+                Ok(integer) => integer,
+                Err(_) if target_bytes.len() == 8 => {
+                    // A pointer-width integer stores the same link-time
+                    // address bits as pointer storage. The destination's C
+                    // type does not change the relocation's representation.
+                    let (symbol, addend, _) = symbolic_address(
+                        unit,
+                        target,
+                        value,
+                        false,
+                        origins,
+                        strings,
+                        label_addresses,
+                    )?;
+                    target_bytes.fill(0);
+                    relocs.push(evocc_evoir::Relocation {
+                        offset: offset as u64,
+                        symbol,
+                        addend,
+                        exposed: true,
+                    });
+                    return Ok(());
+                }
+                Err(_) => {
+                    return Err(LowerError::UnsupportedExpression {
                         span,
                         feature: "global initializer is not an admitted integer constant",
-                    })?;
+                    });
+                }
+            };
             let destination_integer = canonical_integer(unit.types(), target, destination, span)?;
             let raw = integer.cast(destination_integer).raw_bits();
             write_static_integer_bytes(raw, target, target_bytes);
@@ -1917,35 +1955,12 @@ fn absolute_static_integer(
     target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
 ) -> Option<CInteger> {
-    // Preserve the usual arithmetic conversions of an integer conditional
-    // before its surrounding pointer cast, e.g. (void *)(1 ? -1 : 1U).
-    if let Some(value) = constant_integer(unit, target, expression) {
-        return Some(value);
-    }
-    match expression {
-        CHirExpr::Cast(ty, operand, span) => {
-            let integer = match unit.types().get(*ty)?.kind {
-                TypeKind::Pointer(_) if target.pointer_layout().size_bytes == 8 => {
-                    CIntegerType::ULONG
-                }
-                _ => canonical_integer(unit.types(), target, *ty, *span).ok()?,
-            };
-            Some(absolute_static_integer(unit, target, operand)?.cast(integer))
-        }
-        CHirExpr::Ternary(condition, left, right, _) => {
-            let condition = absolute_static_integer(unit, target, condition)?.truth();
-            absolute_static_integer(unit, target, if condition { left } else { right })
-        }
-        CHirExpr::Elvis(value, fallback, _) => {
-            let value = absolute_static_integer(unit, target, value)?;
-            if value.truth() {
-                Some(value)
-            } else {
-                absolute_static_integer(unit, target, fallback)
-            }
-        }
-        _ => None,
-    }
+    evocc_chir::constant::eval_absolute_address_constant(
+        expression,
+        unit.types(),
+        unit.symbols(),
+        target,
+    )
 }
 
 fn subobject_offset(
@@ -4203,7 +4218,7 @@ impl<'a> FunctionLowerer<'a> {
                     .ok_or_else(refuse)
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let (symbol, addend) = symbolic_address(
+        let (symbol, addend, _) = symbolic_address(
             self.unit,
             self.target,
             expression,

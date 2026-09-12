@@ -6832,3 +6832,10 @@ Under the reviewed common-GNU-extension rule, a variably modified record member,
 The check follows the canonical member type rather than only written brackets, but dimensions scoped inside a callback's parameter prototype do not make the callback member itself variably modified; `prototype-array-members.{c,out}` records four agreeing reference and two subject native executions.
 Eight unchanged torture originals require the non-consensus record extension and four additional originals require excluded nested definitions, individually evidenced in `variable-array-original-refusals.out` and bound to source digests in the existing disposition table.
 These twelve are prospective evidenced-not-applicable classifications, not new PASS results or an exclusion of ordinary variable-length automatic objects, whose allocation and reclamation remain required.
+
+### Static address offsets and exposure
+
+Static numeric pointer offsets retain pointee scaling and all intermediate integer casts, and a pointer-width integer static initializer can hold a symbol plus a byte addend, as `tests/fixtures/static-addresses.out` records for both sealed compilers at O0/O2.
+To retain Section 3.7's exposure when a symbolic initializer casts an address to an integer, including a cast back to a pointer, its relocation admits the optional fourth field `exposed`: `(offset, @symbol, addend, exposed)` exposes that target at module initialization, while the existing three-field form does not.
+This field changes neither the emitted address bytes nor access checks; raw numeric addresses and ordinary pointer relocations do not expose unrelated objects, and E3013 remains required for an unexposed integer-derived dereference.
+No diagnostic is allocated; the preceding survey attributes 29 refusals to numeric pointer offsets and 21 to integer address initializers, pending original-unit replay.

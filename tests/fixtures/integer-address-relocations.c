@@ -8,6 +8,8 @@ static struct descriptor table[] = { { (unsigned long)&object[1] } };
 
 int main(void)
 {
+    if (*(int *)byte_offset != 44 || *(int *)table[0].data != 22)
+        return 3;
     return base != (unsigned long)&object ||
            element != (unsigned long)&object[2] ||
            *(int *)byte_offset != 44 || *(int *)table[0].data != 22;

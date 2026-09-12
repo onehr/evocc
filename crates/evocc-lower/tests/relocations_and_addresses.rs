@@ -121,6 +121,26 @@ fn integer_static_objects_can_carry_symbolic_address_relocations() {
         Ok(0),
         &["@object, 0", "@object, 8", "@object, 12", "@object, 4"],
     );
+    check(
+        "int object=7; static unsigned long address=(unsigned long)&object;
+         int main(void){return *(int *)address;}",
+        Ok(7),
+        &["relocs=[(0, @object, 0, exposed)]"],
+    );
+    for (initializer, expected) in [
+        ("&object", Err("E3013")),
+        ("(int *)(unsigned long)&object", Ok(7)),
+    ] {
+        check(
+            &format!(
+                "int object=7; static int *p={initializer};
+                 int main(void){{unsigned long address;
+                 __builtin_memcpy(&address,&p,8);return *(int *)address;}}"
+            ),
+            expected,
+            &[],
+        );
+    }
 }
 
 #[test]
@@ -187,7 +207,7 @@ fn function_relocations_travel_through_object_pointer_storage() {
     check(
         "int f(void){return 7;} static void *p=(void *)(unsigned long)&f; int main(void){return p!=0;}",
         Ok(1),
-        &["relocs=[(0, @f, 0)]"],
+        &["relocs=[(0, @f, 0, exposed)]"],
     );
     check(
         "int f(void){return 7;} static void *p=(void *)(unsigned long)&f; int main(void){return ((int (*)(void))(unsigned long)p)();}",

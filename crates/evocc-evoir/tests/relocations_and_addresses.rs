@@ -27,7 +27,13 @@ fn symbolic_relocations_round_trip_and_validate_their_byte_ranges() {
         render_module(&parse_section9_module(negative.as_bytes()).unwrap()),
         negative
     );
+    let exposed = text.replace("(0, @a, 0)", "(0, @a, 0, exposed)");
+    let module = parse_section9_module(exposed.as_bytes()).unwrap();
+    assert_eq!(render_module(&module), exposed);
+    assert!(module.globals[1].relocs[0].exposed);
     for invalid in [
+        text.replace("(0, @a, 0)", "(0, @a, 0, false)"),
+        text.replace("(0, @a, 0)", "(0, @a, 0, exposed, exposed)"),
         text.replace("(0, @a, 0)", "(0, @a, -0)"),
         text.replace("(0, @a, 0)", "(0, @a, +1)"),
         text.replace("(0, @a, 0)", "(1, @a, 0)"),

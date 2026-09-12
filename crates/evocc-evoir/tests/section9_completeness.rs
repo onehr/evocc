@@ -352,6 +352,7 @@ fn sentinel_module() -> Module {
                     offset: 8,
                     symbol: "sentinel_file".into(),
                     addend: -3,
+                    exposed: true,
                 }],
             },
         ],

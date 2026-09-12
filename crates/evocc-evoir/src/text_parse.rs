@@ -435,7 +435,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
             .ok_or("malformed relocation list")?;
         for entry in text.split("), (") {
             let fields = entry.split(", ").collect::<Vec<_>>();
-            if fields.len() != 3 {
+            if fields.len() != 3 && !(fields.len() == 4 && fields[3] == "exposed") {
                 return Err("malformed relocation".to_owned());
             }
             let offset = fields[0]
@@ -461,6 +461,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
                 offset,
                 symbol,
                 addend,
+                exposed: fields.len() == 4,
             });
         }
     }

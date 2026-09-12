@@ -105,7 +105,10 @@ pub fn render_global(global: &crate::GlobalObject) -> String {
             &global
                 .relocs
                 .iter()
-                .map(|r| format!("({}, @{}, {})", r.offset, r.symbol, r.addend))
+                .map(|r| {
+                    let exposure = if r.exposed { ", exposed" } else { "" };
+                    format!("({}, @{}, {}{exposure})", r.offset, r.symbol, r.addend)
+                })
                 .collect::<Vec<_>>()
                 .join(", "),
         );

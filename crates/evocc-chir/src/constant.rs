@@ -502,6 +502,70 @@ pub fn eval_executable_integer_constant(
     )
 }
 
+/// Numeric static addresses have bits, not allocation provenance. Preserve
+/// intermediate integer casts and use the pointed-to type for byte scaling.
+/// Symbolic addresses deliberately return None and need relocation handling.
+#[must_use]
+pub fn eval_absolute_address_constant(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<CInteger> {
+    if let Some(value) = eval_executable_integer_constant(expression, types, symbols, target) {
+        return Some(value);
+    }
+    let evaluate = |expression| eval_absolute_address_constant(expression, types, symbols, target);
+    match expression {
+        CHirExpr::Cast(ty, operand, _) => {
+            let integer = match types.get(*ty)?.kind {
+                TypeKind::Pointer(_) if target.pointer_layout().size_bytes == 8 => {
+                    CIntegerType::ULONG
+                }
+                _ => canonical_integer_type(types, *ty)?,
+            };
+            Some(evaluate(operand)?.cast(integer))
+        }
+        CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), left, right, _) => {
+            let pointer_type = |expression| {
+                crate::PointerTypeDesc::from_expression(symbols, types, expression).ok()
+            };
+            let (pointer, index, pointer_type) = if let Some(ty) = pointer_type(left) {
+                (*left, *right, ty)
+            } else if *op == BinaryOp::Add {
+                (*right, *left, pointer_type(right)?)
+            } else {
+                return None;
+            };
+            let base = evaluate(pointer)?.cast(CIntegerType::ULONG);
+            let index = eval_executable_integer_constant(index, types, symbols, target)?
+                .cast(CIntegerType::ULONG);
+            let scale = target.sizeof_type(types, pointer_type.pointee()).ok()?;
+            let delta = eval_binary_integer(
+                BinaryOp::Mul,
+                index,
+                CInteger::new(scale, CIntegerType::ULONG),
+            )
+            .ok()?;
+            eval_binary_integer(*op, base, delta).ok()
+        }
+        CHirExpr::Ternary(condition, left, right, _) => evaluate(if evaluate(condition)?.truth() {
+            left
+        } else {
+            right
+        }),
+        CHirExpr::Elvis(value, fallback, _) => {
+            let value = evaluate(value)?;
+            if value.truth() {
+                Some(value)
+            } else {
+                evaluate(fallback)
+            }
+        }
+        _ => None,
+    }
+}
+
 #[derive(Clone, Copy)]
 enum ConstantContext {
     Required,

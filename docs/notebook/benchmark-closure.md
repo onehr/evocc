@@ -41,24 +41,33 @@ existing ID only after its source-level cause is established.
 
 ### Link, execution and integration work outside the compile-count table
 
-All September 10 failures below are still **OPEN, not rerun on current HEAD**.
-The single-unit reductions identify candidate responsibility, not the exact
-compiler defect. The acknowledged QEMU digest drift remains in their receipts;
+The nVHE link failure remains OPEN; the other original link/boot failures now
+have passing isolated and five-object combined replays below. The full required-C
+combination remains unmeasured after the repairs. The acknowledged QEMU digest drift remains in their receipts;
 it is neither a waived failure nor evidence that the compiler caused a timeout.
 
 | ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
 |---|---|---|---|
-| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted: link succeeds, boot times out; serial log has an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. [Single-unit capture](../../.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json). | Lowering/backend: inspect the failing call/argument and memory path; reduce it and compare both interpreters and native execution. Do not assume an ABI root cause from the stack trace alone. | Tailored regression, original single-unit boot, then the final combination. |
-| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted: link succeeds, boot times out with no useful kernel serial trace. [Capture](../../.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json). | Backend/boot lane: locate the first divergent instruction with the same image/environment, then create a minimal native regression. Do not increase the timeout to hide it. | Cause established, tailored regression and original boot replay. |
-| K-L01 / P0 | `arch/arm64/kernel/irq.o` alone cannot link: undefined `irq_shadow_call_stack_ptr`. [Link log](../../.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log). | Lowering/symbol emission: reduce the declaration, condition and emitted reference; verify the expected symbol relationship with the reference object. | Small object/link test and the original unit links without a stub or reference fallback. |
+| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. [Original capture](../../.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `9d889fa`, RED `a7af1a6`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json). Final combination still OPEN. |
+| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. [Original capture](../../.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `9d889fa`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json). Final combination still OPEN. |
+| K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. [Original log](../../.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `bddc65f`; `a4009fd` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: [replay](../../.evidence/k1/constant-inline-irq-20260912/boot/boot.json); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
 | K-L02 / P0 | Large combination fails building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | AArch64 emission/driver: identify the contributing object and relocation; test the addressing mode required by that sub-link and its original flags. | Native relocation check and the original nVHE sub-link accepts the EvoCC objects. |
-| K-L03 / recheck | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`; no standalone closure evidence is attached to the current index. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Reconcile with existing fixes and exact original object/link results before opening duplicate compiler fixes. | Link to an applicable passing replay, or reduce and retain a separate OPEN cause. |
+| K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: [replay](../../.evidence/k1/known-failures-20260912/boot/boot.json). Full required-C combination still OPEN. |
 | K-B01 / P1 | Kbuild replaced three installed objects: `alternative.o`, `signal32.o`, `vdso.o`, all under `arch/arm64/kernel/`. [Per-unit capture](../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/units.jsonl). | Driver/build lane: identify the dependency or postprocessing step that rebuilt each object; preserve required Kbuild transformations. | All required C artifacts retain verified EvoCC lineage through sub-links/final link; legitimate non-C generated artifacts remain separately classified. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 | `kernel-full` adapter is `NOT_IMPLEMENTED`; complete EvoCC composition/link/boot is UNMEASURED. | Extend the existing bench/K1 path, not a parallel runner: require all target C inputs, exact object lineage, complete link and the contract's nonce-bound ordered boot/shutdown predicate. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
 
 ### Execution order and update rules
+
+Targeted combined replay `known-failures-20260912` uses the same release
+SHA-256 `cd12aa10d326d3838fd5f18aee40d641678053d56fb4e09c6e6392553dc2a54b`
+for `cpuinfo.o`, `hw_breakpoint.o`, `irq.o`, `debug-monitors.o`, and
+`entry-common.o`. All five substituted objects survived Kbuild unchanged,
+the link exited zero, and the unchanged boot predicate passed for Image
+`23d5eb829ed4b336e198eea82d82fc65f9d8844628b567535aed5ddd39c9db28`.
+This verifies the interaction of those five fixes/rechecks, not a 2,799-object
+boot or K6: every other target C object in this trial remains reference-built.
 
 1. Keep `K-C01` LOCAL_VERIFIED; its 6-unit sample is not closure of all 78
    affected originals. Diagnose the P0 boot/link failures above before claiming
@@ -201,8 +210,8 @@ units, not diagnostic occurrences or predictions of the next run.
 | ID / state | Units | Code | First-error family | Example unit | Next tailored check / owner |
 |---|---:|---|---|---|---|
 | K-C01 / LOCAL_VERIFIED | 78 | E3101 | Goto destination discarded; `fb05c80`, six-unit replay below | `arch/arm64/kernel/signal.o` | Lowering: retain the green expression-goto tests; replay all 78 originals at batch closure. |
-| K-C02 / OPEN | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | Lowering: numeric-pointer plus offset bytes, symbol/addend preservation, invalid-dereference refusal. |
-| K-C03 / OPEN | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | Lowering: `(unsigned long)&object` in scalar/record storage; compare native relocation and interpreter values. |
+| K-C02 / LOCAL_VERIFIED | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | Shared target-width static-address evaluation passes numeric pointer scaling/casts and invalid-dereference regressions; original 29-unit replay pending. |
+| K-C03 / LOCAL_VERIFIED | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | Pointer-width integer storage retains symbol/addend and explicit static exposure; both interpreters pass, including no-prior-address-use and non-exposure negative cases. Original 21-unit replay pending. |
 | K-C04 / OPEN | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | C-HIR/lowering: reduce the operand and its call/inlining path; distinguish a true nonconstant from a missed constant. |
 | K-C05 / OPEN | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | Lowering/backend: reduce the union-valued asm register output; check representation and native read/write. |
 | K-C06 / OPEN | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | Lowering: zero-sized element arithmetic, operand effects and object identity; emit valid IR without inventing size 1. |

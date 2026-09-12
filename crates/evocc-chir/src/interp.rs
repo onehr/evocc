@@ -1374,6 +1374,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         mut expression: &'arena CHirExpr<'arena>,
     ) -> Result<CValue, InterpreterError> {
+        if self.pointer_type_of_expression(expression).is_ok() {
+            if let Some(integer) = crate::constant::eval_absolute_address_constant(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                &self.target,
+            ) {
+                let span = expression.span();
+                self.tick(span)?;
+                return cast_machine_value(
+                    CValue::Integer(integer),
+                    self.expression_value_type(expression)?,
+                    span,
+                    self.unit.types(),
+                    &mut self.memory,
+                );
+            }
+        }
         let mut casts = Vec::new();
         while let CHirExpr::Cast(ty, operand, span) = expression {
             self.tick(*span)?;
@@ -1394,6 +1412,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.eval_static_initializer_value(if condition { left } else { right })?;
                 let target = self.expression_value_type(expression)?;
                 cast_machine_value(value, target, *span, self.unit.types(), &mut self.memory)
+            }
+            CHirExpr::Binary(operator @ (BinaryOp::Add | BinaryOp::Sub), left, right, span) => {
+                if let Ok(integer) = self.eval_static_integer_expression(expression) {
+                    Ok(CValue::Integer(integer))
+                } else {
+                    self.tick(*span)?;
+                    let left = self.eval_static_initializer_value(left)?;
+                    let right = self.eval_static_initializer_value(right)?;
+                    match (left, right) {
+                        (CValue::Integer(left), CValue::Integer(right)) => {
+                            eval_constant_binary_integer(*operator, left, right)
+                                .map(CValue::Integer)
+                                .map_err(|error| self.integer_error(error, *span))
+                        }
+                        (left, right) => self.apply_machine_binary(*operator, left, right, *span),
+                    }
+                }
             }
             CHirExpr::Binary(operator @ (BinaryOp::Eq | BinaryOp::Ne), left, right, span)
                 if self.infer_integer_type(left).is_err()
