@@ -85,6 +85,7 @@ did regenerate `.vmlinux.export.o`, caught by the installed-object audit.
 | K-L07 | Unused static marker addresses create runtime relocations into discarded `.no_trim_symbol`. | Trace machine value demand through pure computations and incoming edges; do not drop accesses, calls, lifetimes or the marker data. RED `091cd55`; original vfio/pnfs units no longer emit the marker-address instructions. |
 | K-L08 | `btf_parse_base` ignores its data arguments with BTF disabled, but the caller still refers to absent `__start_BTF` / `__stop_BTF`. | Tailored and original object PASS: `87bcb6c` RED, `a109420` keeps ABI positions and argument effects, replacing only unused private-call transport. Public/interposable calls retain their arguments. Original BTF replay takes 8.756 seconds and has neither absent address reference. |
 | K-L09 | `fs/proc/array.o` emits the `__scoped_seqlock_bug` optimization canary despite its dominating loop-state guard. | Tailored and original object PASS: observe repeated reads only on nonescaping, nonvolatile local storage with no intervening write. Exclude unreachable continuations after loop exits from predecessor queries; retain all loads, guards, effects and possible error calls. Original replay: 3.232 seconds, canary calls zero. |
+| K-L10 | Honoring hidden pragmas exposed unused external declarations: `.hidden __compiletime_assert_608` alone makes the EFI link require a definition even after the call has disappeared. | RED `18cf82c`; emit external visibility only for references surviving machine allocation, including relocations and symbolic asm operands. Definitions retain their metadata. The 92-test symbol/relocation gate passes, including an actual native link without the absent definitions. Original complete-link retry follows. |
 | K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `e03f564` RED, `fb7a5b6` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; complete diagnostic link passes with the generated source stable and all 2,799 installed target-C objects retained. |
 
 The complete diagnostic composition now **links successfully**:
@@ -113,7 +114,10 @@ RED `3213f0e` fails on missing hidden metadata, with no build error. The scoped
 default now uses the existing symbol path and survives `-E` replay. Sealed
 oracle results and their small source live in `tests/fixtures/visibility-pragma-oracle.*`.
 Targeted tests are green; all 40 original records that force-include `hidden.h`
-must be recompiled before the next complete-composition link and boot.
+were recompiled and assembled with three workers. The bad GOT reference count
+is zero; all 2,799 EvoCC objects remain installed. The next link stopped at
+K-L10 before boot, recorded in
+[`visibility-boot-20260913/result.json`](../../.evidence/k1/visibility-boot-20260913/result.json).
 
 The targeted gate also exposed a dead-computation regression: retaining an
 `adds` arithmetic result could remove its mandatory, unused flags consumer.

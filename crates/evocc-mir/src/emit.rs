@@ -376,6 +376,52 @@ pub(crate) fn emit_linked_module(
     )
 }
 
+/// Declaration metadata is not a machine reference. In particular, `.hidden`
+/// for an unused undefined symbol can itself make an ELF link fail. Follow
+/// references that survived allocation, including static relocations and
+/// symbolic assembly operands; raw assembly retains its own directives.
+fn referenced_symbols<'a>(
+    functions: &'a [Allocated],
+    globals: &'a [GlobalObject],
+) -> BTreeSet<&'a str> {
+    let mut symbols: BTreeSet<_> = globals
+        .iter()
+        .flat_map(|g| g.relocs.iter().map(|r| r.symbol.as_str()))
+        .collect();
+    for block in functions.iter().flat_map(|f| &f.blocks) {
+        for inst in &block.insts {
+            match inst {
+                MInst::Adrp { symbol, .. }
+                | MInst::AddPageOff { symbol, .. }
+                | MInst::Bl { symbol, .. } => {
+                    symbols.insert(symbol.as_str());
+                }
+                _ => {}
+            }
+        }
+        let assembly = block
+            .insts
+            .iter()
+            .filter_map(|inst| match inst {
+                MInst::Asm(body) => Some(body),
+                _ => None,
+            })
+            .chain(match &block.term {
+                MTerm::AsmGoto { body, .. } => Some(body),
+                _ => None,
+            });
+        for body in assembly {
+            symbols.extend(body.inputs.iter().chain(&body.outputs).filter_map(
+                |arg| match &arg.value {
+                    AsmValue::Symbol { name, .. } => Some(name.as_str()),
+                    _ => None,
+                },
+            ));
+        }
+    }
+    symbols
+}
+
 fn emit_unit(
     target: Target,
     functions: &[Allocated],
@@ -393,6 +439,13 @@ fn emit_unit(
     let mut weak_functions = BTreeSet::new();
     let mut indirect_addresses = BTreeSet::new();
     if let Some(module) = module {
+        let mut references = referenced_symbols(functions, globals);
+        if module.functions.iter().any(|f| f.stack_protect) {
+            references.insert("__stack_chk_fail");
+            if options.stack_guard == StackGuard::Global {
+                references.insert("__stack_chk_guard");
+            }
+        }
         for name in module
             .functions
             .iter()
@@ -402,7 +455,10 @@ fn emit_unit(
                 module
                     .declares
                     .iter()
-                    .filter(|f| f.visibility == GlobalVisibility::Hidden)
+                    .filter(|f| {
+                        f.visibility == GlobalVisibility::Hidden
+                            && references.contains(f.name.as_str())
+                    })
                     .map(|f| f.name.as_str()),
             )
             .chain(
@@ -416,7 +472,10 @@ fn emit_unit(
                 module
                     .extern_objects
                     .iter()
-                    .filter(|g| g.visibility == GlobalVisibility::Hidden)
+                    .filter(|g| {
+                        g.visibility == GlobalVisibility::Hidden
+                            && references.contains(g.symbol.as_str())
+                    })
                     .map(|g| g.symbol.as_str()),
             )
             .chain(

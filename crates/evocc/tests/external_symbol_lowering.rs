@@ -160,10 +160,17 @@ fn unused_hidden_declarations_do_not_create_linker_dependencies() {
         extern void missing_call(void); extern int missing_object;\n\
         int main(void){if(0) missing_call(); (void)&missing_object; return 0;}";
     let output = run(source, "--emit=asm");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let text = String::from_utf8(output.stdout).unwrap();
     for name in ["missing_call", "missing_object"] {
-        assert!(!text.contains(name), "unused declaration creates an undefined hidden symbol: {text}");
+        assert!(
+            !text.contains(name),
+            "unused declaration creates an undefined hidden symbol: {text}"
+        );
     }
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     assert_native_execution(source, "unused-hidden-declarations");
@@ -174,7 +181,11 @@ fn unused_hidden_declarations_do_not_create_linker_dependencies() {
          void emit(void){asm volatile(\".xword %c0\" : : \"i\"(&asm_operand));}",
         "--emit=asm",
     );
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let text = String::from_utf8(output.stdout).unwrap();
     for name in ["relocated", "asm_operand"] {
         assert!(text.contains(&format!(".hidden {name}")), "{text}");
