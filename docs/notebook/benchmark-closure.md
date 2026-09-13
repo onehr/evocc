@@ -154,7 +154,7 @@ retains all 2,799 EvoCC objects with stable generated export source, recorded in
 Boot remains TIMEOUT, but the diagnostic flight gets through MMU and memory
 setup to IRQ initialization; the shift guard is unchanged.
 
-**K-R05 / FIXED IN TAILORED TESTS, original boot replay pending: scope-exit cleanup.**
+**K-R05 / original IRQ replay PASS; uniform kernel rebuild pending: scope-exit cleanup.**
 The next stopped CPU is in `queued_spin_lock_slowpath`, entered by
 `gic_irq_domain_map` through `__irq_set_handler`; the descriptor lock contains
 `0x101`. The preceding `irq_modify_status` uses the kernel's scoped guard, whose
@@ -172,7 +172,19 @@ declaration, for-init lifetime, aggregate return copying, always-inline object
 remapping, statement-expression values and indirect exit. The conditional
 break/continue shortcut now preserves required lifetime and callback actions.
 No new IR kind or kernel-specific workaround is used. Original kernel replay
-and boot are still pending; the earlier boot TIMEOUT remains the measured result.
+initially found eight duplicate-label failures among 17 IRQ units: the same
+inlined callback body was emitted at several mutually exclusive exits. A
+multi-return native/interpreter RED reproduces it; `379790c` keeps private
+callback label lookup local to each emission without changing concrete CFG edges.
+All 17 original IRQ units now emit and assemble. The complete diagnostic link
+retains 2,799/2,799 objects, with stable export input, in
+[`scope-cleanup-20260913`](../../.evidence/k1/scope-cleanup-20260913/result.json).
+Image `611b2f69975c03788340ca479844491e98e57f3fbe9e32d659cbf53aa9a8270e`
+still records standard boot TIMEOUT. A separate bounded early-console snapshot
+now passes IRQ setup, GICv2m and clock initialization; CPU0 waits for
+`pmus_lock` owned by `init_task` in the still-old `kernel/events/core.o`, whose
+PMU registration also uses cleanup guards. A uniform rebuild is next, not a
+claim of boot success from the mixed-revision diagnostic image.
 
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):
