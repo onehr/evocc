@@ -72,6 +72,18 @@ class FullSelftest(unittest.TestCase):
             {'outcome': 'FAIL', 'exitCode': 1, 'valid': True, 'cases': [{'outcome': 'PASS'}]}]}
         self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'FAIL')
 
+    def test_upstream_timeout_tap_stays_timeout_after_normal_guest_shutdown(self):
+        name = 'selftests: mm: run_vmtests.sh # TIMEOUT 900 seconds'
+        for exit_code in (0, 1):
+            with self.subTest(exit_code=exit_code):
+                flight = {'boot': {'verdict': 'PASS'}, 'programs': [
+                    {'outcome': 'FAIL', 'exitCode': exit_code, 'valid': True,
+                     'cases': [{'outcome': 'FAIL', 'name': name}]}]}
+                self.assertEqual(lane.program_case('mm:run_vmtests.sh', flight)['outcome'], 'TIMEOUT')
+        flight['programs'][0].update(outcome='PASS', exitCode=0)
+        flight['programs'][0]['cases'][0]['outcome'] = 'PASS'
+        self.assertEqual(lane.program_case('mm:run_vmtests.sh', flight)['outcome'], 'PASS')
+
     def test_reference_reuse_preserves_every_result_and_rejects_changed_inputs(self):
         self.assertTrue(hasattr(lane, 'reusable_reference'), 'explicit reference reuse is missing')
         current = {'build': {'builds': [{'id': 'mm', 'available': ['mm:a', 'mm:b']}]},
