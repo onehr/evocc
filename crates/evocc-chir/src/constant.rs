@@ -1,5 +1,8 @@
 //! Conservative front-end constant knowledge shared by every C-HIR consumer.
 
+mod object_size;
+pub use object_size::builtin_object_size;
+
 use evocc_common::SourceSpan;
 use evocc_types::{
     enum_integer_rank, TagDefinition, TagId, TagState, TargetDataLayout, TypeId, TypeInterner,
@@ -163,10 +166,17 @@ pub fn validate_front_end_builtin_records(
                 }
             }
             FrontEndBuiltinRecord::ObjectSize {
-                span, mode, result, ..
+                span,
+                operand,
+                mode,
+                result,
             } => {
-                let expected = if *mode <= 1 { u64::MAX } else { 0 };
-                if *mode > 3 || *result != expected {
+                let expected =
+                    builtin_object_size(operand, *mode, unit.types(), unit.symbols(), target);
+                // Later declarations can complete a previously unknown type.
+                // Unknown claims no extent; every claimed bound must recheck.
+                let unknown = if *mode <= 1 { u64::MAX } else { 0 };
+                if *mode > 3 || (*result != expected && *result != unknown) {
                     return Err(*span);
                 }
             }

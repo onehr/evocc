@@ -393,7 +393,7 @@ fn dynamic_offsetof_resolves_to_byte_identical_runtime_arithmetic() {
 }
 
 #[test]
-fn builtin_object_size_resolves_to_unknown_constants() {
+fn builtin_object_size_resolves_to_proven_or_unknown_constants() {
     assert_pairs(
         &[
             (
@@ -403,6 +403,10 @@ fn builtin_object_size_resolves_to_unknown_constants() {
             (
                 "unsigned long f(int *p) { return __builtin_object_size(p, 2); }\n",
                 "unsigned long f(int *p) { return 0ul; }\n",
+            ),
+            (
+                "struct s { char text[16]; }; unsigned long f(struct s *p) { return __builtin_object_size(p->text, 1); }\n",
+                "struct s { char text[16]; }; unsigned long f(struct s *p) { return 16ul; }\n",
             ),
         ],
         104,

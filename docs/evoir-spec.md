@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.93** | **Authoritative reference** | **2026-09-13**
+**Revision 1.9.94** | **Authoritative reference** | **2026-09-13**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4458,20 +4458,25 @@ and Clang-19 agree on every row.
   `0..3`; any other value, or a non-constant mode, is `E2925`
   (`builtin-mode-out-of-range`) at the mode operand (both oracles reject it).
   The operand is parsed and type-checked but **never evaluated**
-  (measured, both oracles). This profile performs no object-size analysis and
-  therefore always answers as if the object were unknown: `(size_t) -1` for
-  modes 0 and 1, `0` for modes 2 and 3, as an integer constant expression. That
-  is the answer both oracles give for a genuinely unknown object, and it asserts
-  nothing about storage the compiler has not analysed.
+  (measured, both oracles). Revision 1.9.94, authorized on 2026-09-13, returns
+  the remaining byte extent when it can be proved from a declared object or
+  subobject, a string literal, and constant address offsets. Even modes refer
+  to the complete object; odd modes refer to the nearest surrounding subobject.
+  Unknown complete-object identity does not prevent proving a declared fixed
+  member's odd-mode extent: `p->name` for `char name[16]` gives 16 in modes 1
+  and 3 without reading `p` or the member. One-past gives zero; an offset
+  outside a proved extent gives zero. These results remain integer constant
+  expressions and resolve before EvoIR; parser and consumers share the query.
 
-  This is a deliberate profile choice, not a conformance claim: for an object
-  the oracles *can* see, they answer with its size (16 for a known array) and
-  this profile still answers unknown. It also makes a recorded disagreement moot
-  rather than arbitrated — for a side-effecting expression naming a known array,
-  GCC-14 answers `(size_t) -1` and Clang-19 answers `16`. All 42 uses in the
-  kernel cohort are modes 0 and 1 on parameters and none is in a constant
-  context, so nothing in the cohort depends on the difference. A later revision
-  that adds the analysis must say so and re-measure.
+  Unproved extents, variable bounds, dynamic offsets and effectful operands
+  retain `(size_t)-1` in modes 0/1 or `0` in modes 2/3. The analysis may decline
+  multi-object flow rather than invent a bound; casts never create an allocation
+  extent. In particular, side-effecting operands stay unknown and unevaluated.
+  For a multidimensional array row, the sealed oracles disagree about the
+  nearest extent (GCC-14 gives 8 and Clang-19 4 for `char m[3][4]; m[1]`);
+  that odd-mode row extent remains unknown. This supersedes the old explicit
+  always-unknown rule. Evidence: `tests/fixtures/object-size-member.c`,
+  `object-size-bounds.c`, and the compact `resolved-compiler-queries.out`.
 - `__builtin_has_attribute(operand, attribute)`: a GCC builtin; Clang-19 does
   not provide it, and it appears only in GCC-dialect input, which is what
   EvoCPP presents itself as (10.4). The result is an integer constant
@@ -6035,6 +6040,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.94 | 2026-09-13 | Authorizes proved object-size bounds with unknown fallback and unevaluated operands, replacing the explicit always-unknown profile that blocks ext4. Distinguishes whole objects from subobjects; records the multidimensional-row oracle conflict without claiming a bound. |
 | 1.9.93 | 2026-09-13 | Authorizes optimization-time constant queries with proved values, unevaluated operands and preserved initializer/argument effects. Source ICE admission is unchanged. |
 | 1.9.92 | 2026-09-12 | Records the approved computed-goto edge-binding design: explicit storage addresses and effects, complete successor sets, positional parallel copies and E3048 for invalid dynamic targets. Synchronizes two stale signed-shift clauses with 1.9.88, preserving legacy IR obligations. This revision specifies behavior; implementation and native acceptance are tracked separately. |
 | 1.9.91 | 2026-09-12 | Corrects the overstrong eight-aligned relocation offset requirement: AArch64 ABS64 data relocations occupy eight bytes at byte-aligned positions. User-authorized standard alignment behavior; packed layout and pointer provenance remain intact, as do range, nonoverlap and actual load/store alignment checks. |

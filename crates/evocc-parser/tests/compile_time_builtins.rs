@@ -238,13 +238,14 @@ fn builtin_offsetof_dynamic_index_is_not_a_file_scope_array_bound() {
 }
 
 #[test]
-fn builtin_object_size_always_returns_the_unknown_size_constant() {
+fn builtin_object_size_returns_proven_array_extents() {
     accepts(concat!(
         "int known[4]; ",
-        "_Static_assert(__builtin_object_size(known, 0) == (unsigned long)-1, \"mode 0\"); ",
-        "_Static_assert(__builtin_object_size(known, 1) == (unsigned long)-1, \"mode 1\"); ",
-        "_Static_assert(__builtin_object_size(known, 2) == 0, \"mode 2\"); ",
-        "_Static_assert(__builtin_object_size(known, 3) == 0, \"mode 3\");\n",
+        "_Static_assert(__builtin_object_size(\"abc\", 1) == 4, \"literal extent\"); ",
+        "_Static_assert(__builtin_object_size(known, 0) == 16, \"mode 0\"); ",
+        "_Static_assert(__builtin_object_size(known, 1) == 16, \"mode 1\"); ",
+        "_Static_assert(__builtin_object_size(known, 2) == 16, \"mode 2\"); ",
+        "_Static_assert(__builtin_object_size(known, 3) == 16, \"mode 3\");\n",
     ));
 }
 

@@ -12245,7 +12245,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2925", "builtin-mode-out-of-range", mode_expression.span());
             return None;
         };
-        let result = if mode <= 1 { u64::MAX } else { 0 };
+        let result = evocc_chir::constant::builtin_object_size(
+            operand,
+            mode,
+            &self.types,
+            &self.symbols,
+            &self.target_layout,
+        );
         let span = self.merge_span(keyword.span, close.span);
         self.front_end_builtins
             .push(FrontEndBuiltinRecord::ObjectSize {
@@ -12254,8 +12260,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 mode,
                 result,
             });
-        if mode >= 2 {
-            return Some(self.size_literal(0, span));
+        if result != u64::MAX {
+            return Some(self.size_literal(result, span));
         }
         let one = self.alloc_node(CHirExpr::Lit(
             IntLit {

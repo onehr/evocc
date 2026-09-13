@@ -60,7 +60,7 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 | `kernel-full` now runs the existing K1 path with complete-coverage and object-lineage guards; latest attempt `20260912T191806Z` is INCOMPLETE before installation. | Finish the remaining constant/inline link blockers, then prepare actual generated headers, recompile, verify fixed point, fully link and boot. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
 | K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
-| K-S02 / SPEC_BODY_CONFLICT | `fs/ext4/ioctl.o` retains `__compiletime_assert_753`: `memtostr_pad` requires `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | §10.1.14 still explicitly mandates unknown even for known arrays. Both sealed oracles return 16 for the reduced member-array shape, with the operand unevaluated. Asked for authority to return proved bounds and retain unknown otherwise; no implementation or spec change made without that authority. | OPEN. Do not remove the kernel assertion, stub its callee, or claim an already-known failing full link as useful progress. |
+| K-S02 / tailored GREEN, full link OPEN | `fs/ext4/ioctl.o` retained `__compiletime_assert_753`: `memtostr_pad` needs `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | User authorized proved bounds on September 13; §10.1.14 revision 1.9.94 replaces the explicit always-unknown rule. Parser and consumers share a declaration/layout-backed query, with unknown fallback, unevaluated operands and checked claimed bounds. | Original .o.cmd emission exits zero without assertion calls; native reduced fixture passes with EvoCC and both sealed oracles. 510 focused tests PASS. The kernel assertion and configuration are unchanged; the actual full link/boot remains the next gate. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
 
 ### Execution order and update rules
@@ -479,6 +479,18 @@ and original-command replay are recorded in the compact result above; four
 workers took 155.4 seconds under shared load. This replaces the old 58-unit
 targeted inventory, not the full 2,799-unit denominator. The last full receipt
 remains unchanged until a real full compile/link/boot is run.
+
+The subsequent authorized object-size repair also clears the final original
+`fs/ext4/ioctl.o` assertion call (4.16 seconds; release
+`683a260d99085f95bcaf6de7e11dd7a8bf8cf64aca663fb7798894ba607039f2`).
+Known object/subobject extents and constant offsets use the existing target
+layout and checked place chain. Unknown pointers, dynamic offsets, variable
+bounds and side-effecting operands remain unknown; the query performs no read.
+Actual backing storage caps a cast member's claimed extent. The parser's
+profile-specific ICE tests remain separate from the native oracle fixture:
+GCC rejected the initial `_Static_assert` probe as nonconstant, so only the
+runtime-value fixture is claimed as dual-oracle/native consensus. The full
+2,799-unit attempt now proceeds through the existing kernel-full adapter.
 
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,

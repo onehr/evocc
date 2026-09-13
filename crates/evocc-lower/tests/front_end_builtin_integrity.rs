@@ -74,3 +74,35 @@ fn consumers_reject_a_forged_attribute_query_result() {
         "unexpected lowering diagnostic: {lowering}"
     );
 }
+
+#[test]
+fn consumers_recompute_declared_object_bounds() {
+    let source = "int main(void){char object[16];return __builtin_object_size(object,1);}";
+    let arena = Arena::default();
+    let file = FileId::new(10_123);
+    let mut lexer = Lexer::new(file, source);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        assert_ne!(token.kind, TokenKind::Error);
+        tokens.push(token);
+    }
+    let mut parser = Parser::new(tokens, file, source);
+    let mut unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error());
+    let mut records = unit.front_end_builtins().to_vec();
+    let FrontEndBuiltinRecord::ObjectSize { result, .. } = &mut records[0] else {
+        panic!("fixture retains the object-size query");
+    };
+    assert_eq!(*result, 16);
+    *result = 99;
+    unit.set_front_end_builtins(records);
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    assert!(evocc_chir::validate_front_end_builtin_records(&unit, &target).is_err());
+    assert!(interpret_scalar_function(
+        &unit,
+        function_symbol(&unit, "main"),
+        InterpreterLimits::new(10_000),
+    )
+    .is_err());
+    assert!(lower_unit(&unit, &target).is_err());
+}

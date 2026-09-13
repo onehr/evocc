@@ -140,3 +140,31 @@ member=21/16/21/16 offset=13
 array=16 offset=13 literal=4 unknown=18446744073709551615 side=18446744073709551615 effects=0
 Not a subject PASS: current spec deliberately requires unknown even for the
 known member; authority to revise that explicit profile rule is pending.
+
+2026-09-13: user authorized the proved-bound rule; EvoIR 1.9.94.
+RED: parser compile_time_builtins object_size filter: 2 passed / 1 failed;
+CLI object_size filter: 1 passed / 1 failed (E2911), zero build errors.
+An added cast/storage guard also failed with a wrong value before clamping.
+GREEN commands (CARGO_TARGET_DIR=target/tailored, --locked --offline -j 2):
+cargo test -p evocc-chir -p evocc-lower --tests --no-fail-fast: 449/0/0
+cargo test -p evocc-parser --test compile_time_builtins: 20/0/0
+cargo test -p evocc --test resolved_compiler_queries: 41/0/0
+Object bounds are recomputed by consumer integrity tests; a forged 99-byte
+claim for a 16-byte array is rejected by the interpreter and lowering.
+object-size-bounds.c, -std=gnu11 -O2, both sealed oracles: link/exit 0.
+EvoCC -O2 --emit=asm for the same file, gcc-14 assemble/link/native exit 0.
+The initial oracle fixture's _Static_assert was rejected by GCC as nonconstant;
+ICE acceptance remains a separate EvoCC profile test, not an oracle claim.
+No-inline unknown struct pointer p->name, char name[16], both oracles:
+  modes 0/1/2/3 = SIZE_MAX/16/0/16; +3 odd-mode extent = 13.
+char m[3][4], object_size(m[1],1): GCC 8 / Clang 4; subject stays unknown.
+char a[8] cast to struct { char head[7],name[16],tail[5]; }, name extent:
+  mode 1 GCC/Clang = 1/1; mode 3 = 1/0 (Clang's conservative lower estimate).
+Subject never lets a cast enlarge the actual complete object's extent.
+Original ext4 .o.cmd replay via tools/k1/cmdrecord.py::evocc_argv:
+  subject 683a260d99085f95bcaf6de7e11dd7a8bf8cf64aca663fb7798894ba607039f2
+  fs/ext4/ioctl.o exit=0 compiler-assert-calls=0 wall_seconds=4.16.
+This is the final targeted repair, not itself a full link or boot result.
+cargo clippy -p evocc-chir -p evocc-parser -p evocc-lower -p evocc
+  --all-targets --locked --offline -j 2 -- -D warnings: exit 0.
+cargo fmt --all -- --check: exit 0; git diff --check: exit 0.

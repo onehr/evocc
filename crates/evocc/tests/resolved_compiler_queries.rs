@@ -611,3 +611,31 @@ fn private_loop_folding_does_not_export_interpreter_addresses() {
         assert!(String::from_utf8_lossy(&output.stdout).contains("ptr.to_int"), "{source}");
     }
 }
+
+#[test]
+fn object_size_proves_declared_bounds_without_reading_the_object() {
+    let source = include_str!("../../../tests/fixtures/object-size-bounds.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn object_size_declines_unproved_or_effectful_operands() {
+    for source in [
+        "int main(void){char a[16];int effects=0;unsigned long n=__builtin_object_size((effects++,a),1);return effects||n!=~0ul;}",
+        "unsigned long f(char*p,int i){return __builtin_object_size(p+i,1);}int main(void){return f((char*)37,2)!=~0ul;}",
+        "int main(void){char a[16];char*p=a;return __builtin_object_size(p++,3)!=0||p!=a;}",
+        "struct s{int head;char flexible[];};int f(struct s*p){return __builtin_object_size(p->flexible,1)!=~0ul;}int main(void){return f((struct s*)0);}",
+        "struct s{char a[16];};int main(void){struct s *volatile p=(void*)0;return __builtin_object_size(p->a,1)!=~0ul;}",
+        "extern int a[];unsigned long n=__builtin_object_size(a,0);int a[4];int main(void){return n!=~0ul;}",
+        "struct s;extern struct s x;unsigned long n=__builtin_object_size(&x,0);struct s{int a;};struct s x;int main(void){return n!=~0ul;}",
+        "struct s{char head[7],name[16],tail[5];};int main(void){char a[8];return __builtin_object_size(((struct s*)a)->name,1)!=1;}",
+        "int main(void){char rows[3][4];return __builtin_object_size(rows[1],0)!=8||__builtin_object_size(rows[1],1)!=~0ul;}",
+    ] { assert_constant_program(source); }
+}
