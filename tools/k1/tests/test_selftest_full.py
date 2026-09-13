@@ -43,6 +43,23 @@ class FullSelftest(unittest.TestCase):
         self.assertEqual(result['outcomes'], {'PASS': 1, 'NOT_RUN': 1})
         self.assertNotEqual(result['status'], 'PASS')
 
+    def test_one_program_timeout_cannot_erase_later_program_results(self):
+        self.assertTrue(hasattr(lane, 'program_case'), 'per-program VM accounting is missing')
+        timeout = {'boot': {'verdict': 'TIMEOUT'}, 'programs': [{'outcome': 'INCOMPLETE', 'cases': []}]}
+        passed = {'boot': {'verdict': 'PASS'}, 'programs': [{'outcome': 'PASS', 'valid': True,
+                                                         'cases': [{'outcome': 'PASS'}]}]}
+        cases = [lane.program_case('mm:a', timeout), lane.program_case('mm:b', passed)]
+        self.assertEqual([c['outcome'] for c in cases], ['TIMEOUT', 'PASS'])
+        self.assertEqual([c['id'] for c in cases], ['mm:a', 'mm:b'])
+
+    def test_boot_or_incomplete_tap_cannot_become_a_program_pass(self):
+        self.assertTrue(hasattr(lane, 'program_case'), 'per-program VM accounting is missing')
+        for verdict, outcome, valid in [('MARKERS_MISSING', 'PASS', True),
+                                         ('PASS', 'INVALID_OUTPUT', False)]:
+            flight = {'boot': {'verdict': verdict}, 'programs': [{'outcome': outcome, 'valid': valid,
+                                                               'cases': [{'outcome': 'PASS'}]}]}
+            self.assertNotEqual(lane.program_case('mm:a', flight)['outcome'], 'PASS')
+
 
 if __name__ == '__main__':
     unittest.main()
