@@ -41,6 +41,12 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertEqual(row['buildFailures'], ['bpf'])
         self.assertEqual(row['status'], 'INCOMPLETE')
 
+    def test_full_selftest_reference_reuse_is_explicit_and_reuses_the_payload(self):
+        args = bench.parser().parse_args(['kernel-selftest-all', '--reuse-selftest-reference', '/old/summary.json'])
+        command, _ = bench.command('kernel-selftest-all', args, Path('/unused/compiler'))
+        self.assertIn('--reuse-build', command)
+        self.assertEqual(command[command.index('--reference-run') + 1], '/old/summary.json')
+
     def test_kernel_selftest_only_invocation_does_not_require_or_build_evocc(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

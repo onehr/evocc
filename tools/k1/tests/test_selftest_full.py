@@ -1,6 +1,7 @@
 """The full selftest run must account for build and execution gaps."""
 
 import importlib.util
+import copy
 from pathlib import Path
 import unittest
 
@@ -65,6 +66,28 @@ class FullSelftest(unittest.TestCase):
         flight = {'boot': {'verdict': 'MARKERS_MISSING'},
                   'programs': [{'outcome': 'NOT_RUN', 'cases': []}]}
         self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'NOT_RUN')
+
+    def test_reference_reuse_preserves_every_result_and_rejects_changed_inputs(self):
+        self.assertTrue(hasattr(lane, 'reusable_reference'), 'explicit reference reuse is missing')
+        current = {'build': {'builds': [{'id': 'mm', 'available': ['mm:a', 'mm:b']}]},
+                   'referenceConfigSha256': 'config', 'initramfsSha256': 'init',
+                   'rootfsSha256': 'disk', 'runtimePolicy': {'workers': 2}}
+        cases = [{'id': 'mm:a', 'outcome': 'PASS'}, {'id': 'mm:b', 'outcome': 'FAIL'}]
+        previous = {**current, 'status': 'INCOMPLETE', 'kernelImageSha256': 'old-subject',
+                    'execution': {'reference': {'collections': [{'id': 'mm', 'cases': cases}]},
+                                  'subject': {'collections': []}}}
+        self.assertEqual(lane.reusable_reference(previous, current), cases)
+        for key in ('referenceConfigSha256', 'initramfsSha256', 'rootfsSha256', 'runtimePolicy', 'build'):
+            with self.subTest(changed=key), self.assertRaises(ValueError):
+                lane.reusable_reference(previous, {**current, key: 'changed'})
+        for status in ('RUNNING', 'BLOCKED'):
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                lane.reusable_reference({**previous, 'status': status}, current)
+        for bad in (cases[:1], [cases[0], cases[0]]):
+            incomplete = copy.deepcopy(previous)
+            incomplete['execution']['reference']['collections'][0]['cases'] = bad
+            with self.assertRaises(ValueError):
+                lane.reusable_reference(incomplete, current)
 
 
 if __name__ == '__main__':
