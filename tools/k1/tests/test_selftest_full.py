@@ -67,6 +67,11 @@ class FullSelftest(unittest.TestCase):
                   'programs': [{'outcome': 'NOT_RUN', 'cases': []}]}
         self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'NOT_RUN')
 
+    def test_nonzero_exit_cannot_pass_even_when_the_tap_case_says_ok(self):
+        flight = {'boot': {'verdict': 'PASS'}, 'programs': [
+            {'outcome': 'FAIL', 'exitCode': 1, 'valid': True, 'cases': [{'outcome': 'PASS'}]}]}
+        self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'FAIL')
+
     def test_reference_reuse_preserves_every_result_and_rejects_changed_inputs(self):
         self.assertTrue(hasattr(lane, 'reusable_reference'), 'explicit reference reuse is missing')
         current = {'build': {'builds': [{'id': 'mm', 'available': ['mm:a', 'mm:b']}]},
