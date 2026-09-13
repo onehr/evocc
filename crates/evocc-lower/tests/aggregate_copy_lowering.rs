@@ -283,6 +283,24 @@ fn file_scope_flexible_array_initializer_extends_only_the_object() {
 }
 
 #[test]
+fn empty_flexible_elements_contribute_storage_even_without_scalar_actions() {
+    let module = lower(include_str!(
+        "../../../tests/fixtures/flexible-empty-initializers.c"
+    ));
+    for (name, size) in [
+        ("trailing", 12),
+        ("only_empty", 8),
+        ("designated_empty", 20),
+        ("range_empty", 28),
+        ("nested_empty", 20),
+        ("exact", 80),
+    ] {
+        let object = module.globals.iter().find(|g| g.symbol == name).unwrap();
+        assert_eq!(object.layout.size_bytes, size, "{name}");
+    }
+}
+
+#[test]
 fn flexible_string_initializers_preserve_object_extent_and_terminators() {
     let module = lower(include_str!(
         "../../../tests/fixtures/flexible-string-initializers.c"

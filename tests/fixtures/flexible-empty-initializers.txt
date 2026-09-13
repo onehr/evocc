@@ -1,0 +1,18 @@
+Measured 2026-09-13, evo-flight-lab:sealed, linux/arm64, network none.
+For CC=gcc-14 and CC=clang-19:
+  $CC -std=gnu11 -O0 flexible-empty-initializers.c -o /tmp/probe
+  /tmp/probe
+  nm -S /tmp/probe
+Both executions return 0. Both symbol tables give these object sizes in bytes:
+  trailing=12, only_empty=8, designated_empty=20, range_empty=28,
+  nested_empty=20, exact=80.
+The descriptor TYPE still has sizeof 32; only its initialized object is extended.
+
+Actual kernel Image 7cfa16a1b3d548dac0f897f0eb05d584410fc855fa7402ecd3cf33f256bf05bb:
+  complete diagnostic link 0, all 2799 EvoCC target-C objects retained;
+  HVF boot timeout before console;
+  bounded cortex-a72 TCG trace: first exception Breakpoint, ESR 0xf2000bbd,
+  ELR 0x403173ec = __pi_match_options at brk #3005.
+Emitted mmfr0 occupied 56 bytes instead of 80: the empty fields[] sentinel
+was missing, so traversal read the following descriptor's text as a shift count.
+The shift guard is correct and must remain.

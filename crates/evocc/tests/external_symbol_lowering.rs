@@ -193,6 +193,22 @@ fn unused_hidden_declarations_do_not_create_linker_dependencies() {
 }
 
 #[test]
+fn empty_flexible_sentinels_are_accessible_and_zero_initialized() {
+    let source = include_str!("../../../tests/fixtures/flexible-empty-initializers.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "empty-flexible-sentinels");
+}
+
+#[test]
 fn position_independent_macros_follow_the_last_codegen_option() {
     for (options, pic, pie) in [
         (vec![], 2, 2),
