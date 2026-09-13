@@ -14,7 +14,7 @@
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, lower_module, out_of_ssa, render_allocated, verify_allocation, BinOp, MBlock,
+    allocate, lower_module, out_of_ssa, render_allocated, verify_allocation, BinOp, Cond, MBlock,
     MFunction, MInst, MTerm, RegClass, VReg, Width, CALLEE_SAVED, CALLER_SAVED,
 };
 
@@ -184,6 +184,89 @@ fn disjoint_pressure_regions_reuse_spill_storage() {
         allocated.frame_slots
     );
     verify_allocation(&allocated).expect("a reload sees the correct stored value after slot reuse");
+}
+
+#[test]
+fn mutually_exclusive_spills_do_not_depend_on_block_layout() {
+    // Definitions in all arms precede all their consuming blocks in the
+    // layout, as happens when out-of-SSA appends edge-copy blocks. Their
+    // convex textual intervals overlap; their executed live ranges do not.
+    let mut blocks = Vec::new();
+    for arm in 0..24 {
+        let flags = VReg::new(10 + arm, RegClass::Flags);
+        blocks.push(MBlock {
+            id: arm,
+            args: if arm == 0 { vec![w(0)] } else { Vec::new() },
+            insts: vec![MInst::CmpImm {
+                dst: flags,
+                lhs: w(0),
+                imm: u64::from(arm),
+                width: Width::W,
+            }],
+            term: MTerm::BCond {
+                flags,
+                cond: Cond::Eq,
+                taken: 100 + arm,
+                taken_args: Vec::new(),
+                untaken: if arm == 23 { 100 + arm } else { arm + 1 },
+                untaken_args: Vec::new(),
+            },
+        });
+    }
+    for arm in 0..24 {
+        let base = 100 + arm * 100;
+        blocks.push(MBlock {
+            id: 100 + arm,
+            args: Vec::new(),
+            insts: (0..40)
+                .map(|index| MInst::MovImm {
+                    dst: w(base + index),
+                    imm: u64::from(index + arm),
+                })
+                .collect(),
+            term: MTerm::B {
+                target: 200 + arm,
+                args: Vec::new(),
+            },
+        });
+    }
+    for arm in 0..24 {
+        let base = 100 + arm * 100;
+        let mut sum = w(base);
+        let mut insts = Vec::new();
+        for index in 1..40 {
+            let dst = w(base + 40 + index);
+            insts.push(MInst::Binary {
+                op: BinOp::Add,
+                dst,
+                lhs: sum,
+                rhs: w(base + index),
+                width: Width::W,
+            });
+            sum = dst;
+        }
+        blocks.push(MBlock {
+            id: 200 + arm,
+            args: Vec::new(),
+            insts,
+            term: MTerm::Ret { values: vec![sum] },
+        });
+    }
+    let function = MFunction {
+        name: "branch_pressure".into(),
+        blocks,
+    };
+    let allocated = allocate(&function).expect("each arm can spill");
+    verify_allocation(&allocated).expect("every branch reloads its own values");
+    assert!(
+        allocated.spilled > 400,
+        "fixture must exercise many spill identities"
+    );
+    assert!(
+        allocated.frame_slots <= 40,
+        "mutually exclusive arms retained {} physical spill slots",
+        allocated.frame_slots
+    );
 }
 
 #[test]
