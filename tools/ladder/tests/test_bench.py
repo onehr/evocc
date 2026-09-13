@@ -27,6 +27,20 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertNotIn('--evocc', command)
         self.assertEqual(env['K1_ALLOW_QEMU_DRIFT'], '1')
 
+    def test_all_selftests_have_a_separate_measured_denominator(self):
+        args = bench.parser().parse_args(['kernel-selftest-all', '--jobs', '2'])
+        command, _ = bench.command('kernel-selftest-all', args, Path('/unused/compiler'))
+        self.assertTrue(any(part.endswith('/k1/selftest_full.py') for part in command))
+        self.assertNotIn('--evocc', command)
+        data = {'status': 'INCOMPLETE', 'run': 'full', 'evidence': 'run', 'kernelImageSha256': 'image',
+                'build': {'targets': ['mm', 'bpf']}, 'execution': {'subject': {'summary': {
+                    'programs': 2, 'outcomes': {'PASS': 1, 'BUILD_UNAVAILABLE': 1},
+                    'collections': 2, 'buildFailures': ['bpf']}}}}
+        row = bench.metrics('kernel-selftest-all', data)
+        self.assertEqual((row['passed'], row['total']), (1, 2))
+        self.assertEqual(row['buildFailures'], ['bpf'])
+        self.assertEqual(row['status'], 'INCOMPLETE')
+
     def test_kernel_selftest_only_invocation_does_not_require_or_build_evocc(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

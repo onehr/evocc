@@ -46,6 +46,7 @@ CATALOG = {
     "sqlite": ("E12", None, "no adapter; floating-point rung deferred"),
     "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
     "kernel-selftest": ("K7", "kernel-selftest", "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate"),
+    "kernel-selftest-all": ("K7", "kernel-selftest-all", "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate"),
 }
 
 
@@ -63,6 +64,7 @@ def parser():
     p.add_argument("--allow-qemu-drift", action="store_true", help="acknowledge and record the installed QEMU digest")
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
+    p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
     return p
 
 
@@ -89,11 +91,14 @@ def select(names):
 def command(name, args, binary):
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    if name == "kernel-selftest":
+    if name in ("kernel-selftest", "kernel-selftest-all"):
         if args.reuse_kernel_survey:
             raise ValueError("kernel-selftest consumes the booted Image, not a compilation survey")
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
+        if name == 'kernel-selftest-all':
+            reuse = '--reuse-build' if args.reuse_selftest_build else '--install-deps'
+            return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest_full.py'), '--jobs', str(args.jobs), reuse], env
         return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest.py')], env
     if name == "kernel-full":
         if args.reuse_kernel_survey:
@@ -134,6 +139,8 @@ def command(name, args, binary):
 
 
 def lane_receipt(name):
+    if name == "kernel-selftest-all":
+        return ROOT / "tests/contracts/kernel-selftest-full-receipt.json"
     if name == "kernel-selftest":
         return ROOT / "tests/contracts/kernel-selftest-receipt.json"
     if name == "kernel-full":
@@ -147,7 +154,16 @@ def metrics(name, data):
     """Normalize claim ceilings, without rewriting a lane's raw outcomes."""
     row = {"rung": CATALOG[name][0], "note": CATALOG[name][2], "outcomes": {},
            "refusals": {}, "baselineFailures": 0, "failingUnits": data.get("failingUnits", [])}
-    if name == "kernel-selftest":
+    if name == "kernel-selftest-all":
+        measured = data.get('execution', {}).get('subject', {}).get('summary', {})
+        row.update(total=measured.get('programs', 0), passed=measured.get('outcomes', {}).get('PASS', 0),
+                   kind='programs', status=data['status'], outcomes=measured.get('outcomes', {}),
+                   collectionCount=measured.get('collections', len(data['build']['targets'])),
+                   buildFailures=measured.get('buildFailures', []),
+                   noRunnableTests=measured.get('noRunnableTests', []),
+                   reference=data.get('execution', {}).get('reference', {}).get('summary', {}),
+                   kernelImageSha256=data['kernelImageSha256'])
+    elif name == "kernel-selftest":
         if 'subject' not in data or 'reference' not in data:
             return {**row, 'total': data['programs'], 'passed': 0, 'kind': 'programs',
                     'status': data['status'], 'outcomes': {'NOT_RUN': data['programs']},
@@ -277,7 +293,7 @@ def read_result(name, before, expected, survey_run=None):
     if name == "kernel":
         survey = ROOT / data["survey"]["runDirectory"] / "substitution.json"
         digest = json.loads(survey.read_text())["evoccSha256"]
-    if name == 'kernel-selftest':
+    if name in ('kernel-selftest', 'kernel-selftest-all'):
         kernel = ROOT / 'tests/contracts/kernel-full-receipt.json'
         if data['kernelReceiptSha256'] != sha256(kernel):
             raise ValueError('kernel selftests name a different complete kernel receipt')
@@ -338,7 +354,7 @@ def main(argv=None):
         return 2
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/frontend")).resolve()
     binary = (args.evocc or target / "release/evocc").resolve()
-    needs_compiler = any(name != 'kernel-selftest' and CATALOG[name][1] for name in selected)
+    needs_compiler = any(name not in ('kernel-selftest', 'kernel-selftest-all') and CATALOG[name][1] for name in selected)
     if args.dry_run:
         for name in selected:
             print(name + ": " + (shlex.join(command(name, args, binary)[0]) if CATALOG[name][1] else CATALOG[name][2]))

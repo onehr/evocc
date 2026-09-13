@@ -70,6 +70,12 @@ k1_boot() {
   smp="$("$K1_JQ" -r '.qemu.fixedArgv.smp' "$contract")"
   mem="$("$K1_JQ" -r '.qemu.fixedArgv.memoryMiB' "$contract")"
   local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
+  if [ -n "${K1_SELFTEST_COLLECTION:-}" ]; then
+    case "$K1_SELFTEST_COLLECTION" in
+      *[!a-zA-Z0-9_/-]*|*..*) k1_die "invalid selftest collection" ;;
+    esac
+    command_line="$command_line evo_selftest=$K1_SELFTEST_COLLECTION"
+  fi
   if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
     case "$K1_CONSOLE_LOGLEVEL" in
       [1-8]) command_line="$command_line loglevel=$K1_CONSOLE_LOGLEVEL" ;;

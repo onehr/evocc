@@ -13,6 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 
+static int full_suite;
+
 static void poweroff(void)
 {
     sync();
@@ -40,14 +42,16 @@ static int run(const char *id, unsigned timeout)
     char path[256], cwd[256];
     snprintf(path, sizeof(path), "/tests/%s", id);
     snprintf(cwd, sizeof(cwd), "/scratch/%s", id);
-    if (mkdir(cwd, 0700) && errno != EEXIST)
+    if (!full_suite && mkdir(cwd, 0700) && errno != EEXIST)
         fatal("mkdir test directory");
     pid_t child = fork();
     if (child < 0)
         return 127;
     if (!child) {
-        if (setpgid(0, 0) || chdir(cwd))
+        if (setpgid(0, 0) || chdir(full_suite ? "/tests" : cwd))
             _exit(127);
+        if (full_suite)
+            execl("/tests/run_kselftest.sh", "run_kselftest.sh", "-c", id, (char *)NULL);
         execl(path, path, (char *)NULL);
         _exit(127);
     }
@@ -79,6 +83,15 @@ int main(void)
     char command[4096], nonce[129], id[200];
     unsigned limit;
     setvbuf(stdout, NULL, _IONBF, 0);
+    full_suite = access("/full-suite", F_OK) == 0;
+    if (full_suite) {
+        if (mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
+            || mount("/dev/vda", "/newroot", "ext4", 0, NULL)
+            || chdir("/newroot") || chroot("."))
+            fatal("mount selftest runtime root");
+    }
+    setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
+    setenv("HOME", "/root", 1);
     puts("EVO_INIT_ALIVE");
     if (mount("proc", "/proc", "proc", 0, NULL))
         fatal("mount proc");
@@ -90,6 +103,10 @@ int main(void)
     if (!key || sscanf(key + strlen("evo_nonce="), "%128s", nonce) != 1)
         fatal("missing nonce");
     dprintf(1, "EVO_BOOT_NONCE %s\n", nonce);
+    char collection[200] = "";
+    key = strstr(command, "evo_selftest=");
+    if (key && sscanf(key + strlen("evo_selftest="), "%199s", collection) != 1)
+        fatal("invalid collection");
     if (mount("sysfs", "/sys", "sysfs", 0, NULL)
         || mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
         || mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777"))
@@ -98,9 +115,18 @@ int main(void)
         fatal("mkdir shm");
     if (mount("tmpfs", "/dev/shm", "tmpfs", 0, "mode=1777"))
         fatal("mount shm");
+    if (full_suite) {
+        if (system("ip link set lo up"))
+            fatal("enable loopback");
+        const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf"};
+        const char *paths[] = {"/sys/kernel/debug", "/sys/kernel/tracing", "/sys/fs/cgroup", "/sys/fs/bpf"};
+        for (unsigned i = 0; i < sizeof(types) / sizeof(types[0]); ++i)
+            if (mount(types[i], paths[i], types[i], 0, NULL))
+                dprintf(1, "KSELFTEST_SETUP unavailable %s: %s\n", types[i], strerror(errno));
+    }
     if (symlink("/proc/self/fd", "/dev/fd") && errno != EEXIST)
         fatal("link fd");
-    if (mount("/dev/vda", "/scratch", "ext4", 0, NULL))
+    if (!full_suite && mount("/dev/vda", "/scratch", "ext4", 0, NULL))
         fatal("mount scratch");
     file = fopen("/tests/huge-pages", "r");
     unsigned pages, available;
@@ -120,8 +146,10 @@ int main(void)
         fatal("read test list");
     unsigned count = 0;
     while (fscanf(file, "%199s %u", id, &limit) == 2) {
-        if (strchr(id, '/') || !limit)
+        if ((!full_suite && strchr(id, '/')) || strstr(id, "..") || !limit)
             fatal("invalid test entry");
+        if (collection[0] && strcmp(collection, id))
+            continue;
         dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, id);
         int rc = run(id, limit);
         dprintf(1, "KSELFTEST_END %s %s %d\n", nonce, id, rc);
