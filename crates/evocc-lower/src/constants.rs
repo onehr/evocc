@@ -48,6 +48,35 @@ fn signed(raw: u128, n: u16) -> i128 {
 }
 
 fn transfer(inst: &Inst, facts: &[Fact]) -> Fact {
+    // These are facts on successful completion of the ORIGINAL instruction,
+    // not permission to replace it. Even x & 0 must still consume x (and
+    // report poison), and every evaluation/guard/effect stays in the CFG.
+    let absorbing = |a: &Value, b: &Value, value| {
+        ![a, b]
+            .iter()
+            .any(|v| facts[v.id as usize].as_ref().is_some_and(Vec::is_empty))
+            && [a, b]
+                .iter()
+                .any(|v| facts[v.id as usize].as_deref() == Some(&[value]))
+    };
+    match inst {
+        Inst::And(_, a, b) | Inst::Mul(_, a, b) if absorbing(a, b, 0) => {
+            return Some(vec![0]);
+        }
+        Inst::Or(v, a, b) if absorbing(a, b, mask(width(v)?)) => {
+            return Some(vec![mask(width(v)?)]);
+        }
+        Inst::Sub(_, a, b) | Inst::Xor(_, a, b) if a == b => {
+            return Some(
+                if facts[a.id as usize].as_ref().is_some_and(Vec::is_empty) {
+                    Vec::new()
+                } else {
+                    vec![0]
+                },
+            );
+        }
+        _ => {}
+    }
     let unary = |a: &Value, f: &dyn Fn(u128) -> Option<u128>| -> Fact {
         facts[a.id as usize]
             .as_ref()?
@@ -78,6 +107,16 @@ fn transfer(inst: &Inst, facts: &[Fact]) -> Fact {
         Inst::Add(v, a, b) => binary(a, b, &|x, y| Some(x.wrapping_add(y) & mask(width(v)?))),
         Inst::Sub(v, a, b) => binary(a, b, &|x, y| Some(x.wrapping_sub(y) & mask(width(v)?))),
         Inst::Mul(v, a, b) => binary(a, b, &|x, y| Some(x.wrapping_mul(y) & mask(width(v)?))),
+        Inst::UDiv(_, a, b) => binary(a, b, &|x, y| x.checked_div(y)),
+        Inst::URem(_, a, b) => binary(a, b, &|x, y| x.checked_rem(y)),
+        Inst::SDiv(v, a, b) => binary(a, b, &|x, y| {
+            let n = width(v)?;
+            Some(signed(x, n).checked_div(signed(y, n))? as u128 & mask(n))
+        }),
+        Inst::SRem(v, a, b) => binary(a, b, &|x, y| {
+            let n = width(v)?;
+            Some(signed(x, n).checked_rem(signed(y, n))? as u128 & mask(n))
+        }),
         Inst::And(_, a, b) => binary(a, b, &|x, y| Some(x & y)),
         Inst::Or(_, a, b) => binary(a, b, &|x, y| Some(x | y)),
         Inst::Xor(_, a, b) => binary(a, b, &|x, y| Some(x ^ y)),

@@ -129,7 +129,16 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
     let mut blocks = Vec::new();
     for block in &split.blocks {
         let mut insts = prefix.remove(&block.id).unwrap_or_default();
-        insts.extend(block.insts.iter().cloned());
+        insts.extend(
+            block
+                .insts
+                .iter()
+                .filter(|inst| {
+                    !discardable_computation(inst)
+                        || inst_defs(inst).iter().any(|dst| needed.contains(&dst.id))
+                })
+                .cloned(),
+        );
         insts.extend(suffix.remove(&block.id).unwrap_or_default());
         let mut term = block.term.clone();
         if let MTerm::Indirect { target, .. } = &mut term {
@@ -159,11 +168,41 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
     }
 }
 
-/// A parameter forwarded forever around a cycle, but never read, needs no
-/// physical transport. Seed demand from actual instruction/control operands,
-/// then walk each demanded parameter back through ALL of its incoming edges.
-/// This removes only unused edge copies: no instruction, call, access,
-/// lifetime action, branch or function ABI parameter is removed.
+/// Only total register computations can be discarded. In particular, every
+/// memory access (even nonvolatile), call, assembly, allocation, ABI marker
+/// and lifetime action stays. UB guards are control flow and stay as well.
+fn discardable_computation(inst: &MInst) -> bool {
+    matches!(
+        inst,
+        MInst::Mov { .. }
+            | MInst::MovImm { .. }
+            | MInst::Adrp { .. }
+            | MInst::AddPageOff { .. }
+            | MInst::Adr { .. }
+            | MInst::Binary { .. }
+            | MInst::BinaryImm { .. }
+            | MInst::FlagBinary { .. }
+            | MInst::WideMultiply { .. }
+            | MInst::Msub { .. }
+            | MInst::Madd { .. }
+            | MInst::CarryBinary { .. }
+            | MInst::AddCarryFlags { .. }
+            | MInst::SubCarryFlags { .. }
+            | MInst::TstImm { .. }
+            | MInst::Unary { .. }
+            | MInst::Extend { .. }
+            | MInst::Bfx { .. }
+            | MInst::Cmp { .. }
+            | MInst::CmpImm { .. }
+            | MInst::Cset { .. }
+            | MInst::Csel { .. }
+    )
+}
+
+/// Follow value demand through pure computations and ALL incoming edges.
+/// An unused address, including one forwarded around a dead parameter cycle,
+/// must not create a runtime relocation into a metadata/discarded section.
+/// Global declarations and their sections are not changed by this pass.
 fn needed_edge_values(
     function: &MFunction,
     parameters: &BTreeMap<u32, Vec<VReg>>,
@@ -171,7 +210,19 @@ fn needed_edge_values(
     let mut incoming: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut needed = BTreeSet::new();
     for block in &function.blocks {
-        needed.extend(block.insts.iter().flat_map(inst_uses).map(|reg| reg.id));
+        for inst in &block.insts {
+            let uses = inst_uses(inst);
+            if discardable_computation(inst) {
+                for dst in inst_defs(inst) {
+                    incoming
+                        .entry(dst.id)
+                        .or_default()
+                        .extend(uses.iter().map(|reg| reg.id));
+                }
+            } else {
+                needed.extend(uses.iter().map(|reg| reg.id));
+            }
+        }
         let mut control = block.term.clone();
         clear_edge_args(&mut control);
         needed.extend(term_uses(&control).into_iter().map(|reg| reg.id));

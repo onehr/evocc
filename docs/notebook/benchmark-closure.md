@@ -72,6 +72,27 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 
 ### Execution order and update rules
 
+September 13 complete-composition diagnostic retry
+[`symbol-linkage-20260913`](../../.evidence/k1/symbol-linkage-20260913/result.json)
+gets past duplicate definitions and modpost, but not final linking. This is a
+mixed **EvoCC revision** diagnostic composition, not a new compiler-bound K6
+measurement; no reference target-C object was intentionally restored. Kbuild
+did regenerate `.vmlinux.export.o`, caught by the installed-object audit.
+
+| ID | Actual new full-link blocker | Current tailored result / next action |
+|---|---|---|
+| K-L06 | `flags & 0` retained disabled DAX / page-table-sync calls; constant division in field masks retained `__field_overflow`. | Extend the existing bounded CFG facts, retaining original arithmetic, poison consumption and guards. RED `091cd55`; actual affected `.o.cmd` replays no longer emit these calls. |
+| K-L07 | Unused static marker addresses create runtime relocations into discarded `.no_trim_symbol`. | Trace machine value demand through pure computations and incoming edges; do not drop accesses, calls, lifetimes or the marker data. RED `091cd55`; original vfio/pnfs units no longer emit the marker-address instructions. |
+| K-L08 | `btf_parse_base` ignores its data arguments with BTF disabled, but the caller still refers to absent `__start_BTF` / `__stop_BTF`. | OPEN: eliminate unused private-call argument transport without changing ABI or dropping operand effects; test interposition as the negative boundary. |
+| K-L09 | `fs/proc/array.o` still emits the `__scoped_seqlock_bug` optimization canary. | OPEN: local state and edge refinement; do not delete or define the canary. |
+| K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | OPEN: run its real producer before compiling that original target-C record with EvoCC; content and installed-object checks must survive final linking. |
+
+The eleven focused original-command replays are recorded in
+[`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):
+all eleven emitted and assembled, with three compiler workers. The associated
+configuration/machine regression gate passes 63 tests, zero failures; Clippy
+for lower/MIR all targets and fmt pass. These are not a new full survey or boot.
+
 September 13 allocator replay uses executable SHA-256
 `36f7c40355cea5648211590831a6a4eedbbf8a2989371f2ef476e45cf6da5fc2`.
 The existing `emit_assembly`/`assemble_batch` functions replayed the original
