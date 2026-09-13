@@ -209,7 +209,10 @@ fn live_arithmetic_keeps_its_flags_consumer_but_dead_bundles_disappear() {
             })
             .unwrap();
             if returned.is_none() {
-                assert!(after.blocks[0].insts.is_empty(), "dead flags bundle retained");
+                assert!(
+                    after.blocks[0].insts.is_empty(),
+                    "dead flags bundle retained"
+                );
             }
             let allocated = evocc_mir::allocate(&after).unwrap();
             evocc_mir::verify_allocation(&allocated).unwrap();

@@ -210,6 +210,27 @@ fn needed_edge_values(
     let mut incoming: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut needed = BTreeSet::new();
     for block in &function.blocks {
+        // A flags producer and its immediately following consumer form one
+        // legality bundle. In particular, keeping the arithmetic result of
+        // `adds` while dropping its unused `cset` leaves an unconsumed flags
+        // definition. Propagate demand forward within the bundle as well as
+        // backward through normal uses. Entire dead bundles still disappear.
+        for pair in block.insts.windows(2) {
+            let definitions = inst_defs(&pair[0]);
+            let uses = inst_uses(&pair[1]);
+            if definitions
+                .iter()
+                .any(|reg| reg.class == RegClass::Flags && uses.contains(reg))
+            {
+                let consumer_definitions = inst_defs(&pair[1]);
+                for dst in definitions {
+                    incoming
+                        .entry(dst.id)
+                        .or_default()
+                        .extend(consumer_definitions.iter().map(|reg| reg.id));
+                }
+            }
+        }
         for inst in &block.insts {
             let uses = inst_uses(inst);
             if discardable_computation(inst) {
