@@ -306,6 +306,22 @@ fn scope_exit_cleanup_preserves_activation_and_results() {
             }
         "#,
         ),
+        (
+            "inline-callback-multiple-exits",
+            r#"
+            static int calls;
+            static inline __attribute__((always_inline)) void release(int *p) {
+                if (*p) calls += *p;
+            }
+            static int f(int n) {
+                int v __attribute__((cleanup(release))) = n;
+                if (n == 1) return 7;
+                if (n == 2) return 8;
+                return 9;
+            }
+            int main(void) { return f(1) != 7 || f(2) != 8 || f(3) != 9 || calls != 6; }
+        "#,
+        ),
     ];
     let mut failures = Vec::new();
     for (name, source) in cases {

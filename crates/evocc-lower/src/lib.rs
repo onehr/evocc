@@ -5117,7 +5117,7 @@ impl<'a> FunctionLowerer<'a> {
                     .map(|value| self.retain_temporary(value, &mut state))
                     .collect::<Vec<_>>();
                 for cleanup in cleanups.into_iter().rev() {
-                    self.lower_discarded_expr(cleanup, &mut state)?;
+                    self.lower_cleanup(cleanup, &mut state)?;
                 }
                 for key in return_keys {
                     returned.push(self.token(&state, key)?.value);
@@ -7686,7 +7686,7 @@ impl<'a> FunctionLowerer<'a> {
                 .get(&symbol)
                 .and_then(|o| o.cleanup)
             {
-                self.lower_discarded_expr(cleanup, state)?;
+                self.lower_cleanup(cleanup, state)?;
             }
         }
         // An inlined callback can create blocks. Read the address from its
@@ -11588,6 +11588,36 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }))
+    }
+
+    fn lower_cleanup(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        // One lexical callback has several mutually exclusive exit sites.
+        // Its inlined body's private labels belong to each emission, not to
+        // the enclosing function's source-label lookup. Existing edges already
+        // hold their concrete BlockIds; keep them and build fresh blocks here.
+        let mut references = FunctionReferences::default();
+        collect_references_expr(expression, &mut references);
+        let private = references
+            .defined_labels
+            .into_iter()
+            .filter(|name| !self.address_labels.contains_key(name))
+            .map(|name| {
+                let saved = self.labels.remove(&name);
+                (name, saved)
+            })
+            .collect::<Vec<_>>();
+        let result = self.lower_discarded_expr(expression, state);
+        for (name, saved) in private {
+            self.labels.remove(&name);
+            if let Some(target) = saved {
+                self.labels.insert(name, target);
+            }
+        }
+        result
     }
 
     fn lower_discarded_expr(
