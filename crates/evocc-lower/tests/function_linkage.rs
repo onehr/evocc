@@ -4,6 +4,61 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 #[test]
+fn pointer_declarators_preserve_symbol_linkage() {
+    let source = include_str!("../../../tests/fixtures/pointer-symbol-linkage.c");
+    let arena = Arena::default();
+    let file = FileId::new(45013);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    for name in ["choose", "choose_pair", "choose_qualified"] {
+        let function = module.functions.iter().find(|f| f.name == name).unwrap();
+        assert_eq!(function.linkage, evocc_evoir::Linkage::Weak, "{name}");
+    }
+    for name in ["pointer_object", "callback"] {
+        let object = module.globals.iter().find(|g| g.symbol == name).unwrap();
+        assert_eq!(object.linkage, evocc_evoir::Linkage::Weak, "{name}");
+    }
+    assert!(module
+        .aliases
+        .iter()
+        .any(|alias| alias.name == "alternative" && alias.target == "implementation"));
+    let inventory = unit.attribute_inventory();
+    assert_eq!(inventory.preserved_not_applied.get("weak"), Some(&5));
+    assert_eq!(inventory.preserved_not_applied.get("alias"), Some(&1));
+    evocc_evoir::validate_module(&module).unwrap();
+}
+
+#[test]
+fn pointer_symbol_attributes_keep_linkage_rejections() {
+    for (source, code) in [
+        (
+            "static int * __attribute__((weak)) hidden(void) { return 0; }",
+            "E3060",
+        ),
+        (
+            "extern int * __attribute__((alias(\"missing\"))) other(void);",
+            "E3061",
+        ),
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45014);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{source}: {:?}", parser.diagnostic());
+        let error = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .unwrap_err();
+        assert_eq!(error.code(), code, "{source}");
+    }
+}
+
+#[test]
 fn adjacent_attribute_strings_name_the_same_linker_entities() {
     for (source, section, hidden, alias) in [
         (
