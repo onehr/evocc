@@ -65,6 +65,8 @@ def parser():
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
     p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
+    p.add_argument("--reuse-selftest-reference", type=Path,
+                   help="reuse a completed unchanged GCC reference summary and payload; still execute every program on the current EvoCC kernel")
     return p
 
 
@@ -97,8 +99,11 @@ def command(name, args, binary):
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
         if name == 'kernel-selftest-all':
-            reuse = '--reuse-build' if args.reuse_selftest_build else '--install-deps'
-            return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest_full.py'), '--jobs', str(args.jobs), reuse], env
+            reuse = '--reuse-build' if args.reuse_selftest_build or args.reuse_selftest_reference else '--install-deps'
+            cmd = [sys.executable, '-u', str(ROOT / 'tools/k1/selftest_full.py'), '--jobs', str(args.jobs), reuse]
+            if args.reuse_selftest_reference:
+                cmd += ['--reference-run', str(args.reuse_selftest_reference)]
+            return cmd, env
         return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest.py')], env
     if name == "kernel-full":
         if args.reuse_kernel_survey:

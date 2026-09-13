@@ -81,6 +81,20 @@ def program_case(ident, result):
             'exitCode': row.get('exitCode')}
 
 
+def reusable_reference(previous, current):
+    """Reuse a completed control measurement, never the old subject results."""
+    if previous['status'] not in ('PASS', 'INCOMPLETE'):
+        raise ValueError('reference run is not finished')
+    for key in ('build', 'referenceConfigSha256', 'initramfsSha256', 'rootfsSha256', 'runtimePolicy'):
+        if previous[key] != current[key]:
+            raise ValueError(f'reference reuse input changed: {key}')
+    cases = [case for row in previous['execution']['reference']['collections'] for case in row['cases']]
+    wanted = [ident for b in current['build']['builds'] for ident in b['available']]
+    if sorted(c['id'] for c in cases) != sorted(wanted):
+        raise ValueError('reference run does not account for every installed program exactly once')
+    return cases
+
+
 def save(path, data):
     path.write_text(json.dumps(data, indent=2) + '\n')
 
@@ -212,9 +226,13 @@ def main():
     parser.add_argument('--build-worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--build-only', action='store_true')
     parser.add_argument('--reuse-build', action='store_true')
+    parser.add_argument('--reference-run', type=Path,
+                        help='reuse a finished reference summary after checking the unchanged Image and payload; execute every subject program')
     parser.add_argument('--install-deps', action='store_true', help='install additional selftest dependencies only in the disposable build container')
     parser.add_argument('--allow-qemu-drift', action='store_true')
     args = parser.parse_args()
+    if args.reference_run and not args.reuse_build:
+        parser.error('--reference-run requires --reuse-build')
     if args.build_worker:
         return build_worker(args.jobs)
     import selftest
@@ -288,6 +306,7 @@ def main():
         save(receipt_path, receipt)
     checkpoint()
     images = {'reference': ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image', 'subject': subject}
+    receipt['referenceImageSha256'] = selftest.sha(images['reference'])
     rows = {label: {b['id']: {'id': b['id'], 'cases': [], 'valid': False} for b in build['builds'] if b['available']}
             for label in images}
     for label in images:
@@ -315,12 +334,36 @@ def main():
         receipt['execution'][label]['summary'] = summarize(build['builds'], list(rows[label].values()))
         checkpoint()
 
+    active_images = list(images)
+    if args.reference_run:
+        previous = selftest.read(args.reference_run)
+        cases = reusable_reference(previous, receipt)
+        qemu = selftest.sha(Path(kernel['boot']['qemu']['path']))
+        builds = {b['id']: b for b in build['builds']}
+        for case in cases:
+            boot = selftest.read(ROOT / case['capture'] / 'boot.json')
+            if (boot['imageSha256'] != receipt['referenceImageSha256']
+                    or boot['qemu']['sha256'] != qemu
+                    or selftest.sha(Path(boot['serialLog'])) != boot['serialLogSha256']):
+                raise ValueError('reference Image, QEMU or captured output changed')
+            b = builds[case['id'].split(':', 1)[0]]
+            rows['reference'][b['id']]['cases'].append(case)
+        for row in rows['reference'].values():
+            row['valid'] = all(case['valid'] for case in row['cases'])
+        receipt['execution']['reference']['summary'] = summarize(build['builds'], list(rows['reference'].values()))
+        receipt['referenceReuse'] = {'run': previous['run'], 'summary': str(args.reference_run),
+                                     'summarySha256': selftest.sha(args.reference_run),
+                                     'programs': len(cases), 'subjectResultsReused': 0}
+        active_images = ['subject']
+        checkpoint()
+        print(f'Reusing {len(cases)} unchanged reference measurements from {previous["run"]}; every subject program will run', flush=True)
+
     tasks = [(label, b, number, ident) for b in build['builds']
-             for number, ident in enumerate(b['available'], 1) for label in images]
+             for number, ident in enumerate(b['available'], 1) for label in active_images]
     with ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:
         # A guest which cannot start the test runtime would repeat the same boot
         # failure hundreds of times. Measure it once and retain every NOT_RUN.
-        bootstrap = list(pool.map(lambda task: execute(*task), tasks[:len(images)]))
+        bootstrap = list(pool.map(lambda task: execute(*task), tasks[:len(active_images)]))
         for result in bootstrap:
             record(*result)
         if any(not case['started'] for _, _, case in bootstrap):
@@ -329,7 +372,7 @@ def main():
             checkpoint()
             print(receipt['blocker'], flush=True)
             return 0
-        futures = [pool.submit(execute, *task) for task in tasks[len(images):]]
+        futures = [pool.submit(execute, *task) for task in tasks[len(active_images):]]
         for future in as_completed(futures):
             record(*future.result())
     receipt['status'] = ('PASS' if all(e['summary']['status'] == 'PASS' for e in receipt['execution'].values())
@@ -343,6 +386,7 @@ def main():
         receipt['regressions'].extend(f'{row["id"]}:{c["name"]}' for c in old['cases']
                                       if c['outcome'] == 'PASS' and now.get(c['number']) != 'PASS')
     if (selftest.sha(subject) != receipt['kernelImageSha256']
+            or selftest.sha(images['reference']) != receipt['referenceImageSha256']
             or selftest.sha(work / 'initramfs.cpio') != receipt['initramfsSha256']
             or selftest.sha(work / 'scratch.img') != receipt['rootfsSha256']):
         raise ValueError('test images changed during execution')
