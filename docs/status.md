@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-13 UTC,EvoIR 1.9.96 / EvoMIR 0.29, checkout f5d7574)
+EvoCC ── (2026-09-13 UTC,EvoIR 1.9.96 / EvoMIR 0.29, checkout 87b854e)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -24,10 +24,10 @@ EvoCC ── (2026-09-13 UTC,EvoIR 1.9.96 / EvoMIR 0.29, checkout f5d7574)
 ┌─ ── K6 EvoCC PASS ───────────────────────────────────────────────────────────────────────────┐
 │ 2,799/2,799 EvoCC C ; PASS; PASS │
 │ K6 read-only-storage-20260913 │
-│ K7 kselftest STALE_IMAGE: 125 PASS / 0 FAIL / 0 SKIP;KUnit │
-│ K7 collection STALE_IMAGE;// receipt │
-│   reference: 114 collections, 199 PASS / 190 FAIL / 537 SKIP (program-level)                                      │
-│   subject: 114 collections, 194 PASS / 187 FAIL / 537 SKIP (program-level)                                        │
+│ K7 kselftest PASS: 125 PASS / 0 FAIL / 0 SKIP;KUnit │
+│ K7 collection INCOMPLETE;// receipt │
+│   reference: 114 collections, 214 PASS / 178 FAIL / 537 SKIP (program-level)                                      │
+│   subject: 114 collections, 217 PASS / 175 FAIL / 537 SKIP (program-level)                                        │
 │ :2,799 @782272f │
 │ PASS ████████ GCC ,EvoCC , │
 │ K1 receipt: EvoCC 76 ; 90/2,799 ░░░░░░░░ │
@@ -48,7 +48,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260913T120301.857819Z`; checkout `f5d7574`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
+Run `20260913T145405.810012Z`; checkout `87b854e`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run. Kernel composition and compiler identities, including whether the build is uniform or incremental, are recorded in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); boot and runtime selftests remain separate measurements.
 
@@ -71,7 +71,7 @@ Program counts and translation-unit counts are different measures; an incomplete
 | lua | E11 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | sqlite | E12 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | kernel-full | K6 | PASS | 2799/2799 units | 20260913T090822Z-incremental (previous) | all target C objects, generated-input fixed point, full link and real boot; selftests separate |
-| kernel-selftest | K7 | PASS | 9/9 programs | 20260913T120301.857819Z | selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate |
-| kernel-selftest-all | K7 | INCOMPLETE | 194/935 programs | 20260913T120301.857819Z | all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate |
+| kernel-selftest | K7 | PASS | 9/9 programs | 20260913T144437.071869Z (previous) | selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate |
+| kernel-selftest-all | K7 | INCOMPLETE | 217/935 programs | 20260913T145405.810012Z | all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate |
 
 Details and commands: [bench receipt](../tests/contracts/bench-receipt.json). Partial failed runs and source-level blockers: [benchmark review](notebook/benchmark-evaluation.md).

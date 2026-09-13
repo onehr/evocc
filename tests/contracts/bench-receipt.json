@@ -1,27 +1,24 @@
 {
   "schemaVersion": 1,
-  "run": "20260913T144437.071869Z",
-  "subject": "b35df0ebee26c0d9d4756460981de05478b535fc",
+  "run": "20260913T145405.810012Z",
+  "subject": "87b854eb05be16ce78894ff8d9116fcc4e80bfe5",
   "dirty": false,
   "driver": null,
   "driverSha256": null,
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel-selftest",
     "kernel-selftest-all",
     "--jobs",
     "2",
-    "--reuse-selftest-reference",
-    ".evidence/kselftest-full/20260913T120409Z/summary.json",
+    "--reuse-selftest-build",
     "--allow-qemu-drift"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-selftest",
     "kernel-selftest-all"
   ],
-  "status": "INTERRUPTED",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -1540,18 +1537,215 @@
     },
     "kernel-selftest-all": {
       "rung": "K7",
-      "status": "RUNNING",
       "note": "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate",
+      "outcomes": {
+        "PASS": 217,
+        "FAIL": 175,
+        "SKIP": 537,
+        "INVALID_OUTPUT": 1,
+        "INCOMPLETE": 1,
+        "TIMEOUT": 4
+      },
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 935,
+      "passed": 217,
+      "kind": "programs",
+      "status": "INCOMPLETE",
+      "collectionCount": 128,
+      "buildFailures": [
+        "bpf",
+        "hid",
+        "kexec",
+        "prctl",
+        "sched_ext",
+        "thermal/intel/power_floor",
+        "thermal/intel/workload_hint"
+      ],
+      "noRunnableTests": [
+        "bpf",
+        "drivers/s390x/uvdevice",
+        "hid",
+        "kexec",
+        "move_mount_set_group",
+        "powerpc",
+        "prctl",
+        "riscv",
+        "sched_ext",
+        "sgx",
+        "sparc64",
+        "thermal/intel/power_floor",
+        "thermal/intel/workload_hint",
+        "x86"
+      ],
+      "reference": {
+        "collections": 128,
+        "programs": 935,
+        "completedCollections": 114,
+        "outcomes": {
+          "PASS": 214,
+          "FAIL": 178,
+          "SKIP": 537,
+          "INVALID_OUTPUT": 1,
+          "INCOMPLETE": 1,
+          "TIMEOUT": 4
+        },
+        "buildFailures": [
+          "bpf",
+          "hid",
+          "kexec",
+          "prctl",
+          "sched_ext",
+          "thermal/intel/power_floor",
+          "thermal/intel/workload_hint"
+        ],
+        "noRunnableTests": [
+          "bpf",
+          "drivers/s390x/uvdevice",
+          "hid",
+          "kexec",
+          "move_mount_set_group",
+          "powerpc",
+          "prctl",
+          "riscv",
+          "sched_ext",
+          "sgx",
+          "sparc64",
+          "thermal/intel/power_floor",
+          "thermal/intel/workload_hint",
+          "x86"
+        ],
+        "incompleteCollections": [
+          "cpufreq",
+          "cpu-hotplug",
+          "filesystems",
+          "perf_events",
+          "rseq"
+        ],
+        "timedOutCollections": [],
+        "status": "INCOMPLETE"
+      },
+      "kernelImageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
+      "run": "20260913T145405Z",
+      "evidence": ".evidence/kselftest-full/20260913T145405Z",
+      "receipt": "tests/contracts/kernel-selftest-full-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/k1/selftest_full.py",
         "--jobs",
         "2",
-        "--reuse-build",
-        "--reference-run",
-        ".evidence/kselftest-full/20260913T120409Z/summary.json"
-      ]
+        "--reuse-build"
+      ],
+      "exitCode": 0,
+      "seconds": 8471.9,
+      "previous": {
+        "rung": "K7",
+        "note": "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate",
+        "outcomes": {
+          "PASS": 44,
+          "NOT_RUN": 853,
+          "FAIL": 1,
+          "SKIP": 35,
+          "INCOMPLETE": 2
+        },
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 935,
+        "passed": 44,
+        "kind": "programs",
+        "status": "ABORTED",
+        "collectionCount": 128,
+        "buildFailures": [
+          "bpf",
+          "hid",
+          "kexec",
+          "prctl",
+          "sched_ext",
+          "thermal/intel/power_floor",
+          "thermal/intel/workload_hint"
+        ],
+        "noRunnableTests": [
+          "bpf",
+          "drivers/s390x/uvdevice",
+          "hid",
+          "kexec",
+          "move_mount_set_group",
+          "powerpc",
+          "prctl",
+          "riscv",
+          "sched_ext",
+          "sgx",
+          "sparc64",
+          "thermal/intel/power_floor",
+          "thermal/intel/workload_hint",
+          "x86"
+        ],
+        "reference": {
+          "collections": 128,
+          "programs": 935,
+          "completedCollections": 114,
+          "outcomes": {
+            "PASS": 199,
+            "FAIL": 190,
+            "SKIP": 537,
+            "INVALID_OUTPUT": 4,
+            "INCOMPLETE": 1,
+            "TIMEOUT": 4
+          },
+          "buildFailures": [
+            "bpf",
+            "hid",
+            "kexec",
+            "prctl",
+            "sched_ext",
+            "thermal/intel/power_floor",
+            "thermal/intel/workload_hint"
+          ],
+          "noRunnableTests": [
+            "bpf",
+            "drivers/s390x/uvdevice",
+            "hid",
+            "kexec",
+            "move_mount_set_group",
+            "powerpc",
+            "prctl",
+            "riscv",
+            "sched_ext",
+            "sgx",
+            "sparc64",
+            "thermal/intel/power_floor",
+            "thermal/intel/workload_hint",
+            "x86"
+          ],
+          "incompleteCollections": [
+            "cpufreq",
+            "cpu-hotplug",
+            "filesystems",
+            "filesystems/statmount",
+            "filesystems/mount-notify",
+            "perf_events",
+            "rseq"
+          ],
+          "timedOutCollections": [],
+          "status": "INCOMPLETE"
+        },
+        "kernelImageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
+        "run": "20260913T144544Z",
+        "evidence": ".evidence/kselftest-full/20260913T144544Z"
+      },
+      "measurement": {
+        "run": "20260913T145405.810012Z",
+        "subject": "87b854eb05be16ce78894ff8d9116fcc4e80bfe5",
+        "driverSha256": null
+      },
+      "classificationCorrection": {
+        "receipt": "tests/contracts/kernel-selftest-full-receipt.json",
+        "executionRepeated": false,
+        "originalSummary": ".evidence/kselftest-full/20260913T145405Z/summary.json"
+      }
     }
   }
 }

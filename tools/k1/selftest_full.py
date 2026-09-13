@@ -71,12 +71,12 @@ def program_case(ident, result):
         outcome = 'INCOMPLETE'
     elif not row.get('valid') or len(row['cases']) != 1:
         outcome = 'INVALID_OUTPUT'
+    elif row['cases'][0]['outcome'] == 'FAIL' and '# TIMEOUT ' in row['cases'][0].get('name', ''):
+        outcome = 'TIMEOUT'
     elif outcome == 'FAIL':
         outcome = 'FAIL'
     else:
         outcome = row['cases'][0]['outcome']
-        if '# TIMEOUT ' in row['cases'][0].get('name', ''):
-            outcome = 'TIMEOUT'
     return {'id': ident, 'outcome': outcome, 'bootVerdict': boot,
             'started': row['outcome'] != 'NOT_RUN',
             'valid': row.get('valid', False) and boot == 'PASS',

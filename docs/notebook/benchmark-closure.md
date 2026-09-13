@@ -6,7 +6,7 @@ musl rerun `20260907T153648.272156Z`, compiler SHA-256
 The [evaluation](benchmark-evaluation.md) and its linked raw records are the
 inventory authority. Counts below overlap where a row is a subcategory.
 
-## Kernel boot blocker tracker (updated 2026-09-13)
+## Kernel boot blocker tracker (updated 2026-09-14)
 
 **K6 first complete kernel boot: PASS, 2026-09-13.** All 2,799 target-C
 objects come from EvoCC, remain installed after the complete link, and reach
@@ -17,13 +17,14 @@ binds Image `eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd`
 to nonce `k1-20260913T143932Z-54e48f74` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
 drift remains recorded, not erased. K7's separately measured selected subset
-passed **125/125 subtests in nine programs** on the preceding Image and the GCC
-reference Image (`20260913T120301Z`); the new Image requires its own rerun.
-The expanded all-collection run on the preceding Image
-`20260913T120409Z` has completed **935/935 installed programs on each
-kernel**; it exposed K-R08 below. Completion is not an all-PASS result:
-the reference has 199 program passes and the subject 194. KUnit remains
-**NOT_RUN**.
+passed **125/125 subtests in nine programs** on this Image and the GCC
+reference Image (`20260913T144437Z`). The new all-collection run
+`20260913T145405Z` completed **935/935 installed programs on each kernel**
+with the corrected runtime root. All seven earlier reference-PASS compiler
+regressions now pass on both kernels; no reference-PASS regression remains.
+Completion is not an all-PASS result: the reference has 214 program passes
+and the subject 217, with shared failures, skips and timeouts below.
+KUnit remains **NOT_RUN**.
 
 This is a **uniform all-EvoCC build**: all 2,799 objects were recompiled with
 `782272f`, including allocator repair `aad1657` and read-only string storage,
@@ -89,8 +90,8 @@ correctness and unselected runtime tests remain separate gates.
 | K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
 | K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
 | K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
-| K-R07 / bootstrap fixed; full rerun pending | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `aad1657`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | Exact `acct:acct_syscall` replay on Image `943f27b4a3ce` **PASS**, normal poweroff; [capture](../../.evidence/k1/exec-stack-20260913/bootstrap/boot.json). Uniform rebuild then retains all 2,799 objects and boots Image `bd67f341e141`. All-program runtime rerun is pending; the previous 935 NOT_RUN count remains historical. |
-| K-R08 / tailored GREEN; kernel replay pending | Full run `20260913T120409Z` reaches `exec:recursion-depth`, `filesystems:fclog` and `filesystems/mount-notify:mount-notify_test`: GCC passes, EvoCC crashes in `kfree_const` while freeing a mount. `alloc_vfsmnt(NULL)` stores `"none"` directly; its symbol `__evocc.string.695` is incorrectly in `.data`, outside `__start_rodata..__end_rodata`. The overlayfs test reaches the same crash but also fails on GCC for another reason. | RED `69b6016`; select read-only storage from `GlobalKind::StringLiteral` before considering zero-fill compression. Ordinary writable arrays/zero globals are unchanged; no kernel source, allocator, stack size or test predicate change. | Emission regression covers ordinary, empty, wide-empty and embedded-NUL strings on both targets. The [native fixture](../../tests/fixtures/read-only-string-storage.c), linked with [section bounds](../../tests/fixtures/read-only-string-storage.ld), exits 0 on EvoCC and GCC-14/Clang-19 at O0/O2; readelf confirms `.rodata` has `A`, not `WA`. Full run continues on the unchanged pre-repair Image; do not claim these kernel tests are fixed until replay. |
+| K-R07 / CLOSED 2026-09-14 | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `aad1657`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | The uniform 2,799-object Image `eaab6181ec27` boots; full run `20260913T145405Z` starts all **935/935 programs on each kernel**, NOT_RUN 0. The earlier failed bootstrap is preserved, not rewritten as a pass. |
+| K-R08 / CLOSED 2026-09-14 | Full run `20260913T120409Z` exposes seven reference-PASS programs crashing in `kfree_const` while freeing a mount. `alloc_vfsmnt(NULL)` stores `"none"` directly; its symbol `__evocc.string.695` is incorrectly in `.data`, outside `__start_rodata..__end_rodata`. Overlayfs reaches the same crash but also fails on GCC for another reason. | RED `69b6016`, repair `782272f`: select read-only storage from `GlobalKind::StringLiteral` before considering zero-fill compression. Ordinary writable objects, kernel sources and test predicates remain unchanged. | Emission and five-lane native fixture tests pass; the full rebuild retains all 2,799 objects. Targeted replay and full run `20260913T145405Z` both pass all seven previous reference-PASS regressions. Overlayfs no longer crashes; its ordinary failure remains on both kernels. |
 
 ### Selected kernel runtime selftests (2026-09-13)
 
@@ -288,8 +289,76 @@ passes `filesystems/statmount:statmount_test` and
 assertion, but fails its subsequent `listmount` count assertion (1 versus 10)
 on both kernels; that remains a real measured failure.
 
-The runtime change invalidates reference reuse. The next full comparison must
-execute all 935 programs on **both** Images with the same corrected initramfs.
+The runtime change invalidates reference reuse. The following full comparison
+therefore executes all 935 programs on **both** Images with the same corrected
+initramfs; it does not reuse the old control results.
+
+#### Complete comparison on the repaired Image (2026-09-14)
+
+Command: `python3 -u tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift`.
+Run `20260913T145405Z`, execution code `87b854e`, same subject Image
+`eaab6181ec27` and reference Image `b6f206dea584b` as above. All **935/935**
+installed programs were attempted on each kernel, with at most two concurrent
+VMs. The controller and all its VMs have exited. The runner took **8,471.9 s**;
+the benchmark verdict remains **INCOMPLETE**, not all-PASS.
+
+| Kernel | PASS | FAIL | SKIP | Invalid output | Incomplete execution | Timeout | NOT_RUN |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| GCC reference | 214 | 178 | 537 | 1 | 1 | 4 | 0 |
+| EvoCC subject | 217 | 175 | 537 | 1 | 1 | 4 | 0 |
+
+The [current receipt](../../tests/contracts/kernel-selftest-full-receipt.json)
+records a classification-only correction: both `mm:run_vmtests.sh` logs end in
+`not ok ... # TIMEOUT 900 seconds`, followed by a normal guest shutdown.
+The original classifier reported FAIL before checking that upstream marker.
+Reparsing all **1,870 original transcripts**, checking their recorded hashes,
+changes exactly those two outcomes from FAIL to TIMEOUT. No PASS count changed,
+no execution was repeated, no budget changed, and the
+[original summary](../../.evidence/kselftest-full/20260913T145405Z/summary.json)
+and raw logs remain unchanged. The receipt identifies the original summary and
+corrected classifier; it is the authority for the corrected table.
+
+All seven K-R08 regressions pass on both kernels, and there are **zero
+reference-PASS → subject-nonPASS regressions**. Three programs fail on the
+reference and pass on the subject: `cgroup:test_freezer`,
+`cgroup:test_memcontrol`, and `uevent:uevent_filtering`. These differences are
+unadjudicated, not claimed improvements. The reference uevent log reports
+`No buffer space available` when receiving an event.
+
+Remaining concrete issues and coverage limits:
+
+- Runtime packaging: all **29/29 ublk programs fail on both kernels** because
+  installed scripts cannot source `test_common.sh`. The file exists in the
+  frozen source but was not included in the installed test runtime.
+- Runtime tools: `ps`, `pgrep`, `killall`, `sysctl`, `udevadm`, and `tcpdump`
+  are absent from the guest PATH. The mm test's `charge_reserved_hugetlb.sh`
+  treats missing `ps` as a dead writer and cannot clean it up without
+  `pgrep`/`killall`; both runs subsequently hit the unchanged 900-second budget.
+  Other logs explicitly report missing `sysctl`, `udevadm`, and `tcpdump`.
+  These are measured environment defects, not established compiler defects.
+- Both kernels still time out in `filesystems:file_stressor`,
+  `perf_events:sigtrap_threads`, and `rseq:run_param_test.sh`; CPU-hotplug
+  reaches a shared kernel panic, while cpufreq produces invalid outer TAP.
+- Modules remain unbuilt/uninstalled, including configured modular IPv6,
+  bridge, VLAN and overlayfs support. The 14 collections without runnable
+  entries remain separately accounted: three need missing BTF, ten are
+  architecture-conditioned, and one is helper-only. KUnit remains NOT_RUN.
+
+Next work should repair runtime packaging and rerun affected collections on
+both unchanged Images before another full run. Shared residual failures still
+require diagnosis; matching a GCC failure is not proof of correctness.
+
+Focused classification validation: `python3 -m unittest discover -s tools/k1/tests`
+**125 PASS**; `python3 -m unittest discover -s tools/ladder/tests -p test_bench.py`
+**22 PASS**; Ruff clean. `tools/gate-changed.sh 87b854e` reports no changed Rust
+crate, so it does not rebuild kernel/compiler binaries or claim a fresh
+workspace run.
+
+Storage maintenance removed **103 regenerable Cargo cache directories**:
+101 historical reconnaissance `cargo-target` directories and the old
+`builtin-lowering/target` and `ac-replay-36e4a57/target` directories. Observed
+free space rose **29.79 → 51.51 GiB** (**21.73 GiB** net). Current compiler
+outputs, kernel/test Images, source files and test results were retained.
 
 ### Execution order and update rules
 
