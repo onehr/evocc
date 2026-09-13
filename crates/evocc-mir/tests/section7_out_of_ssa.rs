@@ -160,6 +160,64 @@ fn unused_symbol_addresses_do_not_become_linker_dependencies() {
 }
 
 #[test]
+fn live_arithmetic_keeps_its_flags_consumer_but_dead_bundles_disappear() {
+    let flags = |id| VReg::new(id, RegClass::Flags);
+    for carry_chain in [false, true] {
+        for returned in [None, Some(w(2)), Some(w(5))] {
+            let mut insts = vec![MInst::FlagBinary {
+                op: evocc_mir::FlagOp::Adds,
+                dst: w(2),
+                flags: flags(3),
+                lhs: w(0),
+                rhs: w(1),
+                width: Width::W,
+            }];
+            if carry_chain {
+                insts.push(MInst::AddCarryFlags {
+                    dst: flags(4),
+                    flags_in: flags(3),
+                    lhs: w(0),
+                    rhs: w(1),
+                    width: Width::W,
+                });
+            }
+            insts.push(MInst::Cset {
+                dst: w(5),
+                flags: flags(if carry_chain { 4 } else { 3 }),
+                cond: evocc_mir::Cond::Cs,
+            });
+            let function = MFunction {
+                name: "arithmetic".into(),
+                blocks: vec![MBlock {
+                    id: 0,
+                    args: vec![w(0), w(1)],
+                    insts,
+                    term: MTerm::Ret {
+                        values: returned.into_iter().collect(),
+                    },
+                }],
+            };
+            evocc_mir::validate_module(&MModule {
+                functions: vec![function.clone()],
+                ..MModule::default()
+            })
+            .unwrap();
+            let after = out_of_ssa(&function);
+            evocc_mir::validate_module(&MModule {
+                functions: vec![after.clone()],
+                ..MModule::default()
+            })
+            .unwrap();
+            if returned.is_none() {
+                assert!(after.blocks[0].insts.is_empty(), "dead flags bundle retained");
+            }
+            let allocated = evocc_mir::allocate(&after).unwrap();
+            evocc_mir::verify_allocation(&allocated).unwrap();
+        }
+    }
+}
+
+#[test]
 fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
     let x = |id| VReg::new(id, RegClass::Gpr64);
     let function = MFunction {
