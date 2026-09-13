@@ -51,7 +51,7 @@ static int run(const char *id, unsigned timeout)
         if (setpgid(0, 0) || chdir(full_suite ? "/tests" : cwd))
             _exit(127);
         if (full_suite)
-            execl("/tests/run_kselftest.sh", "run_kselftest.sh", "-c", id, (char *)NULL);
+            execl("/tests/run_kselftest.sh", "run_kselftest.sh", strchr(id, ':') ? "-t" : "-c", id, (char *)NULL);
         execl(path, path, (char *)NULL);
         _exit(127);
     }
@@ -116,6 +116,11 @@ int main(void)
     if (mount("tmpfs", "/dev/shm", "tmpfs", 0, "mode=1777"))
         fatal("mount shm");
     if (full_suite) {
+        if ((mkdir("/dev/pts", 0755) && errno != EEXIST)
+            || mount("devpts", "/dev/pts", "devpts", 0, "mode=0620,ptmxmode=0666"))
+            fatal("mount devpts");
+    }
+    if (full_suite) {
         if (system("ip link set lo up"))
             fatal("enable loopback");
         const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf"};
@@ -155,11 +160,16 @@ int main(void)
     while (fscanf(file, "%199s %u", id, &limit) == 2) {
         if ((!full_suite && strchr(id, '/')) || strstr(id, "..") || !limit)
             fatal("invalid test entry");
-        if (collection[0] && strcmp(collection, id))
-            continue;
-        dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, id);
-        int rc = run(id, limit);
-        dprintf(1, "KSELFTEST_END %s %s %d\n", nonce, id, rc);
+        if (collection[0] && strcmp(collection, id)) {
+            char *colon = strchr(collection, ':');
+            if (!colon || (size_t)(colon - collection) != strlen(id)
+                || strncmp(collection, id, strlen(id)))
+                continue;
+        }
+        const char *selected = collection[0] ? collection : id;
+        dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, selected);
+        int rc = run(selected, limit);
+        dprintf(1, "KSELFTEST_END %s %s %d\n", nonce, selected, rc);
         count++;
     }
     if (!feof(file) || !count)

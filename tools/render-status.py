@@ -223,6 +223,20 @@ def main() -> int:
     if selftests and selftests.get("kernelImageSha256") != full_kernel.get("imageSha256"):
         selftest_status = "STALE_IMAGE"
     selftest_cases = selftests.get("subject", {}).get("subtests", {})
+    full_selftests = contract("kernel-selftest-full-receipt.json")
+    full_selftest_status = full_selftests.get("status", "NOT_RUN")
+    if full_selftests and full_selftests.get("kernelImageSha256") != full_kernel.get("imageSha256"):
+        full_selftest_status = "STALE_IMAGE"
+    full_selftest_execution = full_selftests.get("execution", {})
+    full_selftest_progress = []
+    for name in ("reference", "subject"):
+        execution = full_selftest_execution.get(name, {})
+        summary = execution.get("summary", {})
+        counts = summary.get("outcomes", {})
+        full_selftest_progress.append(
+            f"  {name}: {summary.get('completedCollections', len(execution.get('collections', [])))} collections, "
+            f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / {counts.get('SKIP', 0)} SKIP (program-level)"
+        )
     # The native E0 receipt holds one selected suite; the common run retains
     # both, so running torture must not erase an earlier c-testsuite reading.
     e0c = e0c or measured.get("ctest", {}).get("outcomes", {})
@@ -241,6 +255,8 @@ def main() -> int:
             f" {full_compiled:,}/{full_total:,} EvoCC C ; {'PASS' if full_linked else ''}; {full_boot.get('verdict', 'NOT_RUN')}",
             f"K6 {full_kernel.get('run', full_kernel.get('runId', ''))}",
             f"K7 kselftest {selftest_status}: {selftest_cases.get('PASS', 0)} PASS / {selftest_cases.get('FAIL', 0)} FAIL / {selftest_cases.get('SKIP', 0)} SKIP;KUnit ",
+            f"K7 collection {full_selftest_status};// receipt",
+            *full_selftest_progress,
             ":" + (" + ".join(f"{entry['units']:,} @{entry['subject'][:7]}" for entry in full_kernel.get("compilerComposition", [])) or " receipt"),
             f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
             f" K1 receipt: EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",

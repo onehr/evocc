@@ -72,7 +72,7 @@ k1_boot() {
   local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
   if [ -n "${K1_SELFTEST_COLLECTION:-}" ]; then
     case "$K1_SELFTEST_COLLECTION" in
-      *[!a-zA-Z0-9_/-]*|*..*) k1_die "invalid selftest collection" ;;
+      *[!a-zA-Z0-9_/:.+-]*|*..*) k1_die "invalid selftest collection or program" ;;
     esac
     command_line="$command_line evo_selftest=$K1_SELFTEST_COLLECTION"
   fi

@@ -163,6 +163,8 @@ def metrics(name, data):
                    noRunnableTests=measured.get('noRunnableTests', []),
                    reference=data.get('execution', {}).get('reference', {}).get('summary', {}),
                    kernelImageSha256=data['kernelImageSha256'])
+        if data.get('blocker'):
+            row['error'] = data['blocker']
     elif name == "kernel-selftest":
         if 'subject' not in data or 'reference' not in data:
             return {**row, 'total': data['programs'], 'passed': 0, 'kind': 'programs',

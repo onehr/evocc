@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
 import os
@@ -45,12 +46,39 @@ def summarize(builds, runtime):
     failed = [b['id'] for b in builds if b['buildExit'] != 0 or b.get('buildErrors')]
     empty = [b['id'] for b in builds if not b.get('available', b['tests'])]
     return {'collections': len(builds), 'programs': sum(len(b['tests']) for b in builds),
+            'completedCollections': sum(bool(b.get('available', b['tests']))
+                and len(actual.get(b['id'], {}).get('cases', [])) == len(b.get('available', b['tests']))
+                and all(c.get('started', True) for c in actual.get(b['id'], {}).get('cases', []))
+                for b in builds),
             'outcomes': dict(counts), 'buildFailures': failed, 'noRunnableTests': empty,
             'incompleteCollections': incomplete,
             'timedOutCollections': [r['id'] for r in runtime if r.get('outcome') == 'TIMEOUT'
                                     or r.get('boot', {}).get('verdict') == 'TIMEOUT'],
             'status': 'PASS' if counts and set(counts) == {'PASS'} and not failed
             and not empty and not incomplete else 'INCOMPLETE'}
+
+
+def program_case(ident, result):
+    """A VM watchdog failure is one measured program, not the rest of its collection."""
+    boot = result['boot']['verdict']
+    row = result['programs'][0]
+    outcome = row['outcome']
+    if outcome == 'NOT_RUN':
+        outcome = 'NOT_RUN'
+    elif boot == 'TIMEOUT' or outcome == 'TIMEOUT':
+        outcome = 'TIMEOUT'
+    elif boot != 'PASS':
+        outcome = 'INCOMPLETE'
+    elif not row.get('valid') or len(row['cases']) != 1:
+        outcome = 'INVALID_OUTPUT'
+    else:
+        outcome = row['cases'][0]['outcome']
+        if '# TIMEOUT ' in row['cases'][0].get('name', ''):
+            outcome = 'TIMEOUT'
+    return {'id': ident, 'outcome': outcome, 'bootVerdict': boot,
+            'started': row['outcome'] != 'NOT_RUN',
+            'valid': row.get('valid', False) and boot == 'PASS',
+            'exitCode': row.get('exitCode')}
 
 
 def save(path, data):
@@ -102,15 +130,19 @@ def build_worker(jobs):
             raise RuntimeError('less than 8 GiB free; stopping before filling the host disk')
         directory = source / 'tools/testing/selftests' / target
         output = directory
-        cmd = ['make', '--no-print-directory', '-C', str(directory), 'ARCH=arm64',
+        cmd = ['make', '--no-print-directory', '-C', str(directory), '-o', 'headers', 'ARCH=arm64',
                'CC=gcc-14', 'HOSTCC=gcc-14', 'CLANG=clang-19', 'LLC=llc-19',
                f'OUTPUT={output}', f'O={work / "obj"}',
                'KHDR_INCLUDES=-isystem /work/headers/include',
-               f'CPPFLAGS=-I{source / "tools/testing/selftests"}']
+               f'CPPFLAGS=-I{source / "tools/testing/selftests"} -isystem /work/headers/include',
+               'CFLAGS_NOLIBC_TEST=-isystem /work/headers/include']
         log = logs / (target.replace('/', '.') + '.log')
         started = time.monotonic()
         with log.open('w') as handle:
-            build_rc = build_command(cmd + ['-k', '-j', str(jobs), 'all'], handle, 600)
+            # The arm64 signal Makefile copies all outputs from multiple rules;
+            # its parallel cp race is unrelated to kernel/compiler behavior.
+            target_jobs = 1 if target == 'arm64' else jobs
+            build_rc = build_command(cmd + ['-k', '-j', str(target_jobs), 'all'], handle, 600)
             build_errors = [line for line in log.read_text(errors='replace').splitlines()
                             if re.search(r'make(?:\[\d+\])?: \*\*\*', line)]
             install = cmd + ['-k', '-o', 'all', 'install', f'INSTALL_PATH={tests / target}',
@@ -124,12 +156,13 @@ def build_worker(jobs):
             except subprocess.TimeoutExpired:
                 install_rc, names = 124, []
         available = [name for name in names if (tests / name.replace(':', '/', 1)).is_file()]
-        row = {'id': target, 'command': cmd + ['-k', '-j', str(jobs), 'all'],
+        row = {'id': target, 'command': cmd + ['-k', '-j', str(target_jobs), 'all'],
                'buildExit': build_rc, 'buildErrors': build_errors, 'installExit': install_rc, 'tests': names, 'available': available,
                'seconds': round(time.monotonic() - started, 2), 'log': log.name}
         settings = tests / target / 'settings'
         timeout = re.search(r'^timeout=(\d+)$', settings.read_text() if settings.exists() else '', re.M)
         row['upstreamTimeoutSeconds'] = int(timeout[1]) if timeout else 45
+        row['programTimeoutSeconds'] = (row['upstreamTimeoutSeconds'] or 300) + 15
         row['collectionTimeoutSeconds'] = max(120, len(available) * (row['upstreamTimeoutSeconds'] or 300) + 60)
         metadata['builds'].append(row)
         save(work / 'build.json', metadata)
@@ -142,7 +175,7 @@ def build_worker(jobs):
     shutil.copytree(source / 'tools/testing/selftests/net/lib', tests / 'net/lib', dirs_exist_ok=True)
     all_tests = [name for row in metadata['builds'] for name in row['available']]
     (tests / 'kselftest-list.txt').write_text('\n'.join(all_tests) + '\n')
-    (tests / 'list').write_text(''.join(f'{b["id"]} {b["collectionTimeoutSeconds"]}\n'
+    (tests / 'list').write_text(''.join(f'{b["id"]} {b["programTimeoutSeconds"]}\n'
                                        for b in metadata['builds'] if b['available']))
     (tests / 'huge-pages').write_text('1\n')
     # A runtime root, not another kernel tree or complete compiler installation.
@@ -213,7 +246,8 @@ def main():
                         'libnl-3-dev libnl-genl-3-dev libcap-ng-dev libunwind-dev libtraceevent-dev '
                         'libbpf-dev libpopt-dev libfuse-dev libfuse3-dev libjson-c-dev libpcap-dev libkeyutils-dev '
                         'iproute2 iputils-ping iptables nftables ethtool socat numactl bc strace jq '
-                        'python3-pyroute2 python3-yaml python3-pytest python3-scapy python3-pexpect')
+                        'python3-pyroute2 python3-yaml python3-pytest python3-scapy python3-pexpect '
+                        'gawk python3-jsonschema libmbedtls-dev')
             worker = ('apt-get -o Acquire::Check-Valid-Until=false update > /work/full/dependencies.log 2>&1 && '
                       'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends '
                       + packages + ' >> /work/full/dependencies.log 2>&1 && ' + worker)
@@ -243,41 +277,65 @@ def main():
                'referenceConfigSha256': selftest.sha(ROOT / '.build/reference/gcc-lane-1/.config'),
                'initramfsSha256': selftest.sha(work / 'initramfs.cpio'),
                'rootfsSha256': selftest.sha(work / 'scratch.img'), 'execution': {}}
+    receipt['runtimePolicy'] = {'isolation': 'fresh VM per program', 'workers': min(args.jobs, 2),
+                                'upstreamTimeouts': 'unchanged; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
+                                'unlimitedProgramWatchdogSeconds': 300,
+                                'modules': 'not built or installed; frozen Images and configuration unchanged'}
     if receipt['kernelConfigSha256'] != receipt['referenceConfigSha256']:
         raise ValueError('reference and subject kernel configurations differ')
     def checkpoint():
         save(run / 'summary.json', receipt)
         save(receipt_path, receipt)
     checkpoint()
-    for label, image in [('reference', ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image'), ('subject', subject)]:
-        rows = []
-        receipt['execution'][label] = {'collections': rows}
-        for b in build['builds']:
-            if not b['available']:
-                continue
-            os.environ['K1_SELFTEST_COLLECTION'] = b['id']
-            contract = {'consoleLoglevel': 5, 'hugePages': 1, 'bootOverheadSeconds': 60,
-                        'perProgramTimeoutSeconds': b['collectionTimeoutSeconds']}
-            try:
-                result = selftest.flight(label + '/' + b['id'], image, work, run, contract, [b['id']])
-                row = result['programs'][0]
-                row.update(boot=result['boot'], bootExit=result['exitCode'])
-            except ValueError as error:
-                row = {'id': b['id'], 'cases': [], 'valid': False, 'error': str(error),
-                       'boot': selftest.read(run / label / b['id'] / 'boot.json')}
-                print(f'{label} {b["id"]}: incomplete capture: {error}', flush=True)
-            for case in row['cases']:
-                if '# TIMEOUT ' in case['name']:
-                    case['outcome'] = 'TIMEOUT'
-            for case, ident in zip(row['cases'], b['available']):
-                case['id'] = ident
-            rows.append(row)
-            receipt['execution'][label]['summary'] = summarize(build['builds'], rows)
+    images = {'reference': ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image', 'subject': subject}
+    rows = {label: {b['id']: {'id': b['id'], 'cases': [], 'valid': False} for b in build['builds'] if b['available']}
+            for label in images}
+    for label in images:
+        receipt['execution'][label] = {'collections': list(rows[label].values()),
+                                       'summary': summarize(build['builds'], [])}
+
+    def execute(label, b, number, ident):
+        capture = label + '/' + ident.replace(':', '/')
+        contract = {'consoleLoglevel': 5, 'hugePages': 1, 'bootOverheadSeconds': 60,
+                    'perProgramTimeoutSeconds': b['programTimeoutSeconds']}
+        try:
+            result = selftest.flight(capture, images[label], work, run, contract, [ident],
+                                    extra_env={'K1_SELFTEST_COLLECTION': ident})
+            case = program_case(ident, result)
+        except ValueError as error:
+            case = {'id': ident, 'outcome': 'NOT_RUN', 'started': False, 'valid': False, 'error': str(error)}
+        case.update(number=number, name=ident, capture=str((run / capture).relative_to(ROOT)))
+        return label, b, case
+
+    def record(label, b, case):
+        row = rows[label][b['id']]
+        row['cases'].append(case)
+        row['cases'].sort(key=lambda c: c['number'])
+        row['valid'] = len(row['cases']) == len(b['available']) and all(c['valid'] for c in row['cases'])
+        receipt['execution'][label]['summary'] = summarize(build['builds'], list(rows[label].values()))
+        checkpoint()
+
+    tasks = [(label, b, number, ident) for b in build['builds']
+             for number, ident in enumerate(b['available'], 1) for label in images]
+    with ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:
+        # A guest which cannot start the test runtime would repeat the same boot
+        # failure hundreds of times. Measure it once and retain every NOT_RUN.
+        bootstrap = list(pool.map(lambda task: execute(*task), tasks[:len(images)]))
+        for result in bootstrap:
+            record(*result)
+        if any(not case['started'] for _, _, case in bootstrap):
+            receipt.update(status='BLOCKED', blocker='Kernel could not initialize the selftest runtime; tests not reached',
+                           bootstrap={label: case for label, _, case in bootstrap})
             checkpoint()
-        print(label, receipt['execution'][label]['summary'], flush=True)
-    receipt['status'] = receipt['execution']['subject']['summary']['status']
+            print(receipt['blocker'], flush=True)
+            return 0
+        futures = [pool.submit(execute, *task) for task in tasks[len(images):]]
+        for future in as_completed(futures):
+            record(*future.result())
+    receipt['status'] = ('PASS' if all(e['summary']['status'] == 'PASS' for e in receipt['execution'].values())
+                         else 'INCOMPLETE')
     receipt['referenceStatus'] = receipt['execution']['reference']['summary']['status']
-    previous = {r['id']: r for r in receipt['execution']['reference']['collections']}
+    previous = rows['reference']
     receipt['regressions'] = []
     for row in receipt['execution']['subject']['collections']:
         old = previous[row['id']]

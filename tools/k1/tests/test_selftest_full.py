@@ -60,6 +60,12 @@ class FullSelftest(unittest.TestCase):
                                                                'cases': [{'outcome': 'PASS'}]}]}
             self.assertNotEqual(lane.program_case('mm:a', flight)['outcome'], 'PASS')
 
+    def test_kernel_failure_before_test_begin_stays_not_run(self):
+        self.assertTrue(hasattr(lane, 'program_case'), 'per-program VM accounting is missing')
+        flight = {'boot': {'verdict': 'MARKERS_MISSING'},
+                  'programs': [{'outcome': 'NOT_RUN', 'cases': []}]}
+        self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'NOT_RUN')
+
 
 if __name__ == '__main__':
     unittest.main()

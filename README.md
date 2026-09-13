@@ -24,8 +24,11 @@ the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds the exact Image
 and nonce. K7's selected upstream kselftests now pass **125/125 subtests in nine
 programs**, on both that unchanged Image and the GCC reference kernel, with no
 failures, skips or timeouts ([receipt](tests/contracts/kernel-selftest-receipt.json)).
-KUnit and unselected selftests have not run; broader native coverage remains
-partial. Current figures are in [docs/status.md](docs/status.md), with remaining
+An expanded run of every upstream selftest collection is now available; its
+[separate receipt](tests/contracts/kernel-selftest-full-receipt.json) retains
+build gaps, unavailable hardware/configuration, skips and failures rather than
+extending the selected-subset PASS to all tests. KUnit has not run. Current
+figures are in [docs/status.md](docs/status.md), with remaining
 constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
 The illustration above is not a live counter. The evaluation ladder and pinned
 subjects are in [docs/roadmap.md](docs/roadmap.md).
@@ -39,6 +42,7 @@ python3 tools/bench.py --list
 python3 tools/bench.py csmith cjson
 python3 tools/bench.py torture zlib toybox --jobs 4
 python3 tools/bench.py kernel-selftest --allow-qemu-drift
+python3 tools/bench.py kernel-selftest-all --jobs 2 --allow-qemu-drift
 python3 tools/bench.py all --programs 500 --jobs 4 --budget 20 --allow-qemu-drift
 ```
 
@@ -51,6 +55,17 @@ the installed QEMU digest for the kernel lane. `--dry-run` prints commands;
 `kernel-selftest` alone reuses the measured K6 and reference Images without
 rebuilding the compiler or kernel; it builds one shared reference-compiled
 userspace test payload and checks actual test results on both kernels.
+`kernel-selftest-all` enumerates upstream `TARGETS` and `TARGETS_HOTPLUG` with
+`SKIP_TARGETS` empty, attempts each build, and runs installed programs/scripts
+on both unchanged Images. Each program gets a fresh VM disk snapshot; at most
+two VMs run concurrently, so a hung program cannot hide the later programs.
+Its counts are upstream **program-level outcomes**, not individual assertions;
+some programs legitimately skip or contain no applicable subtests. It needs
+additional userspace dependencies and can take hours. `--reuse-selftest-build`
+reuses the installed payload but still executes the tests again. Upstream
+timeouts are retained; programs explicitly disabling them get a documented
+300-second VM safety watchdog, plus cleanup and boot allowances. A timeout is
+not a pass.
 
 The script streams lane output, keeps only a small summary under `.evidence/bench/`,
 updates `tests/contracts/bench-receipt.json`, and renders `docs/status.md`.

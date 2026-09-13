@@ -155,9 +155,9 @@ def build_payload(work, contract, run):
                           'binarySha256': sha(ramfs / ident)} for name, ident in zip(programs, ids)]}
 
 
-def flight(name, image, work, run, contract, ids):
+def flight(name, image, work, run, contract, ids, extra_env=None):
     directory = run / name
-    env = {**os.environ, 'K1_INITRAMFS': str(work / 'initramfs.cpio'),
+    env = {**os.environ, **(extra_env or {}), 'K1_INITRAMFS': str(work / 'initramfs.cpio'),
            'K1_TEST_DISK': str(work / 'scratch.img'),
            'K1_CONSOLE_LOGLEVEL': str(contract['consoleLoglevel']),
            'K1_BOOT_TIMEOUT': str(contract['bootOverheadSeconds'] + len(ids) * contract['perProgramTimeoutSeconds'])}

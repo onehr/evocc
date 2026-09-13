@@ -2015,7 +2015,7 @@ Rules that hold for every rung:
 | E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
 | K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
 | K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): incremental composition of 2,723 prior + 76 repaired EvoCC objects; zero reference target-C fallback, not a fresh single-compiler survey |
-| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T100557Z`; KUnit and unselected selftests NOT_RUN |
+| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T100557Z`; KUnit NOT_RUN; expanded collection coverage is measured separately below |
 
 The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-13)
 separates compile refusals, link/relocation failures, runtime failures, build
@@ -2028,6 +2028,23 @@ run `20260913T100557Z` executes the [declared nine-program subset](../tests/cont
 with the same reference-built userspace payload on both kernels. All 125 subtests
 pass on each; this is runtime evidence beyond boot, not coverage of all kselftests
 or KUnit. Reproduce with `python3 tools/bench.py kernel-selftest --allow-qemu-drift`.
+
+The expanded `kernel-selftest-all` lane attempts all 128 upstream `TARGETS` and
+`TARGETS_HOTPLUG` collections with `SKIP_TARGETS` empty. Each run is recorded independently in the
+[full selftest receipt](../tests/contracts/kernel-selftest-full-receipt.json),
+which is checkpointed after each program. Build and installed program counts
+are measured, including collections with no runnable list under this arm64
+configuration/build environment. These include architecture restrictions and
+missing BTF prerequisites, not measured passes. Runtime counts
+are the upstream outer TAP program verdicts, not a count of every nested test
+assertion. Both kernels reuse the same userspace payload; every collection gets
+a fresh VM snapshot for each program, and a panic or orphaned child cannot
+prevent later programs from running. At most two VMs run concurrently. Upstream
+timeouts are unchanged; an upstream unlimited program has a documented
+300-second VM safety watchdog, plus cleanup and boot allowances.
+The selected 125-subtest result does not close this expanded population.
+Reproduce with `python3 tools/bench.py kernel-selftest-all --jobs 2 --allow-qemu-drift`;
+add `--reuse-selftest-build` to avoid rebuilding the already installed payload.
 
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
