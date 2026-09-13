@@ -19,6 +19,14 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_kernel_selftests_reuse_the_booted_image_without_a_compiler_build(self):
+        self.assertIsNotNone(bench.CATALOG['kernel-selftest'][1])
+        args = bench.parser().parse_args(['kernel-selftest', '--allow-qemu-drift'])
+        command, env = bench.command('kernel-selftest', args, Path('/unused/compiler'))
+        self.assertTrue(any(part.endswith('/k1/selftest.py') for part in command))
+        self.assertNotIn('--evocc', command)
+        self.assertEqual(env['K1_ALLOW_QEMU_DRIFT'], '1')
+
     def test_full_kernel_uses_strict_composition_not_the_mixed_link_bisection(self):
         args = bench.parser().parse_args(["kernel-full", "--jobs", "2", "--allow-qemu-drift"])
         command, env = bench.command("kernel-full", args, Path("/tmp/compiler"))
