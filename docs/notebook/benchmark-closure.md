@@ -87,7 +87,7 @@ correctness and unselected runtime tests remain separate gates.
 | K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
 | K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
 | K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
-| K-R07 / P0 OPEN | The unchanged EvoCC Image panics with **kernel stack overflow** during disk-backed userspace startup, before the full selftest's first BEGIN marker. Reference startup/test succeeds with identical payload. | Runtime/frame investigation: reproduce the ELF-exec → filemap/page-fault → virtio I/O → slab/page-allocation chain; measure cumulative frame demand and preserve the 16 KiB task stack. The observed leaf is `get_page_from_freelist+0x84`, not proof that this leaf alone is defective. | `20260913T111521Z` **BLOCKED**; serial exact-selector confirmation also fails. All 935 subject programs remain NOT_RUN. Compiler repair and full rerun are still required; see the section below. |
+| K-R07 / bootstrap fixed; full rerun pending | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `aad1657`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | Exact `acct:acct_syscall` replay on Image `943f27b4a3ce` **PASS**, normal poweroff; [capture](../../.evidence/k1/exec-stack-20260913/bootstrap/boot.json). Uniform rebuild then retains all 2,799 objects and boots Image `bd67f341e141`. All-program runtime rerun is pending; the previous 935 NOT_RUN count remains historical. |
 
 ### Selected kernel runtime selftests (2026-09-13)
 
@@ -186,6 +186,32 @@ Harness checks: K1 Python **122/122**, bench Python **21/21**, Ruff and shell
 syntax **PASS**; `tools/gate-changed.sh 6b4e62a` reports no changed Rust crate.
 The runtime/build directory is **1.9 GiB** and all full-selftest captures total
 approximately **3.8 MiB** (`du -sh`); no workspace clone or new kernel build.
+
+#### Startup repair (2026-09-13)
+
+The failing chain contained twelve objects still built before `aad1657`.
+Recompiling them with that already-tested compiler, using their original
+commands and the actual prepared headers, reduced cumulative stack demand.
+The [frame comparison](../../.evidence/k1/exec-stack-20260913/frame-comparison.json)
+counts 59 matched C prologues, not a complete dynamic stack high-water mark.
+All 2,799 installed object hashes survived the incremental full link, and
+header preparation reached a content fixed point. The unchanged disk-backed
+payload now runs `acct:acct_syscall` and powers off normally. This is the
+original failing workload turning green, not another minimal-init boot.
+
+The uniform rebuild is now complete:
+[result](../../.evidence/k1/uniform-stack-20260913/result.json),
+[boot](../../.evidence/k1/uniform-stack-20260913/boot/boot.json).
+All **2,799/2,799** target-C objects were recompiled with the same tested
+compiler, assembled, installed and retained through the final link. Header
+preparation reached a fixed point; no reference target-C object was substituted.
+Image `bd67f341e141` boots and powers off normally. The rebuild/relink took
+1,564.96 seconds; the longest individual compilation was 26.442 seconds.
+The assembler reused 1,028 identical objects and assembled 1,771 changed ones.
+
+The existing kernel build tree and userspace payload were reused; no clone,
+stack enlargement or kernel configuration change was involved. All-program
+runtime testing on this Image is the next measurement, not implied by the boot.
 
 ### Execution order and update rules
 

@@ -23,12 +23,12 @@ EvoCC ── (2026-09-13 UTC,EvoIR 1.9.96 / EvoMIR 0.29, checkout cbd1ace)
                                         ▼
 ┌─ ── K6 EvoCC PASS ───────────────────────────────────────────────────────────────────────────┐
 │ 2,799/2,799 EvoCC C ; PASS; PASS │
-│ K6 20260913T090822Z-incremental │
-│ K7 kselftest PASS: 125 PASS / 0 FAIL / 0 SKIP;KUnit │
-│ K7 collection BLOCKED;// receipt │
+│ K6 uniform-stack-20260913 │
+│ K7 kselftest STALE_IMAGE: 125 PASS / 0 FAIL / 0 SKIP;KUnit │
+│ K7 collection STALE_IMAGE;// receipt │
 │   reference: 1 collections, 1 PASS / 0 FAIL / 0 SKIP (program-level)                                              │
 │   subject: 0 collections, 0 PASS / 0 FAIL / 0 SKIP (program-level)                                                │
-│ :2,723 @d3c457b + 76 @aad1657 │
+│ :2,799 @aad1657 │
 │ PASS ████████ GCC ,EvoCC , │
 │ K1 receipt: EvoCC 76 ; 90/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
@@ -50,7 +50,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 Run `20260913T111520.970173Z`; checkout `cbd1ace`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
-Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run. An incremental all-EvoCC kernel records each compiler revision in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); it is not a fresh single-compiler survey.
+Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run. Kernel composition and compiler identities, including whether the build is uniform or incremental, are recorded in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); boot and runtime selftests remain separate measurements.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|

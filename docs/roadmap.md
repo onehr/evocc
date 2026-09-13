@@ -2057,6 +2057,14 @@ NOT_RUN). The same failure repeats in a single VM. See
 The two Images/configurations are unchanged, so this is a newly exposed
 runtime limitation beyond the smaller historical K6/K7 workload.
 
+The startup failure is reproduced and repaired without changing the stack size:
+twelve objects on the deep exec/fault/I/O chain had not received the existing
+spill-slot fix. The exact disk-backed startup/test passes after their replay.
+The subsequent uniform rebuild `uniform-stack-20260913` retains all 2,799
+EvoCC target-C objects and boots Image `bd67f341e141` with the same configuration.
+The previous subset and expanded receipts remain historical until remeasured
+against this Image; the all-program runtime result is pending.
+
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
 oracles, each a superset of the previous rung's demands); the kernel rungs

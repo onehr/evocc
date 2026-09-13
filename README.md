@@ -18,11 +18,12 @@ The compiler is written by AI agents. What keeps that honest:
 
 The frozen front-end gate covers 2,798 kernel translation units. On September 13,
 the complete Linux 6.18.44 configuration linked and booted to init with all
-**2,799 target-C objects from EvoCC**, then shut down normally. This incremental
-build combines two recorded EvoCC revisions, with no GCC target-C fallback;
-the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds the exact Image
-and nonce. K7's selected upstream kselftests now pass **125/125 subtests in nine
-programs**, on both that unchanged Image and the GCC reference kernel, with no
+**2,799 target-C objects from EvoCC**, then shut down normally. That first
+build combined two recorded EvoCC revisions. A subsequent uniform rebuild
+with the tested spill allocator also boots, with no GCC target-C fallback;
+the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds its exact Image
+and nonce. K7's historical selected upstream kselftests pass **125/125 subtests in nine
+programs**, on both the earlier Image and the GCC reference kernel, with no
 failures, skips or timeouts ([receipt](tests/contracts/kernel-selftest-receipt.json)).
 An expanded run of every upstream selftest collection is now available; its
 [separate receipt](tests/contracts/kernel-selftest-full-receipt.json) retains
@@ -30,8 +31,10 @@ build gaps, unavailable hardware/configuration, skips and failures rather than
 extending the selected-subset PASS to all tests. The latest expanded attempt is
 **BLOCKED**: 935 declared programs/scripts are installed, but the EvoCC Image
 overflows its kernel stack while starting disk-backed userspace, before any
-test begins. The reference Image passes the same startup check. This does not
-erase the earlier boot/subset result or establish full K7. KUnit has not run. Current
+test begins. Recompiling the previously stale objects with the existing allocator
+fix makes that exact startup test pass, without enlarging the kernel stack.
+The complete kernel is now uniformly rebuilt; full runtime retesting is pending.
+This does not erase the earlier boot/subset result or establish full K7. KUnit has not run. Current
 figures are in [docs/status.md](docs/status.md), with remaining
 constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
 The illustration above is not a live counter. The evaluation ladder and pinned

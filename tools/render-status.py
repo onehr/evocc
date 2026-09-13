@@ -307,8 +307,9 @@ def main() -> int:
             "Program counts and translation-unit counts are different measures; "
             "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
             "retain their previous reading and compiler identity; they are not remeasured by this run. "
-            "An incremental all-EvoCC kernel records each compiler revision in the "
-            "[full-kernel receipt](../tests/contracts/kernel-full-receipt.json); it is not a fresh single-compiler survey.\n\n"
+            "Kernel composition and compiler identities, including whether the build is uniform or incremental, "
+            "are recorded in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); "
+            "boot and runtime selftests remain separate measurements.\n\n"
             "| Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |\n"
             "|---|---|---|---|---|---|\n"
         )
