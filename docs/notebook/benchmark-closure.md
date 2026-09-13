@@ -12,26 +12,24 @@ inventory authority. Counts below overlap where a row is a subcategory.
 objects come from EvoCC, remain installed after the complete link, and reach
 the unchanged nonce-bound init/powerdown predicate. No reference-compiler C
 object, stub, configuration reduction or timeout increase was used.
-The actual [boot record](../../.evidence/k1/large-frames-20260913/boot/boot.json)
-binds Image `1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c`
-to nonce `k1-20260913T090822Z-d77e5b2b` on the HVF-host lane. The installed
+The current [boot record](../../.evidence/k1/uniform-stack-20260913/boot/boot.json)
+binds Image `bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260`
+to nonce `k1-20260913T115955Z-85e70812` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
 drift remains recorded, not erased. K7's separately measured selected subset now
-passes **125/125 subtests in nine programs** on this unchanged Image and the GCC
-reference Image. The expanded all-collection attempt is now **BLOCKED** by
-K-R07 below; KUnit remains **NOT_RUN**.
+passes **125/125 subtests in nine programs** on this Image and the GCC
+reference Image (`20260913T120301Z`). The expanded all-collection rerun
+`20260913T120409Z` has passed startup and is **RUNNING**; it exposed K-R08
+below. KUnit remains **NOT_RUN**.
 
-This is an **incremental all-EvoCC build**, not a fresh all-at-HEAD survey:
-2,723 objects retain the compiler from full run `20260913T075423Z`
-(`d3c457b`), and 76 use allocator repair `aad1657`. That base run compiled all
-2,799 again against actual generated headers, reached the input fixed point,
-and linked, but its first boot exposed stack overflow. Replaying the original
-BPF unit and then all 75 remaining units with a frame of at least 2,048 bytes
-produced the passing composition. Every final installed object digest was
-rechecked; the generated export source stayed unchanged. The
-[receipt](../../tests/contracts/kernel-full-receipt.json) records both compiler
-identities and the small repair manifests instead of copying another build
-tree or presenting the old uniform run as a PASS. Historical failed runs below
+This is a **uniform all-EvoCC build**: all 2,799 objects were recompiled with
+allocator repair `aad1657`, against the actual generated headers, then
+assembled, installed and retained through the complete link. The earlier
+76-object repair booted but left twelve smaller-frame objects on the exec
+path stale; K-R07 records that correction. The generated-header content fixed
+point and export source were rechecked, with no new workspace clone. The
+[receipt](../../tests/contracts/kernel-full-receipt.json) records the one
+compiler identity and every installed object. Historical failed runs below
 remain failed measurements.
 
 **Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
@@ -88,6 +86,7 @@ correctness and unselected runtime tests remain separate gates.
 | K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
 | K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
 | K-R07 / bootstrap fixed; full rerun pending | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `aad1657`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | Exact `acct:acct_syscall` replay on Image `943f27b4a3ce` **PASS**, normal poweroff; [capture](../../.evidence/k1/exec-stack-20260913/bootstrap/boot.json). Uniform rebuild then retains all 2,799 objects and boots Image `bd67f341e141`. All-program runtime rerun is pending; the previous 935 NOT_RUN count remains historical. |
+| K-R08 / tailored GREEN; kernel replay pending | Full run `20260913T120409Z` reaches `exec:recursion-depth`, `filesystems:fclog` and `filesystems/mount-notify:mount-notify_test`: GCC passes, EvoCC crashes in `kfree_const` while freeing a mount. `alloc_vfsmnt(NULL)` stores `"none"` directly; its symbol `__evocc.string.695` is incorrectly in `.data`, outside `__start_rodata..__end_rodata`. The overlayfs test reaches the same crash but also fails on GCC for another reason. | RED `69b6016`; select read-only storage from `GlobalKind::StringLiteral` before considering zero-fill compression. Ordinary writable arrays/zero globals are unchanged; no kernel source, allocator, stack size or test predicate change. | Emission regression covers ordinary, empty, wide-empty and embedded-NUL strings on both targets. The [native fixture](../../tests/fixtures/read-only-string-storage.c), linked with [section bounds](../../tests/fixtures/read-only-string-storage.ld), exits 0 on EvoCC and GCC-14/Clang-19 at O0/O2; readelf confirms `.rodata` has `A`, not `WA`. Full run continues on the unchanged pre-repair Image; do not claim these kernel tests are fixed until replay. |
 
 ### Selected kernel runtime selftests (2026-09-13)
 

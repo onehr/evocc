@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
+use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::{
     linscan::physical, Allocated, AsmBody, AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst,
@@ -258,6 +258,15 @@ impl Target {
         match self {
             Self::Darwin => ".section __DATA,__data",
             Self::Linux => ".data",
+        }
+    }
+
+    const fn read_only_section(self) -> &'static str {
+        match self {
+            // __cstring can coalesce at embedded NULs; preserve the complete
+            // object, including wide code units, in ordinary constant storage.
+            Self::Darwin => ".section __TEXT,__const",
+            Self::Linux => ".section .rodata,\"a\",%progbits",
         }
     }
 
@@ -585,8 +594,7 @@ fn emit_unit(
     if !globals.is_empty() {
         let mut ordered: Vec<&GlobalObject> = globals.iter().collect();
         ordered.sort_by_key(|global| global.origin);
-        // A global names its section only when the section changes, so a unit
-        // whose globals all hold content emits the one `.data` it always did.
+        // A global names its section only when the section changes.
         let mut section = String::new();
         for global in ordered {
             let zero_filled = is_zero_filled(global);
@@ -605,6 +613,11 @@ fn emit_unit(
                         None => format!(".section {name:?}"),
                     },
                 }
+            } else if global.kind == GlobalKind::StringLiteral {
+                // Storage kind takes precedence over zero-fill compression:
+                // an empty string is read-only too. The kernel's kfree_const
+                // relies on these addresses belonging to its rodata range.
+                target.read_only_section().to_owned()
             } else if zero_filled {
                 target.bss_section().to_owned()
             } else {
@@ -796,14 +809,15 @@ fn flush_bytes(text: &mut String, pending: &mut Vec<u8>) {
     pending.clear();
 }
 
-/// Whether a global reserves space rather than storing bytes.
+/// Whether a global's entire initializer can be encoded as a zero run.
 ///
 /// Every byte is zero, EvoIR 2.1's `initialized=` bits are all set so no byte
 /// is a poisoned value some later revision might have to spell differently,
 /// and no relocation writes an address into the object. Such a global has the
-/// same content wherever the loader's zero page puts it, so it belongs in the
-/// section that reserves space without storing it. A global with no bytes at
-/// all is the same case: it reserves its size and stores nothing.
+/// same content wherever the loader's zero page puts it. Writable globals can
+/// therefore use the section that reserves space without storing it; read-only
+/// strings must retain their storage protection. A global with no bytes at all
+/// is the same case: it reserves its size and stores nothing.
 fn is_zero_filled(global: &GlobalObject) -> bool {
     global.relocs.is_empty()
         && (global.bytes.is_empty()
