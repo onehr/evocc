@@ -8,6 +8,8 @@ use evocc_types::EvoIRType;
 
 use super::DraftBlock;
 
+mod private;
+
 // Empty is the unreachable/bottom fact, None is unknown/top. A union larger
 // than eight values widens to top, bounding both storage and convergence.
 type Fact = Option<Vec<u128>>;
@@ -259,7 +261,7 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
             }
         }
     }
-    for block in blocks {
+    for block in blocks.iter_mut() {
         if let Some(Inst::CondBr(condition, a, aa, b, ba)) = &block.terminator {
             if let Some(values) = &facts[condition.id as usize] {
                 if !values.is_empty() && values.iter().all(|&v| v == 0) {
@@ -270,6 +272,7 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
             }
         }
     }
+    private::prune_guarded_reads(blocks, &facts, &indices, &users, &reachable);
 }
 
 /// Follow actual lowered uses after constant edges are removed. Linkage,

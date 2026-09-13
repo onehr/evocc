@@ -470,6 +470,75 @@ fn guarded_private_state_keeps_the_impossible_case_unlinked() {
 }
 
 #[test]
+fn private_state_guards_survive_nested_loop_exits() {
+    for body in [
+        "while(k){if(k==1)break;--k;}",
+        "do{--k;break;}while(k);",
+        "while(k){--k;if(k)continue;}",
+    ] {
+        let source = format!(
+            "extern void impossible_state(void);struct S{{int state;}};
+             int run(int n,int k){{struct S s={{n}};if(s.state){{{body}if(!s.state)impossible_state();}}return 0;}}
+             int main(void){{return run(1,2);}}"
+        );
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(!module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+            .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_state")),
+            "unreachable loop-exit scaffolding obscures the dominating guard: {body}");
+    }
+}
+
+#[test]
+fn private_state_guards_are_invalidated_by_writes_escapes_and_volatile_reads() {
+    for (qualifier, action, expected) in [
+        ("", "s.state=0;", 1),
+        ("", "int *p=&s.state; *p=0;", 1),
+        ("", "reset(&s);", 1),
+        ("", "int *p=n?&s.state:&s.other; *p=0;", 1),
+        ("volatile", "", 0),
+    ] {
+        let source = format!(
+            "struct S{{int state;int other;}};int hits;
+             void reset(struct S *p){{p->state=0;}}
+             void possible(void){{++hits;}}
+             int run(int n){{{qualifier} struct S s={{n,7}};if(s.state){{{action}if(!s.state)possible();}}return hits;}}
+             int main(void){{return run(1)!={expected};}}"
+        );
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(
+            module
+                .functions
+                .iter()
+                .flat_map(|f| &f.blocks)
+                .flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "possible")),
+            "a write or volatile reread was incorrectly assumed to preserve the guard: {source}"
+        );
+    }
+    for body in [
+        "struct S a={n,7},b={0,9};if(a.state){if(!b.state)possible();}",
+        "int a[2]={n,7};if(a[0]){a[i]=0;if(!a[0])possible();}",
+        "struct S s={n,7};if(s.state){while(i--){s.state=0;}if(!s.state)possible();}",
+    ] {
+        let source = format!(
+            "struct S{{int state;int other;}};int hits;void possible(void){{++hits;}}
+             int run(int n,int i){{{body}return hits;}}int main(void){{return run(1,0)!={};}}",
+            i32::from(!body.contains("while")),
+        );
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(
+            module
+                .functions
+                .iter()
+                .flat_map(|f| &f.blocks)
+                .flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "possible")),
+            "a different field or a possibly modified array was incorrectly equated: {source}"
+        );
+    }
+}
+
+#[test]
 fn mask_facts_keep_operand_effects_and_poison_consumption() {
     assert_execution_with_optimization(
         "int n; int tick(void){return ++n;} int main(void){if(tick() & 0)return 1;return n!=1;}",
