@@ -209,6 +209,33 @@ fn empty_flexible_sentinels_are_accessible_and_zero_initialized() {
 }
 
 #[test]
+fn scope_exit_cleanup_executes_in_both_interpreters() {
+    let source = include_str!("../../../tests/fixtures/cleanup-scope-exits.c");
+    let mut failures = Vec::new();
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        if !output.status.success() || output.stdout != b"0\n" {
+            failures.push(format!(
+                "{mode}: status={:?}, value={}, diagnostic={}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+fn scope_exit_cleanup_executes_on_the_machine() {
+    assert_native_execution(
+        include_str!("../../../tests/fixtures/cleanup-scope-exits.c"),
+        "scope-exit-cleanup",
+    );
+}
+
+#[test]
 fn position_independent_macros_follow_the_last_codegen_option() {
     for (options, pic, pie) in [
         (vec![], 2, 2),
