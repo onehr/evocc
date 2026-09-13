@@ -81,7 +81,7 @@ fn composite_function_declarations_keep_the_completed_interface() {
 
 #[test]
 fn static_definitions_keep_internal_linkage_in_the_ir_header() {
-    let source = "static int private(void){return 3;} static inline int helper(void){return private();} int public(void){return helper();}";
+    let source = "static int private(void){return 3;} static inline int helper(void){return private();} int (*keep_bodies[])(void)={private,helper}; int public(void){return helper();}";
     let arena = Arena::default();
     let file = FileId::new(45010);
     let mut lexer = Lexer::new(file, source);

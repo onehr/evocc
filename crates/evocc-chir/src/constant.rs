@@ -18,16 +18,15 @@ use crate::{
     SymbolTable, TagMembers, UnaryOp,
 };
 
-/// A constant-return fact about an internal inline definition, not a C integer
+/// A constant-return fact about an internal definition, not a C integer
 /// constant expression. A consumer must still evaluate the call and arguments
 /// unless it separately proves that their execution can be removed.
-pub fn inline_constant_result<'a>(
+pub fn internal_constant_result<'a>(
     unit: &CHirUnit<'a>,
     function: &crate::FunctionDecl<'a>,
     target: &TargetDataLayout,
 ) -> Option<(&'a CHirExpr<'a>, CInteger)> {
     if !function.has_internal_linkage(unit.symbols())
-        || function.inline_spans.is_empty()
         || function
             .attributes
             .iter()

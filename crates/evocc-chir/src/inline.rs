@@ -28,15 +28,34 @@ struct Uses<'a> {
     nodes: usize,
     addressed_labels: bool,
     constant_queries: bool,
+    has_loops: bool,
+    has_calls: bool,
+    unknown_memory: bool,
+    writes: BTreeSet<SymbolId>,
     entry_labels: bool,
     jumps: bool,
     references: BTreeSet<SymbolId>,
     assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
+    mutations: BTreeMap<SymbolId, usize>,
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
     owns_statements: bool,
     calls: Vec<(SymbolId, &'a [&'a CHirExpr<'a>])>,
+}
+
+impl Uses<'_> {
+    fn mark_mutable(&mut self, symbol: SymbolId) {
+        self.mutable.insert(symbol);
+        *self.mutations.entry(symbol).or_default() += 1;
+    }
+
+    fn single_mutations(&self) -> BTreeSet<SymbolId> {
+        self.mutations
+            .iter()
+            .filter_map(|(&s, &n)| (n == 1).then_some(s))
+            .collect()
+    }
 }
 
 /// Replaying an immutable parameter's argument must not read mutable storage
@@ -132,6 +151,14 @@ fn inspect_with_declarations<'a>(
     nodes: impl IntoIterator<Item = Node<'a>>,
     visit: &mut impl FnMut(&'a CHirDecl<'a>),
 ) -> Uses<'a> {
+    inspect_with_visitors(nodes, visit, &mut |_| {})
+}
+
+fn inspect_with_visitors<'a>(
+    nodes: impl IntoIterator<Item = Node<'a>>,
+    visit: &mut impl FnMut(&'a CHirDecl<'a>),
+    visit_expression: &mut impl FnMut(&'a CHirExpr<'a>),
+) -> Uses<'a> {
     let mut work: Vec<_> = nodes.into_iter().collect();
     let mut uses = Uses::default();
     while let Some(node) = work.pop() {
@@ -169,6 +196,10 @@ fn inspect_with_declarations<'a>(
                 }
             }
             Node::Stmt(s) => {
+                uses.has_loops |= matches!(
+                    s,
+                    CHirStmt::For(..) | CHirStmt::While(..) | CHirStmt::DoWhile(..)
+                );
                 uses.entry_labels |= matches!(
                     s,
                     CHirStmt::Label(..)
@@ -243,7 +274,7 @@ fn inspect_with_declarations<'a>(
                         uses.assembly.push(&a.template);
                         for o in &a.outputs {
                             if let CHirExpr::Ident { symbol, .. } = o.expression {
-                                uses.mutable.insert(*symbol);
+                                uses.mark_mutable(*symbol);
                             }
                         }
                         for o in &a.inputs {
@@ -252,7 +283,7 @@ fn inspect_with_declarations<'a>(
                             // even when the initializer or argument is constant.
                             if matches!(o.constraint.as_str(), "m" | "Q" | "Qo") {
                                 if let CHirExpr::Ident { symbol, .. } = o.expression {
-                                    uses.mutable.insert(*symbol);
+                                    uses.mark_mutable(*symbol);
                                 }
                             }
                         }
@@ -268,6 +299,7 @@ fn inspect_with_declarations<'a>(
                 }
             }
             Node::Expr(e, callee) => {
+                visit_expression(e);
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
                 uses.constant_queries |= matches!(e, CHirExpr::BuiltinConstantP { .. });
@@ -279,15 +311,17 @@ fn inspect_with_declarations<'a>(
                         uses.addresses.insert(*symbol);
                     }
                     CHirExpr::Assign { place, .. } | CHirExpr::Update { place, .. } => {
-                        uses.mutable.insert(place.symbol());
+                        uses.mark_mutable(place.symbol());
+                        uses.writes.insert(place.symbol());
                     }
                     CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::Ident { symbol, .. }, _) => {
-                        uses.mutable.insert(*symbol);
+                        uses.mark_mutable(*symbol);
                     }
                     _ => {}
                 }
                 match e {
                     CHirExpr::Call(f, args, _) => {
+                        uses.has_calls = true;
                         if let CHirExpr::Ident { symbol, .. } = f {
                             uses.calls.push((*symbol, args));
                         }
@@ -323,8 +357,16 @@ fn inspect_with_declarations<'a>(
                     | CHirExpr::MemoryUpdate { place, .. }
                     | CHirExpr::MemoryAssign { place, .. } => {
                         if let Some(s) = place.root_symbol() {
-                            uses.mutable.insert(s);
+                            uses.mark_mutable(s);
+                            uses.references.insert(s);
+                            if !matches!(e, CHirExpr::MemoryRead { .. }) {
+                                uses.writes.insert(s);
+                            }
+                        } else {
+                            uses.unknown_memory = true;
                         }
+                        uses.unknown_memory |= place.access_qualifiers().is_volatile
+                            || place.access_qualifiers().is_atomic;
                         for e in place.source_expressions() {
                             work.push(Node::Expr(e, false));
                         }
@@ -394,7 +436,12 @@ pub fn retained_functions(
     let mut assembly_names = BTreeMap::new();
     let mut pending = Vec::new();
     for (&symbol, function) in &definitions {
-        if !function.has_internal_linkage(unit.symbols()) {
+        if !function.has_internal_linkage(unit.symbols())
+            || function
+                .attributes
+                .iter()
+                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
+        {
             pending.push(symbol);
         }
         let name = linkage.function_name(symbol, &function.name.spelling);
@@ -473,7 +520,7 @@ fn constant_inline_return<'a>(
     {
         return None;
     }
-    crate::constant::inline_constant_result(unit, function, target)
+    crate::constant::internal_constant_result(unit, function, target)
         .map(|(expression, _)| expression)
 }
 
@@ -646,6 +693,27 @@ pub(crate) fn substitute_for_execution<'a>(
         message: e.message.to_owned(),
     })?;
     uses.addresses.extend(linkage.aliases.values());
+    let assembly_names = uses
+        .assembly
+        .iter()
+        .flat_map(|text| {
+            text.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$')))
+        })
+        .collect::<BTreeSet<_>>();
+    for declaration in unit.iter() {
+        if let CHirDecl::Function(function) = declaration {
+            let name = linkage.function_name(function.symbol, &function.name.spelling);
+            if function
+                .attributes
+                .iter()
+                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
+                || assembly_names.contains(name)
+                || assembly_names.contains(format!("_{name}").as_str())
+            {
+                uses.addresses.insert(function.symbol);
+            }
+        }
+    }
     let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
     // Honor ordinary inline hints for small, acyclic private helpers too.
     // The bound limits code growth; mandatory always_inline remains separate.
@@ -710,6 +778,10 @@ pub(crate) fn substitute_for_execution<'a>(
             _ => None,
         })
         .collect();
+    let pure_constants = eligible
+        .values()
+        .filter_map(|f| pure_loop_result(unit, f, target).map(|value| (f.symbol, value)))
+        .collect();
     let static_objects: BTreeMap<_, _> = eligible
         .values()
         .flat_map(|f| inspect([Node::Stmt(f.body.unwrap())]).statics)
@@ -721,6 +793,7 @@ pub(crate) fn substitute_for_execution<'a>(
         eligible,
         globals: BTreeMap::new(),
         static_values: BTreeMap::new(),
+        pure_constants,
         serial: 0,
         active: Vec::new(),
         temporaries: Vec::new(),
@@ -785,6 +858,7 @@ pub(crate) fn substitute_for_execution<'a>(
                     .id();
                 let mut c = Context::new(scope);
                 c.mutable = bodies[&f.symbol].mutable.clone();
+                c.single_mutations = bodies[&f.symbol].single_mutations();
                 c.declaration_prefix = true;
                 if let Some(values) = parameter_values.get(&f.symbol) {
                     for (&symbol, &(value, ty)) in values {
@@ -828,11 +902,121 @@ pub(crate) fn substitute_for_execution<'a>(
     Ok(pass.unit)
 }
 
+// Execute a small, closed integer computation with the existing interpreter,
+// not a second loop evaluator. Reads must come from initialized internal const
+// integer tables; writes can only affect private scalar locals. Failure or fuel
+// exhaustion merely declines the optimization and keeps the original function.
+fn pure_loop_result(
+    unit: &CHirUnit<'_>,
+    function: &FunctionDecl<'_>,
+    target: &TargetDataLayout,
+) -> Option<crate::integer::CInteger> {
+    if !function.has_internal_linkage(unit.symbols())
+        || !matches!(&function.parameters, ParameterSyntax::Prototype { parameters, variadic: false } if parameters.is_empty())
+    {
+        return None;
+    }
+    let mut locals = BTreeMap::new();
+    // Even a pure computation cannot export the interpreter's synthetic
+    // addresses. Every evaluated expression must be integer-valued; array
+    // objects may appear only as the checked roots of integer element reads.
+    let mut integer_only = true;
+    let uses = inspect_with_visitors(
+        [Node::Stmt(function.body?)],
+        &mut |d| {
+            if let CHirDecl::Object(o) = d {
+                locals.insert(o.symbol, o);
+            }
+        },
+        &mut |e| {
+            integer_only &=
+                crate::constant::integer_expression_type(e, unit.types(), unit.symbols()).is_some();
+        },
+    );
+    if !uses.has_loops
+        || uses.nodes > 128
+        || uses.has_calls
+        || !integer_only
+        || !uses.assembly.is_empty()
+        || uses.unknown_memory
+        || uses.constant_queries
+        || uses.addressed_labels
+        || !uses.statics.is_empty()
+        || uses.writes.iter().any(|s| !locals.contains_key(s))
+    {
+        return None;
+    }
+    for local in locals.values() {
+        let ty = unit.types().get(local.ty)?;
+        if !matches!(local.storage, StorageClass::None | StorageClass::Auto)
+            || local.asm_label.is_some()
+            || ty.qualifiers.is_volatile
+            || ty.qualifiers.is_atomic
+            || crate::constant::canonical_integer_type(unit.types(), local.ty).is_none()
+        {
+            return None;
+        }
+    }
+    for symbol in &uses.references {
+        if locals.contains_key(symbol) {
+            continue;
+        }
+        let entry = unit.symbols().symbol(*symbol).ok()?;
+        if entry.kind() == SymbolKind::Enumerator {
+            continue;
+        }
+        let object = unit.iter().find_map(|d| match d {
+            CHirDecl::Object(o)
+                if o.symbol == *symbol
+                    && o.storage == StorageClass::Static
+                    && o.initializer.is_some() =>
+            {
+                Some(o)
+            }
+            _ => None,
+        })?;
+        if target.layout_of(unit.types(), object.ty).ok()?.size_bytes > 4096 {
+            return None;
+        }
+        let mut ty = object.ty;
+        let mut is_const = false;
+        loop {
+            let t = unit.types().get(ty)?;
+            if t.qualifiers.is_volatile || t.qualifiers.is_atomic {
+                return None;
+            }
+            is_const |= t.qualifiers.is_const;
+            match t.kind {
+                TypeKind::Array {
+                    element,
+                    bound: evocc_types::ArrayBound::Fixed(_),
+                } => ty = element,
+                _ => break,
+            }
+        }
+        if !is_const || crate::constant::canonical_integer_type(unit.types(), ty).is_none() {
+            return None;
+        }
+    }
+    let outcome = crate::interp::interpret_resolved_function(
+        unit,
+        function.symbol,
+        target,
+        crate::interp::InterpreterLimits::new(2048),
+    )
+    .ok()?;
+    let value = outcome.return_value?;
+    let ty = crate::constant::canonical_integer_type(unit.types(), value.ty)?;
+    (ty.bits() <= 64).then(|| crate::integer::CInteger::from_raw(value.raw_bits, ty))
+}
+
 struct Context<'a> {
     scope: ScopeId,
     replacements: BTreeMap<SymbolId, SymbolId>,
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     optimized_constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    assignment_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     declaration_prefix: bool,
     memo: HashMap<(usize, bool), &'a CHirExpr<'a>>,
@@ -849,6 +1033,8 @@ impl Context<'_> {
             replacements: BTreeMap::new(),
             constants: BTreeMap::new(),
             optimized_constants: BTreeMap::new(),
+            assignment_values: BTreeMap::new(),
+            single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
             declaration_prefix: false,
             memo: HashMap::new(),
@@ -867,6 +1053,7 @@ struct Substitution<'a, 't> {
     eligible: BTreeMap<SymbolId, &'a FunctionDecl<'a>>,
     globals: BTreeMap<SymbolId, SymbolId>,
     static_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    pure_constants: BTreeMap<SymbolId, crate::integer::CInteger>,
     serial: u64,
     active: Vec<SymbolId>,
     temporaries: Vec<&'a CHirDecl<'a>>,
@@ -1509,6 +1696,9 @@ impl<'a> Substitution<'a, '_> {
             if let Some(v) = c.optimized_constants.get(symbol) {
                 return Ok(v);
             }
+            if let Some(v) = c.assignment_values.get(symbol) {
+                return Ok(v);
+            }
             if let Some(v) = self.static_values.get(symbol) {
                 return Ok(v);
             }
@@ -1719,6 +1909,58 @@ impl<'a> Substitution<'a, '_> {
         c.memo.insert(key, out);
         Ok(out)
     }
+    fn remember_assignment(
+        &mut self,
+        source: &CHirStmt<'a>,
+        rewritten: &'a CHirStmt<'a>,
+        c: &mut Context<'a>,
+    ) {
+        let CHirStmt::Expr(
+            CHirExpr::Assign {
+                op: AssignmentOp::Simple,
+                place,
+                ..
+            },
+            _,
+        ) = source
+        else {
+            return;
+        };
+        let symbol = place.symbol();
+        if !c.single_mutations.contains(&symbol) {
+            return;
+        }
+        let Ok(entry) = self.unit.symbols.symbol(symbol) else {
+            return;
+        };
+        if !matches!(
+            entry.storage_class(),
+            Some(StorageClass::None | StorageClass::Auto)
+        ) {
+            return;
+        }
+        let CHirStmt::Expr(CHirExpr::Assign { value, place, .. }, _) = rewritten else {
+            return;
+        };
+        let ty = place.ty();
+        let Some(canonical) = self.unit.types.get(ty) else {
+            return;
+        };
+        if canonical.qualifiers.is_volatile
+            || canonical.qualifiers.is_atomic
+            || crate::constant::canonical_integer_type(&self.unit.types, ty).is_none()
+        {
+            return;
+        }
+        // The real assignment remains. A single direct, unescaped write can
+        // supply a converted value to later queries in this straight-line scope.
+        let converted = self.alloc(CHirExpr::Cast(ty, value, value.span()));
+        if let Some(value) = self.value_after_execution(converted, ty) {
+            c.assignment_values.insert(symbol, value);
+            c.memo.clear();
+        }
+    }
+
     fn stmt(
         &mut self,
         s: &'a CHirStmt<'a>,
@@ -1732,6 +1974,7 @@ impl<'a> Substitution<'a, '_> {
                 // of its own immutable symbol, even after another statement.
                 let incoming = inspect([Node::Stmt(s)]).entry_labels;
                 let outer_prefix = c.declaration_prefix;
+                let outer_assignments = c.assignment_values.clone();
                 if !incoming {
                     c.declaration_prefix = true;
                 }
@@ -1742,7 +1985,11 @@ impl<'a> Substitution<'a, '_> {
                             .extend(self.decl(d, c)?.into_iter().map(CHirBlockItem::Declaration)),
                         CHirBlockItem::Statement(s) => {
                             c.declaration_prefix = false;
-                            result.push(CHirBlockItem::Statement(self.stmt(s, c)?));
+                            let rewritten = self.stmt(s, c)?;
+                            if !incoming {
+                                self.remember_assignment(s, rewritten, c);
+                            }
+                            result.push(CHirBlockItem::Statement(rewritten));
                             if !incoming {
                                 c.declaration_prefix = true;
                             }
@@ -1751,6 +1998,17 @@ impl<'a> Substitution<'a, '_> {
                 }
                 *items = result;
                 c.declaration_prefix = outer_prefix;
+                // A conditional/loop body may never execute. Its assignments
+                // prove later uses inside that body, not uses after its exit.
+                if c.assignment_values.len() != outer_assignments.len()
+                    || c.assignment_values
+                        .iter()
+                        .zip(&outer_assignments)
+                        .any(|((a, x), (b, y))| a != b || !std::ptr::eq(*x, *y))
+                {
+                    c.assignment_values = outer_assignments;
+                    c.memo.clear();
+                }
             }
             CHirStmt::Return(e, span) if c.end.is_some() => {
                 let mut items = Vec::new();
@@ -1951,6 +2209,17 @@ impl<'a> Substitution<'a, '_> {
             }
         }
         if args.is_empty() {
+            if let Some(value) = self.pure_constants.get(&f.symbol).copied() {
+                let literal = self.alloc(CHirExpr::Lit(
+                    IntLit {
+                        value: value.raw_bits() as u64,
+                        suffix: IntSuffix::ULL,
+                        base: IntBase::Hex,
+                    },
+                    span,
+                ));
+                return Ok(self.alloc(CHirExpr::Cast(return_type, literal, span)));
+            }
             if let Some(value) = constant_inline_return(&self.unit, f, self.target) {
                 // Retain the conversion at the return boundary. In particular,
                 // a nonzero integer returned as _Bool must become one.
@@ -1970,6 +2239,7 @@ impl<'a> Substitution<'a, '_> {
             .create_scope(scope, ScopeKind::Block, Some(span))
             .map_err(|e| self.error(span, e))?;
         let mut c = Context::new(inline_scope);
+        c.single_mutations = uses.single_mutations();
         c.mutable = uses.mutable;
         c.declaration_prefix = true;
         let serial = self.next();

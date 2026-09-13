@@ -908,7 +908,7 @@ pub fn interpret_scalar_function_with_target(
     interpret_resolved_function(unit, function, target, limits)
 }
 
-fn interpret_resolved_function(
+pub(crate) fn interpret_resolved_function(
     unit: &CHirUnit<'_>,
     function: SymbolId,
     target: &TargetDataLayout,

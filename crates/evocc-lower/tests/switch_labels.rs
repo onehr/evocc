@@ -5,6 +5,10 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 fn assert_execution(source: &str) -> evocc_evoir::Module {
+    assert_execution_with_optimization(source, false)
+}
+
+fn assert_execution_with_optimization(source: &str, optimize: bool) -> evocc_evoir::Module {
     let arena = Arena::default();
     let file = FileId::new(45030);
     let mut lexer = Lexer::new(file, source);
@@ -25,8 +29,12 @@ fn assert_execution(source: &str) -> evocc_evoir::Module {
         interp::interpret_scalar_function(&unit, main, interp::InterpreterLimits::new(10000))
             .unwrap();
     assert_eq!(expected.return_value.unwrap().raw_bits, 0);
-    let module =
-        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let module = evocc_lower::lower_unit_with_optimization(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        optimize,
+    )
+    .unwrap();
     let main = module.functions.iter().find(|f| f.name == "main").unwrap();
     let arguments = main
         .params
@@ -109,11 +117,12 @@ fn constant_configuration_results_retain_calls_and_argument_evaluation() {
             "enabled(++n)",
         ),
     ] {
+        let guard = guard.replace("++n", "tick()");
         let source = format!(
-            "extern int absent(int); {definition}
-             int main(void){{int n=0;if({guard})return absent(n);return n!=1;}}"
+            "extern int absent(int); int counter; int tick(void){{return ++counter;}} {definition}
+             int main(void){{int n=0;if({guard})return absent(n);return counter!=1;}}"
         );
-        let module = assert_execution(&source);
+        let module = assert_execution_with_optimization(&source, true);
         let calls: Vec<_> = module
             .functions
             .iter()
@@ -125,8 +134,8 @@ fn constant_configuration_results_retain_calls_and_argument_evaluation() {
             })
             .collect();
         assert!(
-            calls.contains(&"enabled"),
-            "parameter evaluation must keep its real call"
+            calls.contains(&"tick"),
+            "inlining must keep the argument's observable call"
         );
         assert!(
             !calls.contains(&"absent"),
@@ -136,12 +145,15 @@ fn constant_configuration_results_retain_calls_and_argument_evaluation() {
     for (definition, expected_counter) in [
         ("int enabled(int n){return 0;}", 0),
         ("static inline int enabled(int n){return n-1;}", 0),
-        ("static inline int enabled(int n){++counter;return 0;}", 1),
+        (
+            "static inline int enabled(int n){++counter;return n-counter;}",
+            1,
+        ),
     ] {
         let source = format!(
             "extern int absent(int); int counter; {definition}
-             int main(void){{int n=0;if(enabled(++n))return absent(n);
-             return n!=1 || counter!={expected_counter};}}"
+             int check(int start){{int n=start;if(enabled(++n))return absent(n);
+             return n!=1 || counter!={expected_counter};}} int main(void){{return check(0);}}"
         );
         let module = assert_execution(&source);
         assert!(module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)

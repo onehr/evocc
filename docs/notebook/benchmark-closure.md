@@ -59,7 +59,8 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 | `kernel-full` now runs the existing K1 path with complete-coverage and object-lineage guards; latest attempt `20260912T191806Z` is INCOMPLETE before installation. | Finish the remaining constant/inline link blockers, then prepare actual generated headers, recompile, verify fixed point, fully link and boot. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
-| K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on a proved positive local; the user authorized this on September 13, recorded in §10.1.14 revision 1.9.93. | Shared C-HIR substitutions now serve both interpreters and lowering. 20 query tests PASS; native and both sealed oracles agree on the query/effect fixtures. Original blk-settings/at/arm/page_alloc.nvhe emissions no longer contain these assertion calls. | Full combination still needs fresh compile/link/boot; masked-switch defaults and compound-literal representation reads are the next measured link classes. |
+| K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
+| K-S02 / SPEC_BODY_CONFLICT | `fs/ext4/ioctl.o` retains `__compiletime_assert_753`: `memtostr_pad` requires `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | §10.1.14 still explicitly mandates unknown even for known arrays. Both sealed oracles return 16 for the reduced member-array shape, with the operand unevaluated. Asked for authority to return proved bounds and retain unknown otherwise; no implementation or spec change made without that authority. | OPEN. Do not remove the kernel assertion, stub its callee, or claim an already-known failing full link as useful progress. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
 
 ### Execution order and update rules
@@ -144,10 +145,12 @@ tailored tests pass. A focused PASS is recorded as locally verified, not as
 an original-program or milestone closure.
 Keep unavailable references, unsupported programs and baseline failures visible.
 No compiler changes are justified merely by reducing a diagnostic count.
-Do not rerun whole lanes after every patch. After tailored validation, run
-the complete gate, isolated replay and a serial campaign through
-`python3 tools/bench.py`; classify every new failure and repeat the same
-repair loop until the reviewed completion conditions hold. Floating-point
+Do not rerun whole lanes after every patch. The September 13 user instruction
+cancels redundant full-workspace and isolated-clone replays for kernel closure:
+reuse `target/tailored`, run affected tests/lints and actual native regressions,
+then the existing `python3 tools/bench.py kernel-full` compilation/link/boot
+path. Retain compact results and the current run, not copies of every build or
+log. Classify new failures and repeat the repair loop. Floating-point
 execution remains deferred by the user's
 standing instruction; FP-dependent milestones cannot be called complete.
 
@@ -433,13 +436,49 @@ out-of-line path. The address-sensitive guard also repairs a newly reproduced
 UFS label regression; `ufshcd.o` emits again but still has ten layout assertion
 calls. These measurements did not install objects or run a full link.
 
-Known remaining link constructs originally included the K-S01 min/max query conflict,
+Historical link constructs originally included the K-S01 min/max query conflict,
 KVM queries on statement-expression request constants, exhaustive masked
 switches retaining their default assertion (`ptrace.o`), and reads of constant
 compound-literal representations (`ufshcd.o`). They are not floating-point
-failures. The final focused regression set is 17 CLI cases plus 79 expression
-flow and 24 resolved-form tests; all pass. Do not run another known-failing
-full link or change the query rule until its explicit decision is supplied.
+failures. That earlier checkpoint had 17 CLI cases plus 79 expression-flow and
+24 resolved-form tests. The September 13 authorization and subsequent targeted
+work below supersede that checkpoint; they do not rewrite the last full run.
+
+### Constant-flow closure follow-up (2026-09-13)
+
+`4f7d254` and `2228355` record the next failing regression boundary. The fix
+carries finite integer facts across completed SSA edges, remembers a proven
+single defining assignment only after execution and inside its valid scope,
+and reads immutable private initializer representations without inventing
+padding or provenance. It preserves original calls, effects and obligations.
+Nested switch labels do not bypass their enclosing initialized object; truly
+incoming labels still prevent the proof. Unreferenced internal definitions
+are removed only after actual edge pruning, with aliases, relocations, assembly
+names, used/retain definitions and externally visible functions retained.
+
+Small, closed integer-table loops reuse the existing C-HIR interpreter with a
+2,048-step budget. External state, volatile reads, escaping writes, runtime
+addresses and failed interpretation prevent folding. A negative regression
+caught synthetic interpreter addresses being exported during development;
+the final guard requires integer-only evaluated expressions, and that test
+now preserves the real pointer conversion. No compiler assertion is deleted.
+
+Release `f104465eb7243d6b7e29ad0ac9316746c736d5a2c3a88cdc2804962d36d272f7`
+replays `net/bpf/test_run.o`, `net/core/filter.o`, `net/core/skbuff.o` through
+their original `.o.cmd` arguments with exit zero and no compiler-assert calls.
+The measured wall times were 9.36 / 24.55 / 12.22 seconds with three workers
+and concurrent focused tests; these are not isolated performance measurements.
+Commands and focused/native results are retained compactly in
+[`resolved-compiler-queries.out`](../../tests/fixtures/resolved-compiler-queries.out).
+Nothing in these replays installed an object, linked the full kernel or booted it.
+
+A unified replay of the 90 historical assertion-call assembly units with that
+same release then measured **90 emitted / 89 assertion-call-free / 0 timeout**.
+Only `fs/ext4/ioctl.o` retains `__compiletime_assert_753` (K-S02). Enumeration
+and original-command replay are recorded in the compact result above; four
+workers took 155.4 seconds under shared load. This replaces the old 58-unit
+targeted inventory, not the full 2,799-unit denominator. The last full receipt
+remains unchanged until a real full compile/link/boot is run.
 
 The remaining projection omissions are now explicitly classified in
 `cmdrecord.omitted_option_class`, not silently called supported. Fixed LP64,

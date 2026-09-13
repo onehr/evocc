@@ -458,7 +458,7 @@ fn assigned_constants_and_finite_flags_survive_ssa_edges() {
 
 #[test]
 fn branch_pruning_releases_only_unreferenced_internal_definitions() {
-    let source="void invalid(void);static int impossible(void){invalid();return 1;}static inline int enabled(void){return 0;}int f(void){return enabled()?impossible():0;}int main(void){return f();}";
+    let source="void invalid(void);static int impossible(void){invalid();return 1;}static int enabled(int n){return 0;}int f(void){return enabled(4)?impossible():0;}int main(void){return f();}";
     assert_constant_program(source);
     let output = run(source, "--emit=evoir");
     assert!(output.status.success());
@@ -497,7 +497,7 @@ fn internal_roots_include_relocations_aliases_assembly_and_used_definitions() {
 fn private_initialized_union_representation_proves_layout_assertions() {
     let source="void invalid(void);union lock{unsigned value;struct{unsigned char a,b,c,d;}bytes;};int main(void){union lock u={.bytes={0,0,0,0}};if(u.value!=0)invalid();return 0;}";
     assert_constant_program(source);
-    let output=run(source,"--emit=evoir");
+    let output = run(source, "--emit=evoir");
     assert!(output.status.success());
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
     for source in [
@@ -506,4 +506,108 @@ fn private_initialized_union_representation_proves_layout_assertions() {
         "union u{int v;char a[4];};int main(void){union u x={0};char*p=x.a;p[0]=3;return x.v!=3;}",
         "union u{int v;char a[4];};int main(void){goto later;{union u x={0};later:x.v=3;return x.v!=3;}}",
     ] {assert_constant_program(source);}
+}
+
+#[test]
+fn representation_facts_compose_with_assigned_values_and_short_circuit_edges() {
+    let source = include_str!("../../../tests/fixtures/constant-control-flow.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn inline_local_representation_is_known_only_after_its_initialization() {
+    let source = "void invalid(void);typedef struct{int counter;}atomic_t;typedef struct{union{atomic_t val;struct{unsigned char locked,pending;};struct{unsigned short locked_pending,tail;};};}spin;static inline void check(spin*p){spin*l=(void*)p;union{unsigned val;spin lock;}u={.lock={{.val={(0)}}}};do{if(!(u.val==0))invalid();}while(0);(void)l;}void f(spin*p){check(p);}int main(void){spin s={0};f(&s);return 0;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+
+    for source in [
+        "int main(void){goto later;{union{int v;}u={0};later:return u.v;}}",
+        "int main(void){switch(1){union{int v;}u={0};case 1:return u.v;}return 0;}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(!output.status.success(), "{source}: {mode}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E3001"),
+                "{source}: {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
+fn constant_queries_use_proven_values_after_a_defining_assignment() {
+    for source in [
+        "void invalid(void);int main(void){unsigned long meta;meta=255;if(!__builtin_constant_p(meta))invalid();return meta!=255;}",
+        "void invalid(void);int main(void){int n;int before=__builtin_constant_p(n);n=7;if(!__builtin_constant_p(n))invalid();return before||n!=7;}",
+        "void invalid(void);int main(void){int calls=0;unsigned char n;n=(++calls,257);if(!__builtin_constant_p(n))invalid();return calls!=1||n!=1;}",
+    ] {
+        assert_constant_program(source);
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    }
+}
+
+#[test]
+fn assignment_query_facts_do_not_escape_branches_or_aliases() {
+    for source in [
+        "int f(int c){int x;if(c){x=7;}return __builtin_constant_p(x);}int main(void){return f(0)||f(1);}",
+        "int f(int n){int x=1;int*p=&x;x=7;*p=n;return __builtin_constant_p(x);}int main(void){return f(3);}",
+        "int main(void){goto out;{int x;x=7;out:return __builtin_constant_p(x);}}",
+        "int f(int n){int x=1;while(n--){x=7;}return __builtin_constant_p(x);}int main(void){return f(0)||f(1);}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn bounded_private_table_reductions_fold_without_exporting_runtime_state() {
+    let source = "void invalid(void);static const unsigned char sizes[]={3,5,7};static __attribute__((always_inline)) inline unsigned sum(void){unsigned n=2;int i;for(i=0;i<sizeof(sizes);i++)n+=sizes[i];return n;}int main(void){if(sum()>255)invalid();return sum()!=17;}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    for source in [
+        "static unsigned char values[]={1};static inline int sum(void){int n=0;for(int i=0;i<1;i++)n+=values[i];return n;}int main(void){values[0]=7;return sum()!=7;}",
+        "static int count;static inline int sum(void){for(int i=0;i<3;i++)++count;return count;}int main(void){sum();return sum()!=6;}",
+        "static const unsigned char values[]={1};static inline int sum(void){int n=0;for(int i=0;i<2;i++)n+=values[i];return n;}int main(void){return sum();}",
+    ] {
+        let output = run(source, "--interpret-evoir");
+        if source.contains("i<2") {
+            assert!(!output.status.success());
+            assert!(String::from_utf8_lossy(&output.stderr).contains("E3011"));
+        } else {
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n");
+        }
+    }
+}
+
+#[test]
+fn private_loop_folding_does_not_export_interpreter_addresses() {
+    for source in [
+        "static inline unsigned long address(void){int x;unsigned long a=0;for(int i=0;i<1;i++)a=(unsigned long)&x;return a;}unsigned long f(void){return address();}",
+        "static const int table[]={1};static inline unsigned long address(void){unsigned long a=0;for(int i=0;i<1;i++)a=(unsigned long)table;return a;}unsigned long f(void){return address();}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("ptr.to_int"), "{source}");
+    }
 }

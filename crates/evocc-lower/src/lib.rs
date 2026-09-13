@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 mod allocation;
+mod constants;
 
 use evocc_chir::integer::{
     eval_binary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
@@ -394,6 +395,9 @@ struct FunctionLowerer<'a> {
     address_labels: BTreeMap<String, BlockId>,
     pending_gotos: BTreeMap<String, Vec<State>>,
     object_declarations: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
+    constant_objects: BTreeSet<SymbolId>,
+    unstable_objects: BTreeSet<SymbolId>,
+    optimize: bool,
     size_symbols: &'a BTreeSet<SymbolId>,
     active_control: ControlTargets,
 }
@@ -404,6 +408,17 @@ struct FunctionLowerer<'a> {
 /// explicit input and is consulted for every scalar type admitted by this
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
+    lower_unit_with_optimization(unit, target, false)
+}
+
+/// Enable optional integer-flow and dead-internal-body simplification for
+/// optimized builds. Source semantics and required inline substitution are
+/// identical in either mode; unoptimized clients keep their original CFG.
+pub fn lower_unit_with_optimization(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    optimize: bool,
+) -> Result<Module, LowerError> {
     unit.symbol_linkage().map_err(LowerError::Linkage)?;
     // Check the entire source inventory before selecting emitted bodies. Its
     // allocation identities must remain stable for cross-interpreter traces.
@@ -431,15 +446,16 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 reason: e.message,
             }
         })?;
-        return lower_resolved_unit(&rewritten, target, None);
+        return lower_resolved_unit(&rewritten, target, None, optimize);
     }
-    lower_resolved_unit(unit, target, Some(&source_manifest))
+    lower_resolved_unit(unit, target, Some(&source_manifest), optimize)
 }
 
 fn lower_resolved_unit(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
     source_manifest: Option<&AllocationSiteManifest<'_>>,
+    optimize: bool,
 ) -> Result<Module, LowerError> {
     let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let global_register_symbols = collect_global_register_symbols(unit);
@@ -621,7 +637,7 @@ fn lower_resolved_unit(
             &dynamic_origins,
             &string_origins,
         )
-        .lower(function)?;
+        .lower(function, optimize)?;
         lowered.push(function);
         label_addresses.extend(addresses);
     }
@@ -922,6 +938,26 @@ fn lower_resolved_unit(
         if *visibility == GlobalVisibility::External && hidden_names.contains(name.as_str()) {
             *visibility = GlobalVisibility::Hidden;
         }
+    }
+    let preserved = unit
+        .iter()
+        .filter_map(|decl| {
+            let CHirDecl::Function(function) = decl else {
+                return None;
+            };
+            function
+                .attributes
+                .iter()
+                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
+                .then(|| {
+                    linkage
+                        .function_name(function.symbol, &function.name.spelling)
+                        .to_owned()
+                })
+        })
+        .collect();
+    if optimize {
+        constants::remove_unreferenced_functions(&mut module, preserved);
     }
     module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
@@ -2924,7 +2960,7 @@ fn function_info(
         parameter_symbols,
         parameter_types,
         return_type,
-        constant_result: evocc_chir::constant::inline_constant_result(unit, function, target)
+        constant_result: evocc_chir::constant::internal_constant_result(unit, function, target)
             .map(|(_, value)| value),
         participant: matches!(
             parameters,
@@ -3449,6 +3485,9 @@ impl<'a> FunctionLowerer<'a> {
             address_labels: BTreeMap::new(),
             pending_gotos: BTreeMap::new(),
             object_declarations: BTreeMap::new(),
+            constant_objects: BTreeSet::new(),
+            unstable_objects: BTreeSet::new(),
+            optimize: false,
             size_symbols,
             active_control: ControlTargets::default(),
         }
@@ -3457,7 +3496,9 @@ impl<'a> FunctionLowerer<'a> {
     fn lower(
         mut self,
         declaration: &FunctionDecl<'a>,
+        optimize: bool,
     ) -> Result<(Function, BTreeMap<usize, String>), LowerError> {
+        self.optimize = optimize;
         let body = declaration
             .body
             .ok_or_else(|| LowerError::MalformedFunction {
@@ -3467,6 +3508,7 @@ impl<'a> FunctionLowerer<'a> {
             })?;
         let mut references = FunctionReferences::default();
         collect_references_stmt(body, &mut references);
+        self.unstable_objects = std::mem::take(&mut references.unstable_objects);
         let stack_protect = self.unit.stack_protector()
             && !declaration
                 .attributes
@@ -3771,6 +3813,16 @@ impl<'a> FunctionLowerer<'a> {
                     *block = address_remap[block];
                 }
             }
+        }
+        if optimize {
+            constants::prune_constant_edges(
+                &mut self.blocks,
+                &self
+                    .address_labels
+                    .keys()
+                    .filter_map(|name| self.labels.get(name).map(|label| label.id))
+                    .collect(),
+            );
         }
         self.prune_unreachable_blocks()?;
         if self.blocks.iter().any(|block| block.terminator.is_none()) {
@@ -4893,6 +4945,7 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
+        self.record_constant_prefix(statement);
         let previous = std::mem::replace(&mut self.active_control, control.clone());
         let scope = match statement {
             CHirStmt::Switch(_, body, _) => *body as *const CHirStmt<'a> as usize,
@@ -4909,6 +4962,49 @@ impl<'a> FunctionLowerer<'a> {
         }
         self.active_control = previous;
         result
+    }
+
+    fn record_constant_prefix(&mut self, body: &CHirStmt<'_>) {
+        let CHirStmt::Compound(items, _) = body else {
+            return;
+        };
+        let mut candidates = Vec::new();
+        for item in items {
+            let CHirBlockItem::Declaration(decl) = item else {
+                break;
+            };
+            let mut initializer = FunctionReferences::default();
+            collect_references_decl(decl, &mut initializer);
+            if !initializer.goto_names.is_empty() || initializer.has_computed_goto {
+                break;
+            }
+            if let CHirDecl::Object(object) = decl {
+                if object.initializer.is_some()
+                    && !matches!(object.storage, StorageClass::Static | StorageClass::Extern)
+                    && !self.unstable_objects.contains(&object.symbol)
+                {
+                    candidates.push(object.symbol);
+                }
+            }
+        }
+        if candidates.is_empty() {
+            return;
+        }
+        // Use the complete compound, never a switch/statement-expression
+        // prefix: an incoming label after the prefix could skip initialization.
+        // Internal backedges are safe for an object never modified or escaped.
+        let mut local = FunctionReferences::default();
+        collect_references_stmt(body, &mut local);
+        if local.has_unbound_case_label
+            || local.defined_labels.iter().any(|label| {
+                self.address_labels.contains_key(label)
+                    || self.goto_counts.get(label).copied().unwrap_or(0)
+                        > local.goto_counts.get(label).copied().unwrap_or(0)
+            })
+        {
+            return;
+        }
+        self.constant_objects.extend(candidates);
     }
 
     fn lower_stmt_active(
@@ -9078,6 +9174,7 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
+        self.record_constant_prefix(body);
         let CHirStmt::Compound(items, _) = body else {
             return Err(LowerError::UnsupportedExpression {
                 span,
@@ -10005,8 +10102,7 @@ impl<'a> FunctionLowerer<'a> {
                 false_args,
             ),
         )?;
-        let right_value = self.lower_expr(right, &mut right_state)?;
-        let right_result = self.lower_condition_value(right_value, &right_state)?;
+        let right_result = self.lower_condition(right, &mut right_state)?;
         let mut skip_state = skip_state;
         let skip_result = self.fresh_value(EvoIRType::Bits(1));
         self.emit(
@@ -10654,8 +10750,8 @@ impl<'a> FunctionLowerer<'a> {
         (values.len() <= 8).then_some(values)
     }
 
-    // Prove a fresh literal's initialized representation, not a value read
-    // from an arbitrary object. The real load and initialization are retained.
+    // Prove a fresh literal or a private immutable object's initialized
+    // representation. The real load and initialization are retained.
     // Applying the existing scalar/bit-field write plan to complementary
     // initial bytes makes every unwritten bit disagree, so padding cannot
     // accidentally become a known zero. Relocated/pointer bytes are excluded.
@@ -10665,6 +10761,10 @@ impl<'a> FunctionLowerer<'a> {
             return None;
         }
         let (ty, initializer, mut offset) = match place.root() {
+            PlaceRoot::Object { symbol } if self.constant_objects.contains(symbol) => {
+                let object = self.object_declarations.get(symbol)?;
+                (object.ty, object.initializer.as_ref()?, 0)
+            }
             PlaceRoot::PointerExpression { pointer, .. } => {
                 literal_address(self.unit.types(), pointer)?
             }
@@ -12209,6 +12309,16 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<Value, LowerError> {
         let value = self.lower_expr(expression, state)?;
+        // Materialize a proven truth only after performing the expression.
+        // Its loads, calls and obligations still run; the truth can now cross
+        // a short-circuit join just like any other constant SSA value.
+        if self.optimize {
+            if let Some(known) = self.result_after_evaluation(expression) {
+                return Ok(self
+                    .constant(state, CIntegerType::BOOL, u64::from(known.truth()))?
+                    .value);
+            }
+        }
         self.lower_condition_value(value, state)
     }
 
@@ -13050,6 +13160,7 @@ fn contains_targeted_label(
 #[derive(Default)]
 struct FunctionReferences {
     objects: BTreeMap<SymbolId, TypeId>,
+    unstable_objects: BTreeSet<SymbolId>,
     frame_addresses: BTreeSet<SymbolId>,
     addressed_compound: bool,
     has_computed_goto: bool,
@@ -13064,15 +13175,19 @@ struct FunctionReferences {
     goto_names: BTreeSet<String>,
     goto_counts: BTreeMap<String, usize>,
     has_case_label: bool,
+    has_unbound_case_label: bool,
+    switch_depth: usize,
     scope: usize,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
 }
 
 fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferences) {
-    calls.has_case_label |= matches!(
+    let case_label = matches!(
         statement,
         CHirStmt::Case(..) | CHirStmt::CaseRange(..) | CHirStmt::Default(..)
     );
+    calls.has_case_label |= case_label;
+    calls.has_unbound_case_label |= case_label && calls.switch_depth == 0;
     let parent = calls.scope;
     if matches!(
         statement,
@@ -13090,6 +13205,7 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
                 *calls.goto_counts.entry(label.spelling.clone()).or_default() += 1;
             }
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_symbols_expr(operand.expression, &mut calls.unstable_objects);
                 collect_references_expr(operand.expression, calls);
             }
         }
@@ -13107,9 +13223,13 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
                 collect_references_stmt(branch, calls);
             }
         }
-        CHirStmt::Switch(expression, body, _)
-        | CHirStmt::While(expression, body, _)
-        | CHirStmt::Case(expression, body, _) => {
+        CHirStmt::Switch(expression, body, _) => {
+            collect_references_expr(expression, calls);
+            calls.switch_depth += 1;
+            collect_references_stmt(body, calls);
+            calls.switch_depth -= 1;
+        }
+        CHirStmt::While(expression, body, _) | CHirStmt::Case(expression, body, _) => {
             collect_references_expr(expression, calls);
             collect_references_stmt(body, calls);
         }
@@ -13188,6 +13308,7 @@ fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionRefer
                 | InitAction::CopyAggregate { value, .. } = action
                 {
                     collect_references_expr(value, calls);
+                    collect_symbols_expr(value, &mut calls.unstable_objects);
                 }
             }
         }
@@ -13196,6 +13317,7 @@ fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionRefer
 
 fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionReferences) {
     if let CHirExpr::Unary(UnaryOp::AddrOf, operand, _) = expression {
+        collect_symbols_expr(operand, &mut calls.unstable_objects);
         let mut root = *operand;
         while let CHirExpr::Member(base, _, _) = root {
             root = base;
@@ -13222,6 +13344,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
             }
             collect_references_expr(callee, calls);
             for argument in arguments {
+                collect_symbols_expr(argument, &mut calls.unstable_objects);
                 collect_references_expr(argument, calls);
             }
         }
@@ -13260,10 +13383,14 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
             collect_references_expr(else_value, calls);
         }
         CHirExpr::Assign { target, value, .. } => {
+            collect_symbols_expr(target, &mut calls.unstable_objects);
+            collect_symbols_expr(value, &mut calls.unstable_objects);
             collect_references_expr(target, calls);
             collect_references_expr(value, calls);
         }
         CHirExpr::MemoryAssign { place, value, .. } => {
+            calls.unstable_objects.extend(place.root_symbol());
+            collect_symbols_expr(value, &mut calls.unstable_objects);
             for source in place.source_expressions() {
                 collect_references_expr(source, calls);
             }
@@ -13275,9 +13402,11 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
             }
         }
         CHirExpr::Update { target, .. } => {
+            collect_symbols_expr(target, &mut calls.unstable_objects);
             collect_references_expr(target, calls);
         }
         CHirExpr::MemoryUpdate { place, .. } => {
+            calls.unstable_objects.extend(place.root_symbol());
             for source in place.source_expressions() {
                 collect_references_expr(source, calls);
             }

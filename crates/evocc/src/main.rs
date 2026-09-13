@@ -27,7 +27,6 @@ use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
-use evocc_lower::lower_unit;
 use evocc_mir::emit::{CodegenOptions, StackGuard};
 use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target as MirTarget};
 use evocc_parser::Parser;
@@ -828,7 +827,11 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         ParsedAction::EmitCHir => emit_chir(&unit),
         ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
             let target = options.target_layout();
-            let module = match lower_unit(&unit, &target) {
+            let module = match evocc_lower::lower_unit_with_optimization(
+                &unit,
+                &target,
+                options.optimization != 0,
+            ) {
                 Ok(module) => module,
                 Err(error) => {
                     let span = error.span();

@@ -97,3 +97,46 @@ io_uring/fs.o exit=0 compiler-assert-calls=0
 lib/lzo/lzo1x_compress.o exit=0 compiler-assert-calls=0
 arch/arm64/kvm/guest.o exit=0 compiler-assert-calls=0
 drivers/ufs/core/ufshcd.o exit=0 compiler-assert-calls=10 (not link-closed)
+
+2026-09-13 constant-flow follow-up, superseding the targeted counts above:
+SSA/assignment REDs: retained call @invalid, zero build errors.
+Private-table RED: interpreter value correct but call @invalid survived emission.
+Address-observation guard RED: ptr.to_int disappeared into a synthetic address;
+GREEN preserves the conversion, not an interpreter-specific numeric constant.
+Final commands, CARGO_TARGET_DIR=target/tailored:
+cargo test -p evocc-chir -p evocc-lower --tests --no-fail-fast --locked --offline -j 2
+  43 targets, 448 passed / 0 failed / 0 ignored.
+cargo test -p evocc --test resolved_compiler_queries --locked --offline -j 2
+  39 passed / 0 failed / 0 ignored.
+cargo clippy -p evocc-chir -p evocc-lower -p evocc --all-targets --locked --offline -j 2 -- -D warnings
+  exit 0.
+constant-control-flow.c: gcc-14 and clang-19, -std=gnu11 -O2, link and exit 0;
+same fixture with EvoCC -O2 --emit=asm, assembled/linked by gcc-14, exit 0.
+All three run in evo-flight-lab:sealed with --platform linux/arm64 --network none;
+image sha256 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+Original .o.cmd through tools/k1/cmdrecord.py::evocc_argv, emission only:
+subject f104465eb7243d6b7e29ad0ac9316746c736d5a2c3a88cdc2804962d36d272f7
+net/bpf/test_run.o exit=0 compiler-assert-calls=0 wall_seconds=9.36
+net/core/filter.o exit=0 compiler-assert-calls=0 wall_seconds=24.55
+net/core/skbuff.o exit=0 compiler-assert-calls=0 wall_seconds=12.22
+Three workers concurrent with focused tests; no isolated timing claim.
+No objects installed; full link/boot NOT RUN.
+
+Unified assertion-call cohort replay with the same f104465e... subject:
+enumeration: rg -l '^\s*bl\s+__compiletime_assert' -g '*.s' --no-ignore .build/k1/evocc-out
+replay: original .o.cmd through tools/k1/cmdrecord.py::evocc_argv, --emit=asm,
+4 workers, 180-second per-unit cap, no saved assembly/log copies.
+90 units emitted; 89 have no compiler-assert calls; 0 timeouts; wall 155.4 s.
+Remaining: fs/ext4/ioctl.o, __compiletime_assert_753, 3.93 s.
+This is a fixed targeted 90-unit set, not the full 2,799-unit survey.
+
+Pending-rule probe: object-size-member.c, both sealed oracles -std=gnu11 -O2,
+compiled/executed by the same container invocation described above.
+gcc-14 exit=0:
+member=21/16/21/16 offset=13
+array=16 offset=13 literal=4 unknown=18446744073709551615 side=18446744073709551615 effects=0
+clang-19 exit=0:
+member=21/16/21/16 offset=13
+array=16 offset=13 literal=4 unknown=18446744073709551615 side=18446744073709551615 effects=0
+Not a subject PASS: current spec deliberately requires unknown even for the
+known member; authority to revise that explicit profile rule is pending.
