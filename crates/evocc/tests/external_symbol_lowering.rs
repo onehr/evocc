@@ -60,6 +60,89 @@ fn position_independent_options_preserve_external_address_semantics() {
 }
 
 #[test]
+fn visibility_pragmas_preserve_link_time_address_binding() {
+    let source = "#include \"visibility-pragma.h\"\n\
+         int read(void){return hidden_data + hidden_function(1) + hidden_definition
+             + default_data + restored_hidden_data + restored_default_data;}\n\
+         int *weak_address(void){return &weak_hidden_data;}\n";
+    let includes = format!("{}/../../tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+    for mode in ["--emit=evoir", "--emit=asm"] {
+        let output = run_with_options(source, mode, &["-fpie", "-I", &includes]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        for name in [
+            "hidden_data",
+            "hidden_function",
+            "hidden_definition",
+            "restored_hidden_data",
+            "weak_hidden_data",
+        ] {
+            if mode == "--emit=evoir" {
+                assert!(text.lines().any(|line| line.contains(&format!("@{name} "))
+                    || line.contains(&format!("@{name}("))));
+                assert!(
+                    text.lines()
+                        .filter(|line| line.starts_with("extern ")
+                            || line.starts_with("declare ")
+                            || line.starts_with("global "))
+                        .filter(|line| line.contains(&format!("@{name} "))
+                            || line.contains(&format!("@{name}(")))
+                        .all(|line| line.contains("visibility=hidden")),
+                    "{name}: {text}"
+                );
+            } else {
+                assert!(text.contains(&format!(".hidden {name}")), "{name}: {text}");
+            }
+        }
+        if mode == "--emit=asm" {
+            assert!(!text.contains(":got:hidden_data"), "{text}");
+            assert!(!text.contains(":got:restored_hidden_data"), "{text}");
+            for name in ["weak_hidden_data", "default_data", "restored_default_data"] {
+                assert!(text.contains(&format!(":got:{name}")), "{name}: {text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn visibility_pragma_defaults_preserve_explicit_attributes_and_redeclarations() {
+    for source in [
+        "#pragma GCC visibility push(hidden)\nextern int data;\n#pragma GCC visibility pop\nextern int data;",
+        "extern int data;\n_Pragma(\"GCC visibility push(hidden)\")\nextern int data;",
+        "void f(void){\n#pragma GCC visibility push(hidden)\nextern int data;\n#pragma GCC visibility pop\n}\nextern int data;",
+    ] {
+        let output = run(&format!("{source}\nint read(void){{return data;}}"), "--emit=asm");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains(".hidden data"), "{text}");
+        assert!(!text.contains(":got:data"), "{text}");
+    }
+    for source in [
+        "extern int data __attribute__((visibility(\"default\")));\n#pragma GCC visibility push(hidden)\nextern int data;",
+        "#pragma GCC visibility push(hidden)\nextern int data __attribute__((visibility(\"default\")));",
+    ] {
+        let output = run(&format!("{source}\nint read(void){{return data;}}"), "--emit=asm");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(!text.contains(".hidden data"), "{text}");
+        assert!(text.contains(":got:data"), "{text}");
+    }
+    for source in [
+        "#pragma GCC visibility pop\nint data;",
+        "#pragma GCC visibility push(protected)\nint data;",
+        "#pragma GCC visibility push(hidden)\nextern int data;\nextern int data __attribute__((visibility(\"default\")));int read(void){return data;}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "unsupported or conflicting visibility accepted: {source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2943"));
+    }
+}
+
+#[test]
 fn position_independent_macros_follow_the_last_codegen_option() {
     for (options, pic, pie) in [
         (vec![], 2, 2),
