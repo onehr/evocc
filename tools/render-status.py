@@ -204,6 +204,20 @@ def main() -> int:
     e0t = e0.get("torture", {}).get("outcomes", {})
     bench = contract("bench-receipt.json")
     measured = bench.get("benchmarks", {})
+    full_kernel = contract("kernel-full-receipt.json")
+    full_total = full_kernel.get("requestedUnits", 0)
+    full_compiled = full_kernel.get("counts", {}).get("substituted", 0)
+    full_linked = (
+        full_total > 0 and full_compiled == full_total
+        and full_kernel.get("completeComposition") is True
+        and full_kernel.get("relinkExitCode") == 0
+    )
+    full_boot = full_kernel.get("boot", {})
+    full_passed = (
+        full_linked and full_boot.get("verdict") == "PASS"
+        and bool(full_kernel.get("imageSha256"))
+        and full_boot.get("imageSha256") == full_kernel.get("imageSha256")
+    )
     # The native E0 receipt holds one selected suite; the common run retains
     # both, so running torture must not erase an earlier c-testsuite reading.
     e0c = e0c or measured.get("ctest", {}).get("outcomes", {})
@@ -217,8 +231,11 @@ def main() -> int:
     e0c_label = f"{e0c.get('pass', 0)}/{sum(e0c.values())}" if e0c else ""
     e0t_label = f"{e0t.get('pass', 0)}/{sum(e0t.values())}" if e0t else ""
     kernel = box(
-        " ── ",
+        " ── K6 EvoCC PASS" if full_passed else " ── ",
         [
+            f" {full_compiled:,}/{full_total:,} EvoCC C ; {'PASS' if full_linked else ''}; {full_boot.get('verdict', 'NOT_RUN')}",
+            f" {full_kernel.get('run', full_kernel.get('runId', ''))};K7 KUnit/kselftest ",
+            ":" + (" + ".join(f"{entry['units']:,} @{entry['subject'][:7]}" for entry in full_kernel.get("compilerComposition", [])) or " receipt"),
             f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
             f" K1 receipt: EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
             latest_k1_note,
@@ -226,7 +243,7 @@ def main() -> int:
             f" E0 (): c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
             f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {record_count(cs.get('miscompiles'))};"
             + " ".join(f"{name} {r.get('unitsInPassingBuild', '?')}/{r.get('unitsTotal', r.get('units', 0))}" for name, r in subjects),
-            "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
+            f"C1 EvoCC {bar(full_compiled, full_total, 4)} C2 vmlinux {bar(int(full_linked), 1, 4)} G1 {bar(int(full_passed), 1, 4)}",
         ],
         span,
     )
@@ -267,7 +284,9 @@ def main() -> int:
             f"selected gates `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
             "Program counts and translation-unit counts are different measures; "
             "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
-            "retain their previous reading and compiler identity; they are not remeasured by this run.\n\n"
+            "retain their previous reading and compiler identity; they are not remeasured by this run. "
+            "An incremental all-EvoCC kernel records each compiler revision in the "
+            "[full-kernel receipt](../tests/contracts/kernel-full-receipt.json); it is not a fresh single-compiler survey.\n\n"
             "| Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |\n"
             "|---|---|---|---|---|---|\n"
         )

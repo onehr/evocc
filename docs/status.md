@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-13 UTC,EvoIR 1.9.94 / EvoMIR 0.29, checkout 85a25e5)
+EvoCC ── (2026-09-13 UTC,EvoIR 1.9.96 / EvoMIR 0.29, checkout aad1657)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -21,18 +21,21 @@ EvoCC ── (2026-09-13 UTC,EvoIR 1.9.94 / EvoMIR 0.29, checkout 85a25e5)
 └──────────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼
-┌─ ── ──────────────────────────────────────────────────────────────────────────────────┐
+┌─ ── K6 EvoCC PASS ───────────────────────────────────────────────────────────────────────────┐
+│ 2,799/2,799 EvoCC C ; PASS; PASS │
+│ 20260913T090822Z-incremental;K7 KUnit/kselftest │
+│ :2,723 @d3c457b + 76 @aad1657 │
 │ PASS ████████ GCC ,EvoCC , │
 │ K1 receipt: EvoCC 76 ; 90/2,799 ░░░░░░░░ │
 │ measure-20260907T025031Z: PASS; 2; NOT_PASS: two byte-proof mismatches │
 │ fail-closed 8 :E3021 E3025 E3026 E3029 E3030 E3031 E3033 E3034 │
 │ E0 (): c-testsuite 209/220 ████████ torture 1269/1692 ██████░░ │
 │ Csmith 932/1000, 0;zlib 19/19 zstd 6/44 cjson 0/2 tinycc 8/11 toybox 195/203 musl 1010/1339 │
-│ C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░ │
+│ C1 EvoCC ████ C2 vmlinux ████ G1 ████ │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 (,)
-Q0 █████████░ 123 ,
+Q0 █████████░ 125 ,
 Q1 kernel ████░░░░░░ 2,798/2,798, 2,008/2,798, 384/384
 Q2 e-graph pipeline ███░░░░░░░ , GCC -O2
 Q3 ███░░░░░░░ ,(13 3 )
@@ -41,9 +44,9 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260913T024049.017790Z`; checkout `85a25e5`; selected gates `ERROR`. Run again with `python3 tools/bench.py all`.
+Run `20260913T090822Z-incremental`; checkout `aad1657`; selected gates `PASS`. Run again with `python3 tools/bench.py all`.
 
-Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
+Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run. An incremental all-EvoCC kernel records each compiler revision in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); it is not a fresh single-compiler survey.
 
 | Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |
 |---|---|---|---|---|---|
@@ -63,7 +66,7 @@ Program counts and translation-unit counts are different measures; an incomplete
 | jq | E10 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | lua | E11 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | sqlite | E12 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
-| kernel-full | K6 | ERROR | 0/2799 units | 20260913T024049.017790Z | runner exit 1 |
+| kernel-full | K6 | PASS | 2799/2799 units | 20260913T090822Z-incremental | all target C objects, generated-input fixed point, full link and real boot; selftests separate |
 | kernel-selftest | K7 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no kselftest adapter yet |
 
 Details and commands: [bench receipt](../tests/contracts/bench-receipt.json). Partial failed runs and source-level blockers: [benchmark review](notebook/benchmark-evaluation.md).

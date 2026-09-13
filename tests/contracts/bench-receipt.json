@@ -1,25 +1,16 @@
 {
   "schemaVersion": 1,
-  "run": "20260913T024049.017790Z",
-  "subject": "85a25e59b26cbf9eb8f43decb86985b1536dd722",
+  "run": "20260913T090822Z-incremental",
+  "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
-  "driverSha256": "36f7c40355cea5648211590831a6a4eedbbf8a2989371f2ef476e45cf6da5fc2",
-  "invocation": [
-    "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
-    "tools/bench.py",
-    "kernel-full",
-    "--evocc",
-    "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
-    "--jobs",
-    "8",
-    "--allow-qemu-drift"
-  ],
-  "execution": "sequential lanes; original per-program watchdogs unchanged",
+  "driverSha256": null,
+  "invocation": "K1_ALLOW_QEMU_DRIFT=1 tools/k1/boot.sh .build/k1/out/arch/arm64/boot/Image .evidence/k1/large-frames-20260913/boot",
+  "execution": "Existing K1 helpers replayed 76 original records, then full relink and boot; normalized by tools/bench.py metrics. Other lanes were not rerun.",
   "selected": [
     "kernel-full"
   ],
-  "status": "ERROR",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -1419,73 +1410,46 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 2799,
-      "passed": 0,
+      "passed": 2799,
       "compiled": 2799,
       "kind": "units",
-      "status": "ERROR",
-      "testVerdict": "NOT_RUN",
-      "evidence": ".evidence/k1/20260913T024049Z",
-      "run": null,
+      "status": "PASS",
+      "testVerdict": "PASS",
+      "evidence": ".evidence/k1/large-frames-20260913",
+      "run": "20260913T090822Z-incremental",
       "receipt": "tests/contracts/kernel-full-receipt.json",
-      "error": "runner exit 1",
-      "errorTail": [
-        "    \"failedUnits\": [],",
-        "    \"compileInputSnapshotSha256\": \"fc3f6a318a2feaded90c17d6a6369d338bf5e2a58e535a005130bb06b29076a6\",",
-        "    \"verifyPrepareExitCode\": 0,",
-        "    \"preparedInputsStable\": true",
-        "  },",
-        "  \"installed\": true,",
-        "  \"allowSymbolDrift\": true,",
-        "  \"imageSha256\": \"af053a63dea8301e1629da2a2c7b6694c4b83010debbe78e91921fd4c4f425ba\",",
-        "  \"vmlinuxSha256\": \"b852aa79a89c5d702f2290f8d4e3c703f8257a102d505fc934fa3b078feecb6a\",",
-        "  \"unitsSha256\": \"1fc7845e7ed7842bc1b058cf6c831d78a99618ba9d5d1a24b018848ca4c1529e\",",
-        "  \"mode\": \"full-kernel\",",
-        "  \"completeComposition\": false,",
-        "  \"boot\": {",
-        "    \"verdict\": \"NOT_RUN\"",
-        "  },",
-        "  \"driverSha256\": \"36f7c40355cea5648211590831a6a4eedbbf8a2989371f2ef476e45cf6da5fc2\",",
-        "  \"status\": \"INCOMPLETE\",",
-        "  \"evidence\": \".evidence/k1/20260913T024049Z\"",
-        "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/20260913T024049Z"
-      ],
-      "command": [
-        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
-        "/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py",
-        "--all",
-        "--require-all",
-        "--boot",
-        "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
-        "--jobs",
-        "8"
-      ],
-      "exitCode": 1,
-      "seconds": 2963.0,
+      "command": "K1_ALLOW_QEMU_DRIFT=1 tools/k1/boot.sh .build/k1/out/arch/arm64/boot/Image .evidence/k1/large-frames-20260913/boot",
+      "exitCode": 0,
       "previous": {
-        "rung": "K6",
-        "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
-        "outcomes": {
-          "assembled": 2794,
-          "timeout": 5
-        },
-        "refusals": {},
-        "baselineFailures": 0,
-        "failingUnits": [],
-        "total": 2799,
+        "run": null,
+        "status": "ERROR",
+        "testVerdict": "MARKERS_MISSING",
+        "compiled": 2799,
         "passed": 0,
-        "compiled": 2794,
-        "kind": "units",
-        "status": "INCOMPLETE",
-        "testVerdict": "NOT_RUN",
-        "evidence": ".evidence/k1/20260913T014446Z",
-        "run": null
+        "evidence": ".evidence/k1/20260913T075423Z"
       },
       "measurement": {
-        "run": "20260913T024049.017790Z",
-        "subject": "85a25e59b26cbf9eb8f43decb86985b1536dd722",
-        "driverSha256": "36f7c40355cea5648211590831a6a4eedbbf8a2989371f2ef476e45cf6da5fc2"
+        "run": "20260913T090822Z-incremental",
+        "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+        "driverSha256": null,
+        "compilerComposition": [
+          {
+            "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
+            "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
+            "units": 2723,
+            "evidence": ".evidence/k1/20260913T075423Z/units.jsonl"
+          },
+          {
+            "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+            "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+            "units": 76,
+            "evidence": [
+              ".evidence/k1/spill-slots-20260913/result.json",
+              ".evidence/k1/large-frames-20260913/result.json"
+            ]
+          }
+        ],
+        "kind": "incremental complete kernel composition; not a fresh single-compiler survey"
       }
     },
     "kernel-selftest": {
@@ -1498,5 +1462,22 @@
         "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
       }
     }
-  }
+  },
+  "compilerComposition": [
+    {
+      "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
+      "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
+      "units": 2723,
+      "evidence": ".evidence/k1/20260913T075423Z/units.jsonl"
+    },
+    {
+      "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+      "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+      "units": 76,
+      "evidence": [
+        ".evidence/k1/spill-slots-20260913/result.json",
+        ".evidence/k1/large-frames-20260913/result.json"
+      ]
+    }
+  ]
 }

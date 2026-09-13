@@ -16,11 +16,14 @@ The compiler is written by AI agents. What keeps that honest:
 
 ![Milestones](docs/images/evocc-milestones.png)
 
-The frozen front-end gate covers 2,798 kernel translation units. End-to-end
-native coverage is still partial: a passing interpreter corpus or a mixed-link
-boot does not establish a fully EvoCC-built kernel. Current, command-produced
-figures are in [docs/status.md](docs/status.md), with configurations, limitations
-and blocking constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
+The frozen front-end gate covers 2,798 kernel translation units. On September 13,
+the complete Linux 6.18.44 configuration linked and booted to init with all
+**2,799 target-C objects from EvoCC**, then shut down normally. This incremental
+build combines two recorded EvoCC revisions, with no GCC target-C fallback;
+the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds the exact Image
+and nonce. K7 runtime selftests have not run, and broader native coverage remains
+partial. Current figures are in [docs/status.md](docs/status.md), with remaining
+constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
 The illustration above is not a live counter. The evaluation ladder and pinned
 subjects are in [docs/roadmap.md](docs/roadmap.md).
 
@@ -102,7 +105,7 @@ $ target/release/evocc --emit=evoir -Oeq-scalar opt.c | tail -4
 - Each union records why it was allowed. `evo-proofcheck` replays the record against the before and after programs and shares no code with the optimizer.
 - The rewrite rules themselves are machine-checked. Every rule of the scalar registry and every row of the known-bits analysis it relies on is proved in Lean 4 against one model of the EvoIR scalar semantics, for every width the profile admits; an audit lists the axioms each proof uses and writes a receipt, and the Rust implementations are compared with the Lean model on 1.3 million vectors. This checks the rules, not the whole compiler: the front end, the backend and the memory model are not proved.
 - EvoMIR's register allocation is checked by an independent verifier. A randomized gate runs 21,000 generated programs as source IR, optimized IR, machine IR and native binary on both targets.
-- The kernel is measured the way a compiler bring-up is done: GCC builds it, EvoCC replaces translation units one at a time, kbuild relinks, QEMU boots, and a failure bisects to one unit.
+- Kernel bring-up starts with reference-built inputs and targeted object substitutions. The complete lane requires every target-C object from EvoCC, checks that kbuild retained them through the full link, and boots the resulting Image with a fresh nonce. The first complete boot is recorded above; selftests are a separate milestone.
 
 ## Layout
 

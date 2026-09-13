@@ -2014,15 +2014,17 @@ Rules that hold for every rung:
 | E11 | Lua | 5.5.1 (2026-07-24, lua.org/download.html) | ~35 TU | official test suite | FP |
 | E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
 | K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
-| K6 | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | link without reference objects, boot to `init` | an inliner for `i` assembly constraints, computed goto, aggregate ABI parity |
+| K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): incremental composition of 2,723 prior + 76 repaired EvoCC objects; zero reference target-C fallback, not a fresh single-compiler survey |
 | K7 | K6 plus kselftest in the initramfs | 6.18.44 | | kselftest pass rate | runtime correctness beyond boot |
 
-The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-12)
+The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-13)
 separates compile refusals, link/relocation failures, runtime failures, build
 provenance and the K6/K7 measurement gaps. Its statuses are distinct from the
 receipt-backed counts in `docs/status.md`: assembled units and locally verified
-fixes do not close a boot milestone. Historical measurements remain dated;
-closing the currently known issue list still requires a real full-kernel replay.
+fixes do not close a boot milestone. The first complete all-EvoCC boot is
+`20260913T090822Z-incremental`; its receipt retains both compiler revisions and
+the authorized QEMU digest drift. Historical failures remain dated. K7 runtime
+selftests have not run and are not implied by the K6 boot.
 
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong

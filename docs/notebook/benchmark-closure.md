@@ -8,23 +8,28 @@ inventory authority. Counts below overlap where a row is a subcategory.
 
 ## Kernel boot blocker tracker (updated 2026-09-13)
 
-This is the current kernel-specific index into the existing issue inventory,
-not a second tracker or a new acceptance framework. The latest full attempt
-is `20260913T024049Z`: all 2,799 assembled, recompiled against the actual
-generated headers, installed and retained; zero refusals or timeouts.
-The generated inputs reached a content fixed point, but full linking failed
-on four duplicate definitions in three units, so boot is NOT RUN.
-The previous five allocator timeouts and 42 source refusals have cleared;
-K-L05 records the newly exposed symbol-attachment defect.
-The baseline failed mixed-link attempt remains `measure-20260910T160033Z`;
-earlier reports remain history.
+**K6 first complete kernel boot: PASS, 2026-09-13.** All 2,799 target-C
+objects come from EvoCC, remain installed after the complete link, and reach
+the unchanged nonce-bound init/powerdown predicate. No reference-compiler C
+object, stub, configuration reduction or timeout increase was used.
+The actual [boot record](../../.evidence/k1/large-frames-20260913/boot/boot.json)
+binds Image `1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c`
+to nonce `k1-20260913T090822Z-d77e5b2b` on the HVF-host lane. The installed
+QEMU digest differs from the frozen tool digest; that explicitly authorized
+drift remains recorded, not erased. K7 selftests have **not** run.
 
-The subsequent complete **diagnostic composition** now links with all 2,799
-EvoCC target-C objects retained. Its current Image is `c19129dd7005e99b8dee76a3088963ad9c179f9cc61e4a6e29632cc0e973d956`;
-the standard flight still times out. A separate early-console diagnostic reaches
-IRQ initialization, then waits on a lock whose GNU `cleanup` destructor was
-not emitted (K-R05 below). This combines several EvoCC revisions for diagnosis;
-it is not a fresh uniform survey or a passing K6 result.
+This is an **incremental all-EvoCC build**, not a fresh all-at-HEAD survey:
+2,723 objects retain the compiler from full run `20260913T075423Z`
+(`d3c457b`), and 76 use allocator repair `aad1657`. That base run compiled all
+2,799 again against actual generated headers, reached the input fixed point,
+and linked, but its first boot exposed stack overflow. Replaying the original
+BPF unit and then all 75 remaining units with a frame of at least 2,048 bytes
+produced the passing composition. Every final installed object digest was
+rechecked; the generated export source stayed unchanged. The
+[receipt](../../tests/contracts/kernel-full-receipt.json) records both compiler
+identities and the small repair manifests instead of copying another build
+tree or presenting the old uniform run as a PASS. Historical failed runs below
+remain failed measurements.
 
 **Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
 currently 2,799 target C compile records. K6 requires all required target C
@@ -53,10 +58,11 @@ existing ID only after its source-level cause is established.
 
 ### Link, execution and integration work outside the compile-count table
 
-The original link/boot failures now have passing isolated, five-object combined,
-and eleven-object nVHE replays below. The full required-C
-combination remains unmeasured after the repairs. The acknowledged QEMU digest drift remains in their receipts;
-it is neither a waived failure nor evidence that the compiler caused a timeout.
+The isolated and small-group measurements below are historical. Their former
+"full combination OPEN" notes were resolved by the complete boot above; they
+are not claims that the older images passed. K-G01 and K-R06 record the final
+composition and runtime repair. The acknowledged QEMU digest drift remains
+in the receipts; K7 and broader compiler correctness remain separate gates.
 
 | ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
 |---|---|---|---|
@@ -69,12 +75,13 @@ it is neither a waived failure nor evidence that the compiler caused a timeout.
 | K-L05 / tailored and original object replay PASS, full link OPEN | `20260913T024049Z` installed all 2,799 objects, then `ld -r` found duplicate `bpf_arch_text_copy`, `bpf_int_jit_compile`, `arch_alloc_bpf_trampoline`, `execmem_arch_setup`. Each fallback writes `* __weak name`, whose attribute was stranded on a pointer layer instead of reaching symbol linkage. | RED `bec1deb`; move only symbol-only `weak`/`alias` marks into the owning named declaration's inventory, preserving their spelling/position once and leaving pointer layout attributes unchanged. | 73 targeted tests and Clippy/fmt PASS; both oracles O0/O2 and native EvoCC with both oracle overrides plus its own override return zero. Original core.o / trampoline.o / execmem.o emit and assemble in 6.471 / 5.643 / 2.426 seconds. Complete relink and boot remain OPEN. |
 | K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
-| K-G01 / K6 | `kernel-full` runs the existing K1 path with complete-coverage and object-lineage guards; latest attempt `20260913T024049Z` is INCOMPLETE at full link, with all 2,799 objects installed and retained and the input fixed point verified. | Fix K-L05, retry the full composition to expose any further linker/runtime defect, then obtain a fresh complete compiler-bound run. | Same measured compiler/configuration, all required C objects, linked Image and real passing boot; no bisection exclusions. |
+| K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `aad1657` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../tests/contracts/kernel-full-receipt.json). K7 NOT_RUN. |
 | K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
 | K-S02 / tailored GREEN, full link OPEN | `fs/ext4/ioctl.o` retained `__compiletime_assert_753`: `memtostr_pad` needs `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | User authorized proved bounds on September 13; §10.1.14 revision 1.9.94 replaces the explicit always-unknown rule. Parser and consumers share a declaration/layout-backed query, with unknown fallback, unevaluated operands and checked claimed bounds. | Original .o.cmd emission exits zero without assertion calls; native reduced fixture passes with EvoCC and both sealed oracles. 510 focused tests PASS. The kernel assertion and configuration are unchanged; the actual full link/boot remains the next gate. |
 | K-P01 / original release replay PASS | During `20260913T014446Z`, `drivers/hid/hid-input.o` exhausted the 180-second compiler budget. A separate 190-second replay also timed out; CPU samples of it and `mm/memory.c` locate repeated interval scans in linear-scan allocation. | Expire assigned intervals; index merged fixed-register ranges, including future calls/clobbers; binary-search the ordered call positions. No register pool, spill policy, validator or watchdog change. | A 16,384-call RED took 5.31 seconds with just one live ordinary value. All five original commands now emit and assemble; measured times below. The fresh full composition remains required. |
 | K-P02 / original assembly replay PASS | With K-P01 alone, all five timed-out units emit in 8.23–24.40 seconds, but three assemblers are killed at the unchanged 1 GiB container budget. `copy_present_ptes` has 2,164,954 assembly lines and a roughly 2.6 MiB frame: unused cyclic block parameters create artificial liveness and spill traffic. | In out-of-SSA, seed parameter demand from real instruction/control operands and propagate it back through every incoming edge. Omit only undemanded copies; retain original operations, ABI parameters, targets, effects, calls and lifetime actions. | RED: 2,113 copies for a loop with one live value; GREEN: at most 34, zero spills. All five original units assemble with unchanged container resources. Old pressure fixtures now make their checked values observable rather than depending on dead transport. |
-| K-P03 / tailored and original assembly PASS, boot OPEN | After K-P02, `copy_present_ptes` still reserves 365,248 bytes below its saved frame pair. Every spilled virtual value retained a separate physical slot even after its last use, exceeding the configured 16 KiB task stack. | After allocation, reuse private eight-byte spill storage only for conservative, non-overlapping CFG live intervals. Preserve virtual identities, source objects, overlapping values and all actual operations. | RED: 32 disjoint pressure regions reserve 480 slots; GREEN: at most 40, with actual spills and independent allocation verification. Original `mm/memory.o` frame is now 8,640 bytes plus the 16-byte saved pair; whole call-chain stack usage and boot remain to be measured. |
+| K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
+| K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
 | K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
 
 ### Execution order and update rules
@@ -154,7 +161,7 @@ retains all 2,799 EvoCC objects with stable generated export source, recorded in
 Boot remains TIMEOUT, but the diagnostic flight gets through MMU and memory
 setup to IRQ initialization; the shift guard is unchanged.
 
-**K-R05 / original IRQ replay PASS; uniform kernel rebuild pending: scope-exit cleanup.**
+**K-R05 / CLOSED by the complete kernel boot: scope-exit cleanup.**
 The next stopped CPU is in `queued_spin_lock_slowpath`, entered by
 `gic_irq_domain_map` through `__irq_set_handler`; the descriptor lock contains
 `0x101`. The preceding `irq_modify_status` uses the kernel's scoped guard, whose
@@ -183,8 +190,32 @@ Image `611b2f69975c03788340ca479844491e98e57f3fbe9e32d659cbf53aa9a8270e`
 still records standard boot TIMEOUT. A separate bounded early-console snapshot
 now passes IRQ setup, GICv2m and clock initialization; CPU0 waits for
 `pmus_lock` owned by `init_task` in the still-old `kernel/events/core.o`, whose
-PMU registration also uses cleanup guards. A uniform rebuild is next, not a
-claim of boot success from the mixed-revision diagnostic image.
+PMU registration also uses cleanup guards. The subsequent uniform run
+`20260913T075423Z` passes IRQ, PMU, clocks and four-CPU startup, then exposes
+K-R06's spill-frame overflow. The final incremental all-EvoCC build above
+passes boot; the older cleanup-only image remains a recorded TIMEOUT.
+
+**K-R06 / complete native boot PASS: CFG-aware physical spill storage.**
+Block order is not execution order: appended edge-copy blocks stretched the
+old convex intervals across mutually exclusive switch arms. The new allocation
+finishing pass computes spill-slot interference from all CFG successors and
+uses deterministic coloring without changing registers or virtual identities.
+A dead spill store still conflicts with live contents because it remains an
+actual write. Native regressions execute all 24 arms and a loop with that dead
+store. The 13 linear-scan and 52 related allocation/128-bit/native tests pass;
+MIR all-target Clippy and workspace fmt pass. No full clone or workspace replay
+was performed in this boot-focused continuation.
+
+The original BPF replay reduces `build_insn` from 14,224 to 256 frame bytes but
+exposes the same defect in the allocator/slab call chain. Replaying all 75
+remaining units whose old maximum frame is at least 2,048 bytes reduces, for
+example, `mm/page_alloc.o` from 4,944 to 624 and `lib/maple_tree.o` from 12,080
+to 1,248. This threshold selects replays; it changes no language or stack-size
+rule. The final [composition](../../.evidence/k1/large-frames-20260913/result.json)
+retains every installed target-C object and the generated export source.
+The standard 60-second flight reports **PASS**, with exactly one ordered
+`EVO_INIT_ALIVE`, current `EVO_BOOT_NONCE`, `EVO_INIT_DONE`, then
+`reboot: Power down`. Boot is the measured claim, not KUnit/kselftest coverage.
 
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):
