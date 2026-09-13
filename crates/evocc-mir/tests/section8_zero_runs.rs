@@ -82,6 +82,72 @@ fn section_of(text: &str, label: &str) -> String {
 }
 
 #[test]
+fn string_storage_is_read_only_even_when_all_code_units_are_zero() {
+    // kfree_const excludes .rodata from heap frees. alloc_vfsmnt(NULL) stores
+    // the literal "none" without calling kstrdup_const first, so its section
+    // is observable when that mount is released.
+    let mut unit = global_line("writable", 0, "internal", 1, b"none\0", "");
+    for (origin, align, bytes) in [
+        (1, 1, b"none\0".as_slice()),
+        (2, 1, &[0][..]),
+        (3, 4, &[0, 0, 0, 0][..]),
+        (4, 1, b"a\0b\0".as_slice()),
+    ] {
+        unit.push_str(
+            &global_line(
+                &format!("__evocc.string.{origin}"),
+                origin,
+                "internal",
+                align,
+                bytes,
+                "",
+            )
+            .replace("kind=file", "kind=string_literal"),
+        );
+    }
+    unit.push_str(&global_line("blank", 5, "internal", 4, &[0; 4], ""));
+    for (target, read_only, writable, blank, prefix) in [
+        (
+            Target::Linux,
+            ".section .rodata,\"a\",%progbits",
+            ".data",
+            ".bss",
+            "",
+        ),
+        (
+            Target::Darwin,
+            ".section __TEXT,__const",
+            ".section __DATA,__data",
+            ".section __DATA,__bss,zerofill",
+            "_",
+        ),
+    ] {
+        let text = emitted(target, &unit);
+        for origin in 1..=4 {
+            assert_eq!(
+                section_of(&text, &format!("{prefix}__evocc.string.{origin}")),
+                read_only,
+                "literal {origin}: string storage must not be heap-like writable data"
+            );
+        }
+        assert_eq!(section_of(&text, &format!("{prefix}writable")), writable);
+        assert_eq!(section_of(&text, &format!("{prefix}blank")), blank);
+        assert_eq!(
+            body_of(&text, &format!("{prefix}__evocc.string.1")),
+            [".byte 110, 111, 110, 101, 0"]
+        );
+        assert_eq!(
+            body_of(&text, &format!("{prefix}__evocc.string.2")),
+            [".zero 1"]
+        );
+        assert_eq!(
+            body_of(&text, &format!("{prefix}__evocc.string.3")),
+            [".zero 4"]
+        );
+    }
+}
+
+#[test]
 fn an_all_zero_initialized_global_is_emitted_in_the_zero_filled_section() {
     let unit = global_line("blank", 0, "external", 4, &[0; 4096], "");
     for target in [Target::Darwin, Target::Linux] {
