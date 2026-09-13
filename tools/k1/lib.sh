@@ -89,7 +89,7 @@ k1_boot() {
   fi
 
   set +e
-  "$K1_TIMEOUT" "$limit" "$qemu" \
+  "$K1_TIMEOUT" --foreground "$limit" "$qemu" \
     -M "$machine",dtb-randomness=off \
     -accel hvf -cpu host \
     -smp "$smp" \

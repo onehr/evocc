@@ -126,6 +126,13 @@ int main(void)
     }
     if (symlink("/proc/self/fd", "/dev/fd") && errno != EEXIST)
         fatal("link fd");
+    const char *streams[] = {"/dev/stdin", "/dev/stdout", "/dev/stderr"};
+    for (unsigned i = 0; i < sizeof(streams) / sizeof(streams[0]); ++i) {
+        char fd_path[32];
+        snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%u", i);
+        if (symlink(fd_path, streams[i]) && errno != EEXIST)
+            fatal("link standard stream");
+    }
     if (!full_suite && mount("/dev/vda", "/scratch", "ext4", 0, NULL))
         fatal("mount scratch");
     file = fopen("/tests/huge-pages", "r");
