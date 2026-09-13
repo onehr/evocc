@@ -15,7 +15,7 @@
 //! interference structure.
 
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use crate::{
@@ -1071,82 +1071,80 @@ fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
 // Spill code
 // ---------------------------------------------------------------------------
 
-/// Reuse eight-byte spill locations only when their conservative CFG live
-/// ranges do not overlap. Virtual spill identities stay separate throughout
-/// allocation; physical slot reuse happens once, after the final rewrite.
+/// Reuse eight-byte spill locations only when their CFG live ranges do not
+/// overlap. A convex interval in block-layout order would make unrelated
+/// branch arms interfere, especially when edge-copy blocks are appended.
+/// Virtual spill identities stay separate throughout allocation; physical
+/// slot reuse happens once, after the final rewrite.
 fn compact_spill_slots(function: &mut MFunction) -> u32 {
-    let positions = numbering(function);
-    let mut bounds: BTreeMap<u32, (usize, usize)> = BTreeMap::new();
+    let mut conflicts: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut uses = BTreeMap::new();
     let mut defs = BTreeMap::new();
     for block in &function.blocks {
         let mut read = BTreeSet::new();
         let mut written = BTreeSet::new();
-        for (offset, inst) in block.insts.iter().enumerate() {
-            let (slot, at) = match inst {
+        for inst in &block.insts {
+            let slot = match inst {
                 MInst::SpillReload { slot, .. } => {
                     if !written.contains(slot) {
                         read.insert(*slot);
                     }
-                    (*slot, positions[&block.id].0 + 2 * offset)
+                    *slot
                 }
                 MInst::SpillStore { slot, .. } => {
                     written.insert(*slot);
-                    (*slot, positions[&block.id].0 + 2 * offset + 1)
+                    *slot
                 }
                 _ => continue,
             };
-            bounds
-                .entry(slot)
-                .and_modify(|range| {
-                    range.0 = range.0.min(at);
-                    range.1 = range.1.max(at);
-                })
-                .or_insert((at, at));
+            conflicts.entry(slot).or_default();
         }
         uses.insert(block.id, read);
         defs.insert(block.id, written);
     }
-    if bounds.is_empty() {
+    if conflicts.is_empty() {
         return 0;
     }
     let live_in = live_on_entry(function, &uses, &defs);
     for block in &function.blocks {
-        let (start, end) = positions[&block.id];
-        for slot in &live_in[&block.id] {
-            let range = bounds.get_mut(slot).unwrap();
-            range.0 = range.0.min(start);
-        }
+        let mut live = BTreeSet::new();
         for (target, _) in term_edges(&block.term) {
             if let Some(slots) = live_in.get(&target) {
-                for slot in slots {
-                    let range = bounds.get_mut(slot).unwrap();
-                    range.1 = range.1.max(end - 1);
-                }
+                live.extend(slots.iter().copied());
+            }
+        }
+        for inst in block.insts.iter().rev() {
+            let slot = match inst {
+                MInst::SpillStore { slot, .. } | MInst::SpillReload { slot, .. } => *slot,
+                _ => continue,
+            };
+            // A store conflicts with values live afterwards even if its own
+            // result is dead: the emitted store still overwrites its slot.
+            // A reload also keeps its value distinct from every other value
+            // live at that point, including across loop backedges.
+            for other in live.iter().copied().filter(|other| *other != slot) {
+                conflicts.entry(slot).or_default().insert(other);
+                conflicts.entry(other).or_default().insert(slot);
+            }
+            if matches!(inst, MInst::SpillStore { .. }) {
+                live.remove(&slot);
+            } else {
+                live.insert(slot);
             }
         }
     }
-    let mut ranges: Vec<_> = bounds
-        .into_iter()
-        .map(|(slot, (start, end))| (start, slot, end))
-        .collect();
-    ranges.sort_unstable();
-    let mut active: BinaryHeap<Reverse<(usize, u32)>> = BinaryHeap::new();
-    let mut free = BTreeSet::new();
+    let mut order: Vec<_> = conflicts.keys().copied().collect();
+    order.sort_unstable_by_key(|slot| (Reverse(conflicts[slot].len()), *slot));
     let mut mapping = BTreeMap::new();
     let mut count = 0;
-    for (start, slot, end) in ranges {
-        while active.peek().is_some_and(|Reverse((end, _))| *end < start) {
-            let Reverse((_, location)) = active.pop().unwrap();
-            free.insert(location);
-        }
-        let location = free.pop_first().unwrap_or_else(|| {
-            let location = count;
-            count += 1;
-            location
-        });
+    for slot in order {
+        let occupied: BTreeSet<_> = conflicts[&slot]
+            .iter()
+            .filter_map(|other| mapping.get(other).copied())
+            .collect();
+        let location = (0..).find(|color| !occupied.contains(color)).unwrap();
+        count = count.max(location + 1);
         mapping.insert(slot, location);
-        active.push(Reverse((end, location)));
     }
     for inst in function
         .blocks

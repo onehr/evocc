@@ -267,6 +267,147 @@ fn mutually_exclusive_spills_do_not_depend_on_block_layout() {
         "mutually exclusive arms retained {} physical spill slots",
         allocated.frame_slots
     );
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        let mut insts = vec![MInst::MovImm { dst: w(0), imm: 0 }];
+        let mut errors = w(0);
+        for arm in 0..24 {
+            let base = 10 + arm * 10;
+            insts.push(MInst::MovImm {
+                dst: w(base),
+                imm: u64::from(arm),
+            });
+            insts.push(MInst::Bl {
+                symbol: "branch_pressure".into(),
+                args: vec![w(base)],
+                results: vec![w(base + 1)],
+            });
+            insts.push(MInst::MovImm {
+                dst: w(base + 2),
+                imm: u64::from(780 + 40 * arm),
+            });
+            insts.push(MInst::Binary {
+                op: BinOp::Eor,
+                dst: w(base + 3),
+                lhs: w(base + 1),
+                rhs: w(base + 2),
+                width: Width::W,
+            });
+            insts.push(MInst::Binary {
+                op: BinOp::Orr,
+                dst: w(base + 4),
+                lhs: errors,
+                rhs: w(base + 3),
+                width: Width::W,
+            });
+            errors = w(base + 4);
+        }
+        let main = MFunction {
+            name: "main".into(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: Vec::new(),
+                insts,
+                term: MTerm::Ret {
+                    values: vec![errors],
+                },
+            }],
+        };
+        let main = allocate(&main).expect("native checker allocation");
+        verify_allocation(&main).expect("native checker registers");
+        let text = evocc_mir::emit_module(&[allocated, main], &[]);
+        assert_eq!(
+            evocc_mir::Toolchain::locate()
+                .unwrap()
+                .exit_status("branch-spill-reuse", &text)
+                .unwrap(),
+            0
+        );
+    }
+}
+
+#[test]
+fn live_spill_contents_survive_backedges_and_dead_stores() {
+    let function = MFunction {
+        name: "main".into(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: Vec::new(),
+                insts: vec![
+                    MInst::MovImm { dst: w(0), imm: 7 },
+                    MInst::SpillStore { src: w(0), slot: 0 },
+                    MInst::MovImm { dst: w(1), imm: 3 },
+                    MInst::SpillStore { src: w(1), slot: 1 },
+                ],
+                term: MTerm::B {
+                    target: 1,
+                    args: Vec::new(),
+                },
+            },
+            MBlock {
+                id: 1,
+                args: Vec::new(),
+                insts: vec![
+                    MInst::SpillReload { dst: w(2), slot: 1 },
+                    MInst::MovImm { dst: w(3), imm: 1 },
+                    MInst::Binary {
+                        op: BinOp::Sub,
+                        dst: w(4),
+                        lhs: w(2),
+                        rhs: w(3),
+                        width: Width::W,
+                    },
+                    MInst::SpillStore { src: w(4), slot: 1 },
+                    MInst::MovImm { dst: w(5), imm: 99 },
+                    // Dead does not mean removed: it must not overwrite
+                    // either the loop counter or the value carried through.
+                    MInst::SpillStore { src: w(5), slot: 2 },
+                ],
+                term: MTerm::Cb {
+                    nonzero: true,
+                    src: w(4),
+                    taken: 1,
+                    taken_args: Vec::new(),
+                    untaken: 2,
+                    untaken_args: Vec::new(),
+                },
+            },
+            MBlock {
+                id: 2,
+                args: Vec::new(),
+                insts: vec![
+                    MInst::SpillReload { dst: w(6), slot: 0 },
+                    MInst::MovImm { dst: w(7), imm: 7 },
+                    MInst::Binary {
+                        op: BinOp::Sub,
+                        dst: w(8),
+                        lhs: w(6),
+                        rhs: w(7),
+                        width: Width::W,
+                    },
+                ],
+                term: MTerm::Ret { values: vec![w(8)] },
+            },
+        ],
+    };
+    let allocated = allocate(&function).expect("loop allocation");
+    verify_allocation(&allocated).expect("loop registers");
+    assert_eq!(
+        allocated.frame_slots, 3,
+        "all three stores interfere on the loop edge"
+    );
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        let text = evocc_mir::emit_module(&[allocated], &[]);
+        assert_eq!(
+            evocc_mir::Toolchain::locate()
+                .unwrap()
+                .exit_status("loop-spill-reuse", &text)
+                .unwrap(),
+            0
+        );
+    }
 }
 
 #[test]
