@@ -57,6 +57,24 @@ fn rejects(source: &str, code: &str) {
     }
 }
 
+#[test]
+fn cleanup_binds_a_compatible_function_and_keeps_ignored_placements() {
+    accepts("void release(void *); void f(void) { int x __attribute__((cleanup(release))) = 0; }");
+    accepts("int x __attribute__((cleanup(unknown))); void f(void) { static int y __attribute__((cleanup(unknown))); }");
+    for source in [
+        "void f(void) { int x __attribute__((cleanup)); }",
+        "void release(int *, int); void f(void) { int x __attribute__((cleanup(release))); }",
+        "void release(long *); void f(void) { int x __attribute__((cleanup(release))); }",
+        "int release; void f(void) { int x __attribute__((cleanup(release))); }",
+    ] {
+        rejects(source, "E2903");
+    }
+    rejects(
+        "void f(void) { int x __attribute__((cleanup(unknown))); }",
+        "E2001",
+    );
+}
+
 /// Size and alignment of the typedef named `name` after parsing `source`.
 fn layout_of(source: &str, name: &str) -> (u64, u32) {
     let arena = Arena::default();

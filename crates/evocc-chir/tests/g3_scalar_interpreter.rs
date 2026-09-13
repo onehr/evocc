@@ -212,6 +212,7 @@ impl<'arena> Fixture<'arena> {
             self.arena,
             CHirDecl::Object(ObjectDecl {
                 attributes: Vec::new(),
+                cleanup: None,
                 symbol,
                 name: SpannedName {
                     spelling: name.to_owned(),

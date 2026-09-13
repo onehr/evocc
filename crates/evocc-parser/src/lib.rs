@@ -2254,7 +2254,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 gnu_extension_spans.clone(),
             ));
         }
-        for entry in pending {
+        for mut entry in pending {
             declarations.extend(entry.captures);
             let declaration = if storage == StorageClass::Typedef {
                 CHirDecl::Typedef(TypedefDecl {
@@ -2285,6 +2285,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span: declaration_span,
                 })
             } else {
+                let cleanup = self.resolve_object_cleanup(
+                    entry.symbol,
+                    &entry.declarator.name,
+                    storage,
+                    &mut entry.attributes,
+                )?;
                 CHirDecl::Object(ObjectDecl {
                     symbol: entry.symbol,
                     name: entry.declarator.name,
@@ -2293,6 +2299,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     written: entry.written,
                     storage,
                     initializer: entry.initializer,
+                    cleanup,
                     asm_label: entry.asm_label,
                     asm_label_span: entry.asm_label_span,
                     gnu_extension_spans: gnu_extension_spans.clone(),
@@ -2303,6 +2310,80 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             declarations.push(self.alloc_node(declaration));
         }
         Some(declarations)
+    }
+
+    fn resolve_object_cleanup(
+        &mut self,
+        object: SymbolId,
+        name: &SpannedName,
+        storage: StorageClass,
+        attributes: &mut [Attribute],
+    ) -> Option<Option<&'arena CHirExpr<'arena>>> {
+        let mut cleanup = None;
+        for attribute in attributes {
+            if attribute.semantic_name() != Some("cleanup") {
+                continue;
+            }
+            // GNU cleanup applies only to automatic variables. Attributes on
+            // static or external objects remain inventory, not executed calls.
+            if self.current_scope == self.symbols.file_scope()
+                || matches!(storage, StorageClass::Static | StorageClass::Extern)
+            {
+                continue;
+            }
+            let [argument] = attribute.arguments.as_slice() else {
+                self.report("E2903", "malformed-attribute", attribute.span);
+                return None;
+            };
+            let spelling = argument.text.trim();
+            let Some(function) = self.resolve_expression_symbol(spelling) else {
+                self.report("E2001", "undeclared-identifier", argument.span);
+                return None;
+            };
+            if self.symbols.symbol(function).ok()?.kind() != SymbolKind::Function
+                || !self.facts_for_symbol(object).is_addressable()
+            {
+                self.report("E2903", "malformed-attribute", attribute.span);
+                return None;
+            }
+            let callee = self.alloc_node(CHirExpr::Ident {
+                symbol: function,
+                spelling: spelling.to_owned(),
+                facts: self.facts_for_symbol(function),
+                span: argument.span,
+            });
+            let local = self.alloc_node(CHirExpr::Ident {
+                symbol: object,
+                spelling: name.spelling.clone(),
+                facts: self.facts_for_symbol(object),
+                span: name.span,
+            });
+            let address = self.alloc_node(CHirExpr::Unary(UnaryOp::AddrOf, local, name.span));
+            let parameters = match self
+                .types
+                .get(self.facts_for_symbol(function).ty())?
+                .kind
+                .clone()
+            {
+                TypeKind::Function { parameters, .. } => parameters,
+                _ => unreachable!("cleanup resolved a function symbol"),
+            };
+            let valid = match parameters {
+                FunctionParameters::Prototype { types, .. } => {
+                    types.len() == 1
+                        && self.assignment_constraint(AssignmentOp::Simple, types[0], address)
+                            != UpdateConstraint::Invalid
+                }
+                FunctionParameters::Unspecified => true,
+            };
+            if !valid {
+                self.report("E2903", "malformed-attribute", attribute.span);
+                return None;
+            }
+            cleanup = Some(self.alloc_node(CHirExpr::Call(callee, vec![address], attribute.span)));
+            attribute.applied = Some(AppliedAttribute::Cleanup);
+        }
+        Some(cleanup)
     }
 
     fn function_declaration_parameters(
@@ -4624,6 +4705,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             storage: StorageClass::Static,
             initializer: Some(initializer),
+            cleanup: None,
             asm_label: None,
             asm_label_span: None,
             gnu_extension_spans: Vec::new(),
@@ -6889,6 +6971,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 },
                 storage: StorageClass::Auto,
                 initializer: Some(ObjectInitializer::new(written, plan)),
+                cleanup: None,
                 asm_label: None,
                 asm_label_span: None,
                 gnu_extension_spans: Vec::new(),

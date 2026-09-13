@@ -1138,6 +1138,12 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             }
             CHirDecl::Object(object) => {
                 self.validate_object_declaration(object, file_scope, current_function)?;
+                if let Some(expression) = object.cleanup {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
                 if !file_scope && object.storage == StorageClass::Static {
                     self.function_static_objects.push(object);
                 }
@@ -1967,6 +1973,7 @@ mod tests {
     ) -> CHirDecl<'arena> {
         CHirDecl::Object(ObjectDecl {
             attributes: Vec::new(),
+            cleanup: None,
             symbol,
             name: name(spelling, at),
             ty,

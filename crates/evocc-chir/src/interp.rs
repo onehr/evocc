@@ -557,13 +557,14 @@ fn invalid_initializer_target(target: InitializerTarget<'_>, span: SourceSpan) -
 }
 
 #[derive(Debug)]
-struct MemoryFrame {
+struct MemoryFrame<'arena> {
     anonymous: Vec<CValue>,
     id: FrameId,
     root_scope: MemoryScopeId,
     current_scope: MemoryScopeId,
     bindings: HashMap<SymbolId, MemoryBinding>,
     compound_bindings: HashMap<(MemoryScopeId, usize), MemoryBinding>,
+    cleanups: Vec<(MemoryScopeId, &'arena CHirExpr<'arena>)>,
 }
 
 #[derive(Debug)]
@@ -575,14 +576,14 @@ struct MemoryScopeExit {
 }
 
 #[derive(Debug)]
-struct FunctionEnd {
+struct FunctionEnd<'arena> {
     symbol: SymbolId,
     return_type: TypeId,
     return_value_type: ValueType,
     is_main: bool,
     body_span: SourceSpan,
     caller_slots: Option<HashMap<SymbolId, Slot>>,
-    caller_memory_frame: Option<MemoryFrame>,
+    caller_memory_frame: Option<MemoryFrame<'arena>>,
     caller_fuel_anchor: Option<SourceSpan>,
     caller_expects_value: bool,
     value_base: usize,
@@ -603,7 +604,7 @@ enum MachineTask<'arena> {
         requested_ty: Option<TypeId>,
         span: SourceSpan,
     },
-    FunctionEnd(FunctionEnd),
+    FunctionEnd(FunctionEnd<'arena>),
     RestoreSlots(Vec<(SymbolId, Slot)>),
     ExitMemoryScope(MemoryScopeExit),
     /// Step a named scalar object in place, yielding the value the prefix or
@@ -960,7 +961,7 @@ struct Interpreter<'unit, 'arena> {
     static_compound_bindings: HashMap<usize, MemoryBinding>,
     string_bindings: HashMap<usize, Pointer>,
     symbol_order: OnceCell<SymbolOrder>,
-    memory_frame: Option<MemoryFrame>,
+    memory_frame: Option<MemoryFrame<'arena>>,
     memory_mode: bool,
     memory: MemoryState,
     world: WorldState,
@@ -2993,6 +2994,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 declaration.span,
             )?;
         }
+        if let Some(cleanup) = declaration.cleanup {
+            let frame = self
+                .memory_frame
+                .as_mut()
+                .expect("automatic object has a frame");
+            frame.cleanups.push((frame.current_scope, cleanup));
+        }
         let Some(initializer) = &declaration.initializer else {
             if self.unit.zero_initialize_automatic(declaration) {
                 let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
@@ -3292,7 +3300,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         tasks: &mut Vec<MachineTask<'arena>>,
         span: SourceSpan,
-    ) -> Result<FunctionEnd, InterpreterError> {
+    ) -> Result<FunctionEnd<'arena>, InterpreterError> {
         while let Some(task) = tasks.pop() {
             match task {
                 MachineTask::FunctionEnd(end) => return Ok(end),
@@ -5003,6 +5011,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 anonymous_values.push(value);
             }
             self.memory_frame = Some(MemoryFrame {
+                cleanups: Vec::new(),
                 anonymous: anonymous_values,
                 id: frame,
                 root_scope,
@@ -5408,7 +5417,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
     fn finish_function(
         &mut self,
-        end: FunctionEnd,
+        end: FunctionEnd<'arena>,
         exit: FunctionExit,
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
@@ -5507,6 +5516,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     end.body_span,
                 )?);
             }
+            self.run_scope_cleanups(None)?;
             let frame = self
                 .memory_frame
                 .take()
@@ -5725,6 +5735,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: exit.span,
             });
         }
+        self.run_scope_cleanups(Some(exit.scope))?;
         self.memory = self
             .memory
             .end_scope(exit.scope)
@@ -5738,6 +5749,28 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         frame
             .compound_bindings
             .retain(|(scope, _), _| *scope != exit.scope);
+        Ok(())
+    }
+
+    fn run_scope_cleanups(&mut self, scope: Option<MemoryScopeId>) -> Result<(), InterpreterError> {
+        let frame = self
+            .memory_frame
+            .as_mut()
+            .expect("cleanup has a live frame");
+        let mut cleanups = Vec::new();
+        frame.cleanups.retain(|(owner, expression)| {
+            if scope.is_none_or(|scope| scope == *owner) {
+                cleanups.push(*expression);
+                false
+            } else {
+                true
+            }
+        });
+        for expression in cleanups.into_iter().rev() {
+            let mut tasks = Vec::new();
+            self.schedule_discarded_expression(expression, &mut tasks)?;
+            self.run_tasks(tasks)?;
+        }
         Ok(())
     }
 
@@ -9404,6 +9437,9 @@ fn collect_declaration_symbols<'arena>(
     match declaration {
         CHirDecl::Object(object) => {
             output.record(object.symbol);
+            if let Some(cleanup) = object.cleanup {
+                collect_expression_symbols(cleanup, output);
+            }
             if let Some(initializer) = &object.initializer {
                 collect_initializer_symbols(initializer.plan(), output);
             }
@@ -9654,7 +9690,8 @@ fn declaration_requires_memory(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>) 
     let CHirDecl::Object(declaration) = declaration else {
         return false;
     };
-    type_requires_memory(unit.types(), declaration.ty)
+    declaration.cleanup.is_some()
+        || type_requires_memory(unit.types(), declaration.ty)
         || declaration.initializer.as_ref().is_some_and(|initializer| {
             initializer
                 .plan()
@@ -10811,6 +10848,7 @@ mod tests {
             arena,
             CHirDecl::Object(ObjectDecl {
                 attributes: Vec::new(),
+                cleanup: None,
                 symbol: counter,
                 name: SpannedName {
                     spelling: "counter".to_owned(),
@@ -11172,6 +11210,7 @@ mod tests {
             arena,
             CHirDecl::Object(ObjectDecl {
                 attributes: Vec::new(),
+                cleanup: None,
                 symbol: deep,
                 name: SpannedName {
                     spelling: "deep".to_owned(),

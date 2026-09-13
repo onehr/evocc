@@ -316,6 +316,8 @@ struct State {
     block: BlockId,
     env: Environment,
     locals: BTreeSet<SymbolId>,
+    /// Reached declarations, in order; reserving storage is not activation.
+    cleanups: Vec<SymbolId>,
 }
 
 #[derive(Debug, Default)]
@@ -991,6 +993,9 @@ fn has_linked_object_storage(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
 fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn declaration(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>, out: &mut BTreeSet<SymbolId>) {
         if let CHirDecl::Object(object) = declaration {
+            if let Some(cleanup) = object.cleanup {
+                expression(unit, cleanup, out);
+            }
             // Storage does not execute a scalar value. In particular an
             // uninitialized floating object may be used only by sizeof or
             // address-of while floating arithmetic remains unsupported.
@@ -1010,6 +1015,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 .get(object.ty)
                 .is_some_and(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic);
             if needs_object_storage
+                || object.cleanup.is_some()
                 || has_linked_object_storage(unit, object.symbol)
                 || is_qualified_memory
                 || object.storage == StorageClass::Static
@@ -2222,6 +2228,9 @@ fn prevalidate_decl_for_lowering(
         }),
         CHirDecl::Object(object) => {
             validate_object_declaration_for_lowering(unit, object)?;
+            if let Some(cleanup) = object.cleanup {
+                prevalidate_expr_for_lowering(unit, cleanup, global_register_symbols)?;
+            }
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
                     if let InitAction::StoreScalar { value, .. }
@@ -3684,6 +3693,7 @@ impl<'a> FunctionLowerer<'a> {
             block: 0,
             env,
             locals,
+            cleanups: Vec::new(),
         };
         // The call interface supplies scalar values, but an addressed parameter
         // is an automatic object owned by this invocation, just like a local.
@@ -4160,7 +4170,7 @@ impl<'a> FunctionLowerer<'a> {
             return self.terminate(state, Inst::Br(target, arguments));
         }
         let mut state = state.clone();
-        let leaving = state
+        let leaving_storage = state
             .env
             .keys()
             .copied()
@@ -4169,7 +4179,6 @@ impl<'a> FunctionLowerer<'a> {
                     && !keys.contains(key)
             })
             .collect::<Vec<_>>();
-        self.end_compound_storage(&leaving, &mut state)?;
         let leaving = state
             .env
             .keys()
@@ -4178,10 +4187,11 @@ impl<'a> FunctionLowerer<'a> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        for symbol in leaving {
+        for symbol in leaving.into_iter().rev() {
             self.end_object_lifetime(symbol, &mut state)?;
             state.env.remove(&EnvKey::Address(symbol));
         }
+        self.end_compound_storage(&leaving_storage, &mut state)?;
         for key in keys {
             if let EnvKey::Address(symbol) = key {
                 if !state.env.contains_key(key) {
@@ -4383,6 +4393,12 @@ impl<'a> FunctionLowerer<'a> {
             block: id,
             env,
             locals: template.locals.clone(),
+            cleanups: template
+                .cleanups
+                .iter()
+                .copied()
+                .filter(|symbol| keys.contains(&EnvKey::Address(*symbol)))
+                .collect(),
         })
     }
 
@@ -5084,6 +5100,28 @@ impl<'a> FunctionLowerer<'a> {
                             reason: "return expression disagrees with the function result type",
                         });
                     }
+                }
+                // Evaluate/copy the return value before callbacks may mutate
+                // its source, but keep every object alive while callbacks run.
+                let cleanups = state
+                    .cleanups
+                    .iter()
+                    .filter_map(|symbol| {
+                        self.object_declarations
+                            .get(symbol)
+                            .and_then(|object| object.cleanup)
+                    })
+                    .collect::<Vec<_>>();
+                let return_keys = returned
+                    .drain(..)
+                    .map(|value| self.retain_temporary(value, &mut state))
+                    .collect::<Vec<_>>();
+                for cleanup in cleanups.into_iter().rev() {
+                    self.lower_discarded_expr(cleanup, &mut state)?;
+                }
+                for key in return_keys {
+                    returned.push(self.token(&state, key)?.value);
+                    state.env.remove(&key);
                 }
                 if self.info.participant {
                     returned.push(self.token(&state, EnvKey::Memory)?.value);
@@ -7156,6 +7194,9 @@ impl<'a> FunctionLowerer<'a> {
         if object.storage == StorageClass::Static {
             return Ok(());
         }
+        if object.cleanup.is_some() && !state.cleanups.contains(&object.symbol) {
+            state.cleanups.push(object.symbol);
+        }
         let Some(initializer) = &object.initializer else {
             if self.unit.zero_initialize_automatic(object) {
                 let address = self.token(state, EnvKey::Address(object.symbol))?.value;
@@ -7638,13 +7679,19 @@ impl<'a> FunctionLowerer<'a> {
         }) {
             return Ok(());
         }
-        let pointer = state
-            .env
-            .get(&EnvKey::Address(symbol))
-            .map(|bound| bound.value.clone())
-            .ok_or(LowerError::InvalidGeneratedSsa {
-                message: format!("lifetime end has no address for object {}", symbol.raw()),
-            })?;
+        if state.cleanups.contains(&symbol) {
+            state.cleanups.retain(|active| *active != symbol);
+            if let Some(cleanup) = self
+                .object_declarations
+                .get(&symbol)
+                .and_then(|o| o.cleanup)
+            {
+                self.lower_discarded_expr(cleanup, state)?;
+            }
+        }
+        // An inlined callback can create blocks. Read the address from its
+        // continuation's environment, not a Value ID from the previous block.
+        let pointer = self.token(state, EnvKey::Address(symbol))?.value;
         self.end_pointer_lifetime(pointer, state)
     }
 
@@ -7733,10 +7780,12 @@ impl<'a> FunctionLowerer<'a> {
         collect_symbols_stmt(then_branch, &mut then_symbols);
         let then_keys = self.keys_for(&state, &then_symbols, &[]);
         let can_jump_directly = |target: &&JumpTarget| {
-            !state
-                .env
-                .keys()
-                .any(|key| matches!(key, EnvKey::Compound(_)) && !target.keys.contains(key))
+            !state.env.keys().any(|key| {
+                matches!(
+                    key,
+                    EnvKey::Compound(_) | EnvKey::TemporaryAddress(_) | EnvKey::Address(_)
+                ) && !target.keys.contains(key)
+            })
         };
         let direct_then = self
             .direct_jump(then_branch, control)
@@ -8034,7 +8083,7 @@ impl<'a> FunctionLowerer<'a> {
         let exit = self.new_block_from(&header_condition, &break_keys, BlockRole::Ordinary)?;
         self.replace_target(break_placeholder, exit.block);
         let mut exit = exit;
-        for symbol in init_symbols {
+        for symbol in init_symbols.into_iter().rev() {
             if self.memory_symbols.contains(&symbol)
                 && exit.env.contains_key(&EnvKey::Address(symbol))
             {
@@ -9319,7 +9368,10 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
 
-        for item in items {
+        let result_key = result
+            .as_ref()
+            .map(|result| self.retain_temporary(result.value.clone(), &mut continued));
+        for item in items.iter().rev() {
             let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item else {
                 continue;
             };
@@ -9334,6 +9386,10 @@ impl<'a> FunctionLowerer<'a> {
             continued.locals.remove(&object.symbol);
         }
         self.end_compound_storage(&storage, &mut continued)?;
+        if let (Some(result), Some(key)) = (&mut result, result_key) {
+            result.value = self.token(&continued, key)?.value;
+            continued.env.remove(&key);
+        }
         // Resuming the enclosing expression needs its saved operands. Binding
         // an indirect edge does not: a jump out of this expression must not
         // read an operand which that path never uses.
@@ -13292,6 +13348,9 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
 
 fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionReferences) {
     if let CHirDecl::Object(object) = declaration {
+        if let Some(cleanup) = object.cleanup {
+            collect_references_expr(cleanup, calls);
+        }
         if !matches!(object.storage, StorageClass::Static | StorageClass::Extern) {
             calls.objects.insert(object.symbol, object.ty);
         }
@@ -13713,6 +13772,9 @@ fn collect_symbols_item(item: &CHirBlockItem<'_>, symbols: &mut BTreeSet<SymbolI
     match item {
         CHirBlockItem::Declaration(declaration) => {
             if let CHirDecl::Object(object) = declaration {
+                if let Some(cleanup) = object.cleanup {
+                    collect_symbols_expr(cleanup, symbols);
+                }
                 if let Some(initializer) = &object.initializer {
                     for action in initializer.plan.actions() {
                         if let InitAction::StoreScalar { value, .. }

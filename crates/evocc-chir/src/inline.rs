@@ -168,6 +168,9 @@ fn inspect_with_visitors<'a>(
                 visit(decl);
                 match decl {
                     CHirDecl::Object(o) => {
+                        if let Some(cleanup) = o.cleanup {
+                            work.push(Node::Expr(cleanup, false));
+                        }
                         if o.storage == StorageClass::Static {
                             uses.statics.insert(o.symbol, o);
                         }
@@ -1368,6 +1371,7 @@ impl<'a> Substitution<'a, '_> {
             },
             storage: StorageClass::None,
             initializer,
+            cleanup: None,
             asm_label: None,
             asm_label_span: None,
             gnu_extension_spans: Vec::new(),
@@ -1641,6 +1645,7 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
         }
+        o.cleanup = o.cleanup.map(|cleanup| self.expr(cleanup, c)).transpose()?;
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
     /// Instantiating a local type must rename its captured sizes as well as

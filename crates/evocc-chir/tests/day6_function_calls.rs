@@ -203,6 +203,7 @@ fn object_declaration<'arena>(
         arena,
         CHirDecl::Object(ObjectDecl {
             attributes: Vec::new(),
+            cleanup: None,
             symbol,
             name: SpannedName {
                 spelling: name.to_owned(),
@@ -1068,6 +1069,7 @@ fn composition_program_with_signature(
         arena,
         CHirDecl::Object(ObjectDecl {
             attributes: Vec::new(),
+            cleanup: None,
             symbol: x,
             name: SpannedName {
                 spelling: "x".to_owned(),

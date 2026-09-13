@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.95** | **Authoritative reference** | **2026-09-13**
+**Revision 1.9.96** | **Authoritative reference** | **2026-09-13**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3801,6 +3801,26 @@ a partial reading now would create a second source of truth for each.
 `always_inline` has an effect since revision 1.9.74, stated next; `weak` and
 `alias` are linkage marks since revision 1.9.79 (Section 5.2); `aligned` on a
 function is code alignment since revision 1.9.88 (Section 5.2).
+`cleanup` on an automatic object has the scope-exit effect stated below.
+
+**`cleanup` (revision 1.9.96).** `cleanup(function)` on an automatic object
+resolves a function at the declaration and calls it with the object's address
+when execution leaves that object's scope. The callback must accept that
+pointer as its sole argument; its return value is discarded. Invalid arguments
+or a non-function callback are `E2903`; an unresolved name is `E2001`.
+The attribute on static/external objects, parameters, members, or a pointer type
+does not create a scope-exit callback. The written attribute remains in C-HIR.
+Callbacks execute in reverse declaration order, before their objects' lifetimes
+end, on normal exit, return, break, continue and a direct or indirect goto that
+actually leaves the scope. A declaration not yet reached on an early-return
+path has no callback; reserving its storage does not activate cleanup.
+The return expression is evaluated, and an aggregate return copied, before any
+callback can change its source. Inlined bodies preserve this ordering and
+remap the callback's object address to the new local object.
+These are ordinary C-HIR calls with ordinary EvoIR call effects and explicit
+edge/lifetime handling, not a new instruction or an optimizer hint.
+Evidence: `tests/fixtures/cleanup-scope-exits.{c,txt}`, both sealed oracles at
+O0/O2; authorization follows the measured IRQ scoped-lock boot deadlock.
 
 **`always_inline` (revision 1.9.74).** A call whose callee is a function
 defined in this unit with the `always_inline` attribute is replaced, in
@@ -6054,6 +6074,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.96 | 2026-09-13 | User-authorized cleanup exception: resolved ordinary callbacks run in reverse order on actual scope exit, after return evaluation/copy and before object lifetime end. |
 | 1.9.95 | 2026-09-13 | User-authorized correction: visibility pragmas are semantic declaration defaults, not ignored-safe. Reuse hidden symbol binding and retain weak GOT/null behavior; preserve directives in preprocessed output. |
 | 1.9.94 | 2026-09-13 | Authorizes proved object-size bounds with unknown fallback and unevaluated operands, replacing the explicit always-unknown profile that blocks ext4. Distinguishes whole objects from subobjects; records the multidimensional-row oracle conflict without claiming a bound. |
 | 1.9.93 | 2026-09-13 | Authorizes optimization-time constant queries with proved values, unevaluated operands and preserved initializer/argument effects. Source ICE admission is unchanged. |
@@ -7050,9 +7071,9 @@ This does not apply pointer type attributes such as `aligned` or `mode`, change 
 Both sealed GCC-14 and Clang-19 at O0/O2 emit the weak function/object bindings and one-address alias in `tests/fixtures/pointer-symbol-linkage.{c,out}`, and link `pointer-symbol-override.c` with exit zero.
 The existing E3060/E3061 checks remain; no diagnostic is allocated, and run `20260913T024049Z` exposed four duplicate definitions in three original kernel units before this correction.
 
-### Scope-exit cleanup conflicts with the preserved-only body
+### Scope-exit cleanup: authorized body correction
 
-Section 10.1.9 still classifies `cleanup` under the explicitly unapplied attributes; that rule remains authoritative pending approval of an applied exception.
+Revision 1.9.96 adds the user-authorized `cleanup` exception to Section 10.1.9's preserved-only default.
 Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/cleanup-scope-exits.c` with exit zero, while both subject interpreters return program value 2 and native execution exits 2, as `cleanup-scope-exits.txt` records.
 The current complete kernel diagnostic stalls on the second IRQ descriptor lock acquisition because `irq_modify_status` never calls its scoped guard destructor; this is one measured boot failure, not a claimed count of all affected units.
-No diagnostic or new semantics is allocated here; ordinary reverse-order cleanup calls before object lifetime end on each actual scope exit are proposed, not implemented or approved.
+The implementation uses ordinary reverse-order calls before object lifetime end on each actual scope exit; interpreter/native probe success does not establish a successful kernel boot.

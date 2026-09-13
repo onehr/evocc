@@ -154,7 +154,7 @@ retains all 2,799 EvoCC objects with stable generated export source, recorded in
 Boot remains TIMEOUT, but the diagnostic flight gets through MMU and memory
 setup to IRQ initialization; the shift guard is unchanged.
 
-**K-R05 / SPEC_BODY_CONFLICT: scope-exit cleanup is not executed.**
+**K-R05 / FIXED IN TAILORED TESTS, original boot replay pending: scope-exit cleanup.**
 The next stopped CPU is in `queued_spin_lock_slowpath`, entered by
 `gic_irq_domain_map` through `__irq_set_handler`; the descriptor lock contains
 `0x101`. The preceding `irq_modify_status` uses the kernel's scoped guard, whose
@@ -164,12 +164,15 @@ body has no destructor call. The small
 zero under both sealed compilers at O0/O2, while both EvoCC interpreters report
 program value 2 and native EvoCC exits 2 (missing release), as recorded in
 [`cleanup-scope-exits.txt`](../../tests/fixtures/cleanup-scope-exits.txt).
-Section 10.1.9 explicitly leaves unlisted attributes unapplied; `cleanup` has
-no exception, so applying it requires a body ruling. Proposed closure is ordinary
-cleanup calls before object lifetime end, in reverse declaration order on every
-scope-exit path, retaining return-expression evaluation order; no new IR kind
-or kernel-specific workaround. Production and the existing test expectations
-remain unchanged pending that authority. No QEMU or benchmark run is left active.
+The user authorized the applied exception, now revision 1.9.96. RED `9f56104`
+fails in both interpreters and native execution without a build error.
+Ordinary cleanup calls now execute before lifetime end, in reverse declaration
+order on each actual exit. Tailored tests also check early return before a
+declaration, for-init lifetime, aggregate return copying, always-inline object
+remapping, statement-expression values and indirect exit. The conditional
+break/continue shortcut now preserves required lifetime and callback actions.
+No new IR kind or kernel-specific workaround is used. Original kernel replay
+and boot are still pending; the earlier boot TIMEOUT remains the measured result.
 
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):

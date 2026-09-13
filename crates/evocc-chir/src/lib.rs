@@ -1186,6 +1186,8 @@ pub enum AppliedAttribute {
     Packed,
     /// Integer `mode`; the resulting canonical type is the value authority.
     IntegerMode,
+    /// Scope-exit call, resolved on the owning automatic object declaration.
+    Cleanup,
 }
 
 /// An attribute entry (or an equivalent C11 `_Noreturn`/`_Alignas` specifier),
@@ -1428,6 +1430,9 @@ pub struct ObjectDecl<'arena> {
     pub written: WrittenDeclarator,
     pub storage: StorageClass,
     pub initializer: Option<ObjectInitializer<'arena>>,
+    /// Resolved ordinary call executed before this object's lifetime ends.
+    /// Its argument is the address of this declaration's object, not its value.
+    pub cleanup: Option<&'arena CHirExpr<'arena>>,
     /// GNU assembler name attached after this declarator, if present.
     pub asm_label: Option<String>,
     pub asm_label_span: Option<SourceSpan>,
@@ -2070,6 +2075,7 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
             Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
             Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
             Some(AppliedAttribute::IntegerMode) => "applied integer-mode".to_owned(),
+            Some(AppliedAttribute::Cleanup) => "applied cleanup".to_owned(),
             None => "preserved-not-applied".to_owned(),
         };
         let _ = writeln!(
@@ -2685,6 +2691,7 @@ mod tests {
         });
         CHirDecl::Object(ObjectDecl {
             attributes: Vec::new(),
+            cleanup: None,
             symbol: test_symbol(
                 name_spelling,
                 ty,

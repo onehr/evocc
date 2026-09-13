@@ -236,6 +236,99 @@ fn scope_exit_cleanup_executes_on_the_machine() {
 }
 
 #[test]
+fn scope_exit_cleanup_preserves_activation_and_results() {
+    let cases = [
+        (
+            "early-return",
+            r#"
+            static int calls;
+            static void release(int *p) { calls++; }
+            static int f(int early) {
+                if (early) return 7;
+                int v __attribute__((cleanup(release))) = 3;
+                return v;
+            }
+            int main(void) { return f(1) != 7 || calls != 0 || f(0) != 3 || calls != 1; }
+        "#,
+        ),
+        (
+            "for-initializer",
+            r#"
+            static int calls;
+            static int release(int *p) { calls = calls * 10 + *p; return 99; }
+            int main(void) {
+                for (int v __attribute__((cleanup(release))) = 0; v < 3; ++v) {
+                    if (v == 1) continue;
+                }
+                for (int v __attribute__((cleanup(release))) = 7; v; ++v) break;
+                return calls != 37;
+            }
+        "#,
+        ),
+        (
+            "copied-return",
+            r#"
+            struct pair { int x, y; };
+            static int calls;
+            static void release(struct pair *p) { p->x = 99; calls++; }
+            static struct pair f(void) {
+                struct pair p __attribute__((cleanup(release))) = {3, 4};
+                return p;
+            }
+            int main(void) { struct pair p = f(); return p.x != 3 || p.y != 4 || calls != 1; }
+        "#,
+        ),
+        (
+            "inline-and-statement-expression",
+            r#"
+            static int order;
+            static inline __attribute__((always_inline)) void release(int *p) { order = order * 10 + *p; *p = 99; }
+            static inline __attribute__((always_inline)) int f(int v) {
+                int p __attribute__((cleanup(release))) = v;
+                return p + 1;
+            }
+            int main(void) {
+                int a = f(3), b = f(4);
+                int c = ({ int p __attribute__((cleanup(release))) = 5; p; });
+                return a != 4 || b != 5 || c != 5 || order != 345;
+            }
+        "#,
+        ),
+        (
+            "indirect-exit",
+            r#"
+            static int calls;
+            static void release(int *p) { calls += *p; }
+            int main(void) {
+                void *target = &&out;
+                { int v __attribute__((cleanup(release))) = 7; goto *target; }
+            out: return calls != 7;
+            }
+        "#,
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (name, source) in cases {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            if !output.status.success() || output.stdout != b"0\n" {
+                failures.push(format!(
+                    "{name} {mode}: {:?} {} {}",
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                ));
+            }
+        }
+        #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+        if failures.is_empty() {
+            assert_native_execution(source, name);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn position_independent_macros_follow_the_last_codegen_option() {
     for (options, pic, pie) in [
         (vec![], 2, 2),
