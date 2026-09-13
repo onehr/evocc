@@ -2046,6 +2046,17 @@ The selected 125-subtest result does not close this expanded population.
 Reproduce with `python3 tools/bench.py kernel-selftest-all --jobs 2 --allow-qemu-drift`;
 add `--reuse-selftest-build` to avoid rebuilding the already installed payload.
 
+Expanded measurement `20260913T111521Z` is **BLOCKED**, not an all-test result.
+All 935 declared program/script entries are installed. Fourteen collections
+have no runnable list: ten architecture-limited collections, three requiring
+unavailable BTF, and one exposing only a helper through `TEST_GEN_FILES`.
+The reference executes `acct:acct_syscall` (1 PASS; 934 NOT_RUN); the EvoCC
+Image panics with `kernel stack overflow` before starting that test (935
+NOT_RUN). The same failure repeats in a single VM. See
+[K-R07](notebook/benchmark-closure.md#all-collection-kernel-selftests-2026-09-13-blocked).
+The two Images/configurations are unchanged, so this is a newly exposed
+runtime limitation beyond the smaller historical K6/K7 workload.
+
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
 oracles, each a superset of the previous rung's demands); the kernel rungs

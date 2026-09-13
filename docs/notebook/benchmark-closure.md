@@ -18,7 +18,8 @@ to nonce `k1-20260913T090822Z-d77e5b2b` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
 drift remains recorded, not erased. K7's separately measured selected subset now
 passes **125/125 subtests in nine programs** on this unchanged Image and the GCC
-reference Image; KUnit and unselected selftests remain **NOT_RUN**.
+reference Image. The expanded all-collection attempt is now **BLOCKED** by
+K-R07 below; KUnit remains **NOT_RUN**.
 
 This is an **incremental all-EvoCC build**, not a fresh all-at-HEAD survey:
 2,723 objects retain the compiler from full run `20260913T075423Z`
@@ -86,6 +87,7 @@ correctness and unselected runtime tests remain separate gates.
 | K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
 | K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
 | K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
+| K-R07 / P0 OPEN | The unchanged EvoCC Image panics with **kernel stack overflow** during disk-backed userspace startup, before the full selftest's first BEGIN marker. Reference startup/test succeeds with identical payload. | Runtime/frame investigation: reproduce the ELF-exec → filemap/page-fault → virtio I/O → slab/page-allocation chain; measure cumulative frame demand and preserve the 16 KiB task stack. The observed leaf is `get_page_from_freelist+0x84`, not proof that this leaf alone is defective. | `20260913T111521Z` **BLOCKED**; serial exact-selector confirmation also fails. All 935 subject programs remain NOT_RUN. Compiler repair and full rerun are still required; see the section below. |
 
 ### Selected kernel runtime selftests (2026-09-13)
 
@@ -139,6 +141,51 @@ This closes **only the selected K7 subset**. KUnit is disabled in the frozen
 configuration and was not run; other kselftests, other configurations and broader
 compiler correctness are not implied by these results. The K6 receipt retains
 its historical K7 NOT_RUN state at the time of the earlier boot measurement.
+
+### All-collection kernel selftests (2026-09-13; BLOCKED)
+
+Command: `python3 -u tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift`.
+Adapter `cbd1ace`; final attempt `20260913T111521Z`;
+[receipt](../../tests/contracts/kernel-selftest-full-receipt.json).
+The unmodified upstream Makefiles enumerate **128 collections**, including
+hotplug and with no `SKIP_TARGETS`. All **935 declared programs/scripts are
+installed**. Fourteen collections provide no runnable list: ten excluded by
+their architecture conditions; `bpf`, `hid`, `sched_ext` need unavailable BTF;
+`move_mount_set_group` declares a helper but no registered runnable test.
+These missing collections are not counted as passes or assigned an invented
+program denominator.
+
+| Final attempt | Program PASS | Program NOT_RUN | Startup |
+|---|---:|---:|---|
+| GCC reference | 1 | 934 | `acct:acct_syscall` executes and passes |
+| EvoCC kernel | 0 | 935 | kernel stack overflow before test BEGIN |
+
+The [subject serial log](../../.evidence/kselftest-full/20260913T111521Z/subject/acct/acct_syscall/boot.log)
+records a 16 KiB task stack and `Comm: sh`, followed by
+`Kernel panic - not syncing: kernel stack overflow`. Its call chain includes
+`load_elf_binary`, `filemap_fault`, virtio block dispatch, `___slab_alloc`, and
+`get_page_from_freelist`. The installed page-allocation object's latter
+function reserves 608 bytes plus the saved frame pair; the defect is not
+established to be that one frame alone. A
+[serial replay with the exact registered selector](../../.evidence/kselftest-full/serial-valid-selector/subject/boot.log)
+repeats the failure, ruling out concurrent-VM load as its necessary trigger.
+Both Images retain their K6/selected-K7 hashes. No kernel, compiler or
+configuration was changed by this measurement.
+
+The earlier partial reference attempt `20260913T104629Z` is **ABORTED**, not
+merged into the final numerator. It exposed missing userspace dependencies,
+devpts setup, and an upstream timeout leaving descendants that blocked later
+programs. The adapter now installs the dependencies, retains detailed output,
+and isolates **each program** in a fresh VM. Upstream timeouts remain in force;
+unlimited programs additionally have an explicit 300-second VM safety budget,
+with cleanup/boot allowances. An inability to initialize the test runtime
+stops the batch and preserves NOT_RUN instead of repeating the same boot
+failure 935 times. Program-level PASS is not a count of nested assertions.
+
+Harness checks: K1 Python **122/122**, bench Python **21/21**, Ruff and shell
+syntax **PASS**; `tools/gate-changed.sh 6b4e62a` reports no changed Rust crate.
+The runtime/build directory is **1.9 GiB** and all full-selftest captures total
+approximately **3.8 MiB** (`du -sh`); no workspace clone or new kernel build.
 
 ### Execution order and update rules
 

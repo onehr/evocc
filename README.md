@@ -27,7 +27,11 @@ failures, skips or timeouts ([receipt](tests/contracts/kernel-selftest-receipt.j
 An expanded run of every upstream selftest collection is now available; its
 [separate receipt](tests/contracts/kernel-selftest-full-receipt.json) retains
 build gaps, unavailable hardware/configuration, skips and failures rather than
-extending the selected-subset PASS to all tests. KUnit has not run. Current
+extending the selected-subset PASS to all tests. The latest expanded attempt is
+**BLOCKED**: 935 declared programs/scripts are installed, but the EvoCC Image
+overflows its kernel stack while starting disk-backed userspace, before any
+test begins. The reference Image passes the same startup check. This does not
+erase the earlier boot/subset result or establish full K7. KUnit has not run. Current
 figures are in [docs/status.md](docs/status.md), with remaining
 constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
 The illustration above is not a live counter. The evaluation ladder and pinned
