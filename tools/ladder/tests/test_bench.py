@@ -27,6 +27,34 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertNotIn('--evocc', command)
         self.assertEqual(env['K1_ALLOW_QEMU_DRIFT'], '1')
 
+    def test_kernel_selftest_only_invocation_does_not_require_or_build_evocc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'tests/contracts').mkdir(parents=True)
+            calls = []
+            row = {'rung': 'K7', 'status': 'PASS', 'passed': 1, 'total': 1, 'kind': 'programs'}
+            with patch.object(bench, 'ROOT', root), \
+                 patch.object(bench, 'execute', side_effect=lambda cmd, env: (calls.append(cmd) or 0, [])), \
+                 patch.object(bench, 'read_result', return_value=row), \
+                 patch.object(bench.subprocess, 'check_output', return_value='checkout'), \
+                 patch.object(bench.subprocess, 'run', return_value=SimpleNamespace(returncode=0)):
+                self.assertEqual(bench.main(['kernel-selftest']), 0)
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0][-1].endswith('/k1/selftest.py'))
+            self.assertIsNone(json.loads((root / bench.RECEIPT).read_text())['driver'])
+
+    def test_selftest_metrics_preserve_program_and_case_denominators(self):
+        flight = {'boot': {'verdict': 'PASS', 'imageSha256': 'image'},
+                  'outcomes': {'PASS': 1, 'SKIP': 1}, 'subtests': {'PASS': 3, 'SKIP': 2}}
+        data = {'reference': flight, 'subject': flight, 'status': 'PASS', 'programs': 2,
+                'baselineFailures': [], 'regressions': [], 'compilerComposition': [],
+                'kernelImageSha256': 'image'}
+        row = bench.metrics('kernel-selftest', data)
+        self.assertEqual((row['passed'], row['total'], row['kind']), (1, 2, 'programs'))
+        self.assertEqual(row['subtests'], {'PASS': 3, 'SKIP': 2})
+        data['kernelImageSha256'] = 'different'
+        self.assertEqual(bench.metrics('kernel-selftest', data)['status'], 'INCOMPLETE')
+
     def test_full_kernel_uses_strict_composition_not_the_mixed_link_bisection(self):
         args = bench.parser().parse_args(["kernel-full", "--jobs", "2", "--allow-qemu-drift"])
         command, env = bench.command("kernel-full", args, Path("/tmp/compiler"))

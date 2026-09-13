@@ -59,6 +59,10 @@ class KernelSelftest(unittest.TestCase):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 memory\n", 1), "flight", ["memory"])
         self.assertNotEqual(lane.compare(rows, rows)["status"], "PASS")
 
+    def test_skip_exit_cannot_erase_a_recorded_failure(self):
+        rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])
+        self.assertEqual(rows[0]['outcome'], 'FAIL')
+
 
 if __name__ == "__main__":
     unittest.main()

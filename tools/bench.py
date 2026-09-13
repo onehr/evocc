@@ -45,7 +45,7 @@ CATALOG = {
     "lua": ("E11", None, "no adapter; floating-point rung deferred"),
     "sqlite": ("E12", None, "no adapter; floating-point rung deferred"),
     "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
-    "kernel-selftest": ("K7", None, "no kselftest adapter yet"),
+    "kernel-selftest": ("K7", "kernel-selftest", "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate"),
 }
 
 
@@ -89,6 +89,12 @@ def select(names):
 def command(name, args, binary):
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if name == "kernel-selftest":
+        if args.reuse_kernel_survey:
+            raise ValueError("kernel-selftest consumes the booted Image, not a compilation survey")
+        if args.allow_qemu_drift:
+            env["K1_ALLOW_QEMU_DRIFT"] = "1"
+        return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest.py')], env
     if name == "kernel-full":
         if args.reuse_kernel_survey:
             raise ValueError("kernel-full reuses verified object caches, not a mixed-link allowlist")
@@ -128,6 +134,8 @@ def command(name, args, binary):
 
 
 def lane_receipt(name):
+    if name == "kernel-selftest":
+        return ROOT / "tests/contracts/kernel-selftest-receipt.json"
     if name == "kernel-full":
         return ROOT / "tests/contracts/kernel-full-receipt.json"
     stem = "e0" if name in ("ctest", "torture") else name
@@ -139,7 +147,21 @@ def metrics(name, data):
     """Normalize claim ceilings, without rewriting a lane's raw outcomes."""
     row = {"rung": CATALOG[name][0], "note": CATALOG[name][2], "outcomes": {},
            "refusals": {}, "baselineFailures": 0, "failingUnits": data.get("failingUnits", [])}
-    if name == "kernel-full":
+    if name == "kernel-selftest":
+        if 'subject' not in data or 'reference' not in data:
+            return {**row, 'total': data['programs'], 'passed': 0, 'kind': 'programs',
+                    'status': data['status'], 'outcomes': {'NOT_RUN': data['programs']},
+                    'error': data.get('error', 'selftest flights incomplete'),
+                    'run': data['run'], 'evidence': data['evidence']}
+        outcomes = data['subject']['outcomes']
+        booted = all(data[lane]['boot']['verdict'] == 'PASS' for lane in ('reference', 'subject'))
+        same_image = data['subject']['boot']['imageSha256'] == data['kernelImageSha256']
+        row.update(total=data['programs'], passed=outcomes.get('PASS', 0), kind='programs',
+                   outcomes=outcomes, status=data['status'] if booted and same_image else 'INCOMPLETE',
+                   baselineFailures=len(data['baselineFailures']), failingUnits=data['regressions'],
+                   subtests=data['subject']['subtests'], referenceSubtests=data['reference']['subtests'],
+                   kernelImageSha256=data['kernelImageSha256'], compilerComposition=data['compilerComposition'])
+    elif name == "kernel-full":
         total = data["requestedUnits"]
         counts = data["counts"]
         complete = data.get("completeComposition") is True and counts == {"substituted": total}
@@ -255,7 +277,11 @@ def read_result(name, before, expected, survey_run=None):
     if name == "kernel":
         survey = ROOT / data["survey"]["runDirectory"] / "substitution.json"
         digest = json.loads(survey.read_text())["evoccSha256"]
-    if digest != expected:
+    if name == 'kernel-selftest':
+        kernel = ROOT / 'tests/contracts/kernel-full-receipt.json'
+        if data['kernelReceiptSha256'] != sha256(kernel):
+            raise ValueError('kernel selftests name a different complete kernel receipt')
+    elif digest != expected:
         raise ValueError("receipt names a different compiler binary")
     row = metrics(name, data)
     row["receipt"] = str(path.relative_to(ROOT))
@@ -312,6 +338,7 @@ def main(argv=None):
         return 2
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/frontend")).resolve()
     binary = (args.evocc or target / "release/evocc").resolve()
+    needs_compiler = any(name != 'kernel-selftest' and CATALOG[name][1] for name in selected)
     if args.dry_run:
         for name in selected:
             print(name + ": " + (shlex.join(command(name, args, binary)[0]) if CATALOG[name][1] else CATALOG[name][2]))
@@ -323,15 +350,15 @@ def main(argv=None):
         except BlockingIOError:
             print("another benchmark invocation owns the shared work directories", file=sys.stderr)
             return 2
-        if not args.no_build and not args.evocc:
+        if needs_compiler and not args.no_build and not args.evocc:
             env = {**os.environ, "CARGO_TARGET_DIR": str(target)}
             code, _ = execute(["cargo", "build", "--release", "-p", "evocc", "--locked", "--offline", "-j", str(args.jobs)], env)
             if code:
                 return 2
-        if not binary.is_file():
+        if needs_compiler and not binary.is_file():
             print(f"compiler missing: {binary}", file=sys.stderr)
             return 2
-        driver = sha256(binary)
+        driver = sha256(binary) if needs_compiler else None
         run = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         args.survey_run = f"survey-{run}" if args.survey_only else None
         directory = ROOT / ".evidence/bench" / run
@@ -345,7 +372,7 @@ def main(argv=None):
         summary = {"schemaVersion": 1, "run": run,
                    "subject": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                    "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
-                   "driver": str(binary), "driverSha256": driver,
+                   "driver": str(binary) if needs_compiler else None, "driverSha256": driver,
                    "invocation": [sys.executable, "tools/bench.py", *(sys.argv[1:] if argv is None else argv)],
                    "execution": "sequential lanes; original per-program watchdogs unchanged",
                    "selected": selected, "status": "RUNNING", "benchmarks": known}
@@ -375,7 +402,7 @@ def main(argv=None):
                     summary["benchmarks"][name].update(status="RUNNING", command=cmd)
                     save(summary, directory)
                     code, tail = execute(cmd, env)
-                    if sha256(binary) != driver:
+                    if needs_compiler and sha256(binary) != driver:
                         raise ValueError("compiler changed during evaluation")
                     row = read_result(name, before, driver, args.survey_run)
                     if code:
@@ -388,7 +415,7 @@ def main(argv=None):
                 overall = max(overall, 2 if row["status"] == "ERROR" else int(row["status"] not in ('PASS', 'PROFILE_CLEAN')))
                 print(f"bench {name}: {row['status']} {row.get('passed', '?')}/{row.get('total', '?')}", flush=True)
                 save(summary, directory)
-                if not binary.is_file() or sha256(binary) != driver:
+                if needs_compiler and (not binary.is_file() or sha256(binary) != driver):
                     break  # do not mix compiler identities in later lanes
         except KeyboardInterrupt:
             summary["status"] = "INTERRUPTED"

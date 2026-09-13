@@ -69,6 +69,18 @@ k1_boot() {
   machine="$("$K1_JQ" -r '.qemu.machine' "$contract")"
   smp="$("$K1_JQ" -r '.qemu.fixedArgv.smp' "$contract")"
   mem="$("$K1_JQ" -r '.qemu.fixedArgv.memoryMiB' "$contract")"
+  local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
+  if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
+    case "$K1_CONSOLE_LOGLEVEL" in
+      [1-8]) command_line="$command_line loglevel=$K1_CONSOLE_LOGLEVEL" ;;
+      *) k1_die "invalid console loglevel" ;;
+    esac
+  fi
+  local -a test_disk=()
+  if [ -n "${K1_TEST_DISK:-}" ]; then
+    test_disk=(-drive "file=$K1_TEST_DISK,format=raw,if=none,id=selftest,snapshot=on"
+               -device virtio-blk-device,drive=selftest)
+  fi
 
   set +e
   "$K1_TIMEOUT" "$limit" "$qemu" \
@@ -78,7 +90,8 @@ k1_boot() {
     -m "$mem" \
     -kernel "$image" \
     -initrd "$initramfs" \
-    -append "console=ttyAMA0 panic=-1 evo_nonce=$nonce" \
+    ${test_disk[@]+"${test_disk[@]}"} \
+    -append "$command_line" \
     -nographic \
     -no-reboot \
     > "$log" 2>&1

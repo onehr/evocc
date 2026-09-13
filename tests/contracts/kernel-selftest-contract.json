@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kernelVersion": "6.18.44",
+  "scope": "Selected upstream kselftests on the unchanged complete EvoCC kernel and the frozen GCC reference kernel; not all kselftests or KUnit",
+  "programs": [
+    "mincore/mincore_selftest",
+    "filesystems/epoll/epoll_wakeup_test",
+    "pidfd/pidfd_open_test",
+    "pidfd/pidfd_wait",
+    "pidfd/pidfd_getfd_test",
+    "membarrier/membarrier_test_single_thread",
+    "membarrier/membarrier_test_multi_thread",
+    "signal/mangle_uc_sigmask",
+    "signal/sas"
+  ],
+  "perProgramTimeoutSeconds": 120,
+  "bootOverheadSeconds": 60,
+  "consoleLoglevel": 5,
+  "hugePages": 1,
+  "testCompiler": "gcc-14",
+  "testBuild": "Upstream Makefiles, static userspace executables, frozen kernel UAPI headers. Identical binaries and initramfs in both flights.",
+  "scratchFilesystem": "64 MiB ext4, fresh QEMU snapshot in each flight; tmpfs at /tmp and /dev/shm",
+  "verdict": "All selected programs finish with valid TAP; no subject failure, timeout, missing result, or reference PASS becoming SKIP. Reference failures prevent closure. Explicit upstream skips remain skips, never passes.",
+  "kernelRebuild": false,
+  "kunit": "NOT_RUN: CONFIG_KUNIT is disabled in the frozen configuration"
+}

@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Run selected upstream kselftests in two existing kernels, without rebuilding either."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+CONTRACT = ROOT / "tests/contracts/kernel-selftest-contract.json"
+RECEIPT = ROOT / "tests/contracts/kernel-selftest-receipt.json"
+
+
+def read(path):
+    return json.loads(path.read_text())
+
+
+def sha(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for block in iter(lambda: handle.read(1 << 20), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def parse_tap(output):
+    plans = re.findall(r'^1\.\.(\d+)(?:\s+.*)?$', output, re.M)
+    results = re.findall(r'^(not ok|ok)\s+(\d+)\b(.*)$', output, re.M)
+    cases = [{'number': int(n), 'name': rest.strip(),
+              'outcome': 'SKIP' if re.search(r'#\s*SKIP\b', rest, re.I)
+              else 'PASS' if ok == 'ok' else 'FAIL'} for ok, n, rest in results]
+    planned = int(plans[0]) if len(plans) == 1 else None
+    valid = planned is not None and [r['number'] for r in cases] == list(range(1, planned + 1))
+    valid = valid and 'Bail out!' not in output
+    counts = {key: sum(r['outcome'] == key for r in cases) for key in ('PASS', 'FAIL', 'SKIP')}
+    return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases}
+
+
+def parse_transcript(text, nonce, programs):
+    text = text.replace('\r', '')
+    if text.splitlines().count(f'EVO_BOOT_NONCE {nonce}') != 1:
+        raise ValueError('missing or repeated current boot nonce')
+    events = list(re.finditer(r'^KSELFTEST_(BEGIN|END) (\S+) (\S+)(?: (\d+))?$', text, re.M))
+    rows = {name: {'id': name, 'outcome': 'NOT_RUN', 'subtests': {'PASS': 0, 'FAIL': 0, 'SKIP': 0}, 'cases': []} for name in programs}
+    active, start, seen = None, None, []
+    for event in events:
+        kind, observed, name, status = event.groups()
+        if observed != nonce or name not in rows:
+            raise ValueError('foreign test or nonce in serial transcript')
+        if kind == 'BEGIN':
+            if active or name in seen or name != programs[len(seen)] or status is not None:
+                raise ValueError('duplicate or out-of-order test execution')
+            active, start = name, event.end()
+            seen.append(name)
+            rows[name]['outcome'] = 'INCOMPLETE'
+        else:
+            if active != name or status is None:
+                raise ValueError('test result without its corresponding execution')
+            tap = parse_tap(text[start:event.start()])
+            rc = int(status)
+            outcome = ('TIMEOUT' if rc == 124 else 'FAIL' if rc not in (0, 4) or tap['subtests']['FAIL']
+                       else 'INVALID_OUTPUT' if not tap['valid'] or not tap['cases'] and rc != 4
+                       else 'SKIP' if rc == 4 else 'PASS')
+            rows[name].update(tap, outcome=outcome, exitCode=rc)
+            active = None
+    return list(rows.values())
+
+
+def compare(reference, subject):
+    if [r['id'] for r in reference] != [r['id'] for r in subject]:
+        raise ValueError('reference and subject test denominators differ')
+    regressions, baseline_failures = [], []
+    for before, after in zip(reference, subject):
+        if before['outcome'] not in ('PASS', 'SKIP'):
+            baseline_failures.append(before['id'])
+        old_cases = {r['number']: r['outcome'] for r in before['cases']}
+        new_cases = {r['number']: r['outcome'] for r in after['cases']}
+        lost_pass = any(value == 'PASS' and new_cases.get(n) != 'PASS' for n, value in old_cases.items())
+        if (after['outcome'] not in ('PASS', 'SKIP') or lost_pass
+                or before['outcome'] == 'PASS' and after['outcome'] != 'PASS'
+                or before.get('planned') != after.get('planned')):
+            regressions.append(after['id'])
+    return {'status': 'PASS' if reference and not regressions and not baseline_failures
+            and any(r['outcome'] == 'PASS' for r in subject) else 'INCOMPLETE',
+            'regressions': regressions, 'baselineFailures': baseline_failures,
+            'outcomes': dict(Counter(r['outcome'] for r in subject))}
+
+
+def build_payload(work, contract, run):
+    environment = read(ROOT / 'contracts/build-environment.json')
+    image = environment['buildImage']['sealedImageTag']
+    installed = json.loads(subprocess.check_output(
+        ['/usr/local/bin/container', 'image', 'inspect', image], text=True))
+    image_digest = installed[0]['configuration']['descriptor']['digest']
+    if image_digest != environment['buildImage']['executionReference']:
+        raise ValueError('installed selftest build image differs from the sealed image')
+    programs = contract['programs']
+    ids = [name.replace('/', '.') for name in programs]
+    ramfs = work / 'root'
+    ramfs.mkdir(parents=True, exist_ok=True)
+    (ramfs / 'list').write_text(''.join(f'{name} {contract["perProgramTimeoutSeconds"]}\n' for name in ids))
+    (ramfs / 'huge-pages').write_text(str(contract['hugePages']) + '\n')
+    spec = ['dir /dev 755 0 0', 'dir /proc 755 0 0', 'dir /sys 755 0 0',
+            'dir /tmp 1777 0 0', 'dir /scratch 755 0 0', 'dir /tests 755 0 0',
+            'nod /dev/console 600 0 0 c 5 1',
+            'file /init /work/selftest/root/init 755 0 0',
+            'file /tests/huge-pages /work/selftest/root/huge-pages 644 0 0',
+            'file /tests/list /work/selftest/root/list 644 0 0']
+    spec += [f'file /tests/{name} /work/selftest/root/{name} 755 0 0' for name in ids]
+    (work / 'spec.txt').write_text('\n'.join(spec) + '\n')
+    commands = [['make', '-s', '-C', '/work/src', 'O=/work/selftest/headers-build',
+                 'ARCH=arm64', 'HOSTCC=gcc-14', 'headers_install',
+                 'INSTALL_HDR_PATH=/work/selftest/headers']]
+    for name, ident in zip(programs, ids):
+        directory, binary = name.rsplit('/', 1)
+        output = f'/work/selftest/build/{directory}'
+        (work / 'build' / directory).mkdir(parents=True, exist_ok=True)
+        commands.append(['make', '-s', '-C', f'/work/src/tools/testing/selftests/{directory}',
+                         f'OUTPUT={output}', 'ARCH=arm64', 'CC=gcc-14',
+                         'KHDR_INCLUDES=-isystem /work/selftest/headers/include',
+                         'LDFLAGS=-static', f'{output}/{binary}'])
+        commands.append(['cp', f'{output}/{binary}', f'/work/selftest/root/{ident}'])
+    commands.append(['gcc-14', '-static', '-O2', '-Wall', '-Wextra', '-Werror',
+                     '/work/harness/selftest-init.c', '-o', '/work/selftest/root/init'])
+    shell = 'set -eu\n' + '\n'.join(shlex.join(c) for c in commands)
+    shell += '\n/work/bin/gen_init_cpio -t ' + str(environment['reproducibility']['SOURCE_DATE_EPOCH'])
+    shell += ' /work/selftest/spec.txt > /work/selftest/initramfs.cpio\n'
+    cmd = ['/usr/local/bin/container', 'run', '--rm', '--platform', 'linux/arm64', '--network', 'none',
+           '-v', f'{ROOT / ".build/linux-src"}:/work/src:ro',
+           '-v', f'{work}:/work/selftest', '-v', f'{ROOT / "tools/k1"}:/work/harness:ro',
+           '-v', f'{ROOT / ".build/reference/gcc-lane-1/usr/gen_init_cpio"}:/work/bin/gen_init_cpio:ro',
+           image, 'sh', '-c', shell]
+    with (run / 'build.log').open('w') as log:
+        subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=600)
+        formatter = Path('/opt/homebrew/opt/e2fsprogs/sbin/mke2fs')
+        format_command = [str(formatter), '-q', '-F', '-t', 'ext4', '-b', '1024',
+                          '-E', 'lazy_itable_init=0,lazy_journal_init=0',
+                          str(work / 'scratch.img'), '65536']
+        subprocess.run(format_command, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=30)
+    return {'compiler': 'gcc-14', 'image': image_digest, 'commands': commands,
+            'initSourceSha256': sha(ROOT / 'tools/k1/selftest-init.c'),
+            'filesystemCommand': format_command, 'filesystemToolSha256': sha(formatter),
+            'initramfsSha256': sha(work / 'initramfs.cpio'), 'scratchSha256': sha(work / 'scratch.img'),
+            'programs': [{'id': ident, 'source': f'tools/testing/selftests/{name}.c',
+                          'sourceSha256': sha(ROOT / f'.build/linux-src/tools/testing/selftests/{name}.c'),
+                          'binarySha256': sha(ramfs / ident)} for name, ident in zip(programs, ids)]}
+
+
+def flight(name, image, work, run, contract, ids):
+    directory = run / name
+    env = {**os.environ, 'K1_INITRAMFS': str(work / 'initramfs.cpio'),
+           'K1_TEST_DISK': str(work / 'scratch.img'),
+           'K1_CONSOLE_LOGLEVEL': str(contract['consoleLoglevel']),
+           'K1_BOOT_TIMEOUT': str(contract['bootOverheadSeconds'] + len(ids) * contract['perProgramTimeoutSeconds'])}
+    expected_image = sha(image)
+    print(f'{name}: running {len(ids)} upstream programs on Image {expected_image[:12]}', flush=True)
+    done = subprocess.run([str(ROOT / 'tools/k1/boot.sh'), str(image), str(directory)],
+                          env=env, check=False)
+    boot = read(directory / 'boot.json')
+    if sha(image) != expected_image or boot['imageSha256'] != expected_image:
+        raise ValueError('kernel Image changed during selftests')
+    log = Path(boot['serialLog'])
+    if sha(log) != boot['serialLogSha256']:
+        raise ValueError('serial capture differs from boot receipt')
+    rows = parse_transcript(log.read_text(errors='replace'), boot['nonce'], ids)
+    for row in rows:
+        print(f"  {row['id']}: {row['outcome']} {row['subtests']}", flush=True)
+    return {'boot': boot, 'exitCode': done.returncode, 'programs': rows,
+            'consoleLoglevel': contract['consoleLoglevel'],
+            'hugePages': contract['hugePages'],
+            'outcomes': dict(Counter(r['outcome'] for r in rows)),
+            'subtests': dict(sum((Counter(r['subtests']) for r in rows), Counter()))}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--allow-qemu-drift', action='store_true')
+    args = parser.parse_args()
+    if args.allow_qemu_drift:
+        os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
+    contract = read(CONTRACT)
+    kernel_receipt = ROOT / 'tests/contracts/kernel-full-receipt.json'
+    kernel = read(kernel_receipt)
+    subject = ROOT / kernel['boot']['image']
+    if (kernel.get('status') != 'PASS' or not kernel.get('completeComposition')
+            or kernel['counts'] != {'substituted': kernel['requestedUnits']}
+            or kernel['boot']['verdict'] != 'PASS' or sha(subject) != kernel['imageSha256']
+            or kernel['boot']['imageSha256'] != kernel['imageSha256']):
+        raise ValueError('a verified complete booted EvoCC kernel is required')
+    work = ROOT / '.build/kselftest'
+    run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    run = ROOT / '.evidence/kselftest' / run_id
+    run.mkdir(parents=True)
+    receipt = {'schemaVersion': 1, 'run': run_id, 'status': 'RUNNING',
+               'scope': contract['scope'], 'contractSha256': sha(CONTRACT),
+               'kernelReceiptSha256': sha(kernel_receipt), 'kernelImageSha256': kernel['imageSha256'],
+               'compilerComposition': kernel.get('compilerComposition', []),
+               'programs': len(contract['programs']), 'evidence': str(run.relative_to(ROOT)),
+               'kunit': contract['kunit']}
+    def save():
+        value = json.dumps(receipt, indent=2) + '\n'
+        (run / 'summary.json').write_text(value)
+        RECEIPT.write_text(value)
+    save()
+    try:
+        receipt['payload'] = build_payload(work, contract, run)
+        save()
+        ids = [r['id'] for r in receipt['payload']['programs']]
+        receipt['reference'] = flight('reference', ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image', work, run, contract, ids)
+        save()
+        receipt['subject'] = flight('subject', subject, work, run, contract, ids)
+        receipt.update(compare(receipt['reference']['programs'], receipt['subject']['programs']))
+        if any(receipt[name]['boot']['verdict'] != 'PASS' for name in ('reference', 'subject')):
+            receipt['status'] = 'INCOMPLETE'
+        if (sha(kernel_receipt) != receipt['kernelReceiptSha256']
+                or sha(work / 'initramfs.cpio') != receipt['payload']['initramfsSha256']
+                or sha(work / 'scratch.img') != receipt['payload']['scratchSha256']):
+            raise ValueError('measured kernel receipt or common test inputs changed during the flights')
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        detail = (f'payload command exited {error.returncode}; see build.log'
+                  if isinstance(error, subprocess.CalledProcessError) else str(error))
+        receipt.update(status='ERROR', error=detail)
+        save()
+        print(f'kernel-selftest: {detail}; evidence: {run}', file=sys.stderr)
+        return 2
+    save()
+    print(f"kernel-selftest: {receipt['status']}; {receipt['outcomes']}; evidence: {run}", flush=True)
+    # Like the other lanes, measured FAIL is a receipt verdict, not a runner error.
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
