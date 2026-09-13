@@ -155,6 +155,33 @@ fn visibility_pragma_defaults_preserve_explicit_attributes_and_redeclarations() 
 }
 
 #[test]
+fn unused_hidden_declarations_do_not_create_linker_dependencies() {
+    let source = "#pragma GCC visibility push(hidden)\n\
+        extern void missing_call(void); extern int missing_object;\n\
+        int main(void){if(0) missing_call(); (void)&missing_object; return 0;}";
+    let output = run(source, "--emit=asm");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let text = String::from_utf8(output.stdout).unwrap();
+    for name in ["missing_call", "missing_object"] {
+        assert!(!text.contains(name), "unused declaration creates an undefined hidden symbol: {text}");
+    }
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    assert_native_execution(source, "unused-hidden-declarations");
+
+    let output = run(
+        "#pragma GCC visibility push(hidden)\n\
+         extern int relocated, asm_operand; int *keep = &relocated;\n\
+         void emit(void){asm volatile(\".xword %c0\" : : \"i\"(&asm_operand));}",
+        "--emit=asm",
+    );
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let text = String::from_utf8(output.stdout).unwrap();
+    for name in ["relocated", "asm_operand"] {
+        assert!(text.contains(&format!(".hidden {name}")), "{text}");
+    }
+}
+
+#[test]
 fn position_independent_macros_follow_the_last_codegen_option() {
     for (options, pic, pie) in [
         (vec![], 2, 2),
