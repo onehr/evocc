@@ -51,7 +51,9 @@ fn live_references_retain_the_body_and_its_refusals() {
     let declaration = "static int hidden(int n){asm(\"\"::\"i\"(n));return n;}";
     for reference in [
         "int entry(int n){return hidden(n);}",
-        "int entry(void){if(0)return hidden(1);return 0;}",
+        // Keep the parameter unknown: private-call constant propagation can
+        // now prove hidden(1)'s immediate constraint, even in a dead branch.
+        "int entry(int n){if(0)return hidden(n);return 0;}",
         "int (*pointer)(int)=hidden;",
         "extern int exposed(int) __attribute__((alias(\"hidden\")));",
         "asm(\".quad hidden\");",
@@ -66,6 +68,19 @@ fn live_references_retain_the_body_and_its_refusals() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    let output = run(
+        &format!("{declaration}int entry(void){{if(0)return hidden(1);return 0;}}"),
+        "--emit=evoir",
+    );
+    assert!(output.status.success(), "{:?}", output.stderr);
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert!(
+        module
+            .functions
+            .iter()
+            .any(|function| function.name == "hidden"),
+        "a proved immediate makes the retained body valid; it does not remove it"
+    );
     for reference in [
         "unsigned long entry(void){return hidden();}",
         "unsigned long (*pointer)(void)=hidden;",
