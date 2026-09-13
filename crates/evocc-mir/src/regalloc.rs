@@ -247,6 +247,22 @@ fn needed_edge_values(
     needed
 }
 
+/// The entry is an ABI boundary, so unused arguments still keep their fixed
+/// positions. A direct private caller may supply an arbitrary value in a
+/// position the callee provably never reads, after evaluating the source
+/// argument normally. No signature or incoming-register convention changes.
+pub(crate) fn unused_parameters(function: &MFunction) -> Vec<bool> {
+    let parameters = function
+        .blocks
+        .iter()
+        .map(|b| (b.id, b.args.clone()))
+        .collect();
+    let needed = needed_edge_values(function, &parameters);
+    function.blocks.first().map_or_else(Vec::new, |entry| {
+        entry.args.iter().map(|a| !needed.contains(&a.id)).collect()
+    })
+}
+
 fn clear_edge_args(term: &mut MTerm) {
     match term {
         MTerm::Indirect { edges, .. } => {

@@ -127,12 +127,76 @@ pub fn lower_module_for(
         }
     }
     if refusals.is_empty() {
+        omit_unused_private_arguments(module, &mut functions);
         Ok(MModule {
             globals: module.globals.clone(),
             functions,
         })
     } else {
         Err(refusals)
+    }
+}
+
+fn omit_unused_private_arguments(module: &Module, functions: &mut [MFunction]) {
+    let unused: HashMap<_, _> = module
+        .functions
+        .iter()
+        .zip(functions.iter())
+        .filter(|(source, _)| {
+            source.visibility == evocc_evoir::GlobalVisibility::Internal
+                && !source.variadic
+                && source
+                    .param_marks
+                    .iter()
+                    .all(|mark| *mark == ParamMark::None)
+        })
+        .map(|(source, machine)| {
+            (
+                source.name.as_str(),
+                crate::regalloc::unused_parameters(machine),
+            )
+        })
+        .filter(|(_, mask)| mask.iter().any(|unused| *unused))
+        .collect();
+    if unused.is_empty() {
+        return;
+    }
+    for function in functions {
+        let mut next = function
+            .blocks
+            .iter()
+            .flat_map(|b| {
+                b.args
+                    .iter()
+                    .copied()
+                    .chain(b.insts.iter().flat_map(crate::inst_defs))
+            })
+            .map(|v| v.id)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        for block in &mut function.blocks {
+            let mut rewritten = Vec::with_capacity(block.insts.len());
+            for mut inst in std::mem::take(&mut block.insts) {
+                if let MInst::Bl { symbol, args, .. } = &mut inst {
+                    if let Some(mask) = unused
+                        .get(symbol.as_str())
+                        .filter(|mask| mask.len() == args.len())
+                    {
+                        for (arg, unused) in args.iter_mut().zip(mask) {
+                            if *unused {
+                                let value = VReg::new(next, arg.class);
+                                next += 1;
+                                rewritten.push(MInst::MovImm { dst: value, imm: 0 });
+                                *arg = value;
+                            }
+                        }
+                    }
+                }
+                rewritten.push(inst);
+            }
+            block.insts = rewritten;
+        }
     }
 }
 
