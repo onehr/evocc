@@ -66,6 +66,18 @@ fn visibility_pragmas_preserve_link_time_address_binding() {
              + default_data + restored_hidden_data + restored_default_data;}\n\
          int *weak_address(void){return &weak_hidden_data;}\n";
     let includes = format!("{}/../../tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+    let preprocessed = run_with_options(source, "-E", &["-I", &includes]);
+    assert!(preprocessed.status.success());
+    let preprocessed = String::from_utf8(preprocessed.stdout).unwrap();
+    assert!(preprocessed.contains("#pragma GCC visibility push(hidden)"));
+    let replay = run(&preprocessed, "--emit=evoir");
+    assert!(
+        replay.status.success(),
+        "{}",
+        String::from_utf8_lossy(&replay.stderr)
+    );
+    let direct = run_with_options(source, "--emit=evoir", &["-I", &includes]);
+    assert_eq!(direct.stdout, replay.stdout);
     for mode in ["--emit=evoir", "--emit=asm"] {
         let output = run_with_options(source, mode, &["-fpie", "-I", &includes]);
         assert!(

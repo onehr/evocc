@@ -21,7 +21,9 @@ use evocc_chir::{
     CHirDecl,
 };
 use evocc_common::{Arena, FileId};
-use evocc_cpp::{pragma_pack_action, Preprocessor};
+use evocc_cpp::{
+    pragma_pack_action, pragma_visibility_action, PragmaVisibilityAction, Preprocessor,
+};
 use evocc_eqopt::{optimize_scalar_module_certified_persistent, EqualityState, ScalarEqBudget};
 use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
@@ -712,6 +714,22 @@ fn render_preprocessed(tokens: &[evocc_lex::Token], source: &str) -> Result<Stri
         .iter()
         .filter(|token| token.kind != TokenKind::Eof && pragma_pack_action(token).is_none())
     {
+        if let Some(action) = pragma_visibility_action(token) {
+            if !rendered.is_empty() && !rendered.ends_with('\n') {
+                rendered.push('\n');
+            }
+            rendered.push_str(match action {
+                PragmaVisibilityAction::Push { hidden: true } => {
+                    "#pragma GCC visibility push(hidden)\n"
+                }
+                PragmaVisibilityAction::Push { hidden: false } => {
+                    "#pragma GCC visibility push(default)\n"
+                }
+                PragmaVisibilityAction::Pop => "#pragma GCC visibility pop\n",
+            });
+            unseparated.clear();
+            continue;
+        }
         let text = match &token.text {
             evocc_lex::TokenText::Decoded(text) => text.clone(),
             evocc_lex::TokenText::Borrowed => source

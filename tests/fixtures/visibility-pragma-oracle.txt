@@ -1,0 +1,36 @@
+Measured 2026-09-13 in evo-flight-lab:sealed, linux/arm64, network none.
+Source: visibility-pragma-oracle.c. Compilers: gcc-14 and clang-19.
+No full build copies or probe binaries retained.
+
+Declaration cases (N=1..9):
+  $CC -std=gnu11 -fpie -O2 -DCASE=$N -c probe.c -o /tmp/probe.o
+  readelf -Ws /tmp/probe.o
+
+CASE  GCC exit / data visibility          Clang exit / data visibility
+1     0 HIDDEN                            0 HIDDEN
+2     0 HIDDEN                            0 HIDDEN
+3     0 DEFAULT                           0 DEFAULT
+4     0 HIDDEN (conflicting warning)      1 (visibility does not match)
+5     0 DEFAULT                           0 DEFAULT
+6     0 DEFAULT (unmatched-pop warning)   1 (no matching push)
+7     0 PROTECTED                         0 PROTECTED
+8     0 HIDDEN                            0 HIDDEN
+9     0 HIDDEN                            0 HIDDEN
+
+Profile: hidden/default only, as for the existing visibility attribute.
+Cases 4 and 6 refuse E2943 in the conflicting oracles' refusal direction.
+Case 7 is not admitted by the authorized visibility vocabulary.
+
+Address cases (no CASE, HIDDEN=0/1):
+  $CC -std=gnu11 -O2 $MODE -DHIDDEN=$HIDDEN -S probe.c -o /tmp/probe.s
+Both compilers return 0 for every row; inspect address_data/address_weak:
+MODE       HIDDEN   strong data    weak data
+-fno-pie   0        direct         GOT
+-fno-pie   1        direct         GOT
+-fpie      0        GOT            GOT
+-fpie      1        direct         GOT
+-fPIC      0        GOT            GOT
+-fPIC      1        direct         GOT
+
+Direct = adrp + page-offset, not a load through :got: / :got_lo12:.
+Weak addresses still use the GOT even when hidden: unresolved weak is null.

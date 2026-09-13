@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.94** | **Authoritative reference** | **2026-09-13**
+**Revision 1.9.95** | **Authoritative reference** | **2026-09-13**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -5025,7 +5025,21 @@ else is `E0106` (`feature-query-malformed`).
 **Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
 visibility ...`, `#pragma GCC poison`, `#pragma pack(...)` are accepted:
-`diagnostic` and `visibility` are ignored-safe, `poison` is honoured, and
+`diagnostic` is ignored-safe; `visibility push(hidden)` / `push(default)`
+and `visibility pop` maintain a translation-unit stack, including across
+includes and `_Pragma` expansion. The current visibility supplies a default
+for externally linked object/function declarations, not for types or automatic
+objects; an explicit attribute on that declaration, or an earlier bound
+visibility of the same symbol, takes precedence. The default is preserved as
+pragma-origin metadata and uses the existing hidden-symbol linkage path:
+strong hidden addresses are direct, weak hidden addresses retain the GOT.
+Malformed/unsupported values and unmatched `pop` are E2943; so is a conflicting
+later explicit visibility (the latter two are GCC-warning/Clang-error oracle
+conflicts, refused by this profile). Only hidden/default are admitted, as for
+the explicit attribute. `-E` preserves these semantic directives for re-parsing.
+This correction was authorized on 2026-09-13 after the first complete EvoCC
+kernel link faulted before MMU setup; paired sealed probes are recorded beside
+`tests/fixtures/visibility-pragma.h`. `poison` is honoured, and
 `pack(N)` sets the maximum member alignment of every record defined while it
 is in effect to `N` (a power of two); `pack()` restores the default;
 `pack(push[, N])` and `pack(pop)` maintain a stack. Measured (both oracles):
@@ -6040,6 +6054,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.95 | 2026-09-13 | User-authorized correction: visibility pragmas are semantic declaration defaults, not ignored-safe. Reuse hidden symbol binding and retain weak GOT/null behavior; preserve directives in preprocessed output. |
 | 1.9.94 | 2026-09-13 | Authorizes proved object-size bounds with unknown fallback and unevaluated operands, replacing the explicit always-unknown profile that blocks ext4. Distinguishes whole objects from subobjects; records the multidimensional-row oracle conflict without claiming a bound. |
 | 1.9.93 | 2026-09-13 | Authorizes optimization-time constant queries with proved values, unevaluated operands and preserved initializer/argument effects. Source ICE admission is unchanged. |
 | 1.9.92 | 2026-09-12 | Records the approved computed-goto edge-binding design: explicit storage addresses and effects, complete successor sets, positional parallel copies and E3048 for invalid dynamic targets. Synchronizes two stale signed-shift clauses with 1.9.88, preserving legacy IR obligations. This revision specifies behavior; implementation and native acceptance are tracked separately. |

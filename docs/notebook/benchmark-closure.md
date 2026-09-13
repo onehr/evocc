@@ -85,7 +85,42 @@ did regenerate `.vmlinux.export.o`, caught by the installed-object audit.
 | K-L07 | Unused static marker addresses create runtime relocations into discarded `.no_trim_symbol`. | Trace machine value demand through pure computations and incoming edges; do not drop accesses, calls, lifetimes or the marker data. RED `091cd55`; original vfio/pnfs units no longer emit the marker-address instructions. |
 | K-L08 | `btf_parse_base` ignores its data arguments with BTF disabled, but the caller still refers to absent `__start_BTF` / `__stop_BTF`. | Tailored and original object PASS: `87bcb6c` RED, `a109420` keeps ABI positions and argument effects, replacing only unused private-call transport. Public/interposable calls retain their arguments. Original BTF replay takes 8.756 seconds and has neither absent address reference. |
 | K-L09 | `fs/proc/array.o` emits the `__scoped_seqlock_bug` optimization canary despite its dominating loop-state guard. | Tailored and original object PASS: observe repeated reads only on nonescaping, nonvolatile local storage with no intervening write. Exclude unreachable continuations after loop exits from predecessor queries; retain all loads, guards, effects and possible error calls. Original replay: 3.232 seconds, canary calls zero. |
-| K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `e03f564` RED, `fb7a5b6` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; actual full-link validation pending. |
+| K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `e03f564` RED, `fb7a5b6` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; complete diagnostic link passes with the generated source stable and all 2,799 installed target-C objects retained. |
+
+The complete diagnostic composition now **links successfully**:
+[`complete-link-20260913/result.json`](../../.evidence/k1/complete-link-20260913/result.json).
+All 2,799 original target-C records retain their EvoCC object identity, including
+the export table compiled after modpost; its generated source remains stable.
+The initial audit used the short spelling `virt/kvm/vfio.o` for a repair whose
+original record spells `arch/arm64/kvm/../../../virt/kvm/vfio.o`; comparing the
+same resolved installed path corrects that bookkeeping discrepancy without
+changing the denominator or suppressing a hash difference.
+This is still a mixed-EvoCC-revision diagnostic composition, not a fresh survey.
+Its actual 60-second HVF flight **TIMED OUT before console output**, Image
+`b6194b9a7683d7e5d15e37c6d406ad6b6fa0d90099bf639d6ba247ec576593ab`.
+
+**K-R03 / OPEN: visibility pragma in early position-independent code.**
+Linux `include/linux/hidden.h` writes `#pragma GCC visibility push(hidden)`, but
+the old §10.4 classified visibility pragmas as ignored-safe; consequently
+`__pi_create_init_idmap` loads the virtual address of `arm64_use_ng_mappings`
+through the GOT before the MMU exists (stopped CPU PC `0x200`, x8
+`0xffff8000875caab4`, LR `0x476800c0`).
+Sealed GCC-14 and Clang-19 both use direct page-relative addressing for a strong
+hidden declaration under `-fpie`/`-fPIC`, and retain GOT addressing for a weak one;
+the existing hidden-attribute lowering already implements that distinction.
+The user authorized the correction on September 13; revision 1.9.95 records it.
+RED `3213f0e` fails on missing hidden metadata, with no build error. The scoped
+default now uses the existing symbol path and survives `-E` replay. Sealed
+oracle results and their small source live in `tests/fixtures/visibility-pragma-oracle.*`.
+Targeted tests are green; all 40 original records that force-include `hidden.h`
+must be recompiled before the next complete-composition link and boot.
+
+The targeted gate also exposed a dead-computation regression: retaining an
+`adds` arithmetic result could remove its mandatory, unused flags consumer.
+RED `784ef59` pins both live bundles and entirely dead bundles. Demand now
+closes over adjacent flags chains without changing either validator. The
+external-symbol, attribute, wide-integer and allocator suites pass 182/182;
+these tests do not establish a successful boot.
 
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):

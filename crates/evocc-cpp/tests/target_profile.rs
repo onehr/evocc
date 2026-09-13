@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use evocc_cpp::{
-    pragma_pack_action, FileId, Lexer, PreprocessError, Preprocessor, Token, TokenKind,
-    TokenStream, TokenText,
+    pragma_pack_action, pragma_visibility_action, FileId, Lexer, PragmaVisibilityAction,
+    PreprocessError, Preprocessor, Token, TokenKind, TokenStream, TokenText,
 };
 use evocc_proof::sha256_hex;
 
@@ -398,7 +398,19 @@ fn pragma_operator_is_processed_after_macro_expansion() {
 
 #[test]
 fn pragma_lines_are_classified() {
-    assert_eq!(preprocess("#pragma GCC visibility push(default)\nx\n"), "x");
+    let source = "#pragma GCC visibility push(default)\nx\n";
+    let mut pp = Preprocessor::new();
+    let tokens = pp
+        .process(TokenStream::new(lex(FileId::DUMMY, source)), source)
+        .into_vec();
+    assert_eq!(
+        tokens
+            .iter()
+            .filter_map(pragma_visibility_action)
+            .collect::<Vec<_>>(),
+        vec![PragmaVisibilityAction::Push { hidden: false }]
+    );
+    assert_eq!(pp.ignored_pragma_count(), 0);
     assert_eq!(preprocess("#pragma GCC poison bad\nok\n"), "ok");
     assert_eq!(first_error_code("#pragma GCC poison bad\nbad\n"), "E0108");
     assert_eq!(first_error_code("#pragma pack(1)\n"), "NONE");

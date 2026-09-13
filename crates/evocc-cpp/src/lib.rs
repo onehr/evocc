@@ -584,6 +584,31 @@ pub enum PragmaPackAction {
     Pop,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PragmaVisibilityAction {
+    Push { hidden: bool },
+    Pop,
+}
+
+const PRAGMA_VISIBILITY_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-visibility:";
+
+/// Visibility changes must reach the declaration consumer in source order,
+/// including changes introduced by an include or expanded `_Pragma`.
+pub fn pragma_visibility_action(token: &Token) -> Option<PragmaVisibilityAction> {
+    let TokenText::Decoded(text) = &token.text else {
+        return None;
+    };
+    if token.kind != TokenKind::Identifier {
+        return None;
+    }
+    match text.strip_prefix(PRAGMA_VISIBILITY_MARKER_PREFIX)? {
+        "hidden" => Some(PragmaVisibilityAction::Push { hidden: true }),
+        "default" => Some(PragmaVisibilityAction::Push { hidden: false }),
+        "pop" => Some(PragmaVisibilityAction::Pop),
+        _ => None,
+    }
+}
+
 const PRAGMA_PACK_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-pack:";
 
 /// Decode the synthetic token that carries a supported `#pragma pack` across
@@ -1925,6 +1950,32 @@ impl Preprocessor {
                 code: "E0107",
                 span,
                 message: "pragma-pack-unsupported".into(),
+            });
+            return None;
+        }
+
+        if first == "GCC" && second == "visibility" {
+            let words: Vec<_> = tokens
+                .iter()
+                .skip(2)
+                .map(|t| token_lexeme(t, source))
+                .collect();
+            let action = match words.as_slice() {
+                ["pop"] => Some("pop"),
+                ["push", "(", name @ ("hidden" | "default"), ")"] => Some(*name),
+                _ => None,
+            };
+            if let Some(action) = action {
+                return Some(Token::new(
+                    TokenKind::Identifier,
+                    span,
+                    TokenText::Decoded(format!("{PRAGMA_VISIBILITY_MARKER_PREFIX}{action}")),
+                ));
+            }
+            self.errors.push(PreprocessError {
+                code: "E2943",
+                span,
+                message: "invalid-or-conflicting-symbol-attribute".into(),
             });
             return None;
         }

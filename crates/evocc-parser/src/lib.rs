@@ -25,7 +25,9 @@ use evocc_chir::{
     WrittenDesignator, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
-use evocc_cpp::{pragma_pack_action, PragmaPackAction};
+use evocc_cpp::{
+    pragma_pack_action, pragma_visibility_action, PragmaPackAction, PragmaVisibilityAction,
+};
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
     enum_integer_rank, ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant,
@@ -344,6 +346,7 @@ pub struct Parser<'src, 'arena> {
     next_local_label: u64,
     pack_alignment: Option<u32>,
     pack_stack: Vec<Option<u32>>,
+    visibility_stack: Vec<(bool, SourceSpan)>,
     /// True only while normalizing an initializer attached to a file-scope
     /// object.  It admits the final flexible member without changing the
     /// record type itself.
@@ -514,6 +517,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             next_local_label: 0,
             pack_alignment: None,
             pack_stack: Vec::new(),
+            visibility_stack: Vec::new(),
             flexible_initializer_allowed: false,
         }
     }
@@ -549,7 +553,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.arena = Some(arena);
         let mut decls = Vec::new();
         while !self.is_done() && !self.reached_error_limit() {
-            if self.consume_pragma_pack_marker() {
+            if self.consume_pragma_pack_marker() || self.consume_visibility_marker() {
                 continue;
             }
             if let Some((code, message)) = misplaced_statement_diagnostic(self.peek_kind()) {
@@ -692,6 +696,56 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         true
+    }
+
+    fn consume_visibility_marker(&mut self) -> bool {
+        let Some(action) = self.peek().and_then(pragma_visibility_action) else {
+            return false;
+        };
+        let span = self.advance().expect("peeked visibility marker").span;
+        match action {
+            PragmaVisibilityAction::Push { hidden } => self.visibility_stack.push((hidden, span)),
+            PragmaVisibilityAction::Pop => {
+                if self.visibility_stack.pop().is_none() {
+                    self.report("E2943", "invalid-or-conflicting-symbol-attribute", span);
+                }
+            }
+        }
+        true
+    }
+
+    fn apply_visibility_default(
+        &self,
+        symbol: SymbolId,
+        attributes: &mut Vec<Attribute>,
+        visibility: Option<(bool, SourceSpan)>,
+    ) {
+        let Some((hidden, span)) = visibility else {
+            return;
+        };
+        if self
+            .entity_attributes
+            .get(&symbol)
+            .is_some_and(|a| a.contains("visibility"))
+            || attributes
+                .iter()
+                .any(|a| a.semantic_name() == Some("visibility"))
+        {
+            return;
+        }
+        attributes.push(Attribute {
+            name: "visibility".into(),
+            written: "#pragma GCC visibility".into(),
+            syntax: AttributeSyntax::Pragma,
+            arguments: vec![AttributeArgument {
+                text: format!("\"{}\"", if hidden { "hidden" } else { "default" }),
+                span,
+                integer: None,
+            }],
+            placement: AttributePlacement::DeclarationSpecifiers,
+            span,
+            applied: None,
+        });
     }
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -1616,6 +1670,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         side_start: usize,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
+        let visibility = self.visibility_stack.last().copied();
         let gnu_extension_spans = self.parse_extension_prefix();
         let mut storage = None;
         let mut inline_spans = Vec::new();
@@ -1790,6 +1845,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 SymbolData::Function { storage },
                 full_type,
             );
+            if storage != StorageClass::Static {
+                self.apply_visibility_default(symbol, &mut attributes, visibility);
+            }
             self.add_entity_attributes(symbol, &attributes);
             self.record_assembly_name(symbol, &asm_label);
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
@@ -2003,6 +2061,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 SymbolData::Object { storage }
             };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
+            if storage != StorageClass::Typedef
+                && storage != StorageClass::Static
+                && (is_function
+                    || context == DeclarationContext::File
+                    || storage == StorageClass::Extern)
+            {
+                self.apply_visibility_default(symbol, &mut attributes, visibility);
+            }
             self.add_entity_attributes(symbol, &attributes);
             self.record_assembly_name(symbol, &asm_label);
             full_type = self
@@ -8283,6 +8349,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut items = Vec::new();
         let mut at_block_start = true;
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
+            if self.consume_visibility_marker() {
+                continue;
+            }
             let before = self.pos;
             let side_start = self.side_declarations.len();
             let mut item_start = items.len();

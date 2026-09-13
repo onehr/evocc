@@ -1208,7 +1208,12 @@ pub struct Attribute {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeSyntax {
     Gnu,
-    Brackets { namespace: Option<String> },
+    /// A declaration default supplied by a source pragma, not a rewritten
+    /// explicit attribute. Linkage resolution preserves that precedence.
+    Pragma,
+    Brackets {
+        namespace: Option<String>,
+    },
 }
 
 impl Attribute {
@@ -1223,7 +1228,7 @@ impl Attribute {
             return None;
         }
         match &self.syntax {
-            AttributeSyntax::Gnu => Some(&self.name),
+            AttributeSyntax::Gnu | AttributeSyntax::Pragma => Some(&self.name),
             AttributeSyntax::Brackets {
                 namespace: Some(namespace),
             } if matches!(namespace.as_str(), "gnu" | "__gnu__") => Some(&self.name),
@@ -2072,7 +2077,7 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
             "  attribute {}({arguments}) placement={} {applied}",
             match attribute.syntax {
                 AttributeSyntax::Gnu => &attribute.name,
-                AttributeSyntax::Brackets { .. } => &attribute.written,
+                AttributeSyntax::Brackets { .. } | AttributeSyntax::Pragma => &attribute.written,
             },
             attribute.placement.spelling()
         );
