@@ -71,6 +71,8 @@ def program_case(ident, result):
         outcome = 'INCOMPLETE'
     elif not row.get('valid') or len(row['cases']) != 1:
         outcome = 'INVALID_OUTPUT'
+    elif outcome == 'FAIL':
+        outcome = 'FAIL'
     else:
         outcome = row['cases'][0]['outcome']
         if '# TIMEOUT ' in row['cases'][0].get('name', ''):
@@ -92,6 +94,8 @@ def reusable_reference(previous, current):
     wanted = [ident for b in current['build']['builds'] for ident in b['available']]
     if sorted(c['id'] for c in cases) != sorted(wanted):
         raise ValueError('reference run does not account for every installed program exactly once')
+    if any(c['outcome'] == 'PASS' and c.get('exitCode') != 0 for c in cases):
+        raise ValueError('reference PASS disagrees with its process exit')
     return cases
 
 

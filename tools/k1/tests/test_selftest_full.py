@@ -77,7 +77,8 @@ class FullSelftest(unittest.TestCase):
         current = {'build': {'builds': [{'id': 'mm', 'available': ['mm:a', 'mm:b']}]},
                    'referenceConfigSha256': 'config', 'initramfsSha256': 'init',
                    'rootfsSha256': 'disk', 'runtimePolicy': {'workers': 2}}
-        cases = [{'id': 'mm:a', 'outcome': 'PASS'}, {'id': 'mm:b', 'outcome': 'FAIL'}]
+        cases = [{'id': 'mm:a', 'outcome': 'PASS', 'exitCode': 0},
+                 {'id': 'mm:b', 'outcome': 'FAIL', 'exitCode': 1}]
         previous = {**current, 'status': 'INCOMPLETE', 'kernelImageSha256': 'old-subject',
                     'execution': {'reference': {'collections': [{'id': 'mm', 'cases': cases}]},
                                   'subject': {'collections': []}}}
@@ -93,6 +94,10 @@ class FullSelftest(unittest.TestCase):
             incomplete['execution']['reference']['collections'][0]['cases'] = bad
             with self.assertRaises(ValueError):
                 lane.reusable_reference(incomplete, current)
+        contradictory = copy.deepcopy(previous)
+        contradictory['execution']['reference']['collections'][0]['cases'][0]['exitCode'] = 1
+        with self.assertRaises(ValueError):
+            lane.reusable_reference(contradictory, current)
 
 
 if __name__ == '__main__':
