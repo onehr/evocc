@@ -464,3 +464,46 @@ fn branch_pruning_releases_only_unreferenced_internal_definitions() {
     assert!(output.status.success());
     assert!(!String::from_utf8_lossy(&output.stdout).contains("func @impossible"));
 }
+
+#[test]
+fn integer_flow_widens_at_loops_and_keeps_poison_and_indirect_entries() {
+    for source in [
+        "int f(int n){int x=0,seen=0;while(x<n){++x;if(x==9)++seen;}return x+seen;}int main(void){return f(0)!=0||f(7)!=7||f(20)!=21;}",
+        "int f(int c){int x=2;if(c)x=7;else x=9;return x==7;}int main(void){return f(0)!=0||f(1)!=1;}",
+        "int f(int c){int x=0;goto * (c?&&a:&&b);a:x=3;goto out;b:x=7;out:return x;}int main(void){return f(0)!=7||f(1)!=3;}",
+    ] { assert_constant_program(source); }
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run("int main(void){int x;if(x==0)return 1;return 0;}", mode);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
+    }
+}
+
+#[test]
+fn internal_roots_include_relocations_aliases_assembly_and_used_definitions() {
+    for source in [
+        "static int keep(void){return 1;}int(*p)(void)=keep;int main(void){return p()!=1;}",
+        "static int keep(void){return 1;}int exported(void)__attribute__((alias(\"keep\")));int main(void){return exported()!=1;}",
+        "static __attribute__((used)) int keep(void){return 1;}int main(void){return 0;}",
+        "static int keep(void){return 1;}asm(\".quad keep\");int main(void){return 0;}",
+    ] {
+        let output=run(source,"--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("func @keep"));
+    }
+}
+
+#[test]
+fn private_initialized_union_representation_proves_layout_assertions() {
+    let source="void invalid(void);union lock{unsigned value;struct{unsigned char a,b,c,d;}bytes;};int main(void){union lock u={.bytes={0,0,0,0}};if(u.value!=0)invalid();return 0;}";
+    assert_constant_program(source);
+    let output=run(source,"--emit=evoir");
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    for source in [
+        "union u{int v;char a[4];};int main(void){union u x={0};x.v=3;return x.v!=3;}",
+        "union u{int v;char a[4];};int main(void){union u x={0};int*p=&x.v;*p=3;return x.v!=3;}",
+        "union u{int v;char a[4];};int main(void){union u x={0};char*p=x.a;p[0]=3;return x.v!=3;}",
+        "union u{int v;char a[4];};int main(void){goto later;{union u x={0};later:x.v=3;return x.v!=3;}}",
+    ] {assert_constant_program(source);}
+}
