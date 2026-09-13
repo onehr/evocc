@@ -1,14 +1,19 @@
 {
   "schemaVersion": 1,
-  "run": "20260913T090822Z-incremental",
-  "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
-  "dirty": false,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
+  "run": "20260913T100557.474792Z",
+  "subject": "fe69b20894303bc1dace44c1e244a633f39ea85c",
+  "dirty": true,
+  "driver": null,
   "driverSha256": null,
-  "invocation": "K1_ALLOW_QEMU_DRIFT=1 tools/k1/boot.sh .build/k1/out/arch/arm64/boot/Image .evidence/k1/large-frames-20260913/boot",
-  "execution": "Existing K1 helpers replayed 76 original records, then full relink and boot; normalized by tools/bench.py metrics. Other lanes were not rerun.",
+  "invocation": [
+    "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+    "tools/bench.py",
+    "kernel-selftest",
+    "--allow-qemu-drift"
+  ],
+  "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-full"
+    "kernel-selftest"
   ],
   "status": "PASS",
   "benchmarks": {
@@ -1454,30 +1459,98 @@
     },
     "kernel-selftest": {
       "rung": "K7",
-      "status": "NOT_IMPLEMENTED",
-      "note": "no kselftest adapter yet",
+      "note": "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate",
+      "outcomes": {
+        "PASS": 9
+      },
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 9,
+      "passed": 9,
+      "kind": "programs",
+      "status": "PASS",
+      "subtests": {
+        "PASS": 125
+      },
+      "referenceSubtests": {
+        "PASS": 125
+      },
+      "kernelImageSha256": "1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c",
+      "compilerComposition": [
+        {
+          "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
+          "evidence": ".evidence/k1/20260913T075423Z/units.jsonl",
+          "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
+          "units": 2723
+        },
+        {
+          "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+          "evidence": [
+            ".evidence/k1/spill-slots-20260913/result.json",
+            ".evidence/k1/large-frames-20260913/result.json"
+          ],
+          "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+          "units": 76
+        }
+      ],
+      "run": "20260913T100557Z",
+      "evidence": ".evidence/kselftest/20260913T100557Z",
+      "receipt": "tests/contracts/kernel-selftest-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/k1/selftest.py"
+      ],
+      "exitCode": 0,
+      "seconds": 70.1,
+      "previous": {
+        "rung": "K7",
+        "note": "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate",
+        "outcomes": {
+          "PASS": 9
+        },
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 9,
+        "passed": 9,
+        "kind": "programs",
+        "status": "PASS",
+        "subtests": {
+          "PASS": 124,
+          "SKIP": 1
+        },
+        "referenceSubtests": {
+          "PASS": 124,
+          "SKIP": 1
+        },
+        "kernelImageSha256": "1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c",
+        "compilerComposition": [
+          {
+            "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
+            "evidence": ".evidence/k1/20260913T075423Z/units.jsonl",
+            "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
+            "units": 2723
+          },
+          {
+            "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+            "evidence": [
+              ".evidence/k1/spill-slots-20260913/result.json",
+              ".evidence/k1/large-frames-20260913/result.json"
+            ],
+            "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+            "units": 76
+          }
+        ],
+        "run": "20260913T100247Z",
+        "evidence": ".evidence/kselftest/20260913T100247Z"
+      },
       "measurement": {
-        "run": "20260907T141450.311159Z",
-        "subject": "4e86995bc357615abd0df698c4bf64097a5fa026",
-        "driverSha256": "b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6"
+        "run": "20260913T100557.474792Z",
+        "subject": "fe69b20894303bc1dace44c1e244a633f39ea85c",
+        "driverSha256": null
       }
     }
-  },
-  "compilerComposition": [
-    {
-      "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
-      "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
-      "units": 2723,
-      "evidence": ".evidence/k1/20260913T075423Z/units.jsonl"
-    },
-    {
-      "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
-      "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
-      "units": 76,
-      "evidence": [
-        ".evidence/k1/spill-slots-20260913/result.json",
-        ".evidence/k1/large-frames-20260913/result.json"
-      ]
-    }
-  ]
+  }
 }

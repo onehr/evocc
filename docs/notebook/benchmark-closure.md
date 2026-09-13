@@ -16,7 +16,9 @@ The actual [boot record](../../.evidence/k1/large-frames-20260913/boot/boot.json
 binds Image `1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c`
 to nonce `k1-20260913T090822Z-d77e5b2b` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
-drift remains recorded, not erased. K7 selftests have **not** run.
+drift remains recorded, not erased. K7's separately measured selected subset now
+passes **125/125 subtests in nine programs** on this unchanged Image and the GCC
+reference Image; KUnit and unselected selftests remain **NOT_RUN**.
 
 This is an **incremental all-EvoCC build**, not a fresh all-at-HEAD survey:
 2,723 objects retain the compiler from full run `20260913T075423Z`
@@ -62,7 +64,8 @@ The isolated and small-group measurements below are historical. Their former
 "full combination OPEN" notes were resolved by the complete boot above; they
 are not claims that the older images passed. K-G01 and K-R06 record the final
 composition and runtime repair. The acknowledged QEMU digest drift remains
-in the receipts; K7 and broader compiler correctness remain separate gates.
+in the receipts. The selected K7 subset is measured below; broader compiler
+correctness and unselected runtime tests remain separate gates.
 
 | ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
 |---|---|---|---|
@@ -75,14 +78,67 @@ in the receipts; K7 and broader compiler correctness remain separate gates.
 | K-L05 / tailored and original object replay PASS, full link OPEN | `20260913T024049Z` installed all 2,799 objects, then `ld -r` found duplicate `bpf_arch_text_copy`, `bpf_int_jit_compile`, `arch_alloc_bpf_trampoline`, `execmem_arch_setup`. Each fallback writes `* __weak name`, whose attribute was stranded on a pointer layer instead of reaching symbol linkage. | RED `bec1deb`; move only symbol-only `weak`/`alias` marks into the owning named declaration's inventory, preserving their spelling/position once and leaving pointer layout attributes unchanged. | 73 targeted tests and Clippy/fmt PASS; both oracles O0/O2 and native EvoCC with both oracle overrides plus its own override return zero. Original core.o / trampoline.o / execmem.o emit and assemble in 6.471 / 5.643 / 2.426 seconds. Complete relink and boot remain OPEN. |
 | K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
-| K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `aad1657` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../tests/contracts/kernel-full-receipt.json). K7 NOT_RUN. |
+| K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `aad1657` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../tests/contracts/kernel-full-receipt.json). K7 is a later separate measurement below. |
 | K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
 | K-S02 / tailored GREEN, full link OPEN | `fs/ext4/ioctl.o` retained `__compiletime_assert_753`: `memtostr_pad` needs `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | User authorized proved bounds on September 13; §10.1.14 revision 1.9.94 replaces the explicit always-unknown rule. Parser and consumers share a declaration/layout-backed query, with unknown fallback, unevaluated operands and checked claimed bounds. | Original .o.cmd emission exits zero without assertion calls; native reduced fixture passes with EvoCC and both sealed oracles. 510 focused tests PASS. The kernel assertion and configuration are unchanged; the actual full link/boot remains the next gate. |
 | K-P01 / original release replay PASS | During `20260913T014446Z`, `drivers/hid/hid-input.o` exhausted the 180-second compiler budget. A separate 190-second replay also timed out; CPU samples of it and `mm/memory.c` locate repeated interval scans in linear-scan allocation. | Expire assigned intervals; index merged fixed-register ranges, including future calls/clobbers; binary-search the ordered call positions. No register pool, spill policy, validator or watchdog change. | A 16,384-call RED took 5.31 seconds with just one live ordinary value. All five original commands now emit and assemble; measured times below. The fresh full composition remains required. |
 | K-P02 / original assembly replay PASS | With K-P01 alone, all five timed-out units emit in 8.23–24.40 seconds, but three assemblers are killed at the unchanged 1 GiB container budget. `copy_present_ptes` has 2,164,954 assembly lines and a roughly 2.6 MiB frame: unused cyclic block parameters create artificial liveness and spill traffic. | In out-of-SSA, seed parameter demand from real instruction/control operands and propagate it back through every incoming edge. Omit only undemanded copies; retain original operations, ABI parameters, targets, effects, calls and lifetime actions. | RED: 2,113 copies for a loop with one live value; GREEN: at most 34, zero spills. All five original units assemble with unchanged container resources. Old pressure fixtures now make their checked values observable rather than depending on dead transport. |
 | K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
 | K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
-| K-G02 / K7 | `kernel-selftest` adapter is `NOT_IMPLEMENTED`. | After K6, declare the selected KUnit/kselftest cases/configuration and reuse the boot lane. Report reference failures/unavailable cases separately. | Execute the selected tests in the measured kernel and publish their actual results, not only a boot marker. |
+| K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
+
+### Selected kernel runtime selftests (2026-09-13)
+
+Command: `python3 -u tools/bench.py kernel-selftest --allow-qemu-drift`.
+Run `20260913T100557Z`, adapter commit `fe69b20`,
+[capture](../../.evidence/kselftest/20260913T100557Z/summary.json).
+The [selection contract](../../tests/contracts/kernel-selftest-contract.json)
+names nine unchanged upstream Linux 6.18.44 test programs before execution:
+
+| Program | GCC reference PASS | EvoCC kernel PASS |
+|---|---:|---:|
+| `mincore/mincore_selftest` | 5 | 5 |
+| `filesystems/epoll/epoll_wakeup_test` | 64 | 64 |
+| `pidfd/pidfd_open_test` | 4 | 4 |
+| `pidfd/pidfd_wait` | 3 | 3 |
+| `pidfd/pidfd_getfd_test` | 5 | 5 |
+| `membarrier/membarrier_test_single_thread` | 18 | 18 |
+| `membarrier/membarrier_test_multi_thread` | 16 | 16 |
+| `signal/mangle_uc_sigmask` | 7 | 7 |
+| `signal/sas` | 3 | 3 |
+| **Total subtests** | **125/125** | **125/125** |
+
+Both have **0 FAIL, 0 SKIP, 0 TIMEOUT** and normal powerdown. The original K6
+Image is unchanged (`1fd6e5aa…`); the reference Image is `b6f206de…`.
+`shasum -a 256 .build/k1/out/.config .build/reference/gcc-lane-1/.config`
+confirms the same configuration digest:
+`4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d`.
+The shared initramfs is `075ae7ab…`; full Image, payload and serial-log digests,
+actual QEMU commands, nonces, exit codes and every TAP case are in the receipt.
+
+The userspace programs are statically built with sealed GCC-14 and run unchanged
+on both kernels: this isolates the kernel under test, not userspace compiler
+coverage. Each flight gets a fresh snapshot of the same 64 MiB ext4 scratch disk,
+tmpfs mounts and one reserved 2 MiB hugepage. The initial environment left one
+mincore subtest skipped; reserving that page on both kernels permits all 125 to
+execute, without dropping a test or changing either kernel's configuration.
+Console loglevel 5 retains warnings/errors without informational printk splitting
+TAP lines. A truncated, failed or missing test cannot pass on exit status alone.
+Each program has a 120-second watchdog; the explicit selftest workload budget is
+1,140 seconds per flight, distinct from the unchanged K6 boot-only budget.
+
+Checks: `python3 -m unittest discover -s tools/k1/tests -p 'test_*.py'`
+**116/116 PASS**; `python3 -m unittest discover -s tools/ladder/tests -p test_bench.py`
+**20/20 PASS**; Ruff on changed Python files, `/bin/bash -n tools/k1/lib.sh`,
+`tools/gate-changed.sh eb1b930` and `git diff --check` **PASS**. No Rust crate
+changed. No full workspace rebuild, clone or repeated full kernel survey was
+needed. `du -sh .build/kselftest` measures approximately **109 MiB**, reused by
+subsequent runs rather than copied per flight.
+
+This closes **only the selected K7 subset**. KUnit is disabled in the frozen
+configuration and was not run; other kselftests, other configurations and broader
+compiler correctness are not implied by these results. The K6 receipt retains
+its historical K7 NOT_RUN state at the time of the earlier boot measurement.
 
 ### Execution order and update rules
 
@@ -1077,7 +1133,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 18 | Unavailable Csmith references | Fresh `20260909T193124Z`, subject `691b654`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; every identity, runtime checksum/verdict, generator option and runtime digest unchanged | `csmith` | OPEN: four repeating source paths identified, 64 undetermined; every unavailable identity is listed in the applicability notebook, and none is a PASS |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
-| 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua, SQLite, full-kernel and kselftest: eight NOT_IMPLEMENTED entries; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
+| 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua and SQLite: six NOT_IMPLEMENTED entries. Full-kernel and selected kselftest adapters now run; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
 
 ## Progress
 

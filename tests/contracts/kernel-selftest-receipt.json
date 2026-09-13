@@ -1,0 +1,1848 @@
+{
+  "schemaVersion": 1,
+  "run": "20260913T100557Z",
+  "status": "PASS",
+  "scope": "Selected upstream kselftests on the unchanged complete EvoCC kernel and the frozen GCC reference kernel; not all kselftests or KUnit",
+  "contractSha256": "3532e08e095527ac8ca62f2630d080634deecdb1ccded8c2556c97d198165cab",
+  "kernelReceiptSha256": "26b0a258a9d9e5390db15ba25b426c48c02650628253366776dcbd102700f7f5",
+  "kernelImageSha256": "1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c",
+  "compilerComposition": [
+    {
+      "driverSha256": "6db821e05168be36028247bbedfcafacfabd8364126615928fe4b3ad63cf483a",
+      "evidence": ".evidence/k1/20260913T075423Z/units.jsonl",
+      "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
+      "units": 2723
+    },
+    {
+      "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+      "evidence": [
+        ".evidence/k1/spill-slots-20260913/result.json",
+        ".evidence/k1/large-frames-20260913/result.json"
+      ],
+      "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+      "units": 76
+    }
+  ],
+  "programs": 9,
+  "evidence": ".evidence/kselftest/20260913T100557Z",
+  "kunit": "NOT_RUN: CONFIG_KUNIT is disabled in the frozen configuration",
+  "payload": {
+    "compiler": "gcc-14",
+    "image": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "commands": [
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src",
+        "O=/work/selftest/headers-build",
+        "ARCH=arm64",
+        "HOSTCC=gcc-14",
+        "headers_install",
+        "INSTALL_HDR_PATH=/work/selftest/headers"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/mincore",
+        "OUTPUT=/work/selftest/build/mincore",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/mincore/mincore_selftest"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/mincore/mincore_selftest",
+        "/work/selftest/root/mincore.mincore_selftest"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/filesystems/epoll",
+        "OUTPUT=/work/selftest/build/filesystems/epoll",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/filesystems/epoll/epoll_wakeup_test"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/filesystems/epoll/epoll_wakeup_test",
+        "/work/selftest/root/filesystems.epoll.epoll_wakeup_test"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/pidfd",
+        "OUTPUT=/work/selftest/build/pidfd",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/pidfd/pidfd_open_test"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/pidfd/pidfd_open_test",
+        "/work/selftest/root/pidfd.pidfd_open_test"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/pidfd",
+        "OUTPUT=/work/selftest/build/pidfd",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/pidfd/pidfd_wait"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/pidfd/pidfd_wait",
+        "/work/selftest/root/pidfd.pidfd_wait"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/pidfd",
+        "OUTPUT=/work/selftest/build/pidfd",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/pidfd/pidfd_getfd_test"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/pidfd/pidfd_getfd_test",
+        "/work/selftest/root/pidfd.pidfd_getfd_test"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/membarrier",
+        "OUTPUT=/work/selftest/build/membarrier",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/membarrier/membarrier_test_single_thread"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/membarrier/membarrier_test_single_thread",
+        "/work/selftest/root/membarrier.membarrier_test_single_thread"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/membarrier",
+        "OUTPUT=/work/selftest/build/membarrier",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/membarrier/membarrier_test_multi_thread"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/membarrier/membarrier_test_multi_thread",
+        "/work/selftest/root/membarrier.membarrier_test_multi_thread"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/signal",
+        "OUTPUT=/work/selftest/build/signal",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/signal/mangle_uc_sigmask"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/signal/mangle_uc_sigmask",
+        "/work/selftest/root/signal.mangle_uc_sigmask"
+      ],
+      [
+        "make",
+        "-s",
+        "-C",
+        "/work/src/tools/testing/selftests/signal",
+        "OUTPUT=/work/selftest/build/signal",
+        "ARCH=arm64",
+        "CC=gcc-14",
+        "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+        "LDFLAGS=-static",
+        "/work/selftest/build/signal/sas"
+      ],
+      [
+        "cp",
+        "/work/selftest/build/signal/sas",
+        "/work/selftest/root/signal.sas"
+      ],
+      [
+        "gcc-14",
+        "-static",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/work/harness/selftest-init.c",
+        "-o",
+        "/work/selftest/root/init"
+      ]
+    ],
+    "initSourceSha256": "c0465a7281afb2af4cfe4511f6185264a1448900b086cc9e6b00db689ecb4612",
+    "filesystemCommand": [
+      "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs",
+      "-q",
+      "-F",
+      "-t",
+      "ext4",
+      "-b",
+      "1024",
+      "-E",
+      "lazy_itable_init=0,lazy_journal_init=0",
+      "/Users/onehrxn/dev/30days/c30/.build/kselftest/scratch.img",
+      "65536"
+    ],
+    "filesystemToolSha256": "099fbe0688569037d9ee5dcf19273b9bbae4fbab6a7841e5a1196fe88ed6542c",
+    "initramfsSha256": "075ae7ab92b2fb6a1cd9b61cc90868aa8cf74636e5ecef72c1630cb8f99605f6",
+    "scratchSha256": "f5551babb9aba0d066397c7f8b6099212d286980eb65984dbc5ccba9e6d03c53",
+    "programs": [
+      {
+        "id": "mincore.mincore_selftest",
+        "source": "tools/testing/selftests/mincore/mincore_selftest.c",
+        "sourceSha256": "b63cc6fd710d429398e3103172ac7a250e7b3299629953f735303799e9c4d9cd",
+        "binarySha256": "c06d1c9cbe52085cdcd96a6d623740a43adc666062da76e4b32ffa23736bd2a7"
+      },
+      {
+        "id": "filesystems.epoll.epoll_wakeup_test",
+        "source": "tools/testing/selftests/filesystems/epoll/epoll_wakeup_test.c",
+        "sourceSha256": "ee8ddf665040810bfa29850fef65e248a2db98eaf5dab58f24a00f04cf634ae1",
+        "binarySha256": "59b9ecf5e578d27462608c41d00f4ad62b71fb45e7eff663987b9fc9b5e7fffb"
+      },
+      {
+        "id": "pidfd.pidfd_open_test",
+        "source": "tools/testing/selftests/pidfd/pidfd_open_test.c",
+        "sourceSha256": "f071a99f2a44f2a2189d08e63ffb308d4728dfe69595145dd9a4b66afa72e50a",
+        "binarySha256": "ffc5a797b0cd086faec42d9371ff449cc488ea0f17674e136949a26efbca6b32"
+      },
+      {
+        "id": "pidfd.pidfd_wait",
+        "source": "tools/testing/selftests/pidfd/pidfd_wait.c",
+        "sourceSha256": "a15d66cef506a743c3270db93f0c6adcd3da8c1c43e0f890e6445dedd6f4299c",
+        "binarySha256": "aabb8d888000b2e1888c51a34a47e631ab5eaf5b34e1781895c227ffbb6a4e51"
+      },
+      {
+        "id": "pidfd.pidfd_getfd_test",
+        "source": "tools/testing/selftests/pidfd/pidfd_getfd_test.c",
+        "sourceSha256": "a2cb3a5578fc24cb9c9b8a121c538822ea7cd171166eee8e5c81a3c9d031a3a0",
+        "binarySha256": "71d40d905626d8ca8614ce14e4536bd912f037d2662a41d144d3ef96234a7769"
+      },
+      {
+        "id": "membarrier.membarrier_test_single_thread",
+        "source": "tools/testing/selftests/membarrier/membarrier_test_single_thread.c",
+        "sourceSha256": "fd7b5782e67ea1f61785f5f8f72b0f5c1c1774aa0ff7a4f41bed921b144f2262",
+        "binarySha256": "95c6e4eb2f077784e7ff5eca8f36d73beca2eeafe7061a9d84158c29bd489e80"
+      },
+      {
+        "id": "membarrier.membarrier_test_multi_thread",
+        "source": "tools/testing/selftests/membarrier/membarrier_test_multi_thread.c",
+        "sourceSha256": "3203e5154e1e6042beb0566e73b003222247e779178db250dc08470957d85706",
+        "binarySha256": "7d28fc2a932b2713428236e2ae394ceef75bab8b4d8ce39a6166000c81a411e7"
+      },
+      {
+        "id": "signal.mangle_uc_sigmask",
+        "source": "tools/testing/selftests/signal/mangle_uc_sigmask.c",
+        "sourceSha256": "28bd2cf516debd685cf162e815758d9049afd90819d3a0362b1aad4aa734c529",
+        "binarySha256": "259e47e274ddc46613b6cf815cad6966039e6e5c7286256f3a4937367bf61c4e"
+      },
+      {
+        "id": "signal.sas",
+        "source": "tools/testing/selftests/signal/sas.c",
+        "sourceSha256": "d7410af89674253964c21387f90f243fa5b4c9d712fec87f6bbb6f2dea130d25",
+        "binarySha256": "4e8d5a1e75d9757b7bc618a457dac0f591dccc8d3e325b346733e405afc23ea0"
+      }
+    ]
+  },
+  "reference": {
+    "boot": {
+      "verdict": "PASS",
+      "image": "/Users/onehrxn/dev/30days/c30/.build/reference/gcc-lane-1/arch/arm64/boot/Image",
+      "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+      "nonce": "k1-20260913T100600Z-511a4330",
+      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T100557Z/reference/boot.log",
+      "serialLogSha256": "45296e3803b377ad593aaed1ae5ad396d5281444019110dfb6c39821eb4d1b70",
+      "timeoutSeconds": 1140,
+      "qemu": {
+        "path": "/opt/homebrew/bin/qemu-system-aarch64",
+        "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e",
+        "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+        "matchesContract": false
+      },
+      "flownAt": "2026-09-13T10:06:34Z"
+    },
+    "exitCode": 0,
+    "programs": [
+      {
+        "id": "mincore.mincore_selftest",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.basic_interface",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.check_anonymous_locked_pages",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.check_huge_pages",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "global.check_file_mmap",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "global.check_tmpfs_mmap",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 5,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "filesystems.epoll.epoll_wakeup_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 64,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.epoll1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.epoll2",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.epoll3",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "global.epoll4",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "global.epoll5",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "global.epoll6",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "global.epoll7",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "global.epoll8",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "global.epoll9",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "global.epoll10",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "global.epoll11",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "global.epoll12",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "global.epoll13",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "global.epoll14",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "global.epoll15",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "global.epoll16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 17,
+            "name": "global.epoll17",
+            "outcome": "PASS"
+          },
+          {
+            "number": 18,
+            "name": "global.epoll18",
+            "outcome": "PASS"
+          },
+          {
+            "number": 19,
+            "name": "global.epoll19",
+            "outcome": "PASS"
+          },
+          {
+            "number": 20,
+            "name": "global.epoll20",
+            "outcome": "PASS"
+          },
+          {
+            "number": 21,
+            "name": "global.epoll21",
+            "outcome": "PASS"
+          },
+          {
+            "number": 22,
+            "name": "global.epoll22",
+            "outcome": "PASS"
+          },
+          {
+            "number": 23,
+            "name": "global.epoll23",
+            "outcome": "PASS"
+          },
+          {
+            "number": 24,
+            "name": "global.epoll24",
+            "outcome": "PASS"
+          },
+          {
+            "number": 25,
+            "name": "global.epoll25",
+            "outcome": "PASS"
+          },
+          {
+            "number": 26,
+            "name": "global.epoll26",
+            "outcome": "PASS"
+          },
+          {
+            "number": 27,
+            "name": "global.epoll27",
+            "outcome": "PASS"
+          },
+          {
+            "number": 28,
+            "name": "global.epoll28",
+            "outcome": "PASS"
+          },
+          {
+            "number": 29,
+            "name": "global.epoll29",
+            "outcome": "PASS"
+          },
+          {
+            "number": 30,
+            "name": "global.epoll30",
+            "outcome": "PASS"
+          },
+          {
+            "number": 31,
+            "name": "global.epoll31",
+            "outcome": "PASS"
+          },
+          {
+            "number": 32,
+            "name": "global.epoll32",
+            "outcome": "PASS"
+          },
+          {
+            "number": 33,
+            "name": "global.epoll33",
+            "outcome": "PASS"
+          },
+          {
+            "number": 34,
+            "name": "global.epoll34",
+            "outcome": "PASS"
+          },
+          {
+            "number": 35,
+            "name": "global.epoll35",
+            "outcome": "PASS"
+          },
+          {
+            "number": 36,
+            "name": "global.epoll36",
+            "outcome": "PASS"
+          },
+          {
+            "number": 37,
+            "name": "global.epoll37",
+            "outcome": "PASS"
+          },
+          {
+            "number": 38,
+            "name": "global.epoll38",
+            "outcome": "PASS"
+          },
+          {
+            "number": 39,
+            "name": "global.epoll39",
+            "outcome": "PASS"
+          },
+          {
+            "number": 40,
+            "name": "global.epoll40",
+            "outcome": "PASS"
+          },
+          {
+            "number": 41,
+            "name": "global.epoll41",
+            "outcome": "PASS"
+          },
+          {
+            "number": 42,
+            "name": "global.epoll42",
+            "outcome": "PASS"
+          },
+          {
+            "number": 43,
+            "name": "global.epoll43",
+            "outcome": "PASS"
+          },
+          {
+            "number": 44,
+            "name": "global.epoll44",
+            "outcome": "PASS"
+          },
+          {
+            "number": 45,
+            "name": "global.epoll45",
+            "outcome": "PASS"
+          },
+          {
+            "number": 46,
+            "name": "global.epoll46",
+            "outcome": "PASS"
+          },
+          {
+            "number": 47,
+            "name": "global.epoll47",
+            "outcome": "PASS"
+          },
+          {
+            "number": 48,
+            "name": "global.epoll48",
+            "outcome": "PASS"
+          },
+          {
+            "number": 49,
+            "name": "global.epoll49",
+            "outcome": "PASS"
+          },
+          {
+            "number": 50,
+            "name": "global.epoll50",
+            "outcome": "PASS"
+          },
+          {
+            "number": 51,
+            "name": "global.epoll51",
+            "outcome": "PASS"
+          },
+          {
+            "number": 52,
+            "name": "global.epoll52",
+            "outcome": "PASS"
+          },
+          {
+            "number": 53,
+            "name": "global.epoll53",
+            "outcome": "PASS"
+          },
+          {
+            "number": 54,
+            "name": "global.epoll54",
+            "outcome": "PASS"
+          },
+          {
+            "number": 55,
+            "name": "global.epoll55",
+            "outcome": "PASS"
+          },
+          {
+            "number": 56,
+            "name": "global.epoll56",
+            "outcome": "PASS"
+          },
+          {
+            "number": 57,
+            "name": "global.epoll57",
+            "outcome": "PASS"
+          },
+          {
+            "number": 58,
+            "name": "global.epoll58",
+            "outcome": "PASS"
+          },
+          {
+            "number": 59,
+            "name": "global.epoll59",
+            "outcome": "PASS"
+          },
+          {
+            "number": 60,
+            "name": "global.epoll60",
+            "outcome": "PASS"
+          },
+          {
+            "number": 61,
+            "name": "global.epoll61",
+            "outcome": "PASS"
+          },
+          {
+            "number": 62,
+            "name": "global.epoll62",
+            "outcome": "PASS"
+          },
+          {
+            "number": 63,
+            "name": "global.epoll63",
+            "outcome": "PASS"
+          },
+          {
+            "number": 64,
+            "name": "global.epoll64",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 64,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_open_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 4,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "do not allow invalid pid test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "do not allow invalid flag test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "open a new pidfd test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "get info from pidfd test: passed",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 4,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_wait",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.wait_simple",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.wait_states",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.wait_nonblock",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 3,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_getfd_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.flags_set",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "child.no_strange_EBADF",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "child.test_unknown_fd",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "child.fetch_fd",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "child.disable_ptrace",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 5,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "membarrier.membarrier_test_single_thread",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 18,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 0, registrations = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sys_membarrier available",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sys membarrier invalid command test: command = -1, flags = 0, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "sys membarrier MEMBARRIER_CMD_QUERY invalid flags test: flags = 1, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 16, registrations = 16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 80, registrations = 80",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          },
+          {
+            "number": 17,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 18,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 18,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "membarrier.membarrier_test_multi_thread",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 16,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "sys_membarrier available",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sys membarrier invalid command test: command = -1, flags = 0, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sys membarrier MEMBARRIER_CMD_QUERY invalid flags test: flags = 1, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 16, registrations = 16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 80, registrations = 80",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 16,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "signal.mangle_uc_sigmask",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 7,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "USR1 is blocked, cannot invoke handler right now",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "SEGV not blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "USR1 not blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "SEGV delivered",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "handler invoked only twice",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "USR2 blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "USR2 present in &current->blocked",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 7,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "signal.sas",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "Initial sigaltstack state was SS_DISABLE",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sigaltstack is disabled in sighandler",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sigaltstack is still SS_AUTODISARM after signal",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 3,
+        "valid": true,
+        "exitCode": 0
+      }
+    ],
+    "consoleLoglevel": 5,
+    "hugePages": 1,
+    "outcomes": {
+      "PASS": 9
+    },
+    "subtests": {
+      "PASS": 125
+    }
+  },
+  "subject": {
+    "boot": {
+      "verdict": "PASS",
+      "image": "/Users/onehrxn/dev/30days/c30/.build/k1/out/arch/arm64/boot/Image",
+      "imageSha256": "1fd6e5aad16c9197ef297661f031eb12b82f5ca8d64f19e6fe4c2319d921304c",
+      "nonce": "k1-20260913T100635Z-de05f839",
+      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T100557Z/subject/boot.log",
+      "serialLogSha256": "3b449c3d86e85737ff0258204b3dd7496eca3adc808583ed3c510cee08edd6fa",
+      "timeoutSeconds": 1140,
+      "qemu": {
+        "path": "/opt/homebrew/bin/qemu-system-aarch64",
+        "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e",
+        "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+        "matchesContract": false
+      },
+      "flownAt": "2026-09-13T10:07:07Z"
+    },
+    "exitCode": 0,
+    "programs": [
+      {
+        "id": "mincore.mincore_selftest",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.basic_interface",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.check_anonymous_locked_pages",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.check_huge_pages",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "global.check_file_mmap",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "global.check_tmpfs_mmap",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 5,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "filesystems.epoll.epoll_wakeup_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 64,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.epoll1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.epoll2",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.epoll3",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "global.epoll4",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "global.epoll5",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "global.epoll6",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "global.epoll7",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "global.epoll8",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "global.epoll9",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "global.epoll10",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "global.epoll11",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "global.epoll12",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "global.epoll13",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "global.epoll14",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "global.epoll15",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "global.epoll16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 17,
+            "name": "global.epoll17",
+            "outcome": "PASS"
+          },
+          {
+            "number": 18,
+            "name": "global.epoll18",
+            "outcome": "PASS"
+          },
+          {
+            "number": 19,
+            "name": "global.epoll19",
+            "outcome": "PASS"
+          },
+          {
+            "number": 20,
+            "name": "global.epoll20",
+            "outcome": "PASS"
+          },
+          {
+            "number": 21,
+            "name": "global.epoll21",
+            "outcome": "PASS"
+          },
+          {
+            "number": 22,
+            "name": "global.epoll22",
+            "outcome": "PASS"
+          },
+          {
+            "number": 23,
+            "name": "global.epoll23",
+            "outcome": "PASS"
+          },
+          {
+            "number": 24,
+            "name": "global.epoll24",
+            "outcome": "PASS"
+          },
+          {
+            "number": 25,
+            "name": "global.epoll25",
+            "outcome": "PASS"
+          },
+          {
+            "number": 26,
+            "name": "global.epoll26",
+            "outcome": "PASS"
+          },
+          {
+            "number": 27,
+            "name": "global.epoll27",
+            "outcome": "PASS"
+          },
+          {
+            "number": 28,
+            "name": "global.epoll28",
+            "outcome": "PASS"
+          },
+          {
+            "number": 29,
+            "name": "global.epoll29",
+            "outcome": "PASS"
+          },
+          {
+            "number": 30,
+            "name": "global.epoll30",
+            "outcome": "PASS"
+          },
+          {
+            "number": 31,
+            "name": "global.epoll31",
+            "outcome": "PASS"
+          },
+          {
+            "number": 32,
+            "name": "global.epoll32",
+            "outcome": "PASS"
+          },
+          {
+            "number": 33,
+            "name": "global.epoll33",
+            "outcome": "PASS"
+          },
+          {
+            "number": 34,
+            "name": "global.epoll34",
+            "outcome": "PASS"
+          },
+          {
+            "number": 35,
+            "name": "global.epoll35",
+            "outcome": "PASS"
+          },
+          {
+            "number": 36,
+            "name": "global.epoll36",
+            "outcome": "PASS"
+          },
+          {
+            "number": 37,
+            "name": "global.epoll37",
+            "outcome": "PASS"
+          },
+          {
+            "number": 38,
+            "name": "global.epoll38",
+            "outcome": "PASS"
+          },
+          {
+            "number": 39,
+            "name": "global.epoll39",
+            "outcome": "PASS"
+          },
+          {
+            "number": 40,
+            "name": "global.epoll40",
+            "outcome": "PASS"
+          },
+          {
+            "number": 41,
+            "name": "global.epoll41",
+            "outcome": "PASS"
+          },
+          {
+            "number": 42,
+            "name": "global.epoll42",
+            "outcome": "PASS"
+          },
+          {
+            "number": 43,
+            "name": "global.epoll43",
+            "outcome": "PASS"
+          },
+          {
+            "number": 44,
+            "name": "global.epoll44",
+            "outcome": "PASS"
+          },
+          {
+            "number": 45,
+            "name": "global.epoll45",
+            "outcome": "PASS"
+          },
+          {
+            "number": 46,
+            "name": "global.epoll46",
+            "outcome": "PASS"
+          },
+          {
+            "number": 47,
+            "name": "global.epoll47",
+            "outcome": "PASS"
+          },
+          {
+            "number": 48,
+            "name": "global.epoll48",
+            "outcome": "PASS"
+          },
+          {
+            "number": 49,
+            "name": "global.epoll49",
+            "outcome": "PASS"
+          },
+          {
+            "number": 50,
+            "name": "global.epoll50",
+            "outcome": "PASS"
+          },
+          {
+            "number": 51,
+            "name": "global.epoll51",
+            "outcome": "PASS"
+          },
+          {
+            "number": 52,
+            "name": "global.epoll52",
+            "outcome": "PASS"
+          },
+          {
+            "number": 53,
+            "name": "global.epoll53",
+            "outcome": "PASS"
+          },
+          {
+            "number": 54,
+            "name": "global.epoll54",
+            "outcome": "PASS"
+          },
+          {
+            "number": 55,
+            "name": "global.epoll55",
+            "outcome": "PASS"
+          },
+          {
+            "number": 56,
+            "name": "global.epoll56",
+            "outcome": "PASS"
+          },
+          {
+            "number": 57,
+            "name": "global.epoll57",
+            "outcome": "PASS"
+          },
+          {
+            "number": 58,
+            "name": "global.epoll58",
+            "outcome": "PASS"
+          },
+          {
+            "number": 59,
+            "name": "global.epoll59",
+            "outcome": "PASS"
+          },
+          {
+            "number": 60,
+            "name": "global.epoll60",
+            "outcome": "PASS"
+          },
+          {
+            "number": 61,
+            "name": "global.epoll61",
+            "outcome": "PASS"
+          },
+          {
+            "number": 62,
+            "name": "global.epoll62",
+            "outcome": "PASS"
+          },
+          {
+            "number": 63,
+            "name": "global.epoll63",
+            "outcome": "PASS"
+          },
+          {
+            "number": 64,
+            "name": "global.epoll64",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 64,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_open_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 4,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "do not allow invalid pid test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "do not allow invalid flag test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "open a new pidfd test: passed",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "get info from pidfd test: passed",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 4,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_wait",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.wait_simple",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "global.wait_states",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "global.wait_nonblock",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 3,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "pidfd.pidfd_getfd_test",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "global.flags_set",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "child.no_strange_EBADF",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "child.test_unknown_fd",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "child.fetch_fd",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "child.disable_ptrace",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 5,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "membarrier.membarrier_test_single_thread",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 18,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 0, registrations = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sys_membarrier available",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sys membarrier invalid command test: command = -1, flags = 0, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "sys membarrier MEMBARRIER_CMD_QUERY invalid flags test: flags = 1, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 16, registrations = 16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 80, registrations = 80",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          },
+          {
+            "number": 17,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 18,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 18,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "membarrier.membarrier_test_multi_thread",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 16,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "sys_membarrier available",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sys membarrier invalid command test: command = -1, flags = 0, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sys membarrier MEMBARRIER_CMD_QUERY invalid flags test: flags = 1, errno = 22. Failed as expected",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE not registered failure test: flags = 0, errno = 1",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 8,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 16, registrations = 16",
+            "outcome": "PASS"
+          },
+          {
+            "number": 9,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 10,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 11,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 80, registrations = 80",
+            "outcome": "PASS"
+          },
+          {
+            "number": 12,
+            "name": "sys membarrier MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 13,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 14,
+            "name": "sys membarrier MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          },
+          {
+            "number": 15,
+            "name": "sys membarrier MEMBARRIER_CMD_GET_REGISTRATIONS test: flags = 0, ret = 84, registrations = 84",
+            "outcome": "PASS"
+          },
+          {
+            "number": 16,
+            "name": "sys membarrier MEMBARRIER_CMD_GLOBAL_EXPEDITED test: flags = 0",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 16,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "signal.mangle_uc_sigmask",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 7,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "USR1 is blocked, cannot invoke handler right now",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "SEGV not blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "USR1 not blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 4,
+            "name": "SEGV delivered",
+            "outcome": "PASS"
+          },
+          {
+            "number": 5,
+            "name": "handler invoked only twice",
+            "outcome": "PASS"
+          },
+          {
+            "number": 6,
+            "name": "USR2 blocked in ucontext",
+            "outcome": "PASS"
+          },
+          {
+            "number": 7,
+            "name": "USR2 present in &current->blocked",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 7,
+        "valid": true,
+        "exitCode": 0
+      },
+      {
+        "id": "signal.sas",
+        "outcome": "PASS",
+        "subtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "cases": [
+          {
+            "number": 1,
+            "name": "Initial sigaltstack state was SS_DISABLE",
+            "outcome": "PASS"
+          },
+          {
+            "number": 2,
+            "name": "sigaltstack is disabled in sighandler",
+            "outcome": "PASS"
+          },
+          {
+            "number": 3,
+            "name": "sigaltstack is still SS_AUTODISARM after signal",
+            "outcome": "PASS"
+          }
+        ],
+        "planned": 3,
+        "valid": true,
+        "exitCode": 0
+      }
+    ],
+    "consoleLoglevel": 5,
+    "hugePages": 1,
+    "outcomes": {
+      "PASS": 9
+    },
+    "subtests": {
+      "PASS": 125
+    }
+  },
+  "regressions": [],
+  "baselineFailures": [],
+  "outcomes": {
+    "PASS": 9
+  }
+}

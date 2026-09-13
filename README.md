@@ -21,7 +21,10 @@ the complete Linux 6.18.44 configuration linked and booted to init with all
 **2,799 target-C objects from EvoCC**, then shut down normally. This incremental
 build combines two recorded EvoCC revisions, with no GCC target-C fallback;
 the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds the exact Image
-and nonce. K7 runtime selftests have not run, and broader native coverage remains
+and nonce. K7's selected upstream kselftests now pass **125/125 subtests in nine
+programs**, on both that unchanged Image and the GCC reference kernel, with no
+failures, skips or timeouts ([receipt](tests/contracts/kernel-selftest-receipt.json)).
+KUnit and unselected selftests have not run; broader native coverage remains
 partial. Current figures are in [docs/status.md](docs/status.md), with remaining
 constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
 The illustration above is not a live counter. The evaluation ladder and pinned
@@ -35,6 +38,7 @@ subjects are in [docs/roadmap.md](docs/roadmap.md).
 python3 tools/bench.py --list
 python3 tools/bench.py csmith cjson
 python3 tools/bench.py torture zlib toybox --jobs 4
+python3 tools/bench.py kernel-selftest --allow-qemu-drift
 python3 tools/bench.py all --programs 500 --jobs 4 --budget 20 --allow-qemu-drift
 ```
 
@@ -44,6 +48,9 @@ It is a long native evaluation, not a unit-test shortcut. Csmith's default is
 bisection probes, not corpus size. `--allow-qemu-drift` explicitly acknowledges
 the installed QEMU digest for the kernel lane. `--dry-run` prints commands;
 `--evocc PATH` measures an existing compiler without rebuilding it.
+`kernel-selftest` alone reuses the measured K6 and reference Images without
+rebuilding the compiler or kernel; it builds one shared reference-compiled
+userspace test payload and checks actual test results on both kernels.
 
 The script streams lane output, keeps only a small summary under `.evidence/bench/`,
 updates `tests/contracts/bench-receipt.json`, and renders `docs/status.md`.

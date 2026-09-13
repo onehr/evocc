@@ -2015,7 +2015,7 @@ Rules that hold for every rung:
 | E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
 | K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
 | K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): incremental composition of 2,723 prior + 76 repaired EvoCC objects; zero reference target-C fallback, not a fresh single-compiler survey |
-| K7 | K6 plus kselftest in the initramfs | 6.18.44 | | kselftest pass rate | runtime correctness beyond boot |
+| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T100557Z`; KUnit and unselected selftests NOT_RUN |
 
 The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-13)
 separates compile refusals, link/relocation failures, runtime failures, build
@@ -2023,8 +2023,11 @@ provenance and the K6/K7 measurement gaps. Its statuses are distinct from the
 receipt-backed counts in `docs/status.md`: assembled units and locally verified
 fixes do not close a boot milestone. The first complete all-EvoCC boot is
 `20260913T090822Z-incremental`; its receipt retains both compiler revisions and
-the authorized QEMU digest drift. Historical failures remain dated. K7 runtime
-selftests have not run and are not implied by the K6 boot.
+the authorized QEMU digest drift. Historical failures remain dated. K7's separate
+run `20260913T100557Z` executes the [declared nine-program subset](../tests/contracts/kernel-selftest-contract.json)
+with the same reference-built userspace payload on both kernels. All 125 subtests
+pass on each; this is runtime evidence beyond boot, not coverage of all kselftests
+or KUnit. Reproduce with `python3 tools/bench.py kernel-selftest --allow-qemu-drift`.
 
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
