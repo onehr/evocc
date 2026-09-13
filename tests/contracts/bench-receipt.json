@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "run": "20260912T191806.546521Z",
-  "subject": "b358bf12cacf8d36af493ef130e58c39de5c0f47",
-  "dirty": true,
+  "run": "20260913T014446.688767Z",
+  "subject": "f0c670e7d33cb93cb8da4c09122b1b05c900b8e6",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/tailored/release/evocc",
-  "driverSha256": "09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df",
+  "driverSha256": "683a260d99085f95bcaf6de7e11dd7a8bf8cf64aca663fb7798894ba607039f2",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
@@ -1413,46 +1413,43 @@
       "rung": "K6",
       "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
       "outcomes": {
-        "assembled": 2757,
-        "refused": 42
+        "assembled": 2794,
+        "timeout": 5
       },
-      "refusals": {
-        "E3026": 1,
-        "E3101": 41
-      },
+      "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 2799,
       "passed": 0,
-      "compiled": 2757,
+      "compiled": 2794,
       "kind": "units",
       "status": "ERROR",
       "testVerdict": "NOT_RUN",
-      "evidence": ".evidence/k1/20260912T191806Z",
+      "evidence": ".evidence/k1/20260913T014446Z",
       "run": null,
       "receipt": "tests/contracts/kernel-full-receipt.json",
       "error": "runner exit 1",
       "errorTail": [
-        "    \"E3026\": 1,",
-        "    \"E3101\": 41",
         "  },",
+        "  \"refusalsByFirstCode\": {},",
+        "  \"refusalCodeCounts\": {},",
         "  \"relinkExitCode\": null,",
         "  \"preparation\": null,",
         "  \"installed\": false,",
         "  \"allowSymbolDrift\": true,",
         "  \"imageSha256\": \"af053a63dea8301e1629da2a2c7b6694c4b83010debbe78e91921fd4c4f425ba\",",
         "  \"vmlinuxSha256\": \"b852aa79a89c5d702f2290f8d4e3c703f8257a102d505fc934fa3b078feecb6a\",",
-        "  \"unitsSha256\": \"ff67d8d1d6aed20dce2e8bfd7711582c6b5ec6f011d62347e528391e27412538\",",
+        "  \"unitsSha256\": \"656a55d0ae9e0747a5cb3d50bd5891f54d8e2ab60788ef8a2cac899756a4a6d8\",",
         "  \"mode\": \"full-kernel\",",
         "  \"completeComposition\": false,",
         "  \"boot\": {",
         "    \"verdict\": \"NOT_RUN\"",
         "  },",
-        "  \"driverSha256\": \"09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df\",",
+        "  \"driverSha256\": \"683a260d99085f95bcaf6de7e11dd7a8bf8cf64aca663fb7798894ba607039f2\",",
         "  \"status\": \"INCOMPLETE\",",
-        "  \"evidence\": \".evidence/k1/20260912T191806Z\"",
+        "  \"evidence\": \".evidence/k1/20260913T014446Z\"",
         "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/20260912T191806Z"
+        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/20260913T014446Z"
       ],
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
@@ -1466,12 +1463,33 @@
         "8"
       ],
       "exitCode": 1,
-      "seconds": 1081.2,
-      "previous": null,
+      "seconds": 1850.4,
+      "previous": {
+        "rung": "K6",
+        "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
+        "outcomes": {
+          "assembled": 2757,
+          "refused": 42
+        },
+        "refusals": {
+          "E3026": 1,
+          "E3101": 41
+        },
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 2799,
+        "passed": 0,
+        "compiled": 2757,
+        "kind": "units",
+        "status": "INCOMPLETE",
+        "testVerdict": "NOT_RUN",
+        "evidence": ".evidence/k1/20260912T191806Z",
+        "run": null
+      },
       "measurement": {
-        "run": "20260912T191806.546521Z",
-        "subject": "b358bf12cacf8d36af493ef130e58c39de5c0f47",
-        "driverSha256": "09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df"
+        "run": "20260913T014446.688767Z",
+        "subject": "f0c670e7d33cb93cb8da4c09122b1b05c900b8e6",
+        "driverSha256": "683a260d99085f95bcaf6de7e11dd7a8bf8cf64aca663fb7798894ba607039f2"
       }
     },
     "kernel-selftest": {

@@ -7,9 +7,11 @@
 //! allocation, on virtual registers, as its own pass; the lowering of Section
 //! 5 does not do it."
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{inst_defs, term_edges, MBlock, MFunction, MInst, MTerm, RegClass, VReg};
+use crate::{
+    inst_defs, inst_uses, term_edges, term_uses, MBlock, MFunction, MInst, MTerm, RegClass, VReg,
+};
 
 /// Virtual registers at or above this number are the cycle-breaking scratch of
 /// Section 7, pre-coloured to `x16`.
@@ -41,6 +43,7 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         .iter()
         .map(|block| (block.id, block.args.clone()))
         .collect();
+    let needed = needed_edge_values(&split, &parameters);
     let mut predecessors: BTreeMap<u32, usize> = BTreeMap::new();
     for block in &split.blocks {
         for (target, _) in term_edges(&block.term) {
@@ -78,6 +81,7 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                 .flat_map(|(target, args)| {
                     parameters[target].iter().copied().zip(args.iter().copied())
                 })
+                .filter(|(dst, _)| needed.contains(&dst.id))
                 .collect();
             let mut moves = Vec::new();
             if pairs
@@ -106,6 +110,7 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                 .iter()
                 .copied()
                 .zip(args.iter().copied())
+                .filter(|(dst, _)| needed.contains(&dst.id))
                 .collect();
             if pairs.is_empty() {
                 continue;
@@ -152,6 +157,43 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         name: function.name.clone(),
         blocks,
     }
+}
+
+/// A parameter forwarded forever around a cycle, but never read, needs no
+/// physical transport. Seed demand from actual instruction/control operands,
+/// then walk each demanded parameter back through ALL of its incoming edges.
+/// This removes only unused edge copies: no instruction, call, access,
+/// lifetime action, branch or function ABI parameter is removed.
+fn needed_edge_values(
+    function: &MFunction,
+    parameters: &BTreeMap<u32, Vec<VReg>>,
+) -> BTreeSet<u32> {
+    let mut incoming: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    let mut needed = BTreeSet::new();
+    for block in &function.blocks {
+        needed.extend(block.insts.iter().flat_map(inst_uses).map(|reg| reg.id));
+        let mut control = block.term.clone();
+        clear_edge_args(&mut control);
+        needed.extend(term_uses(&control).into_iter().map(|reg| reg.id));
+        for (target, args) in term_edges(&block.term) {
+            if let Some(params) = parameters.get(&target) {
+                for (param, arg) in params.iter().zip(args) {
+                    incoming.entry(param.id).or_default().push(arg.id);
+                }
+            }
+        }
+    }
+    let mut pending: Vec<_> = needed.iter().copied().collect();
+    while let Some(value) = pending.pop() {
+        if let Some(arguments) = incoming.get(&value) {
+            for &argument in arguments {
+                if needed.insert(argument) {
+                    pending.push(argument);
+                }
+            }
+        }
+    }
+    needed
 }
 
 fn clear_edge_args(term: &mut MTerm) {

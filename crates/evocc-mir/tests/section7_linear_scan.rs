@@ -136,6 +136,57 @@ fn exhausting_the_class_spills_to_a_frame_slot() {
 }
 
 #[test]
+fn disjoint_pressure_regions_reuse_spill_storage() {
+    let mut insts = Vec::new();
+    for group in 0..32 {
+        let base = group * 100;
+        for index in 0..40 {
+            insts.push(MInst::MovImm {
+                dst: w(base + index),
+                imm: u64::from(index),
+            });
+        }
+        let mut sum = w(base);
+        for index in 1..40 {
+            let dst = w(base + 40 + index);
+            insts.push(MInst::Binary {
+                op: BinOp::Add,
+                dst,
+                lhs: sum,
+                rhs: w(base + index),
+                width: Width::W,
+            });
+            sum = dst;
+        }
+        insts.push(MInst::Bl {
+            symbol: "consume".into(),
+            args: vec![sum],
+            results: Vec::new(),
+        });
+    }
+    let function = MFunction {
+        name: "separate_pressure".into(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: Vec::new(),
+            insts,
+            term: MTerm::Ret { values: Vec::new() },
+        }],
+    };
+    let allocated = allocate(&function).expect("each region can spill");
+    assert!(
+        allocated.spilled > 40,
+        "the fixture must create many distinct spilled values"
+    );
+    assert!(
+        allocated.frame_slots <= 40,
+        "disjoint regions retained {} physical spill slots",
+        allocated.frame_slots
+    );
+    verify_allocation(&allocated).expect("a reload sees the correct stored value after slot reuse");
+}
+
+#[test]
 fn a_reserved_register_is_never_assigned() {
     let allocated = allocate(&out_of_ssa(&pressure(40))).expect("allocation");
     for number in allocated.assignment.values() {
@@ -156,6 +207,40 @@ fn the_allocation_is_a_function_of_its_input() {
         let two = render_allocated(&allocate(&input).expect("allocation"));
         assert_eq!(one, two, "two runs differ at pressure {count}");
     }
+}
+
+#[test]
+fn short_lived_values_do_not_accumulate_interference_history() {
+    let mut insts = Vec::new();
+    for index in 0..16_384 {
+        insts.push(MInst::MovImm {
+            dst: w(index),
+            imm: u64::from(index),
+        });
+        insts.push(MInst::Bl {
+            symbol: "consume".to_owned(),
+            args: vec![w(index)],
+            results: Vec::new(),
+        });
+    }
+    let function = MFunction {
+        name: "sequential_calls".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: Vec::new(),
+            insts,
+            term: MTerm::Ret { values: Vec::new() },
+        }],
+    };
+    let started = std::time::Instant::now();
+    let allocated = allocate(&function).expect("one live value requires no spills");
+    let elapsed = started.elapsed();
+    assert_eq!(allocated.spilled, 0);
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "allocation retained expired or scanned all future fixed intervals: {elapsed:?}"
+    );
+    verify_allocation(&allocated).expect("fixed call operands remain valid");
 }
 
 #[test]
@@ -320,7 +405,49 @@ fn a_value_carried_around_a_loop_keeps_its_register() {
     let module = parse_section9_module(CARRIED_AROUND_A_LOOP.as_bytes()).expect("canonical EvoIR");
     let lowered = lower_module(&module).expect("every form is in the Section 5 table");
     for function in &lowered.functions {
-        let allocated = allocate(&out_of_ssa(function)).expect("allocation");
+        let mut function = function.clone();
+        // Keep the historical pressure observable: unused transport is now
+        // eliminated, so relying on dead parameters would no longer exercise
+        // the spill store overwriting a value defined on the back edge.
+        let first = function
+            .blocks
+            .iter()
+            .flat_map(|block| {
+                block
+                    .args
+                    .iter()
+                    .copied()
+                    .chain(block.insts.iter().flat_map(evocc_mir::inst_defs))
+            })
+            .map(|reg| reg.id)
+            .max()
+            .unwrap()
+            + 1;
+        let carried: Vec<_> = (first..first + 32).map(g).collect();
+        function.blocks[0].insts.extend(
+            carried
+                .iter()
+                .enumerate()
+                .map(|(i, &dst)| MInst::MovImm { dst, imm: i as u64 }),
+        );
+        let header = function
+            .blocks
+            .iter_mut()
+            .find(|block| block.id == 1)
+            .unwrap();
+        header.insts.push(MInst::Bl {
+            symbol: "observe".into(),
+            args: header.args.clone(),
+            results: Vec::new(),
+        });
+        for args in carried.chunks(8) {
+            header.insts.push(MInst::Bl {
+                symbol: "observe".into(),
+                args: args.to_vec(),
+                results: Vec::new(),
+            });
+        }
+        let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
         assert!(
             allocated.spilled > 0,
             "the reproducer must still spill to reach the defect"

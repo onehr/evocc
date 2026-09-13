@@ -14,7 +14,8 @@
 //! same allocation Section 7 describes, arrived at without a second
 //! interference structure.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::cmp::Reverse;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::fmt::Write as _;
 
 use crate::{
@@ -106,7 +107,11 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
     for _ in 0..64 {
         match scan(&current, &pins) {
             Ok(mut assignment) => {
-                let blocks = drop_identity_moves(&current, &mut assignment);
+                let mut compacted = MFunction {
+                    name: current.name.clone(),
+                    blocks: drop_identity_moves(&current, &mut assignment),
+                };
+                let frame_slots = compact_spill_slots(&mut compacted);
                 let used_callee_saved = assignment
                     .values()
                     .copied()
@@ -115,12 +120,12 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
                     .into_iter()
                     .collect();
                 return Ok(Allocated {
-                    name: current.name.clone(),
-                    blocks,
+                    name: compacted.name,
+                    blocks: compacted.blocks,
                     parameters,
                     assignment,
                     spilled: slots.len(),
-                    frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
+                    frame_slots,
                     used_callee_saved,
                     outgoing,
                     indirect_result,
@@ -564,7 +569,14 @@ fn liveness(function: &MFunction) -> BTreeMap<u32, BTreeSet<u32>> {
         uses.insert(block.id, read);
         defs.insert(block.id, written);
     }
+    live_on_entry(function, &uses, &defs)
+}
 
+fn live_on_entry(
+    function: &MFunction,
+    uses: &BTreeMap<u32, BTreeSet<u32>>,
+    defs: &BTreeMap<u32, BTreeSet<u32>>,
+) -> BTreeMap<u32, BTreeSet<u32>> {
     let mut live_in: BTreeMap<u32, BTreeSet<u32>> = function
         .blocks
         .iter()
@@ -706,7 +718,9 @@ fn intervals(function: &MFunction) -> Vec<Interval> {
             class,
             start,
             end,
-            spans_call: calls.iter().any(|at| start <= *at && *at < end),
+            spans_call: calls
+                .get(calls.partition_point(|at| *at < start))
+                .is_some_and(|at| *at < end),
         })
         .collect();
     // Walk by start point, ties by virtual register number.
@@ -819,7 +833,8 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
     let all = intervals(function);
     let tied = tied_pairs(function);
     let mut assignment: BTreeMap<u32, u8> = BTreeMap::new();
-    let mut held: Vec<(Interval, u8)> = asm_interferences(function);
+    let mut fixed = asm_interferences(function);
+    let mut held: Vec<(Interval, u8)> = Vec::new();
     let mut victims: Vec<u32> = Vec::new();
 
     for interval in &all {
@@ -831,14 +846,42 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
         }
         if let Some(number) = pins.get(&interval.value).copied() {
             assignment.insert(interval.value, number);
-            held.push((*interval, number));
+            fixed.push((*interval, number));
         }
+    }
+
+    // Fixed ranges can start after the current interval, so simply expiring
+    // old entries is not enough. Index their union by physical register and
+    // search the first range that has not ended. This preserves interference
+    // with future call operands and assembly clobbers without scanning every
+    // fixed operand in a large function for every value.
+    let mut reserved: BTreeMap<u8, Vec<(usize, usize)>> = BTreeMap::new();
+    for (interval, number) in fixed {
+        reserved
+            .entry(number)
+            .or_default()
+            .push((interval.start, interval.end));
+    }
+    for ranges in reserved.values_mut() {
+        ranges.sort_unstable();
+        let mut merged: Vec<(usize, usize)> = Vec::new();
+        for (start, end) in ranges.drain(..) {
+            if let Some(last) = merged.last_mut().filter(|last| start <= last.1) {
+                last.1 = last.1.max(end);
+            } else {
+                merged.push((start, end));
+            }
+        }
+        *ranges = merged;
     }
 
     for interval in &all {
         if interval.class == RegClass::Flags || pins.contains_key(&interval.value) {
             continue;
         }
+        // The remaining intervals were assigned in start order. Once one
+        // ends before this start it cannot interfere with any later value.
+        held.retain(|(other, _)| other.end >= interval.start);
         // A tied input takes the register its output was given, whichever of
         // the two the walk reaches first: the pair is one location.
         if let Some(output) = tied.get(&interval.value) {
@@ -848,11 +891,19 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
                 continue;
             }
         }
-        let taken: BTreeSet<u8> = held
+        let mut taken: BTreeSet<u8> = held
             .iter()
             .filter(|(other, _)| overlaps(other, interval))
             .map(|(_, number)| *number)
             .collect();
+        for (number, ranges) in &reserved {
+            if ranges
+                .get(ranges.partition_point(|(_, end)| *end < interval.start))
+                .is_some_and(|(start, _)| *start <= interval.end)
+            {
+                taken.insert(*number);
+            }
+        }
         // Section 7: "a call clobbers every caller-saved register, so an
         // interval live across a call is assigned a callee-saved register or
         // spilled."
@@ -1019,6 +1070,95 @@ fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
 // ---------------------------------------------------------------------------
 // Spill code
 // ---------------------------------------------------------------------------
+
+/// Reuse eight-byte spill locations only when their conservative CFG live
+/// ranges do not overlap. Virtual spill identities stay separate throughout
+/// allocation; physical slot reuse happens once, after the final rewrite.
+fn compact_spill_slots(function: &mut MFunction) -> u32 {
+    let positions = numbering(function);
+    let mut bounds: BTreeMap<u32, (usize, usize)> = BTreeMap::new();
+    let mut uses = BTreeMap::new();
+    let mut defs = BTreeMap::new();
+    for block in &function.blocks {
+        let mut read = BTreeSet::new();
+        let mut written = BTreeSet::new();
+        for (offset, inst) in block.insts.iter().enumerate() {
+            let (slot, at) = match inst {
+                MInst::SpillReload { slot, .. } => {
+                    if !written.contains(slot) {
+                        read.insert(*slot);
+                    }
+                    (*slot, positions[&block.id].0 + 2 * offset)
+                }
+                MInst::SpillStore { slot, .. } => {
+                    written.insert(*slot);
+                    (*slot, positions[&block.id].0 + 2 * offset + 1)
+                }
+                _ => continue,
+            };
+            bounds
+                .entry(slot)
+                .and_modify(|range| {
+                    range.0 = range.0.min(at);
+                    range.1 = range.1.max(at);
+                })
+                .or_insert((at, at));
+        }
+        uses.insert(block.id, read);
+        defs.insert(block.id, written);
+    }
+    if bounds.is_empty() {
+        return 0;
+    }
+    let live_in = live_on_entry(function, &uses, &defs);
+    for block in &function.blocks {
+        let (start, end) = positions[&block.id];
+        for slot in &live_in[&block.id] {
+            let range = bounds.get_mut(slot).unwrap();
+            range.0 = range.0.min(start);
+        }
+        for (target, _) in term_edges(&block.term) {
+            if let Some(slots) = live_in.get(&target) {
+                for slot in slots {
+                    let range = bounds.get_mut(slot).unwrap();
+                    range.1 = range.1.max(end - 1);
+                }
+            }
+        }
+    }
+    let mut ranges: Vec<_> = bounds
+        .into_iter()
+        .map(|(slot, (start, end))| (start, slot, end))
+        .collect();
+    ranges.sort_unstable();
+    let mut active: BinaryHeap<Reverse<(usize, u32)>> = BinaryHeap::new();
+    let mut free = BTreeSet::new();
+    let mut mapping = BTreeMap::new();
+    let mut count = 0;
+    for (start, slot, end) in ranges {
+        while active.peek().is_some_and(|Reverse((end, _))| *end < start) {
+            let Reverse((_, location)) = active.pop().unwrap();
+            free.insert(location);
+        }
+        let location = free.pop_first().unwrap_or_else(|| {
+            let location = count;
+            count += 1;
+            location
+        });
+        mapping.insert(slot, location);
+        active.push(Reverse((end, location)));
+    }
+    for inst in function
+        .blocks
+        .iter_mut()
+        .flat_map(|block| &mut block.insts)
+    {
+        if let MInst::SpillStore { slot, .. } | MInst::SpillReload { slot, .. } = inst {
+            *slot = mapping[slot];
+        }
+    }
+    count
+}
 
 /// Spill around indivisible flags producer/consumer chains. Reloads precede
 /// the whole chain, stores follow it, and a value defined inside the chain

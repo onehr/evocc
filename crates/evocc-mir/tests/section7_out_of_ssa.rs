@@ -28,6 +28,73 @@ fn moves(block: &MBlock) -> Vec<(u32, u32)> {
 }
 
 #[test]
+fn unused_loop_carried_parameters_do_not_create_copy_pressure() {
+    let width = 64;
+    let mut blocks = vec![MBlock {
+        id: 0,
+        args: Vec::new(),
+        insts: (0..width)
+            .map(|id| MInst::MovImm {
+                dst: w(id),
+                imm: u64::from(id),
+            })
+            .collect(),
+        term: MTerm::B {
+            target: 1,
+            args: (0..width).map(w).collect(),
+        },
+    }];
+    for block in 1..=32 {
+        let args: Vec<_> = (block * width..(block + 1) * width).map(w).collect();
+        let term = if block == 32 {
+            MTerm::Tb {
+                nonzero: true,
+                src: args[0],
+                bit: 0,
+                taken: 1,
+                taken_args: args.clone(),
+                untaken: 33,
+                untaken_args: vec![args[0]],
+            }
+        } else {
+            MTerm::B {
+                target: block + 1,
+                args: args.clone(),
+            }
+        };
+        blocks.push(MBlock {
+            id: block,
+            args,
+            insts: Vec::new(),
+            term,
+        });
+    }
+    blocks.push(MBlock {
+        id: 33,
+        args: vec![w(33 * width)],
+        insts: Vec::new(),
+        term: MTerm::Ret {
+            values: vec![w(33 * width)],
+        },
+    });
+    let lowered = out_of_ssa(&MFunction {
+        name: "transport".into(),
+        blocks,
+    });
+    let copies = lowered.blocks.iter().flat_map(moves).count();
+    assert!(
+        copies <= 34,
+        "unused transport cycle generated {copies} copies"
+    );
+    let allocated = evocc_mir::allocate(&lowered).expect("one live value");
+    assert_eq!(
+        allocated.spilled, 0,
+        "unused edge arguments must not cause spills"
+    );
+    evocc_mir::verify_allocation(&allocated).expect("the live loop value remains defined");
+}
+
+#[test]
 fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
     let x = |id| VReg::new(id, RegClass::Gpr64);
     let function = MFunction {
@@ -55,7 +122,11 @@ fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
                 id: 2,
                 args: vec![x(4), x(5)],
                 insts: vec![],
-                term: MTerm::Ret { values: vec![x(4)] },
+                // Both bindings checked below must be observable, rather
+                // than requiring a copy to an unused parameter to survive.
+                term: MTerm::Ret {
+                    values: vec![x(4), x(5)],
+                },
             },
         ],
     };
