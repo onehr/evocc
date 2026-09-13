@@ -439,3 +439,28 @@ fn finite_facts_preserve_mixed_outcomes_conversions_and_runtime_errors() {
         assert!(String::from_utf8_lossy(&output.stdout).contains("call @observe"));
     }
 }
+
+#[test]
+fn assigned_constants_and_finite_flags_survive_ssa_edges() {
+    for source in [
+        "void invalid(void);int main(void){unsigned long size;size=sizeof(long);if(size>4096)invalid();return size!=8;}",
+        "void invalid(void);int main(void){const int size=({int n=-22;if(sizeof(long)==1)n=16;else if(sizeof(long)==2)n=8;else if(sizeof(long)==4)n=0;else if(sizeof(long)==8)n=24;n;});if(size<0)invalid();return size!=24;}",
+        "void invalid(void);int f(int c,int n){int flags=c?1:0;if(n>1)flags|=2;if(flags>3)invalid();return flags;}int main(void){return f(0,1)!=0||f(1,1)!=1||f(0,2)!=2||f(1,2)!=3;}",
+        "void invalid(void);static __attribute__((always_inline)) inline int order(unsigned long n){if(__builtin_constant_p(n)){if(!n)return 52;if(n<4096)return 0;return 64-__builtin_clzl(n-1)-12;}n--;n>>=12;return n?64-__builtin_clzl(n):0;}int main(void){if(order(32768)>7)invalid();return order(32768)!=3;}",
+        "void invalid(void);int main(void){if(65531<({unsigned x=4000000,y=65000;x<y?x:y;}))invalid();return 0;}",
+    ] {
+        assert_constant_program(source);
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"), "{source}");
+    }
+}
+
+#[test]
+fn branch_pruning_releases_only_unreferenced_internal_definitions() {
+    let source="void invalid(void);static int impossible(void){invalid();return 1;}static inline int enabled(void){return 0;}int f(void){return enabled()?impossible():0;}int main(void){return f();}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("func @impossible"));
+}
