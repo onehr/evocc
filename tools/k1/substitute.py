@@ -654,6 +654,40 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
     return result
 
 
+def recompile_export_table(rows: list[dict], records: dict[str, Record], args,
+                           asm_root: Path, out_root: Path, run_dir: Path) -> dict:
+    """modpost derives this target C source from the installed vmlinux.o.
+
+    It is an original denominator member, not a host-tool exemption. Compile
+    its actual generated content before final Kbuild can fall back to CC.
+    """
+    unit = ".vmlinux.export.o"
+    if unit not in records or not any(row["unit"] == unit for row in rows):
+        return {"required": False, "ready": True}
+    result = {"required": True, "ready": False, "producerExitCode":
+              relink(args.src_root, out_root, run_dir / "modpost.log",
+                     args.relink_jobs, ("modpost",))}
+    if result["producerExitCode"] != 0:
+        return result
+    source = source_path(records[unit], args.src_root, out_root)
+    before = sha256_file(source)
+    compiler = sha256_file(args.evocc)
+    row = emit_assembly(unit, records[unit], args.evocc, args.src_root,
+                        out_root, asm_root, args.timeout)
+    result.update(source=str(source), sourceSha256=before)
+    if before != sha256_file(source) or compiler != sha256_file(args.evocc):
+        result["inputsChanged"] = True
+        return result
+    assemble_batch([row], records, asm_root, out_root, use_cache=not args.no_cache)
+    row.update(compileInputRoot=str(out_root), compileSourceSha256=before,
+               recompiledAfterPrepare=True, recompiledAfterModpost=True)
+    install([row], asm_root, out_root, args.allow_symbol_drift)
+    rows[:] = [row if old["unit"] == unit else old for old in rows]
+    result["ready"] = row["outcome"] == "substituted"
+    result["outcome"] = row["outcome"]
+    return result
+
+
 def main() -> int:
     started = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -847,8 +881,17 @@ def main() -> int:
                  and preparation.get("verifyPrepareExitCode") == 0
                  and preparation.get("preparedInputsStable")
                  and not preparation.get("failedUnits"))
+        if ready:
+            preparation["exportTable"] = recompile_export_table(
+                rows, records, args, asm_root, out_root, run_dir)
+            ready = preparation["exportTable"]["ready"]
         relink_code = (relink(args.src_root, out_root, run_dir / "relink.log", args.relink_jobs)
                        if ready else 1)
+        export = preparation.get("exportTable", {})
+        if export.get("ready") and export.get("required"):
+            export["unchangedAfterLink"] = sha256_file(Path(export["source"])) == export["sourceSha256"]
+            if not export["unchangedAfterLink"]:
+                relink_code = 1
         print(f"k1: relink exit {relink_code}", flush=True)
         for row in rows:
             if row["outcome"] != "substituted":

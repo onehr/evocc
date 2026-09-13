@@ -81,6 +81,16 @@ class CacheKeyTest(unittest.TestCase):
             self.assertEqual(result["sourceSha256"], substitute.sha256_file(source))
             self.assertEqual(events, ["produce", "compile", "assemble", "install"])
             self.assertEqual(rows[0]["installedSha256"], "new")
+            def changing_emit(*args):
+                source.write_text("changed while compilation was running\n")
+                return {"unit": unit, "outcome": "emitted"}
+            with patch.object(substitute, "relink", side_effect=produce), \
+                    patch.object(substitute, "emit_assembly", side_effect=changing_emit), \
+                    patch.object(substitute, "install") as install_mock:
+                result = recompile(rows, records, args, root / "asm", output, root)
+            self.assertFalse(result["ready"])
+            self.assertTrue(result["inputsChanged"])
+            install_mock.assert_not_called()
             with patch.object(substitute, "relink", return_value=2), \
                     patch.object(substitute, "emit_assembly") as emit_mock:
                 result = recompile(rows, records, args, root / "asm", output, root)
