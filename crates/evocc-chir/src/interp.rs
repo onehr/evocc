@@ -7775,9 +7775,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
             ) && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
             {
-                // Ordering carries the same live, same-object obligation as
-                // subtraction; lowering compares the corresponding addresses.
-                self.subtract_pointer_values(left, right, left_ty, span)?;
+                // Ordering compares byte addresses. Unlike subtraction it
+                // does not require an exact number of pointee-sized elements.
+                self.pointer_byte_difference(left, right, span)?;
                 let left = left.byte_offset();
                 let right = right.byte_offset();
                 let result = match operator {
@@ -8045,24 +8045,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         pointer_type: PointerTypeDesc,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
-        self.memory
-            .check_pointer(left)
-            .map_err(|error| self.memory_error(error, span))?;
-        self.memory
-            .check_pointer(right)
-            .map_err(|error| self.memory_error(error, span))?;
-        if left.object() != right.object() {
-            return Err(InterpreterError::UnsupportedExpression {
-                feature: "pointer subtraction across distinct objects",
-                span,
-            });
-        }
-        let byte_delta = left.byte_offset().checked_sub(right.byte_offset()).ok_or(
-            InterpreterError::UnsupportedExpression {
-                feature: "pointer subtraction overflow",
-                span,
-            },
-        )?;
+        let byte_delta = self.pointer_byte_difference(left, right, span)?;
         let scale =
             i64::try_from(self.pointer_arithmetic_scale(pointer_type.pointee(), left, span)?)
                 .map_err(|_| InterpreterError::UnsupportedExpression {
@@ -8079,6 +8062,32 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             (byte_delta / scale) as u64,
             CIntegerType::LONG,
         )))
+    }
+
+    fn pointer_byte_difference(
+        &self,
+        left: Pointer,
+        right: Pointer,
+        span: SourceSpan,
+    ) -> Result<i64, InterpreterError> {
+        self.memory
+            .check_pointer(left)
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory
+            .check_pointer(right)
+            .map_err(|error| self.memory_error(error, span))?;
+        if left.object() != right.object() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction across distinct objects",
+                span,
+            });
+        }
+        left.byte_offset().checked_sub(right.byte_offset()).ok_or(
+            InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction overflow",
+                span,
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

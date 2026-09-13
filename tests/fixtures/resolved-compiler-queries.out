@@ -78,6 +78,16 @@ constant-representation-reads.c: GCC-14/Clang-19 -std=gnu11 -O2 and EvoCC
 generated native AArch64 all link and exit 0. Padding, volatile and runtime
 initializer guards retain the unproved branch; original evaluations remain.
 Original ptrace.o and ufshcd.o: emit rc 0, no compiletime-assert calls.
+Inline-flow/relation RED: 24 passed / 3 failed, zero build errors.
+GREEN and conservative guards: resolved_compiler_queries 28/28;
+Clippy evocc-chir/evocc-lower/evocc all-targets -D warnings and fmt PASS.
+Finite-condition, scalar-literal and byte-address comparison fixture:
+GCC-14, Clang-19 and EvoCC native AArch64, -O2, each exit 0.
+Original .o.cmd emission (no installation): fs/nfs/dir.o, fs/proc/task_mmu.o,
+kernel/bpf/bpf_lru_list.o, kernel/jump_label.o, mm/ksm.o, mm/vma_exec.o,
+net/ipv4/tcp_output.o: rc 0, no compiletime-assert calls.
+The 58 previously identified assertion-call units now have 50 targeted clears
+and 8 remaining, not a fresh full survey or full link.
 Latest focused commands (CARGO_TARGET_DIR=target/tailored, --locked --offline -j 2):
 cargo test -p evocc --test resolved_compiler_queries: 17 passed
 cargo test -p evocc-lower --test expression_value_flow --test front_end_resolved_forms: 103 passed

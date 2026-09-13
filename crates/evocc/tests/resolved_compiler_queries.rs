@@ -412,3 +412,30 @@ fn finite_conditional_results_prove_bounds_without_skipping_calls() {
     );
     assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
 }
+
+#[test]
+fn finite_facts_preserve_mixed_outcomes_conversions_and_runtime_errors() {
+    for source in [
+        "int f(int c){return (c?52:48)>50;}int main(void){return f(0)!=0||f(1)!=1;}",
+        "int f(int c){return (unsigned char)(c?256:257)>0;}int main(void){return f(0)!=1||f(1)!=0;}",
+        "int f(int c){return (c?-1:1)<0;}int main(void){return f(0)!=0||f(1)!=1;}",
+    ] {
+        assert_constant_program(source);
+    }
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(
+            "int f(int c){if(1/(c?1:0)>2)return 1;return 0;}int main(void){return f(0);}",
+            mode,
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3002"));
+    }
+    for source in [
+        "void observe(void);static int a,b;void f(void){if(&a<&b)observe();}",
+        "void observe(void);static int a;void f(void){if((unsigned long)&a+~0ul<(unsigned long)&a)observe();}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("call @observe"));
+    }
+}

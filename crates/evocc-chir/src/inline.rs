@@ -1371,6 +1371,19 @@ impl<'a> Substitution<'a, '_> {
             return Ok(Vec::new());
         }
         let original = o.symbol;
+        let initializer_jumps = o.initializer.as_ref().is_some_and(|initializer| {
+            initializer
+                .plan
+                .actions()
+                .iter()
+                .any(|action| match action {
+                    InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } => {
+                        inspect([Node::Expr(value, false)]).jumps
+                    }
+                    _ => false,
+                })
+        });
         let mut o = o.clone();
         if c.prefix.is_some() && o.storage == StorageClass::Extern {
             self.unit
@@ -1436,7 +1449,7 @@ impl<'a> Substitution<'a, '_> {
                 // An unknown runtime value does not break dominance. Only
                 // an initializer with a source control transfer can jump past
                 // subsequent declarations before their values are established.
-                if value.is_some_and(|value| inspect([Node::Expr(value, false)]).jumps) {
+                if initializer_jumps {
                     c.declaration_prefix = false;
                 }
             }

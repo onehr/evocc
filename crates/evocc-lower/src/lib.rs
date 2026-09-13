@@ -10501,51 +10501,157 @@ impl<'a> FunctionLowerer<'a> {
     // particular, loops which omit evaluation of a source constant must not
     // use this fact: a constant-return call can still evaluate effectful args.
     fn result_after_evaluation(&self, expression: &CHirExpr<'_>) -> Option<CInteger> {
+        let values = self.possible_results_after_evaluation(expression)?;
+        match values.as_slice() {
+            [value] => Some(*value),
+            _ => None,
+        }
+    }
+
+    fn possible_results_after_evaluation(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Option<Vec<CInteger>> {
         if let Some(value) = evocc_chir::constant::eval_absolute_address_constant(
             expression,
             self.unit.types(),
             self.unit.symbols(),
             self.target,
         ) {
-            return Some(value);
+            return Some(vec![value]);
         }
-        let result = |expression| self.result_after_evaluation(expression);
-        match expression {
-            CHirExpr::MemoryRead { place, .. } => self.fresh_literal_read(place),
+        let results = |expression| self.possible_results_after_evaluation(expression);
+        let mut values = match expression {
+            CHirExpr::MemoryRead { place, .. } => vec![self.fresh_literal_read(place)?],
             CHirExpr::Call(CHirExpr::Ident { symbol, .. }, _, _) => {
-                self.functions.get(symbol)?.constant_result
+                vec![self.functions.get(symbol)?.constant_result?]
             }
-            CHirExpr::Comma(_, right, _) => result(right),
-            CHirExpr::Cast(ty, operand, _) => Some(result(operand)?.cast(
-                canonical_integer(self.unit.types(), self.target, *ty, expression.span()).ok()?,
-            )),
-            CHirExpr::Unary(UnaryOp::Not, operand, _) => Some(CInteger::new(
-                u64::from(!result(operand)?.truth()),
-                CIntegerType::INT,
-            )),
+            CHirExpr::CompoundLit(ty, initializer, _) => {
+                if self.unit.types().get(*ty)?.qualifiers.is_volatile {
+                    return None;
+                }
+                let integer =
+                    canonical_integer(self.unit.types(), self.target, *ty, expression.span())
+                        .ok()?;
+                match initializer.plan().actions() {
+                    [InitAction::StoreScalar { path, value, .. }] if path.is_root() => {
+                        results(value)?
+                            .into_iter()
+                            .map(|value| value.cast(integer))
+                            .collect()
+                    }
+                    [] if initializer.plan().zero_fills_unwritten() => {
+                        vec![CInteger::new(0, integer)]
+                    }
+                    _ => return None,
+                }
+            }
+            CHirExpr::Comma(_, right, _) => results(right)?,
+            CHirExpr::Cast(ty, operand, _) => {
+                let integer =
+                    canonical_integer(self.unit.types(), self.target, *ty, expression.span())
+                        .ok()?;
+                results(operand)?
+                    .into_iter()
+                    .map(|value| value.cast(integer))
+                    .collect()
+            }
+            CHirExpr::Unary(operator, operand, _) => results(operand)?
+                .into_iter()
+                .map(|value| evocc_chir::integer::eval_unary_integer(*operator, value).ok())
+                .collect::<Option<Vec<_>>>()?,
             CHirExpr::Binary(op @ (BinaryOp::And | BinaryOp::Or), left, right, _) => {
-                let left = result(left)?.truth();
-                let truth = if (*op == BinaryOp::And && !left) || (*op == BinaryOp::Or && left) {
-                    left
-                } else {
-                    result(right)?.truth()
-                };
-                Some(CInteger::new(u64::from(truth), CIntegerType::INT))
+                let left = results(left)?;
+                let mut values = Vec::new();
+                for value in left {
+                    let truth = value.truth();
+                    if (*op == BinaryOp::And && !truth) || (*op == BinaryOp::Or && truth) {
+                        values.push(CInteger::int(i32::from(truth)));
+                    } else {
+                        values.extend(
+                            results(right)?
+                                .into_iter()
+                                .map(|value| CInteger::int(i32::from(value.truth()))),
+                        );
+                    }
+                }
+                values
             }
             CHirExpr::Binary(operator, left, right, _) => {
-                eval_binary_integer(*operator, result(left)?, result(right)?).ok()
+                if matches!(
+                    operator,
+                    BinaryOp::Eq
+                        | BinaryOp::Ne
+                        | BinaryOp::Lt
+                        | BinaryOp::Le
+                        | BinaryOp::Gt
+                        | BinaryOp::Ge
+                ) && [left, right].iter().all(|operand| {
+                    evocc_chir::PointerTypeDesc::from_expression(
+                        self.unit.symbols(),
+                        self.unit.types(),
+                        operand,
+                    )
+                    .is_ok()
+                }) {
+                    let address = |expression| {
+                        symbolic_address(
+                            self.unit,
+                            self.target,
+                            expression,
+                            false,
+                            self.allocation_origins,
+                            &self.string_origins,
+                            &BTreeMap::new(),
+                        )
+                        .ok()
+                    };
+                    if let (Some((a, x, false)), Some((b, y, false))) =
+                        (address(left), address(right))
+                    {
+                        if a == b {
+                            return Some(vec![eval_binary_integer(
+                                *operator,
+                                CInteger::new(x as u64, CIntegerType::LONG),
+                                CInteger::new(y as u64, CIntegerType::LONG),
+                            )
+                            .ok()?]);
+                        }
+                    }
+                }
+                let left = results(left)?;
+                let right = results(right)?;
+                let mut values = Vec::new();
+                for a in left {
+                    for &b in &right {
+                        values.push(eval_binary_integer(*operator, a, b).ok()?);
+                    }
+                }
+                values
             }
             CHirExpr::Ternary(condition, yes, no, _) => {
-                let selected = if result(condition)?.truth() { yes } else { no };
                 let ty = evocc_chir::constant::integer_expression_type(
                     expression,
                     self.unit.types(),
                     self.unit.symbols(),
                 )?;
-                Some(result(selected)?.cast(ty))
+                let conditions =
+                    results(condition).unwrap_or_else(|| vec![CInteger::int(0), CInteger::int(1)]);
+                let mut values = Vec::new();
+                if conditions.iter().any(|value| value.truth()) {
+                    values.extend(results(yes)?);
+                }
+                if conditions.iter().any(|value| !value.truth()) {
+                    values.extend(results(no)?);
+                }
+                values.into_iter().map(|value| value.cast(ty)).collect()
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+        values.sort_by_key(|value| value.raw_bits());
+        values.dedup();
+        // Finite alternatives, not path enumeration or an unbounded evaluator.
+        (values.len() <= 8).then_some(values)
     }
 
     // Prove a fresh literal's initialized representation, not a value read
