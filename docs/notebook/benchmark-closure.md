@@ -12,18 +12,22 @@ inventory authority. Counts below overlap where a row is a subcategory.
 objects come from EvoCC, remain installed after the complete link, and reach
 the unchanged nonce-bound init/powerdown predicate. No reference-compiler C
 object, stub, configuration reduction or timeout increase was used.
-The current [boot record](../../.evidence/k1/uniform-stack-20260913/boot/boot.json)
-binds Image `bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260`
-to nonce `k1-20260913T115955Z-85e70812` on the HVF-host lane. The installed
+The current [boot record](../../.evidence/k1/read-only-storage-20260913/boot/boot.json)
+binds Image `eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd`
+to nonce `k1-20260913T143932Z-54e48f74` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
-drift remains recorded, not erased. K7's separately measured selected subset now
-passes **125/125 subtests in nine programs** on this Image and the GCC
-reference Image (`20260913T120301Z`). The expanded all-collection rerun
-`20260913T120409Z` has passed startup and is **RUNNING**; it exposed K-R08
-below. KUnit remains **NOT_RUN**.
+drift remains recorded, not erased. K7's separately measured selected subset
+passed **125/125 subtests in nine programs** on the preceding Image and the GCC
+reference Image (`20260913T120301Z`); the new Image requires its own rerun.
+The expanded all-collection run on the preceding Image
+`20260913T120409Z` has completed **935/935 installed programs on each
+kernel**; it exposed K-R08 below. Completion is not an all-PASS result:
+the reference has 199 program passes and the subject 194. KUnit remains
+**NOT_RUN**.
 
 This is a **uniform all-EvoCC build**: all 2,799 objects were recompiled with
-allocator repair `aad1657`, against the actual generated headers, then
+`782272f`, including allocator repair `aad1657` and read-only string storage,
+against the actual generated headers, then
 assembled, installed and retained through the complete link. The earlier
 76-object repair booted but left twelve smaller-frame objects on the exec
 path stale; K-R07 records that correction. The generated-header content fixed
@@ -141,7 +145,7 @@ configuration and was not run; other kselftests, other configurations and broade
 compiler correctness are not implied by these results. The K6 receipt retains
 its historical K7 NOT_RUN state at the time of the earlier boot measurement.
 
-### All-collection kernel selftests (2026-09-13; BLOCKED)
+### All-collection kernel selftests (2026-09-13; historical startup failure)
 
 Command: `python3 -u tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift`.
 Adapter `cbd1ace`; final attempt `20260913T111521Z`;
@@ -209,8 +213,59 @@ Image `bd67f341e141` boots and powers off normally. The rebuild/relink took
 The assembler reused 1,028 identical objects and assembled 1,771 changed ones.
 
 The existing kernel build tree and userspace payload were reused; no clone,
-stack enlargement or kernel configuration change was involved. All-program
-runtime testing on this Image is the next measurement, not implied by the boot.
+stack enlargement or kernel configuration change was involved. The following
+measurement records the subsequent runtime tests separately from that boot.
+
+#### Completed original full run and string-storage repair
+
+Run [`20260913T120409Z`](../../.evidence/kselftest-full/20260913T120409Z/summary.json)
+completed every one of the **935 installed programs**, each in its own fresh VM,
+on both unchanged Images. The 128-collection build inventory above is unchanged.
+These are outer program outcomes, not counts of nested assertions:
+
+| Kernel | PASS | FAIL | SKIP | Invalid output | Incomplete execution | Timeout | NOT_RUN |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| GCC reference | 199 | 190 | 537 | 4 | 1 | 4 | 0 |
+| EvoCC before string-storage repair | 194 | 187 | 537 | 4 | 9 | 4 | 0 |
+
+Seven reference-PASS programs crash in the subject: `exec:recursion-depth`,
+`filesystems:fclog`, `filesystems/mount-notify:mount-notify_test`,
+`proc:proc-pidns`, `proc:proc-subset-pid`, `proc:setns-sysvipc`, and
+`tmpfs:bug-link-o-tmpfile`. Each subject trace reaches the same
+`free_vfsmnt` / `kfree_const` failure on the `"none"` literal from
+`fs/namespace.o`. `filesystems/overlayfs:set_layers_via_fds` reaches that same
+subject crash but already fails on the reference for another reason. These
+eight traces share K-R08, not eight separately inferred compiler defects.
+
+The CPU-hotplug crash and four program timeouts occur on both kernels.
+`cgroup:test_freezer` and `cgroup:test_memcontrol` fail on the reference but
+pass on the subject; their differing results are not yet adjudicated as an
+improvement or a timing effect. All recorded PASS programs have process exit
+zero. Missing BTF, architecture-conditioned collections, uninstalled modules,
+and skipped tests remain explicit coverage limits, not passes.
+
+Repair `782272f` selects read-only storage for string literals. Its complete
+2,799-object replacement build is recorded in
+[`read-only-storage-20260913`](../../.evidence/k1/read-only-storage-20260913/preparation.json).
+The source and instruction text are unchanged: every assembly difference is
+limited to section-selection directives and blank lines. Before linking,
+readelf confirms the actual `__evocc.string.695` (`"none"`) in
+`fs/namespace.o` is in allocatable, non-writable `.rodata`.
+
+The [complete link](../../.evidence/k1/read-only-storage-20260913/link.json)
+retains all 2,799 EvoCC objects, with no Kbuild overwrite and unchanged generated
+headers/export source. The new Image `eaab6181ec27` boots and powers off normally.
+The [targeted replay](../../.evidence/k1/read-only-storage-20260913/replay/summary.json)
+then passes **all seven reference-PASS regressions**. Overlayfs no longer crashes
+the kernel; its ordinary failure due to unavailable overlayfs support remains,
+matching the reference failure. These are actual kernel replays, not inferred
+from the tailored emitter test. A fresh full subject run remains required.
+
+For that rerun, `--reuse-selftest-reference` explicitly retains the completed
+GCC control run only after checking the same build inventory, configuration,
+Image, QEMU, payload, runtime policy and captured logs. Every subject program
+runs again; no old subject PASS, failure or timeout is reused. The unchanged
+935-program denominator, original timeouts and two-worker limit are retained.
 
 ### Execution order and update rules
 

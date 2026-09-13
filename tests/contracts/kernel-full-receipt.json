@@ -1,34 +1,19 @@
 {
   "allowSymbolDrift": true,
   "assemblerImage": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
-  "baseSurvey": {
-    "bootVerdict": "MARKERS_MISSING",
-    "evidence": ".evidence/k1/20260913T075423Z",
-    "freshCompilations": 2799,
-    "run": "20260913T075423Z",
-    "seconds": {
-      "assemble": 46.885,
-      "compile": 1384.857,
-      "snapshot": 29.999,
-      "symbols": 49.431,
-      "total": 3157.026
-    },
-    "subject": "d3c457b2b2ade74dd971c6168db7cda124e9ae96",
-    "unitsSha256": "39d0be3f410b5cc26a20494d13569df46ae8f7bb8da921a5ac557a1b45d254a1"
-  },
   "boot": {
-    "flownAt": "2026-09-13T11:59:56Z",
+    "flownAt": "2026-09-13T14:39:33Z",
     "image": ".build/k1/out/arch/arm64/boot/Image",
-    "imageSha256": "bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260",
-    "nonce": "k1-20260913T115955Z-85e70812",
+    "imageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
+    "nonce": "k1-20260913T143932Z-54e48f74",
     "qemu": {
       "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
       "matchesContract": false,
       "path": "/opt/homebrew/bin/qemu-system-aarch64",
       "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
     },
-    "serialLog": ".evidence/k1/uniform-stack-20260913/boot/boot.log",
-    "serialLogSha256": "44c4e0a7484c6b3906817b3a6b46a7b8b7c55d09a91df68ddccd37ebf2cc4e9b",
+    "serialLog": ".evidence/k1/read-only-storage-20260913/boot/boot.log",
+    "serialLogSha256": "3489c113ce1af6b4fa368f7330de15862e707787b40e2971491704dcbf5df7d6",
     "timeoutSeconds": 60,
     "verdict": "PASS"
   },
@@ -37,51 +22,42 @@
     "benchmarkNormalization": {
       "command": "python3 -m unittest discover -s tools/ladder/tests -p test_bench.py",
       "failed": 0,
-      "passed": 21
+      "passed": 22
     },
     "changedGate": {
-      "command": "CARGO_TARGET_DIR=target/tailored tools/gate-changed.sh 79353b9",
-      "status": "PASS; no changed Rust crate; 65 MIR allocation/native tests rerun separately"
-    },
-    "clippy": {
-      "command": "CARGO_TARGET_DIR=target/tailored cargo clippy -p evocc-mir --all-targets --locked --offline -j 2 -- -D warnings",
-      "status": "PASS"
-    },
-    "fmt": {
-      "command": "cargo fmt --all -- --check",
-      "status": "PASS"
+      "command": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh f5d7574 --locked --offline -j 2",
+      "status": "PASS after correcting a stale reachability test; evocc, evocc-mir, evocc-policy, evocc-proofcheck, evocc-randgate; Clippy -D warnings and fmt included"
     },
     "kernelHarness": {
       "command": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py'",
       "failed": 0,
-      "passed": 122
+      "passed": 124
     },
-    "kernelSelftests": "PENDING on this Image; historical selected-subset result belongs to the previous Image",
-    "linearScan": {
-      "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-mir --test section7_linear_scan --locked --offline -j 2",
+    "kernelSelftests": "Full repaired-subject rerun pending; prior complete control measurements are retained separately",
+    "nativeReadOnlyStorage": {
+      "execution": "sealed aarch64; EvoCC and GCC-14/Clang-19 at O0/O2",
       "failed": 0,
-      "passed": 13
-    },
-    "relatedNativeAndAllocation": {
-      "command": "CARGO_TARGET_DIR=target/tailored cargo test -p evocc-mir --test section7_out_of_ssa --test section7_allocation_verifier --test section5_wide_integers --test wide_predicates --test section9_native_differential --locked --offline -j 2",
-      "failed": 0,
-      "passed": 52
+      "fixture": "tests/fixtures/read-only-string-storage.c",
+      "linkerScript": "tests/fixtures/read-only-string-storage.ld",
+      "passed": 5
     },
     "ruff": {
       "command": "ruff check tools/k1/selftest.py tools/k1/selftest_full.py tools/bench.py tools/render-status.py",
       "status": "PASS"
     },
-    "statusRendering": {
-      "command": "python3 tools/render-status.py --check",
-      "status": "PASS"
+    "targetedKernelReplay": {
+      "nowPass": 7,
+      "referencePassRegressions": 7,
+      "remainingOverlayfsFailure": "No kernel crash; same absent overlayfs support as reference; retains FAIL",
+      "summary": ".evidence/k1/read-only-storage-20260913/replay/summary.json"
     },
     "workspaceAndOfflineClone": "NOT_RUN: user requested the real kernel path rather than another clone/workspace gate"
   },
   "compilerComposition": [
     {
-      "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
-      "evidence": ".evidence/k1/uniform-stack-20260913/units.jsonl",
-      "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+      "driverSha256": "fab31d070296aa22ddfbd2bad9c0de430de2a646dc1a0bbb1881debc65a8d5b8",
+      "evidence": ".evidence/k1/read-only-storage-20260913/installed-units.jsonl",
+      "subject": "782272f64c45e2d40a1d28b9485e342efc69175e",
       "units": 2799
     }
   ],
@@ -90,38 +66,46 @@
   "counts": {
     "substituted": 2799
   },
-  "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
-  "evidence": ".evidence/k1/uniform-stack-20260913",
-  "evoccSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
+  "driverSha256": "fab31d070296aa22ddfbd2bad9c0de430de2a646dc1a0bbb1881debc65a8d5b8",
+  "evidence": ".evidence/k1/read-only-storage-20260913",
+  "evoccSha256": "fab31d070296aa22ddfbd2bad9c0de430de2a646dc1a0bbb1881debc65a8d5b8",
   "execution": {
-    "assembledObjectCacheHits": 1028,
-    "compilerInvocations": 2802,
-    "compilerWatchdogSeconds": 300,
-    "longestCompilationSeconds": 26.442,
-    "newAssemblies": 1771,
-    "seconds": 1564.96,
+    "allAssemblyChangesLimitedToStorageDirectives": 2799,
+    "assembledObjectCacheHits": 324,
+    "compileAndAssemblySeconds": 4417.2,
+    "compilerInvocations": 2800,
+    "compilerWatchdogSeconds": 180,
+    "concurrentLoadDuringCompilation": "Two full-kselftest VMs; changed-crate gate initially also running",
+    "installationAndLinkSeconds": 132.88,
+    "jobs": 2,
+    "longestCompilationSeconds": 22.144,
+    "newAssemblies": 2476,
+    "relinkJobs": 6,
     "uniqueTargetCUnits": 2799,
     "withinStandard180SecondBudget": true
   },
   "finalAudit": {
     "changedObjects": [],
-    "compositionObjectSha256": "26e41303f5201c80c3e1476906cf40f1478b3664aad29d8418cc09e84a166530",
+    "compositionObjectSha256": "04a40295a1048b2f3e24747d49526bae496460a7bce9bc52b729e31bf73db91b",
     "configSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
     "digestEncoding": "SHA-256 of UTF-8 compact JSON sorted [unit, installedSha256] pairs",
     "exportSourceStable": true,
     "initramfsSha256": "07772533d8bb83e20c46cbd4b5263a53153ffdae2d7d91219d3ff9c67df02433",
     "referenceCompilerTargetCObjects": 0,
     "retainedUnits": 2799,
-    "vmlinuxSha256": "09cbc1e2e59927efa643a0aa021832c0d986600dda0912ae5c41b1321b94de92"
+    "unitsSha256": "0506a3d280c3e4ed20556314df6c6b2ad8bef0b8a8cdde759025450a6dc0aa50",
+    "vmlinuxSha256": "aa5169291bd7478fc6df2bc75e861881791c6531d96b0ad4e6fc4f33de3114ba"
   },
   "freshCompilations": 2799,
-  "imageSha256": "bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260",
-  "inputSnapshotSha256": "668063d83cf5699acb324ccbe60899e5217f205ba4a57630bb2df886c3d4acac",
+  "imageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
+  "inputSnapshotSha256": "a394a7ccb4fbc35476e9748fc1118f15e850880fc10e6f55be687fded7bfe0cf",
   "installed": true,
-  "jobs": 8,
+  "jobs": 2,
   "measurementCommands": {
-    "boot": "K1_ALLOW_QEMU_DRIFT=1 tools/k1/boot.sh .build/k1/out/arch/arm64/boot/Image .evidence/k1/uniform-stack-20260913/boot",
-    "fullRebuild": "tools/k1/substitute.py existing emit_assembly, assemble_batch, recompile_after_prepare, recompile_export_table and relink helpers; target/tailored/release/evocc; all 2799 original records; compileInputRoot=.build/k1/out; jobs=8; no reference target-C fallback"
+    "boot": "K1_ALLOW_QEMU_DRIFT=1 tools/k1/boot.sh .build/k1/out/arch/arm64/boot/Image .evidence/k1/read-only-storage-20260913/boot",
+    "fullRebuild": "tools/k1/substitute.py emit_assembly and assemble_batch helpers; target/tailored/release/evocc; all 2799 original records; compileInputRoot=.build/k1/out; jobs=2; no reference target-C fallback",
+    "link": "tools/k1/substitute.py install, relink(prepare), recompile_export_table and relink(Image,vmlinux) helpers; relink_jobs=6; audit all installed object hashes",
+    "targetedReplay": "tools/k1/selftest.py flight plus selftest_full.program_case; eight original selectors; existing .build/kselftest-full payload; two workers; unchanged upstream watchdogs"
   },
   "mode": "full-kernel",
   "omittedOptions": {
@@ -439,7 +423,8 @@
     }
   },
   "preparation": {
-    "compileInputSnapshotSha256": "668063d83cf5699acb324ccbe60899e5217f205ba4a57630bb2df886c3d4acac",
+    "compileInputSnapshotSha256": "a394a7ccb4fbc35476e9748fc1118f15e850880fc10e6f55be687fded7bfe0cf",
+    "compilerInputsUnchangedBeforeInstallation": true,
     "exportTable": {
       "outcome": "substituted",
       "producerExitCode": 0,
@@ -450,10 +435,19 @@
       "unchangedAfterLink": true
     },
     "failedUnits": [],
-    "prepareExitCode": 0,
     "preparedInputsStable": true,
     "recompiledUnits": 2799,
+    "unchangedVdsoProducers": [
+      "arch/arm64/kernel/vdso/vgetrandom.o",
+      "arch/arm64/kernel/vdso/vgettimeofday.o"
+    ],
     "verifyPrepareExitCode": 0
+  },
+  "previousKernel": {
+    "evidence": ".evidence/k1/uniform-stack-20260913",
+    "imageSha256": "bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260",
+    "run": "uniform-stack-20260913",
+    "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a"
   },
   "qemuDrift": "Explicitly authorized installed QEMU; exact installed and contract digests retained in boot.qemu",
   "refusalCodeCounts": {},
@@ -463,13 +457,14 @@
     ".evidence/k1/spill-slots-20260913/result.json",
     ".evidence/k1/large-frames-20260913/result.json",
     ".evidence/k1/exec-stack-20260913/result.json",
-    ".evidence/k1/uniform-stack-20260913/result.json"
+    ".evidence/k1/uniform-stack-20260913/result.json",
+    ".evidence/k1/read-only-storage-20260913/link.json"
   ],
   "requestedUnits": 2799,
-  "run": "uniform-stack-20260913",
-  "runId": "uniform-stack-20260913",
+  "run": "read-only-storage-20260913",
+  "runId": "read-only-storage-20260913",
   "status": "PASS",
-  "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+  "subject": "782272f64c45e2d40a1d28b9485e342efc69175e",
   "substitutedUnits": [
     ".vmlinux.export.o",
     "arch/arm64/crypto/aes-ce-ccm-glue.o",
@@ -3272,5 +3267,5 @@
     "virt/lib/irqbypass.o"
   ],
   "uniformCompilerBuild": true,
-  "vmlinuxSha256": "09cbc1e2e59927efa643a0aa021832c0d986600dda0912ae5c41b1321b94de92"
+  "vmlinuxSha256": "aa5169291bd7478fc6df2bc75e861881791c6531d96b0ad4e6fc4f33de3114ba"
 }
