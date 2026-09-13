@@ -267,6 +267,30 @@ Image, QEMU, payload, runtime policy and captured logs. Every subject program
 runs again; no old subject PASS, failure or timeout is reused. The unchanged
 935-program denominator, original timeouts and two-worker limit are retained.
 
+#### Runtime root correction before the next full comparison
+
+The repaired-Image selected subset passed **125/125** again in
+`20260913T144437Z`. The following full attempt `20260913T144544Z` was
+**ABORTED**, not completed or combined with another numerator, when inspection
+of shared reference failures exposed a test-environment defect. Its PID 1
+mounted the ext4 runtime at `/newroot` and only called `chroot`: Linux's
+`create_user_ns()` correctly rejects `current_chrooted()` with `EPERM`.
+`CONFIG_USER_NS=y`; the original failure was not an unavailable kernel feature.
+
+The startup now moves the mounted filesystem onto `/` using `MS_MOVE` before
+setting the process root and working directory, matching the root transition
+in the frozen kernel's `init/do_mounts.c`. No kernel code, configuration, test
+binary, disk image or timeout changes. Only the small reference-built initramfs
+was rebuilt. The [original-test replay](../../.evidence/kselftest-full/root-switch-20260913/summary.json)
+passes `filesystems/statmount:statmount_test` and
+`filesystems/mount-notify:mount-notify_test_ns` on both unchanged Images.
+`statmount_test_ns` also gets past namespace creation and passes its first
+assertion, but fails its subsequent `listmount` count assertion (1 versus 10)
+on both kernels; that remains a real measured failure.
+
+The runtime change invalidates reference reuse. The next full comparison must
+execute all 935 programs on **both** Images with the same corrected initramfs.
+
 ### Execution order and update rules
 
 September 13 complete-composition diagnostic retry

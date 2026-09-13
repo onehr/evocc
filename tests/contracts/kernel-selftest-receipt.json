@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "run": "20260913T120301Z",
+  "run": "20260913T144437Z",
   "status": "PASS",
   "scope": "Selected upstream kselftests on the unchanged complete EvoCC kernel and the frozen GCC reference kernel; not all kselftests or KUnit",
   "contractSha256": "3532e08e095527ac8ca62f2630d080634deecdb1ccded8c2556c97d198165cab",
-  "kernelReceiptSha256": "726f4eda3220d74ca08b1efb0b7580fd008432045224e62084d0472e150ec159",
-  "kernelImageSha256": "bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260",
+  "kernelReceiptSha256": "fe4b6fb3c772855786c2159fcf919017478d7caa676aa93588b5e17268366b0b",
+  "kernelImageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
   "compilerComposition": [
     {
-      "driverSha256": "5237dd27b320a59da86c35fd9476b0523e7d713b3e588048b6625280332f3b01",
-      "evidence": ".evidence/k1/uniform-stack-20260913/units.jsonl",
-      "subject": "aad1657f187cd9f990f2c038e5166e54e0fc245a",
+      "driverSha256": "fab31d070296aa22ddfbd2bad9c0de430de2a646dc1a0bbb1881debc65a8d5b8",
+      "evidence": ".evidence/k1/read-only-storage-20260913/installed-units.jsonl",
+      "subject": "782272f64c45e2d40a1d28b9485e342efc69175e",
       "units": 2799
     }
   ],
   "programs": 9,
-  "evidence": ".evidence/kselftest/20260913T120301Z",
+  "evidence": ".evidence/kselftest/20260913T144437Z",
   "kunit": "NOT_RUN: CONFIG_KUNIT is disabled in the frozen configuration",
   "payload": {
     "compiler": "gcc-14",
@@ -213,7 +213,7 @@
     ],
     "filesystemToolSha256": "099fbe0688569037d9ee5dcf19273b9bbae4fbab6a7841e5a1196fe88ed6542c",
     "initramfsSha256": "83e4de62dd754bdba8b29cfb084e8615fa87681c0f727a965139ee50a2193c97",
-    "scratchSha256": "1125918efeff44d05b8c5d03334b32cec0f0ca595f9e99017b229344d030db72",
+    "scratchSha256": "1611e72c99e1ce5a18af06621cb04d860857963cd4fea71019b7376759bda537",
     "programs": [
       {
         "id": "mincore.mincore_selftest",
@@ -276,9 +276,9 @@
       "verdict": "PASS",
       "image": "/Users/onehrxn/dev/30days/c30/.build/reference/gcc-lane-1/arch/arm64/boot/Image",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20260913T120304Z-9d8388c4",
-      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T120301Z/reference/boot.log",
-      "serialLogSha256": "951ef49f3439e1dbe8c5eecf95144558fa428e09981d8a1d10652d28b3956f89",
+      "nonce": "k1-20260913T144439Z-4c228d38",
+      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T144437Z/reference/boot.log",
+      "serialLogSha256": "804b360b833650d38841692160b0b0ce399ec4aad7378a54154013a7dea20896",
       "timeoutSeconds": 1140,
       "qemu": {
         "path": "/opt/homebrew/bin/qemu-system-aarch64",
@@ -286,7 +286,7 @@
         "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
         "matchesContract": false
       },
-      "flownAt": "2026-09-13T12:03:38Z"
+      "flownAt": "2026-09-13T14:45:14Z"
     },
     "exitCode": 0,
     "programs": [
@@ -1055,10 +1055,10 @@
     "boot": {
       "verdict": "PASS",
       "image": "/Users/onehrxn/dev/30days/c30/.build/k1/out/arch/arm64/boot/Image",
-      "imageSha256": "bd67f341e1413a1fdceafe2349499300f194d62b7a200cc581f8d785ae717260",
-      "nonce": "k1-20260913T120338Z-3c1f714f",
-      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T120301Z/subject/boot.log",
-      "serialLogSha256": "e7e6fd1ce09734c737b08eeac12a7d5a3efefac836b52b23abe26aba51ae66f2",
+      "imageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
+      "nonce": "k1-20260913T144514Z-482ee63e",
+      "serialLog": "/Users/onehrxn/dev/30days/c30/.evidence/kselftest/20260913T144437Z/subject/boot.log",
+      "serialLogSha256": "0510e730b8430ff92da4399727ff1a73e6b388b6a609edd53a35d8fa338845aa",
       "timeoutSeconds": 1140,
       "qemu": {
         "path": "/opt/homebrew/bin/qemu-system-aarch64",
@@ -1066,7 +1066,7 @@
         "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
         "matchesContract": false
       },
-      "flownAt": "2026-09-13T12:04:09Z"
+      "flownAt": "2026-09-13T14:45:43Z"
     },
     "exitCode": 0,
     "programs": [

@@ -85,9 +85,12 @@ int main(void)
     setvbuf(stdout, NULL, _IONBF, 0);
     full_suite = access("/full-suite", F_OK) == 0;
     if (full_suite) {
+        /* A chroot alone leaves us below the mount-namespace root, where
+         * Linux correctly refuses to create user namespaces. */
         if (mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
             || mount("/dev/vda", "/newroot", "ext4", 0, NULL)
-            || chdir("/newroot") || chroot("."))
+            || chdir("/newroot") || mount(".", "/", NULL, MS_MOVE, NULL)
+            || chroot(".") || chdir("/"))
             fatal("mount selftest runtime root");
     }
     setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
