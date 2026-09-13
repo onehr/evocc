@@ -7049,3 +7049,10 @@ The symbol-only `weak`/`alias` rules of Section 5.2 also govern a mark after `*`
 This does not apply pointer type attributes such as `aligned` or `mode`, change layout, or propagate a parameter's mark to its enclosing function.
 Both sealed GCC-14 and Clang-19 at O0/O2 emit the weak function/object bindings and one-address alias in `tests/fixtures/pointer-symbol-linkage.{c,out}`, and link `pointer-symbol-override.c` with exit zero.
 The existing E3060/E3061 checks remain; no diagnostic is allocated, and run `20260913T024049Z` exposed four duplicate definitions in three original kernel units before this correction.
+
+### Scope-exit cleanup conflicts with the preserved-only body
+
+Section 10.1.9 still classifies `cleanup` under the explicitly unapplied attributes; that rule remains authoritative pending approval of an applied exception.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/cleanup-scope-exits.c` with exit zero, while both subject interpreters return program value 2 and native execution exits 2, as `cleanup-scope-exits.txt` records.
+The current complete kernel diagnostic stalls on the second IRQ descriptor lock acquisition because `irq_modify_status` never calls its scoped guard destructor; this is one measured boot failure, not a claimed count of all affected units.
+No diagnostic or new semantics is allocated here; ordinary reverse-order cleanup calls before object lifetime end on each actual scope exit are proposed, not implemented or approved.

@@ -1,0 +1,40 @@
+Measured 2026-09-13, subject e5569f1, Linux AArch64, gnu11.
+Source: cleanup-scope-exits.c. No probe binaries are retained.
+
+Sealed oracle image: evo-flight-lab:sealed, linux/arm64, network none.
+For CC=gcc-14 and CC=clang-19, OPT=0 and OPT=2:
+  $CC -std=gnu11 -O$OPT /work/probes/cleanup-scope-exits.c -o /tmp/probe
+  /tmp/probe
+All four builds and executions exit 0. The fixture checks a guard release,
+reverse declaration order, return-value evaluation before cleanup, continue,
+break, and goto out of a scope.
+
+Subject:
+  target/tailored/release/evocc --target=aarch64-unknown-linux-gnu \
+    --interpret-c-hir tests/fixtures/cleanup-scope-exits.c
+  target/tailored/release/evocc --target=aarch64-unknown-linux-gnu \
+    --interpret-evoir tests/fixtures/cleanup-scope-exits.c
+Both commands exit 0 and print 2: the program detects the missing guard release.
+  target/tailored/release/evocc --target=aarch64-unknown-linux-gnu \
+    --emit=asm tests/fixtures/cleanup-scope-exits.c |
+    container run --rm -i --platform linux/arm64 --network none \
+      evo-flight-lab:sealed sh -c \
+      'gcc-14 -x assembler - -o /tmp/probe && /tmp/probe'
+Compilation and linking succeed; the native program exits 2 too.
+The later checks are not reached by the subject, so no result is inferred for them.
+
+Actual complete diagnostic Image:
+c19129dd7005e99b8dee76a3088963ad9c179f9cc61e4a6e29632cc0e973d956
+Standard 60-second flight: TIMEOUT, not PASS.
+Separate six-second diagnostic with earlycon=pl011,0x09000000 nokaslr:
+last line "Root IRQ handler: gic_handle_irq"; CPU0 PC ffff800080f52b60.
+Frame chain: queued_spin_lock_slowpath -> _raw_spin_lock_irqsave ->
+__irq_get_desc_lock -> __irq_set_handler -> irq_domain_set_info ->
+gic_irq_domain_map. Lock at ffff0000084264ac contains 0x101.
+The preceding irq_set_percpu_devid path calls irq_modify_status; its scoped
+irqdesc guard acquires the lock but the emitted function has no destructor
+call to __irq_put_desc_unlock. The next handler setup attempts to lock it again.
+
+Authority boundary: Section 10.1.9 still explicitly preserves unlisted attributes
+without applying them; cleanup is not an applied exception. This is a body
+conflict awaiting authorization, not a silent implementation override or a PASS.

@@ -19,6 +19,13 @@ K-L05 records the newly exposed symbol-attachment defect.
 The baseline failed mixed-link attempt remains `measure-20260910T160033Z`;
 earlier reports remain history.
 
+The subsequent complete **diagnostic composition** now links with all 2,799
+EvoCC target-C objects retained. Its current Image is `c19129dd7005e99b8dee76a3088963ad9c179f9cc61e4a6e29632cc0e973d956`;
+the standard flight still times out. A separate early-console diagnostic reaches
+IRQ initialization, then waits on a lock whose GNU `cleanup` destructor was
+not emitted (K-R05 below). This combines several EvoCC revisions for diagnosis;
+it is not a fresh uniform survey or a passing K6 result.
+
 **Scope:** the pinned ARM64 configuration in `contracts/kernel-target.json`,
 currently 2,799 target C compile records. K6 requires all required target C
 objects from EvoCC, a complete link without reference-compiler C fallback,
@@ -100,7 +107,7 @@ This is still a mixed-EvoCC-revision diagnostic composition, not a fresh survey.
 Its actual 60-second HVF flight **TIMED OUT before console output**, Image
 `b6194b9a7683d7e5d15e37c6d406ad6b6fa0d90099bf639d6ba247ec576593ab`.
 
-**K-R03 / OPEN: visibility pragma in early position-independent code.**
+**K-R03 / original replay PASS: visibility pragma in early position-independent code.**
 Linux `include/linux/hidden.h` writes `#pragma GCC visibility push(hidden)`, but
 the old §10.4 classified visibility pragmas as ignored-safe; consequently
 `__pi_create_init_idmap` loads the virtual address of `arm64_use_ng_mappings`
@@ -132,7 +139,7 @@ in [`visibility-references-20260913`](../../.evidence/k1/visibility-references-2
 installed objects retained, export source stable. Boot still times out before
 console on Image `7cfa16a1b3d548dac0f897f0eb05d584410fc855fa7402ecd3cf33f256bf05bb`.
 
-**K-R04 / OPEN: a trailing empty flexible-array element lost its storage.**
+**K-R04 / original replay PASS: a trailing empty flexible-array element lost its storage.**
 The bounded first-exception trace points to `__pi_match_options`, brk #3005,
 not the previous GOT fault. `mmfr0.fields` has one populated entry plus an empty
 sentinel, but its object occupied 56 bytes instead of 80. Traversal consequently
@@ -140,8 +147,29 @@ read the next descriptor's text as a shift count. RED `ba89539` checks six exact
 object extents and execution; both sealed oracles agree. Normalization now counts
 visited subobjects even when sparse initialization emits no scalar action. The
 118-test initializer/external-symbol gate passes, including both interpreters
-and native execution. Original `idreg-override.o` replay and boot follow; do not
-remove the correctly firing shift guard.
+and native execution. Original `idreg-override.o` replay takes 1.805 seconds;
+all seven descriptor sizes now match the reference object. The complete link
+retains all 2,799 EvoCC objects with stable generated export source, recorded in
+[`flexible-sentinel-20260913`](../../.evidence/k1/flexible-sentinel-20260913/result.json).
+Boot remains TIMEOUT, but the diagnostic flight gets through MMU and memory
+setup to IRQ initialization; the shift guard is unchanged.
+
+**K-R05 / SPEC_BODY_CONFLICT: scope-exit cleanup is not executed.**
+The next stopped CPU is in `queued_spin_lock_slowpath`, entered by
+`gic_irq_domain_map` through `__irq_set_handler`; the descriptor lock contains
+`0x101`. The preceding `irq_modify_status` uses the kernel's scoped guard, whose
+`cleanup(class_irqdesc_lock_destructor)` must release that lock, but its emitted
+body has no destructor call. The small
+[`cleanup-scope-exits.c`](../../tests/fixtures/cleanup-scope-exits.c) probe returns
+zero under both sealed compilers at O0/O2, while both EvoCC interpreters report
+program value 2 and native EvoCC exits 2 (missing release), as recorded in
+[`cleanup-scope-exits.txt`](../../tests/fixtures/cleanup-scope-exits.txt).
+Section 10.1.9 explicitly leaves unlisted attributes unapplied; `cleanup` has
+no exception, so applying it requires a body ruling. Proposed closure is ordinary
+cleanup calls before object lifetime end, in reverse declaration order on every
+scope-exit path, retaining return-expression evaluation order; no new IR kind
+or kernel-specific workaround. Production and the existing test expectations
+remain unchanged pending that authority. No QEMU or benchmark run is left active.
 
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):
