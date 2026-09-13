@@ -1,0 +1,8 @@
+Sealed image: sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Sources: pointer-symbol-linkage.c, pointer-symbol-override.c
+Command per compiler/optimization: CC -std=gnu11 -OOPT -c pointer-symbol-linkage.c -o weak.o; nm -g --defined-only weak.o; CC -std=gnu11 -OOPT pointer-symbol-override.c weak.o -o probe; ./probe
+gcc-14 O0 linked-exit=0
+gcc-14 O2 linked-exit=0
+clang-19 O0 linked-exit=0
+clang-19 O2 linked-exit=0
+All four nm results: W choose, W choose_pair, W choose_qualified; V callback, V pointer_object; T alternative and T implementation at the same address.

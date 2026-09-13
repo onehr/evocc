@@ -5185,9 +5185,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         resolved
     }
 
-    /// Pointer-position attributes are never applied, but an `aligned`
+    /// Pointer type attributes are never applied, but an `aligned`
     /// argument must still satisfy the attribute grammar's representability
-    /// and power-of-two constraint.
+    /// and power-of-two constraint. Symbol linkage is handled separately.
     fn validate_pointer_attributes(&mut self, attributes: &[Attribute]) {
         for attribute in attributes {
             if attribute.semantic_name() == Some("aligned") {
@@ -7111,11 +7111,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         function_definition_possible: bool,
     ) -> Option<ParsedDeclarator<'arena>> {
         let mut pointers = Vec::new();
+        let mut symbol_attributes = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
             let qualifiers = self.parse_qualifiers();
             let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
             self.validate_pointer_attributes(&attributes);
+            // Linkage marks describe the declared symbol, never its pointer
+            // type. Keep their written position/span, but put them in the
+            // declaration inventory shared by linkage and attribute queries.
+            // Other pointer attributes remain on the written pointer layer.
+            let (linkage, attributes): (Vec<_>, Vec<_>) = attributes
+                .into_iter()
+                .partition(|attribute| matches!(attribute.semantic_name(), Some("weak" | "alias")));
+            symbol_attributes.extend(linkage);
             let end = self
                 .tokens
                 .get(self.pos.saturating_sub(1))
@@ -7147,6 +7156,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             return None;
         };
+        symbol_attributes.append(&mut declarator.attributes);
+        declarator.attributes = symbol_attributes;
 
         loop {
             match self.peek_kind() {

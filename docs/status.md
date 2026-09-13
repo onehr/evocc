@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-13 UTC,EvoIR 1.9.94 / EvoMIR 0.29, checkout f0c670e)
+EvoCC ── (2026-09-13 UTC,EvoIR 1.9.94 / EvoMIR 0.29, checkout 85a25e5)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -41,7 +41,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260913T014446.688767Z`; checkout `f0c670e`; selected gates `ERROR`. Run again with `python3 tools/bench.py all`.
+Run `20260913T024049.017790Z`; checkout `85a25e5`; selected gates `ERROR`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run.
 
@@ -63,7 +63,7 @@ Program counts and translation-unit counts are different measures; an incomplete
 | jq | E10 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | lua | E11 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | sqlite | E12 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
-| kernel-full | K6 | ERROR | 0/2799 units | 20260913T014446.688767Z | runner exit 1 |
+| kernel-full | K6 | ERROR | 0/2799 units | 20260913T024049.017790Z | runner exit 1 |
 | kernel-selftest | K7 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no kselftest adapter yet |
 
 Details and commands: [bench receipt](../tests/contracts/bench-receipt.json). Partial failed runs and source-level blockers: [benchmark review](notebook/benchmark-evaluation.md).

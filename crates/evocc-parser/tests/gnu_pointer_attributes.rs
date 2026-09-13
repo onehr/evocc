@@ -1,8 +1,8 @@
 //! Pointer-declarator GNU attributes (specification 10.1.9).
 //!
-//! These attributes belong to the pointer layer formed by the immediately
-//! preceding `*`.  This profile retains them for source fidelity and never
-//! applies them, including `aligned`.
+//! Type attributes belong to the pointer layer formed by the immediately
+//! preceding `*`. This profile retains them without applying them, including
+//! `aligned`; the symbol-only `weak`/`alias` marks belong to the declaration.
 
 use evocc_chir::{render_unit_summary, CHirUnit};
 use evocc_common::{Arena, FileId, SourceFile};

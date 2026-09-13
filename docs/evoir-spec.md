@@ -7027,3 +7027,10 @@ No diagnostic is allocated; all 2,799 command records contain optimization optio
 `__builtin_extract_return_addr(p)` evaluates its pointer operand exactly once and returns that same address and provenance, without an external call; `return_address` already performs the target's return-address normalization.
 Both sealed compilers at O2 execute `tests/fixtures/extract-return-address.c` with exit zero, including a side-effecting operand and a null address (`resolved-compiler-queries.out`).
 No diagnostic is allocated; the original `lib/vsprintf.o` emission exposed one observed kernel unit with an unintended unresolved builtin call, not a completed link measurement.
+
+### Symbol linkage marks inside a named pointer declarator
+
+The symbol-only `weak`/`alias` rules of Section 5.2 also govern a mark after `*` in a named declarator: it describes the declared object or function, not the pointer type; retain its written placement and span once in the declaration inventory.
+This does not apply pointer type attributes such as `aligned` or `mode`, change layout, or propagate a parameter's mark to its enclosing function.
+Both sealed GCC-14 and Clang-19 at O0/O2 emit the weak function/object bindings and one-address alias in `tests/fixtures/pointer-symbol-linkage.{c,out}`, and link `pointer-symbol-override.c` with exit zero.
+The existing E3060/E3061 checks remain; no diagnostic is allocated, and run `20260913T024049Z` exposed four duplicate definitions in three original kernel units before this correction.
