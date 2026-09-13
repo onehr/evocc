@@ -351,6 +351,9 @@ pub struct Parser<'src, 'arena> {
     /// object.  It admits the final flexible member without changing the
     /// record type itself.
     flexible_initializer_allowed: bool,
+    /// Root flexible member and its highest visited element. Empty aggregate
+    /// initializers consume storage even though the sparse plan has no store.
+    flexible_initializer_extent: Option<(usize, u64)>,
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
@@ -519,6 +522,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             pack_stack: Vec::new(),
             visibility_stack: Vec::new(),
             flexible_initializer_allowed: false,
+            flexible_initializer_extent: None,
         }
     }
 
@@ -3157,9 +3161,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         allow_flexible_member: bool,
     ) -> Option<InitPlan<'arena>> {
         let previous = self.flexible_initializer_allowed;
+        let previous_extent = self.flexible_initializer_extent;
         self.flexible_initializer_allowed = allow_flexible_member;
+        self.flexible_initializer_extent = self
+            .final_flexible_array_member(target)
+            .filter(|_| allow_flexible_member)
+            .map(|(index, _, _)| (index, 0));
         let result = self.normalize_initializer_plan_inner(target, written);
         self.flexible_initializer_allowed = previous;
+        self.flexible_initializer_extent = previous_extent;
         result
     }
 
@@ -3181,7 +3191,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut actions = Vec::new();
         self.normalize_initializer_value(target, SubobjectPath::root(), written, &mut actions)?;
-        let flexible_array_elements = self.flexible_initializer_element_count(target, &actions);
+        let flexible_array_elements = self
+            .flexible_initializer_element_count(target, &actions)
+            .max(
+                self.flexible_initializer_extent
+                    .map_or(0, |(_, count)| count),
+            );
         let mut plan = InitPlan::with_last_write_wins(target, actions, &self.types)
             .with_flexible_array_elements(flexible_array_elements);
         if matches!(
@@ -3548,6 +3563,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         actions: &mut Vec<InitAction<'arena>>,
     ) -> Option<()> {
         let kind = self.types.get(target)?.kind.clone();
+        if let (
+            Some((member, count)),
+            [SubobjectStep::Field { field_index }, SubobjectStep::Index { index }, ..],
+        ) = (&mut self.flexible_initializer_extent, path.steps())
+        {
+            if member == field_index {
+                *count = (*count).max(index.saturating_add(1));
+            }
+        }
         if self.flexible_initializer_allowed
             && matches!(
                 kind,

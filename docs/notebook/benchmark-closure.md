@@ -126,6 +126,23 @@ closes over adjacent flags chains without changing either validator. The
 external-symbol, attribute, wide-integer and allocator suites pass 182/182;
 these tests do not establish a successful boot.
 
+The visibility and unused-declaration fixes now pass the actual complete link
+in [`visibility-references-20260913`](../../.evidence/k1/visibility-references-20260913/result.json):
+40 original commands, 31 identical objects reused, nine reassembled, all 2,799
+installed objects retained, export source stable. Boot still times out before
+console on Image `7cfa16a1b3d548dac0f897f0eb05d584410fc855fa7402ecd3cf33f256bf05bb`.
+
+**K-R04 / OPEN: a trailing empty flexible-array element lost its storage.**
+The bounded first-exception trace points to `__pi_match_options`, brk #3005,
+not the previous GOT fault. `mmfr0.fields` has one populated entry plus an empty
+sentinel, but its object occupied 56 bytes instead of 80. Traversal consequently
+read the next descriptor's text as a shift count. RED `ba89539` checks six exact
+object extents and execution; both sealed oracles agree. Normalization now counts
+visited subobjects even when sparse initialization emits no scalar action. The
+118-test initializer/external-symbol gate passes, including both interpreters
+and native execution. Original `idreg-override.o` replay and boot follow; do not
+remove the correctly firing shift guard.
+
 The eleven focused original-command replays are recorded in
 [`constant-linkage-20260913/objects.json`](../../.evidence/k1/constant-linkage-20260913/objects.json):
 all eleven emitted and assembled, with three compiler workers. The associated
