@@ -56,6 +56,44 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
 #[test]
+fn a_private_callee_unused_parameter_does_not_force_an_external_address() {
+    let source = format!(
+        "extern @absent size=4 align=4
+
+func @ignore(%arg0: ptr<generic>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default visibility=internal
+{PURE}
+{{
+^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 7
+    ret %v3, %v1, %v2
+}}
+
+func @entry(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+{PURE}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = global_addr @absent : ptr<generic>
+    (%v3, %v4, %v5) = call @ignore(%v2, %v0, %v1)
+    ret %v3, %v4, %v5
+}}
+"
+    );
+    let private = emitted(Target::Linux, &source);
+    assert!(
+        !private
+            .lines()
+            .any(|line| line.contains("absent") && !line.trim_start().starts_with('.')),
+        "an unused private-call argument keeps an unresolved address: {private}"
+    );
+    // External linkage can be interposed, so an unused local body parameter
+    // is not authority to change the argument supplied to that symbol.
+    let public = emitted(Target::Linux, &source.replace(" visibility=internal", ""));
+    assert!(public
+        .lines()
+        .any(|line| line.contains("adrp") && line.contains("absent")));
+}
+
+#[test]
 fn undefined_symbol_addresses_use_indirection_without_changing_definitions() {
     let source = format!(
         "extern @value size=4 align=4 linkage=weak
