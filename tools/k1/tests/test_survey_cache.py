@@ -38,6 +38,55 @@ class CacheKeyTest(unittest.TestCase):
         self.assertIn("targets", inspect.signature(substitute.relink).parameters,
                       "prepare must precede final object installation and linking")
 
+    def test_export_table_is_compiled_after_modpost_from_actual_generated_source(self) -> None:
+        recompile = getattr(substitute, "recompile_export_table", None)
+        self.assertTrue(callable(recompile), "modpost creates another target C input after prepare")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "out"
+            output.mkdir()
+            source = output / ".vmlinux.export.c"
+            source.write_text("old exports\n")
+            binary = root / "evocc"
+            binary.write_bytes(b"measured compiler")
+            args = SimpleNamespace(src_root=root / "src", evocc=binary, timeout=180,
+                                   relink_jobs=2, no_cache=False, allow_symbol_drift=True)
+            unit = ".vmlinux.export.o"
+            records = {unit: substitute.Record(root / "record", unit, ("gcc-14",), source.name)}
+            rows = [{"unit": unit, "outcome": "substituted", "installedSha256": "old"}]
+            events = []
+            def produce(*args):
+                self.assertEqual(args[-1], ("modpost",))
+                events.append("produce")
+                source.write_text("actual complete-composition exports\n")
+                return 0
+            def emit(*args):
+                self.assertEqual(args[4], output)
+                self.assertEqual(source.read_text(), "actual complete-composition exports\n")
+                events.append("compile")
+                return {"unit": unit, "outcome": "emitted"}
+            def assemble(rows, *args, **kwargs):
+                events.append("assemble")
+                rows[0].update(outcome="assembled", objectSha256="new")
+            def install(rows, *args):
+                events.append("install")
+                self.assertTrue(rows[0]["recompiledAfterPrepare"])
+                rows[0].update(outcome="substituted", installedSha256="new")
+            with patch.object(substitute, "relink", side_effect=produce), \
+                    patch.object(substitute, "emit_assembly", side_effect=emit), \
+                    patch.object(substitute, "assemble_batch", side_effect=assemble), \
+                    patch.object(substitute, "install", side_effect=install):
+                result = recompile(rows, records, args, root / "asm", output, root)
+            self.assertTrue(result["ready"])
+            self.assertEqual(result["sourceSha256"], substitute.sha256_file(source))
+            self.assertEqual(events, ["produce", "compile", "assemble", "install"])
+            self.assertEqual(rows[0]["installedSha256"], "new")
+            with patch.object(substitute, "relink", return_value=2), \
+                    patch.object(substitute, "emit_assembly") as emit_mock:
+                result = recompile(rows, records, args, root / "asm", output, root)
+            self.assertFalse(result["ready"])
+            emit_mock.assert_not_called()
+
     def test_relinks_keep_the_reference_build_version_and_prepare_both_headers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

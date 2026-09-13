@@ -454,6 +454,22 @@ fn masked_configuration_edges_do_not_keep_undefined_calls() {
 }
 
 #[test]
+fn guarded_private_state_keeps_the_impossible_case_unlinked() {
+    let module = assert_execution_with_optimization(
+        include_str!("../../../tests/fixtures/guarded-private-state.c"),
+        true,
+    );
+    assert!(!module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(
+            |i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_state")
+        ));
+}
+
+#[test]
 fn mask_facts_keep_operand_effects_and_poison_consumption() {
     assert_execution_with_optimization(
         "int n; int tick(void){return ++n;} int main(void){if(tick() & 0)return 1;return n!=1;}",
