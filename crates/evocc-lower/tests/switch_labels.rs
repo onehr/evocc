@@ -415,6 +415,82 @@ fn constant_expression_edges_keep_selected_values_and_effects() {
 }
 
 #[test]
+fn masked_configuration_edges_do_not_keep_undefined_calls() {
+    for condition in [
+        "(n & 0U) != 0",
+        "(0U & n) != 0",
+        "(n * 0U) != 0",
+        "(n | ~0U) == 0",
+        "(n ^ n) != 0",
+        "(n - n) != 0",
+    ] {
+        let source = format!(
+            "extern int absent(void); int check(unsigned n){{if({condition})return absent();return 0;}}
+             int main(void){{return check(7);}}"
+        );
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(
+            !module
+                .functions
+                .iter()
+                .flat_map(|f| &f.blocks)
+                .flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "absent")),
+            "a proved configuration mask retained its unselected call: {condition}"
+        );
+    }
+    let module = assert_execution_with_optimization(
+        "extern int absent(void); unsigned field=0xff00U;
+         static __attribute__((always_inline)) inline unsigned mask(unsigned field){return field / (field & -field);}
+         int main(void){if(7U & ~mask(0xff00U))return absent();return 0;}",
+        true,
+    );
+    assert!(!module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "absent")));
+}
+
+#[test]
+fn mask_facts_keep_operand_effects_and_poison_consumption() {
+    assert_execution_with_optimization(
+        "int n; int tick(void){return ++n;} int main(void){if(tick() & 0)return 1;return n!=1;}",
+        true,
+    );
+    for operand in ["n", "(1 / n)"] {
+        let source = format!("int main(void){{int n; if(({operand}) & 0)return 1;return 0;}}");
+        let arena = Arena::default();
+        let file = FileId::new(45031);
+        let mut lexer = Lexer::new(file, &source);
+        let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, &source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error());
+        let module = evocc_lower::lower_unit_with_optimization(
+            &unit,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            true,
+        )
+        .unwrap();
+        let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+        let args: Vec<_> = main
+            .params
+            .iter()
+            .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+            .collect();
+        let error = evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &args,
+            evocc_evoir::InterpreterLimits::new(10000),
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), "E3001", "{source}: {error}");
+    }
+}
+
+#[test]
 fn constant_branch_selection_uses_the_conditional_common_type() {
     assert_execution(include_str!(
         "../../../tests/fixtures/conditional-common-type.c"

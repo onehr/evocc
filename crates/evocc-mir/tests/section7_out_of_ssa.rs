@@ -95,6 +95,71 @@ fn unused_loop_carried_parameters_do_not_create_copy_pressure() {
 }
 
 #[test]
+fn unused_symbol_addresses_do_not_become_linker_dependencies() {
+    let x = |id| VReg::new(id, RegClass::Gpr64);
+    let function = MFunction {
+        name: "metadata".into(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![x(0)],
+                insts: vec![
+                    MInst::Adrp {
+                        dst: x(1),
+                        symbol: "discarded_marker".into(),
+                        kind: evocc_mir::SymbolKind::Global,
+                    },
+                    MInst::AddPageOff {
+                        dst: x(2),
+                        src: x(1),
+                        symbol: "discarded_marker".into(),
+                        kind: evocc_mir::SymbolKind::Global,
+                    },
+                    MInst::MovImm { dst: x(3), imm: 7 },
+                    MInst::Load {
+                        dst: x(4),
+                        base: x(0),
+                        offset: 0,
+                        kind: evocc_mir::LoadKind::X,
+                        volatile: true,
+                        align: 8,
+                    },
+                ],
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![x(2), x(3)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![x(5), x(6)],
+                insts: vec![],
+                term: MTerm::Ret { values: vec![x(6)] },
+            },
+        ],
+    };
+    let after = out_of_ssa(&function);
+    assert!(
+        !after
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .any(|i| matches!(i, MInst::Adrp { .. } | MInst::AddPageOff { .. })),
+        "unused marker address still produces a relocation"
+    );
+    assert!(
+        after
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .any(|i| matches!(i, MInst::Load { volatile: true, .. })),
+        "unused result does not authorize deleting an actual access"
+    );
+    let allocated = evocc_mir::allocate(&after).unwrap();
+    evocc_mir::verify_allocation(&allocated).unwrap();
+}
+
+#[test]
 fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
     let x = |id| VReg::new(id, RegClass::Gpr64);
     let function = MFunction {
