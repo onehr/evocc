@@ -419,11 +419,12 @@ def defined_symbols(objects: list[tuple[str, Path]], work: Path) -> dict[str, li
     listing.write_text("\n".join(name for name, _ in objects) + "\n", encoding="utf-8")
     script = work / "symbols.sh"
     script.write_text(
-        "#!/bin/sh\n"
+        "#!/bin/sh\nset -eu\n"
         "cd /work/nm || exit 2\n"
         "while IFS= read -r name; do\n"
+        '  symbols=$(nm --defined-only --extern-only "$name") || exit 2\n'
         '  echo "## $name"\n'
-        '  nm --defined-only --extern-only "$name" 2>/dev/null | awk \'{print $2, $3}\'\n'
+        '  printf "%s\\n" "$symbols" | awk \'NF {print $2, $3}\'\n'
         "done < /work/nm/nm-inputs.txt\n",
         encoding="utf-8",
     )
@@ -437,6 +438,8 @@ def defined_symbols(objects: list[tuple[str, Path]], work: Path) -> dict[str, li
         text=True,
         check=False,
     )
+    if completed.returncode:
+        raise RuntimeError(f"symbol reader failed ({completed.returncode}): {completed.stderr.strip()[:600]}")
     table: dict[str, list[str]] = {}
     current = None
     for line in completed.stdout.splitlines():
@@ -445,6 +448,8 @@ def defined_symbols(objects: list[tuple[str, Path]], work: Path) -> dict[str, li
             table[current] = []
         elif current is not None and line.strip():
             table[current].append(line.strip())
+    if set(table) != {name for name, _ in objects}:
+        raise RuntimeError("symbol reader returned an incomplete object inventory")
     return table
 
 

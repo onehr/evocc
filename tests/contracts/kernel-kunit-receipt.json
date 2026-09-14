@@ -219,6 +219,7 @@
   "buildAssertionReplay": {
     "run": "build-assertions-20260914",
     "compilerState": "worktree after 0d1fab9; not yet committed",
+    "subsequentImplementationCommit": "cfc5d64",
     "compilerSha256": "24c06d4b0e81f3b396c6c3dfeb31fe4fe892bf05aa1d85954b2a4dad447bd2e1",
     "units": ".evidence/kunit/build-assertions-20260914/units.jsonl",
     "unitsSha256": "cea7284dc1bf36dde64477e73af0671b4b4950cf82a15efa7712fa1b3a1ee3a3",
@@ -238,6 +239,23 @@
     "test": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 139 passed; Ruff on Python and bash -n on shell both pass",
     "runtime": "NOT_RUN"
   },
+  "symbolReadFailureGuard": {
+    "cause": "A failed container/nm invocation or missing object verdict could be interpreted as two empty symbol sets and accepted as parity.",
+    "repair": "Reject a failed symbol reader or incomplete inventory; retain genuinely successful empty objects. Propagate nm failure before the formatting pipeline.",
+    "red": "2 declared failing subcases; no test import or build error",
+    "gate": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 141 passed; ruff check tools/k1: clean; git diff --check: clean",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 0f3c64d --offline -j2 --quiet: exit 0, no changed Rust crate",
+    "nativeSymbolRead": "NOT_RUN: execution approval service unavailable"
+  },
+  "executionAvailability": {
+    "checkedAt": "2026-09-14T09:35:00Z",
+    "status": "BLOCKED_BEFORE_LAUNCH",
+    "reason": "Automatic approval review failed with Selected model is at capacity, including a narrowed offline request to assemble only the two repaired objects.",
+    "installedObjectAudit": {"records": 2897, "changedObjects": 0},
+    "repairedAssemblyDigestMatches": 2,
+    "newBuildOrVmStarted": false,
+    "nextAction": "Once execution is available, assemble/install the two repaired objects, regenerate the export table, relink and audit, then run full EvoCC KUnit on the declared TCG lane."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
-  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition is being rebuilt against actual generated headers separately."
+  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition failed linking; its two subsequent compiler repairs are not yet installed or booted."
 }

@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 09:28 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 09:35 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -45,6 +45,15 @@ remain separate in the full-selftest and KUnit receipts.
   Assembly, native probes, final relink and KUnit remain pending: the approval
   service repeatedly rejected launches with `Selected model is at capacity`.
   These commands did not start. This is not a test failure or a runtime pass.
+  The implementation is now committed as `cfc5d64`. A fresh read-only check
+  still finds all 2,897 installed object hashes unchanged and both repaired
+  assembly hashes matching. Even a narrowed two-object assembly request was
+  rejected before launch; no new build or VM is running.
+- The symbol comparison now rejects failed `nm` execution or missing object
+  verdicts instead of treating them as empty symbol sets. Genuine successful
+  empty objects remain valid. Two declared RED subcases now pass; all **141**
+  harness tests and Ruff pass. This protects measurement integrity and does
+  not change or upgrade any prior kernel execution result.
 
 ## Runtime packaging: targeted guest replay complete
 
@@ -171,4 +180,5 @@ and source reasoning are distinguished from that unexecuted check.
    full comparison. The original 935-program denominator remains visible.
 
 No new kernel clone was created. The stress and packaging VMs have exited
-normally. The 2,897-unit built-in composition is still running separately.
+normally. The built-in link failed, and the next container/VM launches were
+blocked by the approval service; there is no running composition to monitor.
