@@ -3,6 +3,7 @@
 import importlib.util
 import copy
 from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -23,6 +24,35 @@ class FullSelftest(unittest.TestCase):
                          ['net/forwarding:a.sh', 'mm:test', 'mm:missing'])
         with self.assertRaises(ValueError):
             lane.test_manifest('mm:test\nmm:test\n')
+
+    def test_runtime_install_preserves_ublk_helpers_without_changing_programs(self):
+        self.assertTrue(hasattr(lane, 'install_runtime_helpers'), 'ublk runtime helpers are not installed')
+        with tempfile.TemporaryDirectory() as temp:
+            source, installed = Path(temp) / 'source', Path(temp) / 'installed'
+            (source / 'ublk/trace').mkdir(parents=True)
+            (installed / 'ublk').mkdir(parents=True)
+            (source / 'ublk/test_common.sh').write_text('helper\n')
+            (source / 'ublk/trace/seq_io.bt').write_text('trace\n')
+            (installed / 'ublk/test_generic_01.sh').write_text('original program\n')
+            lane.install_runtime_helpers(source, installed)
+            self.assertEqual((installed / 'ublk/test_common.sh').read_text(), 'helper\n')
+            self.assertEqual((installed / 'ublk/trace/seq_io.bt').read_text(), 'trace\n')
+            self.assertEqual((installed / 'ublk/test_generic_01.sh').read_text(), 'original program\n')
+
+    def test_runtime_dependency_packages_cover_observed_missing_tools(self):
+        self.assertTrue(hasattr(lane, 'RUNTIME_PACKAGES'), 'runtime packages are not declared')
+        self.assertTrue({'procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod'} <= set(lane.RUNTIME_PACKAGES))
+
+    def test_targeted_replay_keeps_the_full_inventory_and_rejects_unknown_names(self):
+        self.assertTrue(hasattr(lane, 'selected_programs'), 'targeted replay is missing')
+        builds = [{'id': 'mm', 'available': ['mm:a', 'mm:b']},
+                  {'id': 'ublk', 'available': ['ublk:c']}]
+        original = copy.deepcopy(builds)
+        self.assertEqual(lane.selected_programs(builds, ['mm', 'ublk:c']), ['mm:a', 'mm:b', 'ublk:c'])
+        self.assertEqual(lane.selected_programs(builds, ['mm:b']), ['mm:b'])
+        self.assertEqual(builds, original)
+        with self.assertRaises(ValueError):
+            lane.selected_programs(builds, ['mispelled'])
 
     def test_build_failure_and_no_tests_cannot_disappear(self):
         builds = [{'id': 'mm', 'buildExit': 0, 'tests': ['mm:test']},
