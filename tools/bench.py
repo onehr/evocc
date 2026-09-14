@@ -65,6 +65,8 @@ def parser():
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
     p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
+    p.add_argument('--refresh-selftest-runtime', action='store_true', help='repair full-suite runtime dependencies without rebuilding test programs')
+    p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
     p.add_argument("--reuse-selftest-reference", type=Path,
                    help="reuse a completed unchanged GCC reference summary and payload; still execute every program on the current EvoCC kernel")
     return p
@@ -99,10 +101,14 @@ def command(name, args, binary):
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
         if name == 'kernel-selftest-all':
-            reuse = '--reuse-build' if args.reuse_selftest_build or args.reuse_selftest_reference else '--install-deps'
+            reuse = '--reuse-build' if not args.refresh_selftest_runtime and (args.reuse_selftest_build or args.reuse_selftest_reference) else '--install-deps'
             cmd = [sys.executable, '-u', str(ROOT / 'tools/k1/selftest_full.py'), '--jobs', str(args.jobs), reuse]
+            if args.refresh_selftest_runtime:
+                cmd += ['--refresh-runtime']
             if args.reuse_selftest_reference:
                 cmd += ['--reference-run', str(args.reuse_selftest_reference)]
+            for selector in args.selftest_select:
+                cmd += ['--select', selector]
             return cmd, env
         return [sys.executable, '-u', str(ROOT / 'tools/k1/selftest.py')], env
     if name == "kernel-full":
@@ -168,6 +174,9 @@ def metrics(name, data):
                    noRunnableTests=measured.get('noRunnableTests', []),
                    reference=data.get('execution', {}).get('reference', {}).get('summary', {}),
                    kernelImageSha256=data['kernelImageSha256'])
+        if data.get('selection'):
+            row['selection'] = data['selection']
+            row['note'] += '; targeted replay, unselected programs NOT_RUN'
         if data.get('blocker'):
             row['error'] = data['blocker']
     elif name == "kernel-selftest":

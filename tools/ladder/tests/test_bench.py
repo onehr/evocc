@@ -19,6 +19,17 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_targeted_selftests_refresh_only_the_runtime_and_keep_selection_explicit(self):
+        options = {option for action in bench.parser()._actions for option in action.option_strings}
+        self.assertIn('--refresh-selftest-runtime', options)
+        self.assertIn('--selftest-select', options)
+        args = bench.parser().parse_args(['kernel-selftest-all', '--refresh-selftest-runtime',
+                                          '--selftest-select', 'ublk', '--selftest-select', 'mm:run_vmtests.sh'])
+        command, _ = bench.command('kernel-selftest-all', args, Path('/unused/compiler'))
+        self.assertIn('--refresh-runtime', command)
+        self.assertIn('--install-deps', command)
+        self.assertEqual(command[-4:], ['--select', 'ublk', '--select', 'mm:run_vmtests.sh'])
+
     def test_kernel_selftests_reuse_the_booted_image_without_a_compiler_build(self):
         self.assertIsNotNone(bench.CATALOG['kernel-selftest'][1])
         args = bench.parser().parse_args(['kernel-selftest', '--allow-qemu-drift'])

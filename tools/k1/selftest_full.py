@@ -17,6 +17,26 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod')
+
+
+def install_runtime_helpers(source, installed):
+    """Upstream ublk scripts source helpers omitted by their install target."""
+    shutil.copy2(source / 'ublk/test_common.sh', installed / 'ublk/test_common.sh')
+    shutil.copytree(source / 'ublk/trace', installed / 'ublk/trace', dirs_exist_ok=True)
+
+
+def selected_programs(builds, selectors):
+    available = [name for build in builds for name in build['available']]
+    if not selectors:
+        return available
+    chosen = set()
+    for selector in selectors:
+        matches = [name for name in available if name == selector or name.split(':', 1)[0] == selector]
+        if not matches:
+            raise ValueError(f'no installed selftests match {selector}')
+        chosen.update(matches)
+    return [name for name in available if name in chosen]
 
 
 def test_manifest(text):
@@ -191,15 +211,27 @@ def build_worker(jobs):
     shutil.copytree(source / 'tools/testing/selftests/kselftest', tests / 'kselftest', dirs_exist_ok=True)
     # Shared network/Python helpers are an upstream installation dependency.
     shutil.copytree(source / 'tools/testing/selftests/net/lib', tests / 'net/lib', dirs_exist_ok=True)
+    install_runtime_helpers(source / 'tools/testing/selftests', tests)
     all_tests = [name for row in metadata['builds'] for name in row['available']]
     (tests / 'kselftest-list.txt').write_text('\n'.join(all_tests) + '\n')
     (tests / 'list').write_text(''.join(f'{b["id"]} {b["programTimeoutSeconds"]}\n'
                                        for b in metadata['builds'] if b['available']))
     (tests / 'huge-pages').write_text('1\n')
+    refresh_runtime(work)
+    metadata.update(json.loads((work / 'build.json').read_text()))
+    metadata['complete'] = True
+    save(work / 'build.json', metadata)
+    return 0
+
+
+def refresh_runtime(work):
+    """Update userspace prerequisites without rebuilding tests or kernel Images."""
+    rootfs = work / 'rootfs'
+    install_runtime_helpers(Path('/work/src/tools/testing/selftests'), rootfs / 'tests')
     # A runtime root, not another kernel tree or complete compiler installation.
     for part in ('usr/bin', 'usr/sbin', 'usr/lib/aarch64-linux-gnu', 'usr/lib/python3',
                  'usr/lib/python3.13', 'usr/lib/locale', 'usr/libexec', 'usr/share/perl5',
-                 'usr/share/perl', 'usr/share/zoneinfo', 'etc'):
+                 'usr/share/perl', 'usr/share/zoneinfo', 'usr/lib/udev', 'usr/lib/systemd', 'etc'):
         if Path('/' + part).exists():
             dest = rootfs / part
             dest.mkdir(parents=True, exist_ok=True)
@@ -219,7 +251,9 @@ def build_worker(jobs):
         'file /full-suite /work/full/full-suite 644 0 0\n')
     with (work / 'initramfs.cpio').open('wb') as handle:
         subprocess.run(['/work/bin/gen_init_cpio', '-t', '0', str(work / 'spec.txt')], stdout=handle, check=True)
-    metadata['complete'] = True
+    metadata = json.loads((work / 'build.json').read_text())
+    metadata['runtimePackages'] = subprocess.check_output(['dpkg-query', '-W'], text=True)
+    metadata['runtimeHelpers'] = ['ublk/test_common.sh', 'ublk/trace']
     save(work / 'build.json', metadata)
     return 0
 
@@ -228,17 +262,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--build-worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--runtime-worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--refresh-runtime', action='store_true', help='install missing runtime prerequisites without rebuilding tests')
     parser.add_argument('--build-only', action='store_true')
     parser.add_argument('--reuse-build', action='store_true')
     parser.add_argument('--reference-run', type=Path,
                         help='reuse a finished reference summary after checking the unchanged Image and payload; execute every subject program')
     parser.add_argument('--install-deps', action='store_true', help='install additional selftest dependencies only in the disposable build container')
     parser.add_argument('--allow-qemu-drift', action='store_true')
+    parser.add_argument('--select', action='append', default=[], help='replay an installed collection or collection:program; other programs remain NOT_RUN')
     args = parser.parse_args()
     if args.reference_run and not args.reuse_build:
         parser.error('--reference-run requires --reuse-build')
+    if args.reference_run and (args.refresh_runtime or args.select):
+        parser.error('reference reuse requires a complete run with the unchanged payload')
+    if args.refresh_runtime and not args.install_deps:
+        parser.error('--refresh-runtime requires --install-deps')
     if args.build_worker:
         return build_worker(args.jobs)
+    if args.runtime_worker:
+        return refresh_runtime(Path('/work/full'))
     import selftest
     if args.allow_qemu_drift:
         os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
@@ -251,7 +294,7 @@ def main():
         raise ValueError('unchanged complete booted kernel required')
     environment = selftest.read(ROOT / 'contracts/build-environment.json')['buildImage']
     image = environment['sealedImageTag']
-    if not args.reuse_build:
+    if not args.reuse_build or args.refresh_runtime:
         installed = json.loads(subprocess.check_output(['/usr/local/bin/container', 'image', 'inspect', image], text=True))
         if installed[0]['configuration']['descriptor']['digest'] != environment['executionReference']:
             raise ValueError('selftest seed image differs from the frozen build environment')
@@ -262,14 +305,15 @@ def main():
                '-v', f'{ROOT / "tools/k1"}:/work/harness:ro',
                '-v', f'{ROOT / ".build/reference/gcc-lane-1/usr/gen_init_cpio"}:/work/bin/gen_init_cpio:ro',
                *([] if args.install_deps else ['--network', 'none']), image]
-        worker = f'exec python3 /work/harness/selftest_full.py --build-worker --jobs {args.jobs}'
+        mode = '--runtime-worker' if args.refresh_runtime else '--build-worker'
+        worker = f'exec python3 /work/harness/selftest_full.py {mode} --jobs {args.jobs}'
         if args.install_deps:
             packages = ('pkgconf libcap-dev libnuma-dev libmnl-dev libasound2-dev libaio-dev liburing-dev '
                         'libnl-3-dev libnl-genl-3-dev libcap-ng-dev libunwind-dev libtraceevent-dev '
                         'libbpf-dev libpopt-dev libfuse-dev libfuse3-dev libjson-c-dev libpcap-dev libkeyutils-dev '
                         'iproute2 iputils-ping iptables nftables ethtool socat numactl bc strace jq '
                         'python3-pyroute2 python3-yaml python3-pytest python3-scapy python3-pexpect '
-                        'gawk python3-jsonschema libmbedtls-dev')
+                        'gawk python3-jsonschema libmbedtls-dev ' + ' '.join(RUNTIME_PACKAGES))
             worker = ('apt-get -o Acquire::Check-Valid-Until=false update > /work/full/dependencies.log 2>&1 && '
                       'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends '
                       + packages + ' >> /work/full/dependencies.log 2>&1 && ' + worker)
@@ -281,6 +325,7 @@ def main():
     if args.build_only:
         return 0
     build = selftest.read(work / 'build.json')
+    selected = selected_programs(build['builds'], args.select)
     if ([row['id'] for row in build['builds']] != build['targets']
             or not all((work / name).is_file() for name in ('initramfs.cpio', 'scratch.img'))):
         raise ValueError('selftest build has not completed its enumeration and payload')
@@ -303,6 +348,9 @@ def main():
                                 'upstreamTimeouts': 'unchanged; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
                                 'unlimitedProgramWatchdogSeconds': 300,
                                 'modules': 'not built or installed; frozen Images and configuration unchanged'}
+    if args.select:
+        receipt['selection'] = {'selectors': args.select, 'programs': selected,
+                                'unselected': 'NOT_RUN; original inventory retained'}
     if receipt['kernelConfigSha256'] != receipt['referenceConfigSha256']:
         raise ValueError('reference and subject kernel configurations differ')
     def checkpoint():
@@ -363,7 +411,7 @@ def main():
         print(f'Reusing {len(cases)} unchanged reference measurements from {previous["run"]}; every subject program will run', flush=True)
 
     tasks = [(label, b, number, ident) for b in build['builds']
-             for number, ident in enumerate(b['available'], 1) for label in active_images]
+             for number, ident in enumerate(b['available'], 1) if ident in selected for label in active_images]
     with ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:
         # A guest which cannot start the test runtime would repeat the same boot
         # failure hundreds of times. Measure it once and retain every NOT_RUN.
