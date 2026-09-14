@@ -19,6 +19,22 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_upstream_install_dependencies_are_built_without_becoming_test_collections(self):
+        self.assertTrue(hasattr(lane, 'enumerate_collections'),
+                        'the build enumeration drops INSTALL_DEP_TARGETS such as net/lib')
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / 'Makefile').write_text(
+                'TARGETS := net mm\nTARGETS_HOTPLUG := cpu-hotplug\n'
+                'INSTALL_DEP_TARGETS := net/lib net\n')
+            targets, dependencies = lane.enumerate_collections(['make', '-s', '-C', temp])
+            self.assertEqual(targets, ['net', 'mm', 'cpu-hotplug'])
+            self.assertEqual(dependencies, ['net/lib'])
+        dependency = {'id': 'net/lib', 'buildExit': 2, 'installExit': 0, 'buildErrors': []}
+        result = lane.summarize([], [], [dependency])
+        self.assertEqual(result['dependencyBuildFailures'], ['net/lib'])
+        self.assertEqual(result['programs'], 0)
+        self.assertNotEqual(result['status'], 'PASS')
+
     def test_long_stressor_uses_its_declared_test_timeout_not_the_collection_default(self):
         self.assertTrue(hasattr(lane, 'program_timeout'))
         build = {'programTimeoutSeconds': 60}

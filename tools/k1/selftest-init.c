@@ -83,6 +83,45 @@ static int run(const char *id, unsigned timeout)
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 
+static void load_runtime_modules(void)
+{
+    FILE *file = fopen("/tests/modules", "r");
+    if (!file) {
+        if (errno == ENOENT)
+            return; /* The original module-free runtime is unchanged. */
+        fatal("read module setup");
+    }
+    char name[128];
+    while (fgets(name, sizeof(name), file)) {
+        size_t length = strcspn(name, "\n");
+        if (!length || name[length] != '\n'
+            || strspn(name, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != length) {
+            errno = EINVAL;
+            fatal("invalid module setup");
+        }
+        name[length] = '\0';
+        pid_t child = fork();
+        if (child < 0)
+            fatal("fork modprobe");
+        if (!child) {
+            execlp("modprobe", "modprobe", "--", name, NULL);
+            _exit(127);
+        }
+        int status;
+        while (waitpid(child, &status, 0) < 0)
+            if (errno != EINTR)
+                fatal("wait modprobe");
+        if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+            errno = EIO;
+            fatal("load required runtime module");
+        }
+        dprintf(1, "KSELFTEST_SETUP module %s loaded\n", name);
+    }
+    if (!feof(file))
+        fatal("incomplete module setup");
+    fclose(file);
+}
+
 int main(void)
 {
     char command[4096], nonce[129], id[200];
@@ -144,10 +183,11 @@ int main(void)
             fatal("mount devpts");
     }
     if (full_suite) {
+        load_runtime_modules();
         if (system("ip link set lo up"))
             fatal("enable loopback");
-        const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf", "securityfs"};
-        const char *paths[] = {"/sys/kernel/debug", "/sys/kernel/tracing", "/sys/fs/cgroup", "/sys/fs/bpf", "/sys/kernel/security"};
+        const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf", "securityfs", "fusectl"};
+        const char *paths[] = {"/sys/kernel/debug", "/sys/kernel/tracing", "/sys/fs/cgroup", "/sys/fs/bpf", "/sys/kernel/security", "/sys/fs/fuse/connections"};
         for (unsigned i = 0; i < sizeof(types) / sizeof(types[0]); ++i)
             if (mount(types[i], paths[i], types[i], 0, NULL))
                 dprintf(1, "KSELFTEST_SETUP unavailable %s: %s\n", types[i], strerror(errno));

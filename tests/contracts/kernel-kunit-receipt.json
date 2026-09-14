@@ -322,6 +322,20 @@
     "newBuildOrVmStarted": true,
     "nextAction": "Install and execute matching EvoCC modules; complete the six NEON units, BTF metadata and remaining shared selftest diagnoses."
   },
+  "matchingModuleRuntime": {
+    "capture": ".evidence/kunit/runtime-modules-20260914",
+    "targetCRecords": 31,
+    "compilerSha256": "c4eb8810622368af1e51a31df76210566f92a4f88bdea5b84bd6a6f332d4eeb3",
+    "modules": ["drivers/net/veth.ko", "fs/fuse/fuse.ko", "fs/overlayfs/overlay.ko"],
+    "link": "Original Kbuild ld commands; all 31 installed C object hashes audited, no GCC fallback",
+    "runtime": "All three matching modules load on both Images; FUSE 1/1 and overlayfs dev_in_maps 1/1 pass on each",
+    "isolatedOverlayLayersEachKernel": {"PASS": 5, "FAIL": 2},
+    "overlayFailureCauses": ["Detached-mount test creates /set_layers_via_fds_tmpfs/u/{upper,work} but asserts /tmp/{u,w}; failed teardown contaminates the subsequent aggregate run", "override_creds_nomknod also drops CAP_SYS_ADMIN; clone_private_mount checks that capability and returns EPERM on both kernels"],
+    "veth": "Generated BPF helper now installed; XDP/channel checks run, but UDP receive fails because IPv6 is a module not yet installed",
+    "runtimeResults": ".evidence/kunit/runtime-modules-20260914/runtime-results.json",
+    "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
+    "claimLimit": "Three modules exercised, not a complete module installation. Original tests and failed captures are unchanged. Full module C recompilation is in progress."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
 }

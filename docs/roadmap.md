@@ -2085,9 +2085,14 @@ shared arm64 breakpoint failures. The padding repair has passed the original
 `20260914-subject-padding-tcg` is **1,325 PASS / 7 FAIL / 108 SKIP**, with zero
 new regressions against the GCC control. The seven source-explained arm64
 breakpoint failures remain FAIL, not claimed passes.
+VETH, FUSE and overlayfs now link from 31 audited EvoCC target-C inputs and
+load on both matching expanded Images. FUSE and overlayfs `dev_in_maps` pass;
+isolated overlay layer tests give 5 PASS / 2 source-explained shared FAIL each.
+The missing upstream `net/lib` install dependency is now built, and VETH
+reaches the still-missing IPv6 module. This is not complete module coverage.
 Six NEON module units and BTF type metadata remain compiler
-work, not architecture exclusions; no installed-module or all-test pass is
-claimed. The runtime root-mount repair also restores the original statmount
+work, not architecture exclusions; no all-test pass is claimed.
+The runtime root-mount repair also restores the original statmount
 namespace test to 2/2 on both Images without changing the kernel test.
 See the dated runtime update in
 [the blocker ledger](notebook/benchmark-closure.md#runtime-prerequisite-and-compiler-repairs-2026-09-14)

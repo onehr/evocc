@@ -112,7 +112,7 @@ def test_manifest(text):
     return rows
 
 
-def summarize(builds, runtime):
+def summarize(builds, runtime, dependencies=()):
     actual = {row['id']: row for row in runtime}
     counts = Counter()
     incomplete = []
@@ -129,6 +129,8 @@ def summarize(builds, runtime):
             incomplete.append(build['id'])
     counts = +counts
     failed = [b['id'] for b in builds if b['buildExit'] != 0 or b.get('buildErrors')]
+    dependency_failures = [b['id'] for b in dependencies
+                           if b['buildExit'] != 0 or b['installExit'] != 0 or b.get('buildErrors')]
     empty = [b['id'] for b in builds if not b.get('available', b['tests'])]
     return {'collections': len(builds), 'programs': sum(len(b['tests']) for b in builds),
             'completedCollections': sum(bool(b.get('available', b['tests']))
@@ -136,10 +138,11 @@ def summarize(builds, runtime):
                 and all(c.get('started', True) for c in actual.get(b['id'], {}).get('cases', []))
                 for b in builds),
             'outcomes': dict(counts), 'buildFailures': failed, 'noRunnableTests': empty,
+            'dependencyBuildFailures': dependency_failures,
             'incompleteCollections': incomplete,
             'timedOutCollections': [r['id'] for r in runtime if r.get('outcome') == 'TIMEOUT'
                                     or r.get('boot', {}).get('verdict') == 'TIMEOUT'],
-            'status': 'PASS' if counts and set(counts) == {'PASS'} and not failed
+            'status': 'PASS' if counts and set(counts) == {'PASS'} and not failed and not dependency_failures
             and not empty and not incomplete else 'INCOMPLETE'}
 
 
@@ -198,6 +201,20 @@ def build_command(command, handle, timeout):
         return 124
 
 
+def enumerate_collections(base):
+    """Read both runnable targets and their upstream install dependencies."""
+    emitted = subprocess.check_output(base + ['-s', '-f', 'Makefile', '-f', '-', 'print_collections'],
+        input='print_collections:\n\t@printf "%s\\n" "$(TARGETS) $(TARGETS_HOTPLUG)" "$(INSTALL_DEP_TARGETS)"\n',
+        text=True).splitlines()
+    if len(emitted) != 2:
+        raise ValueError('invalid upstream collection enumeration')
+    targets, dependencies = [list(dict.fromkeys(line.split())) for line in emitted]
+    if not targets or any(not re.fullmatch(r'[\w/-]+', t) or '..' in t.split('/')
+                          for t in targets + dependencies):
+        raise ValueError('invalid upstream TARGETS enumeration')
+    return targets, [name for name in dependencies if name not in targets]
+
+
 def build_worker(jobs):
     """Runs only inside the disposable Linux build container, never on the host."""
     work, original = Path('/work/full'), Path('/work/src')
@@ -219,16 +236,13 @@ def build_worker(jobs):
     tests.mkdir(parents=True, exist_ok=True)
     base = ['make', '--no-print-directory', '-C', str(source / 'tools/testing/selftests'),
             'ARCH=arm64', 'SKIP_TARGETS=']
-    enumeration = subprocess.check_output(base + ['-s', '-f', 'Makefile', '-f', '-', 'print_collections'],
-        input='print_collections:\n\t@printf "%s\\n" $(TARGETS) $(TARGETS_HOTPLUG)\n', text=True)
-    targets = list(dict.fromkeys(enumeration.split()))
-    if not targets or any(not re.fullmatch(r'[\w/-]+', t) for t in targets):
-        raise ValueError('invalid upstream TARGETS enumeration')
+    targets, dependencies = enumerate_collections(base)
     metadata = {'targets': targets, 'enumerationCommand': base,
+                'installDependencyTargets': dependencies, 'dependencyBuilds': [],
                 'packages': subprocess.check_output(['dpkg-query', '-W'], text=True),
                 'compiler': subprocess.check_output(['gcc-14', '--version'], text=True), 'builds': []}
     save(work / 'build.json', metadata)
-    for target in targets:
+    for target in dependencies + targets:
         if shutil.disk_usage(work).free < 8 << 30:
             raise RuntimeError('less than 8 GiB free; stopping before filling the host disk')
         directory = source / 'tools/testing/selftests' / target
@@ -267,15 +281,15 @@ def build_worker(jobs):
         row['upstreamTimeoutSeconds'] = int(timeout[1]) if timeout else 45
         row['programTimeoutSeconds'] = (row['upstreamTimeoutSeconds'] or 300) + 15
         row['collectionTimeoutSeconds'] = max(120, len(available) * (row['upstreamTimeoutSeconds'] or 300) + 60)
-        metadata['builds'].append(row)
+        metadata['dependencyBuilds' if target in dependencies else 'builds'].append(row)
         save(work / 'build.json', metadata)
-        print(f'build {len(metadata["builds"])}/{len(targets)} {target}: rc={build_rc}, '
+        print(f'build {len(metadata["builds"]) + len(metadata["dependencyBuilds"])}/{len(targets) + len(dependencies)} {target}: rc={build_rc}, '
               f'installed={len(available)}/{len(names)}', flush=True)
     for filename in ('run_kselftest.sh',):
         shutil.copy2(source / 'tools/testing/selftests' / filename, tests / filename)
     shutil.copytree(source / 'tools/testing/selftests/kselftest', tests / 'kselftest', dirs_exist_ok=True)
-    # Shared network/Python helpers are an upstream installation dependency.
-    shutil.copytree(source / 'tools/testing/selftests/net/lib', tests / 'net/lib', dirs_exist_ok=True)
+    # INSTALL_DEP_TARGETS already installed the generated network helpers;
+    # copying their source directory is not a substitute for building them.
     install_runtime_helpers(source / 'tools/testing/selftests', tests)
     all_tests = [name for row in metadata['builds'] for name in row['available']]
     (tests / 'kselftest-list.txt').write_text('\n'.join(all_tests) + '\n')
@@ -437,7 +451,7 @@ def main():
             for label in images}
     for label in images:
         receipt['execution'][label] = {'collections': list(rows[label].values()),
-                                       'summary': summarize(build['builds'], [])}
+                                       'summary': summarize(build['builds'], [], build.get('dependencyBuilds', []))}
 
     def execute(label, b, number, ident):
         capture = label + '/' + ident.replace(':', '/')
@@ -460,7 +474,8 @@ def main():
         row['cases'].append(case)
         row['cases'].sort(key=lambda c: c['number'])
         row['valid'] = len(row['cases']) == len(b['available']) and all(c['valid'] for c in row['cases'])
-        receipt['execution'][label]['summary'] = summarize(build['builds'], list(rows[label].values()))
+        receipt['execution'][label]['summary'] = summarize(build['builds'], list(rows[label].values()),
+                                                          build.get('dependencyBuilds', []))
         checkpoint()
 
     active_images = list(images)
@@ -479,7 +494,8 @@ def main():
             rows['reference'][b['id']]['cases'].append(case)
         for row in rows['reference'].values():
             row['valid'] = all(case['valid'] for case in row['cases'])
-        receipt['execution']['reference']['summary'] = summarize(build['builds'], list(rows['reference'].values()))
+        receipt['execution']['reference']['summary'] = summarize(build['builds'], list(rows['reference'].values()),
+                                                                build.get('dependencyBuilds', []))
         receipt['referenceReuse'] = {'run': previous['run'], 'summary': str(args.reference_run),
                                      'summarySha256': selftest.sha(args.reference_run),
                                      'programs': len(cases), 'subjectResultsReused': 0}

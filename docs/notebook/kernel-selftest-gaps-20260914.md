@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 10:20 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 10:43 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -89,6 +89,50 @@ kernel clone is retained. This is targeted evidence, not a new full-suite pass.
 
 ## Shared test defects: not compiler passes
 
+### Matching modules and overlayfs isolation
+
+The original Kbuild linker commands now link VETH, FUSE and overlayfs from
+31 freshly compiled EvoCC C records against the actual generated headers.
+Every installed input hash is audited, with no GCC fallback. All three modules
+load on both matching expanded Images. FUSE's control test and overlayfs
+`dev_in_maps` each pass unchanged on both kernels. Capture:
+`.evidence/kunit/runtime-modules-20260914/runtime-results.json`.
+
+The original seven-case overlay layer program fails its first case, then
+leaves directories behind after failed teardown. Isolating each unchanged
+case in its own VM gives **5 PASS / 2 FAIL on each kernel**:
+
+- `set_layers_via_detached_mount_fds` creates `u/upper`, `u/work` and detached
+  layer mounts below `/set_layers_via_fds_tmpfs`, but lines 690–706 assert the
+  `/tmp/w`, `/tmp/u` and `/tmp/l*` paths from a different test. Line 711 fails;
+  the teardown then cannot remove the still-busy mount directory.
+- `set_override_creds_nomknod` drops both CAP_MKNOD and CAP_SYS_ADMIN before
+  recording override credentials (lines 502–508). Overlay's super.c calls
+  `clone_private_mount`, whose namespace.c implementation explicitly checks
+  CAP_SYS_ADMIN and returns EPERM. Both kernels log `failed to clone upperpath`.
+
+These failures remain FAIL; passing five isolated cases is not seven passes.
+The test sources have not been patched. The full module population and NEON
+inputs remain unfinished.
+
+### Generated network helpers
+
+The upstream top-level selftest Makefile includes `net/lib` through
+`INSTALL_DEP_TARGETS`, not TARGETS. The harness omitted that variable and
+only copied the helper source directory. It now builds and installs the
+declared dependency without treating it as another runnable collection.
+One RED assertion and 142 GREEN harness tests pin that behavior and make a
+dependency build failure visible. The original offline Makefiles generated
+`xdp_dummy.bpf.o`, `xdp_native.bpf.o`, `csum` and `xdp_helper`; each installed
+file was read back from both runtime disks and compared byte-for-byte.
+
+VETH now loads XDP and exercises channel checks, but UDP receives fail with
+EAFNOSUPPORT on both kernels: `udpgso_bench_rx` defaults to AF_INET6 and
+CONFIG_IPV6=m has no installed ipv6 module yet. All 3,413 module C records
+are being recompiled against actual generated headers before broader linking
+and installation. The 935-program full-run counts are not replaced by these
+targeted measurements.
+
 ### clone3 and the libcap private ABI
 
 The unchanged `clone3_cap_checkpoint_restore.c:116-122` casts opaque `cap_t`
@@ -130,11 +174,9 @@ and source reasoning are distinguished from that unexecuted check.
 
 ## Configuration, architecture and implementation boundaries
 
-- The frozen K6 configuration has VETH, FUSE and OVERLAY as modules, but the
-  test runtime has no installed modules. For example, repaired tc-testing
-  gets past `/var/run/netns` and fails on veth creation with EOPNOTSUPP on
-  both kernels. This needs genuine matching EvoCC modules, not GCC modules
-  copied into a purported all-EvoCC composition.
+- The frozen K6 runtime has no installed modules. The expanded runtime now
+  has matching EvoCC VETH, FUSE and OVERLAY modules; broader module dependencies
+  including IPv6 are still being prepared, not supplied by GCC fallback.
 - Ublk helper files are now present. All 29 original scripts reach the
   prerequisite check and SKIP on K6 because CONFIG_BLK_DEV_UBLK is disabled.
   The separate expanded configuration enables it; build/install/runtime

@@ -9877,6 +9877,19 @@
     "build": "sealed gcc-14 -static -O2 -Wall -Wextra -Werror tools/k1/selftest-init.c; exit 0",
     "claimLimit": "Original statmount namespace failure repaired on both kernels; the original 935-program results and runtime disk remain unchanged."
   },
+  "moduleAndNetworkHelpers": {
+    "capture": ".evidence/kunit/runtime-modules-20260914",
+    "cause": "The custom build enumeration read TARGETS but omitted the upstream INSTALL_DEP_TARGETS=net/lib; copying source files did not build xdp_dummy.bpf.o",
+    "repair": "Enumerate and build upstream install dependencies separately from runnable collections; dependency failures prevent PASS without changing the program denominator",
+    "red": "One declared missing-install-dependency assertion, no import or build failure",
+    "gate": "python3 -m unittest discover -s tools/k1/tests -q: 142 PASS; ruff check tools/k1 and git diff --check: clean; tools/gate-changed.sh 13499c2: no changed Rust crate",
+    "actualBuild": "Sealed offline gcc-14/clang-19 upstream net/lib all and install targets: exit 0",
+    "userspacePayload": "Four generated helpers installed and read back byte-for-byte in both COW runtime disks; original runtime disk unchanged",
+    "moduleRuntime": "Matching VETH/FUSE/overlay modules loaded on both expanded Images; FUSE and overlayfs dev_in_maps pass. Five isolated overlay layer cases pass; two shared source-explained failures remain. VETH now reaches the missing IPv6 module.",
+    "runtimeResults": ".evidence/kunit/runtime-modules-20260914/runtime-results.json",
+    "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
+    "original935ProgramResultsReplaced": false
+  },
   "runtimePrerequisiteRepair": {
     "changes": ["/mnt directory", "securityfs mount", "dosfstools, sudo and e2fsprogs packages", "Linux file ownership and modes retained in the generated rootfs; libarchive required by the formatter"],
     "tests": "python3 -m unittest discover -s tools/k1/tests -q: 138 PASS; ruff check tools/k1 and bash -n tools/k1/lib.sh tools/k1/boot.sh: PASS; runtime init compiles with gcc-14 -static -O2 -Wall -Wextra -Werror",
