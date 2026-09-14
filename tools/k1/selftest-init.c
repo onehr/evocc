@@ -139,6 +139,69 @@ static unsigned load_runtime_modules(const char *path, const char *nonce)
     return count;
 }
 
+/* Some built-in suites need algorithms supplied by modules. Re-run only the
+ * explicit list after setup, through KUnit's own interface. The earlier boot
+ * results remain separate; a successful trigger is not a passing test. */
+static unsigned run_kunit_suites(const char *path, const char *nonce, const char *root)
+{
+    FILE *list = fopen(path, "r");
+    if (!list) {
+        if (errno == ENOENT)
+            return 0;
+        fatal("read KUnit rerun list");
+    }
+    char name[256], file_path[1024], buffer[4096];
+    unsigned count = 0;
+    while (fgets(name, sizeof(name), list)) {
+        size_t length = strcspn(name, "\n");
+        if (!length || name[length] != '\n'
+            || strspn(name, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") != length) {
+            errno = EINVAL;
+            fatal("invalid KUnit suite name");
+        }
+        name[length] = '\0';
+        if (!strcmp(name, ".") || !strcmp(name, "..")) {
+            errno = EINVAL;
+            fatal("invalid KUnit suite name");
+        }
+        if (snprintf(file_path, sizeof(file_path), "%s/%s/run", root, name) >= (int)sizeof(file_path)) {
+            errno = ENAMETOOLONG;
+            fatal("KUnit run path");
+        }
+        /* No O_CREAT: an init-only suite has no rerun entry. */
+        int fd = open(file_path, O_WRONLY);
+        if (fd < 0)
+            fatal("open KUnit run");
+        dprintf(1, "KUNIT_RERUN_BEGIN %s %s\n", nonce, name);
+        if (write(fd, "1\n", 2) != 2 || close(fd))
+            fatal("trigger KUnit suite");
+        if (snprintf(file_path, sizeof(file_path), "%s/%s/results", root, name) >= (int)sizeof(file_path)) {
+            errno = ENAMETOOLONG;
+            fatal("KUnit results path");
+        }
+        FILE *results = fopen(file_path, "r");
+        if (!results)
+            fatal("open KUnit results");
+        size_t bytes, total = 0;
+        while ((bytes = fread(buffer, 1, sizeof(buffer), results))) {
+            total += bytes;
+            if (fwrite(buffer, 1, bytes, stdout) != bytes)
+                fatal("write KUnit results");
+        }
+        if (ferror(results) || fclose(results) || fflush(stdout))
+            fatal("read KUnit results");
+        if (!total) {
+            errno = EIO;
+            fatal("empty KUnit results");
+        }
+        dprintf(1, "KUNIT_RERUN_END %s %s\n", nonce, name);
+        count++;
+    }
+    if (ferror(list) || fclose(list))
+        fatal("read KUnit rerun list");
+    return count;
+}
+
 int main(void)
 {
     char command[4096], nonce[129], id[200];
@@ -224,6 +287,9 @@ int main(void)
         if (!count)
             fatal("empty KUnit module list");
         dprintf(1, "KUNIT_MODULE_COMPLETE %s %u\n", nonce, count);
+        count = run_kunit_suites("/tests/kunit-rerun", nonce, "/sys/kernel/debug/kunit");
+        if (count)
+            dprintf(1, "KUNIT_RERUN_COMPLETE %s %u\n", nonce, count);
         puts("EVO_INIT_DONE");
         poweroff();
     }

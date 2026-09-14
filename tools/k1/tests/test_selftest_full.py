@@ -152,6 +152,42 @@ class FullSelftest(unittest.TestCase):
         self.assertIn('dmesg --read-clear --color=never', source)
         self.assertIn('fatal("read module KUnit records")', source)
 
+    def test_post_setup_kunit_runs_use_debugfs_and_keep_the_exact_results(self):
+        source = (PATH.parent / 'selftest-init.c').read_text()
+        begin = source.find('static unsigned run_kunit_suites(')
+        self.assertNotEqual(begin, -1, 'KUnit cannot yet run after its module prerequisites load')
+        end = source.index('\nint main(void)', begin)
+        function = source[begin:end]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'suite').mkdir()
+            (root / 'suite/run').write_text('')
+            results = 'KTAP version 1\n1..1\nnot ok 1 deliberately_failing_case\n'
+            (root / 'suite/results').write_text(results)
+            manifest = root / 'list'
+            manifest.write_text('suite\n')
+            program = root / 'probe.c'
+            program.write_text('#include <errno.h>\n#include <fcntl.h>\n#include <stdio.h>\n'
+                               '#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n'
+                               'static void fatal(const char *s) { perror(s); exit(7); }\n'
+                               + function + '\nint main(int argc, char **argv) { (void)argc;\n'
+                               'return run_kunit_suites(argv[1], "nonce", argv[2]) != 1; }\n')
+            subprocess.run(['cc', '-Wall', '-Wextra', '-Werror', str(program),
+                            '-o', str(root / 'probe')], check=True, capture_output=True)
+            command = [str(root / 'probe'), str(manifest), str(root)]
+            done = subprocess.run(command, text=True, capture_output=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(done.stdout, 'KUNIT_RERUN_BEGIN nonce suite\n' + results
+                             + 'KUNIT_RERUN_END nonce suite\n')
+            self.assertEqual((root / 'suite/run').read_text(), '1\n')
+            (root / 'suite/run').unlink()
+            done = subprocess.run(command, text=True, capture_output=True)
+            self.assertEqual(done.returncode, 7)
+            self.assertFalse((root / 'suite/run').exists(), 'an init-only suite must not become a fake run')
+            self.assertNotIn('KUNIT_RERUN_END', done.stdout)
+            manifest.write_text('../suite\n')
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 7)
+
     def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
                    'args-test', str(PATH.parent / 'lib.sh')]
