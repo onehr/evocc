@@ -446,6 +446,8 @@ def refresh_runtime(work):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jobs', type=int, default=2)
+    parser.add_argument('--work-root', type=Path, default=ROOT / '.build/kselftest-full',
+                        help='selftest build and installed userspace; separate from kernel output')
     parser.add_argument('--build-worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--runtime-worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--refresh-runtime', action='store_true', help='install missing runtime prerequisites without rebuilding tests')
@@ -480,8 +482,8 @@ def main():
     import selftest
     if args.allow_qemu_drift:
         os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
-    work = ROOT / '.build/kselftest-full'
-    work.mkdir(exist_ok=True)
+    work = args.work_root.resolve()
+    work.mkdir(parents=True, exist_ok=True)
     selected_kernel = kernel_selection(args.expanded_kernel, receipt_path=args.kernel_receipt)
     kernel_path = selected_kernel['receipt']
     images = selected_kernel['images']

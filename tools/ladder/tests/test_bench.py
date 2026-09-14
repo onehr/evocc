@@ -61,11 +61,13 @@ class BenchmarkEntryTest(unittest.TestCase):
     def test_expanded_selftests_select_their_images_and_module_payload_explicitly(self):
         args = bench.parser().parse_args(['kernel-selftest-all', '--expanded-selftest-kernel',
                                          '--selftest-runtime', '/module/runtime', '--reuse-selftest-build',
-                                         '--selftest-kernel-receipt', '/coverage/receipt.json'])
+                                         '--selftest-kernel-receipt', '/coverage/receipt.json',
+                                         '--selftest-build-root', '/case-sensitive/selftests'])
         command, _ = bench.command('kernel-selftest-all', args, Path('/unused/compiler'))
         self.assertIn('--expanded-kernel', command)
         self.assertEqual(command[command.index('--runtime-root') + 1], '/module/runtime')
         self.assertEqual(command[command.index('--kernel-receipt') + 1], '/coverage/receipt.json')
+        self.assertEqual(command[command.index('--work-root') + 1], '/case-sensitive/selftests')
 
     def test_kernel_selftest_only_invocation_does_not_require_or_build_evocc(self):
         with tempfile.TemporaryDirectory() as tmp:
