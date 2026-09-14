@@ -45,6 +45,20 @@ fn bitwise_array_initializer_has_the_measured_value() {
 }
 
 #[test]
+fn floating_constant_arithmetic_produces_only_integer_values() {
+    agrees(
+        include_str!("../../../tests/fixtures/floating-constant-integers.c"),
+        0,
+    );
+}
+
+#[test]
+fn nonconstant_floating_execution_stays_outside_the_profile() {
+    let output = run("int f(double x) { return (int)(x * 2.0); }", "--emit=evoir");
+    assert!(!output.status.success());
+}
+
+#[test]
 fn nested_static_integer_expressions_do_not_depend_on_the_host_stack() {
     let mut selected = "(1 ? 42 : (1 / 0))".to_owned();
     for index in 0..80 {
