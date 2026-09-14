@@ -64,6 +64,53 @@ fn cpp_flags_have_real_semantics() {
 }
 
 #[test]
+fn explicit_system_includes_follow_user_paths_and_preserve_include_next() {
+    let root = unique_dir("system-includes");
+    let user = root.join("user");
+    let system = root.join("system");
+    fs::create_dir(&user).unwrap();
+    fs::create_dir(&system).unwrap();
+    fs::write(
+        user.join("chain.h"),
+        "#define USER_VALUE 17\n#include_next <chain.h>\n",
+    )
+    .unwrap();
+    fs::write(system.join("chain.h"), "#define SYSTEM_VALUE 29\n").unwrap();
+    let source = root.join("input.c");
+    fs::write(&source, "#include <chain.h>\nUSER_VALUE SYSTEM_VALUE\n").unwrap();
+    for joined in [false, true] {
+        let mut args = vec!["-E".to_owned(), "-P".to_owned(), "-nostdinc".to_owned()];
+        if joined {
+            args.push(format!("-isystem{}", system.display()));
+        } else {
+            args.extend(["-isystem".to_owned(), system.display().to_string()]);
+        }
+        // A directory also named with -isystem must not remain an early -I
+        // entry: otherwise include_next cannot reach the expected wrapper.
+        args.extend([
+            format!("-I{}/.", system.display()),
+            format!("-I{}", user.display()),
+            source.display().to_string(),
+        ]);
+        let output = Command::new(evocc()).args(args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), "17 29");
+    }
+    let missing = Command::new(evocc())
+        .args([source.to_str().unwrap(), "-isystem"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("requires an argument"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn malformed_inputs_fail_closed() {
     for input in [
         b"int value".as_slice(),
