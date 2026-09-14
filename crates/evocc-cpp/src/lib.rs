@@ -161,10 +161,7 @@ impl MacroMap {
                 continue;
             }
             let spelling = token_text(token);
-            let gnu_comma_variadic = macro_def.variadic
-                && spelling == "__VA_ARGS__"
-                && parameter_uses_gnu_comma_elision(&macro_def.body, index);
-            if parameter_is_quoted_or_pasted(&macro_def.body, index) && !gnu_comma_variadic {
+            if parameter_is_quoted_or_pasted(&macro_def.body, index) {
                 continue;
             }
             if let Some(parameter_index) = macro_def
@@ -315,13 +312,15 @@ impl MacroMap {
                 let gnu_comma_variadic = m.variadic
                     && token_text(tok) == "__VA_ARGS__"
                     && parameter_uses_gnu_comma_elision(body, i);
-                let selected_args = if gnu_comma_variadic {
-                    prescanned_args
-                } else if pending_paste.is_some() || parameter_is_followed_by_paste(body, i) {
-                    args
-                } else {
-                    prescanned_args
-                };
+                // GNU comma elision suppresses the paste, not the raw-argument
+                // rule. Rescanning may first feed these tokens into a nested
+                // macro's #/## operands; prescanning here would lose their names.
+                let selected_args =
+                    if pending_paste.is_some() || parameter_is_followed_by_paste(body, i) {
+                        args
+                    } else {
+                        prescanned_args
+                    };
                 if let Some(mut arg) = self.resolve_arg(tok, m, selected_args) {
                     if let Some(first) = arg.first_mut() {
                         first.preceded_by_whitespace = tok.preceded_by_whitespace;

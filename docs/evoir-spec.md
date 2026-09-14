@@ -7084,3 +7084,10 @@ Revision 1.9.96 adds the user-authorized `cleanup` exception to Section 10.1.9's
 Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/cleanup-scope-exits.c` with exit zero, while both subject interpreters return program value 2 and native execution exits 2, as `cleanup-scope-exits.txt` records.
 The current complete kernel diagnostic stalls on the second IRQ descriptor lock acquisition because `irq_modify_status` never calls its scoped guard destructor; this is one measured boot failure, not a claimed count of all affected units.
 The implementation uses ordinary reverse-order calls before object lifetime end on each actual scope exit; interpreter/native probe success does not establish a successful kernel boot.
+
+### Raw variadic arguments after GNU comma elision
+
+For `, ##__VA_ARGS__` (including named GNU variadics), a present argument is substituted without argument prescan; normal replacement-list rescan may then supply its raw tokens to a nested macro's `#` or `##` operand.
+Elision of an omitted argument and retention of an explicitly empty argument are unchanged; suppressing the comma paste does not authorize early expansion of the argument.
+Both sealed GCC-14 and Clang-19 produce `29, 29, 12, 31` for the four independent lines in `.evidence/builtin-probes/20260914-variadic-paste/input.c`, as `oracles.out` records; no diagnostic is added.
+The partial expanded KUnit/module survey exposes 20 E0110 units using Nouveau's variadic dispatch idiom, selected in `.evidence/kunit/variadic-replay-20260914/units.txt` alongside two stray-token refusals; only original-unit replays establish the repair's actual coverage.
