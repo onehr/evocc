@@ -355,6 +355,28 @@ class FullSelftest(unittest.TestCase):
             {'outcome': 'FAIL', 'exitCode': 1, 'valid': True, 'cases': [{'outcome': 'PASS'}]}]}
         self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'FAIL')
 
+    def test_successful_wrapper_cannot_hide_a_nested_failure_summary(self):
+        spec = importlib.util.spec_from_file_location('selftest_summary_probe', PATH.parent / 'selftest.py')
+        selftest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selftest)
+        output = ('TAP version 13\n1..1\n'
+                  '# # Totals: pass:22 fail:1 xfail:3 xpass:0 skip:0 error:0\n'
+                  'ok 1 selftests: mm: run_vmtests.sh\n')
+        parsed = selftest.parse_tap(output)
+        self.assertEqual(parsed.get('nestedFailureSummaries'), [
+            {'line': '# # Totals: pass:22 fail:1 xfail:3 xpass:0 skip:0 error:0',
+             'failed': 1, 'errors': 0}])
+        flight = {'boot': {'verdict': 'PASS'}, 'programs': [
+            dict(parsed, outcome='PASS', exitCode=0)]}
+        case = lane.program_case('mm:run_vmtests.sh', flight)
+        self.assertEqual(case['outcome'], 'PASS', 'retain the original wrapper verdict')
+        summary = lane.summarize([{'id': 'mm', 'buildExit': 0, 'tests': ['mm:run_vmtests.sh']}],
+                                 [{'id': 'mm', 'valid': True, 'cases': [case]}])
+        self.assertEqual(summary['nestedFailureReview'], ['mm:run_vmtests.sh'])
+        self.assertNotEqual(summary['status'], 'PASS')
+        clean = output.replace('fail:1', 'fail:0')
+        self.assertEqual(selftest.parse_tap(clean)['nestedFailureSummaries'], [])
+
     def test_upstream_timeout_tap_stays_timeout_after_normal_guest_shutdown(self):
         name = 'selftests: mm: run_vmtests.sh # TIMEOUT 900 seconds'
         for exit_code in (0, 1):

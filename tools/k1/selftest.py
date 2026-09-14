@@ -42,7 +42,19 @@ def parse_tap(output):
     valid = planned is not None and [r['number'] for r in cases] == list(range(1, planned + 1))
     valid = valid and 'Bail out!' not in output
     counts = {key: sum(r['outcome'] == key for r in cases) for key in ('PASS', 'FAIL', 'SKIP')}
-    return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases}
+    # The upstream wrapper can return zero even when an inner program prints
+    # failed cases (mremap_test's miscellaneous checks are one measured example).
+    # Keep its verdict, but never promote it to an all-subtests claim. A nested
+    # self-test may intentionally exercise failure, so these require review,
+    # not a guessed automatic reclassification of the original program.
+    nested = []
+    for line in output.splitlines():
+        if re.match(r'^\s*(?:#\s*)+Totals:', line):
+            totals = {key: int(value) for key, value in re.findall(r'\b(fail|error):\s*(\d+)', line)}
+            if totals.get('fail', 0) or totals.get('error', 0):
+                nested.append({'line': line, 'failed': totals.get('fail', 0), 'errors': totals.get('error', 0)})
+    return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
+            'nestedFailureSummaries': nested}
 
 
 def parse_transcript(text, nonce, programs):

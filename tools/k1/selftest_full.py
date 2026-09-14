@@ -206,6 +206,8 @@ def summarize(builds, runtime, dependencies=()):
     dependency_failures = [b['id'] for b in dependencies
                            if b['buildExit'] != 0 or b['installExit'] != 0 or b.get('buildErrors')]
     empty = [b['id'] for b in builds if not b.get('available', b['tests'])]
+    nested = [case['id'] for row in runtime for case in row.get('cases', [])
+              if case.get('nestedFailureSummaries')]
     return {'collections': len(builds), 'programs': sum(len(b['tests']) for b in builds),
             'completedCollections': sum(bool(b.get('available', b['tests']))
                 and len(actual.get(b['id'], {}).get('cases', [])) == len(b.get('available', b['tests']))
@@ -213,11 +215,12 @@ def summarize(builds, runtime, dependencies=()):
                 for b in builds),
             'outcomes': dict(counts), 'buildFailures': failed, 'noRunnableTests': empty,
             'dependencyBuildFailures': dependency_failures,
+            'nestedFailureReview': nested,
             'incompleteCollections': incomplete,
             'timedOutCollections': [r['id'] for r in runtime if r.get('outcome') == 'TIMEOUT'
                                     or r.get('boot', {}).get('verdict') == 'TIMEOUT'],
             'status': 'PASS' if counts and set(counts) == {'PASS'} and not failed and not dependency_failures
-            and not empty and not incomplete else 'INCOMPLETE'}
+            and not empty and not incomplete and not nested else 'INCOMPLETE'}
 
 
 def program_case(ident, result):
@@ -242,7 +245,8 @@ def program_case(ident, result):
     return {'id': ident, 'outcome': outcome, 'bootVerdict': boot,
             'started': row['outcome'] != 'NOT_RUN',
             'valid': row.get('valid', False) and boot == 'PASS',
-            'exitCode': row.get('exitCode')}
+            'exitCode': row.get('exitCode'),
+            'nestedFailureSummaries': row.get('nestedFailureSummaries', [])}
 
 
 def reusable_reference(previous, current):
