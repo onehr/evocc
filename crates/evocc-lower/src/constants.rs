@@ -3,8 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use evocc_evoir::{inst_results, inst_uses, BitOp, CmpOp, Inst, Value};
-use evocc_types::EvoIRType;
+use evocc_evoir::{
+    inst_results, inst_uses, BitOp, CmpOp, GlobalObject, IndexSignedness, Inst, OffsetDirection,
+    Value,
+};
+use evocc_types::{ByteOrder, EvoIRType};
 
 use super::DraftBlock;
 
@@ -12,9 +15,9 @@ mod private;
 
 // Empty is the unreachable/bottom fact, None is unknown/top. A union larger
 // than eight values widens to top, bounding both storage and convergence.
-type Fact = Option<Vec<u128>>;
+type Fact<T = u128> = Option<Vec<T>>;
 
-fn union(into: &mut Fact, other: &Fact) -> bool {
+fn union<T: Clone + Ord>(into: &mut Fact<T>, other: &Fact<T>) -> bool {
     if into.is_none() || other.as_ref().is_some_and(Vec::is_empty) {
         return false;
     }
@@ -23,7 +26,7 @@ fn union(into: &mut Fact, other: &Fact) -> bool {
         None => *into = None,
         Some(values) => {
             let current = into.as_mut().unwrap();
-            current.extend(values);
+            current.extend_from_slice(values);
             current.sort_unstable();
             current.dedup();
             if current.len() > 8 {
@@ -162,7 +165,119 @@ fn transfer(inst: &Inst, facts: &[Fact]) -> Fact {
     }
 }
 
-pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BTreeSet<u32>) {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Address {
+    symbol: String,
+    offset: u64,
+}
+
+fn address_transfer(
+    inst: &Inst,
+    facts: &[Fact],
+    addresses: &[Fact<Address>],
+    globals: &BTreeMap<String, GlobalObject>,
+) -> Fact<Address> {
+    match inst {
+        Inst::GlobalAddr { symbol, .. } if globals.contains_key(symbol) => Some(vec![Address {
+            symbol: symbol.clone(),
+            offset: 0,
+        }]),
+        Inst::PointerCast { operand, .. } => addresses[operand.id as usize].clone(),
+        Inst::PtrOffset {
+            base,
+            index,
+            scale,
+            signedness,
+            direction,
+            ..
+        } => {
+            let bases = &addresses[base.id as usize];
+            let offsets = &facts[index.id as usize];
+            if bases.as_ref().is_some_and(Vec::is_empty)
+                || offsets.as_ref().is_some_and(Vec::is_empty)
+            {
+                return Some(Vec::new());
+            }
+            let mut result = Vec::new();
+            for base in bases.as_ref()? {
+                for &raw in offsets.as_ref()? {
+                    let delta = match signedness {
+                        IndexSignedness::Signed => signed(raw, width(index)?),
+                        IndexSignedness::Unsigned => i128::try_from(raw).ok()?,
+                    }
+                    .checked_mul(i128::from(*scale))?;
+                    let offset = match direction {
+                        OffsetDirection::Add => i128::from(base.offset).checked_add(delta)?,
+                        OffsetDirection::Subtract => i128::from(base.offset).checked_sub(delta)?,
+                    };
+                    result.push(Address {
+                        symbol: base.symbol.clone(),
+                        offset: u64::try_from(offset).ok()?,
+                    });
+                }
+            }
+            result.sort_unstable();
+            result.dedup();
+            (result.len() <= 8).then_some(result)
+        }
+        _ => None,
+    }
+}
+
+// A successful original load from an immutable source definition has these
+// bits. Do not remove the load, its bounds/alignment guard or its effects;
+// in particular pointer relocation bytes cannot become numeric constants.
+fn immutable_load(
+    inst: &Inst,
+    addresses: &[Fact<Address>],
+    globals: &BTreeMap<String, GlobalObject>,
+    order: ByteOrder,
+) -> Fact {
+    let Inst::Load {
+        result,
+        address,
+        volatile: false,
+        ..
+    } = inst
+    else {
+        return None;
+    };
+    let bits = width(result)?;
+    let size = usize::from(bits).div_ceil(8);
+    let mut values = Vec::new();
+    for address in addresses[address.id as usize].as_ref()? {
+        let global = globals.get(&address.symbol)?;
+        let start = usize::try_from(address.offset).ok()?;
+        let end = start.checked_add(size)?;
+        if !global.initialized.get(start..end)?.iter().all(|&bit| bit)
+            || global.relocs.iter().any(|reloc| {
+                reloc.offset < end as u64 && reloc.offset.saturating_add(8) > address.offset
+            })
+        {
+            return None;
+        }
+        let mut raw = 0u128;
+        for (i, &byte) in global.bytes.get(start..end)?.iter().enumerate() {
+            let shift = if order == ByteOrder::Little {
+                i
+            } else {
+                size - 1 - i
+            };
+            raw |= u128::from(byte) << (shift * 8);
+        }
+        values.push(raw & mask(bits));
+    }
+    values.sort_unstable();
+    values.dedup();
+    Some(values)
+}
+
+pub(super) fn prune_constant_edges(
+    blocks: &mut [DraftBlock],
+    address_roots: &BTreeSet<u32>,
+    globals: &BTreeMap<String, GlobalObject>,
+    order: ByteOrder,
+) {
     // Address identities retain their explicit CFG reachability under §2.5.
     // Do not prune their entry paths using this scalar-only analysis.
     if blocks.is_empty() || !address_roots.is_empty() {
@@ -183,6 +298,7 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
         .max()
         .map_or(0, |n| n as usize + 1);
     let mut facts = vec![Some(Vec::new()); count];
+    let mut addresses = vec![Some(Vec::new()); count];
     let mut users = vec![BTreeSet::new(); count];
     for (index, block) in blocks.iter().enumerate() {
         for value in block
@@ -202,6 +318,7 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
             pending.insert(i);
             for (_, arg) in &block.args {
                 facts[arg.value.id as usize] = None;
+                addresses[arg.value.id as usize] = None;
             }
         }
     }
@@ -211,9 +328,22 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
         }
         let block = &blocks[index];
         for inst in block.insts.iter().chain(block.terminator.iter()) {
-            let value = transfer(inst, &facts);
+            let value = if matches!(inst, Inst::Load { .. }) {
+                immutable_load(inst, &addresses, globals, order)
+            } else {
+                transfer(inst, &facts)
+            };
+            let address = address_transfer(inst, &facts, &addresses, globals);
             for result in inst_results(inst) {
-                if union(&mut facts[result.id as usize], &value) {
+                let bits = if width(result).is_some() {
+                    &value
+                } else {
+                    &None
+                };
+                if union(&mut facts[result.id as usize], bits) {
+                    pending.extend(&users[result.id as usize]);
+                }
+                if union(&mut addresses[result.id as usize], &address) {
                     pending.extend(&users[result.id as usize]);
                 }
             }
@@ -255,6 +385,11 @@ pub(super) fn prune_constant_edges(blocks: &mut [DraftBlock], address_roots: &BT
             for (value, (_, parameter)) in args.iter().zip(&blocks[next].args) {
                 let incoming = facts[value.id as usize].clone();
                 if union(&mut facts[parameter.value.id as usize], &incoming) {
+                    pending.insert(next);
+                    pending.extend(&users[parameter.value.id as usize]);
+                }
+                let incoming = addresses[value.id as usize].clone();
+                if union(&mut addresses[parameter.value.id as usize], &incoming) {
                     pending.insert(next);
                     pending.extend(&users[parameter.value.id as usize]);
                 }

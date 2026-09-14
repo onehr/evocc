@@ -382,6 +382,7 @@ struct FunctionLowerer<'a> {
     dynamic_origins: BTreeMap<usize, u64>,
     compound_scopes: BTreeMap<usize, BTreeMap<usize, (TypeId, SourceSpan)>>,
     string_origins: BTreeMap<usize, u64>,
+    immutable_globals: &'a BTreeMap<String, GlobalObject>,
     blocks: Vec<DraftBlock>,
     next_value: u32,
     next_block: BlockId,
@@ -609,6 +610,55 @@ fn lower_resolved_unit(
                 .insert(expression as *const CHirExpr<'_> as usize, origin_of(site));
         }
     }
+    // These are source-proven immutable definitions, not a claim inferred
+    // from their section name. Reuse the normal initializer representation.
+    let mut immutable_globals = globals
+        .iter()
+        .filter(|_| optimize)
+        .cloned()
+        .map(|global| (global.symbol.clone(), global))
+        .collect::<BTreeMap<_, _>>();
+    if optimize {
+        for object in unit
+            .iter()
+            .filter_map(|decl| match decl {
+                CHirDecl::Object(object) => Some(object),
+                _ => None,
+            })
+            .chain(manifest.function_static_objects().iter().copied())
+        {
+            let mut ty = object.ty;
+            let mut immutable = false;
+            while let Some(layer) = unit.types().get(ty) {
+                if layer.qualifiers.is_volatile || layer.qualifiers.is_atomic {
+                    immutable = false;
+                    break;
+                }
+                immutable |= layer.qualifiers.is_const;
+                match layer.kind {
+                    TypeKind::Array { element, .. } => ty = element,
+                    _ => break,
+                }
+            }
+            if !immutable
+                || object.storage != StorageClass::Static
+                || object.initializer.is_none()
+                || object.asm_label.is_some()
+            {
+                continue;
+            }
+            if let Ok(global) = lower_global_object(
+                unit,
+                target,
+                object,
+                &allocation_origins,
+                &static_literal_origins,
+                &BTreeMap::new(),
+            ) {
+                immutable_globals.insert(global.symbol.clone(), global);
+            }
+        }
+    }
     let mut lowered = Vec::new();
     let mut label_addresses = BTreeMap::new();
     for declaration in unit.iter() {
@@ -638,6 +688,7 @@ fn lower_resolved_unit(
             &compound_origins,
             &dynamic_origins,
             &string_origins,
+            &immutable_globals,
         )
         .lower(function, optimize)?;
         lowered.push(function);
@@ -1293,7 +1344,6 @@ fn lower_globals<'a>(
     strings: &BTreeMap<usize, u64>,
     label_addresses: &BTreeMap<usize, String>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
-    let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let mut declarations = function_statics
         .iter()
         .map(|object| (object.symbol, *object))
@@ -1327,108 +1377,118 @@ fn lower_globals<'a>(
     }
     declarations
         .into_values()
-        .map(|object| {
-            let symbol =
-                unit.symbols()
-                    .symbol(object.symbol)
-                    .map_err(|_| LowerError::UnknownSymbol {
-                        symbol: object.symbol,
-                        span: object.span,
-                    })?;
-            let layout = target
-                .layout_of(unit.types(), object.ty)
+        .map(|object| lower_global_object(unit, target, object, origins, strings, label_addresses))
+        .collect()
+}
+
+fn lower_global_object(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    object: &ObjectDecl<'_>,
+    origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
+    label_addresses: &BTreeMap<usize, String>,
+) -> Result<GlobalObject, LowerError> {
+    let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
+    let symbol = unit
+        .symbols()
+        .symbol(object.symbol)
+        .map_err(|_| LowerError::UnknownSymbol {
+            symbol: object.symbol,
+            span: object.span,
+        })?;
+    let layout = target
+        .layout_of(unit.types(), object.ty)
+        .map_err(|source| LowerError::Layout {
+            ty: object.ty,
+            span: object.span,
+            source,
+        })?;
+    let object_size = match &object.initializer {
+        Some(initializer) => {
+            initializer
+                .plan()
+                .storage_layout(unit.types(), target)
                 .map_err(|source| LowerError::Layout {
                     ty: object.ty,
                     span: object.span,
                     source,
-                })?;
-            let object_size = match &object.initializer {
-                Some(initializer) => {
-                    initializer
-                        .plan()
-                        .storage_layout(unit.types(), target)
-                        .map_err(|source| LowerError::Layout {
-                            ty: object.ty,
-                            span: object.span,
-                            source,
-                        })?
-                        .size_bytes
-                }
-                None => layout.size_bytes,
-            };
-            let size = usize::try_from(object_size).map_err(|_| LowerError::UnsupportedType {
-                ty: object.ty,
-                span: object.span,
-                feature: "global object exceeds host representation",
-            })?;
-            let mut bytes = vec![0_u8; size];
-            let mut relocs = Vec::new();
-            if let Some(initializer) = &object.initializer {
-                for action in initializer.plan().actions() {
-                    apply_static_initializer(
-                        unit,
-                        target,
-                        object.ty,
-                        action,
-                        &mut bytes,
-                        &mut relocs,
-                        origins,
-                        strings,
-                        label_addresses,
-                    )?;
-                }
-            }
-            relocs.sort_by_key(|relocation: &evocc_evoir::Relocation| relocation.offset);
-            let origin = *origins
-                .get(&object.symbol)
-                .ok_or(LowerError::InvalidGeneratedSsa {
-                    message: format!("global {} has no allocation origin", object.symbol.raw()),
-                })?;
-            let file_scope = unit
-                .symbols()
-                .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
-                .unwrap_or(false);
-            let section = linkage.object_sections.get(&object.symbol).cloned();
-            if section
-                .as_deref()
-                .is_some_and(|name| name == ".bss" || name.starts_with(".bss."))
-                && (!relocs.is_empty() || bytes.iter().any(|byte| *byte != 0))
-            {
-                return Err(LowerError::Linkage(evocc_chir::linkage::LinkageError {
-                    code: "E2943",
-                    message: "invalid-or-conflicting-symbol-attribute",
-                    span: object.span,
-                }));
-            }
-            Ok(GlobalObject {
-                section,
-                relocs,
-                symbol: if file_scope {
-                    symbol.spelling().to_owned()
-                } else {
-                    format!("__evocc.static.{origin}")
-                },
-                origin,
-                kind: if file_scope {
-                    GlobalKind::File
-                } else {
-                    GlobalKind::FunctionStatic
-                },
-                linkage: evocc_evoir::Linkage::Strong,
-                visibility: if file_scope && object.storage != StorageClass::Static {
-                    GlobalVisibility::External
-                } else {
-                    GlobalVisibility::Internal
-                },
-                layout: AccessLayout::new(
-                    object_size,
-                    layout.align_bytes.max(symbol.declared_alignment()),
-                ),
-                bytes,
-                initialized: vec![true; size],
-            })
-        })
-        .collect()
+                })?
+                .size_bytes
+        }
+        None => layout.size_bytes,
+    };
+    let size = usize::try_from(object_size).map_err(|_| LowerError::UnsupportedType {
+        ty: object.ty,
+        span: object.span,
+        feature: "global object exceeds host representation",
+    })?;
+    let mut bytes = vec![0_u8; size];
+    let mut relocs = Vec::new();
+    if let Some(initializer) = &object.initializer {
+        for action in initializer.plan().actions() {
+            apply_static_initializer(
+                unit,
+                target,
+                object.ty,
+                action,
+                &mut bytes,
+                &mut relocs,
+                origins,
+                strings,
+                label_addresses,
+            )?;
+        }
+    }
+    relocs.sort_by_key(|relocation: &evocc_evoir::Relocation| relocation.offset);
+    let origin = *origins
+        .get(&object.symbol)
+        .ok_or(LowerError::InvalidGeneratedSsa {
+            message: format!("global {} has no allocation origin", object.symbol.raw()),
+        })?;
+    let file_scope = unit
+        .symbols()
+        .is_bound_in_scope(object.symbol, unit.symbols().file_scope())
+        .unwrap_or(false);
+    let section = linkage.object_sections.get(&object.symbol).cloned();
+    if section
+        .as_deref()
+        .is_some_and(|name| name == ".bss" || name.starts_with(".bss."))
+        && (!relocs.is_empty() || bytes.iter().any(|byte| *byte != 0))
+    {
+        return Err(LowerError::Linkage(evocc_chir::linkage::LinkageError {
+            code: "E2943",
+            message: "invalid-or-conflicting-symbol-attribute",
+            span: object.span,
+        }));
+    }
+    Ok(GlobalObject {
+        section,
+        relocs,
+        symbol: if file_scope {
+            symbol.spelling().to_owned()
+        } else {
+            format!("__evocc.static.{origin}")
+        },
+        origin,
+        kind: if file_scope {
+            GlobalKind::File
+        } else {
+            GlobalKind::FunctionStatic
+        },
+        linkage: evocc_evoir::Linkage::Strong,
+        visibility: if file_scope && object.storage != StorageClass::Static {
+            GlobalVisibility::External
+        } else {
+            GlobalVisibility::Internal
+        },
+        layout: AccessLayout::new(
+            object_size,
+            layout.align_bytes.max(symbol.declared_alignment()),
+        ),
+        bytes,
+        initialized: vec![true; size],
+    })
 }
 
 /// Resolve an admitted static address without inventing a runtime object.
@@ -3477,6 +3537,7 @@ impl<'a> FunctionLowerer<'a> {
         compound_origins: &BTreeMap<usize, (u64, bool)>,
         dynamic_origins: &BTreeMap<usize, u64>,
         string_origins: &BTreeMap<usize, u64>,
+        immutable_globals: &'a BTreeMap<String, GlobalObject>,
     ) -> Self {
         Self {
             unit,
@@ -3491,6 +3552,7 @@ impl<'a> FunctionLowerer<'a> {
             dynamic_origins: dynamic_origins.clone(),
             compound_scopes: BTreeMap::new(),
             string_origins: string_origins.clone(),
+            immutable_globals,
             blocks: Vec::new(),
             next_value: 0,
             next_block: 0,
@@ -3844,6 +3906,8 @@ impl<'a> FunctionLowerer<'a> {
                     .keys()
                     .filter_map(|name| self.labels.get(name).map(|label| label.id))
                     .collect(),
+                self.immutable_globals,
+                self.target.byte_order(),
             );
         }
         self.prune_unreachable_blocks()?;

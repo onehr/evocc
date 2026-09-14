@@ -98,6 +98,43 @@ fn private_values_before_escape_discharge_build_assertions() {
 }
 
 #[test]
+fn immutable_global_loads_discharge_conditions_after_inline_pointer_selection() {
+    for source in [
+        include_str!("../../../tests/fixtures/immutable-table-conditions.c"),
+        "void invalid(void); int main(void){if(\"message\\n\"[sizeof(\"message\\n\")-2]!='\\n')invalid();return 0;}",
+        "struct S{int head;unsigned short value;}; static const struct S table[]={{1,262},{2,312}}; static __attribute__((always_inline)) inline const struct S *pick(unsigned char n){if(n<2)return &table[n];return 0;} void invalid(void); int main(void){if(pick(0)->value!=262||pick(1)->value!=312)invalid();return 0;}",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"), "immutable load was not resolved: {source}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains(" = load "));
+        assert_constant_program(source);
+    }
+}
+
+#[test]
+fn immutable_global_facts_do_not_cover_writes_volatile_reads_or_pointer_relocations() {
+    for source in [
+        "static int table[]={1,2};int main(void){table[0]=7;return table[0]!=7;}",
+        "static int table[]={1,2};void change(int*p){*p=7;}int main(void){change(table);return table[0]!=7;}",
+        "static int n; static int * const ptr=&n;int main(void){*ptr=7;return *ptr!=7;}",
+    ] { assert_constant_program(source); }
+    let output = run("static const volatile int table[]={1,2};void invalid(void);void f(void){if(table[0]!=1)invalid();}", "--emit=evoir");
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    let output = run("static int n;static int * const p=&n;void invalid(void);void f(void){if(*(unsigned long*)&p==0)invalid();}", "--emit=evoir");
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    assert_constant_program("static const int a[]={1,2};int f(int n){const int*p=n?a:a+1;return *p;}int main(void){return f(0)!=2||f(1)!=1;}");
+    let output = run(
+        "static const int a[]={1,2};int main(void){return a[2];}",
+        "--interpret-evoir",
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("E3011"));
+}
+
+#[test]
 fn normalized_initializers_share_nested_declaration_identities_with_the_written_form() {
     for source in [
         include_str!("../../../tests/fixtures/nested-initializer-identity.c"),

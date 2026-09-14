@@ -301,3 +301,28 @@ and source reasoning are distinguished from that unexecuted check.
 No new kernel clone was created. The first full KUnit and targeted packaging
 VMs exited normally; the padding repair's changed gate and release build pass.
 Existing runtime disks and earlier failed captures are retained.
+
+## Module execution and immutable read repair
+
+The 33 module files with KUnit sections were actually loaded, independently
+of the built-in suites, in `module-suites-20260914`. GCC loaded all 33;
+EvoCC loaded ten and failed to load 23 because DRM and iwlwifi retained
+undefined `__compiletime_assert_*` calls. Successful `ld -r` and defined-symbol
+parity did not test this condition. The GCC serial stream contains a partial
+KTAP line followed by an explicit printk replay, producing 11 parser errors;
+its provisional 773 PASS / one SKIP is not yet a clean suite result.
+
+The assertion calls reduce to immutable string/record loads after inlining.
+The lowerer's bounded value analysis now tracks source-immutable addresses
+and initialized non-relocation bytes through explicit CFG arguments. Loads,
+bounds guards and effects remain in the IR; mutable, volatile, unknown and
+relocation-bearing reads do not acquire constants. The 52 focused tests and
+changed gate pass. The combined minimal fixture runs with result zero under
+sealed GCC-14, Clang-19 and EvoCC at `-O2`; the first native invocation omitted
+`-O2` and its link failure is retained, not called a compiler regression.
+
+Actual `drm_edid.o` and `iwl-io.o` now have no assertion calls. Other original
+commands exposed a separate `-g` defect: lifted function-static objects are
+matched against the pre-inline source inventory. Remaining replays were
+stopped to repair that mismatch; module loading must still be rerun. The
+original full kselftest pair continues against its unchanged payloads.
