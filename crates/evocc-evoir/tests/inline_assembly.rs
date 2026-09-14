@@ -38,6 +38,19 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn vector_register_clobbers_keep_their_own_register_file() {
+    for register in ["v0", "v8", "v15", "v31"] {
+        let source = ordinary(r#""nop""#).replace("[\"memory\"]", &format!("[\"{register}\"]"));
+        let module = parse_section9_module(source.as_bytes()).expect("physical SIMD clobber");
+        assert_eq!(render_module(&module), source);
+    }
+    for register in ["v32", "v255", "v-1"] {
+        let source = ordinary(r#""nop""#).replace("[\"memory\"]", &format!("[\"{register}\"]"));
+        assert!(parse_section9_module(source.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn numbered_labels_count_explicit_operands_and_round_trip() {
     // A read-write output remains one IR operand. Its incoming value is
     // not an extra explicit input; the first label here has index two.

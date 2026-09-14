@@ -3,6 +3,10 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 fn run(source: &str, mode: &str) -> Output {
+    run_with_options(source, mode, &[])
+}
+
+fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
     let path =
@@ -10,6 +14,7 @@ fn run(source: &str, mode: &str) -> Output {
     fs::write(&path, source).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args(["--target=aarch64-unknown-linux-gnu", mode])
+        .args(options)
         .arg(&path)
         .output()
         .unwrap();
@@ -30,6 +35,46 @@ static inline __attribute__((always_inline)) int read_memory(int value) {
 }
 int main(void) { return read_memory(7) != 7; }
 "#;
+
+#[test]
+fn vector_clobbers_preserve_callee_saved_lanes_without_claiming_gpr_clobbers() {
+    let source = include_str!("../../../tests/fixtures/assembly-vector-clobbers.c");
+    let ir = emits(source);
+    assert!(ir.contains("\"v0\", \"v8\", \"v15\", \"v31\""));
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    for register in [8, 15] {
+        assert!(
+            assembly.contains(&format!("str d{register},")),
+            "{assembly}"
+        );
+        assert!(
+            assembly.contains(&format!("ldr d{register},")),
+            "{assembly}"
+        );
+    }
+    assert!(!assembly.contains("str d0,"), "{assembly}");
+    assert!(!assembly.contains("str d31,"), "{assembly}");
+    // The explicit flag disables compiler-generated SIMD accesses. Like
+    // both reference compilers, it does not promise d8-d15 preservation to
+    // hand-written assembly callers that hold SIMD state across the call.
+    let general = run_with_options(source, "--emit=asm", &["-mgeneral-regs-only"]);
+    assert!(
+        general.status.success(),
+        "{}",
+        String::from_utf8_lossy(&general.stderr)
+    );
+    let general = String::from_utf8(general.stdout).unwrap();
+    assert!(!general.contains("str d8,"), "{general}");
+    assert!(!general.contains("str d15,"), "{general}");
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "vector-clobbers");
+}
 
 #[test]
 fn small_aggregate_register_operands_transfer_the_complete_representation() {
