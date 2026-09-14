@@ -69,6 +69,9 @@ def parser():
     p.add_argument('--selftest-runtime', type=Path, help='per-kernel runtime root with matching module payloads')
     p.add_argument('--selftest-kernel-receipt', type=Path, help='audited supplemental kernel-pair receipt; requires --expanded-selftest-kernel')
     p.add_argument('--selftest-build-root', type=Path, help='separate selftest build/install inventory, for example on a case-sensitive volume')
+    p.add_argument('--selftest-source-root', type=Path, help='source tree used by the selftest build')
+    p.add_argument('--selftest-headers-root', type=Path, help='exported headers for that selftest source')
+    p.add_argument('--selftest-kernel-build-root', type=Path, help='configured reference output supplying BTF and test-module build inputs')
     p.add_argument('--refresh-selftest-runtime', action='store_true', help='repair full-suite runtime dependencies without rebuilding test programs')
     p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
     p.add_argument("--reuse-selftest-reference", type=Path,
@@ -115,6 +118,10 @@ def command(name, args, binary):
                 cmd += ['--kernel-receipt', str(args.selftest_kernel_receipt)]
             if args.selftest_build_root:
                 cmd += ['--work-root', str(args.selftest_build_root)]
+            for option in ('source-root', 'headers-root', 'kernel-build-root'):
+                value = getattr(args, 'selftest_' + option.replace('-', '_'))
+                if value:
+                    cmd += ['--' + option, str(value)]
             if args.refresh_selftest_runtime:
                 cmd += ['--refresh-runtime']
             if args.reuse_selftest_reference:

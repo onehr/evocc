@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
                     'e2fsprogs', 'libarchive13t64', 'netsniff-ng', 'libteam-utils',
                     'iperf3', 'traceroute', 'conntrack', 'fuse3')
+BUILD_PACKAGES = ('openssl', 'python3-docutils')
 # The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
 # The collection has no settings file, so the runner's 45s default cannot
 # possibly finish it. Keep this measured policy change explicit in receipts.
@@ -309,7 +310,19 @@ def enumerate_collections(base):
     return targets, [name for name in dependencies if name not in targets]
 
 
-def build_worker(jobs):
+def collection_build_options(target, work, kernel_build=None):
+    # BPF's upstream Makefile recursively builds test_kmods. Its O variable
+    # must name a configured kernel, not the userspace test scratch directory.
+    output = kernel_build if target == 'bpf' and kernel_build else work / 'obj'
+    options = [f'O={output}', 'LLVM_STRIP=llvm-strip-19', 'LLVM_CONFIG=llvm-config-19']
+    if kernel_build:
+        options.append(f'VMLINUX_BTF={kernel_build / "vmlinux"}')
+        if target == 'bpf':
+            options.append(f'KDIR={kernel_build}')
+    return options
+
+
+def build_worker(jobs, kernel_build=None):
     """Runs only inside the disposable Linux build container, never on the host."""
     work, original = Path('/work/full'), Path('/work/src')
     source = work / 'source'
@@ -335,6 +348,11 @@ def build_worker(jobs):
                 'installDependencyTargets': dependencies, 'dependencyBuilds': [],
                 'packages': subprocess.check_output(['dpkg-query', '-W'], text=True),
                 'compiler': subprocess.check_output(['gcc-14', '--version'], text=True), 'builds': []}
+    if kernel_build:
+        from selftest import sha
+        metadata['kernelBuild'] = {'root': str(kernel_build), 'role': 'reference userspace/test-module build input',
+                                  'sha256': {name: sha(kernel_build / name)
+                                             for name in ('.config', 'vmlinux', 'Module.symvers')}}
     save(work / 'build.json', metadata)
     for target in dependencies + targets:
         if shutil.disk_usage(work).free < 8 << 30:
@@ -343,7 +361,7 @@ def build_worker(jobs):
         output = directory
         cmd = ['make', '--no-print-directory', '-C', str(directory), '-o', 'headers', 'ARCH=arm64',
                'CC=gcc-14', 'HOSTCC=gcc-14', 'CLANG=clang-19', 'LLC=llc-19',
-               f'OUTPUT={output}', f'O={work / "obj"}',
+               f'OUTPUT={output}', *collection_build_options(target, work, kernel_build),
                'KHDR_INCLUDES=-isystem /work/headers/include',
                f'CPPFLAGS=-I{source / "tools/testing/selftests"} -isystem /work/headers/include',
                'CFLAGS_NOLIBC_TEST=-isystem /work/headers/include']
@@ -448,6 +466,10 @@ def main():
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--work-root', type=Path, default=ROOT / '.build/kselftest-full',
                         help='selftest build and installed userspace; separate from kernel output')
+    parser.add_argument('--source-root', type=Path, default=ROOT / '.build/linux-src')
+    parser.add_argument('--headers-root', type=Path, default=ROOT / '.build/kselftest/headers')
+    parser.add_argument('--kernel-build-root', type=Path,
+                        help='configured reference output for actual BTF and upstream test-module builds')
     parser.add_argument('--build-worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--runtime-worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--refresh-runtime', action='store_true', help='install missing runtime prerequisites without rebuilding tests')
@@ -476,7 +498,7 @@ def main():
     if args.kernel_receipt and not args.expanded_kernel:
         parser.error('--kernel-receipt requires --expanded-kernel')
     if args.build_worker:
-        return build_worker(args.jobs)
+        return build_worker(args.jobs, args.kernel_build_root)
     if args.runtime_worker:
         return refresh_runtime(Path('/work/full'))
     import selftest
@@ -496,20 +518,29 @@ def main():
             raise ValueError('selftest seed image differs from the frozen build environment')
         cmd = ['/usr/local/bin/container', 'run', '--rm', '--platform', 'linux/arm64',
                '--cpus', str(args.jobs), '--memory', '4G',
-               '-v', f'{ROOT / ".build/linux-src"}:/work/src:ro', '-v', f'{work}:/work/full',
-               '-v', f'{ROOT / ".build/kselftest/headers"}:/work/headers:ro',
+               '-v', f'{args.source_root.resolve()}:/work/src:ro', '-v', f'{work}:/work/full',
+               '-v', f'{args.headers_root.resolve()}:/work/headers:ro',
                '-v', f'{ROOT / "tools/k1"}:/work/harness:ro',
                '-v', f'{ROOT / ".build/reference/gcc-lane-1/usr/gen_init_cpio"}:/work/bin/gen_init_cpio:ro',
-               *([] if args.install_deps else ['--network', 'none']), image]
+               *([] if args.install_deps else ['--network', 'none'])]
+        if args.kernel_build_root:
+            kernel_build = args.kernel_build_root.resolve()
+            for name in ('.config', 'vmlinux', 'Module.symvers', 'include/config/auto.conf'):
+                if not (kernel_build / name).is_file():
+                    raise ValueError(f'incomplete reference kernel build: {name}')
+            cmd += ['-v', f'{kernel_build}:/work/kernel']
+        cmd.append(image)
         mode = '--runtime-worker' if args.refresh_runtime else '--build-worker'
         worker = f'exec python3 /work/harness/selftest_full.py {mode} --jobs {args.jobs}'
+        if args.kernel_build_root:
+            worker += ' --kernel-build-root /work/kernel'
         if args.install_deps:
             packages = ('pkgconf libcap-dev libnuma-dev libmnl-dev libasound2-dev libaio-dev liburing-dev '
                         'libnl-3-dev libnl-genl-3-dev libcap-ng-dev libunwind-dev libtraceevent-dev '
                         'libbpf-dev libpopt-dev libfuse-dev libfuse3-dev libjson-c-dev libpcap-dev libkeyutils-dev '
                         'iproute2 iputils-ping iptables nftables ethtool socat numactl bc strace jq '
                         'python3-pyroute2 python3-yaml python3-pytest python3-scapy python3-pexpect '
-                        'gawk python3-jsonschema libmbedtls-dev ' + ' '.join(RUNTIME_PACKAGES))
+                        'gawk python3-jsonschema libmbedtls-dev ' + ' '.join(BUILD_PACKAGES + RUNTIME_PACKAGES))
             worker = ('apt-get -o Acquire::Check-Valid-Until=false update > /work/full/dependencies.log 2>&1 && '
                       'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends '
                       + packages + ' >> /work/full/dependencies.log 2>&1 && ' + worker)

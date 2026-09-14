@@ -23,6 +23,20 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_bpf_build_uses_the_configured_kernel_and_versioned_llvm_tools(self):
+        self.assertTrue(hasattr(lane, 'collection_build_options'))
+        options = lane.collection_build_options('bpf', Path('/work/full'), Path('/work/kernel'))
+        self.assertIn('O=/work/kernel', options)
+        self.assertIn('KDIR=/work/kernel', options)
+        self.assertIn('LLVM_STRIP=llvm-strip-19', options)
+        self.assertIn('LLVM_CONFIG=llvm-config-19', options)
+        self.assertIn('VMLINUX_BTF=/work/kernel/vmlinux', options)
+        self.assertNotIn('O=/work/full/obj', options)
+        other = lane.collection_build_options('mm', Path('/work/full'), Path('/work/kernel'))
+        self.assertIn('O=/work/full/obj', other)
+        self.assertNotIn('KDIR=/work/kernel', other)
+        self.assertTrue({'openssl', 'python3-docutils'} <= set(lane.BUILD_PACKAGES))
+
     def test_expanded_kernel_selection_uses_the_audited_images_not_the_frozen_pair(self):
         select = getattr(lane, 'kernel_selection', None)
         self.assertTrue(callable(select), 'full selftests cannot yet select the expanded audited kernel')

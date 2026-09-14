@@ -62,12 +62,18 @@ class BenchmarkEntryTest(unittest.TestCase):
         args = bench.parser().parse_args(['kernel-selftest-all', '--expanded-selftest-kernel',
                                          '--selftest-runtime', '/module/runtime', '--reuse-selftest-build',
                                          '--selftest-kernel-receipt', '/coverage/receipt.json',
-                                         '--selftest-build-root', '/case-sensitive/selftests'])
+                                         '--selftest-build-root', '/case-sensitive/selftests',
+                                         '--selftest-source-root', '/case-sensitive/linux',
+                                         '--selftest-headers-root', '/case-sensitive/headers',
+                                         '--selftest-kernel-build-root', '/case-sensitive/reference'])
         command, _ = bench.command('kernel-selftest-all', args, Path('/unused/compiler'))
         self.assertIn('--expanded-kernel', command)
         self.assertEqual(command[command.index('--runtime-root') + 1], '/module/runtime')
         self.assertEqual(command[command.index('--kernel-receipt') + 1], '/coverage/receipt.json')
         self.assertEqual(command[command.index('--work-root') + 1], '/case-sensitive/selftests')
+        self.assertEqual(command[command.index('--source-root') + 1], '/case-sensitive/linux')
+        self.assertEqual(command[command.index('--headers-root') + 1], '/case-sensitive/headers')
+        self.assertEqual(command[command.index('--kernel-build-root') + 1], '/case-sensitive/reference')
 
     def test_kernel_selftest_only_invocation_does_not_require_or_build_evocc(self):
         with tempfile.TemporaryDirectory() as tmp:
