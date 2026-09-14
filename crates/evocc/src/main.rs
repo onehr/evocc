@@ -89,6 +89,7 @@ struct DriverOptions {
     target: DriverTarget,
     input: String,
     include_paths: Vec<String>,
+    system_include_paths: Vec<String>,
     forced_includes: Vec<String>,
     macro_prefix_maps: Vec<(String, String)>,
     macro_actions: Vec<MacroAction>,
@@ -242,6 +243,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut target = None;
     let mut input = None;
     let mut include_paths = Vec::new();
+    let mut system_include_paths = Vec::new();
     let mut forced_includes = Vec::new();
     let mut macro_prefix_maps = Vec::new();
     let mut macro_actions = Vec::new();
@@ -347,7 +349,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--survey" => survey = true,
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
-            "-I" | "-D" | "-U" | "-include" => {
+            "-I" | "-D" | "-U" | "-include" | "-isystem" => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -355,6 +357,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                     .clone();
                 match arg.as_str() {
                     "-I" => include_paths.push(value),
+                    "-isystem" => system_include_paths.push(value),
                     "-D" => macro_actions.push(MacroAction::Define(value)),
                     "-U" => macro_actions.push(MacroAction::Undefine(value)),
                     "-include" => forced_includes.push(value),
@@ -363,6 +366,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             _ if arg.starts_with("-I") && arg.len() > 2 => {
                 include_paths.push(arg[2..].to_owned());
+            }
+            _ if arg.starts_with("-isystem") && arg.len() > "-isystem".len() => {
+                system_include_paths.push(arg["-isystem".len()..].to_owned());
             }
             _ if arg.starts_with("-D") && arg.len() > 2 => {
                 macro_actions.push(MacroAction::Define(arg[2..].to_owned()));
@@ -426,6 +432,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
+        system_include_paths,
         forced_includes,
         macro_prefix_maps,
         macro_actions,
@@ -643,7 +650,23 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     if let Some(parent) = std::path::Path::new(&options.input).parent() {
         pp.add_include_path(parent.to_string_lossy().to_string());
     }
+    // System directories follow every -I directory regardless of option
+    // order. A directory in both lists keeps only its system position, so
+    // include_next sees the same ordered search chain as include/has_include.
+    let directory_identity = |path: &String| {
+        std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
+    };
+    let system_directories = options
+        .system_include_paths
+        .iter()
+        .map(directory_identity)
+        .collect::<std::collections::BTreeSet<_>>();
     for include_path in &options.include_paths {
+        if !system_directories.contains(&directory_identity(include_path)) {
+            pp.add_include_path(include_path.clone());
+        }
+    }
+    for include_path in &options.system_include_paths {
         pp.add_include_path(include_path.clone());
     }
     for forced_include in &options.forced_includes {
