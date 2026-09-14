@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 11:53 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 12:00 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -261,7 +261,13 @@ and source reasoning are distinguished from that unexecuted check.
   evidence that those modules are inapplicable to ARM64.
 - Other shared failures (including rseq's long workload, timer tolerances,
   cgroup, perf and ptrace) still require individual diagnosis.
-  Equality with the GCC control is not a blanket waiver.
+  Equality with the GCC control is not a blanket waiver. The complete unchanged
+  rseq pressure matrix now finishes PASS on both expanded kernels, in 527.633
+  and 518.724 boot seconds. Its upstream `timeout=0` was previously replaced
+  by a 300-second fallback; an explicit 7,200-second budget allowed the full
+  workload to finish. Capture: `rseq-complete-20260914/results.json`.
+  The original timeout and the inner architecture-specific skipped operations
+  remain recorded; one passing wrapper is not 1,184 passing TAP cases.
 
 ## Next execution sequence
 

@@ -52,6 +52,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -62,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cmdrecord import (  # noqa: E402
     Record,
     RecordError,
+    SAVED_COMMAND,
     assemble_argv,
     evocc_argv,
     is_target_c_compile,
@@ -542,7 +544,103 @@ def complete_coverage(rows: list[dict], wanted: list[str], outcome: str) -> bool
         outcome != "substituted" or (
             row.get("installedSha256")
             and row.get("objectSha256AfterRelink") == row["installedSha256"]
-        )) for row in rows)
+    )) for row in rows)
+
+
+def module_link_plan(pristine: Path, out_root: Path, installed: list[dict]) -> dict:
+    """Original Kbuild links, gated by transitive installed-object provenance.
+
+    A composite object still on disk is not evidence that its C inputs were
+    compiled by EvoCC. Walk its original response file down to compilation
+    leaves, and never make a link eligible through an unaudited C object.
+    """
+    rows = {row['unit']: row for row in installed}
+    if len(rows) != len(installed):
+        raise RecordError('duplicate installed object identity')
+    result = {'modules': [], 'blocked': {}, 'links': [], 'cInputs': {},
+              'assemblyInputs': {}, 'linkInputs': {}}
+    completed, visiting = {}, set()
+
+    def path(root, unit):
+        relative = Path(unit)
+        if relative.is_absolute() or '..' in relative.parts or not relative.parts:
+            raise RecordError(f'unsafe module input {unit}')
+        return root / relative
+
+    def unchanged(unit):
+        reference = path(pristine, unit)
+        actual = path(out_root, unit)
+        if not actual.is_file() or sha256_file(reference) != sha256_file(actual):
+            raise RecordError(f'original module link input changed: {unit}')
+        result['linkInputs'][unit] = sha256_file(actual)
+        return reference
+
+    def visit(unit):
+        if unit in completed:
+            return completed[unit]
+        if unit in visiting:
+            raise RecordError(f'cyclic module link: {unit}')
+        visiting.add(unit)
+        record = record_path(pristine, unit)
+        lines = record.read_text().splitlines()
+        match = SAVED_COMMAND.fullmatch(lines[0]) if lines else None
+        if not match or match[1] != unit:
+            raise RecordError(f'invalid module command record: {record}')
+        argv = shlex.split(match[2])
+        if not argv:
+            raise RecordError(f'empty module command record: {record}')
+        errors = []
+        if Path(argv[0]).name == 'ld':
+            if argv.count('-o') != 1 or argv[argv.index('-o') + 1] != unit:
+                raise RecordError(f'module link output mismatch: {record}')
+            unchanged(str(record.relative_to(pristine)))
+            inputs = []
+            for argument in argv[1:]:
+                if argument == unit:
+                    continue
+                if argument.startswith('@'):
+                    inputs.extend(shlex.split(unchanged(argument[1:]).read_text()))
+                elif argument.endswith('.o'):
+                    inputs.append(argument)
+            if '-T' in argv:
+                unchanged(argv[argv.index('-T') + 1])
+            if not inputs:
+                raise RecordError(f'module link has no object inputs: {record}')
+            for child in inputs:
+                path(out_root, child)
+                errors.extend(visit(child))
+            if not errors:
+                result['links'].append({'unit': unit, 'argv': argv, 'inputs': inputs})
+        else:
+            compilation = parse_record(record)
+            actual = path(out_root, unit)
+            digest = sha256_file(actual) if actual.is_file() else None
+            if is_target_c_compile(compilation):
+                row = rows.get(unit, {})
+                if (row.get('outcome') != 'substituted' or not digest
+                        or digest != row.get('installedSha256')):
+                    errors.append(f'{unit}: missing or changed EvoCC object')
+                else:
+                    result['cInputs'][unit] = digest
+            elif compilation.tool == TARGET_COMPILER and compilation.source_token.endswith('.S'):
+                if not digest or digest != sha256_file(path(pristine, unit)):
+                    errors.append(f'{unit}: missing or changed reference assembly')
+                else:
+                    result['assemblyInputs'][unit] = digest
+            else:
+                raise RecordError(f'unsupported module leaf: {record}')
+        visiting.remove(unit)
+        completed[unit] = sorted(set(errors))
+        return completed[unit]
+
+    for item in unchanged('modules.order').read_text().splitlines():
+        unit = str(Path(item).with_suffix('.ko'))
+        path(out_root, unit)
+        if errors := visit(unit):
+            result['blocked'][unit] = errors
+        else:
+            result['modules'].append(unit)
+    return result
 
 
 def load_state(k1_root: Path) -> list[str]:

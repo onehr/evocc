@@ -22,6 +22,49 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_module_linking_requires_audited_c_leaves_and_original_assembly(self) -> None:
+        planner = getattr(substitute, 'module_link_plan', None)
+        self.assertTrue(callable(planner), 'module links must not consume stale reference C objects')
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            pristine, output = base / 'pristine', base / 'out'
+            for root in (pristine, output):
+                root.mkdir()
+                (root / 'modules.order').write_text('combo.o\n')
+                (root / '.combo.ko.cmd').write_text(
+                    'savedcmd_combo.ko := ld -r -o combo.ko combo.o combo.mod.o\n')
+                (root / '.combo.o.cmd').write_text(
+                    'savedcmd_combo.o := ld -r -o combo.o @combo.mod\n')
+                (root / 'combo.mod').write_text('a.o\nstart.o\n')
+                for unit, source in [('a.o', 'a.c'), ('start.o', 'start.S'),
+                                     ('combo.mod.o', 'combo.mod.c')]:
+                    (root / ('.' + unit + '.cmd')).write_text(
+                        f'savedcmd_{unit} := gcc-14 -c -o {unit} {source}\n'
+                        f'source_{unit} := {source}\n')
+                    (root / unit).write_bytes(b'code-' + unit.encode())
+            rows = [{'unit': unit, 'outcome': 'substituted',
+                     'installedSha256': substitute.sha256_file(output / unit)}
+                    for unit in ('a.o', 'combo.mod.o')]
+            result = planner(pristine, output, rows)
+            self.assertEqual(result['modules'], ['combo.ko'])
+            self.assertEqual([r['unit'] for r in result['links']], ['combo.o', 'combo.ko'])
+            self.assertEqual(result['blocked'], {})
+            self.assertEqual(set(result['cInputs']), {'a.o', 'combo.mod.o'})
+            self.assertEqual(set(result['assemblyInputs']), {'start.o'})
+            for bad in [rows[:1], [dict(rows[0], outcome='refused'), rows[1]]]:
+                result = planner(pristine, output, bad)
+                self.assertEqual(result['modules'], [])
+                self.assertIn('combo.ko', result['blocked'])
+            (output / 'a.o').write_bytes(b'reference overwrite')
+            self.assertEqual(planner(pristine, output, rows)['modules'], [])
+            (output / 'a.o').write_bytes(b'code-a.o')
+            (output / 'start.o').write_bytes(b'foreign assembly')
+            self.assertEqual(planner(pristine, output, rows)['modules'], [])
+            (output / 'start.o').write_bytes(b'code-start.o')
+            (output / 'combo.mod').write_text('different.o\n')
+            with self.assertRaises(substitute.RecordError):
+                planner(pristine, output, rows)
+
     def test_full_kernel_coverage_requires_each_original_object_and_fresh_hash(self) -> None:
         check = getattr(substitute, "complete_coverage", None)
         self.assertTrue(callable(check), "full link must not silently use reference C objects")

@@ -37,6 +37,14 @@ PROGRAM_TIMEOUT_OVERRIDES = {
                   'both kernels hit the inherited 45-second limit mid-workload. '
                   '600 seconds is an explicit measurement budget, not an upstream declared timeout.',
     },
+    'rseq:run_param_test.sh': {
+        'seconds': 7200,
+        'source': 'tools/testing/selftests/rseq/run_param_test.sh and rseq/settings',
+        'reason': 'The upstream collection declares timeout=0. The unchanged script runs 1184 '
+                  'invocations including injected yields, signals and sleeps; the 300-second '
+                  'unlimited-test fallback interrupted it. 7200 seconds is an explicit '
+                  'measurement budget, not a change to the test or its assertions.',
+    },
 }
 
 

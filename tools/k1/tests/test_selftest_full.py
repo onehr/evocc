@@ -64,6 +64,14 @@ class FullSelftest(unittest.TestCase):
         self.assertIn('test_stress_05.sh', policy['source'])
         self.assertIn('40', policy['reason'])
 
+    def test_complete_rseq_injection_matrix_has_an_explicit_measured_budget(self):
+        build = {'programTimeoutSeconds': 315}
+        self.assertEqual(lane.program_timeout(build, 'rseq:run_param_test.sh'), 7215)
+        self.assertEqual(lane.program_timeout(build, 'rseq:run_syscall_errors_test.sh'), 315)
+        policy = lane.PROGRAM_TIMEOUT_OVERRIDES['rseq:run_param_test.sh']
+        self.assertIn('timeout=0', policy['reason'])
+        self.assertIn('1184', policy['reason'])
+
     def test_kunit_filter_is_explicit_and_cannot_add_kernel_options(self):
         command = ['bash', '-c', 'source "$1"; k1_kunit_cmdline "$2"',
                    'kunit-test', str(PATH.parent / 'lib.sh')]

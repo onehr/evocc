@@ -9890,6 +9890,20 @@
     "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
     "original935ProgramResultsReplaced": false
   },
+  "completeRseqPressureReplay": {
+    "capture": ".evidence/kunit/rseq-complete-20260914",
+    "program": "rseq:run_param_test.sh",
+    "script": "Unchanged upstream 1184-invocation matrix; architecture-unimplemented inner operations retain their printed skips",
+    "previousRunnerSeconds": 300,
+    "runnerSeconds": 7200,
+    "reason": "The collection settings specify timeout=0. A finite explicit 7200-second budget replaces the harness's 300-second fallback without reducing the matrix, thread count, iterations or injected delays.",
+    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=0 K1_INITRAMFS=.build/k7/module-runtime/initramfs.cpio K1_TEST_DISK=.build/k7/module-runtime/<lane>/scratch-net.img K1_SELFTEST_COLLECTION=rseq:run_param_test.sh K1_SELFTEST_TIMEOUT=7200 K1_CONSOLE_LOGLEVEL=5 K1_BOOT_TIMEOUT=7260 tools/k1/boot.sh <matching-expanded-image> <capture>/<lane>",
+    "eachKernelPrograms": {"PASS": 1, "FAIL": 0, "TIMEOUT": 0},
+    "powerdownAtBootSeconds": {"reference": 527.63272, "subject": 518.724371},
+    "resultsSha256": "41f0581f90c4ac1b45c1a3452102d2bae3f91ee6c9273902fa33667290c39baa",
+    "gate": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 145 PASS; Ruff clean; tools/gate-changed.sh 450b228 --offline -j2 --quiet: no Rust crate changed",
+    "original935ProgramResultsReplaced": false
+  },
   "expandedUblkReplay": {
     "capture": ".evidence/kunit/ublk-expanded-20260914",
     "programs": 29,

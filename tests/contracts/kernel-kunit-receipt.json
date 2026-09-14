@@ -370,6 +370,18 @@
     "kernelUnitBtf": {"bytes": 248098, "sha256": "d198611291ccac0b2340bfa169d938708c9ab632735f00ea6c0ddb774871db17"},
     "claimLimit": "These are independently decoded type records, not a borrowed GCC BTF blob. Existing Images remain no-BTF; enabling and executing BTF-dependent tests still requires rebuilding the configured subject."
   },
+  "moduleComposition": {
+    "capture": ".evidence/kunit/module-composition-20260914",
+    "targetCRecords": 3413,
+    "outcomes": {"substituted": 3400, "refused": 13},
+    "compilerSha256": "c4eb8810622368af1e51a31df76210566f92a4f88bdea5b84bd6a6f332d4eeb3",
+    "inputSnapshotSha256": "fb31f0dba1cc0a1ebad486f0849a99714c353c06d2a3364be0cb203535cebf0e",
+    "refusalClasses": {"DuplicateLocalObject": 7, "NEON": 6},
+    "seconds": 4550.58,
+    "linkPreflight": "697 of 704 modules have complete audited C leaves; original .cmd and response-file links preserve the full dependency graph. No stale reference C object makes an incomplete module eligible.",
+    "guardTest": "One declared missing-provenance-planner RED, then 145 Python tests PASS. Missing/refused/changed C objects and changed assembly inputs are rejected; changed linker response files stop planning.",
+    "next": "Replay all seven identity refusals with the repair, then link and install eligible modules. Six NEON C units remain compiler work, not an architecture exclusion."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
 }
