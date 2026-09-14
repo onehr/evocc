@@ -17,6 +17,15 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_kunit_filter_is_explicit_and_cannot_add_kernel_options(self):
+        command = ['bash', '-c', 'source "$1"; k1_kunit_cmdline "$2"',
+                   'kunit-test', str(PATH.parent / 'lib.sh')]
+        done = subprocess.run(command + ['pm_runtime_test_cases.*'], text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, ' kunit.filter_glob=pm_runtime_test_cases.*')
+        for value in ['suite.* init=/bin/sh', '$(false)', 'suite\n', 'a' * 257]:
+            self.assertNotEqual(subprocess.run(command + [value], capture_output=True).returncode, 0)
+
     def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
                    'args-test', str(PATH.parent / 'lib.sh')]

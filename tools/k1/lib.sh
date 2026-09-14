@@ -88,6 +88,14 @@ k1_selftest_cmdline() {
   fi
 }
 
+k1_kunit_cmdline() {
+  local filter="$1"
+  [ -n "$filter" ] || return 0
+  case "$filter" in *[!a-zA-Z0-9_.*?-]*) k1_die "invalid KUnit filter" ;; esac
+  [ "${#filter}" -le 256 ] || k1_die "KUnit filter exceeds the command-line bound"
+  printf ' kunit.filter_glob=%s' "$filter"
+}
+
 # k1_boot <contract> <image> <initramfs> <nonce> <serial-log> <timeout-seconds>
 #
 # Boots one Image on the hvf-host lane and evaluates the ordered predicate:
@@ -106,6 +114,9 @@ k1_boot() {
   local selftest_cmdline
   selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}")" || return 1
   command_line="$command_line$selftest_cmdline"
+  local kunit_cmdline
+  kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}")" || return 1
+  command_line="$command_line$kunit_cmdline"
   if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
     case "$K1_CONSOLE_LOGLEVEL" in
       [1-8]) command_line="$command_line loglevel=$K1_CONSOLE_LOGLEVEL" ;;
