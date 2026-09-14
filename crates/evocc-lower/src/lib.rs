@@ -1006,7 +1006,7 @@ fn lower_resolved_unit(
             *visibility = GlobalVisibility::Hidden;
         }
     }
-    let preserved = unit
+    let mut preserved: BTreeSet<String> = unit
         .iter()
         .filter_map(|decl| {
             let CHirDecl::Function(function) = decl else {
@@ -1023,6 +1023,27 @@ fn lower_resolved_unit(
                 })
         })
         .collect();
+    let mut preserved_origins = BTreeSet::new();
+    evocc_chir::inline::for_each_declaration(unit, |decl| {
+        if let CHirDecl::Object(object) = decl {
+            if object
+                .attributes
+                .iter()
+                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
+            {
+                if let Some(origin) = allocation_origins.get(&object.symbol) {
+                    preserved_origins.insert(*origin);
+                }
+            }
+        }
+    });
+    preserved.extend(
+        module
+            .globals
+            .iter()
+            .filter(|g| preserved_origins.contains(&g.origin))
+            .map(|g| g.symbol.clone()),
+    );
     if optimize {
         constants::remove_unreferenced_functions(&mut module, preserved);
     }

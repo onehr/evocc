@@ -410,16 +410,114 @@ pub(super) fn prune_constant_edges(
     private::prune_guarded_reads(blocks, &facts, &indices, &users, &reachable);
 }
 
-/// Follow actual lowered uses after constant edges are removed. Linkage,
-/// relocations (including block addresses), aliases and assembly remain roots.
+// Delete only unused address construction and parameter transport. Every
+// evaluation, poison-consuming operation, guard and effect stays in place.
+fn discard_unused_addresses(function: &mut evocc_evoir::Function) {
+    fn edges(inst: &mut Inst, mut visit: impl FnMut(u32, &mut Vec<Value>)) {
+        match inst {
+            Inst::Br(target, args) => visit(*target, args),
+            Inst::CondBr(_, a, aa, b, ba) => {
+                visit(*a, aa);
+                visit(*b, ba);
+            }
+            Inst::IndirectBr { edges, .. } => {
+                for edge in edges {
+                    visit(edge.target, &mut edge.arguments);
+                }
+            }
+            Inst::AsmGoto {
+                labels,
+                fallthrough,
+                ..
+            } => {
+                for label in labels {
+                    visit(label.edge.target, &mut label.edge.arguments);
+                }
+                visit(fallthrough.target, &mut fallthrough.arguments);
+            }
+            _ => {}
+        }
+    }
+    let parameters: BTreeMap<_, _> = function
+        .blocks
+        .iter()
+        .map(|b| {
+            (
+                b.id,
+                b.args.iter().map(|a| a.value.clone()).collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let mut incoming = BTreeMap::<u32, Vec<u32>>::new();
+    let mut needed = BTreeSet::new();
+    for block in &function.blocks {
+        for inst in block.insts.iter().chain(std::iter::once(&block.terminator)) {
+            let mut without_edges = inst.clone();
+            edges(&mut without_edges, |target, args| {
+                for (param, arg) in parameters[&target].iter().zip(args.iter()) {
+                    incoming.entry(param.id).or_default().push(arg.id);
+                }
+                args.clear();
+            });
+            needed.extend(inst_uses(&without_edges).iter().map(|v| v.id));
+        }
+    }
+    // The entry signature is an ABI boundary, including an entry backedge.
+    if let Some(entry) = function.blocks.first() {
+        needed.extend(entry.args.iter().map(|a| a.value.id));
+    }
+    let mut pending: Vec<_> = needed.iter().copied().collect();
+    while let Some(value) = pending.pop() {
+        for &arg in incoming.get(&value).into_iter().flatten() {
+            if needed.insert(arg) {
+                pending.push(arg);
+            }
+        }
+    }
+    for block in &mut function.blocks {
+        block.args.retain(|a| needed.contains(&a.value.id));
+        for inst in block
+            .insts
+            .iter_mut()
+            .chain(std::iter::once(&mut block.terminator))
+        {
+            edges(inst, |target, args| {
+                let mut index = 0;
+                args.retain(|_| {
+                    let keep = needed.contains(&parameters[&target][index].id);
+                    index += 1;
+                    keep
+                });
+            });
+        }
+        block.insts.retain(|inst| match inst {
+            Inst::GlobalAddr { result, .. } | Inst::FuncAddr { result, .. } => {
+                needed.contains(&result.id)
+            }
+            _ => true,
+        });
+    }
+}
+
+/// Follow actual lowered uses after constant edges are removed. External
+/// symbols, explicit sections, preservation attributes, aliases and assembly
+/// are roots; an otherwise unused private table is not a root for its callbacks.
 pub(super) fn remove_unreferenced_functions(
     module: &mut evocc_evoir::Module,
     preserved: BTreeSet<String>,
 ) {
+    for function in &mut module.functions {
+        discard_unused_addresses(function);
+    }
     let functions: BTreeMap<_, _> = module
         .functions
         .iter()
         .map(|f| (f.name.as_str(), f))
+        .collect();
+    let globals: BTreeMap<_, _> = module
+        .globals
+        .iter()
+        .map(|g| (g.symbol.as_str(), g))
         .collect();
     let mut pending = preserved;
     pending.extend(
@@ -434,19 +532,21 @@ pub(super) fn remove_unreferenced_functions(
         module
             .globals
             .iter()
-            .flat_map(|g| &g.relocs)
-            .map(|r| r.symbol.split('^').next().unwrap().to_owned()),
+            .filter(|g| {
+                g.visibility != evocc_evoir::GlobalVisibility::Internal || g.section.is_some()
+            })
+            .map(|g| g.symbol.clone()),
     );
     let assembly_uses = |assembly: &str, pending: &mut BTreeSet<String>| {
         for name in
             assembly.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$')))
         {
-            if functions.contains_key(name) {
+            if functions.contains_key(name) || globals.contains_key(name) {
                 pending.insert(name.to_owned());
             }
             if let Some(name) = name
                 .strip_prefix('_')
-                .filter(|name| functions.contains_key(name))
+                .filter(|name| functions.contains_key(name) || globals.contains_key(name))
             {
                 pending.insert(name.to_owned());
             }
@@ -457,13 +557,25 @@ pub(super) fn remove_unreferenced_functions(
     }
     let mut retained = BTreeSet::new();
     while let Some(name) = pending.pop_first() {
+        if !retained.insert(name.clone()) {
+            continue;
+        }
+        if let Some(global) = globals.get(name.as_str()) {
+            pending.extend(
+                global
+                    .relocs
+                    .iter()
+                    .map(|r| r.symbol.split('^').next().unwrap().to_owned()),
+            );
+        }
         let Some(function) = functions.get(name.as_str()) else {
             continue;
         };
-        if !retained.insert(name) {
-            continue;
-        }
-        for instruction in function.blocks.iter().flat_map(|b| &b.insts) {
+        for instruction in function
+            .blocks
+            .iter()
+            .flat_map(|b| b.insts.iter().chain(std::iter::once(&b.terminator)))
+        {
             match instruction {
                 Inst::Call { callee, .. } => {
                     pending.insert(callee.clone());
@@ -479,4 +591,5 @@ pub(super) fn remove_unreferenced_functions(
         }
     }
     module.functions.retain(|f| retained.contains(&f.name));
+    module.globals.retain(|g| retained.contains(&g.symbol));
 }

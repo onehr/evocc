@@ -362,3 +362,30 @@ The original CPU-hotplug test now passes on both kernels in the TCG lane
 (`hotplug-tcg-20260914`). Its earlier shared HVF panic remains recorded:
 the CPU-off implementation returns from the CPU-die path. This isolates the
 execution backend rather than changing the test or calling the HVF result PASS.
+
+The callback defect is repaired at the shared lowered symbol graph: an
+unreferenced internal table is not an unconditional root for its relocations.
+Unused address transport is removed across complete CFG edges; original
+evaluations, guards, memory operations and poison consumers remain. External
+symbols, explicit sections, used/retain objects, aliases and assembly retain
+their definitions. The standalone fixture links and runs under both sealed
+oracles and EvoCC, including independently verified DWARF. The original
+`iwlwifi/mvm/ops.o` command now drops the unreachable external call.
+
+`module-suites-20260914/subject-complete-records` loads **33/33 modules** and
+reports **781 cases: 780 PASS, zero FAIL, one SKIP, zero parser errors**,
+matching `reference-records` case identities and outcomes. The Image shuts
+down normally; log SHA-256 is
+`1d4711cd89973358918fefb6f52d317357213bdd1bba40b1124448b5bd28eded`.
+This later measurement does not erase the earlier one-tick PRP failure:
+`hsr_framereg.c` saves jiffies, reenables bottom halves, and the test compares
+a later live jiffies read without excluding timer interrupts. No compiler
+repair or test-assertion change was made for that timing-sensitive comparison.
+
+The supplementary BTF test configuration is separate from the running full
+selftest Images. Its IOMMU test requires `FAULT_INJECTION`; merely requesting
+`IOMMUFD_TEST` without that dependency left it disabled. Likewise
+`MSEAL_SYSTEM_MAPPINGS` depends on `!CHECKPOINT_RESTORE` in `security/Kconfig`.
+The former is enabled in the main coverage fragment; mseal has a separate
+fragment that explicitly disables checkpoint/restore. These are distinct
+configurations, not simultaneous coverage attributed to one Image.

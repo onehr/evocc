@@ -651,6 +651,21 @@ fn assigned_constants_and_finite_flags_survive_ssa_edges() {
 }
 
 #[test]
+fn unused_private_callback_tables_do_not_keep_unreachable_calls_linked() {
+    let source = include_str!("../../../tests/fixtures/private-callback-reachability.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(!text.contains("call @missing"), "{text}");
+    assert!(!text.contains("global @operations"), "{text}");
+    assert_constant_program(source);
+}
+
+#[test]
 fn branch_pruning_releases_only_unreferenced_internal_definitions() {
     let source="void invalid(void);static int impossible(void){invalid();return 1;}static int enabled(int n){return 0;}int f(void){return enabled(4)?impossible():0;}int main(void){return f();}";
     assert_constant_program(source);
@@ -680,6 +695,11 @@ fn internal_roots_include_relocations_aliases_assembly_and_used_definitions() {
         "static int keep(void){return 1;}int exported(void)__attribute__((alias(\"keep\")));int main(void){return exported()!=1;}",
         "static __attribute__((used)) int keep(void){return 1;}int main(void){return 0;}",
         "static int keep(void){return 1;}asm(\".quad keep\");int main(void){return 0;}",
+        "static int keep(void){return 1;}static int(*p)(void)__attribute__((used))=keep;int main(void){return 0;}",
+        "static int keep(void){return 1;}static int(*p)(void)__attribute__((section(\".callbacks\")))=keep;int main(void){return 0;}",
+        "static int keep(void){return 1;}static int(*p)(void)=keep;asm(\".quad p\");int main(void){return 0;}",
+        "static int keep(void){return 1;}static int(*p)(void)=keep;extern int(*alias)(void)__attribute__((alias(\"p\")));int main(void){return alias()!=1;}",
+        "static int keep(void){return 1;}int f(void){static int(*p)(void)__attribute__((used))=keep;return 0;}int main(void){return f();}",
     ] {
         let output=run(source,"--emit=evoir");
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
