@@ -86,6 +86,51 @@ fn extent_capture_accepts_pointer_conditions_and_loaded_integer_sizes() {
 }
 
 #[test]
+fn private_values_before_escape_discharge_build_assertions() {
+    let source = include_str!("../../../tests/fixtures/private-constant-before-escape.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+}
+
+#[test]
+fn sequential_constants_stop_at_mutation_escape_and_external_entry() {
+    for source in [
+        "__attribute__((noinline))void replace(int*p){*p=7;}int main(void){int x=32;if(x!=32)return 1;replace(&x);return x!=7;}",
+        "int main(void){int x=32;int*p=&x;*p=7;return x!=7;}",
+        "int main(void){int x=32;for(int i=0;i<2;i++)x++;return x!=34;}",
+        "int f(int c){int x=32;if(c)x=7;return x;}int main(void){return f(0)!=32||f(1)!=7;}",
+        "int main(void){int x=32;goto after;again:x=7;after:if(x==32)goto again;return x!=7;}",
+        "int main(void){int x=32;while(x<34){int y=x;if(y!=x)return 1;x++;}return x!=34;}",
+        "int main(void){int x=32;unsigned long size=__builtin_object_size(&x,0);int*p=&x;*p=7;return size!=4||x!=7;}",
+        "int main(void){int x=32;int constant=__builtin_constant_p(&x);int*p=&x;*p=7;return constant||x!=7;}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn numeric_pointer_bits_fold_in_execution_but_not_as_source_ice() {
+    let source = "static __attribute__((always_inline))inline _Bool bad(const void*p){return __builtin_expect(!!((unsigned long)(void*)p>=(unsigned long)-4095),0);}void invalid(void);int main(void){if(bad((void*)0xffff0123456789abUL))invalid();return !bad((void*)-1L)||bad((void*)0);}";
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    let output = run(
+        "_Static_assert((unsigned long)(void*)1 == 1,\"not an ICE\");",
+        "--parse-only",
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("E2912"));
+}
+
+#[test]
 fn inline_constant_queries_are_recomputed_after_parameter_substitution() {
     let source = include_str!("../../../tests/fixtures/inline-constant-query.c");
     let output = run(source, "--interpret-evoir");

@@ -1033,6 +1033,8 @@ struct Context<'a> {
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     optimized_constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     assignment_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    sequential_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    allow_sequential_values: bool,
     object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
     single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
@@ -1052,6 +1054,8 @@ impl Context<'_> {
             constants: BTreeMap::new(),
             optimized_constants: BTreeMap::new(),
             assignment_values: BTreeMap::new(),
+            sequential_values: BTreeMap::new(),
+            allow_sequential_values: false,
             object_bounds: BTreeMap::new(),
             single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
@@ -1149,7 +1153,7 @@ impl<'a> Substitution<'a, '_> {
         expression: &'a CHirExpr<'a>,
         ty: TypeId,
     ) -> Option<&'a CHirExpr<'a>> {
-        if let Some(value) = crate::constant::eval_integer_constant(
+        if let Some(value) = crate::constant::eval_executable_integer_constant(
             expression,
             &self.unit.types,
             &self.unit.symbols,
@@ -1645,17 +1649,28 @@ impl<'a> Substitution<'a, '_> {
                 let repeatable = replacement.is_some();
                 let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
                 if repeatable
-                    && !c.mutable.contains(&original)
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
                     && o.asm_label.is_none()
                 {
-                    if c.prefix.is_some() {
-                        c.constants.insert(original, replacement.unwrap());
-                    } else {
-                        // This is a proved runtime value, not source ICE
-                        // admission. Queries may now use the same knowledge.
-                        c.optimized_constants.insert(original, replacement.unwrap());
+                    if !c.mutable.contains(&original) {
+                        if c.prefix.is_some() {
+                            c.constants.insert(original, replacement.unwrap());
+                        } else {
+                            // This is a proved runtime value, not source ICE
+                            // admission. Queries may now use the same knowledge.
+                            c.optimized_constants.insert(original, replacement.unwrap());
+                        }
+                    } else if c.allow_sequential_values
+                        && matches!(o.storage, StorageClass::None | StorageClass::Auto)
+                        && o.cleanup.is_none()
+                        && crate::constant::canonical_integer_type(&self.unit.types, o.ty).is_some()
+                    {
+                        // A later escape does not retroactively hide the value
+                        // before that escape. Each following statement kills
+                        // this fact before any mutation or address exposure.
+                        c.sequential_values.insert(original, replacement.unwrap());
+                        c.memo.clear();
                     }
                 }
                 // An unknown runtime value does not break dominance. Only
@@ -1737,6 +1752,9 @@ impl<'a> Substitution<'a, '_> {
                 return Ok(v);
             }
             if let Some(v) = c.assignment_values.get(symbol) {
+                return Ok(v);
+            }
+            if let Some(v) = c.sequential_values.get(symbol) {
                 return Ok(v);
             }
             if let Some(v) = self.static_values.get(symbol) {
@@ -2093,11 +2111,31 @@ impl<'a> Substitution<'a, '_> {
                 let incoming = inspect([Node::Stmt(s)]).entry_labels;
                 let outer_prefix = c.declaration_prefix;
                 let outer_assignments = c.assignment_values.clone();
+                let outer_sequential = c.sequential_values.keys().copied().collect::<BTreeSet<_>>();
+                let outer_allow_sequential = c.allow_sequential_values;
+                c.allow_sequential_values = !incoming;
+                if incoming && !c.sequential_values.is_empty() {
+                    c.sequential_values.clear();
+                    c.memo.clear();
+                }
                 if !incoming {
                     c.declaration_prefix = true;
                 }
                 let mut result = Vec::new();
                 for i in items.iter() {
+                    if !c.sequential_values.is_empty() {
+                        let uses = inspect([match i {
+                            CHirBlockItem::Declaration(d) => Node::Decl(d),
+                            CHirBlockItem::Statement(s) => Node::Stmt(s),
+                        }]);
+                        let before = c.sequential_values.len();
+                        c.sequential_values.retain(|symbol, _| {
+                            !uses.unknown_memory && !uses.mutable.contains(symbol)
+                        });
+                        if before != c.sequential_values.len() {
+                            c.memo.clear();
+                        }
+                    }
                     match i {
                         CHirBlockItem::Declaration(d) => result
                             .extend(self.decl(d, c)?.into_iter().map(CHirBlockItem::Declaration)),
@@ -2116,6 +2154,12 @@ impl<'a> Substitution<'a, '_> {
                 }
                 *items = result;
                 c.declaration_prefix = outer_prefix;
+                c.allow_sequential_values = outer_allow_sequential;
+                // Keep invalidations of outer objects; never export facts for
+                // declarations in a conditionally executed nested scope.
+                c.sequential_values
+                    .retain(|symbol, _| outer_sequential.contains(symbol));
+                c.memo.clear();
                 // A conditional/loop body may never execute. Its assignments
                 // prove later uses inside that body, not uses after its exit.
                 if c.assignment_values.len() != outer_assignments.len()
@@ -2297,6 +2341,13 @@ impl<'a> Substitution<'a, '_> {
                         self.target,
                     )
                     .is_none()
+                        && crate::constant::eval_absolute_address_constant(
+                            converted,
+                            &self.unit.types,
+                            &self.unit.symbols,
+                            self.target,
+                        )
+                        .is_none()
                     {
                         all_constant = false;
                         break;

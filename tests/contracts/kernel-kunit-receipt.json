@@ -57,7 +57,7 @@
   },
   "subject": {
     "status": "NOT_RUN",
-    "buildStatus": "SURVEY_COMPLETE_WITH_REFUSALS",
+    "buildStatus": "BUILTIN_OBJECTS_AUDITED_LINK_BLOCKED",
     "compilerCommit": "3b2a446",
     "compilerSha256": "768163d2f46349831c2a4999291022564387b740ab52570da703c27d0b507b99",
     "targetCRecords": 6310,
@@ -199,6 +199,44 @@
     "nativeCommand": "sealed linux/arm64, network none: gcc-14 -std=gnu11 -O2 probe.c; clang-19 -std=gnu11 -O2 probe.c; gcc-14 subject.s; execute each binary",
     "nativeResults": {"gcc14": 0, "clang19": 0, "evocc": 0},
     "claimLimit": "Targeted repair and installation only. The complete built-in link and runtime audit remain separate; 46/52 original refusal repairs are not a new full-survey result."
+  },
+  "builtInComposition": {
+    "capture": ".evidence/kunit/builtin-composition-repaired-20260914",
+    "summarySha256": "489c8c9a73025ec30396b654df4be5647e7f47661fab982e345d7b17b7a19ff4",
+    "unitsSha256": "0fb218a86e3f56ff8d5c9ddbb2f6f66efb7d082bfbce0aff31deb490a6078def",
+    "targetCBuiltIns": 2897,
+    "installedAndHashVerified": 2897,
+    "gccFallback": 0,
+    "generatedInputsStable": true,
+    "generatedExportTableStable": true,
+    "linkExitCode": 2,
+    "linkBlockers": {
+      "lib/tests/ffs_kunit.o": "five impossible __compiletime_assert calls remain after private local constants lost before later address exposure",
+      "lib/tests/printf_kunit.o": "one impossible __compiletime_assert call remains after a numeric pointer argument hides a constant comparison"
+    },
+    "runtime": "NOT_RUN"
+  },
+  "buildAssertionReplay": {
+    "run": "build-assertions-20260914",
+    "compilerState": "worktree after 0d1fab9; not yet committed",
+    "compilerSha256": "24c06d4b0e81f3b396c6c3dfeb31fe4fe892bf05aa1d85954b2a4dad447bd2e1",
+    "units": ".evidence/kunit/build-assertions-20260914/units.jsonl",
+    "unitsSha256": "cea7284dc1bf36dde64477e73af0671b4b4950cf82a15efa7712fa1b3a1ee3a3",
+    "inputSnapshotSha256": "ee64018750dcbeebd03afa7ce4a4a8eff38aef4dcb89fe98ffb9c79ed58be9dd",
+    "after": {"emitted": 2, "remainingCompiletimeAssertCalls": 0},
+    "fixture": "tests/fixtures/private-constant-before-escape.c",
+    "red": "47 passed / 2 declared assertion failures / 0 build errors in resolved_compiler_queries",
+    "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline --no-fail-fast -- --nocapture: 49 passed, 0 failed, 0 ignored",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 0d1fab9 --offline -j2 --quiet: exit 0, including Clippy and fmt",
+    "pending": ["sealed GCC/Clang and native fixture", "assemble and install the two repaired objects", "relink and audit", "EvoCC KUnit execution"],
+    "executionBlocker": "Automatic approval review repeatedly failed with Selected model is at capacity before container/VM commands started. No denied launch is counted as an executed test."
+  },
+  "kunitAutorunControl": {
+    "purpose": "Explicit K1_KUNIT_AUTORUN=0 can keep the complete KUnit run separate from per-program selftest boots; the default behavior is unchanged",
+    "kernelParameter": "kunit.autorun",
+    "receiptField": "boot.json kunitAutorun",
+    "test": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 139 passed; Ruff on Python and bash -n on shell both pass",
+    "runtime": "NOT_RUN"
   },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition is being rebuilt against actual generated headers separately."

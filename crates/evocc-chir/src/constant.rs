@@ -837,6 +837,17 @@ fn eval_integer_constant_in(
             if let CHirExpr::FloatLit(literal, _) = operand {
                 return floating_literal_to_integer(*literal, target_ty).ok();
             }
+            if matches!(context, ConstantContext::Executable)
+                && crate::PointerTypeDesc::from_expression(symbols, types, operand).is_ok()
+            {
+                // Only a numeric address has compile-time representation bits.
+                // Named objects/functions still need relocation and provenance;
+                // this execution fact does not admit pointer casts as an ICE.
+                return Some(
+                    eval_absolute_address_constant(operand, types, symbols, target)?
+                        .cast(target_ty),
+                );
+            }
             Some(evaluate(operand)?.cast(target_ty))
         }
         CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => Some(CInteger::new(

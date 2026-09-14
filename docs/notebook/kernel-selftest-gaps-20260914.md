@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 09:10 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 09:28 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -33,8 +33,18 @@ remain separate in the full-selftest and KUnit receipts.
   now normalizes conditions to truth values and captures converted arguments.
   All ten actual-header replays emit, assemble, match symbols and install;
   the 46-test query suite, changed gate and GCC/Clang/EvoCC native fixture pass.
-  The original incomplete composition is retained. Final linking/audit is
-  running separately; none of this is yet an EvoCC KUnit runtime result.
+  Commit `0d1fab9`; the original incomplete composition is retained.
+- The complete 2,897-object composition passes its generated-input fixed point,
+  export-table check and post-link object-hash audit (zero GCC fallback), but
+  **linking fails** on six impossible compile-time assertion calls in two
+  objects, `ffs_kunit.o` and `printf_kunit.o`. Their minimal tests were RED
+  (47 PASS / 2 FAIL, no build errors). Sequential private-value propagation
+  now stops at mutation/escape, and numeric pointer bits fold only in the
+  execution context, not as source ICEs. The query suite is 49/49 and changed
+  gate is green; both original units re-emit with no assertion calls.
+  Assembly, native probes, final relink and KUnit remain pending: the approval
+  service repeatedly rejected launches with `Selected model is at capacity`.
+  These commands did not start. This is not a test failure or a runtime pass.
 
 ## Runtime packaging: targeted guest replay complete
 
@@ -112,6 +122,11 @@ and source reasoning are distinguished from that unexecuted check.
   branch in `ipc/msg.c` when CONFIG_CHECKPOINT_RESTORE is disabled. The two
   unsealed vDSO/vvar failures require CONFIG_MSEAL_SYSTEM_MAPPINGS, also
   disabled. These are configuration coverage gaps, not hardware exclusions.
+- ALSA utimer, ntsync and iommufd fail while opening their device nodes, before
+  their assertions exercise the interfaces. CONFIG_SND_UTIMER, CONFIG_NTSYNC
+  and CONFIG_IOMMUFD are all disabled in both configurations. Their original
+  failures remain; enabling the interfaces requires another explicit test
+  configuration, rather than attributing missing devices to the compiler.
 - Syscall-user-dispatch is gated by CONFIG_GENERIC_ENTRY. Arm64 does not
   select it in this tree; `include/linux/syscall_user_dispatch.h` provides
   EINVAL stubs. This explains the dispatch and ptrace-SUD failures on this
@@ -133,7 +148,8 @@ and source reasoning are distinguished from that unexecuted check.
   inferred from `alloc_size(1)` / `(1,2)`. Ten units depend on that rule.
   Revision 1.9.97 records the user-approved exception; `bb98e29` passes 45
   focused tests, the changed gate, and all ten original-unit replays. The
-  complete built-in Image is being rebuilt; EvoCC KUnit has not run yet.
+  built-in objects have been rebuilt, but the later link blockers above still
+  prevent an EvoCC KUnit run.
 - Six NEON module units reach the original GCC resource header and fail at
   its compiler vector type `__Int8x8_t`. C executable vectors and MIR vector
   lowering are missing. This is authorized compiler work still to do, not
@@ -144,7 +160,9 @@ and source reasoning are distinguished from that unexecuted check.
 
 ## Next execution sequence
 
-1. Finish the running complete built-in composition and execute EvoCC KUnit.
+1. Assemble/install the two repaired objects, relink/audit and execute EvoCC
+   KUnit when the execution approval service is available. Existing objects
+   and captures are retained; no clone or full recompile is needed to retry.
 2. Complete integer-vector implementation with original-unit replay; it is
    the remaining six-unit module compilation gap, not a hardware exclusion.
 3. Install matching modules; run the expanded Image's selftests against
