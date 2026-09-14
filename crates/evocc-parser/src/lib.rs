@@ -2753,6 +2753,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn static_initializer_expression_is_constant(&self, expression: &CHirExpr<'_>) -> bool {
         self.is_arithmetic_constant_expression(expression)
             || self.is_static_address_constant(expression)
+            || evocc_chir::constant::eval_absolute_address_constant(
+                expression,
+                &self.types,
+                &self.symbols,
+                &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            )
+            .is_some()
     }
 
     /// Reading storage is never an arithmetic constant expression: C11 6.6

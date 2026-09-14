@@ -7152,3 +7152,10 @@ Seven original expanded-configuration units are affected; no diagnostic is alloc
 Existing E2909 arity, E2913 argument-conversion, and E2927 visible-declaration checks remain unchanged.
 Both sealed GCC-14 and Clang-19 execute `tests/fixtures/fortified-library-builtins.c` at O0/O2 with exit zero, recorded in `.evidence/builtin-probes/20260914-fortified-library/oracles-consensus.out`; GCC's warning about the deliberately bounded append is retained, and the earlier Werror probe is recorded separately.
 Two selected original BPF units in the supplemental FORTIFY/BTF configuration first refuse in `fortify-string.h`; complete build and runtime coverage are measured separately rather than inferred from this prototype rule.
+
+### Numeric pointer comparisons in static integer initializers
+
+A static integer initializer may compare pure numeric address constants using their unsigned target-width address bits, preserving intermediate integer casts and requiring no object access or symbolic address guess.
+This does not admit pointer comparisons as source integer constant expressions, nor reads of pointer objects or function calls as static constants.
+Both sealed GCC-14 and Clang-19 execute `tests/fixtures/static-numeric-pointer-comparisons.c` at O0/O2 with exit zero, including all six comparisons, an incomplete pointee type and a narrowed unsigned source cast; evidence is `.evidence/builtin-probes/20260914-static-pointer-order/oracles.out`.
+The two measured supplemental-configuration refusals are `arch/arm64/kvm/arm.o` and `arch/arm64/kvm/handle_exit.o`; no diagnostic is added and original-unit replays remain required.

@@ -213,6 +213,38 @@ fn numeric_pointer_bits_fold_in_execution_but_not_as_source_ice() {
 }
 
 #[test]
+fn static_numeric_pointer_comparisons_use_target_address_bits() {
+    let source = include_str!("../../../tests/fixtures/static-numeric-pointer-comparisons.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn static_numeric_pointer_folding_does_not_read_objects_or_admit_source_ices() {
+    for (source, code) in [
+        ("void *p; static int x = p < (void *)1;", "E2208"),
+        ("void *f(void); static int x = f() < (void *)1;", "E2208"),
+        (
+            "_Static_assert((void *)1 < (void *)2, \"not an ICE\");",
+            "E2912",
+        ),
+    ] {
+        let output = run(source, "--parse-only");
+        assert!(!output.status.success(), "{source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn inline_constant_queries_are_recomputed_after_parameter_substitution() {
     let source = include_str!("../../../tests/fixtures/inline-constant-query.c");
     let output = run(source, "--interpret-evoir");

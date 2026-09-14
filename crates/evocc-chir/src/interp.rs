@@ -7863,6 +7863,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
             ) && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
             {
+                if self.static_integer_evaluation {
+                    // The static-expression whitelist has evaluated numeric
+                    // casts through the ordinary task machine and fuel budget.
+                    // Comparing their representations does not access objects.
+                    let bits = |pointer| {
+                        self.memory
+                            .pointer_address(PointerValue::object(pointer))
+                            .map(|bits| CInteger::new(bits, CIntegerType::ULONG))
+                            .map_err(|error| self.memory_error(error, span))
+                    };
+                    return self
+                        .runtime_integer_binary(operator, bits(left)?, bits(right)?, span)
+                        .map(CValue::Integer);
+                }
                 // Ordering compares byte addresses. Unlike subtraction it
                 // does not require an exact number of pointee-sized elements.
                 self.pointer_byte_difference(left, right, span)?;
