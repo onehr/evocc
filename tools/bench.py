@@ -65,6 +65,8 @@ def parser():
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
     p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
+    p.add_argument('--expanded-selftest-kernel', action='store_true', help='use the audited expanded KUnit kernel pair for full selftests')
+    p.add_argument('--selftest-runtime', type=Path, help='per-kernel runtime root with matching module payloads')
     p.add_argument('--refresh-selftest-runtime', action='store_true', help='repair full-suite runtime dependencies without rebuilding test programs')
     p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
     p.add_argument("--reuse-selftest-reference", type=Path,
@@ -103,6 +105,10 @@ def command(name, args, binary):
         if name == 'kernel-selftest-all':
             reuse = '--reuse-build' if not args.refresh_selftest_runtime and (args.reuse_selftest_build or args.reuse_selftest_reference) else '--install-deps'
             cmd = [sys.executable, '-u', str(ROOT / 'tools/k1/selftest_full.py'), '--jobs', str(args.jobs), reuse]
+            if args.expanded_selftest_kernel:
+                cmd += ['--expanded-kernel']
+            if args.selftest_runtime:
+                cmd += ['--runtime-root', str(args.selftest_runtime)]
             if args.refresh_selftest_runtime:
                 cmd += ['--refresh-runtime']
             if args.reuse_selftest_reference:
@@ -310,7 +316,10 @@ def read_result(name, before, expected, survey_run=None):
         survey = ROOT / data["survey"]["runDirectory"] / "substitution.json"
         digest = json.loads(survey.read_text())["evoccSha256"]
     if name in ('kernel-selftest', 'kernel-selftest-all'):
-        kernel = ROOT / 'tests/contracts/kernel-full-receipt.json'
+        receipt_name = data.get('kernelReceiptPath', 'tests/contracts/kernel-full-receipt.json')
+        if receipt_name not in ('tests/contracts/kernel-full-receipt.json', 'tests/contracts/kernel-kunit-receipt.json'):
+            raise ValueError('unrecognized kernel acceptance receipt')
+        kernel = ROOT / receipt_name
         if data['kernelReceiptSha256'] != sha256(kernel):
             raise ValueError('kernel selftests name a different complete kernel receipt')
     elif digest != expected:

@@ -7,6 +7,7 @@ import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -51,6 +52,63 @@ PROGRAM_TIMEOUT_OVERRIDES = {
 def program_timeout(build, ident):
     override = PROGRAM_TIMEOUT_OVERRIDES.get(ident)
     return override['seconds'] + 15 if override else build['programTimeoutSeconds']
+
+
+def kernel_selection(expanded, root=ROOT):
+    """Select an already booted pair without confusing test FAIL with build FAIL."""
+    def digest(path):
+        value = hashlib.sha256()
+        with path.open('rb') as handle:
+            for block in iter(lambda: handle.read(1 << 20), b''):
+                value.update(block)
+        return value.hexdigest()
+
+    receipt = root / ('tests/contracts/kernel-kunit-receipt.json' if expanded
+                      else 'tests/contracts/kernel-full-receipt.json')
+    data = json.loads(receipt.read_text())
+    if expanded:
+        outputs = {'reference': root / '.build/k7/pristine', 'subject': root / '.build/k7/out'}
+        composition = data['builtInComposition']
+        if (composition['linkExitCode'] or composition['gccFallback']
+                or not composition['generatedInputsStable'] or not composition['generatedExportTableStable']
+                or not composition['targetCBuiltIns']
+                or composition['installedAndHashVerified'] != composition['targetCBuiltIns']):
+            raise ValueError('expanded built-in composition is incomplete')
+        records = root / composition['capture'] / composition['unitsFile']
+        if digest(records) != composition['unitsSha256']:
+            raise ValueError('expanded composition inventory changed')
+        rows = [json.loads(line) for line in records.read_text().splitlines()]
+        if (len(rows) != composition['targetCBuiltIns']
+                or len({r['unit'] for r in rows}) != len(rows)):
+            raise ValueError('expanded composition denominator changed')
+        for row in rows:
+            unit = Path(row['unit'])
+            if (unit.is_absolute() or '..' in unit.parts or row['outcome'] != 'substituted'
+                    or digest(outputs['subject'] / unit) != row['installedSha256']):
+                raise ValueError(f'expanded installed object changed: {unit}')
+        expected = {'reference': data['reference']['imageSha256'],
+                    'subject': composition['imageSha256']}
+        if (data['reference']['bootVerdict'] != 'PASS'
+                or data['subject']['runtime']['bootVerdict'] != 'PASS'
+                or data['subject']['runtime']['imageSha256'] != expected['subject']):
+            raise ValueError('expanded images have not completed boot')
+        images = {label: out / 'arch/arm64/boot/Image' for label, out in outputs.items()}
+    else:
+        outputs = {'reference': root / '.build/reference/gcc-lane-1', 'subject': root / '.build/k1/out'}
+        images = {'reference': outputs['reference'] / 'arch/arm64/boot/Image',
+                  'subject': root / data['boot']['image']}
+        expected = {'subject': data['imageSha256']}
+        if data['status'] != 'PASS' or not data['completeComposition']:
+            raise ValueError('unchanged complete booted kernel required')
+    for label, value in expected.items():
+        if digest(images[label]) != value:
+            raise ValueError(f'{label} Image changed')
+    configs = {label: out / '.config' for label, out in outputs.items()}
+    if digest(configs['reference']) != digest(configs['subject']):
+        raise ValueError('reference and subject kernel configurations differ')
+    if expanded and digest(configs['subject']) != data['config']['sha256']:
+        raise ValueError('expanded configuration no longer matches its boot receipt')
+    return {'receipt': receipt, 'images': images, 'configs': configs}
 
 
 def install_runtime_helpers(source, installed):
@@ -193,6 +251,8 @@ def reusable_reference(previous, current):
     for key in ('build', 'referenceConfigSha256', 'initramfsSha256', 'rootfsSha256', 'runtimePolicy'):
         if previous[key] != current[key]:
             raise ValueError(f'reference reuse input changed: {key}')
+    if previous.get('payloads', {}).get('reference') != current.get('payloads', {}).get('reference'):
+        raise ValueError('reference runtime payload changed')
     cases = [case for row in previous['execution']['reference']['collections'] for case in row['cases']]
     wanted = [ident for b in current['build']['builds'] for ident in b['available']]
     if sorted(c['id'] for c in cases) != sorted(wanted):
@@ -371,6 +431,10 @@ def main():
     parser.add_argument('--refresh-runtime', action='store_true', help='install missing runtime prerequisites without rebuilding tests')
     parser.add_argument('--build-only', action='store_true')
     parser.add_argument('--reuse-build', action='store_true')
+    parser.add_argument('--expanded-kernel', action='store_true',
+                        help='use the independently booted, audited expanded KUnit kernel pair')
+    parser.add_argument('--runtime-root', type=Path,
+                        help='use <root>/{reference,subject}/{initramfs.cpio,scratch.img}; keep the original test inventory')
     parser.add_argument('--reference-run', type=Path,
                         help='reuse a finished reference summary after checking the unchanged Image and payload; execute every subject program')
     parser.add_argument('--install-deps', action='store_true', help='install additional selftest dependencies only in the disposable build container')
@@ -383,6 +447,8 @@ def main():
         parser.error('reference reuse requires a complete run with the unchanged payload')
     if args.refresh_runtime and not args.install_deps:
         parser.error('--refresh-runtime requires --install-deps')
+    if args.runtime_root and (not args.reuse_build or args.refresh_runtime):
+        parser.error('--runtime-root requires --reuse-build without a runtime refresh')
     if args.build_worker:
         return build_worker(args.jobs)
     if args.runtime_worker:
@@ -392,11 +458,10 @@ def main():
         os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
     work = ROOT / '.build/kselftest-full'
     work.mkdir(exist_ok=True)
-    kernel_path = ROOT / 'tests/contracts/kernel-full-receipt.json'
-    kernel = selftest.read(kernel_path)
-    subject = ROOT / kernel['boot']['image']
-    if kernel['status'] != 'PASS' or not kernel['completeComposition'] or selftest.sha(subject) != kernel['imageSha256']:
-        raise ValueError('unchanged complete booted kernel required')
+    selected_kernel = kernel_selection(args.expanded_kernel)
+    kernel_path = selected_kernel['receipt']
+    images = selected_kernel['images']
+    subject = images['subject']
     environment = selftest.read(ROOT / 'contracts/build-environment.json')['buildImage']
     image = environment['sealedImageTag']
     if not args.reuse_build or args.refresh_runtime:
@@ -428,28 +493,40 @@ def main():
         return 0
     build = selftest.read(work / 'build.json')
     selected = selected_programs(build['builds'], args.select)
+    runtime_work = {label: args.runtime_root / label if args.runtime_root else work for label in images}
     if ([row['id'] for row in build['builds']] != build['targets']
-            or not all((work / name).is_file() for name in ('initramfs.cpio', 'scratch.img'))):
+            or not all((folder / name).is_file() for folder in runtime_work.values()
+                       for name in ('initramfs.cpio', 'scratch.img'))):
         raise ValueError('selftest build has not completed its enumeration and payload')
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     run = ROOT / '.evidence/kselftest-full' / run_id
     run.mkdir(parents=True)
-    shutil.copytree(work / 'logs', run / 'build')
-    if (work / 'dependencies.log').exists():
+    if not args.reuse_build:
+        shutil.copytree(work / 'logs', run / 'build')
+    if not args.reuse_build and (work / 'dependencies.log').exists():
         shutil.copy2(work / 'dependencies.log', run / 'dependencies.log')
     receipt_path = ROOT / 'tests/contracts/kernel-selftest-full-receipt.json'
     receipt = {'schemaVersion': 1, 'run': run_id, 'status': 'RUNNING',
-               'scope': 'Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; unchanged arm64 configuration',
+               'scope': 'Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; '
+                        + ('expanded audited arm64 configuration' if args.expanded_kernel else 'unchanged K6 arm64 configuration'),
                'evidence': str(run.relative_to(ROOT)), 'kernelImageSha256': selftest.sha(subject),
-               'kernelReceiptSha256': selftest.sha(kernel_path), 'build': build,
-               'kernelConfigSha256': selftest.sha(ROOT / '.build/k1/out/.config'),
-               'referenceConfigSha256': selftest.sha(ROOT / '.build/reference/gcc-lane-1/.config'),
-               'initramfsSha256': selftest.sha(work / 'initramfs.cpio'),
-               'rootfsSha256': selftest.sha(work / 'scratch.img'), 'execution': {}}
+               'kernelReceiptSha256': selftest.sha(kernel_path),
+               'kernelReceiptPath': str(kernel_path.relative_to(ROOT)), 'build': build,
+               'buildLogRoot': str(work / 'logs') if args.reuse_build else str(run / 'build'),
+               'kernelConfigSha256': selftest.sha(selected_kernel['configs']['subject']),
+               'referenceConfigSha256': selftest.sha(selected_kernel['configs']['reference']),
+               'initramfsSha256': selftest.sha(runtime_work['subject'] / 'initramfs.cpio'),
+               'rootfsSha256': selftest.sha(runtime_work['subject'] / 'scratch.img'), 'execution': {}}
+    receipt['payloads'] = {label: {'root': str(folder),
+                                  'initramfsSha256': selftest.sha(folder / 'initramfs.cpio'),
+                                  'rootfsSha256': selftest.sha(folder / 'scratch.img')}
+                           for label, folder in runtime_work.items()}
     receipt['runtimePolicy'] = {'isolation': 'fresh VM per program', 'workers': min(args.jobs, 2),
-                                'upstreamTimeouts': 'collection settings retained except explicit source-declared program overrides; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
+                                'upstreamTimeouts': 'collection settings retained except explicit source-declared or measured program overrides; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
                                 'unlimitedProgramWatchdogSeconds': 300,
-                                'modules': 'not built or installed; frozen Images and configuration unchanged'}
+                                'modules': 'explicit per-kernel runtime payload; see module installation receipt' if args.runtime_root
+                                           else 'not built or installed; original runtime payload unchanged',
+                                'kunitAutorun': '0' if args.expanded_kernel else 'unchanged'}
     receipt['runtimePolicy']['programTimeoutOverrides'] = PROGRAM_TIMEOUT_OVERRIDES
     if args.select:
         receipt['selection'] = {'selectors': args.select, 'programs': selected,
@@ -460,7 +537,6 @@ def main():
         save(run / 'summary.json', receipt)
         save(receipt_path, receipt)
     checkpoint()
-    images = {'reference': ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image', 'subject': subject}
     receipt['referenceImageSha256'] = selftest.sha(images['reference'])
     rows = {label: {b['id']: {'id': b['id'], 'cases': [], 'valid': False} for b in build['builds'] if b['available']}
             for label in images}
@@ -473,10 +549,12 @@ def main():
         contract = {'consoleLoglevel': 5, 'hugePages': 1, 'bootOverheadSeconds': 60,
                     'perProgramTimeoutSeconds': program_timeout(b, ident)}
         environment = {'K1_SELFTEST_COLLECTION': ident}
+        if args.expanded_kernel:
+            environment['K1_KUNIT_AUTORUN'] = '0'
         if override := PROGRAM_TIMEOUT_OVERRIDES.get(ident):
             environment['K1_SELFTEST_TIMEOUT'] = str(override['seconds'])
         try:
-            result = selftest.flight(capture, images[label], work, run, contract, [ident],
+            result = selftest.flight(capture, images[label], runtime_work[label], run, contract, [ident],
                                     extra_env=environment)
             case = program_case(ident, result)
         except ValueError as error:
@@ -497,7 +575,7 @@ def main():
     if args.reference_run:
         previous = selftest.read(args.reference_run)
         cases = reusable_reference(previous, receipt)
-        qemu = selftest.sha(Path(kernel['boot']['qemu']['path']))
+        qemu = selftest.sha(Path(selftest.read(ROOT / 'contracts/kernel-target.json')['qemu']['binaryPath']))
         builds = {b['id']: b for b in build['builds']}
         for case in cases:
             boot = selftest.read(ROOT / case['capture'] / 'boot.json')
@@ -547,8 +625,9 @@ def main():
                                       if c['outcome'] == 'PASS' and now.get(c['number']) != 'PASS')
     if (selftest.sha(subject) != receipt['kernelImageSha256']
             or selftest.sha(images['reference']) != receipt['referenceImageSha256']
-            or selftest.sha(work / 'initramfs.cpio') != receipt['initramfsSha256']
-            or selftest.sha(work / 'scratch.img') != receipt['rootfsSha256']):
+            or any(selftest.sha(folder / name) != receipt['payloads'][label][key]
+                   for label, folder in runtime_work.items()
+                   for name, key in [('initramfs.cpio', 'initramfsSha256'), ('scratch.img', 'rootfsSha256')])):
         raise ValueError('test images changed during execution')
     checkpoint()
     print(f'full selftest receipt: {receipt_path}', flush=True)

@@ -3,6 +3,8 @@
 import importlib.util
 import copy
 import io
+import hashlib
+import json
 from pathlib import Path
 import tempfile
 import subprocess
@@ -19,6 +21,49 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_expanded_kernel_selection_uses_the_audited_images_not_the_frozen_pair(self):
+        select = getattr(lane, 'kernel_selection', None)
+        self.assertTrue(callable(select), 'full selftests cannot yet select the expanded audited kernel')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def digest(path):
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+            for side in ('out', 'pristine'):
+                folder = root / '.build/k7' / side
+                (folder / 'arch/arm64/boot').mkdir(parents=True)
+                (folder / 'arch/arm64/boot/Image').write_bytes(side.encode())
+                (folder / '.config').write_bytes(b'CONFIG_KUNIT=y\n')
+            capture = root / 'capture'
+            capture.mkdir()
+            objects = capture / 'objects.jsonl'
+            obj = root / '.build/k7/out/a.o'
+            obj.write_bytes(b'EvoCC object')
+            objects.write_text(json.dumps({'unit': 'a.o', 'outcome': 'substituted',
+                                          'installedSha256': digest(obj)}) + '\n')
+            image = root / '.build/k7/out/arch/arm64/boot/Image'
+            reference = root / '.build/k7/pristine/arch/arm64/boot/Image'
+            receipt = {'config': {'sha256': digest(root / '.build/k7/out/.config')},
+                'builtInComposition': {
+                'capture': 'capture', 'unitsFile': 'objects.jsonl', 'unitsSha256': digest(objects),
+                'targetCBuiltIns': 1, 'installedAndHashVerified': 1, 'gccFallback': 0,
+                'generatedInputsStable': True, 'generatedExportTableStable': True,
+                'linkExitCode': 0, 'imageSha256': digest(image)},
+                'subject': {'runtime': {'bootVerdict': 'PASS', 'imageSha256': digest(image)}},
+                'reference': {'bootVerdict': 'PASS', 'imageSha256': digest(reference)}}
+            receipt_path = root / 'tests/contracts/kernel-kunit-receipt.json'
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps(receipt))
+            selected = select(True, root)
+            self.assertEqual(selected['images'], {'reference': reference, 'subject': image})
+            self.assertEqual(selected['receipt'], receipt_path)
+            (root / '.build/k7/pristine/.config').write_bytes(b'other config')
+            with self.assertRaises(ValueError):
+                select(True, root)
+            (root / '.build/k7/pristine/.config').write_bytes(b'CONFIG_KUNIT=y\n')
+            obj.write_bytes(b'GCC replacement')
+            with self.assertRaises(ValueError):
+                select(True, root)
+
     def test_upstream_install_dependencies_are_built_without_becoming_test_collections(self):
         self.assertTrue(hasattr(lane, 'enumerate_collections'),
                         'the build enumeration drops INSTALL_DEP_TARGETS such as net/lib')

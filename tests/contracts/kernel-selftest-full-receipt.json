@@ -9890,6 +9890,17 @@
     "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
     "original935ProgramResultsReplaced": false
   },
+  "clone3LibcapCompatibilityProbe": {
+    "originalOutcome": "FAIL on both kernels; retained",
+    "cause": "The upstream test writes an opaque cap_t through an obsolete private struct layout, failing to set the required permitted capability with libcap 2.75",
+    "variant": ".evidence/builtin-probes/20260914-clone3-libcap/clone3-public-api.c",
+    "sourceSha256": "ca857ca876079675b12977abcbac8ea8347915dfdefe306f64e207187dbf7caa",
+    "change": "Only replace private writes by cap_set_flag for the same three capabilities. Every clone3, setuid and permission assertion is unchanged; the original source and binary are unchanged.",
+    "capture": ".evidence/kunit/clone3-public-api-20260914",
+    "variantEachKernel": {"PASS": 1, "FAIL": 0},
+    "resultsSha256": "8e349423ac4d1bf9184efef19c7bbc919a7e6383c3ae18d26e51148847a54428",
+    "claimLimit": "A labeled userspace compatibility variant validates the kernel interface. It does not replace the original upstream FAIL in the 935-program inventory."
+  },
   "completeRseqPressureReplay": {
     "capture": ".evidence/kunit/rseq-complete-20260914",
     "program": "rseq:run_param_test.sh",

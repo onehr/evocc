@@ -382,6 +382,25 @@
     "guardTest": "One declared missing-provenance-planner RED, then 145 Python tests PASS. Missing/refused/changed C objects and changed assembly inputs are rejected; changed linker response files stop planning.",
     "next": "Replay all seven identity refusals with the repair, then link and install eligible modules. Six NEON C units remain compiler work, not an architecture exclusion."
   },
+  "completedModuleInstallation": {
+    "capture": ".evidence/kunit/module-link-20260914",
+    "repairCapture": ".evidence/kunit/initializer-identity-complete-20260914",
+    "identityRefusalsRepaired": 7,
+    "repairCompilerSha256": "cf948a82a5e419adefaf00673b5f43ed2f5a0eaf09cd0e987c140a315689f1a9",
+    "targetCInputs": 3407,
+    "assemblyInputs": 6,
+    "modulesLinkedAndInstalled": {"reference": 704, "subject": 702},
+    "subjectMissingModules": ["arch/arm64/lib/xor-neon.ko", "lib/raid6/raid6_pq.ko"],
+    "gccFallback": 0,
+    "link": "Original Kbuild commands, transitive C-leaf provenance, 0 changed input hashes after linking. The control payload uses GCC modules; the subject payload uses EvoCC modules.",
+    "linkResultsSha256": "bba60926792614f08e27477957cb314b92403008f67e92df7e2ef1d6530c57e7",
+    "payload": "Every installed module and dependency index was read back and compared byte-for-byte from each COW runtime disk",
+    "runtimePayloadSha256": "c4b6987c8feb4b3be66e349e6b0fef07e67537269a0ff145f8db337b6fa28cc6",
+    "targetedRuntime": "IPv6, VETH, FUSE and overlay load on both Images. The unchanged VETH test now reaches packet-count/GRO checks instead of EAFNOSUPPORT; both kernels still fail several packet-count assertions.",
+    "vethResultsSha256": "3250cbfcbaa0f15fd89fc9b39b83b18fa8392f0df5175ddf068b7d91fc0d7890",
+    "moduleKunit": "33 installed modules contain .kunit_test_suites; their suites still need execution separately from the 1440 built-in KUnit cases",
+    "claimLimit": "Module installation is measured, not universal module runtime coverage. Six NEON translation units remain refused, and no GCC module fills those two subject gaps."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
 }

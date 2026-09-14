@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 12:00 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 12:14 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -165,6 +165,12 @@ targeted measurements.
 
 ### clone3 and the libcap private ABI
 
+The separately labeled public-API variant now passes on both expanded Images:
+`clone3-public-api-20260914/results.json`. It changes only the obsolete private
+`cap_t` writes to `cap_set_flag` and keeps every clone3 and permission assertion.
+The original upstream FAIL remains in the full-suite inventory; this is a
+userspace compatibility diagnosis, not an unmodified-test PASS.
+
 The unchanged `clone3_cap_checkpoint_restore.c:116-122` casts opaque `cap_t`
 to its own two-word-header `struct libcap` and writes words 5 and 6 to enable
 CAP_CHECKPOINT_RESTORE in effective and permitted sets. The actual runtime is
@@ -271,14 +277,24 @@ and source reasoning are distinguished from that unexecuted check.
 
 ## Next execution sequence
 
-1. Complete matching module installation and targeted runtime tests. The first
-   three high-impact modules are VETH, FUSE and overlayfs; their 31 original
-   target-C records now emit and assemble with exact symbol parity. This does
-   not close the complete module population or the six NEON refusals.
+1. Matching module installation now covers **702/704** modules built from
+   **3,407** audited EvoCC C inputs and six assembly inputs; all installed
+   files and dependency indexes were read back byte-for-byte. The GCC control
+   has its independently built 704 modules. The seven additional initializer
+   identity refusals all replayed successfully; the two missing subject
+   modules still need the six NEON C units. Capture: `module-link-20260914`.
+   IPv6 and VETH load and exercise traffic; both kernels now fail packet-count
+   assertions (for example 2 instead of 1, 13 instead of 10) rather than socket
+   or helper setup. Those assertions still need diagnosis.
 2. Complete integer-vector implementation with original-unit replay; it is
    the remaining six-unit module compilation gap, not a hardware exclusion.
-3. Install matching modules; run the expanded Image's selftests against
-   the corresponding GCC control. Retain every failure, including shared ones.
+3. Run the expanded Image's full selftests against its corresponding GCC
+   control through `tools/bench.py kernel-selftest-all --reuse-selftest-build
+   --expanded-selftest-kernel --selftest-runtime .build/k7/module-runtime/full
+   --allow-qemu-drift --jobs 2`. The selector checks object hashes, Image hashes
+   and matching configurations before launching. It does not replace the K6
+   image or copy build logs for each runtime replay. Also execute the 33 module
+   files containing KUnit suites; the 1,440 cases above are built-in suites.
 4. Complete individual diagnoses of the other shared failures before a new
    full comparison. The original 935-program denominator remains visible.
 
