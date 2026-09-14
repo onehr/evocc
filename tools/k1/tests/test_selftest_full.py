@@ -56,6 +56,14 @@ class FullSelftest(unittest.TestCase):
             self.assertNotEqual(subprocess.run(command + [program, '', value],
                                                capture_output=True).returncode, 0)
 
+    def test_multiphase_ublk_stress_has_an_explicit_budget_without_changing_neighbors(self):
+        build = {'programTimeoutSeconds': 60}
+        self.assertEqual(lane.program_timeout(build, 'ublk:test_stress_05.sh'), 615)
+        self.assertEqual(lane.program_timeout(build, 'ublk:test_stress_04.sh'), 60)
+        policy = lane.PROGRAM_TIMEOUT_OVERRIDES['ublk:test_stress_05.sh']
+        self.assertIn('test_stress_05.sh', policy['source'])
+        self.assertIn('40', policy['reason'])
+
     def test_kunit_filter_is_explicit_and_cannot_add_kernel_options(self):
         command = ['bash', '-c', 'source "$1"; k1_kunit_cmdline "$2"',
                    'kunit-test', str(PATH.parent / 'lib.sh')]

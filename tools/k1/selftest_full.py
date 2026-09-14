@@ -30,6 +30,13 @@ PROGRAM_TIMEOUT_OVERRIDES = {
         'source': 'tools/testing/selftests/filesystems/file_stressor.c',
         'reason': 'TEST_F_TIMEOUT(..., 900 * 2); clock_nanosleep(..., 900)',
     },
+    'ublk:test_stress_05.sh': {
+        'seconds': 600,
+        'source': 'tools/testing/selftests/ublk/test_stress_05.sh',
+        'reason': 'Sequential recovery-mode phases launch fio --runtime=40 and wait for device removal; '
+                  'both kernels hit the inherited 45-second limit mid-workload. '
+                  '600 seconds is an explicit measurement budget, not an upstream declared timeout.',
+    },
 }
 
 

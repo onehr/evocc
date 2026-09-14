@@ -345,7 +345,7 @@
     "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 54aa549 --offline -j2 --quiet: exit 0, including Clippy -D warnings and fmt",
     "native": ".evidence/builtin-probes/20260914-initializer-identity/results.txt: GCC-14, Clang-19 and EvoCC each exit 0",
     "originalUnits": ["drivers/dma/dw-edma/dw-edma-v0-debugfs.o", "drivers/dma/dw-edma/dw-hdma-v0-debugfs.o", "drivers/gpu/drm/nouveau/nouveau_uvmm.o"],
-    "replay": ".evidence/kunit/initializer-identity-20260914/units.jsonl: all three emit using the actual generated headers",
+    "replay": ".evidence/kunit/initializer-identity-20260914/units.jsonl: all three emit using the actual generated headers; assembled.json confirms all three assemble with no missing or extra symbols",
     "claimLimit": "Tailored repair, not a new full module composition. The running full replay retains its original compiler binary and inputs."
   },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},

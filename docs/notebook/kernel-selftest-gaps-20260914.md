@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 11:02 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 11:12 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -99,6 +99,25 @@ confirms sudoers is 0:0/0440 and sudo is 0:0/04755. No additional tarball or
 kernel clone is retained. This is targeted evidence, not a new full-suite pass.
 
 ## Shared test defects: not compiler passes
+
+### Ublk now executes on the expanded configuration
+
+All 29 original programs were rerun on both expanded Images with the supplied
+helpers and `kublk`: initially 25 PASS, three SKIP and one timeout on each.
+`test_stress_05.sh` runs several sequential recovery-mode phases, each launching
+`fio --runtime=40`; the inherited 45-second runner stopped it mid-workload.
+An explicit 600-second measurement budget, without changing the program,
+finishes PASS on both (powerdown at 102.690 and 103.017 seconds). The targeted
+result is therefore **26 PASS / 3 SKIP per kernel**; the original timeouts remain.
+Capture: `.evidence/kunit/ublk-expanded-20260914`, including `stress-budget`.
+The three remaining programs require bpftrace and block completion tracepoints;
+FTRACE/KPROBES are disabled in this configuration, so supplying a binary alone
+does not establish that coverage.
+
+Cgroup `test_cpucg_max` and `test_cpucg_max_nested` write `cpu.max`, but
+CONFIG_CFS_BANDWIDTH is disabled. `kernel/sched/core.c` registers that file only
+under the corresponding guard. These two failures are an identified test
+configuration gap; the unrelated memory-accounting failures remain unresolved.
 
 ### Matching modules and overlayfs isolation
 
