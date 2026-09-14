@@ -26,6 +26,20 @@ def install_runtime_helpers(source, installed):
     shutil.copytree(source / 'ublk/trace', installed / 'ublk/trace', dirs_exist_ok=True)
 
 
+def install_runtime_paths(rootfs):
+    """Keep runtime aliases inside the guest root, including on the host."""
+    for part in ('dev', 'proc', 'sys', 'tmp', 'scratch', 'run/lock', 'root', 'var/tmp', 'var/log'):
+        (rootfs / part).mkdir(parents=True, exist_ok=True)
+    for name, dest in (('bin', 'usr/bin'), ('sbin', 'usr/sbin'), ('lib', 'usr/lib'),
+                       ('var/run', '../run'), ('var/lock', '../run/lock')):
+        path = rootfs / name
+        if path.is_symlink():
+            if path.readlink() != Path(dest):
+                raise ValueError(f'unexpected runtime link: {name}')
+        else:
+            path.symlink_to(dest)
+
+
 def selected_programs(builds, selectors):
     available = [name for build in builds for name in build['available']]
     if not selectors:
@@ -237,12 +251,8 @@ def refresh_runtime(work):
             dest.mkdir(parents=True, exist_ok=True)
             subprocess.run(['rsync', '-a', '--exclude=*.a', '--exclude=*.o', '/' + part + '/',
                             str(dest) + '/'], check=True)
-    for name, dest in (('bin', 'usr/bin'), ('sbin', 'usr/sbin'), ('lib', 'usr/lib')):
-        if not (rootfs / name).is_symlink():
-            (rootfs / name).symlink_to(dest)
+    install_runtime_paths(rootfs)
     shutil.copy2('/usr/lib/ld-linux-aarch64.so.1', rootfs / 'usr/lib/ld-linux-aarch64.so.1', follow_symlinks=True)
-    for part in ('dev', 'proc', 'sys', 'tmp', 'scratch', 'run', 'root', 'var/tmp', 'var/log'):
-        (rootfs / part).mkdir(parents=True, exist_ok=True)
     subprocess.run(['gcc-14', '-static', '-O2', '-Wall', '-Wextra', '-Werror',
                     '/work/harness/selftest-init.c', '-o', str(work / 'init')], check=True)
     (work / 'full-suite').touch()

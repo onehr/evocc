@@ -416,6 +416,19 @@ GCC target objects as substitutes nor overwrites K6. Subject KUnit execution,
 EvoCC module installation, BTF type metadata and other shared failures remain
 open. BTF needs real compiler type metadata, not borrowed reference-kernel BTF.
 
+The expanded survey's first repaired class is GNU comma variadic forwarding:
+RED `11d5c88`, GREEN `30db97c`. Original-unit replay
+`variadic-replay-20260914` changes **20 E0110 + 2 E0112 to 22 assembled**, with
+symbol parity, no installed objects and no inferred boot/module count.
+The `-isystem` driver ordering fix `a6a3461` also passes its changed gate;
+the affected NEON unit still needs an actual resource-header/intrinsic replay.
+
+The `/var/run` and `/var/lock` runtime links are repaired separately. In
+`runtime-links-20260914`, both Images get past the missing `/var/run/netns`
+exception; both still FAIL when creating a veth because VETH is configured as
+a module and modules are not installed. This moves the diagnostic to the
+existing module gap; it does not make `tc-testing` pass.
+
 ### Execution order and update rules
 
 September 13 complete-composition diagnostic retry

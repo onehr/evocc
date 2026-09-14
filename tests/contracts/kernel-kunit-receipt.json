@@ -65,5 +65,16 @@
     "surveyRun": "expanded-config-20260914",
     "command": "python3 -u tools/k1/substitute.py --all --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-runtime-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id expanded-config-20260914 --jobs 4 --timeout 180"
   },
+  "targetedCompilerReplay": {
+    "run": "variadic-replay-20260914",
+    "compilerCommit": "30db97c",
+    "compilerSha256": "7d66bec7b05dc54fc85c41311e24b82a868eb07379d3c8fc1cbb1765eae446fd",
+    "before": {"E0110": 20, "E0112": 2},
+    "after": {"assembled": 22},
+    "installed": false,
+    "units": ".evidence/kunit/variadic-replay-20260914/units.jsonl",
+    "unitsSha256": "d435a6bda41ca4edd1a0a4eb8ff39c70977a4800214dbbc4c6d42d9e9145431a",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/variadic-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-variadic-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id variadic-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/variadic-replay-cache.json --jobs 2 --timeout 180"
+  },
   "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged."
 }

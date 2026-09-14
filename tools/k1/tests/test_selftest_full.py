@@ -83,6 +83,19 @@ class FullSelftest(unittest.TestCase):
         self.assertTrue(hasattr(lane, 'RUNTIME_PACKAGES'), 'runtime packages are not declared')
         self.assertTrue({'procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod'} <= set(lane.RUNTIME_PACKAGES))
 
+    def test_runtime_paths_share_the_run_directory_inside_the_guest_root(self):
+        self.assertTrue(hasattr(lane, 'install_runtime_paths'), 'runtime directory links are missing')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            lane.install_runtime_paths(root)
+            lane.install_runtime_paths(root)
+            self.assertEqual((root / 'var/run').readlink(), Path('../run'))
+            self.assertEqual((root / 'var/lock').readlink(), Path('../run/lock'))
+            (root / 'run/netns').mkdir()
+            (root / 'var/run/netns/example').write_text('guest namespace mount point')
+            self.assertEqual((root / 'run/netns/example').read_text(), 'guest namespace mount point')
+            self.assertEqual((root / 'var/lock').resolve(), (root / 'run/lock').resolve())
+
     def test_targeted_replay_keeps_the_full_inventory_and_rejects_unknown_names(self):
         self.assertTrue(hasattr(lane, 'selected_programs'), 'targeted replay is missing')
         builds = [{'id': 'mm', 'available': ['mm:a', 'mm:b']},
