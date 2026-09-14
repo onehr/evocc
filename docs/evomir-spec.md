@@ -382,6 +382,16 @@ virtual register), then the register save area of a variadic function
 `sp` stays 16-byte aligned at every call. The frame is static: no dynamic
 `alloca` exists in EvoIR.
 
+Physical frame bytes may be reused by distinct logical origins only when the
+address has one definition and every use is a direct, bounded, nonvolatile
+load/store/copy in the defining block, with disjoint closed access intervals
+(different blocks cannot overlap under this nonescape condition).
+Reuse requires identical size and alignment; address transport, arithmetic,
+calls, assembly, spills and repeated definitions retain separate storage.
+The origin-to-offset table retains every origin, object identity and lifetime
+semantics are unchanged, and simultaneous copy operands never overlap merely
+because their access instructions have the same index.
+
 **Over-aligned frames (revision 0.26).** When any `frame.slot` of the
 function declares an alignment `A` greater than 16, the frame is realigned:
 the prologue's `sub sp, sp, #frame` uses a frame size rounded up to a

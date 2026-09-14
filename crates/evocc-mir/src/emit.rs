@@ -12,8 +12,9 @@ use std::fmt::Write as _;
 use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::{
-    linscan::physical, Allocated, AsmBody, AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst,
-    MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul, Width,
+    inst_defs, inst_uses, linscan::physical, term_uses, Allocated, AsmBody, AsmConstraint,
+    AsmOperand, AsmValue, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul,
+    Width,
 };
 
 /// Address materialization selected by the caller's build options.
@@ -71,8 +72,8 @@ pub struct Frame {
     pub saved: BTreeMap<u8, u64>,
     /// Spill slot index to its offset above `sp`.
     pub spills: BTreeMap<u32, u64>,
-    /// Each `frame.slot` instruction, in the order Section 6 lays them out, to
-    /// its offset above `sp`.
+    /// Each logical `frame.slot` origin to its offset above `sp`. Proven
+    /// nonescaping, nonoverlapping private objects may share physical bytes.
     pub slots: BTreeMap<u64, u64>,
     /// Bytes of outgoing stack arguments, which Section 6 puts at the bottom
     /// of the frame so that a call writes them at `[sp, #8 * i]`.
@@ -96,6 +97,116 @@ const fn align_up(value: u64, alignment: u64) -> u64 {
     } else {
         value.div_ceil(alignment) * alignment
     }
+}
+
+#[derive(Clone, Copy)]
+struct LocalAccess {
+    block: usize,
+    first: usize,
+    last: usize,
+}
+
+impl LocalAccess {
+    fn overlaps(self, other: Self) -> bool {
+        self.block == other.block && self.first <= other.last && other.first <= self.last
+    }
+}
+
+/// This is physical storage reuse, not an object/lifetime transformation.
+/// Only a uniquely defined address used directly for bounded, nonvolatile
+/// memory accesses in its defining block qualifies. Copies, calls, spills,
+/// pointer arithmetic and edge transport conservatively retain separate bytes.
+fn private_object_accesses(allocated: &Allocated) -> BTreeMap<u64, LocalAccess> {
+    struct Candidate {
+        origin: u64,
+        size: u64,
+        access: LocalAccess,
+        safe: bool,
+    }
+    let mut candidates = BTreeMap::<u32, Candidate>::new();
+    let mut origins = BTreeMap::<u64, usize>::new();
+    for (block, body) in allocated.blocks.iter().enumerate() {
+        for (index, inst) in body.insts.iter().enumerate() {
+            if let MInst::FrameSlot {
+                dst, origin, size, ..
+            } = inst
+            {
+                *origins.entry(*origin).or_default() += 1;
+                candidates
+                    .entry(dst.id)
+                    .and_modify(|c| c.safe = false)
+                    .or_insert(Candidate {
+                        origin: *origin,
+                        size: *size,
+                        access: LocalAccess {
+                            block,
+                            first: index,
+                            last: index,
+                        },
+                        safe: *size != 0,
+                    });
+            }
+        }
+    }
+    for (block, body) in allocated.blocks.iter().enumerate() {
+        for value in body.args.iter().copied().chain(term_uses(&body.term)) {
+            if let Some(c) = candidates.get_mut(&value.id) {
+                c.safe = false;
+            }
+        }
+        for (index, inst) in body.insts.iter().enumerate() {
+            for value in inst_defs(inst) {
+                if let Some(c) = candidates.get_mut(&value.id) {
+                    c.safe &= c.access.block == block && c.access.first == index;
+                }
+            }
+            for value in inst_uses(inst) {
+                let Some(c) = candidates.get_mut(&value.id) else {
+                    continue;
+                };
+                let bounded = |offset: i64, size: u64| {
+                    u64::try_from(offset)
+                        .ok()
+                        .and_then(|offset| offset.checked_add(size))
+                        .is_some_and(|end| end <= c.size)
+                };
+                let direct_access = match inst {
+                    MInst::Load {
+                        base,
+                        offset,
+                        kind,
+                        volatile: false,
+                        ..
+                    } => base.id == value.id && bounded(*offset, kind.size_bytes()),
+                    MInst::Store {
+                        base,
+                        src,
+                        offset,
+                        kind,
+                        volatile: false,
+                        ..
+                    } => {
+                        base.id == value.id
+                            && src.id != value.id
+                            && bounded(*offset, kind.size_bytes())
+                    }
+                    MInst::MemCopy {
+                        size,
+                        volatile: evocc_evoir::CopyVolatility::None,
+                        ..
+                    } => *size <= c.size,
+                    _ => false,
+                };
+                c.safe &= c.access.block == block && c.access.first < index && direct_access;
+                c.access.last = c.access.last.max(index);
+            }
+        }
+    }
+    candidates
+        .into_values()
+        .filter(|c| c.safe && origins[&c.origin] == 1)
+        .map(|c| (c.origin, c.access))
+        .collect()
 }
 
 /// Compute the Section 6 layout of one allocated function.
@@ -158,9 +269,29 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // assembler refusal was.
     let mut slots = BTreeMap::new();
     let mut cursor = above_save + spill_bytes;
+    let private = private_object_accesses(allocated);
+    // Keep each origin's logical entry. Only identical physical layouts whose
+    // closed access intervals cannot overlap may use the same bytes. Escaping
+    // objects never enter this pool, even when their last explicit use is early.
+    let mut reusable = BTreeMap::<(u64, u64), Vec<(u64, Vec<LocalAccess>)>>::new();
     for (origin, object, align) in automatic.iter().rev() {
+        let access = private.get(origin).copied();
+        let pool = reusable.entry((*object, *align)).or_default();
+        if let Some(access) = access {
+            if let Some((offset, intervals)) = pool
+                .iter_mut()
+                .find(|(_, intervals)| intervals.iter().all(|other| !access.overlaps(*other)))
+            {
+                slots.insert(*origin, *offset);
+                intervals.push(access);
+                continue;
+            }
+        }
         cursor = align_up(cursor, (*align).max(1));
         slots.insert(*origin, cursor);
+        if let Some(access) = access {
+            pool.push((cursor, vec![access]));
+        }
         cursor += *object;
     }
 

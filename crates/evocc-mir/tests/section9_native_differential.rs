@@ -132,7 +132,7 @@ fn private_stack_reuse_preserves_loaded_values_and_overlapping_objects() {
                 }
             }
         }
-        writeln!(source, "    ret %v{sum}, %v{mem}, %v{world}\n}}\n").unwrap();
+        writeln!(source, "    ret %v{sum}, %v{mem}, %v{world}\n}}").unwrap();
         let (allocated, module) = build(&source);
         let frame = evocc_mir::frame_of(&allocated[0]);
         let offsets = frame

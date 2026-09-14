@@ -401,8 +401,11 @@ fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
     for (name, extra) in cases {
         let mut insts = temporary_object(0);
         insts.extend(temporary_object(1));
-        insts.push(extra);
-        let frame = frame_of(&allocated_temporaries(insts));
+        let mut allocated = allocated_temporaries(insts);
+        // Exercise frame layout's input directly: allocation can eliminate a
+        // dead move before the address-escape check would ever see it.
+        allocated.blocks[0].insts.push(extra);
+        let frame = frame_of(&allocated);
         assert_ne!(frame.slots[&0], frame.slots[&1], "{name}");
     }
     for (name, size, align, offset, volatile) in [
