@@ -101,8 +101,11 @@ static unsigned load_runtime_modules(const char *path, const char *nonce)
             fatal("invalid module setup");
         }
         name[length] = '\0';
-        if (nonce)
+        if (nonce) {
+            if (system("dmesg --clear"))
+                fatal("clear module log boundary");
             dprintf(1, "KUNIT_MODULE_BEGIN %s %s\n", nonce, name);
+        }
         pid_t child = fork();
         if (child < 0)
             fatal("fork modprobe");
@@ -116,8 +119,11 @@ static unsigned load_runtime_modules(const char *path, const char *nonce)
                 fatal("wait modprobe");
         int rc = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
         if (nonce) {
-            /* Loading succeeds even when a KUnit assertion fails. The host
-             * reads the original KTAP between these markers, not just rc. */
+            /* Read complete printk records, not the asynchronous console
+             * stream: WARN paths can replay a half-written KTAP line after
+             * modprobe exits. Keep every record, including failures. */
+            if (system("dmesg --read-clear --color=never"))
+                fatal("read module KUnit records");
             dprintf(1, "KUNIT_MODULE_END %s %s %d\n", nonce, name, rc);
         } else if (rc) {
             errno = EIO;
@@ -210,6 +216,10 @@ int main(void)
         file = fopen("/sys/module/kunit/parameters/filter_glob", "w");
         if (!file || fputs("*", file) < 0 || fclose(file))
             fatal("enable module KUnit suites");
+        /* Console replay must not interleave with userspace boundaries.
+         * This only changes console delivery; dmesg retains all test records. */
+        if (system("dmesg --console-level 1"))
+            fatal("select module log capture");
         unsigned count = load_runtime_modules("/tests/kunit-modules", nonce);
         if (!count)
             fatal("empty KUnit module list");

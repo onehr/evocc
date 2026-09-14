@@ -326,3 +326,18 @@ commands exposed a separate `-g` defect: lifted function-static objects are
 matched against the pre-inline source inventory. Remaining replays were
 stopped to repair that mismatch; module loading must still be rerun. The
 original full kselftest pair continues against its unchanged payloads.
+
+The debug mismatch is repaired by consuming the module and its actual
+normalized C-HIR together, before the inline arena expires. No second inline
+pass or guessed synthetic-name mapping is used. All 20 compilation-option
+tests and the changed gate pass; the previously failing original `-g`
+commands now emit successfully.
+
+Module KTAP is now read from complete kernel-ring records after each load,
+with asynchronous console delivery suppressed for this separate measurement.
+Neither assertions nor test sources change. The reference rerun in
+`module-suites-20260914/reference-records` accounts for all 33 modules and
+**781 cases: 780 PASS, zero FAIL, one SKIP, zero parser errors**. The raw
+console attempts are retained: one lost seven cases to a replayed partial
+line, and another interleaved the next module marker with delayed output.
+EvoCC must pass the same record-based execution after its module repairs.

@@ -149,6 +149,8 @@ class FullSelftest(unittest.TestCase):
         self.assertIn('KUNIT_MODULE_BEGIN %s %s', source)
         self.assertIn('KUNIT_MODULE_END %s %s %d', source)
         self.assertIn('KUNIT_MODULE_COMPLETE %s %u', source)
+        self.assertIn('dmesg --read-clear --color=never', source)
+        self.assertIn('fatal("read module KUnit records")', source)
 
     def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
