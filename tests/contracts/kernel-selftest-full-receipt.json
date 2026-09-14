@@ -9821,5 +9821,22 @@
   },
   "referenceImageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
   "referenceStatus": "INCOMPLETE",
-  "regressions": []
+  "regressions": [],
+  "subsequentDiagnosticReplay": {
+    "capture": ".evidence/kselftest-full/private-frame-reuse-20260914/mm-full",
+    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=mm:run_vmtests.sh K1_BOOT_TIMEOUT=1020 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh .build/k1/repair/arch/arm64/boot/Image .evidence/kselftest-full/private-frame-reuse-20260914/mm-full",
+    "imageSha256": "25fa46a4d45f212b7e3aa5ece08f24db4f8bed73aeef87aa2e3908f78de90316",
+    "serialLogSha256": "635609db3be983c561d2f898c88fe8c7a36dd8a067ec9a221ea2498c9f763952",
+    "composition": "Original K6 objects except io_uring/memmap.o, mm/rmap.o, mm/huge_memory.o and mm/madvise.o rebuilt with the two tested EvoCC repairs; no reference-object fallback, not a uniform new full build",
+    "objectAudit": ".evidence/kselftest-full/private-frame-reuse-20260914/relink.json",
+    "bootVerdict": "PASS",
+    "scriptPrograms": {"PASS": 49, "FAIL": 1, "SKIP": 16, "total": 66},
+    "referenceCapture": ".evidence/kselftest-full/20260914T015846Z/reference/mm/run_vmtests.sh",
+    "comparison": "Same 49/1/16 script summary and the same five failing mremap subtests in the reference; upstream outer wrapper SKIP does not erase these failures",
+    "remainingFailures": [
+      {"class": "2 GiB allocations fail ENOMEM in the declared 2 GiB VM", "subtests": 4},
+      {"class": "userfaultfd returns ENOSYS because CONFIG_USERFAULTFD is disabled", "subtests": 1}
+    ],
+    "claimLimit": "The repaired mm script completes without the previous compiler crashes; this is not a full-suite pass or closure of the shared environment requirements"
+  }
 }

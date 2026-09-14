@@ -34,7 +34,26 @@
       "hw_breakpoint.test_task_on_all_and_one_cpu",
       "pm_runtime_test_cases.pm_runtime_error_test"
     ],
-    "earlierHVF": ".evidence/kunit/20260914-reference/boot.json; panic during CPU hotplug, retained rather than counted as PASS"
+    "earlierHVF": ".evidence/kunit/20260914-reference/boot.json; panic during CPU hotplug, retained rather than counted as PASS",
+    "failureAnalysis": {
+      "hw_breakpoint": {
+        "tests": 7,
+        "classification": "arm64 test expectation conflicts with the supported breakpoint interface",
+        "source": "kernel/events/hw_breakpoint_test.c: register_test_bp requests a per-task kernel-address breakpoint; arch/arm64/kernel/hw_breakpoint.c: arch_build_bp_info explicitly returns -EINVAL for an EL1 breakpoint with a task target",
+        "originalOutcome": "FAIL; not relabeled as PASS"
+      },
+      "pm_runtime_error_test": {
+        "tests": 1,
+        "classification": "not reproduced in isolated control runs; asynchronous completion race is supported by the source, not yet instrumented",
+        "source": "drivers/base/power/runtime-test.c:177 expects pm_runtime_barrier == 1 after asynchronous pm_runtime_get; runtime.c returns 0 when no resume request remains pending",
+        "command": "K1_ALLOW_QEMU_DRIFT=1 K1_BOOT_LANE=<lane> K1_KUNIT_FILTER='pm_runtime_test_cases.*' K1_BOOT_TIMEOUT=120 tools/k1/boot.sh .build/k7/pristine/arch/arm64/boot/Image <capture>",
+        "isolated": [
+          {"lane": "tcg-cortex-a72", "capture": ".evidence/kunit/20260914-reference-pm-tcg", "serialLogSha256": "514eb15eb25e8bda1cb96b6486b03ff321638993ad9001888f0e4fe262a3a0d0", "PASS": 6, "FAIL": 0, "SKIP": 0},
+          {"lane": "hvf-host", "capture": ".evidence/kunit/20260914-reference-pm-hvf", "serialLogSha256": "5136d2e5f7a01be972b43bc88a6f310046ea66fe7ba1251ff6b7faf00d150ece", "PASS": 6, "FAIL": 0, "SKIP": 0}
+        ],
+        "originalOutcome": "FAIL; isolated passes do not replace the full run"
+      }
+    }
   },
   "subject": {
     "status": "NOT_RUN",

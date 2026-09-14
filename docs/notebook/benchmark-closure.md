@@ -387,10 +387,24 @@ repair compositions, not a fresh complete 935-program or uniform-compiler run.
 Changed-crate gate against `b13af54`, Clippy `-D warnings`, fmt and 130 K1 Python
 tests pass; long-running tests already ignored before this change remain ignored.
 
+The complete, unfiltered mm script then finishes on the repair Image:
+**49 PASS / 16 SKIP / 1 FAIL** across 66 script programs, exactly the GCC
+reference summary. Its five failing inner assertions are all in `mremap_test`:
+four 2 GiB allocation cases return ENOMEM in the declared 2 GiB VM, and one
+returns ENOSYS because USERFAULTFD is disabled. Capture `mm-full` under the cow
+repair directory and the full-selftest receipt preserve the result; neither
+the outer wrapper's SKIP nor boot PASS is substituted for it.
+
 KUnit is no longer wholly unmeasured: the separate KUnit/ublk configuration
 has a successful GCC `Image modules` build. Its TCG run records **1,440 tests:
 1,324 PASS / 8 FAIL / 108 SKIP**; all eight failures remain named in the
 [KUnit receipt](../../tests/contracts/kernel-kunit-receipt.json).
+Seven failures request per-task kernel breakpoints that arm64 explicitly
+rejects in `arch_build_bp_info`; this is a source-backed test/interface mismatch,
+not an EvoCC regression. The remaining PM suite passes **6/6** when isolated
+on both TCG and HVF; an asynchronous completion race explains the possible
+barrier return of zero, but has not been instrumented. The full run's eight
+FAIL outcomes are preserved, not replaced by those diagnostic reruns.
 The earlier HVF run panicked during CPU hotplug and is retained. The unchanged
 original Images both pass the isolated CPU-hotplug program on the declared TCG
 lane; this does not reclassify the HVF failure as a compiler repair.
