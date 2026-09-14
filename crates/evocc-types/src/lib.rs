@@ -317,6 +317,14 @@ impl TargetBuiltinType {
     }
 
     #[must_use]
+    pub fn spelling(self) -> &'static str {
+        Self::SPELLINGS
+            .iter()
+            .find_map(|&(ty, name)| (ty == self).then_some(name))
+            .expect("every target builtin has a source spelling")
+    }
+
+    #[must_use]
     pub const fn layout(self) -> Option<TypeLayout> {
         let bytes = match self {
             Self::GnuFloat16 | Self::ArmFp16 => 2,
@@ -716,6 +724,14 @@ impl TypeInterner {
     #[must_use]
     pub fn get(&self, id: TypeId) -> Option<&CanonicalType> {
         self.types.get(id.raw() as usize)
+    }
+
+    /// Canonical entries in allocation order, retaining recursive tag identity.
+    pub fn iter(&self) -> impl Iterator<Item = (TypeId, &CanonicalType)> {
+        self.types
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| (TypeId(index as u32), ty))
     }
 
     /// Look up an existing canonical type without changing interner identity or order.

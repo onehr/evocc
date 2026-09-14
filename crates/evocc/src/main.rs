@@ -34,6 +34,8 @@ use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
+mod dwarf;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DriverMode {
     Preprocess,
@@ -96,6 +98,7 @@ struct DriverOptions {
     standard_includes: bool,
     optimize_scalar_evoir: bool,
     optimization: u8,
+    debug_types: bool,
     signed_wrapping: bool,
     standard_builtins: bool,
     hosted: bool,
@@ -250,6 +253,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
     let mut optimization = 0;
+    let mut debug_types = false;
     let mut signed_wrapping = false;
     let mut standard_builtins = true;
     let mut hosted = true;
@@ -279,6 +283,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-O0" => optimization = 0,
             "-O" | "-O1" | "-O2" | "-O3" | "-Og" => optimization = 1,
             "-Os" => optimization = 2,
+            "-g" | "-gdwarf-4" => debug_types = true,
+            "-g0" => debug_types = false,
             "-mcmodel=tiny" => codegen.tiny_addresses = true,
             "-mcmodel=small" => codegen.tiny_addresses = false,
             "-fasynchronous-unwind-tables" | "-funwind-tables" => codegen.unwind_tables = true,
@@ -439,6 +445,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         standard_includes,
         optimize_scalar_evoir,
         optimization,
+        debug_types,
         signed_wrapping,
         standard_builtins,
         hosted,
@@ -894,7 +901,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             };
             match action {
                 ParsedAction::EmitEvoIr => emit_evoir(&module),
-                ParsedAction::EmitAsm => emit_asm(options, &module),
+                ParsedAction::EmitAsm => emit_asm(options, &module, &unit),
                 ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
                 ParsedAction::Validate | ParsedAction::InterpretCHir | ParsedAction::EmitCHir => {
                     unreachable!("matched EvoIR action")
@@ -1009,11 +1016,11 @@ fn emit_evoir(module: &Module) -> ExitCode {
 /// a survey over the kernel can count what stopped each translation unit.
 /// Lowering refusals carry their own EvoMIR codes; the remaining stops are
 /// driver-level reports of an internal stage that declined.
-fn emit_asm(options: &DriverOptions, module: &Module) -> ExitCode {
+fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
     let target = match options.target {
         DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
     };
-    let text = match compile_module_with_options(
+    let mut text = match compile_module_with_options(
         target,
         module,
         &|_| true,
@@ -1043,6 +1050,21 @@ fn emit_asm(options: &DriverOptions, module: &Module) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    if options.debug_types {
+        match dwarf::type_information(unit, module, &options.target_layout(), &options.input) {
+            Ok(debug) => text.push_str(&debug),
+            Err(error) => {
+                emit_error(
+                    &options.input,
+                    1,
+                    1,
+                    "E0004",
+                    &format!("debug-type-emission: {error}"),
+                );
+                return ExitCode::from(1);
+            }
+        }
+    }
     let mut stdout = std::io::stdout().lock();
     if write!(stdout, "{text}").is_err() {
         return ExitCode::from(1);

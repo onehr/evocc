@@ -6,7 +6,7 @@
     "path": ".build/k7/pristine/.config",
     "sha256": "6afbd2125fb1d182b77350077bc888f87323f4cd0de0d4da618cfa5afd159c23",
     "requested": ["CONFIG_KUNIT=y", "CONFIG_KUNIT_ALL_TESTS=y", "CONFIG_BLK_DEV_UBLK=y"],
-    "BTF": "NOT_ENABLED: type debug metadata remains unimplemented"
+    "BTF": "NOT_ENABLED in either current Image. Source-derived DWARF and pahole BTF conversion now pass a fixture and a real KUnit unit; complete BTF kernel integration is still pending."
   },
   "reference": {
     "status": "FAIL",
@@ -347,6 +347,28 @@
     "originalUnits": ["drivers/dma/dw-edma/dw-edma-v0-debugfs.o", "drivers/dma/dw-edma/dw-hdma-v0-debugfs.o", "drivers/gpu/drm/nouveau/nouveau_uvmm.o"],
     "replay": ".evidence/kunit/initializer-identity-20260914/units.jsonl: all three emit using the actual generated headers; assembled.json confirms all three assemble with no missing or extra symbols",
     "claimLimit": "Tailored repair, not a new full module composition. The running full replay retains its original compiler binary and inputs."
+  },
+  "sourceTypeMetadata": {
+    "status": "TARGETED_PASS; whole-kernel BTF NOT_RUN",
+    "fixture": "tests/fixtures/debug-types.c",
+    "implementation": "-g and -gdwarf-4 emit source-derived DWARF type, function and file-object DIEs from the canonical C types and target layout; -g0 disables emission. This does not claim line tables or local-variable locations.",
+    "red": "One declared debug-option rejection, no build error",
+    "focusedCommand": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test compilation_options --offline",
+    "focused": {"passed": 19, "failed": 0},
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh add4474 --offline: exit 0; affected workspace tests, Clippy -D warnings and fmt pass",
+    "finalClippy": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo clippy -p evocc --all-targets --offline -- -D warnings: exit 0",
+    "capture": ".evidence/builtin-probes/20260914-dwarf-types/linked-types",
+    "verificationCommand": "In evo-flight-lab:sealed: as -march=armv8.5-a <source>.s -o <source>.o; llvm-dwarfdump-19 --verify <source>.o; pahole --btf_encode_detached=<source>.btf <source>.o",
+    "dwarfVerification": "subject.o and kernel-bitfield.o: no errors and no warnings",
+    "codeIdentityCommand": "llvm-objcopy-19 -O binary --only-section=.text subject.o subject.text; cmp plain.text subject.text",
+    "codeIdentity": "PASS: the fixture's 292 machine-code bytes are identical with and without -g",
+    "textSha256": "d3bc89c5b9f1135d220c771a13b14abb9bd2fdb69b2fc2c2a8ad0805e0aa8d05",
+    "fixtureBtf": {"bytes": 826, "sha256": "8379a320a17fb05311596f52a4ebc7f1036808c2777cee3c16409cc5940f3ce9"},
+    "globalVariableBtfCommand": "pahole --btf_features_strict=+global_var --btf_encode_detached=subject-vars.btf subject.o",
+    "globalVariableBtfSha256": "43c82f0c654a1ec2d1e7d0140980d0ab9cabf46e0407845a9672d719e0bc6967",
+    "originalKernelUnit": "lib/tests/bitfield_kunit.o, replayed against actual generated headers with -g",
+    "kernelUnitBtf": {"bytes": 248098, "sha256": "d198611291ccac0b2340bfa169d938708c9ab632735f00ea6c0ddb774871db17"},
+    "claimLimit": "These are independently decoded type records, not a borrowed GCC BTF blob. Existing Images remain no-BTF; enabling and executing BTF-dependent tests still requires rebuilding the configured subject."
   },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."

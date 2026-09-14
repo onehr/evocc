@@ -143,10 +143,9 @@ fn inspect<'a>(nodes: impl IntoIterator<Item = Node<'a>>) -> Uses<'a> {
     inspect_with_declarations(nodes, &mut |_| {})
 }
 
-pub(crate) fn for_each_declaration<'a>(
-    unit: &CHirUnit<'a>,
-    mut visit: impl FnMut(&'a CHirDecl<'a>),
-) {
+/// Visit declarations once through their executable syntax, including locals.
+/// Written initializer mirrors are not separate declaration occurrences.
+pub fn for_each_declaration<'a>(unit: &CHirUnit<'a>, mut visit: impl FnMut(&'a CHirDecl<'a>)) {
     inspect_with_declarations(unit.iter().map(Node::Decl), &mut visit);
 }
 

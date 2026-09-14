@@ -29,6 +29,54 @@ fn successful(output: Output) -> String {
 }
 
 #[test]
+fn debug_types_are_opt_in_and_do_not_change_executable_assembly() {
+    let source = include_str!("../../../tests/fixtures/debug-types.c");
+    let plain = successful(run(&["--emit=asm"], source));
+    let debug = successful(run(&["--emit=asm", "-g"], source));
+    assert!(debug.starts_with(&plain));
+    assert!(debug.contains(".section .debug_info"));
+    assert!(debug.contains(".section .debug_abbrev"));
+    for name in [
+        "node",
+        "packet",
+        "state",
+        "count",
+        "mode",
+        "tail",
+        "inspect_node",
+        "callback_slot",
+        "index",
+    ] {
+        assert!(debug.contains(&format!(".asciz {name:?}")), "{name}");
+    }
+    assert_eq!(successful(run(&["--emit=asm", "-g", "-g0"], source)), plain);
+    assert!(successful(run(&["--emit=asm", "-g0", "-gdwarf-4"], source))
+        .contains(".section .debug_info"));
+}
+
+#[test]
+fn debug_target_vectors_are_not_described_as_floating_scalars() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        "typedef __Float32x4_t lanes; typedef __SVBool_t predicates; int anchor;",
+    ));
+    assert!(debug.contains(".asciz \"__Float32x4_t\""));
+    assert!(debug.contains(".asciz \"__SVBool_t\""));
+    assert!(debug.contains(".uleb128 8455")); // DW_AT_GNU_vector
+    assert!(!debug.contains("TargetBuiltin("));
+}
+
+#[test]
+fn debug_information_does_not_resurrect_an_unemitted_internal_function() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        "static int unused(void) { return 7; } int main(void) { return 0; }",
+    ));
+    assert!(!debug.contains(".8byte \"unused\""));
+    assert!(debug.contains(".8byte \"main\""));
+}
+
+#[test]
 fn zero_initialization_is_explicit_and_runs_at_each_declaration() {
     let source = include_str!("../../../tests/fixtures/automatic-zero.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

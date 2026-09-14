@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 11:12 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 11:53 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -235,8 +235,15 @@ and source reasoning are distinguished from that unexecuted check.
   follows the existing-registration branch in `kernel/rseq.c`, before its
   address check. The original direct FAIL is retained.
 - BTF requires real compiler type/debug metadata, not the GCC kernel's BTF.
-  That compiler capability remains missing; BPF/BTF-dependent tests cannot
-  be claimed covered by a no-BTF Image.
+  Source-derived DWARF now passes LLVM verification without warnings and
+  converts through the sealed `pahole` on a fixture and the actual
+  `lib/tests/bitfield_kunit.o` (248,098-byte BTF). The fixture's machine code
+  is byte-identical with/without `-g`; its decoded records preserve recursive
+  pointers, bit-fields, packed offsets and source function signatures.
+  Capture: `.evidence/builtin-probes/20260914-dwarf-types/linked-types`.
+  This does not provide line tables or local-variable locations, and neither
+  current Image contains BTF yet. Full BTF kernel integration and its tests
+  remain pending; the targeted conversion is not kernel coverage.
 - GCC KUnit's seven failing hardware-breakpoint cases request per-task EL1
   breakpoints that arm64 `arch_build_bp_info` explicitly rejects with EINVAL.
   The one PM runtime failure does not reproduce in isolated 6/6 control
