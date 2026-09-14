@@ -46,6 +46,27 @@ fn consensus_wide_field_consumers_are_admitted() {
 }
 
 #[test]
+fn narrowing_an_unsigned_mask_observes_only_the_consensus_low_bits() {
+    assert_eq!(
+        diagnostic(include_str!(
+            "../../../tests/fixtures/narrowed-wide-field-mask.c"
+        )),
+        None
+    );
+    for expression in [
+        "(unsigned)((s.x + 1) & 0xffffffff)",
+        "((unsigned)(s.x & 0xffffffff)) + ~s.x",
+    ] {
+        let source = format!("struct S{{unsigned long x:40;}}; unsigned f(void){{struct S s={{0xffffffffffUL}};return {expression};}}");
+        assert_eq!(
+            diagnostic_with_expansion_spans(&source, true).map(|d| d.0),
+            Some("E2939".into()),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn nested_conditionals_preserve_precision_without_rewalking_their_wide_arm() {
     let mut expression = String::from("s.x");
     for _ in 0..20 {

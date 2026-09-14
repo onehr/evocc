@@ -94,6 +94,14 @@ fn wide_field_consensus_preserves_values_and_neighboring_bits() {
 }
 
 #[test]
+fn narrowed_wide_field_masks_preserve_values_and_one_evaluation() {
+    check(
+        include_str!("../../../tests/fixtures/narrowed-wide-field-mask.c"),
+        0,
+    );
+}
+
+#[test]
 fn expression_scopes_keep_their_static_objects_in_the_module() {
     for source in [
         "int f(void){if(({static int n=0; ++n;})) return 7;return 0;} int main(void){return f()!=7 || f()!=7;}",
