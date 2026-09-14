@@ -195,6 +195,19 @@ fn void_return_expressions_execute_effects_without_a_data_result() {
 }
 
 #[test]
+fn local_label_lists_keep_each_name_and_nested_scope() {
+    check(include_str!("../../../tests/fixtures/local-label-list.c"), 0);
+}
+
+#[test]
+fn alternate_alignof_spelling_keeps_types_attributes_and_unevaluated_operands() {
+    check(
+        include_str!("../../../tests/fixtures/alignof-alternate-spelling.c"),
+        0,
+    );
+}
+
+#[test]
 fn void_return_does_not_execute_the_following_statement() {
     check("int n; void sink(void){n++;} void f(void){return sink();n=99;} int main(void){f();return n!=1;}", 0);
 }
