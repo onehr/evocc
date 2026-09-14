@@ -1277,6 +1277,8 @@ impl AsmOperand {
 pub enum AsmClobber {
     /// A named physical register the `asm` writes.
     Register(u8),
+    /// A SIMD/FP register. It never aliases a general-register allocation.
+    VectorRegister(u8),
     /// `cc`: the flags.
     Flags,
     /// `memory`: inert here, since the EvoIR instruction's maximal effects
@@ -1290,6 +1292,7 @@ impl AsmClobber {
     pub fn spelling(&self) -> String {
         match self {
             Self::Register(number) => format!("x{number}"),
+            Self::VectorRegister(number) => format!("v{number}"),
             Self::Flags => "cc".to_owned(),
             Self::Memory => "memory".to_owned(),
         }
@@ -1298,6 +1301,13 @@ impl AsmClobber {
     /// Read one clobber name.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
+        if let Some(number) = text.strip_prefix('v') {
+            return number
+                .parse::<u8>()
+                .ok()
+                .filter(|number| *number <= 31)
+                .map(Self::VectorRegister);
+        }
         match text {
             "cc" => Some(Self::Flags),
             "memory" => Some(Self::Memory),
@@ -1364,14 +1374,14 @@ impl AsmBody {
         registers
     }
 
-    /// The physical registers the clobber list names.
+    /// The general-purpose physical registers the clobber list names.
     #[must_use]
     pub fn clobbered_registers(&self) -> Vec<u8> {
         self.clobbers
             .iter()
             .filter_map(|clobber| match clobber {
                 AsmClobber::Register(number) => Some(*number),
-                AsmClobber::Flags | AsmClobber::Memory => None,
+                AsmClobber::VectorRegister(_) | AsmClobber::Flags | AsmClobber::Memory => None,
             })
             .collect()
     }

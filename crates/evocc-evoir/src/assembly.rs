@@ -371,6 +371,10 @@ pub fn assembly_register_type(ty: &EvoIRType) -> bool {
 pub fn assembly_clobber(name: &str) -> bool {
     matches!(name, "memory" | "cc")
         || name
+            .strip_prefix('v')
+            .and_then(|number| number.parse::<u8>().ok())
+            .is_some_and(|number| number <= 31)
+        || name
             .strip_prefix('x')
             .or_else(|| name.strip_prefix('w'))
             .and_then(|number| number.parse::<u8>().ok())

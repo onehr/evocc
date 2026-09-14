@@ -39,6 +39,11 @@ fn tokens() -> Vec<RuntimeValue> {
 
 #[test]
 fn vector_register_clobbers_keep_their_own_register_file() {
+    let bound = EDGES
+        .replace("\"+r\"", "\"+r@x8\"")
+        .replace("clobbers []", "clobbers [\"v8\"]");
+    let module = parse_section9_module(bound.as_bytes()).expect("v8 does not clobber x8");
+    assert_eq!(render_module(&module), bound);
     for register in ["v0", "v8", "v15", "v31"] {
         let source = ordinary(r#""nop""#).replace("[\"memory\"]", &format!("[\"{register}\"]"));
         let module = parse_section9_module(source.as_bytes()).expect("physical SIMD clobber");

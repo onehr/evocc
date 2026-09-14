@@ -7098,3 +7098,10 @@ An explicit cast to a non-Boolean unsigned integer no wider than the field may c
 This discharges only that AND operation's E2939, preserving evaluation and all nested or neighboring refusals; it does not admit arbitrary wide-field arithmetic or change its uncast type-query boundaries.
 Both sealed compilers at O0/O2 execute `tests/fixtures/narrowed-wide-field-mask.c` with exit zero, including both operand orders, 16/32-bit destinations and one pointer-call evaluation; `.evidence/builtin-probes/20260914-narrowed-wide-mask/oracles.out` records the values.
 The two measured Nouveau refusals use `lower_32_bits` on a 40-bit offset; their original-unit replay remains required, and no diagnostic is added.
+
+### Named SIMD clobbers in scalar code
+
+The physical-register clobber rule includes `v0` through `v31`; these names are carried separately from `x0` through `x30` and never reserve a same-numbered general register.
+Normal AAPCS64 emission preserves the low 64 bits of clobbered `v8` through `v15` on every return, including asm-goto paths, with ordinary frame addressing and unwind locations; other SIMD clobbers need no callee save, and no vector-valued operand support is implied.
+Explicit `-mgeneral-regs-only` continues to forbid compiler-generated SIMD accesses: both sealed compilers with an explicit `.arch_extension simd` accept the probe but do not preserve those lanes in this mode, whereas both preserve them at ordinary O0/O2, as `.evidence/builtin-probes/20260914-vector-clobbers/oracles.out` records (general-only exit one is a negative control, not a pass).
+One measured module unit, `drivers/net/ethernet/mellanox/mlx5/core/wc.o`, names `v0` through `v3` after `kernel_neon_begin`; its original replay remains required, and malformed names remain E3021.

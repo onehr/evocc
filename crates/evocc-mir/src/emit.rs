@@ -12,9 +12,9 @@ use std::fmt::Write as _;
 use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::{
-    inst_defs, inst_uses, linscan::physical, term_uses, Allocated, AsmBody, AsmConstraint,
-    AsmOperand, AsmValue, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul,
-    Width,
+    inst_defs, inst_uses, linscan::physical, term_uses, Allocated, AsmBody, AsmClobber,
+    AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind,
+    VReg, WideMul, Width,
 };
 
 /// Address materialization selected by the caller's build options.
@@ -70,6 +70,8 @@ pub struct Frame {
     pub alignment: u64,
     /// Callee-saved register to its offset above `sp`.
     pub saved: BTreeMap<u8, u64>,
+    /// Low 64 bits of clobbered v8-v15, preserved by the normal AAPCS64 ABI.
+    pub saved_vectors: BTreeMap<u8, u64>,
     /// Spill slot index to its offset above `sp`.
     pub spills: BTreeMap<u32, u64>,
     /// Each logical `frame.slot` origin to its offset above `sp`. Proven
@@ -301,7 +303,35 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // objects below it needed.
     let saved_base = align_up(cursor, 8);
     let saved_bytes = allocated.used_callee_saved.len() as u64 * 8;
-    let size = align_up(saved_base + saved_bytes, alignment) + alignment - 16;
+    let vectors: BTreeSet<u8> = allocated
+        .blocks
+        .iter()
+        .flat_map(|block| {
+            block
+                .insts
+                .iter()
+                .filter_map(|inst| match inst {
+                    MInst::Asm(body) => Some(body),
+                    _ => None,
+                })
+                .chain(match &block.term {
+                    MTerm::AsmGoto { body, .. } => Some(body),
+                    _ => None,
+                })
+                .flat_map(|body| body.clobbers.iter())
+                .filter_map(|clobber| match clobber {
+                    AsmClobber::VectorRegister(number @ 8..=15) => Some(*number),
+                    _ => None,
+                })
+        })
+        .collect();
+    let vector_base = saved_base + saved_bytes;
+    let saved_vectors: BTreeMap<u8, u64> = vectors
+        .into_iter()
+        .enumerate()
+        .map(|(index, number)| (number, vector_base + index as u64 * 8))
+        .collect();
+    let size = align_up(vector_base + saved_vectors.len() as u64 * 8, alignment) + alignment - 16;
 
     let mut saved = BTreeMap::new();
     for (index, number) in allocated.used_callee_saved.iter().enumerate() {
@@ -323,6 +353,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         size,
         alignment,
         saved,
+        saved_vectors,
         spills,
         slots,
         outgoing,
@@ -1209,6 +1240,14 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
             emit_saved_register_cfi(text, *number, *offset, frame);
         }
     }
+    if !frame.general_registers_only {
+        for (number, offset) in &frame.saved_vectors {
+            emit_frame_access(text, "str", &format!("d{number}"), *offset, frame);
+            if frame.unwind_tables {
+                emit_saved_register_cfi(text, 64 + *number, *offset, frame);
+            }
+        }
+    }
     if let Some((offset, guard)) = &frame.stack_guard {
         emit_guard_load(text, guard);
         let _ = writeln!(text, "    mov x17, x16");
@@ -1246,6 +1285,14 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
 }
 
 fn emit_epilogue(text: &mut String, frame: &Frame) {
+    if !frame.general_registers_only {
+        for (number, offset) in &frame.saved_vectors {
+            emit_frame_access(text, "ldr", &format!("d{number}"), *offset, frame);
+            if frame.unwind_tables {
+                let _ = writeln!(text, ".cfi_restore {}", 64 + *number);
+            }
+        }
+    }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "ldr", &format!("x{number}"), *offset, frame);
         if frame.unwind_tables {
