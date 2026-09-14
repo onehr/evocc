@@ -22,7 +22,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
                     'e2fsprogs', 'libarchive13t64', 'netsniff-ng', 'libteam-utils',
-                    'iperf3', 'traceroute', 'conntrack', 'fuse3')
+                    'iperf3', 'traceroute', 'conntrack', 'fuse3', 'bpftrace')
 BUILD_PACKAGES = ('openssl', 'python3-docutils', 'xxd')
 # The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
 # The collection has no settings file, so the runner's 45s default cannot

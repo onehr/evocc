@@ -276,6 +276,7 @@ class FullSelftest(unittest.TestCase):
     def test_runtime_dependency_packages_cover_observed_missing_tools(self):
         self.assertTrue(hasattr(lane, 'RUNTIME_PACKAGES'), 'runtime packages are not declared')
         self.assertTrue({'procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod'} <= set(lane.RUNTIME_PACKAGES))
+        self.assertIn('bpftrace', lane.RUNTIME_PACKAGES)
 
     def test_fat_runtime_includes_the_formatter_and_privilege_wrapper(self):
         self.assertTrue({'dosfstools', 'sudo'} <= set(lane.RUNTIME_PACKAGES))
