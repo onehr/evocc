@@ -7091,3 +7091,10 @@ For `, ##__VA_ARGS__` (including named GNU variadics), a present argument is sub
 Elision of an omitted argument and retention of an explicitly empty argument are unchanged; suppressing the comma paste does not authorize early expansion of the argument.
 Both sealed GCC-14 and Clang-19 produce `29, 29, 12, 31` for the four independent lines in `.evidence/builtin-probes/20260914-variadic-paste/input.c`, as `oracles.out` records; no diagnostic is added.
 The partial expanded KUnit/module survey exposes 20 E0110 units using Nouveau's variadic dispatch idiom, selected in `.evidence/kunit/variadic-replay-20260914/units.txt` alongside two stray-token refusals; only original-unit replays establish the repair's actual coverage.
+
+### Narrowed low-bit masks of unsigned wide fields
+
+An explicit cast to a non-Boolean unsigned integer no wider than the field may consume a direct unsigned wide-field read ANDed with a nonnegative integer constant mask contained within the field's storage width; both intermediate precisions preserve the resulting low bits.
+This discharges only that AND operation's E2939, preserving evaluation and all nested or neighboring refusals; it does not admit arbitrary wide-field arithmetic or change its uncast type-query boundaries.
+Both sealed compilers at O0/O2 execute `tests/fixtures/narrowed-wide-field-mask.c` with exit zero, including both operand orders, 16/32-bit destinations and one pointer-call evaluation; `.evidence/builtin-probes/20260914-narrowed-wide-mask/oracles.out` records the values.
+The two measured Nouveau refusals use `lower_32_bits` on a 40-bit offset; their original-unit replay remains required, and no diagnostic is added.

@@ -10147,6 +10147,44 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .retain(|(refusal, _, cause)| refusal.code != "E2939" || *cause != identity);
     }
 
+    fn discharge_narrowed_unsigned_mask(&mut self, target: TypeId, operand: &CHirExpr<'_>) {
+        let Ok(target) = self.canonical_integer_type(target) else {
+            return;
+        };
+        if target.is_signed() || target == CIntegerType::BOOL {
+            return;
+        }
+        let CHirExpr::Binary(BinaryOp::BitAnd, left, right, _) = operand else {
+            return;
+        };
+        let consensus = [(left, right), (right, left)]
+            .into_iter()
+            .any(|(field, mask)| {
+                if self.expression_record_field(field).is_none() {
+                    return false;
+                }
+                let Some((width, integer)) = self.wide_field_precision(field) else {
+                    return false;
+                };
+                !integer.is_signed()
+                    && u16::from(target.bits()) <= width
+                    && self
+                        .eval_integer_constant_expression(mask)
+                        .is_ok_and(|mask| {
+                            mask.try_mathematical_value()
+                                .is_some_and(|value| value >= 0)
+                                && mask.raw_bits() <= (u128::MAX >> (128 - width))
+                        })
+            });
+        if consensus {
+            // Both precisions preserve these low bits. Clear only this AND's
+            // deferred refusal, never a neighboring or nested operation's.
+            let identity = BinaryExpressionIdentity::of(operand);
+            self.profile_refusals
+                .retain(|(refusal, _, cause)| refusal.code != "E2939" || *cause != identity);
+        }
+    }
+
     fn expression_bit_field_width(&self, expression: &CHirExpr<'_>) -> Option<u16> {
         if let Some(field) = self.expression_record_field(expression) {
             return Some(field.bit_field?.width_bits);
@@ -11038,6 +11076,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let operand = self.resolve_union_cast_operand(ty, operand, span)?;
+            self.discharge_narrowed_unsigned_mask(ty, operand);
             return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
         }
 
