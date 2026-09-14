@@ -67,6 +67,7 @@ def parser():
     p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
     p.add_argument('--expanded-selftest-kernel', action='store_true', help='use the audited expanded KUnit kernel pair for full selftests')
     p.add_argument('--selftest-runtime', type=Path, help='per-kernel runtime root with matching module payloads')
+    p.add_argument('--selftest-kernel-receipt', type=Path, help='audited supplemental kernel-pair receipt; requires --expanded-selftest-kernel')
     p.add_argument('--refresh-selftest-runtime', action='store_true', help='repair full-suite runtime dependencies without rebuilding test programs')
     p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
     p.add_argument("--reuse-selftest-reference", type=Path,
@@ -109,6 +110,8 @@ def command(name, args, binary):
                 cmd += ['--expanded-kernel']
             if args.selftest_runtime:
                 cmd += ['--runtime-root', str(args.selftest_runtime)]
+            if args.selftest_kernel_receipt:
+                cmd += ['--kernel-receipt', str(args.selftest_kernel_receipt)]
             if args.refresh_selftest_runtime:
                 cmd += ['--refresh-runtime']
             if args.reuse_selftest_reference:

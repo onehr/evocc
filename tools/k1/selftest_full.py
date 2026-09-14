@@ -55,7 +55,7 @@ def program_timeout(build, ident):
     return override['seconds'] + 15 if override else build['programTimeoutSeconds']
 
 
-def kernel_selection(expanded, root=ROOT):
+def kernel_selection(expanded, root=ROOT, *, receipt_path=None):
     """Select an already booted pair without confusing test FAIL with build FAIL."""
     def digest(path):
         value = hashlib.sha256()
@@ -64,11 +64,16 @@ def kernel_selection(expanded, root=ROOT):
                 value.update(block)
         return value.hexdigest()
 
-    receipt = root / ('tests/contracts/kernel-kunit-receipt.json' if expanded
-                      else 'tests/contracts/kernel-full-receipt.json')
+    if receipt_path is not None and not expanded:
+        raise ValueError('a supplemental receipt requires the expanded composition checks')
+    receipt = (root / receipt_path if receipt_path is not None else
+               root / ('tests/contracts/kernel-kunit-receipt.json' if expanded
+                       else 'tests/contracts/kernel-full-receipt.json'))
     data = json.loads(receipt.read_text())
     if expanded:
-        outputs = {'reference': root / '.build/k7/pristine', 'subject': root / '.build/k7/out'}
+        outputs = ({label: root / data['outputs'][label] for label in ('reference', 'subject')}
+                   if receipt_path is not None else
+                   {'reference': root / '.build/k7/pristine', 'subject': root / '.build/k7/out'})
         composition = data['builtInComposition']
         if (composition['linkExitCode'] or composition['gccFallback']
                 or not composition['generatedInputsStable'] or not composition['generatedExportTableStable']
@@ -448,6 +453,8 @@ def main():
     parser.add_argument('--reuse-build', action='store_true')
     parser.add_argument('--expanded-kernel', action='store_true',
                         help='use the independently booted, audited expanded KUnit kernel pair')
+    parser.add_argument('--kernel-receipt', type=Path,
+                        help='supplemental expanded receipt naming its separate reference/subject outputs')
     parser.add_argument('--runtime-root', type=Path,
                         help='use <root>/{reference,subject}/{initramfs.cpio,scratch.img}; keep the original test inventory')
     parser.add_argument('--reference-run', type=Path,
@@ -464,6 +471,8 @@ def main():
         parser.error('--refresh-runtime requires --install-deps')
     if args.runtime_root and (not args.reuse_build or args.refresh_runtime):
         parser.error('--runtime-root requires --reuse-build without a runtime refresh')
+    if args.kernel_receipt and not args.expanded_kernel:
+        parser.error('--kernel-receipt requires --expanded-kernel')
     if args.build_worker:
         return build_worker(args.jobs)
     if args.runtime_worker:
@@ -473,7 +482,7 @@ def main():
         os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
     work = ROOT / '.build/kselftest-full'
     work.mkdir(exist_ok=True)
-    selected_kernel = kernel_selection(args.expanded_kernel)
+    selected_kernel = kernel_selection(args.expanded_kernel, receipt_path=args.kernel_receipt)
     kernel_path = selected_kernel['receipt']
     images = selected_kernel['images']
     subject = images['subject']

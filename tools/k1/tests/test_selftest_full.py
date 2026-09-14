@@ -5,7 +5,9 @@ import copy
 import io
 import hashlib
 import json
+import inspect
 from pathlib import Path
+import shutil
 import tempfile
 import subprocess
 import tarfile
@@ -56,6 +58,20 @@ class FullSelftest(unittest.TestCase):
             selected = select(True, root)
             self.assertEqual(selected['images'], {'reference': reference, 'subject': image})
             self.assertEqual(selected['receipt'], receipt_path)
+            self.assertIn('receipt_path', inspect.signature(select).parameters,
+                          'a second configuration must not overwrite the active kernel pair')
+            shutil.copytree(root / '.build/k7', root / '.build/coverage')
+            supplemental = copy.deepcopy(receipt)
+            supplemental['outputs'] = {'reference': '.build/coverage/pristine',
+                                       'subject': '.build/coverage/out'}
+            alternative = root / 'tests/contracts/kernel-coverage-receipt.json'
+            alternative.write_text(json.dumps(supplemental))
+            second = select(True, root, receipt_path=alternative)
+            self.assertEqual(second['images']['subject'],
+                             root / '.build/coverage/out/arch/arm64/boot/Image')
+            self.assertEqual(second['receipt'], alternative)
+            with self.assertRaises(ValueError):
+                select(False, root, receipt_path=alternative)
             (root / '.build/k7/out/nested').mkdir()
             objects.write_text(json.dumps({'unit': 'nested/../a.o', 'outcome': 'substituted',
                                           'installedSha256': digest(obj)}) + '\n')
