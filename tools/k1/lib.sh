@@ -55,6 +55,14 @@ k1_qemu_facts() {
     '{path:$path,sha256:$actual,contractSha256:$expected,matchesContract:($actual==$expected)}'
 }
 
+# Keep diagnostics on one of the target contract's declared CPU models.
+k1_boot_lane_args() {
+  local contract="$1" lane="$2"
+  "$K1_JQ" -e -r --arg lane "$lane" \
+    '[.qemu.lanes[] | select(.name == $lane)] | if length == 1 then .[0].argv[] else error("unknown boot lane") end' \
+    "$contract"
+}
+
 # k1_boot <contract> <image> <initramfs> <nonce> <serial-log> <timeout-seconds>
 #
 # Boots one Image on the hvf-host lane and evaluates the ordered predicate:
@@ -88,10 +96,15 @@ k1_boot() {
                -device virtio-blk-device,drive=selftest)
   fi
 
+  local lane_args_text arg
+  local -a lane_args=()
+  lane_args_text="$(k1_boot_lane_args "$contract" "${K1_BOOT_LANE:-hvf-host}")" || return 1
+  while IFS= read -r arg; do lane_args+=("$arg"); done <<< "$lane_args_text"
+
   set +e
   "$K1_TIMEOUT" --foreground "$limit" "$qemu" \
     -M "$machine",dtb-randomness=off \
-    -accel hvf -cpu host \
+    "${lane_args[@]}" \
     -smp "$smp" \
     -m "$mem" \
     -kernel "$image" \

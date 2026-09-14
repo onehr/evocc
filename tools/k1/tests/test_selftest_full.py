@@ -4,6 +4,7 @@ import importlib.util
 import copy
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 
 
@@ -16,6 +17,18 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_boot_lane_uses_only_a_declared_machine_profile(self):
+        library = PATH.parent / 'lib.sh'
+        contract = PATH.parents[2] / 'contracts/kernel-target.json'
+        command = ['bash', '-c', 'source "$1"; k1_boot_lane_args "$2" "$3"',
+                   'lane-test', str(library), str(contract)]
+        for name, expected in (('hvf-host', ['-accel', 'hvf', '-cpu', 'host']),
+                               ('tcg-cortex-a72', ['-accel', 'tcg', '-cpu', 'cortex-a72'])):
+            done = subprocess.run(command + [name], text=True, capture_output=True, check=False)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(done.stdout.splitlines(), expected)
+        self.assertNotEqual(subprocess.run(command + ['unknown'], capture_output=True).returncode, 0)
+
     def setUp(self):
         self.assertIsNotNone(lane, 'full upstream selftest execution is not implemented')
 
