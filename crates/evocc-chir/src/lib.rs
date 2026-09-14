@@ -226,6 +226,25 @@ impl StringLit {
         u64::try_from(self.decoded_units()?.len()).ok()
     }
 
+    /// The complete array type before decay. The producer interns this when
+    /// reading the literal; consumers reconstruct it from code units, not a
+    /// claimed pointer type or the first zero byte of the string.
+    #[must_use]
+    pub fn array_type(&self, types: &TypeInterner) -> Option<TypeId> {
+        use evocc_types::{CanonicalType, TypeKind};
+        let element = types.find(&CanonicalType {
+            kind: TypeKind::Int(self.prefix.element_rank()),
+            qualifiers: Qualifiers::default(),
+        })?;
+        types.find(&CanonicalType {
+            kind: TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(self.explicit_unit_count()?.checked_add(1)?),
+            },
+            qualifiers: Qualifiers::default(),
+        })
+    }
+
     /// Initialized character-array extent. An incomplete flexible member
     /// takes the literal's terminating zero without completing its type.
     #[must_use]

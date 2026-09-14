@@ -1600,19 +1600,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .ok_or_else(unsupported)?,
                 })
             }
-            CHirExpr::StringLit(..) => {
-                let value = *self
-                    .string_bindings
-                    .get(&(expression as *const CHirExpr<'_> as usize))
-                    .ok_or_else(unsupported)?;
-                let ty = PointerTypeDesc::from_expression(
-                    self.unit.symbols(),
-                    self.unit.types(),
-                    expression,
-                )
-                .map_err(|_| unsupported())?;
-                Ok(CValue::Pointer { value, ty })
-            }
+            CHirExpr::StringLit(..) => self.string_pointer(expression, decay),
             CHirExpr::CompoundLit(..) => self.static_compound_pointer(expression, span, decay),
             CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
                 let base = if matches!(expression, CHirExpr::Member(..)) {
@@ -4416,26 +4404,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
-            CHirExpr::StringLit(_, _) => {
-                let value = self
-                    .string_bindings
-                    .get(&(expression as *const CHirExpr<'arena> as usize))
-                    .copied()
-                    .ok_or(InterpreterError::UnsupportedExpression {
-                        feature: "string has no allocation site",
-                        span,
-                    })?;
-                let ty = PointerTypeDesc::from_expression(
-                    self.unit.symbols(),
-                    self.unit.types(),
-                    expression,
-                )
-                .map_err(|_| InterpreterError::UnsupportedExpression {
-                    feature: "string has no character type",
-                    span,
-                })?;
-                values.push(CValue::Pointer { value, ty });
-            }
+            CHirExpr::StringLit(_, _) => values.push(self.string_pointer(expression, true)?),
             CHirExpr::FloatLit(_, _) => {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "outside executable Day-7 scalar memory subset",
@@ -6268,6 +6237,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &CHirExpr<'arena>,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
+        if matches!(expression, CHirExpr::StringLit(..)) {
+            return self.string_pointer(expression, false);
+        }
         let CHirExpr::Ident {
             symbol,
             spelling,
@@ -6315,6 +6287,34 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             value: binding.address,
             ty: PointerTypeDesc::from_addressed_place(&place),
         })
+    }
+
+    fn string_pointer(
+        &self,
+        expression: &CHirExpr<'arena>,
+        decay: bool,
+    ) -> Result<CValue, InterpreterError> {
+        let unsupported = || InterpreterError::UnsupportedExpression {
+            feature: "string has no allocation site or complete array type",
+            span: expression.span(),
+        };
+        let CHirExpr::StringLit(literal, _) = expression else {
+            return Err(unsupported());
+        };
+        let value = *self
+            .string_bindings
+            .get(&(expression as *const CHirExpr<'_> as usize))
+            .ok_or_else(unsupported)?;
+        let ty = if decay {
+            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
+                .map_err(|_| unsupported())?
+        } else {
+            let array = literal
+                .array_type(self.unit.types())
+                .ok_or_else(unsupported)?;
+            PointerTypeDesc::to_object(self.unit.types(), array).ok_or_else(unsupported)?
+        };
+        Ok(CValue::Pointer { value, ty })
     }
 
     fn pointer_type_of_expression(

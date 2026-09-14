@@ -9461,6 +9461,7 @@ impl<'a> FunctionLowerer<'a> {
                 CHirExpr::CompoundLit(_, _, _) => {
                     self.lower_compound_literal_address(operand, state)?
                 }
+                CHirExpr::StringLit(..) => self.lower_expr(operand, state)?.value,
                 _ => {
                     return Err(LowerError::UnsupportedExpression {
                         span,

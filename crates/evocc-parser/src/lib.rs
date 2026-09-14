@@ -9079,15 +9079,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 *ty,
             )),
             CHirExpr::StringLit(literal, _) => {
-                let element_ty = self.string_element_type(literal.prefix);
-                let pointer_type = PointerTypeDesc::to_object(&self.types, element_ty)?;
+                // The place is the entire literal array, not its first
+                // character. Ordinary value conversion still decays it.
+                let array_ty = literal.array_type(&self.types)?;
+                let pointer_type = PointerTypeDesc::to_object(&self.types, array_ty)?;
+                let pointer = self.alloc_node(CHirExpr::Unary(
+                    UnaryOp::AddrOf,
+                    expression,
+                    expression.span(),
+                ));
                 Some((
                     PlaceRoot::PointerExpression {
-                        pointer: expression,
+                        pointer,
                         pointer_type,
                     },
                     Vec::new(),
-                    element_ty,
+                    array_ty,
                 ))
             }
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
@@ -11506,7 +11513,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E1006", "invalid-string-literal", span);
                     return None;
                 }
-                self.string_element_type(literal.prefix);
+                let element = self.string_element_type(literal.prefix);
+                self.intern(
+                    TypeKind::Array {
+                        element,
+                        bound: ArrayBound::Fixed(literal.explicit_unit_count()?.checked_add(1)?),
+                    },
+                    Qualifiers::default(),
+                );
                 return Some(self.alloc_node(CHirExpr::StringLit(literal, span)));
             }
             TokenKind::LParen => {

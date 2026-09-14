@@ -1169,6 +1169,9 @@ fn addressed_expression_type(
     expression: &CHirExpr<'_>,
 ) -> Result<TypeId, MemoryPlaceError> {
     let ty = match expression {
+        CHirExpr::StringLit(literal, _) => literal
+            .array_type(types)
+            .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?,
         CHirExpr::Ident { symbol, facts, .. } => {
             let ty = symbols
                 .symbol(*symbol)
