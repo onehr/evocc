@@ -19,6 +19,27 @@ fn run(source: &str, mode: &str) -> Output {
 }
 
 #[test]
+fn dynamic_object_queries_capture_allocation_sizes_without_repeating_effects() {
+    let source = include_str!("../../../tests/fixtures/dynamic-object-size.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("__builtin_dynamic_object_size"));
+}
+
+#[test]
 fn inline_constant_queries_are_recomputed_after_parameter_substitution() {
     let source = include_str!("../../../tests/fixtures/inline-constant-query.c");
     let output = run(source, "--interpret-evoir");
