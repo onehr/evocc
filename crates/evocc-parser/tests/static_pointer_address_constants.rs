@@ -30,6 +30,25 @@ fn accepts(source: &str) {
 }
 
 #[test]
+fn string_literal_address_has_pointer_to_complete_array_type() {
+    for source in [
+        "_Static_assert(sizeof(*(&\"abc\"))==4,\"array extent\");",
+        "_Static_assert(__builtin_types_compatible_p(typeof(&\"abc\"), char (*)[4]),\"array pointer\");",
+        "_Static_assert(sizeof(*(&u\"xy\"))==6,\"wide array\");",
+        "static char (*end)[4]=&\"abc\"+1;",
+    ] {
+        accepts(source);
+    }
+}
+
+#[test]
+fn dereferencing_a_literal_address_does_not_make_the_whole_array_assignable() {
+    let arena = Arena::default();
+    let error = parse("void f(void){*(&\"abc\")=1;}", &arena).unwrap_err();
+    assert_eq!(error.code, "E2101");
+}
+
+#[test]
 fn integer_constant_cast_to_pointer_is_an_address_constant() {
     accepts(concat!(
         "struct entry { void *next; }; ",

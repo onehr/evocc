@@ -70,6 +70,24 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
 }
 
 #[test]
+fn string_literal_addresses_retain_array_extent_and_storage() {
+    check(
+        include_str!("../../../tests/fixtures/string-literal-address.c"),
+        Ok(0),
+        &["global_addr", "ptr.offset"],
+    );
+}
+
+#[test]
+fn copying_from_an_addressed_literal_does_not_load_its_first_character() {
+    check(
+        "int main(void){char dst[4];__builtin_memcpy(dst,&\"abc\",4);return dst[0]!='a'||dst[2]!='c'||dst[3]!=0;}",
+        Ok(0),
+        &["global_addr"],
+    );
+}
+
+#[test]
 fn zero_length_object_accesses_still_report_bounds_and_lifetime() {
     check("char a[0]; int main(void){return a[0];}", Err("E3011"), &[]);
     check(
