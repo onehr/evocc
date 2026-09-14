@@ -251,6 +251,25 @@ class FullSelftest(unittest.TestCase):
     def test_mount_runtime_includes_the_ext4_formatter(self):
         self.assertIn('e2fsprogs', lane.RUNTIME_PACKAGES)
 
+    def test_network_runtime_includes_observed_packet_and_device_tools(self):
+        self.assertTrue({'netsniff-ng', 'libteam-utils', 'iperf3', 'traceroute',
+                         'conntrack', 'fuse3'} <= set(lane.RUNTIME_PACKAGES))
+
+    def test_runtime_rejects_a_partial_network_library_install(self):
+        self.assertTrue(hasattr(lane, 'check_network_runtime'))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            files = ('py/ynl.py', 'ynl/pyynl/__init__.py', 'ynl/pyynl/lib/ynl.py',
+                     'specs/netdev.yaml', 'csum', 'xdp_helper')
+            for name in files:
+                path = root / 'tests/net/lib' / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('installed upstream file\n')
+            lane.check_network_runtime(root)
+            (root / 'tests/net/lib/ynl/pyynl/__init__.py').unlink()
+            with self.assertRaisesRegex(ValueError, 'ynl/pyynl/__init__.py'):
+                lane.check_network_runtime(root)
+
     def test_guest_archive_uses_root_ownership_without_changing_modes_or_links(self):
         self.assertTrue(hasattr(lane, 'write_rootfs_tar'))
         with tempfile.TemporaryDirectory() as temp:

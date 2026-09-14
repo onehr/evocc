@@ -21,7 +21,8 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
-                    'e2fsprogs', 'libarchive13t64')
+                    'e2fsprogs', 'libarchive13t64', 'netsniff-ng', 'libteam-utils',
+                    'iperf3', 'traceroute', 'conntrack', 'fuse3')
 # The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
 # The collection has no settings file, so the runner's 45s default cannot
 # possibly finish it. Keep this measured policy change explicit in receipts.
@@ -116,6 +117,14 @@ def install_runtime_helpers(source, installed):
     """Upstream ublk scripts source helpers omitted by their install target."""
     shutil.copy2(source / 'ublk/test_common.sh', installed / 'ublk/test_common.sh')
     shutil.copytree(source / 'ublk/trace', installed / 'ublk/trace', dirs_exist_ok=True)
+
+
+def check_network_runtime(rootfs):
+    """Generated binaries alone do not satisfy net/lib's upstream TEST_FILES."""
+    for name in ('py/ynl.py', 'ynl/pyynl/__init__.py', 'ynl/pyynl/lib/ynl.py',
+                 'specs/netdev.yaml', 'csum', 'xdp_helper'):
+        if not (rootfs / 'tests/net/lib' / name).is_file():
+            raise ValueError(f'incomplete upstream network library install: {name}')
 
 
 def install_runtime_paths(rootfs):
@@ -386,6 +395,7 @@ def build_worker(jobs):
 def refresh_runtime(work):
     """Update userspace prerequisites without rebuilding tests or kernel Images."""
     rootfs = work / 'rootfs'
+    check_network_runtime(rootfs)
     file_metadata = {}
     install_runtime_helpers(Path('/work/src/tools/testing/selftests'), rootfs / 'tests')
     # A runtime root, not another kernel tree or complete compiler installation.
