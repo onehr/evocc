@@ -57,12 +57,30 @@
   },
   "subject": {
     "status": "NOT_RUN",
-    "buildStatus": "RUNNING",
+    "buildStatus": "SURVEY_COMPLETE_WITH_REFUSALS",
     "compilerCommit": "3b2a446",
     "compilerSha256": "768163d2f46349831c2a4999291022564387b740ab52570da703c27d0b507b99",
     "targetCRecords": 6310,
     "generatedModuleCRecords": 704,
     "surveyRun": "expanded-config-20260914-resumed",
+    "surveyResults": {
+      "assembled": 6258,
+      "refused": 52,
+      "assemblerRefused": 0,
+      "symbolDrift": 0,
+      "timeout": 0,
+      "panic": 0,
+      "builtIn": {"assembled": 2895, "refused": 2},
+      "module": {"assembled": 3363, "refused": 50},
+      "cacheReused": 3500,
+      "freshCompilations": 2810,
+      "installed": false,
+      "units": ".evidence/kunit/expanded-config-20260914-resumed/units.jsonl",
+      "unitsSha256": "6bd065fd3aa1f6ef8997219fb1f87263ff985fffb94098dd833d67c1ca2869eb",
+      "inputSnapshotSha256": "5c6bef40039e1237a551221849358496503b72ac12ea2b127f1d246811812b14",
+      "constructionClasses": {"variadic forwarding": 22, "dynamic object size": 10, "constant arithmetic": 7, "system includes and NEON": 6, "narrowed field masks": 2, "SIMD clobber": 1, "string array address": 1, "commuted static addend": 1, "alignof spelling": 1, "local label list": 1},
+      "builtInRefusals": ["lib/tests/fortify_kunit.o", "lib/tests/overflow_kunit.o"]
+    },
     "previousAttempt": ".evidence/kunit/expanded-config-20260914/interruption.json",
     "command": "python3 -u tools/k1/substitute.py --all --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-runtime-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id expanded-config-20260914-resumed --jobs 8 --timeout 180"
   },
@@ -99,5 +117,42 @@
     "unitsSha256": "951940db0e2a7b4c120b1ed6ab9afc2a9d604a49f61277fdfba15d09a837d9ae",
     "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/vector-clobber-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-vector-clobber-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id vector-clobber-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/vector-clobber-replay-cache.json --jobs 1 --timeout 180"
   },
-  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged."
+  "stringAddressReplay": {
+    "run": "string-address-replay-20260914",
+    "compilerCommit": "dbe9c11",
+    "compilerSha256": "dbbb03d282f5add22854e7e5cd266de366c0a59b3f7ca8ee30d67ecbff37d0a6",
+    "before": {"E3101": 1},
+    "after": {"assembled": 1},
+    "installed": false,
+    "units": ".evidence/kunit/string-address-replay-20260914/units.jsonl",
+    "unitsSha256": "896a74c9ccda5aed8139df45f0df8cc2cbf74707b8c23e4df0c9dde1921141a7",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/string-address-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-string-address-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id string-address-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/string-address-replay-cache.json --jobs 1 --timeout 180"
+  },
+  "commutedAddressReplay": {
+    "run": "commuted-address-replay-20260914",
+    "compilerCommit": "f2b2c07",
+    "compilerSha256": "af40d1fb8baadd26d27112b2a8ed464f1421c48c20d633f2551b36b8b226a2b9",
+    "before": {"E3026": 1},
+    "after": {"assembled": 1},
+    "installed": false,
+    "units": ".evidence/kunit/commuted-address-replay-20260914/units.jsonl",
+    "unitsSha256": "345e99b571b7b1caf64ace2a1f41a0cb6b2d34b296e5361199f8a1cad1dd6dc1",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/commuted-address-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-commuted-address-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id commuted-address-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/commuted-address-replay-cache.json --jobs 1 --timeout 180"
+  },
+  "gnuParserReplay": {
+    "run": "gnu-parser-replay-20260914",
+    "compilerCommit": "2f05f42",
+    "compilerSha256": "930072e32cf24b6e139c1ea258886cf1192d903886add12241237cd08aa4e039",
+    "before": {"E2001": 1, "E1002": 1},
+    "after": {"assembled": 2},
+    "installed": false,
+    "units": ".evidence/kunit/gnu-parser-replay-20260914/units.jsonl",
+    "unitsSha256": "7c717065fa99177d8bf9bcdb13bcda5f6af0b0a93e93c40d4401d963318bdd0b",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/gnu-parser-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-gnu-parser-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id gnu-parser-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/gnu-parser-replay-cache.json --jobs 2 --timeout 180",
+    "gate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh f2b2c07 --offline: PASS, including Clippy and fmt",
+    "focusedTests": 34,
+    "nativeFixtures": {"local-label-list": 0, "alignof-alternate-spelling": 0}
+  },
+  "unrepairedSurveyClasses": {"dynamic object size": 10, "constant arithmetic": 7, "system includes and NEON": 6},
+  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 29 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator."
 }

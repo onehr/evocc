@@ -410,10 +410,14 @@ original Images both pass the isolated CPU-hotplug program on the declared TCG
 lane; this does not reclassify the HVF failure as a compiler repair.
 
 The EvoCC compile/assembly survey of the separate KUnit/module configuration is
-now running over **6,310 target-C records**, including **704 generated module C
-records**, with eight workers and the frozen repair binary. The four-worker
+sealed as `expanded-config-20260914-resumed`: **6,258 assembled / 52 refused**
+out of **6,310 target-C records**, including **704 generated module C
+records**, with zero timeout, panic, assembler refusal or symbol drift.
+The build-class split is **2,895 assembled / 2 refused built-ins** and
+**3,363 assembled / 50 refused module units**. It used eight workers and the
+frozen repair binary from `3b2a446`. The four-worker
 attempt was explicitly interrupted after 3,500 cached results; the resumed run
-reuses those hash-bound results and examines the remaining 2,810 records. It neither installs
+reused those hash-bound results and examined the remaining 2,810 records. It neither installs
 GCC target objects as substitutes nor overwrites K6. Subject KUnit execution,
 EvoCC module installation, BTF type metadata and other shared failures remain
 open. BTF needs real compiler type metadata, not borrowed reference-kernel BTF.
@@ -435,6 +439,36 @@ the original mlx5 `wc.o` changes from E3021 to assembled. The native preservatio
 probe and its `-mgeneral-regs-only` negative control match both sealed compilers.
 Captures `narrow-mask-replay-20260914` and `vector-clobber-replay-20260914` retain
 all three symbol-parity checks; no repaired module was installed by these replays.
+
+`dbe9c11` then fixes address-of-string lowering and the lost complete-array
+type, including embedded zero bytes, wide literals, stride, static pointers and
+the previous silent acceptance of whole-array assignment. Its 43 focused tests,
+both interpreters, native arm64 and changed gate pass; original brcmfmac
+`firmware.o` assembles in `string-address-replay-20260914`.
+`f2b2c07` fixes commuted integer-plus-symbol static addends without admitting
+integer-minus-symbol expressions. Its 36 relocation tests, native arm64 and
+changed gate pass; original iwlwifi `pcie/drv.o` assembles in
+`commuted-address-replay-20260914`. Neither replay installs an object.
+
+`2f05f42` accepts `__alignof` through the existing alignment operator and
+comma-separated `__label__` names through the existing scoped identity path.
+The 34 focused tests, native arm64 fixtures and changed gate pass;
+`gnu-parser-replay-20260914` assembles both original zstd and ALSA units with
+symbol parity. Across these separate replays, 29 of the 52 refused units now
+have targeted GREEN evidence; this is not a replacement full-survey numerator.
+The remaining 23 units are dynamic object size (10), pure constant arithmetic
+ending in an integer value (7), and system resource headers/NEON (6).
+
+The two built-in refusals are `fortify_kunit.o` and `overflow_kunit.o`, both
+requiring `__builtin_dynamic_object_size`; their tests cannot be omitted from
+the expanded KUnit configuration. The same construct blocks eight module units.
+The next implementation must preserve allocation-call sizes, subobject offsets,
+branch-selected extents and the original evaluation count, not return a fabricated
+size. Both sealed compilers at O2 agree on the separate flow probe: whole/flexible
+member 36/32 bytes, allocation/offset 13/11 and 21/19 bytes, selected sizes 17/9,
+and product size 21; O0 answers unknown. The side-effectful query remains unknown
+without incrementing its operand. Probe `20260914-dynamic-object-size/flow.out`
+keeps these distinct from the earlier ambiguous printf-order observation.
 
 The `/var/run` and `/var/lock` runtime links are repaired separately. In
 `runtime-links-20260914`, both Images get past the missing `/var/run/netns`

@@ -2072,7 +2072,10 @@ overflow. Both now have targeted native and kernel GREEN evidence, including
 the unchanged `cow` program's 285 PASS / 4 XFAIL / 523 SKIP on each kernel;
 the original K6 Image remains preserved. The expanded KUnit configuration has
 a measured GCC control (1324 PASS / 8 FAIL / 108 SKIP); its 6,310-record EvoCC
-build survey is running, not yet a subject KUnit or module pass. BTF metadata
+build survey `expanded-config-20260914-resumed` is sealed: 6,258 assembled and
+52 refused, with zero timeout, panic, assembler refusal or symbol drift.
+The split is 2,895 assembled / 2 refused built-in units and 3,363 / 50 modules;
+this is not yet a subject KUnit or installed-module pass. BTF metadata
 and shared failures remain open. See the dated runtime update in
 [the blocker ledger](notebook/benchmark-closure.md#runtime-prerequisite-and-compiler-repairs-2026-09-14)
 and the [KUnit receipt](../tests/contracts/kernel-kunit-receipt.json).
