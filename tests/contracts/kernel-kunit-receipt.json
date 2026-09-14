@@ -62,8 +62,9 @@
     "compilerSha256": "768163d2f46349831c2a4999291022564387b740ab52570da703c27d0b507b99",
     "targetCRecords": 6310,
     "generatedModuleCRecords": 704,
-    "surveyRun": "expanded-config-20260914",
-    "command": "python3 -u tools/k1/substitute.py --all --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-runtime-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id expanded-config-20260914 --jobs 4 --timeout 180"
+    "surveyRun": "expanded-config-20260914-resumed",
+    "previousAttempt": ".evidence/kunit/expanded-config-20260914/interruption.json",
+    "command": "python3 -u tools/k1/substitute.py --all --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-runtime-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id expanded-config-20260914-resumed --jobs 8 --timeout 180"
   },
   "targetedCompilerReplay": {
     "run": "variadic-replay-20260914",
@@ -75,6 +76,28 @@
     "units": ".evidence/kunit/variadic-replay-20260914/units.jsonl",
     "unitsSha256": "d435a6bda41ca4edd1a0a4eb8ff39c70977a4800214dbbc4c6d42d9e9145431a",
     "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/variadic-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-variadic-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id variadic-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/variadic-replay-cache.json --jobs 2 --timeout 180"
+  },
+  "narrowMaskReplay": {
+    "run": "narrow-mask-replay-20260914",
+    "compilerCommit": "bc8b6ea",
+    "compilerSha256": "690d7b3a5c4f8641d725916a5c87706cc5174fc220ecd16d9e354685bb8a31f1",
+    "before": {"E2939": 2},
+    "after": {"assembled": 2},
+    "installed": false,
+    "units": ".evidence/kunit/narrow-mask-replay-20260914/units.jsonl",
+    "unitsSha256": "53707819699e2475e0bf5748b2becbd371cd6bfde8d29dacc2028a42d80f64b0",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/narrow-mask-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-mask-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id narrow-mask-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/narrow-mask-replay-cache.json --jobs 2 --timeout 180"
+  },
+  "vectorClobberReplay": {
+    "run": "vector-clobber-replay-20260914",
+    "compilerCommit": "7ac16fd",
+    "compilerSha256": "972a8a56e95c30a6dd33a05f8bf3f25a7281cb229dc3efcfd501cd7c8b71da8a",
+    "before": {"E3021": 1},
+    "after": {"assembled": 1},
+    "installed": false,
+    "units": ".evidence/kunit/vector-clobber-replay-20260914/units.jsonl",
+    "unitsSha256": "951940db0e2a7b4c120b1ed6ab9afc2a9d604a49f61277fdfba15d09a837d9ae",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/vector-clobber-replay-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-vector-clobber-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id vector-clobber-replay-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/vector-clobber-replay-cache.json --jobs 1 --timeout 180"
   },
   "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged."
 }

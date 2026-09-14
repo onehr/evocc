@@ -411,7 +411,9 @@ lane; this does not reclassify the HVF failure as a compiler repair.
 
 The EvoCC compile/assembly survey of the separate KUnit/module configuration is
 now running over **6,310 target-C records**, including **704 generated module C
-records**, with four workers and the frozen repair binary. It neither installs
+records**, with eight workers and the frozen repair binary. The four-worker
+attempt was explicitly interrupted after 3,500 cached results; the resumed run
+reuses those hash-bound results and examines the remaining 2,810 records. It neither installs
 GCC target objects as substitutes nor overwrites K6. Subject KUnit execution,
 EvoCC module installation, BTF type metadata and other shared failures remain
 open. BTF needs real compiler type metadata, not borrowed reference-kernel BTF.
@@ -422,6 +424,17 @@ RED `11d5c88`, GREEN `30db97c`. Original-unit replay
 symbol parity, no installed objects and no inferred boot/module count.
 The `-isystem` driver ordering fix `a6a3461` also passes its changed gate;
 the affected NEON unit still needs an actual resource-header/intrinsic replay.
+
+Two more bounded repairs pass focused, native and changed-crate gates before
+their original-unit replays. `bc8b6ea` resolves only a direct unsigned wide
+bit-field mask under an explicit unsigned narrowing cast: the two original
+Nouveau units change from E2939 to assembled. Neighboring ambiguous arithmetic
+remains refused. `7ac16fd` preserves `v0`–`v31` asm clobbers separately from GPRs
+and saves the callee-saved low halves of v8–v15 when SIMD preservation applies:
+the original mlx5 `wc.o` changes from E3021 to assembled. The native preservation
+probe and its `-mgeneral-regs-only` negative control match both sealed compilers.
+Captures `narrow-mask-replay-20260914` and `vector-clobber-replay-20260914` retain
+all three symbol-parity checks; no repaired module was installed by these replays.
 
 The `/var/run` and `/var/lock` runtime links are repaired separately. In
 `runtime-links-20260914`, both Images get past the missing `/var/run/netns`
