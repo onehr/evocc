@@ -74,6 +74,18 @@ fn dynamic_object_queries_reject_invalid_modes() {
 }
 
 #[test]
+fn extent_capture_accepts_pointer_conditions_and_loaded_integer_sizes() {
+    for source in [
+        include_str!("../../../tests/fixtures/extent-capture-conditions.c"),
+        "int main(void){char a[4]={1},b[9]={2};void*p=a;char*q=p?a:b;return q[0]!=1||__builtin_dynamic_object_size(q,0)!=4;}",
+        "int calls;int*choose(void){++calls;return &calls;}int main(void){char a[4],b[9];char*q=choose()?a:b;return calls!=1||__builtin_dynamic_object_size(q,0)!=4;}",
+        "int main(void){char a[4],b[9];void*p=a;char*q=(p&&p)?a:b;return __builtin_dynamic_object_size(q,0)!=4;}",
+        "char storage[64];char*volatile base=storage;__attribute__((noinline,alloc_size(1))) void*allocate(unsigned long n){return base;}int main(void){unsigned long n=13;char*p=allocate(*&n);n=1;return __builtin_dynamic_object_size(p,0)!=13;}",
+        "char storage[64];char*volatile base=storage;__attribute__((noinline,alloc_size(1))) void*allocate(unsigned char n){return base;}int main(void){unsigned long n=257;char*p=allocate(n);return __builtin_dynamic_object_size(p,0)!=1;}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
 fn inline_constant_queries_are_recomputed_after_parameter_substitution() {
     let source = include_str!("../../../tests/fixtures/inline-constant-query.c");
     let output = run(source, "--interpret-evoir");

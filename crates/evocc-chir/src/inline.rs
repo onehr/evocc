@@ -1858,7 +1858,11 @@ impl<'a> Substitution<'a, '_> {
                     && self.pointer_bounds(b, c, 0).is_some()
                     && self.pointer_bounds(d, c, 0).is_some()
                 {
-                    *a = self.capture_extent_value(a, c.scope)?;
+                    // C conditions may be pointers as well as integers. The
+                    // extent choice needs their truth value, not their address.
+                    let inverted = self.alloc(CHirExpr::Unary(UnaryOp::Not, a, a.span()));
+                    let condition = self.alloc(CHirExpr::Unary(UnaryOp::Not, inverted, a.span()));
+                    *a = self.capture_extent_value(condition, c.scope)?;
                 }
             }
             CHirExpr::Call(f, args, span) => {

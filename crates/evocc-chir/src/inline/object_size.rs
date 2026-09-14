@@ -2,7 +2,7 @@
 //! representation is inspected and no query evaluates its source operand.
 
 use super::*;
-use evocc_types::{ArrayBound, CanonicalType, IntRank, Qualifiers};
+use evocc_types::{ArrayBound, CanonicalType, FunctionParameters, IntRank, Qualifiers};
 
 type Expr<'a> = &'a CHirExpr<'a>;
 type Extent<'a> = (Expr<'a>, Expr<'a>);
@@ -159,7 +159,35 @@ impl<'a> Substitution<'a, '_> {
         let Some(indices) = self.allocation_sizes.get(symbol).cloned() else {
             return Ok(None);
         };
-        if indices.iter().any(|index| *index >= args.len()) {
+        let parameter_types = self
+            .unit
+            .symbols
+            .symbol(*symbol)
+            .ok()
+            .and_then(|entry| self.unit.types.get(entry.ty()))
+            .and_then(|ty| match &ty.kind {
+                TypeKind::Function {
+                    parameters: FunctionParameters::Prototype { types, .. },
+                    return_type,
+                } if self
+                    .unit
+                    .types
+                    .get(*return_type)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Pointer(_))) =>
+                {
+                    Some(types.clone())
+                }
+                _ => None,
+            });
+        let Some(parameter_types) = parameter_types else {
+            return Ok(None);
+        };
+        if indices.iter().any(|index| {
+            *index >= args.len()
+                || parameter_types.get(*index).is_none_or(|ty| {
+                    crate::constant::canonical_integer_type(&self.unit.types, *ty).is_none()
+                })
+        }) {
             return Ok(None);
         }
         let mut size = self.size_value(1, callee.span());
@@ -167,7 +195,12 @@ impl<'a> Substitution<'a, '_> {
         for index in indices {
             // Capture at this argument's ordinary evaluation position, including
             // its conversion; size++ must still execute exactly once.
-            args[index] = self.capture_extent_value(args[index], scope)?;
+            let converted = self.alloc(CHirExpr::Cast(
+                parameter_types[index],
+                args[index],
+                args[index].span(),
+            ));
+            args[index] = self.capture_extent_value(converted, scope)?;
             let value = self.captured_value(args[index]);
             let value = self.alloc(CHirExpr::Cast(ty, value, value.span()));
             size = self.size_binary(BinaryOp::Mul, size, value);

@@ -182,6 +182,24 @@
     "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline --no-fail-fast: 45 passed, 0 failed, 0 ignored",
     "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 1e8a5f0 --offline -j2 --quiet: exit 0, including Clippy and fmt"
   },
+  "extentCaptureRegressionReplay": {
+    "before": {"new built-in refusals after complete recompilation": 10},
+    "cause": "Conditional extent selection tried to capture pointer conditions as integers; allocation extents were captured before formal-parameter conversion, rejecting loaded lengths and misrepresenting narrowed arguments.",
+    "after": {"emitted": 10, "assembled": 10, "symbolDrift": 0, "installed": 10},
+    "compilerState": "worktree after 0363f05 with conditional truth-value and converted-argument extent capture",
+    "compilerSha256": "04eaafc806fe223f7ff76c2450760bfa6d6e7ffe212c0fd692c8c65e996003ad",
+    "originalFailure": ".evidence/kunit/builtin-composition-20260914/summary.json",
+    "replay": ".evidence/kunit/extent-capture-repair-20260914/summary.json",
+    "composition": ".evidence/kunit/builtin-composition-repaired-20260914/summary.json",
+    "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline --no-fail-fast: 46 passed, 0 failed, 0 ignored",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 0363f05 --offline -j2 --quiet: exit 0, including Clippy and fmt",
+    "fixture": "tests/fixtures/extent-capture-conditions.c",
+    "nativeProbe": ".evidence/builtin-probes/20260914-extent-capture/results.txt",
+    "nativeProbeSha256": "d20456b4f13d4ce14d44b0306280fcf23424044d64024dd5b616ce756d215d93",
+    "nativeCommand": "sealed linux/arm64, network none: gcc-14 -std=gnu11 -O2 probe.c; clang-19 -std=gnu11 -O2 probe.c; gcc-14 subject.s; execute each binary",
+    "nativeResults": {"gcc14": 0, "clang19": 0, "evocc": 0},
+    "claimLimit": "Targeted repair and installation only. The complete built-in link and runtime audit remain separate; 46/52 original refusal repairs are not a new full-survey result."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition is being rebuilt against actual generated headers separately."
 }

@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 08:52 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 09:10 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -27,6 +27,14 @@ remain separate in the full-selftest and KUnit receipts.
   with matching symbols in `dynamic-extents-20260914`; the changed gate passes.
   Tailored repairs now cover **46/52** old refusals. The 2,897 built-in records
   are being recompiled against actual generated headers for the KUnit Image.
+- That complete recompile found ten new extent-capture regressions: pointer
+  conditions were treated as integer values, and allocation arguments were
+  captured before their formal-parameter conversion. The shared capture path
+  now normalizes conditions to truth values and captures converted arguments.
+  All ten actual-header replays emit, assemble, match symbols and install;
+  the 46-test query suite, changed gate and GCC/Clang/EvoCC native fixture pass.
+  The original incomplete composition is retained. Final linking/audit is
+  running separately; none of this is yet an EvoCC KUnit runtime result.
 
 ## Runtime packaging: targeted guest replay complete
 
@@ -99,6 +107,21 @@ and source reasoning are distinguished from that unexecuted check.
 - USERFAULTFD is disabled. Four additional mremap failures request 2 GiB
   allocations inside a 2 GiB VM and return ENOMEM. These are actual resource
   and configuration limits, not proved compiler defects or passes.
+- Landlock's eight programs reach ENOSYS because CONFIG_SECURITY_LANDLOCK is
+  disabled in both configurations. IPC's MSG_COPY reaches the explicit ENOSYS
+  branch in `ipc/msg.c` when CONFIG_CHECKPOINT_RESTORE is disabled. The two
+  unsealed vDSO/vvar failures require CONFIG_MSEAL_SYSTEM_MAPPINGS, also
+  disabled. These are configuration coverage gaps, not hardware exclusions.
+- Syscall-user-dispatch is gated by CONFIG_GENERIC_ENTRY. Arm64 does not
+  select it in this tree; `include/linux/syscall_user_dispatch.h` provides
+  EINVAL stubs. This explains the dispatch and ptrace-SUD failures on this
+  architecture; an x86 implementation is not evidence of arm64 support.
+- The direct `rseq:syscall_errors_test` expects no pre-existing registration,
+  but glibc registers rseq. The upstream companion
+  `run_syscall_errors_test.sh` explicitly sets `glibc.pthread.rseq=0` before
+  executing the same binary. The direct run's EINVAL versus expected EFAULT
+  follows the existing-registration branch in `kernel/rseq.c`, before its
+  address check. The original direct FAIL is retained.
 - BTF requires real compiler type/debug metadata, not the GCC kernel's BTF.
   That compiler capability remains missing; BPF/BTF-dependent tests cannot
   be claimed covered by a no-BTF Image.
