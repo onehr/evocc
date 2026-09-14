@@ -1,9 +1,39 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 12:14 UTC. This is a diagnosis ledger, not a new full-run
-result. The last complete 935-program comparison remains
-`.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
-remain separate in the full-selftest and KUnit receipts.
+Updated 2026-09-14 15:40 UTC. This is a diagnosis ledger. The latest complete
+935-program comparison is `.evidence/kselftest-full/20260914T121718Z/summary.json`;
+the historical entries below retain their original observations. Targeted
+results and additional configurations remain separate from that denominator.
+
+## Latest full run: completed execution, incomplete acceptance
+
+All 935 programs started on each unchanged expanded Image, with two VM
+workers. GCC reports 287 PASS / 111 FAIL / 533 SKIP / one INVALID_OUTPUT /
+one INCOMPLETE / two TIMEOUT; EvoCC reports 287 / 111 / 532 / two / one / two.
+Equal PASS and FAIL totals do not imply equal results: five program outcomes
+differ. Cgroup freezer and ublk stress 04 pass only on EvoCC in this run;
+HSR ping times out only there; seccomp's timing benchmark fails only there;
+the MM wrapper is SKIP on GCC and INVALID_OUTPUT on EvoCC.
+
+`nested-failure-review.json` in the same capture reparses the original logs
+without changing their outcomes. Both MM logs contain 50 PASS / 16 SKIP /
+one FAIL internally: mremap reports 18 PASS / five FAIL / three XFAIL in the
+two-GiB VM. On EvoCC an allocation warning interrupts the TAP comment prefix,
+making an inner `ok 9` look top-level; the parser correctly rejects that
+output. The earlier eight-GiB replay removed four allocation failures on
+both Images but left the missing USERFAULTFD case; a new configuration is
+required before closing that case. Seccomp's additional failure is the
+per-filter timing estimate, not a pid/value assertion. The unchanged serial
+replay `20260914T152937Z`, after other compiler builds had finished, reports
+seven PASS / zero FAIL subtests on both Images. Its estimates are 8 versus
+7 ns on GCC and 30 versus 31 ns on EvoCC; each pair satisfies the unchanged
+test's tolerance. The original FAIL is retained: this is a later observation
+of a timing-sensitive assertion, not a compiler repair or a new full-suite
+numerator. The primary selftest receipt now names that one-program replay;
+its other 934 programs are explicitly NOT_RUN.
+
+Shared hotplug/HVF, perf-watchpoint, configuration and userspace-test failures
+remain below. No full-suite PASS or complete expanded configuration is claimed.
 
 ## Completed since that full run
 
@@ -389,3 +419,106 @@ selftest Images. Its IOMMU test requires `FAULT_INJECTION`; merely requesting
 The former is enabled in the main coverage fragment; mseal has a separate
 fragment that explicitly disables checkpoint/restore. These are distinct
 configurations, not simultaneous coverage attributed to one Image.
+
+## Supplemental configuration: actual build and first compiler blockers
+
+The case-sensitive reference build completes with configuration SHA-256
+`9e28277bea95477ff8ccd9a88809ef18368ecc9db57552b16fa06f9aa056def0`.
+Its 6,916 target-C records comprise 3,137 built-in and 3,779 module records;
+the existing command audit finds no unclassified omitted options.
+`coverage-reference-builtin-20260914` boots the actual new GCC Image and the
+upstream parser reports 1,504 KUnit tests: 1,437 PASS, seven FAIL, 60 SKIP.
+All seven failures are in `hw_breakpoint`; this is not a passing KUnit claim.
+
+The supplemental EvoCC survey was stopped after 128 recorded units:
+118 symbol drifts, seven verified installations, three refusals
+(`coverage-compile-20260914/summary.json`). The drifts add the same 15 FORTIFY
+wrapper definitions: GNU `extern inline` definitions must not acquire
+independent external definitions. Section 10.1.9 still explicitly preserves
+`gnu_inline` without effect, so a body correction has been requested, not
+silently applied. Both sealed compilers' O0/O2 symbol and execution probes
+are in `builtin-probes/20260914-gnu-inline/oracles.out`.
+
+An independent refusal in `machine_halt` reduces to `stop(); while (1);`:
+dead address pruning discarded loop-only effect parameters. The repair roots
+existing mem/world parameters without changing validator rules or loop
+termination; commit `783a4e7` passes its four control-flow variants, the 56-test
+query suite and changed gate, and the original `process.o` emits assembly.
+The other two parser refusals are static numeric-pointer comparisons in
+trace-field signedness metadata, not 100 independent recovery errors.
+The shared numeric-address evaluator now admits the static initializer, while
+the existing interpreter task machine evaluates its casts and comparison:
+58 query tests pass, both interpreters return zero for the reduced matrix,
+and its generated AArch64 assembly executes with exit zero in the sealed
+container. Original `arm.o` and `handle_exit.o` commands both emit assembly
+with no diagnostics (debug compiler, 115.087 and 73.616 seconds under concurrent
+gate load). These are emission checks, not symbol-parity or installed-object
+claims; the independent GNU-inline linkage blocker still applies. The final
+release binary (`160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6`)
+repeats both emissions with empty stderr in 10.263 and 6.138 seconds, and its
+native fixture again exits zero. An initial shortcut bypassed static fuel
+accounting and failed the existing budget test; it was removed before commit.
+Both that budget test and the nonrecursive deep-initializer tests pass.
+Commit `386339d` closes the narrow compiler repair; its changed gate reports
+1,576 passed / zero failed / three existing ignored tests, Clippy and fmt
+clean. Commit `783a4e7` closes the independent infinite-loop token repair.
+Full supplemental composition and execution remain pending.
+
+## BTF-dependent userspace builds need their own effective configuration
+
+`kselftest-full/coverage-build-20260914/configured-build.json` records the
+completed build attempt with the actual reference `vmlinux` BTF, configured
+test-module input, versioned LLVM commands, openssl and rst2man. It installs
+961 of 970 declared programs; HID now builds all 13, while BPF installs
+13/21 and sched_ext 0/1. These are build counts, not executions, and do not
+replace the earlier 935-program runtime inventory.
+
+- BPF's generated `tools/include/vmlinux.h` contains `struct foo` and `bar`
+  from `lib/tests/overflow_kunit.c:1174-1184`; BPF test sources define their
+  own names and fail at redefinition. Combining every built-in KUnit suite
+  with this BPF header is not a usable test configuration. Keep the already
+  measured KUnit Image and prepare a separate BPF configuration; do not edit
+  test types or delete records from actual BTF.
+- The BPF config requests FTRACE_SYSCALLS and NET_SCH_BPF, which this Image
+  lacks; generated syscall trace types and qdisc kfunc declarations are
+  consequently missing. sched_ext likewise lacks SCHED_CLASS_EXT and the
+  `task_struct.scx` field. The requested function-tracing build flags require
+  compiler support, not omission from the command projection.
+  The separate fragment `tests/configs/kernel-bpf-coverage.config`, applied
+  after the upstream BPF/HID/sched_ext fragments, resolves all five options
+  and disables KUnit. This is only an `olddefconfig` check: no Image from it
+  has been built or run. Its arm64 Makefile selects
+  `-fpatchable-function-entry=4,2`; the compiler must implement the entry NOPs,
+  recorded entry table and the kernel's `patchable_function_entry(0,0)`
+  notrace override rather than silently dropping this option.
+  The sealed `builtin-probes/20260914-function-entry/probe.c` now measures it
+  on both GCC-14 and Clang-19, at O0/O2: four NOPs with the function symbol
+  after the first two, a table relocation to the first NOP, no NOPs or table
+  entry for the `(0,0)` override, and three NOPs with one before the symbol
+  for `(3,1)`. All four native programs exit zero. This is oracle evidence,
+  not an EvoCC implementation; `oracles.out` SHA-256 is
+  `6ae24aefc50664369e9b7727cb7017c3f2dbbf0cd3a2a1f117fb758f3fa6a05f`.
+- The certificate helper also needs `xxd`; that prerequisite is now recorded.
+  Livepatch's module Makefile silently skips construction when KDIR is absent;
+  the shared build options now pass the configured KDIR to all collections,
+  while preserving their separate userspace output directories. The new
+  dependency and KDIR assertions were RED, then GREEN; livepatch execution
+  still requires its own enabled kernel support.
+- kexec, prctl and the two Intel thermal collections declare no runnable
+  arm64 targets in this source; their `make all` failures remain explicit,
+  not successful test results. Their architecture guards, unlike BPF's
+  missing configuration, are genuine inapplicability evidence.
+
+The supplemental userspace runtime now contains bpftrace 0.23.2 and its
+runtime libraries; chrooting into that exact root and running `bpftrace
+--version` exits zero. Commit `09f72ff` adds the declared dependency.
+The earlier 935-program payload was not changed, and the three tracing-based
+ublk cases have not yet run against the new kernel configuration. Installing
+the command does not substitute for the required kernel tracepoints.
+
+The status renderer also used to compare every selftest Image with the K6
+Image even when the receipt explicitly selected the separate KUnit pair.
+It now compares with the named kernel receipt. A RED test reproduced the
+incorrect STALE_IMAGE label; 26 benchmark tests now pass, including refusal
+to accept a changed Image or a missing named receipt. Runtime Image and
+object-hash checks were not relaxed.

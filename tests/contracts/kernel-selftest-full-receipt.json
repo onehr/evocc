@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
-  "run": "20260914T015846Z",
+  "run": "20260914T152937Z",
   "status": "INCOMPLETE",
-  "scope": "Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; unchanged arm64 configuration",
-  "evidence": ".evidence/kselftest-full/20260914T015846Z",
-  "kernelImageSha256": "eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd",
-  "kernelReceiptSha256": "fe4b6fb3c772855786c2159fcf919017478d7caa676aa93588b5e17268366b0b",
+  "scope": "Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; expanded audited arm64 configuration",
+  "evidence": ".evidence/kselftest-full/20260914T152937Z",
+  "kernelImageSha256": "df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c",
+  "kernelReceiptSha256": "22db1ea83941c1a445935a6e7c636fbf4cc73082dbaaf4da0baec88fa7953e57",
+  "kernelReceiptPath": "tests/contracts/kernel-kunit-receipt.json",
   "build": {
     "targets": [
       "acct",
@@ -6736,16 +6737,3954 @@
       }
     ],
     "complete": true,
-    "runtimePackages": "adduser\t3.152\napt\t3.0.3\nbase-files\t13.8+deb13u6\nbase-passwd\t3.6.7\nbash\t5.2.37-2+b9\nbc\t1.07.1-4+b1\nbinutils\t2.44-3\nbinutils-aarch64-linux-gnu\t2.44-3\nbinutils-common:arm64\t2.44-3\nbison\t2:3.8.2+dfsg-1+b2\nbsdutils\t1:2.41-5\nbuild-essential\t12.12\nbzip2\t1.0.8-6\nclang-19\t1:19.1.7-3+b1\ncoreutils\t9.7-3\ncpio\t2.15+dfsg-2\ncpp\t4:14.2.0-1\ncpp-14\t14.2.0-19\ncpp-14-aarch64-linux-gnu\t14.2.0-19\ncpp-aarch64-linux-gnu\t4:14.2.0-1\ndash\t0.5.12-12\ndebconf\t1.5.91\ndebian-archive-keyring\t2025.1\ndebianutils\t5.23.2\ndiffutils\t1:3.10-4\ndmsetup\t2:1.02.205-2\ndpkg\t1.22.22\ndpkg-dev\t1.22.22\ndwarves\t1.30-1\nethtool\t1:6.14.2-1\nfindutils\t4.10.0-3\nfio\t3.39-1\nflex\t2.6.4-8.2+b4\ng++\t4:14.2.0-1\ng++-14\t14.2.0-19\ng++-14-aarch64-linux-gnu\t14.2.0-19\ng++-aarch64-linux-gnu\t4:14.2.0-1\ngawk\t1:5.2.1-2+b2\ngcc\t4:14.2.0-1\ngcc-14\t14.2.0-19\ngcc-14-aarch64-linux-gnu\t14.2.0-19\ngcc-14-base:arm64\t14.2.0-19\ngcc-aarch64-linux-gnu\t4:14.2.0-1\ngrep\t3.11-4+b1\ngzip\t1.13-1\nhostname\t3.25\ninit-system-helpers\t1.69~deb13u1\niproute2\t6.15.0-1\niptables\t1.8.11-2\niputils-ping\t3:20240905-3\njq\t1.7.1-6+deb13u3\nkmod\t34.2-2\nlibacl1:arm64\t2.3.2-2+b1\nlibaio-dev:arm64\t0.3.113-8+b1\nlibaio1t64:arm64\t0.3.113-8+b1\nlibapparmor1:arm64\t4.1.0-1\nlibapt-pkg7.0:arm64\t3.0.3\nlibasan8:arm64\t14.2.0-19\nlibasound2-data\t1.2.14-1\nlibasound2-dev:arm64\t1.2.14-1\nlibasound2t64:arm64\t1.2.14-1\nlibatomic1:arm64\t14.2.0-19\nlibattr1:arm64\t1:2.5.2-3\nlibaudit-common\t1:4.0.2-2\nlibaudit1:arm64\t1:4.0.2-2+b2\nlibbinutils:arm64\t2.44-3\nlibblkid1:arm64\t2.41-5\nlibboost-iostreams1.83.0:arm64\t1.83.0-4.2\nlibboost-thread1.83.0:arm64\t1.83.0-4.2\nlibbpf-dev:arm64\t1:1.5.0-3\nlibbpf1:arm64\t1:1.5.0-3\nlibbrotli1:arm64\t1.1.0-2+b7\nlibbsd0:arm64\t0.12.2-2\nlibbz2-1.0:arm64\t1.0.8-6\nlibc-bin\t2.41-12+deb13u3\nlibc-dev-bin\t2.41-12+deb13u3\nlibc6:arm64\t2.41-12+deb13u3\nlibc6-dev:arm64\t2.41-12+deb13u3\nlibcap-dev:arm64\t1:2.75-10+deb13u1+b1\nlibcap-ng-dev:arm64\t0.8.5-4+b1\nlibcap-ng0:arm64\t0.8.5-4+b1\nlibcap2:arm64\t1:2.75-10+deb13u1+b1\nlibcap2-bin\t1:2.75-10+deb13u1+b1\nlibcc1-0:arm64\t14.2.0-19\nlibclang-common-19-dev:arm64\t1:19.1.7-3+b1\nlibclang-cpp19\t1:19.1.7-3+b1\nlibclang1-19\t1:19.1.7-3+b1\nlibcom-err2:arm64\t1.47.2-3+b11\nlibcrypt-dev:arm64\t1:4.4.38-1\nlibcrypt1:arm64\t1:4.4.38-1\nlibcryptsetup12:arm64\t2:2.7.5-2\nlibctf-nobfd0:arm64\t2.44-3\nlibctf0:arm64\t2.44-3\nlibcurl4t64:arm64\t8.14.1-2+deb13u4\nlibdaxctl1:arm64\t81-1\nlibdb5.3t64:arm64\t5.3.28+dfsg2-9\nlibdbus-1-3:arm64\t1.16.2-2\nlibdbus-1-dev:arm64\t1.16.2-2\nlibdebconfclient0:arm64\t0.280\nlibdevmapper1.02.1:arm64\t2:1.02.205-2\nlibdpkg-perl\t1.22.22\nlibdw1t64:arm64\t0.192-4\nlibedit2:arm64\t3.1-20250104-1\nlibelf-dev:arm64\t0.192-4\nlibelf1t64:arm64\t0.192-4\nlibexpat1:arm64\t2.8.2-1~deb13u1\nlibffi8:arm64\t3.4.8-2\nlibfmt10:arm64\t10.1.1+ds1-4\nlibfuse-dev:arm64\t2.9.9-9\nlibfuse2t64:arm64\t2.9.9-9\nlibfuse3-4:arm64\t3.17.2-3\nlibfuse3-dev:arm64\t3.17.2-3\nlibgc1:arm64\t1:8.2.8-1\nlibgcc-14-dev:arm64\t14.2.0-19\nlibgcc-s1:arm64\t14.2.0-19\nlibgdbm-compat4t64:arm64\t1.24-2\nlibgdbm6t64:arm64\t1.24-2\nlibgfapi0:arm64\t11.1-6\nlibgfrpc0:arm64\t11.1-6\nlibgfxdr0:arm64\t11.1-6\nlibglusterfs0:arm64\t11.1-6\nlibgmp10:arm64\t2:6.3.0+dfsg-3\nlibgnutls30t64:arm64\t3.8.9-3+deb13u4\nlibgomp1:arm64\t14.2.0-19\nlibgprofng0:arm64\t2.44-3\nlibgssapi-krb5-2:arm64\t1.21.3-5+deb13u1\nlibhogweed6t64:arm64\t3.10.1-1\nlibhwasan0:arm64\t14.2.0-19\nlibibverbs1:arm64\t56.1-1\nlibidn2-0:arm64\t2.3.8-2\nlibip4tc2:arm64\t1.8.11-2\nlibip6tc2:arm64\t1.8.11-2\nlibisl23:arm64\t0.27-1\nlibitm1:arm64\t14.2.0-19\nlibjansson4:arm64\t2.14-2+b3\nlibjq1:arm64\t1.7.1-6+deb13u3\nlibjson-c-dev:arm64\t0.18+ds-1\nlibjson-c5:arm64\t0.18+ds-1\nlibk5crypto3:arm64\t1.21.3-5+deb13u1\nlibkeyutils-dev:arm64\t1.6.3-6\nlibkeyutils1:arm64\t1.6.3-6\nlibkmod2:arm64\t34.2-2\nlibkrb5-3:arm64\t1.21.3-5+deb13u1\nlibkrb5support0:arm64\t1.21.3-5+deb13u1\nliblastlog2-2:arm64\t2.41-5\nlibldap2:arm64\t2.6.10+dfsg-1\nlibllvm19:arm64\t1:19.1.7-3+b1\nliblsan0:arm64\t14.2.0-19\nliblz4-1:arm64\t1.10.0-4\nliblzma-dev:arm64\t5.8.1-1+deb13u1\nliblzma5:arm64\t5.8.1-1+deb13u1\nlibmbedcrypto16:arm64\t3.6.5-0.1~deb13u1\nlibmbedtls-dev:arm64\t3.6.5-0.1~deb13u1\nlibmbedtls21:arm64\t3.6.5-0.1~deb13u1\nlibmbedx509-7:arm64\t3.6.5-0.1~deb13u1\nlibmd0:arm64\t1.1.0-2+b1\nlibmnl-dev:arm64\t1.0.5-3\nlibmnl0:arm64\t1.0.5-3\nlibmount1:arm64\t2.41-5\nlibmpc3:arm64\t1.3.1-1+b3\nlibmpfr6:arm64\t4.2.2-1\nlibnbd0\t1.22.2-1+b1\nlibncursesw6:arm64\t6.5+20250216-2\nlibndctl6:arm64\t81-1\nlibnetfilter-conntrack3:arm64\t1.1.0-1\nlibnettle8t64:arm64\t3.10.1-1\nlibnfnetlink0:arm64\t1.0.2-3\nlibnfs14:arm64\t5.0.2-1+b2\nlibnftables1:arm64\t1.1.3-1\nlibnftnl11:arm64\t1.2.9-1\nlibnghttp2-14:arm64\t1.64.0-1.1+deb13u1\nlibnghttp3-9:arm64\t1.8.0-1\nlibnl-3-200:arm64\t3.7.0-2\nlibnl-3-dev:arm64\t3.7.0-2\nlibnl-genl-3-200:arm64\t3.7.0-2\nlibnl-genl-3-dev:arm64\t3.7.0-2\nlibnl-route-3-200:arm64\t3.7.0-2\nlibnuma-dev:arm64\t2.0.19-1\nlibnuma1:arm64\t2.0.19-1\nlibobjc-14-dev:arm64\t14.2.0-19\nlibobjc4:arm64\t14.2.0-19\nlibonig5:arm64\t6.9.9-1+b1\nlibp11-kit0:arm64\t0.25.5-3\nlibpam-modules:arm64\t1.7.0-5\nlibpam-modules-bin\t1.7.0-5\nlibpam-runtime\t1.7.0-5\nlibpam0g:arm64\t1.7.0-5\nlibpcap-dev:arm64\t1.10.5-2\nlibpcap0.8-dev:arm64\t1.10.5-2\nlibpcap0.8t64:arm64\t1.10.5-2\nlibpcre2-16-0:arm64\t10.46-1~deb13u1\nlibpcre2-32-0:arm64\t10.46-1~deb13u1\nlibpcre2-8-0:arm64\t10.46-1~deb13u1\nlibpcre2-dev:arm64\t10.46-1~deb13u1\nlibpcre2-posix3:arm64\t10.46-1~deb13u1\nlibperl5.40:arm64\t5.40.1-6\nlibpfm4:arm64\t4.13.0+git99-gc5587f9-1\nlibpkgconf3:arm64\t1.8.1-4\nlibpmem1:arm64\t1.13.1-1.1+b1\nlibpopt-dev:arm64\t1.19+dfsg-2\nlibpopt0:arm64\t1.19+dfsg-2\nlibproc2-0:arm64\t2:4.0.4-9\nlibpsl5t64:arm64\t0.21.2-1.1+b1\nlibpython3-stdlib:arm64\t3.13.5-1\nlibpython3.13-minimal:arm64\t3.13.5-2+deb13u4\nlibpython3.13-stdlib:arm64\t3.13.5-2+deb13u4\nlibrados2\t18.2.7+ds-1+deb13u1\nlibrbd1\t18.2.7+ds-1+deb13u1\nlibrdmacm1t64:arm64\t56.1-1\nlibreadline8t64:arm64\t8.2-6\nlibrtmp1:arm64\t2.4+20151223.gitfa8646d.1-2+b5\nlibsasl2-2:arm64\t2.1.28+dfsg1-9\nlibsasl2-modules-db:arm64\t2.1.28+dfsg1-9\nlibseccomp2:arm64\t2.6.0-2\nlibselinux1:arm64\t3.8.1-1\nlibselinux1-dev:arm64\t3.8.1-1\nlibsemanage-common\t3.8.1-1\nlibsemanage2:arm64\t3.8.1-1\nlibsepol-dev:arm64\t3.8.1-1\nlibsepol2:arm64\t3.8.1-1\nlibsframe1:arm64\t2.44-3\nlibsigsegv2:arm64\t2.14-1+b2\nlibsmartcols1:arm64\t2.41-5\nlibsqlite3-0:arm64\t3.46.1-7+deb13u1\nlibssh2-1t64:arm64\t1.11.1-1+deb13u1\nlibssl-dev:arm64\t3.5.6-1~deb13u2\nlibssl3t64:arm64\t3.5.6-1~deb13u2\nlibstdc++-14-dev:arm64\t14.2.0-19\nlibstdc++6:arm64\t14.2.0-19\nlibsystemd-dev:arm64\t257.13-1~deb13u1\nlibsystemd-shared:arm64\t257.13-1~deb13u1\nlibsystemd0:arm64\t257.13-1~deb13u1\nlibtasn1-6:arm64\t4.20.0-2+deb13u1\nlibtinfo6:arm64\t6.5+20250216-2\nlibtirpc-common\t1.3.6+ds-1\nlibtirpc3t64:arm64\t1.3.6+ds-1\nlibtraceevent-dev:arm64\t1:1.8.4-2\nlibtraceevent1:arm64\t1:1.8.4-2\nlibtsan2:arm64\t14.2.0-19\nlibubsan1:arm64\t14.2.0-19\nlibudev1:arm64\t257.13-1~deb13u1\nlibunistring5:arm64\t1.3-2\nlibunwind-dev:arm64\t1.8.1-0.1\nlibunwind8:arm64\t1.8.1-0.1\nliburing-dev:arm64\t2.9-1\nliburing2:arm64\t2.9-1\nlibuuid1:arm64\t2.41-5\nlibwrap0:arm64\t7.6.q-36\nlibxml2:arm64\t2.12.7+dfsg+really2.9.14-2.1+deb13u3\nlibxtables12:arm64\t1.8.11-2\nlibxxhash0:arm64\t0.8.3-2\nlibyaml-0-2:arm64\t0.2.5-2\nlibz3-4:arm64\t4.13.3-1\nlibzstd-dev:arm64\t1.5.7+dfsg-1\nlibzstd1:arm64\t1.5.7+dfsg-1\nlinux-libc-dev\t6.12.101-1\nlld-19\t1:19.1.7-3+b1\nllvm-19\t1:19.1.7-3+b1\nllvm-19-linker-tools\t1:19.1.7-3+b1\nllvm-19-runtime\t1:19.1.7-3+b1\nlogin\t1:4.16.0-2+really2.41-5\nlogin.defs\t1:4.17.4-2\nm4\t1.4.19-8\nmake\t4.4.1-2\nmawk\t1.3.4.20250131-1\nmedia-types\t13.0.0\nmount\t2.41-5\nncurses-base\t6.5+20250216-2\nncurses-bin\t6.5+20250216-2\nnetbase\t6.5\nnftables\t1.1.3-1\nnumactl\t2.0.19-1\nopenssl-provider-legacy\t3.5.6-1~deb13u2\npahole\t1.30-1\npasswd\t1:4.17.4-2\npatch\t2.8-2\nperl\t5.40.1-6\nperl-base\t5.40.1-6\nperl-modules-5.40\t5.40.1-6\npkgconf:arm64\t1.8.1-4\npkgconf-bin\t1.8.1-4\nprocps\t2:4.0.4-9\npsmisc\t23.7-2\npython3\t3.13.5-1\npython3-attr\t25.3.0-1\npython3-iniconfig\t1.1.1-2\npython3-jsonschema\t4.19.2-6\npython3-jsonschema-specifications\t2023.12.1-2\npython3-minimal\t3.13.5-1\npython3-packaging\t25.0-1\npython3-pexpect\t4.9-3\npython3-pluggy\t1.5.0-1\npython3-psutil\t7.0.0-2\npython3-ptyprocess\t0.7.0-6\npython3-pyroute2\t0.7.7-4\npython3-pytest\t8.3.5-2\npython3-referencing\t0.36.2-1\npython3-rpds-py\t0.21.0-2+b1\npython3-scapy\t2.6.1+dfsg-1\npython3-yaml\t6.0.2-1+b2\npython3.13\t3.13.5-2+deb13u4\npython3.13-minimal\t3.13.5-2+deb13u4\nreadline-common\t8.2-6\nrpcsvc-proto\t1.4.3-1+b1\nrsync\t3.4.1+ds1-5+deb13u4\nsed\t4.9-2+deb13u1\nsgml-base\t1.31+nmu1\nsocat\t1.8.0.3-1\nsqv\t1.3.0-3+b2\nstrace\t6.13+ds-1\nsystemd\t257.13-1~deb13u1\nsysvinit-utils\t3.14-4\ntar\t1.35+dfsg-3.1\ntcpdump\t4.99.5-2\ntzdata\t2026b-0+deb13u1\nudev\t257.13-1~deb13u1\nutil-linux\t2.41-5\nxml-core\t0.19\nxz-utils\t5.8.1-1+deb13u1\nzlib1g:arm64\t1:1.3.dfsg+really1.3.1-1+b1\nzlib1g-dev:arm64\t1:1.3.dfsg+really1.3.1-1+b1\nzstd\t1.5.7+dfsg-1\n",
+    "runtimePackages": "adduser\t3.152\napt\t3.0.3\nbase-files\t13.8+deb13u6\nbase-passwd\t3.6.7\nbash\t5.2.37-2+b9\nbc\t1.07.1-4+b1\nbinutils\t2.44-3\nbinutils-aarch64-linux-gnu\t2.44-3\nbinutils-common:arm64\t2.44-3\nbison\t2:3.8.2+dfsg-1+b2\nbsdutils\t1:2.41-5\nbuild-essential\t12.12\nbzip2\t1.0.8-6\nclang-19\t1:19.1.7-3+b1\nconntrack\t1:1.4.8-2+b1\ncoreutils\t9.7-3\ncpio\t2.15+dfsg-2\ncpp\t4:14.2.0-1\ncpp-14\t14.2.0-19\ncpp-14-aarch64-linux-gnu\t14.2.0-19\ncpp-aarch64-linux-gnu\t4:14.2.0-1\ndash\t0.5.12-12\ndebconf\t1.5.91\ndebian-archive-keyring\t2025.1\ndebianutils\t5.23.2\ndiffutils\t1:3.10-4\ndmsetup\t2:1.02.205-2\ndosfstools\t4.2-1.2\ndpkg\t1.22.22\ndpkg-dev\t1.22.22\ndwarves\t1.30-1\ne2fsprogs\t1.47.2-3+b11\nethtool\t1:6.14.2-1\nfindutils\t4.10.0-3\nfio\t3.39-1\nflex\t2.6.4-8.2+b4\nfuse3\t3.17.2-3\ng++\t4:14.2.0-1\ng++-14\t14.2.0-19\ng++-14-aarch64-linux-gnu\t14.2.0-19\ng++-aarch64-linux-gnu\t4:14.2.0-1\ngawk\t1:5.2.1-2+b2\ngcc\t4:14.2.0-1\ngcc-14\t14.2.0-19\ngcc-14-aarch64-linux-gnu\t14.2.0-19\ngcc-14-base:arm64\t14.2.0-19\ngcc-aarch64-linux-gnu\t4:14.2.0-1\ngrep\t3.11-4+b1\ngzip\t1.13-1\nhostname\t3.25\ninit-system-helpers\t1.69~deb13u1\niperf3\t3.18-2+deb13u2\niproute2\t6.15.0-1\niptables\t1.8.11-2\niputils-ping\t3:20240905-3\njq\t1.7.1-6+deb13u3\nkmod\t34.2-2\nlibacl1:arm64\t2.3.2-2+b1\nlibaio-dev:arm64\t0.3.113-8+b1\nlibaio1t64:arm64\t0.3.113-8+b1\nlibapparmor1:arm64\t4.1.0-1\nlibapt-pkg7.0:arm64\t3.0.3\nlibarchive13t64:arm64\t3.7.4-4+deb13u1\nlibasan8:arm64\t14.2.0-19\nlibasound2-data\t1.2.14-1\nlibasound2-dev:arm64\t1.2.14-1\nlibasound2t64:arm64\t1.2.14-1\nlibatomic1:arm64\t14.2.0-19\nlibattr1:arm64\t1:2.5.2-3\nlibaudit-common\t1:4.0.2-2\nlibaudit1:arm64\t1:4.0.2-2+b2\nlibbinutils:arm64\t2.44-3\nlibblkid1:arm64\t2.41-5\nlibboost-iostreams1.83.0:arm64\t1.83.0-4.2\nlibboost-thread1.83.0:arm64\t1.83.0-4.2\nlibbpf-dev:arm64\t1:1.5.0-3\nlibbpf1:arm64\t1:1.5.0-3\nlibbrotli1:arm64\t1.1.0-2+b7\nlibbsd0:arm64\t0.12.2-2\nlibbz2-1.0:arm64\t1.0.8-6\nlibc-bin\t2.41-12+deb13u3\nlibc-dev-bin\t2.41-12+deb13u3\nlibc6:arm64\t2.41-12+deb13u3\nlibc6-dev:arm64\t2.41-12+deb13u3\nlibcap-dev:arm64\t1:2.75-10+deb13u1+b1\nlibcap-ng-dev:arm64\t0.8.5-4+b1\nlibcap-ng0:arm64\t0.8.5-4+b1\nlibcap2:arm64\t1:2.75-10+deb13u1+b1\nlibcap2-bin\t1:2.75-10+deb13u1+b1\nlibcc1-0:arm64\t14.2.0-19\nlibclang-common-19-dev:arm64\t1:19.1.7-3+b1\nlibclang-cpp19\t1:19.1.7-3+b1\nlibclang1-19\t1:19.1.7-3+b1\nlibcli1.10t64:arm64\t1.10.7-2\nlibcom-err2:arm64\t1.47.2-3+b11\nlibcrypt-dev:arm64\t1:4.4.38-1\nlibcrypt1:arm64\t1:4.4.38-1\nlibcryptsetup12:arm64\t2:2.7.5-2\nlibctf-nobfd0:arm64\t2.44-3\nlibctf0:arm64\t2.44-3\nlibcurl4t64:arm64\t8.14.1-2+deb13u4\nlibdaemon0:arm64\t0.14-7.1+b3\nlibdaxctl1:arm64\t81-1\nlibdb5.3t64:arm64\t5.3.28+dfsg2-9\nlibdbus-1-3:arm64\t1.16.2-2\nlibdbus-1-dev:arm64\t1.16.2-2\nlibdebconfclient0:arm64\t0.280\nlibdevmapper1.02.1:arm64\t2:1.02.205-2\nlibdpkg-perl\t1.22.22\nlibdw1t64:arm64\t0.192-4\nlibedit2:arm64\t3.1-20250104-1\nlibelf-dev:arm64\t0.192-4\nlibelf1t64:arm64\t0.192-4\nlibexpat1:arm64\t2.8.2-1~deb13u1\nlibext2fs2t64:arm64\t1.47.2-3+b11\nlibffi8:arm64\t3.4.8-2\nlibfmt10:arm64\t10.1.1+ds1-4\nlibfuse-dev:arm64\t2.9.9-9\nlibfuse2t64:arm64\t2.9.9-9\nlibfuse3-4:arm64\t3.17.2-3\nlibfuse3-dev:arm64\t3.17.2-3\nlibgc1:arm64\t1:8.2.8-1\nlibgcc-14-dev:arm64\t14.2.0-19\nlibgcc-s1:arm64\t14.2.0-19\nlibgdbm-compat4t64:arm64\t1.24-2\nlibgdbm6t64:arm64\t1.24-2\nlibgeoip1t64:arm64\t1.6.12-11.2~deb13u1\nlibgfapi0:arm64\t11.1-6\nlibgfrpc0:arm64\t11.1-6\nlibgfxdr0:arm64\t11.1-6\nlibglusterfs0:arm64\t11.1-6\nlibgmp10:arm64\t2:6.3.0+dfsg-3\nlibgnutls30t64:arm64\t3.8.9-3+deb13u4\nlibgomp1:arm64\t14.2.0-19\nlibgprofng0:arm64\t2.44-3\nlibgssapi-krb5-2:arm64\t1.21.3-5+deb13u1\nlibhogweed6t64:arm64\t3.10.1-1\nlibhwasan0:arm64\t14.2.0-19\nlibibverbs1:arm64\t56.1-1\nlibidn2-0:arm64\t2.3.8-2\nlibip4tc2:arm64\t1.8.11-2\nlibip6tc2:arm64\t1.8.11-2\nlibiperf0:arm64\t3.18-2+deb13u2\nlibisl23:arm64\t0.27-1\nlibitm1:arm64\t14.2.0-19\nlibjansson4:arm64\t2.14-2+b3\nlibjq1:arm64\t1.7.1-6+deb13u3\nlibjson-c-dev:arm64\t0.18+ds-1\nlibjson-c5:arm64\t0.18+ds-1\nlibk5crypto3:arm64\t1.21.3-5+deb13u1\nlibkeyutils-dev:arm64\t1.6.3-6\nlibkeyutils1:arm64\t1.6.3-6\nlibkmod2:arm64\t34.2-2\nlibkrb5-3:arm64\t1.21.3-5+deb13u1\nlibkrb5support0:arm64\t1.21.3-5+deb13u1\nliblastlog2-2:arm64\t2.41-5\nlibldap2:arm64\t2.6.10+dfsg-1\nlibllvm19:arm64\t1:19.1.7-3+b1\nliblsan0:arm64\t14.2.0-19\nliblz4-1:arm64\t1.10.0-4\nliblzma-dev:arm64\t5.8.1-1+deb13u1\nliblzma5:arm64\t5.8.1-1+deb13u1\nlibmbedcrypto16:arm64\t3.6.5-0.1~deb13u1\nlibmbedtls-dev:arm64\t3.6.5-0.1~deb13u1\nlibmbedtls21:arm64\t3.6.5-0.1~deb13u1\nlibmbedx509-7:arm64\t3.6.5-0.1~deb13u1\nlibmd0:arm64\t1.1.0-2+b1\nlibmnl-dev:arm64\t1.0.5-3\nlibmnl0:arm64\t1.0.5-3\nlibmount1:arm64\t2.41-5\nlibmpc3:arm64\t1.3.1-1+b3\nlibmpfr6:arm64\t4.2.2-1\nlibnbd0\t1.22.2-1+b1\nlibncurses6:arm64\t6.5+20250216-2\nlibncursesw6:arm64\t6.5+20250216-2\nlibndctl6:arm64\t81-1\nlibnet1:arm64\t1.3+dfsg-2\nlibnetfilter-conntrack3:arm64\t1.1.0-1\nlibnettle8t64:arm64\t3.10.1-1\nlibnfnetlink0:arm64\t1.0.2-3\nlibnfs14:arm64\t5.0.2-1+b2\nlibnftables1:arm64\t1.1.3-1\nlibnftnl11:arm64\t1.2.9-1\nlibnghttp2-14:arm64\t1.64.0-1.1+deb13u1\nlibnghttp3-9:arm64\t1.8.0-1\nlibnl-3-200:arm64\t3.7.0-2\nlibnl-3-dev:arm64\t3.7.0-2\nlibnl-cli-3-200:arm64\t3.7.0-2\nlibnl-genl-3-200:arm64\t3.7.0-2\nlibnl-genl-3-dev:arm64\t3.7.0-2\nlibnl-nf-3-200:arm64\t3.7.0-2\nlibnl-route-3-200:arm64\t3.7.0-2\nlibnuma-dev:arm64\t2.0.19-1\nlibnuma1:arm64\t2.0.19-1\nlibobjc-14-dev:arm64\t14.2.0-19\nlibobjc4:arm64\t14.2.0-19\nlibonig5:arm64\t6.9.9-1+b1\nlibp11-kit0:arm64\t0.25.5-3\nlibpam-modules:arm64\t1.7.0-5\nlibpam-modules-bin\t1.7.0-5\nlibpam-runtime\t1.7.0-5\nlibpam0g:arm64\t1.7.0-5\nlibpcap-dev:arm64\t1.10.5-2\nlibpcap0.8-dev:arm64\t1.10.5-2\nlibpcap0.8t64:arm64\t1.10.5-2\nlibpcre2-16-0:arm64\t10.46-1~deb13u1\nlibpcre2-32-0:arm64\t10.46-1~deb13u1\nlibpcre2-8-0:arm64\t10.46-1~deb13u1\nlibpcre2-dev:arm64\t10.46-1~deb13u1\nlibpcre2-posix3:arm64\t10.46-1~deb13u1\nlibperl5.40:arm64\t5.40.1-6\nlibpfm4:arm64\t4.13.0+git99-gc5587f9-1\nlibpkgconf3:arm64\t1.8.1-4\nlibpmem1:arm64\t1.13.1-1.1+b1\nlibpopt-dev:arm64\t1.19+dfsg-2\nlibpopt0:arm64\t1.19+dfsg-2\nlibproc2-0:arm64\t2:4.0.4-9\nlibpsl5t64:arm64\t0.21.2-1.1+b1\nlibpython3-stdlib:arm64\t3.13.5-1\nlibpython3.13-minimal:arm64\t3.13.5-2+deb13u4\nlibpython3.13-stdlib:arm64\t3.13.5-2+deb13u4\nlibrados2\t18.2.7+ds-1+deb13u1\nlibrbd1\t18.2.7+ds-1+deb13u1\nlibrdmacm1t64:arm64\t56.1-1\nlibreadline8t64:arm64\t8.2-6\nlibrtmp1:arm64\t2.4+20151223.gitfa8646d.1-2+b5\nlibsasl2-2:arm64\t2.1.28+dfsg1-9\nlibsasl2-modules-db:arm64\t2.1.28+dfsg1-9\nlibsctp1:arm64\t1.0.21+dfsg-1\nlibseccomp2:arm64\t2.6.0-2\nlibselinux1:arm64\t3.8.1-1\nlibselinux1-dev:arm64\t3.8.1-1\nlibsemanage-common\t3.8.1-1\nlibsemanage2:arm64\t3.8.1-1\nlibsepol-dev:arm64\t3.8.1-1\nlibsepol2:arm64\t3.8.1-1\nlibsframe1:arm64\t2.44-3\nlibsigsegv2:arm64\t2.14-1+b2\nlibsmartcols1:arm64\t2.41-5\nlibsodium23:arm64\t1.0.18-1+deb13u1\nlibsqlite3-0:arm64\t3.46.1-7+deb13u1\nlibss2:arm64\t1.47.2-3+b11\nlibssh2-1t64:arm64\t1.11.1-1+deb13u1\nlibssl-dev:arm64\t3.5.6-1~deb13u2\nlibssl3t64:arm64\t3.5.6-1~deb13u2\nlibstdc++-14-dev:arm64\t14.2.0-19\nlibstdc++6:arm64\t14.2.0-19\nlibsystemd-dev:arm64\t257.13-1~deb13u1\nlibsystemd-shared:arm64\t257.13-1~deb13u1\nlibsystemd0:arm64\t257.13-1~deb13u1\nlibtasn1-6:arm64\t4.20.0-2+deb13u1\nlibteam-utils\t1.31-1+b2\nlibteam5:arm64\t1.31-1+b2\nlibteamdctl0:arm64\t1.31-1+b2\nlibtinfo6:arm64\t6.5+20250216-2\nlibtirpc-common\t1.3.6+ds-1\nlibtirpc3t64:arm64\t1.3.6+ds-1\nlibtraceevent-dev:arm64\t1:1.8.4-2\nlibtraceevent1:arm64\t1:1.8.4-2\nlibtsan2:arm64\t14.2.0-19\nlibubsan1:arm64\t14.2.0-19\nlibudev1:arm64\t257.13-1~deb13u1\nlibunistring5:arm64\t1.3-2\nlibunwind-dev:arm64\t1.8.1-0.1\nlibunwind8:arm64\t1.8.1-0.1\nliburcu8t64:arm64\t0.15.2-2\nliburing-dev:arm64\t2.9-1\nliburing2:arm64\t2.9-1\nlibuuid1:arm64\t2.41-5\nlibwrap0:arm64\t7.6.q-36\nlibxml2:arm64\t2.12.7+dfsg+really2.9.14-2.1+deb13u3\nlibxtables12:arm64\t1.8.11-2\nlibxxhash0:arm64\t0.8.3-2\nlibyaml-0-2:arm64\t0.2.5-2\nlibz3-4:arm64\t4.13.3-1\nlibzstd-dev:arm64\t1.5.7+dfsg-1\nlibzstd1:arm64\t1.5.7+dfsg-1\nlinux-libc-dev\t6.12.101-1\nlld-19\t1:19.1.7-3+b1\nllvm-19\t1:19.1.7-3+b1\nllvm-19-linker-tools\t1:19.1.7-3+b1\nllvm-19-runtime\t1:19.1.7-3+b1\nlogin\t1:4.16.0-2+really2.41-5\nlogin.defs\t1:4.17.4-2\nlogsave\t1.47.2-3+b11\nm4\t1.4.19-8\nmake\t4.4.1-2\nmawk\t1.3.4.20250131-1\nmedia-types\t13.0.0\nmount\t2.41-5\nncurses-base\t6.5+20250216-2\nncurses-bin\t6.5+20250216-2\nnetbase\t6.5\nnetsniff-ng\t0.6.9-1\nnftables\t1.1.3-1\nnumactl\t2.0.19-1\nopenssl-provider-legacy\t3.5.6-1~deb13u2\npahole\t1.30-1\npasswd\t1:4.17.4-2\npatch\t2.8-2\nperl\t5.40.1-6\nperl-base\t5.40.1-6\nperl-modules-5.40\t5.40.1-6\npkgconf:arm64\t1.8.1-4\npkgconf-bin\t1.8.1-4\nprocps\t2:4.0.4-9\npsmisc\t23.7-2\npython3\t3.13.5-1\npython3-attr\t25.3.0-1\npython3-iniconfig\t1.1.1-2\npython3-jsonschema\t4.19.2-6\npython3-jsonschema-specifications\t2023.12.1-2\npython3-minimal\t3.13.5-1\npython3-packaging\t25.0-1\npython3-pexpect\t4.9-3\npython3-pluggy\t1.5.0-1\npython3-psutil\t7.0.0-2\npython3-ptyprocess\t0.7.0-6\npython3-pyroute2\t0.7.7-4\npython3-pytest\t8.3.5-2\npython3-referencing\t0.36.2-1\npython3-rpds-py\t0.21.0-2+b1\npython3-scapy\t2.6.1+dfsg-1\npython3-yaml\t6.0.2-1+b2\npython3.13\t3.13.5-2+deb13u4\npython3.13-minimal\t3.13.5-2+deb13u4\nreadline-common\t8.2-6\nrpcsvc-proto\t1.4.3-1+b1\nrsync\t3.4.1+ds1-5+deb13u4\nsed\t4.9-2+deb13u1\nsgml-base\t1.31+nmu1\nsocat\t1.8.0.3-1\nsqv\t1.3.0-3+b2\nstrace\t6.13+ds-1\nsudo\t1.9.16p2-3+deb13u2\nsystemd\t257.13-1~deb13u1\nsysvinit-utils\t3.14-4\ntar\t1.35+dfsg-3.1\ntcpdump\t4.99.5-2\ntraceroute\t1:2.1.6-1\ntzdata\t2026b-0+deb13u1\nudev\t257.13-1~deb13u1\nutil-linux\t2.41-5\nxml-core\t0.19\nxz-utils\t5.8.1-1+deb13u1\nzlib1g:arm64\t1:1.3.dfsg+really1.3.1-1+b1\nzlib1g-dev:arm64\t1:1.3.dfsg+really1.3.1-1+b1\nzstd\t1.5.7+dfsg-1\n",
     "runtimeHelpers": [
       "ublk/test_common.sh",
       "ublk/trace"
-    ]
+    ],
+    "runtimeFileMetadata": {
+      "usr/bin/awk": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/captoinfo": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/chage": [
+        0,
+        42,
+        1517
+      ],
+      "usr/bin/chfn": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/chsh": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/dnsdomainname": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/domainname": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/expiry": [
+        0,
+        42,
+        1517
+      ],
+      "usr/bin/gpasswd": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/infotocap": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ld.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/linux32": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/linux64": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/mount": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/nawk": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/newgrp": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/nisdomainname": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pager": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/passwd": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/pidof": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/rbash": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/reset": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/sg": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/sh": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/su": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/umount": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/uncompress": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/which": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ypdomainname": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/run0": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-cpp": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-g++": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcc": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcc-ar": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcc-nm": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcc-ranlib": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcov": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcov-dump": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-gcov-tool": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-ld": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-lto-dump": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/addr2line": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ar": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/as": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bugpoint-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bunzip2": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bzcat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bzcmp": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bzegrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bzfgrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/bzless": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/c++": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/c++filt": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/c89": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/c99": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/cc": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/clang++-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/clang-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/clang-cpp-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/cpp": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/cpp-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/dsymutil-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/elfedit": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/flex++": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/g++": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/g++-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-ar": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-ar-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-nm": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-nm-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-ranlib": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcc-ranlib-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov-dump": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov-dump-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov-tool": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gcov-tool-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gmake": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gp-archive": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gp-collect-app": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gp-display-html": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gp-display-src": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gp-display-text": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/gprof": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ld": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ld.bfd": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ld.lld-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ld64.lld-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lex": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llc-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lld-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lld-link-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lli-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lli-child-target-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-PerfectShuffle-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-addr2line-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-ar-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-as-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-bcanalyzer-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-bitcode-strip-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-c-test-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cat-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cfi-verify-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-config-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cov-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cvtres-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cxxdump-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cxxfilt-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-cxxmap-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-debuginfo-analyzer-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-debuginfod-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-debuginfod-find-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-diff-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-dis-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-dlltool-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-dwarfdump-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-dwarfutil-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-dwp-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-exegesis-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-extract-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-gsymutil-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-ifs-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-install-name-tool-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-jitlink-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-jitlink-executor-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-lib-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-libtool-darwin-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-link-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-lipo-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-lto-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-lto2-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-mc-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-mca-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-ml-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-modextract-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-mt-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-nm-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-objcopy-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-objdump-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-opt-report-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-otool-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-pdbutil-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-profdata-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-profgen-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-ranlib-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-rc-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-readelf-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-readobj-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-readtapi-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-reduce-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-remarkutil-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-rtdyld-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-sim-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-size-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-split-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-stress-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-strings-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-strip-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-symbolizer-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-tblgen-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-tli-checker-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-undname-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-windres-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/llvm-xray-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lsmod": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lto-dump": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lto-dump-14": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzcat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzcmp": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzdiff": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzegrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzfgrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzgrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzless": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzma": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lzmore": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/mt": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/nm": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/obj2yaml-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/objcopy": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/objdump": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/opt-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pdb3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pdb3.13": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/py3versions": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pydoc3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pygettext3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/python3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ranlib": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/readelf": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/reduce-chunk-list-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/sanstats-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/size": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/strings": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/strip": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/unlzma": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/unxz": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/unzstd": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/verify-uselistorder-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/wasm-ld-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/xzcat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/xzcmp": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/xzegrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/xzfgrep": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/yacc": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/yaml2obj-19": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/zstdcat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/zstdmt": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/systemd-confext": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/systemd-umount": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/sudo": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/sudoedit": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ctstat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/rtstat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ping4": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/ping6": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pkill": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/snice": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/traceroute6.db": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/fusermount": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/fusermount3": [
+        0,
+        0,
+        2541
+      ],
+      "usr/bin/iptables-xml": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-pkgconf": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pkg-config": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/aarch64-linux-gnu-pkg-config": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pstree.x11": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/lft": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/py.test-3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/pytest-3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/scapy3": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/socat": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/traceroute": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/traceroute6": [
+        0,
+        0,
+        511
+      ],
+      "usr/bin/traceproto": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/getty": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/rmt": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/unix_chkpwd": [
+        0,
+        42,
+        1517
+      ],
+      "usr/sbin/vigr": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/depmod": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/insmod": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/lsmod": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/modinfo": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/modprobe": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/rmmod": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/e2label": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/e2mmpstatus": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/fsck.ext2": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/fsck.ext3": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/fsck.ext4": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkfs.ext2": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkfs.ext3": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkfs.ext4": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/addgroup": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/delgroup": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/dmstats": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/dosfsck": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/dosfslabel": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/fsck.msdos": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/fsck.vfat": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkdosfs": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkfs.msdos": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mkfs.vfat": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/mount.fuse": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-nft": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-nft-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-nft-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-nft": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-nft-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-nft-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-apply": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-legacy": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-legacy-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-legacy-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-nft": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-nft-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-nft-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-restore-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-legacy": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-legacy-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-legacy-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-nft": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-nft-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-nft-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-restore-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-translate": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/xtables-monitor": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/tcptraceroute": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/traceroute": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/iptables": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ip6tables": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-restore": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/arptables": [
+        0,
+        0,
+        511
+      ],
+      "usr/sbin/ebtables-save": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libacl.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libapt-pkg.so.7.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libapt-private.so.0.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libattr.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libaudit.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libblkid.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbsd.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbz2.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbz2.so.1.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcap-ng.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcap.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcrypt.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdebconfclient.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdrop_ambient.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgmp.so.10": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libhogweed.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblastlog2.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblz4.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblzma.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmd.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmount.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnettle.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpam.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpam_misc.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpamc.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-8.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpsx.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libseccomp.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsmartcols.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsqlite3.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libstdc++.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsystemd.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtic.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtinfo.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libudev.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libuuid.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libxxhash.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libz.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libzstd.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libBrokenLocale.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libLLVM-19.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libanl.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libasan.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libatomic.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbpf.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbrotlicommon.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbrotlidec.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbrotlienc.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libc_malloc_debug.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcc1.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libclang-19.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcom_err.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcrypt.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcrypto.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libctf-nobfd.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libctf.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcurl.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdw.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libedit.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libelf.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libelf.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libext2fs.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libexpat.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libexpatw.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libffi.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libformw.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgc.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgccpp.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgctba.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgdbm.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgdbm_compat.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgnutls.so.30": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgomp.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgprofng.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgssapi_krb5.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libhistory.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libhwasan.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libidn2.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libisl.so.23": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libitm.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libjansson.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libk5crypto.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libkeyutils.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libkmod.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libkrb5.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libkrb5support.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblber.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libldap.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblsan.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmenuw.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmpc.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmpfr.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmvec.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libncursesw.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnghttp2.so.14": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnghttp3.so.9": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnss_compat.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnss_hesiod.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libobjc.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libobjc_gc.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libp11-kit.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpanelw.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libperl.so.5.40": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpfm.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpopt.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpsl.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libreadline.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libresolv.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsasl2.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsframe.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libssh2.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libssl.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtasn1.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libthread_db.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtsan.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libubsan.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunistring.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libxml2.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libz.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libzstd.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libe2p.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libss.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libapparmor.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsigsegv.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsctp.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libiperf.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmnl.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtirpc.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libxtables.so.12": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnftnl.so.11": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnftables.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libproc2.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnfnetlink.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnetfilter_conntrack.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libaio.so.1t64": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnbd.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgfxdr.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libglusterfs.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgfrpc.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libgfapi.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnfs.so.14": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-route-3.so.200": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-3.so.200": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libibverbs.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnuma.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdaxctl.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libndctl.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpmem.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libfmt.so.10": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/librdmacm.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/librados.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libjson-c.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcryptsetup.so.12": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/librbd.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libfuse3.so.4": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libonig.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libjq.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libip4tc.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libip6tc.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libaio.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libarchive.so.13": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libasound.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libasound.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libbpf.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcap.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpsx.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcap-ng.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdrop_ambient.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libcli.so.1.10": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdaemon.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsystemd.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdbus-1.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpkgconf.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libdbus-1.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libulockmgr.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libfuse.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsepol.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-16.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-32.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-posix.so.3": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-16.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-32.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-8.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcre2-posix.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libselinux.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libfuse.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libulockmgr.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libfuse3.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libGeoIP.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libjson-c.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libkeyutils.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liblzma.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedcrypto.so.16": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedx509.so.7": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedtls.so.21": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedcrypto.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedtls.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmbedx509.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmnl.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libform.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libmenu.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libncurses.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpanel.so.6": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnet.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-3.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-genl-3.so.200": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-nf-3.so.200": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-cli-3.so.200": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnl-genl-3.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libnuma.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcap.so.0.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpcap.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libpopt.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libsodium.so.23": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libteam.so.5": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtraceevent.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libteamdctl.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libtraceevent.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-aarch64.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-coredump.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-ptrace.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-aarch64.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-coredump.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-generic.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libunwind-ptrace.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-bp.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-cds.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-common.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-mb.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-memb.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu-qsbr.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburcu.so.8": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburing-ffi.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburing.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburing-ffi.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/liburing.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libwrap.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/libyaml-0.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/perl/5.40": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/pkgconfig/libcrypt.pc": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/sasl2/libsasldb.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/sasl2/libsasldb.so.2": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/rsocket/librspreload.so.1": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/rsocket/librspreload.so.1.0.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_DNAT.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_MASQUERADE.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_NOTRACK.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_REDIRECT.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_SNAT.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/xtables/libxt_state.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/perl/cross-config-5.40.1/Config.pm": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/aarch64-linux-gnu/perl/cross-config-5.40.1/Config_heavy.pl": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/python3.13/_sysconfigdata__aarch64-linux-gnu.py": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/python3.13/sitecustomize.py": [
+        0,
+        0,
+        511
+      ],
+      "usr/libexec/sudo/libsudo_util.so": [
+        0,
+        0,
+        511
+      ],
+      "usr/libexec/sudo/libsudo_util.so.0": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/perl/5.40": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/GMT": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/UTC": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/localtime": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/posixrules": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Africa/Timbuktu": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Atka": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Coral_Harbour": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Ensenada": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Kralendijk": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Lower_Princes": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Marigot": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Montreal": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Nipigon": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Pangnirtung": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Porto_Acre": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Rainy_River": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Santa_Isabel": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Shiprock": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/St_Barthelemy": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Thunder_Bay": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Virgin": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/America/Yellowknife": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Arctic/Longyearbyen": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Asia/Chongqing": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Asia/Harbin": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Asia/Istanbul": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Asia/Kashgar": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Asia/Tel_Aviv": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Atlantic/Jan_Mayen": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Australia/Canberra": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Australia/Currie": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Australia/Yancowinna": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/GMT+0": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/GMT-0": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/GMT0": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/Greenwich": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/UCT": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/Universal": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Etc/Zulu": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Belfast": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Bratislava": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Busingen": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Mariehamn": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Nicosia": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Podgorica": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/San_Marino": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Tiraspol": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Europe/Vatican": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Pacific/Johnston": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Pacific/Samoa": [
+        0,
+        0,
+        511
+      ],
+      "usr/share/zoneinfo/Pacific/Yap": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/systemd-sysroot-fstab-check": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/systemd-udevd": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/autovt@.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/cryptdisks-early.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/cryptdisks.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/ctrl-alt-del.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/dbus-org.freedesktop.hostname1.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/dbus-org.freedesktop.locale1.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/dbus-org.freedesktop.login1.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/dbus-org.freedesktop.timedate1.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/default.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/hwclock.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/kmod.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/procps.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel0.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel1.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel2.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel3.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel4.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel5.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/runlevel6.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/x11-common.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sudo.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/udev.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/getty.target.wants/getty-static.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/initrd.target.wants/systemd-bsod.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/initrd.target.wants/systemd-pcrphase-initrd.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/initrd.target.wants/systemd-battery-check.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/local-fs.target.wants/tmp.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/local-fs.target.wants/run-lock.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/multi-user.target.wants/systemd-logind.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/multi-user.target.wants/systemd-user-sessions.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/multi-user.target.wants/getty.target": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/multi-user.target.wants/systemd-ask-password-wall.path": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-hostnamed.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-initctl.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-journald-dev-log.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-journald.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-pcrextend.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-pcrlock.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-sysext.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-udevd-kernel.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-creds.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sockets.target.wants/systemd-udevd-control.socket": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/dev-mqueue.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/kmod-static-nodes.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/ldconfig.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/proc-sys-fs-binfmt_misc.automount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/sys-fs-fuse-connections.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/sys-kernel-config.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/sys-kernel-debug.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/sys-kernel-tracing.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-ask-password-console.path": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-binfmt.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-firstboot.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-hibernate-clear.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-journal-catalog-update.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-journal-flush.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-journald.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-machine-id-commit.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-modules-load.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-pcrmachine.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-pcrphase-sysinit.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-pcrphase.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-random-seed.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-sysctl.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-sysusers.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup-dev-early.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup-dev.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-tpm2-setup-early.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-tpm2-setup.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-update-done.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-udev-trigger.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-udevd.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/systemd-hwdb-update.service": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/sysinit.target.wants/dev-hugepages.mount": [
+        0,
+        0,
+        511
+      ],
+      "usr/lib/systemd/system/timers.target.wants/systemd-tmpfiles-clean.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/gshadow": [
+        0,
+        42,
+        416
+      ],
+      "etc/localtime": [
+        0,
+        0,
+        511
+      ],
+      "etc/os-release": [
+        0,
+        0,
+        511
+      ],
+      "etc/rmt": [
+        0,
+        0,
+        511
+      ],
+      "etc/shadow": [
+        0,
+        42,
+        416
+      ],
+      "etc/mtab": [
+        0,
+        0,
+        511
+      ],
+      "etc/vconsole.conf": [
+        0,
+        0,
+        511
+      ],
+      "etc/gshadow-": [
+        0,
+        42,
+        416
+      ],
+      "etc/shadow-": [
+        0,
+        42,
+        416
+      ],
+      "etc/alternatives/awk": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/iptables": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/builtins.7.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/nawk": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ip6tables": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/pager": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/pager.1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/rmt": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/rmt.8.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.de1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.es1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.fr1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.it1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.ja1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.pl1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/which.sl1.gz": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/c++": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/c89": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/c99": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/cc": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/cpp": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzcat": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzcmp": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzdiff": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzegrep": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzfgrep": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzgrep": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzless": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzma": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lzmore": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/mt": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/unlzma": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/yacc": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/traceroute.sbin": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/traceproto": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/lft": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/traceroute": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/traceroute6": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/iptables-restore": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/tcptraceroute": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/iptables-save": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ip6tables-restore": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ip6tables-save": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/arptables-restore": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/arptables-save": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ebtables-restore": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ebtables": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/arptables": [
+        0,
+        0,
+        511
+      ],
+      "etc/alternatives/ebtables-save": [
+        0,
+        0,
+        511
+      ],
+      "etc/default/locale": [
+        0,
+        0,
+        511
+      ],
+      "etc/profile.d/70-systemd-shell-extra.sh": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc0.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc1.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc2.d/S01rsync": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc2.d/S01sudo": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc2.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc3.d/S01rsync": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc3.d/S01sudo": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc3.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc4.d/S01rsync": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc4.d/S01sudo": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc4.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc5.d/S01rsync": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc5.d/S01sudo": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc5.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rc6.d/K01fio": [
+        0,
+        0,
+        511
+      ],
+      "etc/rcS.d/S01procps": [
+        0,
+        0,
+        511
+      ],
+      "etc/modules-load.d/modules.conf": [
+        0,
+        0,
+        511
+      ],
+      "etc/sgml/catalog": [
+        0,
+        0,
+        511
+      ],
+      "etc/xdg/systemd/user": [
+        0,
+        0,
+        511
+      ],
+      "etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/timers.target.wants/apt-daily.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/timers.target.wants/dpkg-db-backup.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/timers.target.wants/fstrim.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/timers.target.wants/e2scrub_all.timer": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/getty.target.wants/getty@tty1.service": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/multi-user.target.wants/remote-fs.target": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/multi-user.target.wants/e2scrub_reap.service": [
+        0,
+        0,
+        511
+      ],
+      "etc/systemd/system/sysinit.target.wants/systemd-pstore.service": [
+        0,
+        0,
+        511
+      ],
+      "etc/dpkg/origins/default": [
+        0,
+        0,
+        511
+      ]
+    }
   },
-  "kernelConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
-  "referenceConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
-  "initramfsSha256": "32662c04f6de3786f525996e55ea120c858e5d666b3af073b539f4d123feb2fa",
-  "rootfsSha256": "e923656b3144ef9fd8067481597a99ad56dc19efee687861636c097be2110054",
+  "buildLogRoot": "/Users/onehrxn/dev/30days/c30/.build/kselftest-full/logs",
+  "kernelConfigSha256": "6afbd2125fb1d182b77350077bc888f87323f4cd0de0d4da618cfa5afd159c23",
+  "referenceConfigSha256": "6afbd2125fb1d182b77350077bc888f87323f4cd0de0d4da618cfa5afd159c23",
+  "initramfsSha256": "278ee85e25bf3167fcba6c1aca6adf9c2670e01c8eb4153cb1173b7246f27010",
+  "rootfsSha256": "fca163df10f268d36deaf88318df5a840075dde0bb6fdd05c41a76f8e940f319",
   "execution": {
     "reference": {
       "collections": [
@@ -7066,85 +11005,7 @@
         },
         {
           "id": "net",
-          "cases": [
-            {
-              "id": "net:busy_poll_test.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 30,
-              "name": "net:busy_poll_test.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/busy_poll_test.sh"
-            },
-            {
-              "id": "net:cmsg_ip.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 31,
-              "name": "net:cmsg_ip.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/cmsg_ip.sh"
-            },
-            {
-              "id": "net:netdev-l2addr.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 69,
-              "name": "net:netdev-l2addr.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netdev-l2addr.sh"
-            },
-            {
-              "id": "net:netns-name.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 71,
-              "name": "net:netns-name.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netns-name.sh"
-            },
-            {
-              "id": "net:route_localnet.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 79,
-              "name": "net:route_localnet.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/route_localnet.sh"
-            },
-            {
-              "id": "net:rtnetlink_notification.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 83,
-              "name": "net:rtnetlink_notification.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/rtnetlink_notification.sh"
-            },
-            {
-              "id": "net:tfo_passive.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 114,
-              "name": "net:tfo_passive.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/tfo_passive.sh"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -7174,361 +11035,8 @@
         },
         {
           "id": "net/netfilter",
-          "cases": [
-            {
-              "id": "net/netfilter:br_netfilter.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 1,
-              "name": "net/netfilter:br_netfilter.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/br_netfilter.sh"
-            },
-            {
-              "id": "net/netfilter:br_netfilter_queue.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 2,
-              "name": "net/netfilter:br_netfilter_queue.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/br_netfilter_queue.sh"
-            },
-            {
-              "id": "net/netfilter:bridge_brouter.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 3,
-              "name": "net/netfilter:bridge_brouter.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/bridge_brouter.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_clash.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 4,
-              "name": "net/netfilter:conntrack_clash.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_clash.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_dump_flush.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 5,
-              "name": "net/netfilter:conntrack_dump_flush.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_dump_flush.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_icmp_related.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 6,
-              "name": "net/netfilter:conntrack_icmp_related.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_icmp_related.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_ipip_mtu.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 7,
-              "name": "net/netfilter:conntrack_ipip_mtu.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_ipip_mtu.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_resize.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 8,
-              "name": "net/netfilter:conntrack_resize.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_resize.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_reverse_clash.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 9,
-              "name": "net/netfilter:conntrack_reverse_clash.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_reverse_clash.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_sctp_collision.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 10,
-              "name": "net/netfilter:conntrack_sctp_collision.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_sctp_collision.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_tcp_unreplied.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 11,
-              "name": "net/netfilter:conntrack_tcp_unreplied.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_tcp_unreplied.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_vrf.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 12,
-              "name": "net/netfilter:conntrack_vrf.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/conntrack_vrf.sh"
-            },
-            {
-              "id": "net/netfilter:ipvs.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 13,
-              "name": "net/netfilter:ipvs.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/ipvs.sh"
-            },
-            {
-              "id": "net/netfilter:nf_conntrack_packetdrill.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 14,
-              "name": "net/netfilter:nf_conntrack_packetdrill.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nf_conntrack_packetdrill.sh"
-            },
-            {
-              "id": "net/netfilter:nf_nat_edemux.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 15,
-              "name": "net/netfilter:nf_nat_edemux.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nf_nat_edemux.sh"
-            },
-            {
-              "id": "net/netfilter:nft_audit.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 16,
-              "name": "net/netfilter:nft_audit.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_audit.sh"
-            },
-            {
-              "id": "net/netfilter:nft_concat_range.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 17,
-              "name": "net/netfilter:nft_concat_range.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_concat_range.sh"
-            },
-            {
-              "id": "net/netfilter:nft_conntrack_helper.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 18,
-              "name": "net/netfilter:nft_conntrack_helper.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_conntrack_helper.sh"
-            },
-            {
-              "id": "net/netfilter:nft_fib.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 19,
-              "name": "net/netfilter:nft_fib.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_fib.sh"
-            },
-            {
-              "id": "net/netfilter:nft_flowtable.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 20,
-              "name": "net/netfilter:nft_flowtable.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_flowtable.sh"
-            },
-            {
-              "id": "net/netfilter:nft_interface_stress.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 21,
-              "name": "net/netfilter:nft_interface_stress.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_interface_stress.sh"
-            },
-            {
-              "id": "net/netfilter:nft_meta.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 22,
-              "name": "net/netfilter:nft_meta.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_meta.sh"
-            },
-            {
-              "id": "net/netfilter:nft_nat.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 23,
-              "name": "net/netfilter:nft_nat.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_nat.sh"
-            },
-            {
-              "id": "net/netfilter:nft_nat_zones.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 24,
-              "name": "net/netfilter:nft_nat_zones.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_nat_zones.sh"
-            },
-            {
-              "id": "net/netfilter:nft_queue.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 25,
-              "name": "net/netfilter:nft_queue.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_queue.sh"
-            },
-            {
-              "id": "net/netfilter:nft_synproxy.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 26,
-              "name": "net/netfilter:nft_synproxy.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_synproxy.sh"
-            },
-            {
-              "id": "net/netfilter:nft_tproxy_tcp.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 27,
-              "name": "net/netfilter:nft_tproxy_tcp.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_tproxy_tcp.sh"
-            },
-            {
-              "id": "net/netfilter:nft_tproxy_udp.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 28,
-              "name": "net/netfilter:nft_tproxy_udp.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_tproxy_udp.sh"
-            },
-            {
-              "id": "net/netfilter:nft_zones_many.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 29,
-              "name": "net/netfilter:nft_zones_many.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/nft_zones_many.sh"
-            },
-            {
-              "id": "net/netfilter:rpath.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 30,
-              "name": "net/netfilter:rpath.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/rpath.sh"
-            },
-            {
-              "id": "net/netfilter:vxlan_mtu_frag.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 31,
-              "name": "net/netfilter:vxlan_mtu_frag.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/vxlan_mtu_frag.sh"
-            },
-            {
-              "id": "net/netfilter:xt_string.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 32,
-              "name": "net/netfilter:xt_string.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/net/netfilter/xt_string.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "net/openvswitch",
@@ -7637,7 +11145,20 @@
         },
         {
           "id": "seccomp",
-          "cases": [],
+          "cases": [
+            {
+              "id": "seccomp:seccomp_benchmark",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "number": 2,
+              "name": "seccomp:seccomp_benchmark",
+              "capture": ".evidence/kselftest-full/20260914T152937Z/reference/seccomp/seccomp_benchmark"
+            }
+          ],
           "valid": false
         },
         {
@@ -7712,328 +11233,8 @@
         },
         {
           "id": "ublk",
-          "cases": [
-            {
-              "id": "ublk:test_generic_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 1,
-              "name": "ublk:test_generic_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_01.sh"
-            },
-            {
-              "id": "ublk:test_generic_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 2,
-              "name": "ublk:test_generic_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_02.sh"
-            },
-            {
-              "id": "ublk:test_generic_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 3,
-              "name": "ublk:test_generic_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_03.sh"
-            },
-            {
-              "id": "ublk:test_generic_04.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 4,
-              "name": "ublk:test_generic_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_04.sh"
-            },
-            {
-              "id": "ublk:test_generic_05.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 5,
-              "name": "ublk:test_generic_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_05.sh"
-            },
-            {
-              "id": "ublk:test_generic_06.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 6,
-              "name": "ublk:test_generic_06.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_06.sh"
-            },
-            {
-              "id": "ublk:test_generic_07.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 7,
-              "name": "ublk:test_generic_07.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_07.sh"
-            },
-            {
-              "id": "ublk:test_generic_08.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 8,
-              "name": "ublk:test_generic_08.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_08.sh"
-            },
-            {
-              "id": "ublk:test_generic_09.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 9,
-              "name": "ublk:test_generic_09.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_09.sh"
-            },
-            {
-              "id": "ublk:test_generic_10.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 10,
-              "name": "ublk:test_generic_10.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_10.sh"
-            },
-            {
-              "id": "ublk:test_generic_11.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 11,
-              "name": "ublk:test_generic_11.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_11.sh"
-            },
-            {
-              "id": "ublk:test_generic_12.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 12,
-              "name": "ublk:test_generic_12.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_12.sh"
-            },
-            {
-              "id": "ublk:test_generic_13.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 13,
-              "name": "ublk:test_generic_13.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_generic_13.sh"
-            },
-            {
-              "id": "ublk:test_null_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 14,
-              "name": "ublk:test_null_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_null_01.sh"
-            },
-            {
-              "id": "ublk:test_null_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 15,
-              "name": "ublk:test_null_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_null_02.sh"
-            },
-            {
-              "id": "ublk:test_loop_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 16,
-              "name": "ublk:test_loop_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_loop_01.sh"
-            },
-            {
-              "id": "ublk:test_loop_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 17,
-              "name": "ublk:test_loop_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_loop_02.sh"
-            },
-            {
-              "id": "ublk:test_loop_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 18,
-              "name": "ublk:test_loop_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_loop_03.sh"
-            },
-            {
-              "id": "ublk:test_loop_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 19,
-              "name": "ublk:test_loop_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_loop_04.sh"
-            },
-            {
-              "id": "ublk:test_loop_05.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 20,
-              "name": "ublk:test_loop_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_loop_05.sh"
-            },
-            {
-              "id": "ublk:test_stripe_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 21,
-              "name": "ublk:test_stripe_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stripe_01.sh"
-            },
-            {
-              "id": "ublk:test_stripe_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 22,
-              "name": "ublk:test_stripe_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stripe_02.sh"
-            },
-            {
-              "id": "ublk:test_stripe_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 23,
-              "name": "ublk:test_stripe_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stripe_03.sh"
-            },
-            {
-              "id": "ublk:test_stripe_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 24,
-              "name": "ublk:test_stripe_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stripe_04.sh"
-            },
-            {
-              "id": "ublk:test_stress_01.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 25,
-              "name": "ublk:test_stress_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stress_01.sh"
-            },
-            {
-              "id": "ublk:test_stress_02.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 26,
-              "name": "ublk:test_stress_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stress_02.sh"
-            },
-            {
-              "id": "ublk:test_stress_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 27,
-              "name": "ublk:test_stress_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stress_03.sh"
-            },
-            {
-              "id": "ublk:test_stress_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 28,
-              "name": "ublk:test_stress_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stress_04.sh"
-            },
-            {
-              "id": "ublk:test_stress_05.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 29,
-              "name": "ublk:test_stress_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/ublk/test_stress_05.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "uevent",
@@ -8052,20 +11253,8 @@
         },
         {
           "id": "mm",
-          "cases": [
-            {
-              "id": "mm:run_vmtests.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 1,
-              "name": "mm:run_vmtests.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/reference/mm/run_vmtests.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "vfio",
@@ -8086,12 +11275,10 @@
       "summary": {
         "collections": 128,
         "programs": 935,
-        "completedCollections": 3,
+        "completedCollections": 0,
         "outcomes": {
-          "NOT_RUN": 866,
-          "FAIL": 6,
-          "PASS": 7,
-          "SKIP": 56
+          "NOT_RUN": 934,
+          "PASS": 1
         },
         "buildFailures": [
           "bpf",
@@ -8118,6 +11305,8 @@
           "thermal/intel/workload_hint",
           "x86"
         ],
+        "dependencyBuildFailures": [],
+        "nestedFailureReview": [],
         "incompleteCollections": [
           "acct",
           "alsa",
@@ -8188,6 +11377,7 @@
           "net/forwarding",
           "net/hsr",
           "net/mptcp",
+          "net/netfilter",
           "net/openvswitch",
           "net/ovpn",
           "net/packetdrill",
@@ -8224,9 +11414,11 @@
           "tmpfs",
           "tpm2",
           "tty",
+          "ublk",
           "uevent",
           "user_events",
           "vDSO",
+          "mm",
           "vfio",
           "x86/bugs",
           "zram"
@@ -8554,85 +11746,7 @@
         },
         {
           "id": "net",
-          "cases": [
-            {
-              "id": "net:busy_poll_test.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 30,
-              "name": "net:busy_poll_test.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/busy_poll_test.sh"
-            },
-            {
-              "id": "net:cmsg_ip.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 31,
-              "name": "net:cmsg_ip.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/cmsg_ip.sh"
-            },
-            {
-              "id": "net:netdev-l2addr.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 69,
-              "name": "net:netdev-l2addr.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netdev-l2addr.sh"
-            },
-            {
-              "id": "net:netns-name.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 71,
-              "name": "net:netns-name.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netns-name.sh"
-            },
-            {
-              "id": "net:route_localnet.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 79,
-              "name": "net:route_localnet.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/route_localnet.sh"
-            },
-            {
-              "id": "net:rtnetlink_notification.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 83,
-              "name": "net:rtnetlink_notification.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/rtnetlink_notification.sh"
-            },
-            {
-              "id": "net:tfo_passive.sh",
-              "outcome": "FAIL",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 114,
-              "name": "net:tfo_passive.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/tfo_passive.sh"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -8662,361 +11776,8 @@
         },
         {
           "id": "net/netfilter",
-          "cases": [
-            {
-              "id": "net/netfilter:br_netfilter.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 1,
-              "name": "net/netfilter:br_netfilter.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/br_netfilter.sh"
-            },
-            {
-              "id": "net/netfilter:br_netfilter_queue.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 2,
-              "name": "net/netfilter:br_netfilter_queue.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/br_netfilter_queue.sh"
-            },
-            {
-              "id": "net/netfilter:bridge_brouter.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 3,
-              "name": "net/netfilter:bridge_brouter.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/bridge_brouter.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_clash.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 4,
-              "name": "net/netfilter:conntrack_clash.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_clash.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_dump_flush.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 5,
-              "name": "net/netfilter:conntrack_dump_flush.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_dump_flush.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_icmp_related.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 6,
-              "name": "net/netfilter:conntrack_icmp_related.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_icmp_related.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_ipip_mtu.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 7,
-              "name": "net/netfilter:conntrack_ipip_mtu.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_ipip_mtu.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_resize.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 8,
-              "name": "net/netfilter:conntrack_resize.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_resize.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_reverse_clash.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 9,
-              "name": "net/netfilter:conntrack_reverse_clash.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_reverse_clash.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_sctp_collision.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 10,
-              "name": "net/netfilter:conntrack_sctp_collision.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_sctp_collision.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_tcp_unreplied.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 11,
-              "name": "net/netfilter:conntrack_tcp_unreplied.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_tcp_unreplied.sh"
-            },
-            {
-              "id": "net/netfilter:conntrack_vrf.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 12,
-              "name": "net/netfilter:conntrack_vrf.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/conntrack_vrf.sh"
-            },
-            {
-              "id": "net/netfilter:ipvs.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 13,
-              "name": "net/netfilter:ipvs.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/ipvs.sh"
-            },
-            {
-              "id": "net/netfilter:nf_conntrack_packetdrill.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 14,
-              "name": "net/netfilter:nf_conntrack_packetdrill.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nf_conntrack_packetdrill.sh"
-            },
-            {
-              "id": "net/netfilter:nf_nat_edemux.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 15,
-              "name": "net/netfilter:nf_nat_edemux.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nf_nat_edemux.sh"
-            },
-            {
-              "id": "net/netfilter:nft_audit.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 16,
-              "name": "net/netfilter:nft_audit.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_audit.sh"
-            },
-            {
-              "id": "net/netfilter:nft_concat_range.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 17,
-              "name": "net/netfilter:nft_concat_range.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_concat_range.sh"
-            },
-            {
-              "id": "net/netfilter:nft_conntrack_helper.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 18,
-              "name": "net/netfilter:nft_conntrack_helper.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_conntrack_helper.sh"
-            },
-            {
-              "id": "net/netfilter:nft_fib.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 19,
-              "name": "net/netfilter:nft_fib.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_fib.sh"
-            },
-            {
-              "id": "net/netfilter:nft_flowtable.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 20,
-              "name": "net/netfilter:nft_flowtable.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_flowtable.sh"
-            },
-            {
-              "id": "net/netfilter:nft_interface_stress.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 21,
-              "name": "net/netfilter:nft_interface_stress.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_interface_stress.sh"
-            },
-            {
-              "id": "net/netfilter:nft_meta.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 22,
-              "name": "net/netfilter:nft_meta.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_meta.sh"
-            },
-            {
-              "id": "net/netfilter:nft_nat.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 23,
-              "name": "net/netfilter:nft_nat.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_nat.sh"
-            },
-            {
-              "id": "net/netfilter:nft_nat_zones.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 24,
-              "name": "net/netfilter:nft_nat_zones.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_nat_zones.sh"
-            },
-            {
-              "id": "net/netfilter:nft_queue.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 25,
-              "name": "net/netfilter:nft_queue.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_queue.sh"
-            },
-            {
-              "id": "net/netfilter:nft_synproxy.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 26,
-              "name": "net/netfilter:nft_synproxy.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_synproxy.sh"
-            },
-            {
-              "id": "net/netfilter:nft_tproxy_tcp.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 27,
-              "name": "net/netfilter:nft_tproxy_tcp.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_tproxy_tcp.sh"
-            },
-            {
-              "id": "net/netfilter:nft_tproxy_udp.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 28,
-              "name": "net/netfilter:nft_tproxy_udp.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_tproxy_udp.sh"
-            },
-            {
-              "id": "net/netfilter:nft_zones_many.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 29,
-              "name": "net/netfilter:nft_zones_many.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/nft_zones_many.sh"
-            },
-            {
-              "id": "net/netfilter:rpath.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 30,
-              "name": "net/netfilter:rpath.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/rpath.sh"
-            },
-            {
-              "id": "net/netfilter:vxlan_mtu_frag.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 31,
-              "name": "net/netfilter:vxlan_mtu_frag.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/vxlan_mtu_frag.sh"
-            },
-            {
-              "id": "net/netfilter:xt_string.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 32,
-              "name": "net/netfilter:xt_string.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/net/netfilter/xt_string.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "net/openvswitch",
@@ -9125,7 +11886,20 @@
         },
         {
           "id": "seccomp",
-          "cases": [],
+          "cases": [
+            {
+              "id": "seccomp:seccomp_benchmark",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "number": 2,
+              "name": "seccomp:seccomp_benchmark",
+              "capture": ".evidence/kselftest-full/20260914T152937Z/subject/seccomp/seccomp_benchmark"
+            }
+          ],
           "valid": false
         },
         {
@@ -9200,328 +11974,8 @@
         },
         {
           "id": "ublk",
-          "cases": [
-            {
-              "id": "ublk:test_generic_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 1,
-              "name": "ublk:test_generic_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_01.sh"
-            },
-            {
-              "id": "ublk:test_generic_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 2,
-              "name": "ublk:test_generic_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_02.sh"
-            },
-            {
-              "id": "ublk:test_generic_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 3,
-              "name": "ublk:test_generic_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_03.sh"
-            },
-            {
-              "id": "ublk:test_generic_04.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 4,
-              "name": "ublk:test_generic_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_04.sh"
-            },
-            {
-              "id": "ublk:test_generic_05.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 5,
-              "name": "ublk:test_generic_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_05.sh"
-            },
-            {
-              "id": "ublk:test_generic_06.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 6,
-              "name": "ublk:test_generic_06.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_06.sh"
-            },
-            {
-              "id": "ublk:test_generic_07.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 7,
-              "name": "ublk:test_generic_07.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_07.sh"
-            },
-            {
-              "id": "ublk:test_generic_08.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 8,
-              "name": "ublk:test_generic_08.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_08.sh"
-            },
-            {
-              "id": "ublk:test_generic_09.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 9,
-              "name": "ublk:test_generic_09.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_09.sh"
-            },
-            {
-              "id": "ublk:test_generic_10.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 10,
-              "name": "ublk:test_generic_10.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_10.sh"
-            },
-            {
-              "id": "ublk:test_generic_11.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 11,
-              "name": "ublk:test_generic_11.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_11.sh"
-            },
-            {
-              "id": "ublk:test_generic_12.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 12,
-              "name": "ublk:test_generic_12.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_12.sh"
-            },
-            {
-              "id": "ublk:test_generic_13.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 13,
-              "name": "ublk:test_generic_13.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_generic_13.sh"
-            },
-            {
-              "id": "ublk:test_null_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 14,
-              "name": "ublk:test_null_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_null_01.sh"
-            },
-            {
-              "id": "ublk:test_null_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 15,
-              "name": "ublk:test_null_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_null_02.sh"
-            },
-            {
-              "id": "ublk:test_loop_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 16,
-              "name": "ublk:test_loop_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_loop_01.sh"
-            },
-            {
-              "id": "ublk:test_loop_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 17,
-              "name": "ublk:test_loop_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_loop_02.sh"
-            },
-            {
-              "id": "ublk:test_loop_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 18,
-              "name": "ublk:test_loop_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_loop_03.sh"
-            },
-            {
-              "id": "ublk:test_loop_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 19,
-              "name": "ublk:test_loop_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_loop_04.sh"
-            },
-            {
-              "id": "ublk:test_loop_05.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 20,
-              "name": "ublk:test_loop_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_loop_05.sh"
-            },
-            {
-              "id": "ublk:test_stripe_01.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 21,
-              "name": "ublk:test_stripe_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stripe_01.sh"
-            },
-            {
-              "id": "ublk:test_stripe_02.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 22,
-              "name": "ublk:test_stripe_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stripe_02.sh"
-            },
-            {
-              "id": "ublk:test_stripe_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 23,
-              "name": "ublk:test_stripe_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stripe_03.sh"
-            },
-            {
-              "id": "ublk:test_stripe_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 24,
-              "name": "ublk:test_stripe_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stripe_04.sh"
-            },
-            {
-              "id": "ublk:test_stress_01.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 25,
-              "name": "ublk:test_stress_01.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stress_01.sh"
-            },
-            {
-              "id": "ublk:test_stress_02.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 26,
-              "name": "ublk:test_stress_02.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stress_02.sh"
-            },
-            {
-              "id": "ublk:test_stress_03.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 27,
-              "name": "ublk:test_stress_03.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stress_03.sh"
-            },
-            {
-              "id": "ublk:test_stress_04.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 28,
-              "name": "ublk:test_stress_04.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stress_04.sh"
-            },
-            {
-              "id": "ublk:test_stress_05.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "number": 29,
-              "name": "ublk:test_stress_05.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/ublk/test_stress_05.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "uevent",
@@ -9540,19 +11994,7 @@
         },
         {
           "id": "mm",
-          "cases": [
-            {
-              "id": "mm:run_vmtests.sh",
-              "outcome": "INCOMPLETE",
-              "bootVerdict": "MARKERS_MISSING",
-              "started": true,
-              "valid": false,
-              "exitCode": null,
-              "number": 1,
-              "name": "mm:run_vmtests.sh",
-              "capture": ".evidence/kselftest-full/20260914T015846Z/subject/mm/run_vmtests.sh"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -9574,13 +12016,10 @@
       "summary": {
         "collections": 128,
         "programs": 935,
-        "completedCollections": 3,
+        "completedCollections": 0,
         "outcomes": {
-          "NOT_RUN": 866,
-          "FAIL": 6,
-          "PASS": 7,
-          "SKIP": 55,
-          "INCOMPLETE": 1
+          "NOT_RUN": 934,
+          "PASS": 1
         },
         "buildFailures": [
           "bpf",
@@ -9607,6 +12046,8 @@
           "thermal/intel/workload_hint",
           "x86"
         ],
+        "dependencyBuildFailures": [],
+        "nestedFailureReview": [],
         "incompleteCollections": [
           "acct",
           "alsa",
@@ -9677,6 +12118,7 @@
           "net/forwarding",
           "net/hsr",
           "net/mptcp",
+          "net/netfilter",
           "net/openvswitch",
           "net/ovpn",
           "net/packetdrill",
@@ -9713,6 +12155,7 @@
           "tmpfs",
           "tpm2",
           "tty",
+          "ublk",
           "uevent",
           "user_events",
           "vDSO",
@@ -9726,227 +12169,53 @@
       }
     }
   },
+  "payloads": {
+    "reference": {
+      "root": ".build/k7/module-runtime/full/reference",
+      "initramfsSha256": "278ee85e25bf3167fcba6c1aca6adf9c2670e01c8eb4153cb1173b7246f27010",
+      "rootfsSha256": "15546716436316b897f7cd1aa9b5c84a7609762c160688946bf70e8b616f1cbc"
+    },
+    "subject": {
+      "root": ".build/k7/module-runtime/full/subject",
+      "initramfsSha256": "278ee85e25bf3167fcba6c1aca6adf9c2670e01c8eb4153cb1173b7246f27010",
+      "rootfsSha256": "fca163df10f268d36deaf88318df5a840075dde0bb6fdd05c41a76f8e940f319"
+    }
+  },
   "runtimePolicy": {
     "isolation": "fresh VM per program",
-    "workers": 2,
-    "upstreamTimeouts": "unchanged; outer watchdog adds 15 seconds cleanup and 60 seconds boot",
+    "workers": 1,
+    "upstreamTimeouts": "collection settings retained except explicit source-declared or measured program overrides; outer watchdog adds 15 seconds cleanup and 60 seconds boot",
     "unlimitedProgramWatchdogSeconds": 300,
-    "modules": "not built or installed; frozen Images and configuration unchanged"
+    "modules": "explicit per-kernel runtime payload; see module installation receipt",
+    "kunitAutorun": "0",
+    "programTimeoutOverrides": {
+      "filesystems:file_stressor": {
+        "seconds": 1800,
+        "source": "tools/testing/selftests/filesystems/file_stressor.c",
+        "reason": "TEST_F_TIMEOUT(..., 900 * 2); clock_nanosleep(..., 900)"
+      },
+      "ublk:test_stress_05.sh": {
+        "seconds": 600,
+        "source": "tools/testing/selftests/ublk/test_stress_05.sh",
+        "reason": "Sequential recovery-mode phases launch fio --runtime=40 and wait for device removal; both kernels hit the inherited 45-second limit mid-workload. 600 seconds is an explicit measurement budget, not an upstream declared timeout."
+      },
+      "rseq:run_param_test.sh": {
+        "seconds": 7200,
+        "source": "tools/testing/selftests/rseq/run_param_test.sh and rseq/settings",
+        "reason": "The upstream collection declares timeout=0. The unchanged script runs 1184 invocations including injected yields, signals and sleeps; the 300-second unlimited-test fallback interrupted it. 7200 seconds is an explicit measurement budget, not a change to the test or its assertions."
+      }
+    }
   },
   "selection": {
     "selectors": [
-      "ublk",
-      "mm",
-      "net:rtnetlink_notification.sh",
-      "net:route_localnet.sh",
-      "net:cmsg_ip.sh",
-      "net:busy_poll_test.sh",
-      "net:netdev-l2addr.sh",
-      "net:netns-name.sh",
-      "net:tfo_passive.sh",
-      "net/netfilter"
+      "seccomp:seccomp_benchmark"
     ],
     "programs": [
-      "net:busy_poll_test.sh",
-      "net:cmsg_ip.sh",
-      "net:netdev-l2addr.sh",
-      "net:netns-name.sh",
-      "net:route_localnet.sh",
-      "net:rtnetlink_notification.sh",
-      "net:tfo_passive.sh",
-      "net/netfilter:br_netfilter.sh",
-      "net/netfilter:br_netfilter_queue.sh",
-      "net/netfilter:bridge_brouter.sh",
-      "net/netfilter:conntrack_clash.sh",
-      "net/netfilter:conntrack_dump_flush.sh",
-      "net/netfilter:conntrack_icmp_related.sh",
-      "net/netfilter:conntrack_ipip_mtu.sh",
-      "net/netfilter:conntrack_resize.sh",
-      "net/netfilter:conntrack_reverse_clash.sh",
-      "net/netfilter:conntrack_sctp_collision.sh",
-      "net/netfilter:conntrack_tcp_unreplied.sh",
-      "net/netfilter:conntrack_vrf.sh",
-      "net/netfilter:ipvs.sh",
-      "net/netfilter:nf_conntrack_packetdrill.sh",
-      "net/netfilter:nf_nat_edemux.sh",
-      "net/netfilter:nft_audit.sh",
-      "net/netfilter:nft_concat_range.sh",
-      "net/netfilter:nft_conntrack_helper.sh",
-      "net/netfilter:nft_fib.sh",
-      "net/netfilter:nft_flowtable.sh",
-      "net/netfilter:nft_interface_stress.sh",
-      "net/netfilter:nft_meta.sh",
-      "net/netfilter:nft_nat.sh",
-      "net/netfilter:nft_nat_zones.sh",
-      "net/netfilter:nft_queue.sh",
-      "net/netfilter:nft_synproxy.sh",
-      "net/netfilter:nft_tproxy_tcp.sh",
-      "net/netfilter:nft_tproxy_udp.sh",
-      "net/netfilter:nft_zones_many.sh",
-      "net/netfilter:rpath.sh",
-      "net/netfilter:vxlan_mtu_frag.sh",
-      "net/netfilter:xt_string.sh",
-      "ublk:test_generic_01.sh",
-      "ublk:test_generic_02.sh",
-      "ublk:test_generic_03.sh",
-      "ublk:test_generic_04.sh",
-      "ublk:test_generic_05.sh",
-      "ublk:test_generic_06.sh",
-      "ublk:test_generic_07.sh",
-      "ublk:test_generic_08.sh",
-      "ublk:test_generic_09.sh",
-      "ublk:test_generic_10.sh",
-      "ublk:test_generic_11.sh",
-      "ublk:test_generic_12.sh",
-      "ublk:test_generic_13.sh",
-      "ublk:test_null_01.sh",
-      "ublk:test_null_02.sh",
-      "ublk:test_loop_01.sh",
-      "ublk:test_loop_02.sh",
-      "ublk:test_loop_03.sh",
-      "ublk:test_loop_04.sh",
-      "ublk:test_loop_05.sh",
-      "ublk:test_stripe_01.sh",
-      "ublk:test_stripe_02.sh",
-      "ublk:test_stripe_03.sh",
-      "ublk:test_stripe_04.sh",
-      "ublk:test_stress_01.sh",
-      "ublk:test_stress_02.sh",
-      "ublk:test_stress_03.sh",
-      "ublk:test_stress_04.sh",
-      "ublk:test_stress_05.sh",
-      "mm:run_vmtests.sh"
+      "seccomp:seccomp_benchmark"
     ],
     "unselected": "NOT_RUN; original inventory retained"
   },
-  "referenceImageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+  "referenceImageSha256": "2dde028e5f4d6e835291985914387a3fadcd877e3fbfc746ec5f0ca73939ceed",
   "referenceStatus": "INCOMPLETE",
-  "regressions": [],
-  "runtimePathReplay": {
-    "capture": ".evidence/kselftest-full/runtime-links-20260914",
-    "program": "tc-testing:tdc.sh",
-    "runtimeChange": "var/run -> ../run and var/lock -> ../run/lock; same programs, packages, Images and upstream 900-second budget",
-    "rootfsSha256": "2c8bf58b8d802fb76eb4c66510daa01cf557ab89614fd9e0accf43c69985f3bc",
-    "previousRootfs": ".build/kselftest-full/scratch-before-runtime-links.img",
-    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=tc-testing:tdc.sh K1_BOOT_TIMEOUT=975 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <image> <capture>/<lane>",
-    "reference": {"imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35", "serialLogSha256": "78b7411d71bcef27e1feeddd2bacc066fa185f2439b7af1a7aadd5d19638bd51", "boot": "PASS", "program": "FAIL"},
-    "subject": {"imageSha256": "25fa46a4d45f212b7e3aa5ece08f24db4f8bed73aeef87aa2e3908f78de90316", "serialLogSha256": "ca7256b9fc2ea6f04ceea2f0370ba006add4ee300871861da94f163900c48bf8", "boot": "PASS", "program": "FAIL"},
-    "result": "The missing /var/run/netns error disappears on both kernels. Both then fail at nsPlugin.py:130 creating a veth with EOPNOTSUPP; CONFIG_VETH=m but no modules are installed. This is an environment prerequisite repair, not a test pass."
-  },
-  "subsequentDiagnosticReplay": {
-    "capture": ".evidence/kselftest-full/private-frame-reuse-20260914/mm-full",
-    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=mm:run_vmtests.sh K1_BOOT_TIMEOUT=1020 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh .build/k1/repair/arch/arm64/boot/Image .evidence/kselftest-full/private-frame-reuse-20260914/mm-full",
-    "imageSha256": "25fa46a4d45f212b7e3aa5ece08f24db4f8bed73aeef87aa2e3908f78de90316",
-    "serialLogSha256": "635609db3be983c561d2f898c88fe8c7a36dd8a067ec9a221ea2498c9f763952",
-    "composition": "Original K6 objects except io_uring/memmap.o, mm/rmap.o, mm/huge_memory.o and mm/madvise.o rebuilt with the two tested EvoCC repairs; no reference-object fallback, not a uniform new full build",
-    "objectAudit": ".evidence/kselftest-full/private-frame-reuse-20260914/relink.json",
-    "bootVerdict": "PASS",
-    "scriptPrograms": {"PASS": 49, "FAIL": 1, "SKIP": 16, "total": 66},
-    "referenceCapture": ".evidence/kselftest-full/20260914T015846Z/reference/mm/run_vmtests.sh",
-    "comparison": "Same 49/1/16 script summary and the same five failing mremap subtests in the reference; upstream outer wrapper SKIP does not erase these failures",
-    "remainingFailures": [
-      {"class": "2 GiB allocations fail ENOMEM in the declared 2 GiB VM", "subtests": 4},
-      {"class": "userfaultfd returns ENOSYS because CONFIG_USERFAULTFD is disabled", "subtests": 1}
-    ],
-    "claimLimit": "The repaired mm script completes without the previous compiler crashes; this is not a full-suite pass or closure of the shared environment requirements"
-  },
-  "sourceTimeoutReplay": {
-    "capture": ".evidence/kselftest-full/source-timeout-20260914",
-    "program": "filesystems:file_stressor",
-    "source": "tools/testing/selftests/filesystems/file_stressor.c: TEST_F_TIMEOUT(..., 900 * 2) and clock_nanosleep with tv_sec=900",
-    "policyChange": "One program uses its source-declared 1800s timeout via upstream run_kselftest.sh -o; PID1 limit 1815s and boot limit 1875s. Other program limits and the 2 GiB/4 CPU machine are unchanged.",
-    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=filesystems:file_stressor K1_SELFTEST_TIMEOUT=1800 K1_BOOT_TIMEOUT=1875 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <image> <capture>/<lane>-cli",
-    "initramfsSha256": "f9dae4d28e68764820f00de05c7575a8f5aa019ab3e9f2dae5b139f7737faefb",
-    "rootfsSha256": "2c8bf58b8d802fb76eb4c66510daa01cf557ab89614fd9e0accf43c69985f3bc",
-    "reference": {"imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35", "serialLogSha256": "09aaf3139a9519aef8ed6bd560bb016dcc3e2c0589704459d370c064ff1dc46b", "program": "PASS", "subtests": {"PASS": 1, "FAIL": 0, "SKIP": 0}, "powerdownAtBootSeconds": 900.146506},
-    "subject": {"imageSha256": "25fa46a4d45f212b7e3aa5ece08f24db4f8bed73aeef87aa2e3908f78de90316", "serialLogSha256": "4f3cdd70ab94c68338467191b9a7afe106c3b76cfe6d247fa3f2180c386aaec9", "program": "PASS", "subtests": {"PASS": 1, "FAIL": 0, "SKIP": 0}, "powerdownAtBootSeconds": 900.221660},
-    "initialTransportAttempt": "reference/ and subject/ were interrupted after observing that upstream clears the environment-only override. Both remain MARKERS_MISSING/INCOMPLETE; only the later -cli runs pass.",
-    "claimLimit": "One previously timed-out program now finishes on both kernels. The subject is the recorded four-object repair composition, not a fresh 935-program run."
-  },
-  "namespaceRootRepair": {
-    "cause": "The temporary initramfs devtmpfs remained a hidden sibling after moving the ext4 runtime to /. Foreign-namespace listmount selected that first child instead of the runtime root and returned one mount instead of ten.",
-    "repair": "Unmount temporary /dev before MS_MOVE and chroot; mount runtime /dev afterward as before. No kernel or selftest source changed.",
-    "capture": ".evidence/kselftest-full/root-unmount-20260914",
-    "initramfs": ".build/kselftest-full/root-unmount/initramfs.cpio",
-    "initramfsSha256": "7a237d49ed2533c00be34efeb9d09685c31b208000c21a9f37d5f18c346930d0",
-    "rootfsSha256": "e88f9b33afa13c33157f82209171dc69963e4e30122dded4bf15a81191aa2bbe",
-    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/root-unmount/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=filesystems/statmount:statmount_test_ns K1_BOOT_TIMEOUT=120 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <image> <capture>",
-    "reference": {"program": "PASS", "subtests": {"PASS": 2, "FAIL": 0}, "serialLogSha256": "4cdf1b948f13ca952116ae2fe24ced754d920298fe11fb4ab851c3e4efadca36"},
-    "subject": {"program": "PASS", "subtests": {"PASS": 2, "FAIL": 0}, "serialLogSha256": "1eec8f1d762bb9708a91940acf9d0080241c04b13fd79e773a7e244a61601821"},
-    "regression": {"program": "mount_setattr:mount_setattr_test", "kernel": "subject", "PASS": 34, "FAIL": 0, "capture": "subject-mount-setattr", "serialLogSha256": "a8d6a678e26da4ef8b87a689c56d7e21028f6241412786486ab59daacbd96e62"},
-    "build": "sealed gcc-14 -static -O2 -Wall -Wextra -Werror tools/k1/selftest-init.c; exit 0",
-    "claimLimit": "Original statmount namespace failure repaired on both kernels; the original 935-program results and runtime disk remain unchanged."
-  },
-  "moduleAndNetworkHelpers": {
-    "capture": ".evidence/kunit/runtime-modules-20260914",
-    "cause": "The custom build enumeration read TARGETS but omitted the upstream INSTALL_DEP_TARGETS=net/lib; copying source files did not build xdp_dummy.bpf.o",
-    "repair": "Enumerate and build upstream install dependencies separately from runnable collections; dependency failures prevent PASS without changing the program denominator",
-    "red": "One declared missing-install-dependency assertion, no import or build failure",
-    "gate": "python3 -m unittest discover -s tools/k1/tests -q: 142 PASS; ruff check tools/k1 and git diff --check: clean; tools/gate-changed.sh 13499c2: no changed Rust crate",
-    "actualBuild": "Sealed offline gcc-14/clang-19 upstream net/lib all and install targets: exit 0",
-    "userspacePayload": "Four generated helpers installed and read back byte-for-byte in both COW runtime disks; original runtime disk unchanged",
-    "moduleRuntime": "Matching VETH/FUSE/overlay modules loaded on both expanded Images; FUSE and overlayfs dev_in_maps pass. Five isolated overlay layer cases pass; two shared source-explained failures remain. VETH now reaches the missing IPv6 module.",
-    "runtimeResults": ".evidence/kunit/runtime-modules-20260914/runtime-results.json",
-    "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
-    "original935ProgramResultsReplaced": false
-  },
-  "clone3LibcapCompatibilityProbe": {
-    "originalOutcome": "FAIL on both kernels; retained",
-    "cause": "The upstream test writes an opaque cap_t through an obsolete private struct layout, failing to set the required permitted capability with libcap 2.75",
-    "variant": ".evidence/builtin-probes/20260914-clone3-libcap/clone3-public-api.c",
-    "sourceSha256": "ca857ca876079675b12977abcbac8ea8347915dfdefe306f64e207187dbf7caa",
-    "change": "Only replace private writes by cap_set_flag for the same three capabilities. Every clone3, setuid and permission assertion is unchanged; the original source and binary are unchanged.",
-    "capture": ".evidence/kunit/clone3-public-api-20260914",
-    "variantEachKernel": {"PASS": 1, "FAIL": 0},
-    "resultsSha256": "8e349423ac4d1bf9184efef19c7bbc919a7e6383c3ae18d26e51148847a54428",
-    "claimLimit": "A labeled userspace compatibility variant validates the kernel interface. It does not replace the original upstream FAIL in the 935-program inventory."
-  },
-  "completeRseqPressureReplay": {
-    "capture": ".evidence/kunit/rseq-complete-20260914",
-    "program": "rseq:run_param_test.sh",
-    "script": "Unchanged upstream 1184-invocation matrix; architecture-unimplemented inner operations retain their printed skips",
-    "previousRunnerSeconds": 300,
-    "runnerSeconds": 7200,
-    "reason": "The collection settings specify timeout=0. A finite explicit 7200-second budget replaces the harness's 300-second fallback without reducing the matrix, thread count, iterations or injected delays.",
-    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=0 K1_INITRAMFS=.build/k7/module-runtime/initramfs.cpio K1_TEST_DISK=.build/k7/module-runtime/<lane>/scratch-net.img K1_SELFTEST_COLLECTION=rseq:run_param_test.sh K1_SELFTEST_TIMEOUT=7200 K1_CONSOLE_LOGLEVEL=5 K1_BOOT_TIMEOUT=7260 tools/k1/boot.sh <matching-expanded-image> <capture>/<lane>",
-    "eachKernelPrograms": {"PASS": 1, "FAIL": 0, "TIMEOUT": 0},
-    "powerdownAtBootSeconds": {"reference": 527.63272, "subject": 518.724371},
-    "resultsSha256": "41f0581f90c4ac1b45c1a3452102d2bae3f91ee6c9273902fa33667290c39baa",
-    "gate": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 145 PASS; Ruff clean; tools/gate-changed.sh 450b228 --offline -j2 --quiet: no Rust crate changed",
-    "original935ProgramResultsReplaced": false
-  },
-  "expandedUblkReplay": {
-    "capture": ".evidence/kunit/ublk-expanded-20260914",
-    "programs": 29,
-    "inputs": ".evidence/kunit/ublk-expanded-20260914/inputs.json",
-    "initialEachKernel": {"PASS": 25, "SKIP": 3, "TIMEOUT": 1},
-    "initialResultsSha256": "81364d45709362e5afa63ee2bb2c402e5c6cc2882fc9012d3134dfcb712e3837",
-    "stressBudget": {
-      "program": "ublk:test_stress_05.sh",
-      "previousRunnerSeconds": 45,
-      "runnerSeconds": 600,
-      "vmSeconds": 675,
-      "reason": "The source executes multiple sequential recovery-mode phases with fio --runtime=40 and device-removal waits. Original 45-second failures are retained; the unchanged program completes on both kernels with the explicit budget.",
-      "command": "K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=0 K1_INITRAMFS=.build/k7/module-runtime/initramfs.cpio K1_TEST_DISK=.build/k7/module-runtime/<lane>/scratch-net.img K1_SELFTEST_COLLECTION=ublk:test_stress_05.sh K1_SELFTEST_TIMEOUT=600 K1_BOOT_TIMEOUT=675 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <matching-expanded-image> <capture>/stress-budget/<lane>",
-      "eachKernel": {"PASS": 1, "FAIL": 0},
-      "powerdownAtBootSeconds": {"reference": 102.690071, "subject": 103.017434},
-      "resultsSha256": "ec47d462d8f01e82c78baebbffa8f46d8d3c924b61955947fd764780c044c78e"
-    },
-    "completedTargetedEachKernel": {"PASS": 26, "SKIP": 3},
-    "remaining": "generic_01, generic_02 and generic_12 require bpftrace. Their trace programs use block:block_rq_complete; the expanded configuration also has FTRACE/KPROBES disabled. Tool installation alone would not close this tracing coverage gap.",
-    "gate": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 143 PASS; Ruff and git diff --check clean",
-    "claimLimit": "Original sources, arguments and workload unchanged. This is a targeted expanded-configuration comparison, not a replacement for the 935-program run."
-  },
-  "runtimePrerequisiteRepair": {
-    "changes": ["/mnt directory", "securityfs mount", "dosfstools, sudo and e2fsprogs packages", "Linux file ownership and modes retained in the generated rootfs; libarchive required by the formatter"],
-    "tests": "python3 -m unittest discover -s tools/k1/tests -q: 138 PASS; ruff check tools/k1 and bash -n tools/k1/lib.sh tools/k1/boot.sh: PASS; runtime init compiles with gcc-14 -static -O2 -Wall -Wextra -Werror",
-    "execution": "Targeted original-program replay completed on both existing Images; no kernel or test source changed",
-    "command": "python3 tools/k1/selftest_full.py --refresh-runtime --install-deps --build-only --jobs 2",
-    "firstReplay": {"capture": ".evidence/kselftest-full/runtime-prerequisites-20260914", "summarySha256": "96fcfbc0b7f47ccc38c54d71b99b520d29def45dd7465b263f9d181e250e6701", "eachKernel": {"lsmProgramsPassed": 3, "lsmSubtestsPassed": 15, "mountSubtestsPassed": 24, "mountSubtestsFailedMissingMkfsExt4": 10, "fatFailedHostUidOnSudoFiles": 1}},
-    "ownershipReplay": {"capture": ".evidence/kselftest-full/guest-ownership-20260914", "summarySha256": "988740d019316f139b77efe8fc5f3c6239b71a75d9bad5ed3d7cd0f8636de6cc", "rootfsSha256": "e88f9b33afa13c33157f82209171dc69963e4e30122dded4bf15a81191aa2bbe", "eachKernel": {"programsPassed": 2, "mountSubtestsPassed": 34, "mountSubtestsFailed": 0, "fatProgramsPassed": 1}},
-    "imageAudit": "debugfs stat: /etc/sudoers uid 0 gid 0 mode 0440; /usr/bin/sudo uid 0 gid 0 mode 04755, restored from actual Linux package metadata",
-    "failedRefreshAttempts": "The first request was not started because the approval service was at capacity. Later format probes failed because Homebrew mke2fs omits libarchive support and Debian's runtime library was absent. Neither attempt ran a guest or was counted as PASS; installing libarchive13t64 completed the real refresh.",
-    "analysis": "docs/notebook/kernel-selftest-gaps-20260914.md",
-    "claimLimit": "Five targeted programs repaired, not a new 935-program comparison. Subject remains the recorded four-object repair composition."
-  }
+  "regressions": []
 }

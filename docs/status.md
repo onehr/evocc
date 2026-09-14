@@ -1,5 +1,5 @@
 ```text
-EvoCC ── (2026-09-14 UTC,EvoIR 1.9.97 / EvoMIR 0.29, checkout 647d84d)
+EvoCC ── (2026-09-14 UTC,EvoIR 1.9.97 / EvoMIR 0.29, checkout 386339d)
 ══════════════════════════════════════════════════════════════════════════════════
 
 ┌─ F ─────────────────────────┐ ┌─ S ── 17 ────────────────┐
@@ -27,8 +27,8 @@ EvoCC ── (2026-09-14 UTC,EvoIR 1.9.97 / EvoMIR 0.29, checkout 647d84d)
 │ K7 kselftest PASS: 125 PASS / 0 FAIL / 0 SKIP │
 │ KUnit: reference 1324 PASS / 8 FAIL / 108 SKIP; subject 1325 PASS / 7 FAIL / 108 SKIP                             │
 │ K7 collection INCOMPLETE;// receipt │
-│   reference: 3 collections, 7 PASS / 6 FAIL / 56 SKIP (program-level)                                             │
-│   subject: 3 collections, 7 PASS / 6 FAIL / 55 SKIP (program-level)                                               │
+│   reference: 0 collections, 1 PASS / 0 FAIL / 0 SKIP (program-level)                                              │
+│   subject: 0 collections, 1 PASS / 0 FAIL / 0 SKIP (program-level)                                                │
 │ :2,799 @782272f │
 │ PASS ████████ GCC ,EvoCC , │
 │ K1 receipt: EvoCC 76 ; 90/2,799 ░░░░░░░░ │
@@ -49,7 +49,7 @@ Q3 ███░░░░░░░ ,(13 3 )
 
 ## Unified benchmark evaluation
 
-Run `20260914T121621.838048Z`; checkout `647d84d`; selected gates `ERROR`. Run again with `python3 tools/bench.py all`.
+Run `20260914T152936.402615Z`; checkout `386339d`; selected gates `INCOMPLETE`. Run again with `python3 tools/bench.py all`.
 
 Program counts and translation-unit counts are different measures; an incomplete mixed build is not a closed roadmap milestone. Unselected lanes retain their previous reading and compiler identity; they are not remeasured by this run. Kernel composition and compiler identities, including whether the build is uniform or incremental, are recorded in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); boot and runtime selftests remain separate measurements.
 
@@ -73,6 +73,6 @@ Program counts and translation-unit counts are different measures; an incomplete
 | sqlite | E12 | NOT_IMPLEMENTED | not measured | 20260907T141450.311159Z (previous) | no adapter; floating-point rung deferred |
 | kernel-full | K6 | PASS | 2799/2799 units | 20260913T090822Z-incremental (previous) | all target C objects, generated-input fixed point, full link and real boot; selftests separate |
 | kernel-selftest | K7 | PASS | 9/9 programs | 20260913T144437.071869Z (previous) | selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate |
-| kernel-selftest-all | K7 | ERROR | unavailable | 20260914T121621.838048Z | receipt unchanged; previous evidence is not a new measurement |
+| kernel-selftest-all | K7 | INCOMPLETE | 1/935 programs | 20260914T152936.402615Z | all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate; targeted replay, unselected programs NOT_RUN |
 
 Details and commands: [bench receipt](../tests/contracts/bench-receipt.json). Partial failed runs and source-level blockers: [benchmark review](notebook/benchmark-evaluation.md).

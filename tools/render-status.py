@@ -123,6 +123,19 @@ def kunit_progress(receipt) -> str:
     return "KUnit: " + "; ".join(parts)
 
 
+def kernel_selftest_status(receipt: dict, full_kernel: dict) -> str:
+    if not receipt:
+        return "NOT_RUN"
+    kernel = full_kernel
+    if receipt.get("kernelReceiptPath"):
+        path = ROOT / receipt["kernelReceiptPath"]
+        kernel = json.loads(path.read_text()) if path.exists() else {}
+    expected = kernel.get("imageSha256") or kernel.get("builtInComposition", {}).get("imageSha256")
+    if not expected or receipt.get("kernelImageSha256") != expected:
+        return "STALE_IMAGE"
+    return receipt.get("status", "NOT_RUN")
+
+
 def main() -> int:
     gate = contract("semantic-gate-contract.json")
     front = contract("day9-acceptance-contract.json")
@@ -230,14 +243,10 @@ def main() -> int:
         and full_boot.get("imageSha256") == full_kernel.get("imageSha256")
     )
     selftests = contract("kernel-selftest-receipt.json")
-    selftest_status = selftests.get("status", "NOT_RUN")
-    if selftests and selftests.get("kernelImageSha256") != full_kernel.get("imageSha256"):
-        selftest_status = "STALE_IMAGE"
+    selftest_status = kernel_selftest_status(selftests, full_kernel)
     selftest_cases = selftests.get("subject", {}).get("subtests", {})
     full_selftests = contract("kernel-selftest-full-receipt.json")
-    full_selftest_status = full_selftests.get("status", "NOT_RUN")
-    if full_selftests and full_selftests.get("kernelImageSha256") != full_kernel.get("imageSha256"):
-        full_selftest_status = "STALE_IMAGE"
+    full_selftest_status = kernel_selftest_status(full_selftests, full_kernel)
     full_selftest_execution = full_selftests.get("execution", {})
     full_selftest_progress = []
     for name in ("reference", "subject"):

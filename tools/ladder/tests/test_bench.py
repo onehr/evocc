@@ -1,6 +1,8 @@
 """The common entry point must report benchmark verdicts, not runner exits."""
 
 import importlib.util
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import sys
@@ -19,6 +21,41 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_status_uses_the_selftests_named_kernel_not_always_the_boot_milestone(self):
+        spec = importlib.util.spec_from_file_location('render_status', PATH.parent / 'render-status.py')
+        status = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(status)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'docs').mkdir()
+            (root / 'docs/evoir-spec.md').write_text('**Revision 1.0.1**')
+            (root / 'docs/evomir-spec.md').write_text('**Revision 0.1**')
+            contracts = root / 'tests/contracts'
+            contracts.mkdir(parents=True)
+            (contracts / 'kernel-full-receipt.json').write_text(json.dumps({'imageSha256': 'original'}))
+            (contracts / 'kernel-kunit-receipt.json').write_text(json.dumps({
+                'builtInComposition': {'imageSha256': 'expanded'}}))
+            for receipt_path, image, expected in (
+                (None, 'original', 'INCOMPLETE'),
+                ('tests/contracts/kernel-kunit-receipt.json', 'expanded', 'INCOMPLETE'),
+                ('tests/contracts/kernel-kunit-receipt.json', 'changed', 'STALE_IMAGE'),
+                ('tests/contracts/missing.json', 'expanded', 'STALE_IMAGE'),
+            ):
+                with self.subTest(receipt=receipt_path, image=image):
+                    receipt = {'status': 'INCOMPLETE', 'kernelImageSha256': image}
+                    if receipt_path:
+                        receipt['kernelReceiptPath'] = receipt_path
+                    for name in ('kernel-selftest-receipt.json', 'kernel-selftest-full-receipt.json'):
+                        (contracts / name).write_text(json.dumps(receipt))
+                    output = root / 'docs/status.md'
+                    with patch.object(status, 'ROOT', root), patch.object(status, 'OUT', output), \
+                         patch.object(status, 'newest_survey', return_value={}), \
+                         patch.object(status, 'git', return_value='checkout'), redirect_stdout(io.StringIO()):
+                        self.assertEqual(status.main(), 0)
+                    text = output.read_text()
+                    self.assertIn(f'K7 kselftest {expected}:', text)
+                    self.assertIn(f'K7 collection {expected};', text)
+
     def test_targeted_selftests_refresh_only_the_runtime_and_keep_selection_explicit(self):
         options = {option for action in bench.parser()._actions for option in action.option_strings}
         self.assertIn('--refresh-selftest-runtime', options)
