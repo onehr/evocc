@@ -83,8 +83,9 @@ def kernel_selection(expanded, root=ROOT):
             raise ValueError('expanded composition denominator changed')
         for row in rows:
             unit = Path(row['unit'])
-            if (unit.is_absolute() or '..' in unit.parts or row['outcome'] != 'substituted'
-                    or digest(outputs['subject'] / unit) != row['installedSha256']):
+            installed = (outputs['subject'] / unit).resolve()
+            if (unit.is_absolute() or not installed.is_relative_to(outputs['subject'].resolve())
+                    or row['outcome'] != 'substituted' or digest(installed) != row['installedSha256']):
                 raise ValueError(f'expanded installed object changed: {unit}')
         expected = {'reference': data['reference']['imageSha256'],
                     'subject': composition['imageSha256']}

@@ -56,6 +56,12 @@ class FullSelftest(unittest.TestCase):
             selected = select(True, root)
             self.assertEqual(selected['images'], {'reference': reference, 'subject': image})
             self.assertEqual(selected['receipt'], receipt_path)
+            (root / '.build/k7/out/nested').mkdir()
+            objects.write_text(json.dumps({'unit': 'nested/../a.o', 'outcome': 'substituted',
+                                          'installedSha256': digest(obj)}) + '\n')
+            receipt['builtInComposition']['unitsSha256'] = digest(objects)
+            receipt_path.write_text(json.dumps(receipt))
+            self.assertEqual(select(True, root)['images']['subject'], image)
             (root / '.build/k7/pristine/.config').write_bytes(b'other config')
             with self.assertRaises(ValueError):
                 select(True, root)
