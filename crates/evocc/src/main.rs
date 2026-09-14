@@ -875,12 +875,25 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         ParsedAction::EmitCHir => emit_chir(&unit),
         ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
             let target = options.target_layout();
-            let module = match evocc_lower::lower_unit_with_optimization(
+            match evocc_lower::lower_unit_with_source(
                 &unit,
                 &target,
                 options.optimization != 0,
+                |resolved, module| {
+                    let module = if options.optimize_scalar_evoir {
+                        optimize_scalar_evoir(module)
+                    } else {
+                        module
+                    };
+                    match action {
+                        ParsedAction::EmitEvoIr => emit_evoir(&module),
+                        ParsedAction::EmitAsm => emit_asm(options, &module, resolved),
+                        ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
+                        _ => unreachable!("matched EvoIR action"),
+                    }
+                },
             ) {
-                Ok(module) => module,
+                Ok(result) => result,
                 Err(error) => {
                     let span = error.span();
                     emit_error(
@@ -891,20 +904,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                         error.code(),
                         &error.message(),
                     );
-                    return ExitCode::from(1);
-                }
-            };
-            let module = if options.optimize_scalar_evoir {
-                optimize_scalar_evoir(module)
-            } else {
-                module
-            };
-            match action {
-                ParsedAction::EmitEvoIr => emit_evoir(&module),
-                ParsedAction::EmitAsm => emit_asm(options, &module, &unit),
-                ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
-                ParsedAction::Validate | ParsedAction::InterpretCHir | ParsedAction::EmitCHir => {
-                    unreachable!("matched EvoIR action")
+                    ExitCode::from(1)
                 }
             }
         }

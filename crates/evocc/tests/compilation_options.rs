@@ -77,6 +77,21 @@ fn debug_information_does_not_resurrect_an_unemitted_internal_function() {
 }
 
 #[test]
+fn debug_objects_use_the_same_post_inline_inventory_as_lowering() {
+    let source = "static __attribute__((always_inline)) inline int next(void) { \
+        struct local_record { int value; }; \
+        static struct local_record counter = { 5 }; \
+        return ++counter.value; \
+        } int main(void) { next(); return next() != 7; }";
+    let plain = successful(run(&["-O2", "--emit=asm"], source));
+    let debug = successful(run(&["-O2", "--emit=asm", "-g"], source));
+    assert!(debug.starts_with(&plain));
+    assert!(debug.contains(".asciz \"local_record\""));
+    assert!(debug.contains(".asciz \"value\""));
+    assert!(!debug.contains(".8byte \"next\""));
+}
+
+#[test]
 fn zero_initialization_is_explicit_and_runs_at_each_declaration() {
     let source = include_str!("../../../tests/fixtures/automatic-zero.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

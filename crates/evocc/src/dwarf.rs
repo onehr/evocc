@@ -558,8 +558,8 @@ pub(crate) fn type_information(
     for (spelling, id) in aliases {
         writer.node(0x16, false, &[name(spelling), ty(id)]);
     }
-    // File objects retain their symbol spelling after inlining. Do not match
-    // function-local statics by an allocation ordinal from the pre-inline unit.
+    // This is the normalized inventory used by lowering, including lifted
+    // inline statics. Never guess their source types from synthetic names.
     let file_objects: BTreeMap<_, _> = unit
         .iter()
         .filter_map(|decl| {

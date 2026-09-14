@@ -422,6 +422,18 @@ pub fn lower_unit_with_optimization(
     target: &TargetDataLayout,
     optimize: bool,
 ) -> Result<Module, LowerError> {
+    lower_unit_with_source(unit, target, optimize, |_, module| module)
+}
+
+/// Consume the module together with the exact normalized source inventory
+/// that produced it. Debug consumers must not match lifted inline statics
+/// against pre-substitution names or repeat the substitution pass themselves.
+pub fn lower_unit_with_source<R>(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    optimize: bool,
+    consume: impl FnOnce(&CHirUnit<'_>, Module) -> R,
+) -> Result<R, LowerError> {
     unit.symbol_linkage().map_err(LowerError::Linkage)?;
     // Check the entire source inventory before selecting emitted bodies. Its
     // allocation identities must remain stable for cross-interpreter traces.
@@ -449,9 +461,11 @@ pub fn lower_unit_with_optimization(
                 reason: e.message,
             }
         })?;
-        return lower_resolved_unit(&rewritten, target, None, optimize);
+        let module = lower_resolved_unit(&rewritten, target, None, optimize)?;
+        return Ok(consume(&rewritten, module));
     }
-    lower_resolved_unit(unit, target, Some(&source_manifest), optimize)
+    let module = lower_resolved_unit(unit, target, Some(&source_manifest), optimize)?;
+    Ok(consume(unit, module))
 }
 
 fn lower_resolved_unit(
