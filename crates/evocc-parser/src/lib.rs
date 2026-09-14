@@ -2755,6 +2755,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn is_arithmetic_constant_expression(&self, expression: &CHirExpr<'_>) -> bool {
         if self.integer_expression_type(expression).is_ok() {
             return self.eval_integer_constant_expression(expression).is_ok();
+        if evocc_chir::constant::fold_floating_integer_arithmetic(
+            expression,
+            &self.types,
+            &self.symbols,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+        .is_some()
+        {
+            return true;
+        }
         }
         match expression {
             CHirExpr::Lit(_, _) | CHirExpr::FloatLit(_, _) | CHirExpr::CharLit(_, _) => true,
@@ -3788,6 +3798,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     target,
                     expression,
                     expression.span(),
+                let expression = self.explicit_floating_integer_conversion(target, expression);
                 ));
                 Some(())
             }
@@ -8247,7 +8258,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let span = self.merge_span(start_span, semi_span);
                     return Some(self.alloc_node(CHirStmt::Return(None, span)));
                 }
-                let expr = self.parse_expression()?;
+                let mut expr = self.parse_expression()?;
+                let mut scope = Some(self.current_scope);
+                while let Some(id) = scope {
+                    let Ok(entry) = self.symbols.scope(id) else {
+                        break;
+                    };
+                    if let Some(function) = entry.function_owner() {
+                        if let Some(ty) = self
+                            .symbols
+                            .symbol(function)
+                            .ok()
+                            .and_then(|symbol| self.types.get(symbol.ty()))
+                        {
+                            if let TypeKind::Function { return_type, .. } = ty.kind {
+                                expr = self.explicit_floating_integer_conversion(return_type, expr);
+                            }
+                        }
+                        break;
+                    }
+                    scope = entry.parent();
+                }
                 let semi = self.expect(TokenKind::Semicolon);
                 let end_span = semi.as_ref().map_or(expr.span(), |token| token.span);
                 let span = self.merge_span(start_span, end_span);
@@ -8824,6 +8855,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.require_supported_assignment_promotion(op, target, value)?;
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
+    fn explicit_floating_integer_conversion(
+        &self,
+        target: TypeId,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> &'arena CHirExpr<'arena> {
+        if self.canonical_integer_type(target).is_ok()
+            && self.expression_type(expression).is_some_and(|inferred| {
+                matches!(
+                    self.operand_type_class(inferred.ty),
+                    OperandTypeClass::Real(_)
+                )
+            })
+        {
+            self.alloc_node(CHirExpr::Cast(target, expression, expression.span()))
+        } else {
+            expression
+        }
+    }
+
         let constraint = self.assignment_constraint(op, typed_target.ty(), value);
         match constraint {
             UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
@@ -8852,6 +8902,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span,
                 })
             }
+        let value = if op == AssignmentOp::Simple {
+            self.explicit_floating_integer_conversion(typed_target.ty(), value)
+        } else {
+            value
+        };
             TypedUpdateTarget::Memory(place) => {
                 let facts = ExprFacts::value(place.value_ty());
                 self.alloc_node(CHirExpr::MemoryAssign {
@@ -11316,6 +11371,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         Some(fixed) if fixed <= arguments.len() => {
                             self.promote_call_arguments(&mut arguments[fixed..])?
                         }
+                            *argument =
+                                self.explicit_floating_integer_conversion(*parameter, argument);
                         _ => Vec::new(),
                     };
                     if let CHirExpr::Ident { symbol, facts, .. } = expression {

@@ -8757,6 +8757,14 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
+        if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        ) {
+            return self.wide_constant(state, value.ty(), value.raw_bits());
+        }
             expression,
             self.unit.types(),
             self.unit.symbols(),

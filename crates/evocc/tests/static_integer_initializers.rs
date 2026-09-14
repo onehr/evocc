@@ -59,6 +59,33 @@ fn nonconstant_floating_execution_stays_outside_the_profile() {
 }
 
 #[test]
+fn integer_argument_and_assignment_apply_the_same_constant_conversion() {
+    agrees("int id(int x) { return x; } int main(void) { int x; x = 5.5 * 10; return x == 55 && id(1.5 * 3000) == 4500; }", 1);
+    agrees(
+        "int f(void) { return 5.5 * 10; } int main(void) { return f(); }",
+        55,
+    );
+}
+
+#[test]
+fn floating_constant_conversion_does_not_saturate_or_read_objects() {
+    for source in [
+        "int main(void) { return (int)(2147483648.0); }",
+        "int main(void) { return (unsigned int)(-1.0); }",
+        "double x; int main(void) { return (int)(x + 1.0); }",
+        "int main(void) { return (int)(1.0 / 0.0); }",
+    ] {
+        for mode in ["--interpret-c-hir", "--emit=evoir"] {
+            assert!(!run(source, mode).status.success(), "{mode}: {source}");
+        }
+    }
+    agrees(
+        "int main(void) { return (int)(1 ? 5.5 * 10 : 1.0 / 0.0); }",
+        55,
+    );
+}
+
+#[test]
 fn nested_static_integer_expressions_do_not_depend_on_the_host_stack() {
     let mut selected = "(1 ? 42 : (1 / 0))".to_owned();
     for index in 0..80 {

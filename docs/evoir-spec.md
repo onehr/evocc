@@ -7112,3 +7112,10 @@ One measured module unit, `drivers/net/ethernet/mellanox/mlx5/core/wc.o`, names 
 `__label__` accepts a comma-separated list of identifiers, each receiving its own identity in the same existing block-local label scope; nested scopes do not share those identities.
 Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/alignof-alternate-spelling.c` and `tests/fixtures/local-label-list.c` with exit zero, as `.evidence/builtin-probes/20260914-gnu-parser-forms/oracles.out` records; no diagnostic is added.
 The frozen expanded-configuration survey exposes one original zstd unit at the alignment spelling and one ALSA unit at the first local-label comma; scope and malformed-list checks are unchanged.
+
+### Pure floating arithmetic resolved to integer values
+
+Pure finite binary32/binary64 constant arithmetic may resolve to an integer before execution, using each operation's source precision, the conditional arms' common type, and the destination's ordinary truncating conversion; initialization, assignment, arguments and returns use that same conversion.
+This does not make a floating arithmetic expression an integer constant expression, admit runtime floating object reads, saturate out-of-range conversions, evaluate an unselected branch, or approximate binary128 with binary64.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/floating-constant-integers.c` with exit zero (recorded in the adjacent `.out` file), including binary32 rounding, negative truncation and an integer-selected conditional with a floating common type.
+Seven original expanded-configuration units are affected; no diagnostic is allocated, and their compile/assembly replay is separate from kernel execution.

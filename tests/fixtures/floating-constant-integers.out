@@ -1,0 +1,12 @@
+Fixture: tests/fixtures/floating-constant-integers.c
+Environment: evo-flight-lab:sealed, linux/arm64, network none
+Command: <compiler> -std=gnu11 <optimization> /work/probes/floating-constant-integers.c -o /tmp/constant-probe; /tmp/constant-probe
+gcc-14 -O0 exit=0
+gcc-14 -O2 exit=0
+clang-19 -O0 exit=0
+clang-19 -O2 exit=0
+Clang warns about deliberate fractional truncation and the int-to-float rounding case.
+Subject C-HIR interpreter: 0
+Subject EvoIR interpreter: 0
+Subject native: target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm tests/fixtures/floating-constant-integers.c | container run --rm -i --platform linux/arm64 --network none evo-flight-lab:sealed sh -c 'gcc-14 -x assembler - -o /tmp/constant-native && /tmp/constant-native'
+Subject native exit=0; no runtime floating instruction is required.

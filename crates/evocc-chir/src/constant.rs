@@ -1,7 +1,19 @@
 //! Conservative front-end constant knowledge shared by every C-HIR consumer.
 
+mod floating;
 mod object_size;
 pub use object_size::builtin_object_size;
+
+/// Pure floating subexpressions may be resolved before producing an integer;
+/// object reads and runtime floating execution are not admitted by this fold.
+pub fn fold_floating_integer_arithmetic(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<CInteger> {
+    floating::fold(expression, types, symbols, target)
+}
 
 use evocc_common::SourceSpan;
 use evocc_types::{

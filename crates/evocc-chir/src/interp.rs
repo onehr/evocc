@@ -1408,6 +1408,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         mut expression: &'arena CHirExpr<'arena>,
     ) -> Result<CValue, InterpreterError> {
+        if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) {
+            return Ok(CValue::Integer(value));
+        }
         if self.pointer_type_of_expression(expression).is_ok() {
             if let Some(integer) = crate::constant::eval_absolute_address_constant(
                 expression,
@@ -1649,6 +1657,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<CInteger, InterpreterError> {
+        if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) {
+            return Ok(value);
+        }
         let previous = std::mem::replace(&mut self.static_integer_evaluation, true);
         let result = self.run_tasks(vec![MachineTask::EvalExpression {
             expression,
@@ -3863,6 +3879,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
+        if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) {
+            values.push(CValue::Integer(value));
+            return Ok(());
+        }
         if !self.static_integer_evaluation
             && !self.memory_mode
             && !expression_contains_call(expression)
@@ -8569,6 +8594,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 expression,
                 self.unit.types(),
                 self.unit.symbols(),
+        if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) {
+            return Ok(value);
+        }
                 &self.target,
             ) {
                 return Ok(value);

@@ -153,6 +153,20 @@
     "focusedTests": 34,
     "nativeFixtures": {"local-label-list": 0, "alignof-alternate-spelling": 0}
   },
-  "unrepairedSurveyClasses": {"dynamic object size": 10, "constant arithmetic": 7, "system includes and NEON": 6},
-  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 29 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator."
+  "floatingConstantReplay": {
+    "run": "floating-constants-20260914",
+    "compilerState": "worktree after 9ee51d1; executable also contains the uncommitted dynamic object-size draft, not a released compiler commit",
+    "compilerSha256": "74f52d47e843497d35637c8b6fd32941d81498e2386a159a4ca1600f96a8a90e",
+    "before": {"constant arithmetic refused": 7},
+    "after": {"assembled": 7, "symbolDrift": 0, "timeout": 0},
+    "installed": false,
+    "units": ".evidence/kunit/floating-constants-20260914/units.jsonl",
+    "unitsSha256": "0aedd0e24d8cb5c54373cccf9034d9e8bfc7534f4719242089497949467a58a5",
+    "inputSnapshotSha256": "5c6bef40039e1237a551221849358496503b72ac12ea2b127f1d246811812b14",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/floating-constants-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id floating-constants-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/floating-constants-cache.json --jobs 2 --timeout 180",
+    "gate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 9ee51d1 --offline -j2 --quiet: exit 0, including Clippy and fmt; worktree includes the separately pending dynamic-size draft",
+    "nativeFixture": "tests/fixtures/floating-constant-integers.out: GCC-14 and Clang-19 O0/O2 plus native EvoCC all exit 0"
+  },
+  "unrepairedSurveyClasses": {"dynamic object size": 10, "system includes and NEON": 6},
+  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 36 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator."
 }

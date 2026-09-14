@@ -24,7 +24,9 @@ with the corrected runtime root. All seven earlier reference-PASS compiler
 regressions now pass on both kernels; no reference-PASS regression remains.
 Completion is not an all-PASS result: the reference has 214 program passes
 and the subject 217, with shared failures, skips and timeouts below.
-KUnit remains **NOT_RUN**.
+EvoCC KUnit remains **NOT_RUN**; the separate expanded configuration's GCC
+control has measured **1,324 PASS, 8 FAIL, 108 SKIP** (details and limitations
+in [its receipt](../../tests/contracts/kernel-kunit-receipt.json)).
 
 This is a **uniform all-EvoCC build**: all 2,799 objects were recompiled with
 `782272f`, including allocator repair `aad1657` and read-only string storage,
@@ -469,6 +471,35 @@ member 36/32 bytes, allocation/offset 13/11 and 21/19 bytes, selected sizes 17/9
 and product size 21; O0 answers unknown. The side-effectful query remains unknown
 without incrementing its operand. Probe `20260914-dynamic-object-size/flow.out`
 keeps these distinct from the earlier ambiguous printf-order observation.
+
+`952464d` records the dynamic-size RED; the implementation is still an
+uncommitted draft, not a repaired kernel result. **K7-DYNAMIC-ALLOC-SIZE:**
+Section 10.1.9's explicit preserved-only default does not yet permit applying
+`alloc_size(1)` / `(1,2)` to allocation extents. The sealed flow and fixture
+probes agree on the required sizes, but the existing body-over-Appendix-D rule
+requires authorization for this attribute exception; the request is pending.
+This blocks landing the draft, not the previously sealed survey or repaired
+module replays. Actual VLA allocation remains outside this repair; bound
+capture tests use the existing permitted views of fixed storage.
+Draft check: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test
+-p evocc --test resolved_compiler_queries --offline --no-fail-fast` passes
+45 tests, zero failed/ignored, including both interpreters, unevaluated unknown
+queries and captured views of fixed arrays. The principal fixture also exits
+zero natively from the earlier release draft. This is not a changed-gate result,
+an installed kernel object, or an EvoCC KUnit execution; original-unit replay
+remains pending after authority and final validation.
+
+The seven pure floating-constant arithmetic refusals now assemble with matching
+symbols in `floating-constants-20260914`, with no installation or relink. The
+shared fold uses source precision and ordinary integer conversions; it does not
+admit runtime floating arithmetic. Both sealed oracles at O0/O2 and native EvoCC
+execute `tests/fixtures/floating-constant-integers.c` with exit zero. The changed
+gate against `9ee51d1` passes (including the separately pending dynamic-size
+draft). Thus **36/52** earlier refusals have original-unit tailored repairs;
+this is not a new 6,310-unit survey. Remaining: ten dynamic-size units and six
+NEON units. The latter reach GCC's real `arm_neon.h` and fail at `__Int8x8_t`;
+the front end lacks executable vectors and MIR still refuses `Vec` with E4002.
+They are compiler implementation work, not unsupported-VM or header-path waivers.
 
 The `/var/run` and `/var/lock` runtime links are repaired separately. In
 `runtime-links-20260914`, both Images get past the missing `/var/run/netns`
