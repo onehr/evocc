@@ -91,9 +91,13 @@ int main(void)
     full_suite = access("/full-suite", F_OK) == 0;
     if (full_suite) {
         /* A chroot alone leaves us below the mount-namespace root, where
-         * Linux correctly refuses to create user namespaces. */
+         * Linux correctly refuses to create user namespaces. The temporary
+         * device mount must not remain as a hidden sibling of the new root:
+         * foreign-namespace listmount would select it as the namespace root.
+         * /dev is mounted again inside the runtime after the root switch. */
         if (mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
             || mount("/dev/vda", "/newroot", "ext4", 0, NULL)
+            || umount("/dev")
             || chdir("/newroot") || mount(".", "/", NULL, MS_MOVE, NULL)
             || chroot(".") || chdir("/"))
             fatal("mount selftest runtime root");

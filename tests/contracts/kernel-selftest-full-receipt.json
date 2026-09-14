@@ -9863,6 +9863,20 @@
     "initialTransportAttempt": "reference/ and subject/ were interrupted after observing that upstream clears the environment-only override. Both remain MARKERS_MISSING/INCOMPLETE; only the later -cli runs pass.",
     "claimLimit": "One previously timed-out program now finishes on both kernels. The subject is the recorded four-object repair composition, not a fresh 935-program run."
   },
+  "namespaceRootRepair": {
+    "cause": "The temporary initramfs devtmpfs remained a hidden sibling after moving the ext4 runtime to /. Foreign-namespace listmount selected that first child instead of the runtime root and returned one mount instead of ten.",
+    "repair": "Unmount temporary /dev before MS_MOVE and chroot; mount runtime /dev afterward as before. No kernel or selftest source changed.",
+    "capture": ".evidence/kselftest-full/root-unmount-20260914",
+    "initramfs": ".build/kselftest-full/root-unmount/initramfs.cpio",
+    "initramfsSha256": "7a237d49ed2533c00be34efeb9d09685c31b208000c21a9f37d5f18c346930d0",
+    "rootfsSha256": "e88f9b33afa13c33157f82209171dc69963e4e30122dded4bf15a81191aa2bbe",
+    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/root-unmount/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=filesystems/statmount:statmount_test_ns K1_BOOT_TIMEOUT=120 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <image> <capture>",
+    "reference": {"program": "PASS", "subtests": {"PASS": 2, "FAIL": 0}, "serialLogSha256": "4cdf1b948f13ca952116ae2fe24ced754d920298fe11fb4ab851c3e4efadca36"},
+    "subject": {"program": "PASS", "subtests": {"PASS": 2, "FAIL": 0}, "serialLogSha256": "1eec8f1d762bb9708a91940acf9d0080241c04b13fd79e773a7e244a61601821"},
+    "regression": {"program": "mount_setattr:mount_setattr_test", "kernel": "subject", "PASS": 34, "FAIL": 0, "capture": "subject-mount-setattr", "serialLogSha256": "a8d6a678e26da4ef8b87a689c56d7e21028f6241412786486ab59daacbd96e62"},
+    "build": "sealed gcc-14 -static -O2 -Wall -Wextra -Werror tools/k1/selftest-init.c; exit 0",
+    "claimLimit": "Original statmount namespace failure repaired on both kernels; the original 935-program results and runtime disk remain unchanged."
+  },
   "runtimePrerequisiteRepair": {
     "changes": ["/mnt directory", "securityfs mount", "dosfstools, sudo and e2fsprogs packages", "Linux file ownership and modes retained in the generated rootfs; libarchive required by the formatter"],
     "tests": "python3 -m unittest discover -s tools/k1/tests -q: 138 PASS; ruff check tools/k1 and bash -n tools/k1/lib.sh tools/k1/boot.sh: PASS; runtime init compiles with gcc-14 -static -O2 -Wall -Wextra -Werror",
