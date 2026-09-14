@@ -29,8 +29,15 @@ RECORD = (
 class DecodeTest(unittest.TestCase):
     def test_boot_option_audit_does_not_label_new_instrumentation_inert(self):
         self.assertEqual(cmdrecord.omitted_option_class("-funknown-hardening"), "UNREVIEWED")
-        self.assertEqual(cmdrecord.omitted_option_class("-g"), "debug-metadata-not-implemented-not-a-boot-claim")
+        self.assertEqual(cmdrecord.omitted_option_class("-g"), "source-type-debug-option-must-be-forwarded")
         self.assertEqual(cmdrecord.omitted_option_class("-ffixed-x18"), "existing-target-or-conservative-behavior")
+
+    def test_source_type_debug_options_reach_the_compiler_in_written_order(self):
+        options = ['-g', '-g0', '-gdwarf-4']
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
+        argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
+        self.assertEqual([x for x in argv if x in options], options)
+        self.assertFalse(set(options) & set(omitted))
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()

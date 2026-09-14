@@ -32,6 +32,7 @@ PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 #: Options the front end consumes as written.
 PASSED_THROUGH = (
     "-O", "-O0", "-O1", "-O2", "-O3", "-Os", "-Og",
+    "-g", "-g0", "-gdwarf-4",
     "-mcmodel=tiny", "-mcmodel=small",
     "-fasynchronous-unwind-tables", "-funwind-tables",
     "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
@@ -60,8 +61,10 @@ def omitted_option_class(option: str) -> str:
         return "replaced-output-or-dependency-action"
     if option.startswith("-W"):
         return "diagnostic-policy-not-code-generation"
-    if option == "-g" or option.startswith("-femit-struct-debug-") or option == "-fno-var-tracking":
-        return "debug-metadata-not-implemented-not-a-boot-claim"
+    if option in ("-g", "-g0", "-gdwarf-4"):
+        return "source-type-debug-option-must-be-forwarded"
+    if option.startswith("-femit-struct-debug-") or option == "-fno-var-tracking":
+        return "debug-scope-hint-source-types-emitted-without-local-locations"
     if option in ("-fconserve-stack", "-fno-code-hoisting"):
         return "optimization-hint-no-transform-equivalence"
     if option in (
