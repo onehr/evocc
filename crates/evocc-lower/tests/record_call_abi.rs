@@ -66,6 +66,44 @@ fn union_member_casts_execute_once_in_the_chir_interpreter() {
 }
 
 #[test]
+fn transparent_union_arguments_preserve_the_member_value_in_chir() {
+    let source = include_str!("../../../tests/fixtures/transparent-union-calls.c");
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let main = unit
+        .symbols()
+        .resolve(unit.symbols().file_scope(), "main")
+        .unwrap()
+        .unwrap();
+    let result = evocc_chir::interp::interpret_scalar_function(
+        &unit,
+        main,
+        evocc_chir::interp::InterpreterLimits::new(100_000),
+    )
+    .expect("a transparent union wraps the argument value, not its pointee");
+    assert_eq!(result.return_value.unwrap().raw_bits, 0);
+}
+
+#[test]
+fn transparent_union_arguments_preserve_the_member_value_in_evoir() {
+    let module = lower(include_str!("../../../tests/fixtures/transparent-union-calls.c"));
+    let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+    let args = main
+        .params
+        .iter()
+        .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+        .collect::<Vec<_>>();
+    let result = evocc_evoir::interpret_module(
+        &module,
+        "main",
+        &args,
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .expect("the call reads initialized union storage, not the page array");
+    assert_eq!(result.return_values[0].raw_bits, 0);
+}
+
+#[test]
 fn union_member_casts_use_existing_memory_and_record_call_forms() {
     let module = lower(include_str!("../../../tests/fixtures/union-member-casts.c"));
     let text = render_module(&module);
