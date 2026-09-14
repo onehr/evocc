@@ -17,6 +17,27 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_long_stressor_uses_its_declared_test_timeout_not_the_collection_default(self):
+        self.assertTrue(hasattr(lane, 'program_timeout'))
+        build = {'programTimeoutSeconds': 60}
+        self.assertEqual(lane.program_timeout(build, 'filesystems:file_stressor'), 1815)
+        self.assertEqual(lane.program_timeout(build, 'filesystems:devpts_pts'), 60)
+
+    def test_explicit_timeout_reaches_one_selected_program_without_changing_other_options(self):
+        command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3" "$4"',
+                   'timeout-test', str(PATH.parent / 'lib.sh')]
+        done = subprocess.run(command + ['filesystems:file_stressor', '', '1800'],
+                              text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(),
+                         'evo_selftest=filesystems:file_stressor kselftest_override_timeout=1800')
+        for program, value in [('filesystems', '1800'), ('', '1800'),
+                               ('filesystems:file_stressor', '0'),
+                               ('filesystems:file_stressor', '99999999999999999'),
+                               ('filesystems:file_stressor', '1800 init=/bin/sh')]:
+            self.assertNotEqual(subprocess.run(command + [program, '', value],
+                                               capture_output=True).returncode, 0)
+
     def test_kunit_filter_is_explicit_and_cannot_add_kernel_options(self):
         command = ['bash', '-c', 'source "$1"; k1_kunit_cmdline "$2"',
                    'kunit-test', str(PATH.parent / 'lib.sh')]
