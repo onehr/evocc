@@ -83,14 +83,15 @@ static int run(const char *id, unsigned timeout)
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 
-static void load_runtime_modules(void)
+static unsigned load_runtime_modules(const char *path, const char *nonce)
 {
-    FILE *file = fopen("/tests/modules", "r");
+    FILE *file = fopen(path, "r");
     if (!file) {
-        if (errno == ENOENT)
-            return; /* The original module-free runtime is unchanged. */
+        if (errno == ENOENT && !nonce)
+            return 0; /* The original module-free runtime is unchanged. */
         fatal("read module setup");
     }
+    unsigned count = 0;
     char name[128];
     while (fgets(name, sizeof(name), file)) {
         size_t length = strcspn(name, "\n");
@@ -100,6 +101,8 @@ static void load_runtime_modules(void)
             fatal("invalid module setup");
         }
         name[length] = '\0';
+        if (nonce)
+            dprintf(1, "KUNIT_MODULE_BEGIN %s %s\n", nonce, name);
         pid_t child = fork();
         if (child < 0)
             fatal("fork modprobe");
@@ -111,15 +114,23 @@ static void load_runtime_modules(void)
         while (waitpid(child, &status, 0) < 0)
             if (errno != EINTR)
                 fatal("wait modprobe");
-        if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+        int rc = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+        if (nonce) {
+            /* Loading succeeds even when a KUnit assertion fails. The host
+             * reads the original KTAP between these markers, not just rc. */
+            dprintf(1, "KUNIT_MODULE_END %s %s %d\n", nonce, name, rc);
+        } else if (rc) {
             errno = EIO;
             fatal("load required runtime module");
+        } else {
+            dprintf(1, "KSELFTEST_SETUP module %s loaded\n", name);
         }
-        dprintf(1, "KSELFTEST_SETUP module %s loaded\n", name);
+        count++;
     }
     if (!feof(file))
         fatal("incomplete module setup");
     fclose(file);
+    return count;
 }
 
 int main(void)
@@ -183,7 +194,7 @@ int main(void)
             fatal("mount devpts");
     }
     if (full_suite) {
-        load_runtime_modules();
+        load_runtime_modules("/tests/modules", NULL);
         if (system("ip link set lo up"))
             fatal("enable loopback");
         const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf", "securityfs", "fusectl"};
@@ -191,6 +202,20 @@ int main(void)
         for (unsigned i = 0; i < sizeof(types) / sizeof(types[0]); ++i)
             if (mount(types[i], paths[i], types[i], 0, NULL))
                 dprintf(1, "KSELFTEST_SETUP unavailable %s: %s\n", types[i], strerror(errno));
+    }
+    if (full_suite && access("/tests/kunit-modules", F_OK) == 0) {
+        /* Boot with a nonmatching filter and autorun=1, then enable all
+         * suites before loading modules. This includes init-only suites,
+         * which cannot be run later through the debugfs run file. */
+        file = fopen("/sys/module/kunit/parameters/filter_glob", "w");
+        if (!file || fputs("*", file) < 0 || fclose(file))
+            fatal("enable module KUnit suites");
+        unsigned count = load_runtime_modules("/tests/kunit-modules", nonce);
+        if (!count)
+            fatal("empty KUnit module list");
+        dprintf(1, "KUNIT_MODULE_COMPLETE %s %u\n", nonce, count);
+        puts("EVO_INIT_DONE");
+        poweroff();
     }
     if (symlink("/proc/self/fd", "/dev/fd") && errno != EEXIST)
         fatal("link fd");

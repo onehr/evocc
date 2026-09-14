@@ -142,6 +142,14 @@ class FullSelftest(unittest.TestCase):
         for value in ['2', '0 init=/bin/sh']:
             self.assertNotEqual(subprocess.run(command + ['', value], capture_output=True).returncode, 0)
 
+    def test_module_kunit_execution_is_separate_from_upstream_program_results(self):
+        source = (PATH.parent / 'selftest-init.c').read_text()
+        self.assertIn('"/tests/kunit-modules"', source)
+        self.assertIn('"/sys/module/kunit/parameters/filter_glob"', source)
+        self.assertIn('KUNIT_MODULE_BEGIN %s %s', source)
+        self.assertIn('KUNIT_MODULE_END %s %s %d', source)
+        self.assertIn('KUNIT_MODULE_COMPLETE %s %u', source)
+
     def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
                    'args-test', str(PATH.parent / 'lib.sh')]
