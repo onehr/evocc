@@ -104,6 +104,15 @@ class FullSelftest(unittest.TestCase):
         self.assertTrue(hasattr(lane, 'RUNTIME_PACKAGES'), 'runtime packages are not declared')
         self.assertTrue({'procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod'} <= set(lane.RUNTIME_PACKAGES))
 
+    def test_fat_runtime_includes_the_formatter_and_privilege_wrapper(self):
+        self.assertTrue({'dosfstools', 'sudo'} <= set(lane.RUNTIME_PACKAGES))
+
+    def test_mount_tests_have_their_standard_mountpoint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            lane.install_runtime_paths(root)
+            self.assertTrue((root / 'mnt').is_dir())
+
     def test_runtime_paths_share_the_run_directory_inside_the_guest_root(self):
         self.assertTrue(hasattr(lane, 'install_runtime_paths'), 'runtime directory links are missing')
         with tempfile.TemporaryDirectory() as temp:
