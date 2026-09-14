@@ -1,5 +1,9 @@
 # Roadmap benchmark evaluation
 
+Latest refresh: [2026-09-15 measurements and current issue inventory](benchmark-evaluation-20260915.md).
+The September 7 measurements below are historical; they are not the current
+benchmark or kernel acceptance status.
+
 Evaluation started 2026-09-07, run `20260907T141450.311159Z`, subject
 `4e86995bc357615abd0df698c4bf64097a5fa026`. Compiler binary SHA-256:
 `b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6`.

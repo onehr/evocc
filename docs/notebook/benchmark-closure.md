@@ -1,5 +1,12 @@
 # Benchmark issue closure
 
+Current application measurements and remaining issues:
+[September 15 refresh](benchmark-evaluation-20260915.md).
+Current expanded kernel/KUnit/selftest limitations:
+[September 14 15:40 UTC ledger](kernel-selftest-gaps-20260914.md).
+The dated entries below retain earlier observations, including earlier
+NOT_RUN and failed results; use those two ledgers for the current reading.
+
 Baseline: `e6c7938`; all-lane measurement `20260907T141450.311159Z`,
 musl rerun `20260907T153648.272156Z`, compiler SHA-256
 `b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6`.

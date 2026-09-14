@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260909T132842Z",
+ "run": "20260914T163005Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84",
+ "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 17,
@@ -42,17 +42,15 @@
   ]
  },
  "units": 1339,
- "unitsCompiledByEvocc": 1010,
- "unitsInPassingBuild": 1010,
+ "unitsCompiledByEvocc": 925,
+ "unitsInPassingBuild": 925,
  "refusalsByCode": {
-  "E3101": 216,
+  "E3101": 211,
+  "E2943": 97,
   "E1006": 83,
   "E2001": 14,
   "E2203": 8,
-  "E2939": 5,
-  "E1005": 1,
-  "E3021": 1,
-  "E3030": 1
+  "E1005": 1
  },
  "testResult": "libc-test-clean",
  "failingUnits": [],
@@ -116,5 +114,5 @@
   "-fno-stack-protector": 7,
   "-fno-tree-loop-distribute-patterns": 2
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260909T132842Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260914T163005Z"
 }

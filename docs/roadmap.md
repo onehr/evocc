@@ -1960,6 +1960,12 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 
 ![The evaluation ladder](images/evocc-ladder.png)
 
+Latest application refresh: [2026-09-15 measurements and issue inventory](notebook/benchmark-evaluation-20260915.md).
+The current non-FP frontier includes protected ELF visibility, builtin side
+effects, integer vectors, VLA scope/bounds and asm operands. Floating point
+is not the only remaining blocker. Kernel configurations and runtime tests
+retain their own separate receipts; this application run does not rerun them.
+
 The kernel is the launch target, but "the kernel boots" is a single bit that
 arrives late. The ladder below gives Q1 (correct on real code) a reading at
 every step, with the same method the kernel lane already uses: a reference

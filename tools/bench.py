@@ -38,7 +38,7 @@ CATALOG = {
     "toybox": ("E6", "mixed", "mixed-link tests relative to baseline failures"),
     "musl": ("E7", "mixed", "libc-test relative to baseline failures"),
     "kernel": ("K1/K5-K7 ramp", "kernel", "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest"),
-    "mbedtls": ("E4", None, "no benchmark adapter yet"),
+    "mbedtls": ("E4", "subject", "default release selftest and CTest against installed objects; mixed-link ramp"),
     "polybench": ("E8", None, "no adapter; floating-point rung deferred"),
     "llvm-test-suite": ("E9", None, "no adapter; mixed integer/FP suite"),
     "jq": ("E10", None, "no adapter; floating-point rung deferred"),

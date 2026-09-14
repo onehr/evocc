@@ -168,6 +168,13 @@ class BenchmarkEntryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             bench.select(["typo"])
 
+    def test_mbedtls_uses_the_existing_whole_program_measurement(self):
+        self.assertEqual(bench.CATALOG['mbedtls'][1], 'subject')
+        args = bench.parser().parse_args(['mbedtls'])
+        command, _ = bench.command('mbedtls', args, Path('/fixed/compiler'))
+        self.assertTrue(any(part.endswith('/ladder/mbedtls.py') for part in command))
+        self.assertEqual(command[-2:], ['--evocc', '/fixed/compiler'])
+
     def test_command_uses_one_explicit_driver(self):
         args = bench.parser().parse_args(["csmith", "--programs", "17", "--jobs", "2"])
         command, env = bench.command("csmith", args, Path("/tmp/compiler"))

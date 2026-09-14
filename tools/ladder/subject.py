@@ -95,8 +95,8 @@ DIAGNOSTIC = re.compile(
     r"error\[(?P<code>[^]]+)\]: (?P<message>.*)$",
     re.MULTILINE,
 )
-ENTERING = re.compile(r"^make(?:\[\d+\])?: Entering directory '(?P<dir>[^']*)'")
-LEAVING = re.compile(r"^make(?:\[\d+\])?: Leaving directory '(?P<dir>[^']*)'")
+ENTERING = re.compile(r"^g?make(?:\[\d+\])?: Entering directory '(?P<dir>[^']*)'")
+LEAVING = re.compile(r"^g?make(?:\[\d+\])?: Leaving directory '(?P<dir>[^']*)'")
 COMPILERS = frozenset({"gcc", "gcc-14", "cc", "g++", "clang"})
 
 #: Options whose value is a separate argument.
@@ -441,6 +441,29 @@ def reference_build(subject: Subject, tree: Path, evidence: Path) -> dict:
         if source.is_file():
             shutil.copyfile(source, evidence / name)
     return {"status": status, "log": text, "stdout": completed.stdout[-4000:]}
+
+
+def portable_build_symlinks(tree: Path, mounted_tree: str) -> dict[str, str]:
+    """Keep generated in-tree links valid in both mount namespaces.
+
+    CMake can link a generated build path to an absolute container source
+    path. An equivalent relative link preserves the source bytes and include
+    location while also letting the host compiler read it. External targets
+    and already relative links are left alone; every change is recorded.
+    """
+    prefix = mounted_tree.rstrip('/') + '/'
+    changes = {}
+    for link in tree.rglob('*'):
+        if not link.is_symlink():
+            continue
+        target = os.path.normpath(os.readlink(link))
+        if not target.startswith(prefix):
+            continue
+        relative = os.path.relpath(tree / target[len(prefix):], link.parent)
+        link.unlink()
+        link.symlink_to(relative)
+        changes[str(link.relative_to(tree))] = relative
+    return changes
 
 
 def _status(stdout: str, key: str) -> int:
@@ -884,6 +907,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
     if not units:
         raise SystemExit(f"{subject.name}: no compile commands were captured")
 
+    build_symlinks = portable_build_symlinks(tree, f"/work/{subject.name}/{subject.tree}")
     baseline = run_tests(subject, evidence, "baseline")
     if not baseline["passed"]:
         raise SystemExit(f"{subject.name}: the GCC baseline suite failed; see {evidence}")
@@ -1029,6 +1053,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         "attempts": attempts,
         "adjustments": {
             "sysroot": adjustments,
+            "portableBuildSymlinks": build_symlinks,
             "sysrootAdjustmentMeaning": SYSROOT_ADJUSTMENTS,
             "includeOrder": e0.include_flags(sysroot),
             "configure": subject.configure,

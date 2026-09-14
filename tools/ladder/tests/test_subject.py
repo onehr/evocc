@@ -23,6 +23,25 @@ TREE = "/work/zstd/zstd-1.5.7"
 
 
 class ParseBuildLogTest(unittest.TestCase):
+    def test_cmake_gmake_build_directory_applies_to_unprefixed_recipes(self) -> None:
+        log = (
+            f"gmake[1]: Entering directory '{TREE}/build'\n"
+            f"gmake[2]: Entering directory '{TREE}/build'\n"
+            f"gmake[2]: Entering directory '{TREE}/build'\n"
+            f"/usr/bin/gcc-14 -o CMakeFiles/helper.dir/hash.c.o -c {TREE}/hash.c\n"
+            f"cd {TREE}/build/tests && /usr/bin/gcc-14 -o suite.c.o -c {TREE}/suite.c\n"
+            f"gmake[2]: Leaving directory '{TREE}/build'\n"
+            f"/usr/bin/gcc-14 -o CMakeFiles/helper.dir/random.c.o -c {TREE}/random.c\n"
+            f"gmake[2]: Leaving directory '{TREE}/build'\n"
+            f"gmake[1]: Leaving directory '{TREE}/build'\n"
+            "gcc-14 -o top.o -c top.c\n"
+        )
+        units = ladder.parse_build_log(log, TREE)
+        self.assertEqual([unit.obj for unit in units], [
+            'build/CMakeFiles/helper.dir/hash.c.o', 'build/tests/suite.c.o',
+            'build/CMakeFiles/helper.dir/random.c.o', 'top.o',
+        ])
+
     def test_a_flat_build_names_every_object_and_source(self) -> None:
         log = (
             "gcc -O3 -DHAVE_HIDDEN -I. -c -o adler32.o adler32.c\n"
@@ -149,6 +168,35 @@ class EvoccArgvTest(unittest.TestCase):
         argv, _ = self.command(f"gcc -include {TREE}/lib/zstd.h -c -o a.o a.c\n")
         self.assertIn("-include", argv)
         self.assertIn(f"{self.tree}/lib/zstd.h", argv)
+
+
+class BuildSymlinkTest(unittest.TestCase):
+    def test_internal_absolute_links_are_portable_without_changing_source(self) -> None:
+        self.assertTrue(hasattr(ladder, 'portable_build_symlinks'))
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            (tree / 'source').mkdir()
+            (tree / 'build').mkdir()
+            source = tree / 'source/query.c'
+            source.write_bytes(b'int value = 7;\n')
+            link = tree / 'build/query.c'
+            link.symlink_to(f'{TREE}/source/query.c')
+            relative = tree / 'build/relative.c'
+            relative.symlink_to('../source/query.c')
+            external = tree / 'build/external.c'
+            external.symlink_to('/usr/include/external.c')
+            escaped = tree / 'build/escaped.c'
+            escaped.symlink_to(f'{TREE}/../outside.c')
+
+            changes = ladder.portable_build_symlinks(tree, TREE)
+
+            self.assertEqual(changes, {'build/query.c': '../source/query.c'})
+            self.assertEqual(link.read_bytes(), b'int value = 7;\n')
+            self.assertEqual(source.read_bytes(), b'int value = 7;\n')
+            self.assertEqual(relative.readlink(), Path('../source/query.c'))
+            self.assertEqual(external.readlink(), Path('/usr/include/external.c'))
+            self.assertEqual(escaped.readlink(), Path(f'{TREE}/../outside.c'))
+            self.assertEqual(ladder.portable_build_symlinks(tree, TREE), {})
 
 
 class SysrootSourceTest(unittest.TestCase):

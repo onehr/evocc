@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260909T215349Z",
-  "subject": "5aabf60",
-  "driverSha256": "f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd",
+  "run": "20260914T154648Z",
+  "subject": "4289802",
+  "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -67,56 +67,52 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1269,
-     "refused": 328,
+     "pass": 1331,
+     "refused": 265,
      "not-applicable": 89,
-     "fail": 5,
-     "link-fail": 1
+     "fail": 7
     },
     "dispositionCounts": {
-     "PASS": 1268,
-     "compiler-failure": 268,
+     "PASS": 1330,
+     "compiler-failure": 189,
      "FP-deferred": 11,
-     "not-applicable": 145,
+     "not-applicable": 162,
      "oracle-unusable": 0
     },
     "refusalsByCode": {
-     "E3101": 128,
+     "E3101": 114,
      "E2201": 22,
-     "E2001": 21,
-     "E2203": 20,
-     "E1205": 17,
-     "E3021": 17,
+     "E1205": 19,
+     "E2001": 19,
      "E2102": 17,
-     "E3030": 15,
+     "E2203": 16,
      "E0112": 10,
-     "E3029": 8,
-     "E2939": 7,
+     "E2920": 7,
      "E1001": 6,
-     "E3046": 6,
-     "E2920": 6,
+     "E3021": 5,
      "E2940": 5,
      "E2933": 3,
-     "E2913": 3,
      "E2903": 3,
+     "E2913": 2,
+     "E3026": 2,
      "E1006": 2,
+     "E3030": 2,
+     "E2939": 2,
      "E1007": 2,
      "E0002": 1,
-     "E3026": 1,
      "E2935": 1,
-     "E1002": 1,
      "E2202": 1,
      "E2101": 1,
      "E2208": 1,
-     "E3033": 1,
      "E2204": 1,
      "E2929": 1
     },
     "failuresByInterpreterVerdict": {
-     "E3004 signed-integer-overflow": 2,
      "E3008 interpreter-fuel-exhausted": 2,
-     "E3039 external-call-not-executable": 1,
-     "E3001 read-of-uninitialized-object": 1
+     "E3039 external-call-not-executable": 2,
+     "E3004 signed-integer-overflow": 1,
+     "E3001 read-of-uninitialized-object": 1,
+     "E3021 not-lowered": 1
     },
     "appliedOptions": {
      "-std=gnu89": 75,
@@ -127,5 +123,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260909T215349Z"
+ "evidence": ".evidence/ladder/e0/20260914T154648Z"
 }
