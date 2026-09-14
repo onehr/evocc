@@ -2092,6 +2092,11 @@ The missing upstream `net/lib` install dependency is now built, and VETH
 reaches the still-missing IPv6 module. This is not complete module coverage.
 Six NEON module units and BTF type metadata remain compiler
 work, not architecture exclusions; no all-test pass is claimed.
+Subsequent module replay now loads all 33 KUnit modules: the upstream parser
+reports **780 PASS / 0 FAIL / 1 benchmark SKIP** on both kernels, capture
+`module-suites-20260914/subject-complete-records`. Real source-derived DWARF/BTF
+has passed object-level checks; whole-kernel BTF and the six NEON units remain
+open. The broader coverage configuration and full program rerun are in progress.
 The runtime root-mount repair also restores the original statmount
 namespace test to 2/2 on both Images without changing the kernel test.
 See the dated runtime update in

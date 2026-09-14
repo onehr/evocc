@@ -524,6 +524,53 @@ exception; both still FAIL when creating a veth because VETH is configured as
 a module and modules are not installed. This moves the diagnostic to the
 existing module gap; it does not make `tc-testing` pass.
 
+### Module execution and coverage follow-up (2026-09-14)
+
+The expanded built-in kernel result is now **1,325 PASS / 7 FAIL / 108 SKIP**
+(`20260914-subject-padding-tcg`), against GCC's 1,324 / 8 / 108. The seven
+shared arm64 per-task EL1 breakpoint failures remain failures, not passes.
+The original full kselftest rerun `20260914T121718Z` is still running; its
+Images, configurations and runtime disks remain immutable during execution.
+
+Module execution is a separate measured result. All **33/33 KUnit modules**
+load in `module-suites-20260914/subject-complete-records`; the upstream KUnit
+parser reports **781 cases: 780 PASS / 0 FAIL / 1 SKIP**, matching the GCC
+control in `reference-records`. The skipped MD5 benchmark explicitly requires
+`CONFIG_CRYPTO_LIB_BENCHMARK`. Earlier failed attempts remain alongside this
+result: the PRP test compared jiffies across an unlocked interval, and iwlmvm
+still imported a callback reachable only through an unused private table.
+The final comparison is not a claim that those earlier attempts passed.
+
+`286b4ed` preserves sequential and bounded finite initializer facts for
+constant queries. `c4de608` follows one reachability graph through private
+functions and tables, retaining public/hidden, used, section, alias and asm
+roots. Original module replay and loading, rather than focused tests alone,
+validate these repairs. The composed module graph contains **3,407 EvoCC C
+leaves and six assembly leaves**, with 702 eligible linked modules; two
+modules remain blocked by the six executable-NEON C units. These are real
+compiler gaps, not VM exclusions or GCC fallback allowances.
+
+Source-derived DWARF now passes `llvm-dwarfdump --verify` and `pahole` on
+fixtures and an actual KUnit object, but a complete EvoCC BTF-enabled kernel
+is **not yet built or tested**. The separate coverage configuration adds
+BTF, USERFAULTFD, checkpoint/restore, Landlock, IOMMUFD tests, missing crypto
+algorithms and upstream network/mm selftest prerequisites. MSEAL system
+mappings and CHECKPOINT_RESTORE are mutually exclusive and use separate
+fragments; requested symbols are checked against effective Kconfig output.
+Full upstream config merging also requests compiler instrumentation such as
+ftrace and sanitizers, which must not be silently omitted or claimed tested.
+
+The unchanged mremap tests additionally ran on both original expanded Images
+with an explicit **8 GiB supplemental VM profile** in `mremap-memory-20260914`.
+All four 2 GiB mapping cases then pass; the original 2 GiB profile is unchanged.
+The inner result is **22 PASS / 1 FAIL / 3 XFAIL**, plus five passing
+`mremap_dontunmap` cases. The remaining failure explicitly reports unavailable
+USERFAULTFD. The upstream wrapper nevertheless exits zero: `b03b302` now
+retains that wrapper verdict but exposes nested failure summaries and blocks
+an all-tests pass pending review. `a0dc2f4` separately enables explicitly
+listed KUnit suites to run through debugfs after module setup, preserving
+their original boot results and refusing absent init-only rerun interfaces.
+
 ### Execution order and update rules
 
 September 13 complete-composition diagnostic retry
