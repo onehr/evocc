@@ -585,6 +585,15 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// Unevaluated extent query, resolved from declarations and captured
+    /// allocation arguments before EvoIR. Pointer bits never prove a size.
+    BuiltinObjectSize {
+        operand: &'arena CHirExpr<'arena>,
+        mode: u8,
+        dynamic: bool,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     /// Front-end-complete GNU checked arithmetic. The first two operands and
     /// the destination pointer are evaluation roots, in that source order.
     CheckedArithmetic {
@@ -780,6 +789,7 @@ impl CHirExpr<'_> {
             | Self::Elvis(_, _, span)
             | Self::Call(_, _, span)
             | Self::BuiltinConstantP { span, .. }
+            | Self::BuiltinObjectSize { span, .. }
             | Self::CheckedArithmetic { span, .. }
             | Self::BitBuiltin { span, .. }
             | Self::BuiltinTrap { span, .. }
@@ -2065,6 +2075,7 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinConstantP { .. }
+        | CHirExpr::BuiltinObjectSize { .. }
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
@@ -2288,6 +2299,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinConstantP { .. }
+            | CHirExpr::BuiltinObjectSize { .. }
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }

@@ -398,7 +398,7 @@ fn builtin_object_size_resolves_to_proven_or_unknown_constants() {
         &[
             (
                 "unsigned long f(int *p) { return __builtin_object_size(p, 0); }\n",
-                "unsigned long f(int *p) { return (unsigned long)-1; }\n",
+                "unsigned long f(int *p) { return 18446744073709551615ul; }\n",
             ),
             (
                 "unsigned long f(int *p) { return __builtin_object_size(p, 2); }\n",

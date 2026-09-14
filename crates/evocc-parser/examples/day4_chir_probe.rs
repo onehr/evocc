@@ -173,6 +173,15 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let operand = self.expression(&format!("{path}.operand"), operand);
                 format!("constant_p({operand})")
             }
+            CHirExpr::BuiltinObjectSize {
+                operand,
+                mode,
+                dynamic,
+                ..
+            } => {
+                let operand = self.expression(&format!("{path}.operand"), operand);
+                format!("object_size({operand},{mode},{dynamic})")
+            }
             CHirExpr::Lit(value, _) => format!("int({})", value.value),
             CHirExpr::FloatLit(value, _) => format!("float({:?},{:?})", value.value, value.suffix),
             CHirExpr::CharLit(value, _) => format!("char({},{:?})", value.value, value.prefix),

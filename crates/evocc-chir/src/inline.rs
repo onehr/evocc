@@ -10,6 +10,8 @@ use evocc_types::{TargetDataLayout, TypeId, TypeKind};
 
 use crate::*;
 
+mod object_size;
+
 #[derive(Debug)]
 pub struct InlineError {
     pub span: SourceSpan,
@@ -28,6 +30,7 @@ struct Uses<'a> {
     nodes: usize,
     addressed_labels: bool,
     constant_queries: bool,
+    object_queries: bool,
     has_loops: bool,
     has_calls: bool,
     unknown_memory: bool,
@@ -305,7 +308,11 @@ fn inspect_with_visitors<'a>(
                 visit_expression(e);
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
-                uses.constant_queries |= matches!(e, CHirExpr::BuiltinConstantP { .. });
+                uses.constant_queries |= matches!(
+                    e,
+                    CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. }
+                );
+                uses.object_queries |= matches!(e, CHirExpr::BuiltinObjectSize { .. });
                 if let CHirExpr::Ident { symbol, .. } = e {
                     uses.references.insert(*symbol);
                 }
@@ -409,6 +416,7 @@ fn inspect_with_visitors<'a>(
                     | CHirExpr::SizeOf(..)
                     | CHirExpr::SizeOfExpr(..)
                     | CHirExpr::BuiltinConstantP { .. }
+                    | CHirExpr::BuiltinObjectSize { .. }
                     | CHirExpr::AlignOf(..)
                     | CHirExpr::BuiltinTrap { .. }
                     | CHirExpr::BuiltinUnreachable { .. }
@@ -800,6 +808,11 @@ pub(crate) fn substitute_for_execution<'a>(
         serial: 0,
         active: Vec::new(),
         temporaries: Vec::new(),
+        extent_calls: HashMap::new(),
+        extent_captures: HashMap::new(),
+        allocation_sizes: object_size::allocation_sizes(unit),
+        track_extents: uses.object_queries,
+        extent_scope: unit.symbols.file_scope(),
     };
     for (symbol, (value, ty)) in static_integer_values(unit, target) {
         let converted = pass.alloc(CHirExpr::Cast(ty, value, value.span()));
@@ -872,6 +885,7 @@ pub(crate) fn substitute_for_execution<'a>(
                     }
                 }
                 pass.temporaries.clear();
+                pass.extent_scope = scope;
                 pass.active.push(f.symbol);
                 let mut rewritten = pass.stmt(body, &mut c)?;
                 pass.active.pop();
@@ -1019,6 +1033,7 @@ struct Context<'a> {
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     optimized_constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     assignment_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
     single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     declaration_prefix: bool,
@@ -1037,6 +1052,7 @@ impl Context<'_> {
             constants: BTreeMap::new(),
             optimized_constants: BTreeMap::new(),
             assignment_values: BTreeMap::new(),
+            object_bounds: BTreeMap::new(),
             single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
             declaration_prefix: false,
@@ -1060,6 +1076,11 @@ struct Substitution<'a, 't> {
     serial: u64,
     active: Vec<SymbolId>,
     temporaries: Vec<&'a CHirDecl<'a>>,
+    extent_calls: HashMap<usize, object_size::Bounds<'a>>,
+    extent_captures: HashMap<usize, &'a CHirExpr<'a>>,
+    allocation_sizes: BTreeMap<SymbolId, Vec<usize>>,
+    track_extents: bool,
+    extent_scope: ScopeId,
 }
 
 impl<'a> Substitution<'a, '_> {
@@ -1646,6 +1667,20 @@ impl<'a> Substitution<'a, '_> {
             }
         }
         o.cleanup = o.cleanup.map(|cleanup| self.expr(cleanup, c)).transpose()?;
+        if self.track_extents
+            && !c.mutable.contains(&original)
+            && c.declaration_prefix
+            && o.storage != StorageClass::Static
+            && o.asm_label.is_none()
+        {
+            if let Some(initializer) = &o.initializer {
+                if let [InitAction::StoreScalar { value, .. }] = initializer.plan.actions() {
+                    if let Some(bounds) = self.pointer_bounds(value, c, 0) {
+                        c.object_bounds.insert(o.symbol, bounds);
+                    }
+                }
+            }
+        }
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
     /// Instantiating a local type must rename its captured sizes as well as
@@ -1725,6 +1760,27 @@ impl<'a> Substitution<'a, '_> {
         }
         let mut out = e.clone();
         match &mut out {
+            CHirExpr::BuiltinObjectSize {
+                operand,
+                mode,
+                dynamic,
+                facts,
+                span,
+            } => {
+                if *mode > 3
+                    || crate::constant::canonical_integer_type(&self.unit.types, facts.ty())
+                        != Some(crate::integer::CIntegerType::ULONG)
+                {
+                    return Err(self.error(*span, "inconsistent object extent query"));
+                }
+                let expand = c.expand_calls;
+                c.expand_calls = false;
+                let rewritten = self.expr(operand, c);
+                c.expand_calls = expand;
+                let result = self.object_size_result(rewritten?, *mode, *dynamic, c);
+                c.memo.insert(key, result);
+                return Ok(result);
+            }
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -1760,6 +1816,32 @@ impl<'a> Substitution<'a, '_> {
                 c.expand_calls = expand;
                 *operand = rewritten?;
             }
+            CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), a, b, _) => {
+                *a = self.expr(a, c)?;
+                *b = self.expr(b, c)?;
+                if self.track_extents && c.expand_calls {
+                    if crate::constant::integer_expression_type(
+                        b,
+                        &self.unit.types,
+                        &self.unit.symbols,
+                    )
+                    .is_some()
+                        && self.pointer_bounds(a, c, 0).is_some()
+                    {
+                        *b = self.capture_extent_value(b, c.scope)?;
+                    } else if *op == BinaryOp::Add
+                        && crate::constant::integer_expression_type(
+                            a,
+                            &self.unit.types,
+                            &self.unit.symbols,
+                        )
+                        .is_some()
+                        && self.pointer_bounds(b, c, 0).is_some()
+                    {
+                        *a = self.capture_extent_value(a, c.scope)?;
+                    }
+                }
+            }
             CHirExpr::Binary(_, a, b, _)
             | CHirExpr::Index(a, b, _)
             | CHirExpr::Comma(a, b, _)
@@ -1771,11 +1853,23 @@ impl<'a> Substitution<'a, '_> {
                 *a = self.expr(a, c)?;
                 *b = self.expr(b, c)?;
                 *d = self.expr(d, c)?;
+                if self.track_extents
+                    && c.expand_calls
+                    && self.pointer_bounds(b, c, 0).is_some()
+                    && self.pointer_bounds(d, c, 0).is_some()
+                {
+                    *a = self.capture_extent_value(a, c.scope)?;
+                }
             }
             CHirExpr::Call(f, args, span) => {
                 for a in args.iter_mut() {
                     *a = self.expr(a, c)?;
                 }
+                let bounds = if self.track_extents && c.expand_calls {
+                    self.capture_allocation(f, args, c.scope)?
+                } else {
+                    None
+                };
                 if let CHirExpr::Ident { symbol, .. } = f {
                     if let Some(callee) = self
                         .eligible
@@ -1783,12 +1877,27 @@ impl<'a> Substitution<'a, '_> {
                         .copied()
                         .filter(|_| c.expand_calls)
                     {
-                        let result = self.call(callee, args, *span, c.scope)?;
+                        let argument_bounds = args
+                            .iter()
+                            .map(|arg| self.pointer_bounds(arg, c, 0))
+                            .collect::<Vec<_>>();
+                        let result = self.call(callee, args, *span, c.scope, &argument_bounds)?;
+                        if let Some(bounds) = bounds {
+                            self.extent_calls
+                                .insert(result as *const _ as usize, bounds);
+                        }
                         c.memo.insert(key, result);
                         return Ok(result);
                     }
                 }
                 *f = self.expr(f, c)?;
+                if let Some(bounds) = bounds {
+                    let result = self.alloc(out);
+                    self.extent_calls
+                        .insert(result as *const _ as usize, bounds);
+                    c.memo.insert(key, result);
+                    return Ok(result);
+                }
             }
             CHirExpr::CheckedArithmetic {
                 lhs, rhs, target, ..
@@ -2142,6 +2251,7 @@ impl<'a> Substitution<'a, '_> {
         args: &[&'a CHirExpr<'a>],
         span: SourceSpan,
         scope: ScopeId,
+        argument_bounds: &[Option<object_size::Bounds<'a>>],
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
         if self.active.contains(&f.symbol) {
             return Err(InlineError {
@@ -2302,7 +2412,7 @@ impl<'a> Substitution<'a, '_> {
                 items.push(CHirBlockItem::Declaration(object));
             }
         }
-        for (parameter, arg) in parameters.iter().zip(args) {
+        for ((parameter, arg), bounds) in parameters.iter().zip(args).zip(argument_bounds) {
             let ty = self.substituted_type(parameter.ty, &c);
             let fresh = self.fresh(inline_scope, ty, StorageClass::None, span)?;
             let arg = if matches!(
@@ -2325,6 +2435,9 @@ impl<'a> Substitution<'a, '_> {
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
                 {
+                    if let Some(bounds) = bounds {
+                        c.object_bounds.insert(fresh, *bounds);
+                    }
                     if let Some(replacement) = self.value_after_execution(arg, ty) {
                         c.constants.insert(original, replacement);
                     }

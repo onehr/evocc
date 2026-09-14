@@ -398,7 +398,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
                     Some("__builtin_classify_type") => TokenKind::BuiltinClassifyType,
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
-                    Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
+                    Some("__builtin_object_size" | "__builtin_dynamic_object_size") => {
+                        TokenKind::BuiltinObjectSize
+                    }
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
                     Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
                     Some(
@@ -2753,8 +2755,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// Reading storage is never an arithmetic constant expression: C11 6.6
     /// admits only operands whose value is fixed at translation time.
     fn is_arithmetic_constant_expression(&self, expression: &CHirExpr<'_>) -> bool {
-        if self.integer_expression_type(expression).is_ok() {
-            return self.eval_integer_constant_expression(expression).is_ok();
         if evocc_chir::constant::fold_floating_integer_arithmetic(
             expression,
             &self.types,
@@ -2765,10 +2765,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             return true;
         }
+        if self.integer_expression_type(expression).is_ok() {
+            return self.eval_integer_constant_expression(expression).is_ok();
         }
         match expression {
             CHirExpr::Lit(_, _) | CHirExpr::FloatLit(_, _) | CHirExpr::CharLit(_, _) => true,
-            CHirExpr::BitBuiltin { .. } | CHirExpr::BuiltinConstantP { .. } => {
+            CHirExpr::BitBuiltin { .. }
+            | CHirExpr::BuiltinConstantP { .. }
+            | CHirExpr::BuiltinObjectSize { .. } => {
                 self.eval_integer_constant_expression(expression).is_ok()
             }
             CHirExpr::MemoryRead { .. } => false,
@@ -2872,7 +2876,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CharLit(_, _)
             | CHirExpr::Ident { .. }
             | CHirExpr::BitBuiltin { .. }
-            | CHirExpr::BuiltinConstantP { .. } => self
+            | CHirExpr::BuiltinConstantP { .. }
+            | CHirExpr::BuiltinObjectSize { .. } => self
                 .eval_integer_constant_expression(expression)
                 .ok()
                 .map(|value| value.mathematical_value() as f64),
@@ -3793,12 +3798,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E2202", "invalid-initializer-type", expression.span());
                     return None;
                 }
+                let expression = self.explicit_floating_integer_conversion(target, expression);
                 actions.push(InitAction::store_scalar(
                     path,
                     target,
                     expression,
                     expression.span(),
-                let expression = self.explicit_floating_integer_conversion(target, expression);
                 ));
                 Some(())
             }
@@ -6654,6 +6659,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// the semantic caller as E1303.
     fn eval_integer_constant_expression(&self, expression: &CHirExpr<'_>) -> Result<CInteger, ()> {
         match expression {
+            CHirExpr::BuiltinObjectSize { .. } => evocc_chir::constant::eval_integer_constant(
+                expression,
+                &self.types,
+                &self.symbols,
+                &self.target_layout,
+            )
+            .ok_or(()),
             CHirExpr::BuiltinConstantP { operand, .. } => {
                 Ok(CInteger::int(i32::from(builtin_constant_p(
                     operand,
@@ -6778,6 +6790,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
             CHirExpr::BuiltinConstantP { .. } => Ok(CIntegerType::INT),
+            CHirExpr::BuiltinObjectSize { .. } => Ok(CIntegerType::ULONG),
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
             CHirExpr::MemoryRead { .. } => Err(()),
             CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
@@ -8842,19 +8855,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
-        let target = self.parse_conditional()?;
-        let Some(op) = self.peek_kind().and_then(assignment_op) else {
-            return Some(target);
-        };
-        self.advance();
-        // Diagnose the target first, but still consume the complete
-        // right-associative RHS so recovery resumes at the statement boundary.
-        let typed_target = self.typed_update_target(target);
-        let value = self.parse_assignment()?;
-        self.require_supported_assignment_promotion(op, target, value)?;
-        let typed_target = typed_target?;
-        let span = self.merge_span(target.span(), value.span());
     fn explicit_floating_integer_conversion(
         &self,
         target: TypeId,
@@ -8874,6 +8874,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn parse_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        let target = self.parse_conditional()?;
+        let Some(op) = self.peek_kind().and_then(assignment_op) else {
+            return Some(target);
+        };
+        self.advance();
+        // Diagnose the target first, but still consume the complete
+        // right-associative RHS so recovery resumes at the statement boundary.
+        let typed_target = self.typed_update_target(target);
+        let value = self.parse_assignment()?;
+        self.require_supported_assignment_promotion(op, target, value)?;
+        let typed_target = typed_target?;
+        let span = self.merge_span(target.span(), value.span());
         let constraint = self.assignment_constraint(op, typed_target.ty(), value);
         match constraint {
             UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
@@ -8889,6 +8902,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2922", "volatile-aggregate-copy-unsupported", span);
             return None;
         }
+        let value = if op == AssignmentOp::Simple {
+            self.explicit_floating_integer_conversion(typed_target.ty(), value)
+        } else {
+            value
+        };
         Some(match typed_target {
             TypedUpdateTarget::Direct(target_identity) => {
                 let place = self.finish_scalar_update_place(target_identity, target.span())?;
@@ -8902,11 +8920,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span,
                 })
             }
-        let value = if op == AssignmentOp::Simple {
-            self.explicit_floating_integer_conversion(typed_target.ty(), value)
-        } else {
-            value
-        };
             TypedUpdateTarget::Memory(place) => {
                 let facts = ExprFacts::value(place.value_ty());
                 self.alloc_node(CHirExpr::MemoryAssign {
@@ -9056,7 +9069,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// false here.
     fn place_roots_register_object(&self, expression: &CHirExpr<'arena>) -> bool {
         let symbol = match expression {
-            CHirExpr::BuiltinConstantP { .. } => None,
+            CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => None,
             CHirExpr::Ident { symbol, .. } => Some(*symbol),
             CHirExpr::MemoryRead { place, .. } => match place.root() {
                 PlaceRoot::Object { symbol } => Some(*symbol),
@@ -9833,6 +9846,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::BitBuiltin { facts, .. }
             | CHirExpr::BuiltinConstantP { facts, .. }
+            | CHirExpr::BuiltinObjectSize { facts, .. }
             | CHirExpr::BuiltinTrap { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
             | CHirExpr::BuiltinReturnAddress { facts, .. }
@@ -11357,6 +11371,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     if let FunctionParameters::Prototype { types, .. } = &parameters {
                         for (argument, parameter) in arguments.iter_mut().zip(types) {
                             *argument = self.resolve_union_argument(*parameter, argument)?;
+                            *argument =
+                                self.explicit_floating_integer_conversion(*parameter, argument);
                         }
                     }
                     let default_promoted_from = match parameters {
@@ -11371,8 +11387,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         Some(fixed) if fixed <= arguments.len() => {
                             self.promote_call_arguments(&mut arguments[fixed..])?
                         }
-                            *argument =
-                                self.explicit_floating_integer_conversion(*parameter, argument);
                         _ => Vec::new(),
                     };
                     if let CHirExpr::Ident { symbol, facts, .. } = expression {
@@ -12668,6 +12682,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_builtin_object_size(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        let dynamic = self.token_text(&keyword) == "__builtin_dynamic_object_size";
         if self.peek_kind() != Some(TokenKind::LParen) {
             self.report("E2910", "builtin-not-called", keyword.span);
             return None;
@@ -12710,6 +12725,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             &self.target_layout,
         );
         let span = self.merge_span(keyword.span, close.span);
+        if dynamic
+            || self.current_function_parameters.is_some()
+                && (result == u64::MAX || mode >= 2 && result == 0)
+        {
+            let size_ty = self.intern_c_integer_type(CIntegerType::ULONG);
+            return Some(self.alloc_node(CHirExpr::BuiltinObjectSize {
+                operand,
+                mode,
+                dynamic,
+                facts: ExprFacts::value(size_ty),
+                span,
+            }));
+        }
         self.front_end_builtins
             .push(FrontEndBuiltinRecord::ObjectSize {
                 span,
@@ -13877,7 +13905,8 @@ fn collect_jump_regions_expr(
     gotos: &mut Vec<JumpRegionReference>,
 ) {
     match expression {
-        CHirExpr::BuiltinConstantP { operand, .. } => {
+        CHirExpr::BuiltinConstantP { operand, .. }
+        | CHirExpr::BuiltinObjectSize { operand, .. } => {
             collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
         }
         CHirExpr::LabelAddress { label, .. } => gotos.push(JumpRegionReference {
@@ -14118,7 +14147,10 @@ fn place_references_symbol(place: &MemoryPlace<'_>, symbol: SymbolId) -> bool {
 
 fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> bool {
     match expression {
-        CHirExpr::BuiltinConstantP { operand, .. } => expression_references_symbol(operand, symbol),
+        CHirExpr::BuiltinConstantP { operand, .. }
+        | CHirExpr::BuiltinObjectSize { operand, .. } => {
+            expression_references_symbol(operand, symbol)
+        }
         CHirExpr::Ident {
             symbol: referenced, ..
         } => *referenced == symbol,
@@ -14463,6 +14495,19 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
 /// When a parenthesized expression appears, preserve its original span.
 fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHirExpr<'arena> {
     match inner {
+        CHirExpr::BuiltinObjectSize {
+            operand,
+            mode,
+            dynamic,
+            facts,
+            ..
+        } => CHirExpr::BuiltinObjectSize {
+            operand,
+            mode: *mode,
+            dynamic: *dynamic,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::BuiltinConstantP { operand, facts, .. } => CHirExpr::BuiltinConstantP {
             operand,
             facts: *facts,

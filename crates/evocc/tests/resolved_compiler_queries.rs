@@ -40,6 +40,40 @@ fn dynamic_object_queries_capture_allocation_sizes_without_repeating_effects() {
 }
 
 #[test]
+fn extent_queries_do_not_read_unknown_values_or_escape_source_control_flow() {
+    for source in [
+        "int main(void){char a[16];int i;return __builtin_dynamic_object_size(a+i,0)!=~0ul;}",
+        "int main(void){char *p;return __builtin_dynamic_object_size(p,1)!=~0ul;}",
+        "int main(void){char a[16];int i=0;unsigned long n=__builtin_dynamic_object_size(a+i++,1);return n!=~0ul||i;}",
+        "int main(void){char a[16];char*p;goto after; p=a; after:return __builtin_dynamic_object_size(p,1)!=~0ul;}",
+        "int calls;char *allocate(void){++calls;return 0;}int main(void){return __builtin_dynamic_object_size(allocate(),1)!=~0ul||calls;}",
+        "int main(void){char a[16];char*p=a;unsigned long n=__builtin_dynamic_object_size(p++,3);return n||p!=a;}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn object_extents_follow_substituted_parameters_and_captured_array_bounds() {
+    for source in [
+        "static __attribute__((always_inline)) inline unsigned long extent(char*p){return __builtin_dynamic_object_size(p,1);}int main(void){char a[17];return extent(a)!=17;}",
+        "__attribute__((noinline)) int f(unsigned long n){char a[13];typedef char V[n];V*p=(V*)&a;n=1;return __builtin_dynamic_object_size(*p,1)!=13;}int main(void){return f(13);}",
+        "int main(void){char a[16];char*p=a+4;char*q=p-2;return __builtin_dynamic_object_size(q,0)!=14;}",
+        "int main(void){char a[16];return __builtin_dynamic_object_size(a+16,0)||__builtin_dynamic_object_size(a+17,1)||__builtin_dynamic_object_size(a-1,2);}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn dynamic_object_queries_reject_invalid_modes() {
+    for mode in ["4", "-1", "mode"] {
+        let source = format!(
+            "unsigned long f(char *p,int mode){{return __builtin_dynamic_object_size(p,{mode});}}"
+        );
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2925"));
+    }
+}
+
+#[test]
 fn inline_constant_queries_are_recomputed_after_parameter_substitution() {
     let source = include_str!("../../../tests/fixtures/inline-constant-query.c");
     let output = run(source, "--interpret-evoir");

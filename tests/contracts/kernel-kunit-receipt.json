@@ -167,6 +167,21 @@
     "gate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 9ee51d1 --offline -j2 --quiet: exit 0, including Clippy and fmt; worktree includes the separately pending dynamic-size draft",
     "nativeFixture": "tests/fixtures/floating-constant-integers.out: GCC-14 and Clang-19 O0/O2 plus native EvoCC all exit 0"
   },
-  "unrepairedSurveyClasses": {"dynamic object size": 10, "system includes and NEON": 6},
-  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 36 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator."
+  "dynamicObjectSizeReplay": {
+    "run": "dynamic-extents-20260914",
+    "authority": "User approval on 2026-09-14; EvoIR 1.9.97 allocation-size attribute exception and shared object-size resolution",
+    "compilerState": "worktree after 1e8a5f0 with the approved dynamic object-size implementation",
+    "compilerSha256": "5e6c33427785e5c0f284b8aba9cf5588338526d9a636745a6b5089e538db498d",
+    "before": {"dynamic object size refused": 10},
+    "after": {"assembled": 10, "symbolDrift": 0, "timeout": 0},
+    "installed": false,
+    "units": ".evidence/kunit/dynamic-extents-20260914/units.jsonl",
+    "unitsSha256": "d0ba4c96edf0359526da07a207f6664ba0ef90e8503d1d306993566c232bdadb",
+    "inputSnapshotSha256": "5c6bef40039e1237a551221849358496503b72ac12ea2b127f1d246811812b14",
+    "command": "python3 -u tools/k1/substitute.py --allowlist .evidence/kunit/dynamic-extents-20260914/units.txt --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id dynamic-extents-20260914 --cache /Users/onehrxn/dev/30days/c30/.build/k7/dynamic-extents-cache.json --jobs 2 --timeout 180",
+    "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline --no-fail-fast: 45 passed, 0 failed, 0 ignored",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 1e8a5f0 --offline -j2 --quiet: exit 0, including Clippy and fmt"
+  },
+  "unrepairedSurveyClasses": {"system includes and NEON": 6},
+  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition is being rebuilt against actual generated headers separately."
 }

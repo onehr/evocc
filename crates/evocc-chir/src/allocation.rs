@@ -1596,6 +1596,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::SizeOfExpr(_, _, _)
             | CHirExpr::BuiltinConstantP { .. }
+            | CHirExpr::BuiltinObjectSize { .. }
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }

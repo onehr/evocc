@@ -180,6 +180,7 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::SizeOfExpr(child, _, _)
         | CHirExpr::BitBuiltin { operand: child, .. }
         | CHirExpr::BuiltinConstantP { operand: child, .. }
+        | CHirExpr::BuiltinObjectSize { operand: child, .. }
         | CHirExpr::Member(child, _, _)
         | CHirExpr::PtrMember(child, _, _) => assert_expression_owned(arena, child),
         CHirExpr::Update { target, .. } => {

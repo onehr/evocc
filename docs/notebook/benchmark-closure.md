@@ -364,6 +364,13 @@ outputs, kernel/test Images, source files and test results were retained.
 
 #### Runtime prerequisite and compiler repairs (2026-09-14)
 
+The [current concrete-gap ledger](kernel-selftest-gaps-20260914.md) separates
+implemented repairs, source-backed shared test defects and compiler work still
+missing. The 15-minute filesystem stress replay now passes on both kernels;
+runtime packaging updates for mount_setattr/LSM/FAT await guest verification
+after an external-execution approval-service failure. No test from that replay
+is left running.
+
 The repaired payload includes `ublk/test_common.sh`, `ublk/trace`, procps,
 psmisc, udev, tcpdump, fio and kmod. Targeted run `20260914T015846Z`
 selects **69 of the same 935 programs**: reference 7 PASS / 6 FAIL / 56 SKIP;
@@ -472,22 +479,32 @@ and product size 21; O0 answers unknown. The side-effectful query remains unknow
 without incrementing its operand. Probe `20260914-dynamic-object-size/flow.out`
 keeps these distinct from the earlier ambiguous printf-order observation.
 
-`952464d` records the dynamic-size RED; the implementation is still an
-uncommitted draft, not a repaired kernel result. **K7-DYNAMIC-ALLOC-SIZE:**
-Section 10.1.9's explicit preserved-only default does not yet permit applying
+`952464d` records the dynamic-size RED. Before the September 14 approval,
+**K7-DYNAMIC-ALLOC-SIZE** was a body conflict:
+Section 10.1.9's explicit preserved-only default did not permit applying
 `alloc_size(1)` / `(1,2)` to allocation extents. The sealed flow and fixture
 probes agree on the required sizes, but the existing body-over-Appendix-D rule
-requires authorization for this attribute exception; the request is pending.
-This blocks landing the draft, not the previously sealed survey or repaired
+required authorization for this attribute exception.
+This blocked landing the draft, not the previously sealed survey or repaired
 module replays. Actual VLA allocation remains outside this repair; bound
 capture tests use the existing permitted views of fixed storage.
-Draft check: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test
+Focused check: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test
 -p evocc --test resolved_compiler_queries --offline --no-fail-fast` passes
 45 tests, zero failed/ignored, including both interpreters, unevaluated unknown
 queries and captured views of fixed arrays. The principal fixture also exits
 zero natively from the earlier release draft. This is not a changed-gate result,
-an installed kernel object, or an EvoCC KUnit execution; original-unit replay
-remains pending after authority and final validation.
+an installed kernel object, or an EvoCC KUnit execution.
+
+The user approved the exception on September 14; revision 1.9.97 records it.
+`dynamic-extents-20260914` then replays all ten original units: **10 assembled,
+0 refused, 0 symbol drift, 0 timeout**, with no installation or relink. The
+changed gate against `1e8a5f0` passes, including Clippy and fmt. Captured
+allocation arguments, selected extents and offsets resolve through one shared
+C-HIR path for both interpreters and lowering. Across the tailored replays,
+**46/52** old refusals are repaired; six executable-NEON module units remain.
+The 2,897 built-in records are now being recompiled against actual generated
+headers and relinked separately. Neither the old full-survey numerator nor
+the EvoCC KUnit runtime verdict is advanced by these tailored results.
 
 The seven pure floating-constant arithmetic refusals now assemble with matching
 symbols in `floating-constants-20260914`, with no installation or relink. The

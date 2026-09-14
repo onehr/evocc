@@ -214,6 +214,7 @@ fn attribute_query_expression_type(
     match expression {
         CHirExpr::Ident { facts, .. }
         | CHirExpr::BuiltinConstantP { facts, .. }
+        | CHirExpr::BuiltinObjectSize { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::BitBuiltin { facts, .. }
         | CHirExpr::BuiltinTrap { facts, .. }
@@ -436,6 +437,7 @@ fn expression_contains_declaration(
     attribute: &str,
 ) -> bool {
     match expression {
+        CHirExpr::BuiltinObjectSize { .. } => false,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
@@ -750,6 +752,16 @@ fn eval_integer_constant_in(
         |expression| eval_integer_constant_in(expression, types, symbols, target, context);
     match expression {
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
+        CHirExpr::BuiltinObjectSize {
+            operand,
+            mode,
+            dynamic: false,
+            ..
+        } => Some(CInteger::new(
+            builtin_object_size(operand, *mode, types, symbols, target),
+            CIntegerType::ULONG,
+        )),
+        CHirExpr::BuiltinObjectSize { .. } => None,
         CHirExpr::BuiltinConstantP { operand, .. } => Some(CInteger::int(i32::from(
             builtin_constant_p(operand, types, symbols, target),
         ))),
@@ -904,6 +916,7 @@ pub fn integer_expression_type(
     match expression {
         CHirExpr::Lit(literal, _) => Some(integer_literal_value(*literal).ok()?.ty()),
         CHirExpr::BuiltinConstantP { .. } => Some(CIntegerType::INT),
+        CHirExpr::BuiltinObjectSize { .. } => Some(CIntegerType::ULONG),
         CHirExpr::CharLit(literal, _) => Some(literal.integer_value().ty()),
         CHirExpr::Ident { symbol, facts, .. } => {
             let symbol = symbols.symbol(*symbol).ok()?;

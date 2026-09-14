@@ -1145,6 +1145,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::SizeOf(..)
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::BuiltinConstantP { .. }
+            | CHirExpr::BuiltinObjectSize { .. }
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
@@ -2369,7 +2370,7 @@ fn prevalidate_expr_for_lowering(
     global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match expression {
-        CHirExpr::BuiltinConstantP { .. } => Ok(()),
+        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => Ok(()),
         CHirExpr::Ident {
             symbol,
             spelling,
@@ -8756,7 +8757,6 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
         if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
             expression,
             self.unit.types(),
@@ -8765,6 +8765,7 @@ impl<'a> FunctionLowerer<'a> {
         ) {
             return self.wide_constant(state, value.ty(), value.raw_bits());
         }
+        if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
             expression,
             self.unit.types(),
             self.unit.symbols(),
@@ -8782,6 +8783,10 @@ impl<'a> FunctionLowerer<'a> {
                 })?;
                 self.wide_constant(state, integer.ty(), integer.raw_bits())
             }
+            CHirExpr::BuiltinObjectSize { span, .. } => Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "unresolved object extent query",
+            }),
             CHirExpr::BuiltinConstantP { operand, .. } => {
                 let value = evocc_chir::builtin_constant_p(
                     operand,
@@ -13437,7 +13442,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         calls.addressed_compound |= matches!(root, CHirExpr::CompoundLit(..));
     }
     match expression {
-        CHirExpr::BuiltinConstantP { .. } => {}
+        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::LabelAddress { label, .. } => {
             calls.labels.insert(
                 expression as *const CHirExpr<'_> as usize,
@@ -13703,7 +13708,7 @@ fn live_before_stmt(
 
 fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
     match expression {
-        CHirExpr::BuiltinConstantP { .. } => {}
+        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             live.insert(*symbol);
         }
@@ -13910,7 +13915,7 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
 
 fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<SymbolId>) {
     match expression {
-        CHirExpr::BuiltinConstantP { .. } => {}
+        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             symbols.insert(*symbol);
         }

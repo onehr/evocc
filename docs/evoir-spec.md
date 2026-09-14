@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.96** | **Authoritative reference** | **2026-09-13**
+**Revision 1.9.97** | **Authoritative reference** | **2026-09-14**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3802,6 +3802,12 @@ a partial reading now would create a second source of truth for each.
 `alias` are linkage marks since revision 1.9.79 (Section 5.2); `aligned` on a
 function is code alignment since revision 1.9.88 (Section 5.2).
 `cleanup` on an automatic object has the scope-exit effect stated below.
+`alloc_size(1)` / `alloc_size(1,2)` and other valid parameter indices may
+describe a returned allocation's byte extent for the object-size queries below
+(user authorization, 2026-09-14). Indices are one-based; the indicated integer
+arguments, after their ordinary call conversions, give the size or its product.
+This adds no alias, alignment, lifetime or bounds-check exemption; the original
+call and argument effects still execute exactly once.
 
 **`cleanup` (revision 1.9.96).** `cleanup(function)` on an automatic object
 resolves a function at the declaration and calls it with the object's address
@@ -4497,6 +4503,18 @@ and Clang-19 agree on every row.
   that odd-mode row extent remains unknown. This supersedes the old explicit
   always-unknown rule. Evidence: `tests/fixtures/object-size-member.c`,
   `object-size-bounds.c`, and the compact `resolved-compiler-queries.out`.
+- `__builtin_dynamic_object_size(p, mode)` has the same mode, type and unknown
+  answers, but may return a runtime extent proved from allocation-time argument
+  captures, captured array bounds, subobject offsets and selected pointer flows.
+  It does not reevaluate the allocation, a mutated size variable or an effectful
+  query operand, and is not a source integer constant expression. A static
+  `__builtin_object_size` may use these facts only when the answer is constant.
+  All answers are resolved in the shared C-HIR path before EvoIR; when analysis
+  cannot establish an extent it retains the unknown answer, not an invented size.
+  Evidence: `tests/fixtures/dynamic-object-size.c` and the sealed
+  `20260914-dynamic-object-size/flow.out`; both oracles agree at O2, while O0
+  may retain unknown. This is the narrow user-approved `alloc_size` exception,
+  not general permission to apply other preserved attributes.
 - `__builtin_has_attribute(operand, attribute)`: a GCC builtin; Clang-19 does
   not provide it, and it appears only in GCC-dialect input, which is what
   EvoCPP presents itself as (10.4). The result is an integer constant
@@ -6074,6 +6092,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.97 | 2026-09-14 | User authorizes alloc_size for proved allocation extents and dynamic object-size queries, retaining allocation-time evaluation, unknown fallback and the source-ICE boundary. |
 | 1.9.96 | 2026-09-13 | User-authorized cleanup exception: resolved ordinary callbacks run in reverse order on actual scope exit, after return evaluation/copy and before object lifetime end. |
 | 1.9.95 | 2026-09-13 | User-authorized correction: visibility pragmas are semantic declaration defaults, not ignored-safe. Reuse hidden symbol binding and retain weak GOT/null behavior; preserve directives in preprocessed output. |
 | 1.9.94 | 2026-09-13 | Authorizes proved object-size bounds with unknown fallback and unevaluated operands, replacing the explicit always-unknown profile that blocks ext4. Distinguishes whole objects from subobjects; records the multidimensional-row oracle conflict without claiming a bound. |

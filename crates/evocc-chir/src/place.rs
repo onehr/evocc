@@ -1004,6 +1004,7 @@ fn pointer_expression_type(
         }
         CHirExpr::BuiltinVarArgs { facts, .. }
         | CHirExpr::BuiltinConstantP { facts, .. }
+        | CHirExpr::BuiltinObjectSize { facts, .. }
         | CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),

@@ -215,6 +215,15 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         CHirExpr::BuiltinConstantP { operand, .. } => {
             format!("constant_p({})", canonical_expr(operand, types))
         }
+        CHirExpr::BuiltinObjectSize {
+            operand,
+            mode,
+            dynamic,
+            ..
+        } => format!(
+            "object_size({},{mode},{dynamic})",
+            canonical_expr(operand, types)
+        ),
         CHirExpr::Lit(value, _) => format!("int({})", value.value),
         CHirExpr::FloatLit(_, _) => "float".into(),
         CHirExpr::CharLit(_, _) => "char".into(),

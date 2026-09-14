@@ -3927,6 +3927,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | CHirExpr::Ternary(..)
                 | CHirExpr::Elvis(..)
                 | CHirExpr::BuiltinConstantP { .. }
+                | CHirExpr::BuiltinObjectSize { .. }
                 | CHirExpr::BitBuiltin { .. }
                 | CHirExpr::SizeOf(..)
                 | CHirExpr::SizeOfExpr(..)
@@ -3966,6 +3967,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     &self.target,
                 ))),
             )),
+            CHirExpr::BuiltinObjectSize { .. } => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "unresolved object extent query",
+                    span,
+                })
+            }
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -8298,7 +8305,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<(), InterpreterError> {
         match expression {
-            CHirExpr::BuiltinConstantP { .. } => {}
+            CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
@@ -8587,13 +8594,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         allow_root_mutation: bool,
     ) -> Result<CInteger, InterpreterError> {
-        let span = expression.span();
-        self.tick(span)?;
-        if !self.static_integer_evaluation {
-            if let Some(value) = crate::constant::fold_wrapping_integer_arithmetic(
-                expression,
-                self.unit.types(),
-                self.unit.symbols(),
         if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
             expression,
             self.unit.types(),
@@ -8602,6 +8602,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ) {
             return Ok(value);
         }
+        let span = expression.span();
+        self.tick(span)?;
+        if !self.static_integer_evaluation {
+            if let Some(value) = crate::constant::fold_wrapping_integer_arithmetic(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
                 &self.target,
             ) {
                 return Ok(value);
@@ -8619,6 +8626,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     &self.target,
                 ))))
             }
+            CHirExpr::BuiltinObjectSize { .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "unresolved object extent query",
+                span,
+            }),
             CHirExpr::Ident {
                 symbol,
                 spelling,
@@ -8873,6 +8884,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 CHirExpr::CharLit(literal, _) => Ok(literal.integer_value().ty()),
                 CHirExpr::Ident { facts, .. }
                 | CHirExpr::BuiltinConstantP { facts, .. }
+                | CHirExpr::BuiltinObjectSize { facts, .. }
                 | CHirExpr::CheckedArithmetic { facts, .. }
                 | CHirExpr::BitBuiltin { facts, .. }
                 | CHirExpr::Assign { facts, .. }
@@ -9650,6 +9662,7 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::BuiltinConstantP { .. }
+        | CHirExpr::BuiltinObjectSize { .. }
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
@@ -9754,7 +9767,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         return true;
     }
     match expression {
-        CHirExpr::BuiltinConstantP { .. } => false,
+        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => false,
         // A file-scope *object* has static storage and therefore lives in
         // memory. A parameter can never legitimately be declared at file scope,
         // so it is left to the signature validator instead of silently forcing
@@ -9935,6 +9948,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::BuiltinConstantP { .. }
+        | CHirExpr::BuiltinObjectSize { .. }
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
