@@ -88,6 +88,27 @@ fn copying_from_an_addressed_literal_does_not_load_its_first_character() {
 }
 
 #[test]
+fn static_symbol_addends_work_on_either_side_of_addition() {
+    check(
+        include_str!("../../../tests/fixtures/commuted-static-address.c"),
+        Ok(0),
+        &["relocs=["],
+    );
+}
+
+#[test]
+fn subtracting_a_symbol_from_an_integer_is_not_a_positive_symbol_relocation() {
+    let arena = Arena::default();
+    let file = FileId::new(45_006);
+    let source = "int object; unsigned long invalid=4-(unsigned long)&object;";
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let _unit = parser.parse_translation_unit_in(&arena);
+    assert_eq!(parser.diagnostic().unwrap().code, "E2208");
+}
+
+#[test]
 fn zero_length_object_accesses_still_report_bounds_and_lifetime() {
     check("char a[0]; int main(void){return a[0];}", Err("E3011"), &[]);
     check(
