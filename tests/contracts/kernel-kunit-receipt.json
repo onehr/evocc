@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "status": "INCOMPLETE",
+  "scope": "Separate arm64 KUnit and module configuration; not the frozen K6 configuration",
+  "config": {
+    "path": ".build/k7/pristine/.config",
+    "sha256": "6afbd2125fb1d182b77350077bc888f87323f4cd0de0d4da618cfa5afd159c23",
+    "requested": ["CONFIG_KUNIT=y", "CONFIG_KUNIT_ALL_TESTS=y", "CONFIG_BLK_DEV_UBLK=y"],
+    "BTF": "NOT_ENABLED: type debug metadata remains unimplemented"
+  },
+  "reference": {
+    "status": "FAIL",
+    "compiler": "gcc-14 in evo-flight-lab:sealed",
+    "build": "make -C /work/src O=/work/out ARCH=arm64 CC=gcc-14 -j6 Image modules",
+    "buildExit": 0,
+    "imageSha256": "2dde028e5f4d6e835291985914387a3fadcd877e3fbfc746ec5f0ca73939ceed",
+    "bootLane": "tcg-cortex-a72",
+    "boot": ".evidence/kunit/20260914-reference-tcg/boot.json",
+    "bootVerdict": "PASS",
+    "serialLog": ".evidence/kunit/20260914-reference-tcg/boot.log",
+    "serialLogSha256": "418688e84097a09c948c5400823bafb2cd7d6c5201f2fae0319ac086ae538678",
+    "parsedResults": ".evidence/kunit/20260914-reference-tcg/kunit.json",
+    "parsedResultsSha256": "49d8e139ddf96aaee5102ac0abf6f3a47037b0b4ddcfe61ff3688cacbae72aca",
+    "parseCommand": "python3 .build/linux-src/tools/testing/kunit/kunit.py parse <absolute serialLog path> --json=<absolute parsedResults path> --summary",
+    "tests": 1440,
+    "outcomes": {"PASS": 1324, "FAIL": 8, "SKIP": 108},
+    "failures": [
+      "hw_breakpoint.test_one_task_on_all_cpus",
+      "hw_breakpoint.test_two_tasks_on_all_cpus",
+      "hw_breakpoint.test_one_task_on_one_cpu",
+      "hw_breakpoint.test_one_task_mixed",
+      "hw_breakpoint.test_two_tasks_on_one_cpu",
+      "hw_breakpoint.test_two_tasks_on_one_all_cpus",
+      "hw_breakpoint.test_task_on_all_and_one_cpu",
+      "pm_runtime_test_cases.pm_runtime_error_test"
+    ],
+    "earlierHVF": ".evidence/kunit/20260914-reference/boot.json; panic during CPU hotplug, retained rather than counted as PASS"
+  },
+  "subject": {
+    "status": "NOT_RUN",
+    "buildStatus": "RUNNING",
+    "compilerCommit": "3b2a446",
+    "compilerSha256": "768163d2f46349831c2a4999291022564387b740ab52570da703c27d0b507b99",
+    "targetCRecords": 6310,
+    "generatedModuleCRecords": 704,
+    "surveyRun": "expanded-config-20260914",
+    "command": "python3 -u tools/k1/substitute.py --all --no-install --no-relink --k1-root /Users/onehrxn/dev/30days/c30/.build/k7 --evocc /Users/onehrxn/dev/30days/c30/.build/k7/compiler/evocc-runtime-repair --evidence-root /Users/onehrxn/dev/30days/c30/.evidence/kunit --run-id expanded-config-20260914 --jobs 4 --timeout 180"
+  },
+  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged."
+}

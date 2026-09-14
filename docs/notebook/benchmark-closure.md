@@ -307,7 +307,7 @@ the benchmark verdict remains **INCOMPLETE**, not all-PASS.
 | GCC reference | 214 | 178 | 537 | 1 | 1 | 4 | 0 |
 | EvoCC subject | 217 | 175 | 537 | 1 | 1 | 4 | 0 |
 
-The [current receipt](../../tests/contracts/kernel-selftest-full-receipt.json)
+The archived receipt for this run
 records a classification-only correction: both `mm:run_vmtests.sh` logs end in
 `not ok ... # TIMEOUT 900 seconds`, followed by a normal guest shutdown.
 The original classifier reported FAIL before checking that upstream marker.
@@ -325,7 +325,7 @@ reference and pass on the subject: `cgroup:test_freezer`,
 unadjudicated, not claimed improvements. The reference uevent log reports
 `No buffer space available` when receiving an event.
 
-Remaining concrete issues and coverage limits:
+Concrete issues and coverage limits at that run (updates follow below):
 
 - Runtime packaging: all **29/29 ublk programs fail on both kernels** because
   installed scripts cannot source `test_common.sh`. The file exists in the
@@ -359,6 +359,48 @@ Storage maintenance removed **103 regenerable Cargo cache directories**:
 `builtin-lowering/target` and `ac-replay-36e4a57/target` directories. Observed
 free space rose **29.79 → 51.51 GiB** (**21.73 GiB** net). Current compiler
 outputs, kernel/test Images, source files and test results were retained.
+
+#### Runtime prerequisite and compiler repairs (2026-09-14)
+
+The repaired payload includes `ublk/test_common.sh`, `ublk/trace`, procps,
+psmisc, udev, tcpdump, fio and kmod. Targeted run `20260914T015846Z`
+selects **69 of the same 935 programs**: reference 7 PASS / 6 FAIL / 56 SKIP;
+subject 7 PASS / 6 FAIL / 55 SKIP / 1 INCOMPLETE. Both retain 866 NOT_RUN.
+All 29 ublk scripts now reach their prerequisite checks and SKIP because the
+unchanged K6 configuration disables ublk; missing helpers are fixed, but this
+is not 29 new passes. The reference mm wrapper ends SKIP even though its nested
+summary contains 49 PASS / 16 SKIP / 1 FAIL. Do not use outer TAP alone to claim
+all nested assertions passed.
+
+The fuller mm runtime exposes two independent compiler defects:
+
+| ID | Root cause and repair | Actual targeted kernel result |
+|---|---|---|
+| K-R09 / targeted PASS | `release_pages(mr->pages, nr)` passes a pointer to a transparent-union parameter. Old lowering copied from the pointer's pointee, passing a page pointer instead of the page-pointer array. RED `7c155c7`, fix `b13af54` constructs the matching union member through existing checked initialization. | Sealed GCC/Clang O0/O2 and both mixed-ABI directions pass. One repaired EvoCC object links with all 2,799 target hashes retained. `mm:run_vmtests.sh -t gup_test` on both kernels: 6 wrapper programs PASS; longterm subtests 8 PASS / 62 SKIP / 0 FAIL. The other five programs have one skipped inner test each. No `release_pages` crash. |
+| K-R10 / targeted PASS | `cow` alone overflows the unchanged 16 KiB stack, independently of GUP. Block-local nonescaping temporary objects unnecessarily keep separate physical storage. RED `08c5e14`, fix `3b2a446` reuses only equal-size/alignment objects with disjoint direct access intervals, retaining escaped, cross-block and volatile objects. | `try_to_migrate_one` 3184→2288 B, `__split_huge_pmd_locked` 3120→1984 B, `madvise_cold_or_pageout_pte_range` 1952→992 B. After these three object replays, `-t cow` completes on Image `25fa46a4d45f`: **285 PASS / 4 XFAIL / 523 SKIP / 0 FAIL**, identical to GCC. No stack-size or test-budget change. |
+
+Captures: [GUP comparison](../../.evidence/kselftest-full/transparent-union-20260914/),
+[independent original cow failure/control](../../.evidence/kselftest-full/cow-isolated-20260914/),
+[cow repair and complete object-hash audit](../../.evidence/kselftest-full/private-frame-reuse-20260914/).
+The original K6 Image `eaab6181ec27` and receipt are unchanged. These are targeted
+repair compositions, not a fresh complete 935-program or uniform-compiler run.
+Changed-crate gate against `b13af54`, Clippy `-D warnings`, fmt and 130 K1 Python
+tests pass; long-running tests already ignored before this change remain ignored.
+
+KUnit is no longer wholly unmeasured: the separate KUnit/ublk configuration
+has a successful GCC `Image modules` build. Its TCG run records **1,440 tests:
+1,324 PASS / 8 FAIL / 108 SKIP**; all eight failures remain named in the
+[KUnit receipt](../../tests/contracts/kernel-kunit-receipt.json).
+The earlier HVF run panicked during CPU hotplug and is retained. The unchanged
+original Images both pass the isolated CPU-hotplug program on the declared TCG
+lane; this does not reclassify the HVF failure as a compiler repair.
+
+The EvoCC compile/assembly survey of the separate KUnit/module configuration is
+now running over **6,310 target-C records**, including **704 generated module C
+records**, with four workers and the frozen repair binary. It neither installs
+GCC target objects as substitutes nor overwrites K6. Subject KUnit execution,
+EvoCC module installation, BTF type metadata and other shared failures remain
+open. BTF needs real compiler type metadata, not borrowed reference-kernel BTF.
 
 ### Execution order and update rules
 

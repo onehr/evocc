@@ -112,6 +112,17 @@ def record_count(value) -> int:
     return value if isinstance(value, int) else len(value or [])
 
 
+def kunit_progress(receipt) -> str:
+    parts = []
+    for name in ("reference", "subject"):
+        entry = receipt.get(name, {})
+        counts = entry.get("outcomes")
+        measured = (f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / "
+                    f"{counts.get('SKIP', 0)} SKIP") if counts is not None else entry.get("status", "NOT_RUN")
+        parts.append(f"{name} {measured}")
+    return "KUnit: " + "; ".join(parts)
+
+
 def main() -> int:
     gate = contract("semantic-gate-contract.json")
     front = contract("day9-acceptance-contract.json")
@@ -254,7 +265,8 @@ def main() -> int:
         [
             f" {full_compiled:,}/{full_total:,} EvoCC C ; {'PASS' if full_linked else ''}; {full_boot.get('verdict', 'NOT_RUN')}",
             f"K6 {full_kernel.get('run', full_kernel.get('runId', ''))}",
-            f"K7 kselftest {selftest_status}: {selftest_cases.get('PASS', 0)} PASS / {selftest_cases.get('FAIL', 0)} FAIL / {selftest_cases.get('SKIP', 0)} SKIP;KUnit ",
+            f"K7 kselftest {selftest_status}: {selftest_cases.get('PASS', 0)} PASS / {selftest_cases.get('FAIL', 0)} FAIL / {selftest_cases.get('SKIP', 0)} SKIP",
+            kunit_progress(contract("kernel-kunit-receipt.json")),
             f"K7 collection {full_selftest_status};// receipt",
             *full_selftest_progress,
             ":" + (" + ".join(f"{entry['units']:,} @{entry['subject'][:7]}" for entry in full_kernel.get("compilerComposition", [])) or " receipt"),

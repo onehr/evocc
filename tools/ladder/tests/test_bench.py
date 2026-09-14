@@ -250,6 +250,17 @@ class BenchmarkEntryTest(unittest.TestCase):
         self.assertEqual(renderer.record_count([{"program": "a"}]), 1)
         self.assertEqual(renderer.record_count(None), 0)
 
+    def test_kunit_status_distinguishes_reference_results_from_subject_execution(self):
+        spec = importlib.util.spec_from_file_location("benchmark_status", PATH.parent / "render-status.py")
+        renderer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(renderer)
+        self.assertTrue(hasattr(renderer, "kunit_progress"))
+        self.assertIn("NOT_RUN", renderer.kunit_progress({}))
+        line = renderer.kunit_progress({"reference": {"outcomes": {"PASS": 1324, "FAIL": 8, "SKIP": 108}},
+                                        "subject": {"status": "NOT_RUN", "buildStatus": "RUNNING"}})
+        self.assertIn("reference 1324 PASS / 8 FAIL / 108 SKIP", line)
+        self.assertIn("subject NOT_RUN", line)
+
     def test_failed_lane_does_not_prevent_later_measurement(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

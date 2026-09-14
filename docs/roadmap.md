@@ -2065,6 +2065,18 @@ EvoCC target-C objects and boots Image `bd67f341e141` with the same configuratio
 The previous subset and expanded receipts remain historical until remeasured
 against this Image; the all-program runtime result is pending.
 
+September 14 runtime update: prerequisite repair completed; the affected
+69-program rerun keeps 866/935 entries NOT_RUN on each Image. It exposed a
+transparent-union argument miscompile and a separate copy-on-write stack
+overflow. Both now have targeted native and kernel GREEN evidence, including
+the unchanged `cow` program's 285 PASS / 4 XFAIL / 523 SKIP on each kernel;
+the original K6 Image remains preserved. The expanded KUnit configuration has
+a measured GCC control (1324 PASS / 8 FAIL / 108 SKIP); its 6,310-record EvoCC
+build survey is running, not yet a subject KUnit or module pass. BTF metadata
+and shared failures remain open. See the dated runtime update in
+[the blocker ledger](notebook/benchmark-closure.md#runtime-prerequisite-and-compiler-repairs-2026-09-14)
+and the [KUnit receipt](../tests/contracts/kernel-kunit-receipt.json).
+
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
 oracles, each a superset of the previous rung's demands); the kernel rungs
