@@ -253,6 +253,45 @@ fn gnu_comma_paste_elides_only_an_omitted_variadic_argument() {
 }
 
 #[test]
+fn gnu_comma_variadic_forwarding_preserves_raw_tokens_for_nested_paste() {
+    let definitions = concat!(
+        "#define FOO 12\n#define FOO_BAR 29\n",
+        "#define KEEP_RAW(_,x) x##_BAR\n",
+        "#define KEEP_VALUE(_,x) x\n",
+        "#define FORWARD(A...) KEEP_RAW(_, ##A)\n",
+        "#define FORWARD_STD(...) KEEP_RAW(_, ##__VA_ARGS__)\n",
+        "#define VALUE(A...) KEEP_VALUE(_, ##A)\n",
+    );
+    for (call, expected) in [
+        ("FORWARD(FOO)", "29"),
+        ("FORWARD_STD(FOO)", "29"),
+        ("VALUE(FOO)", "12"),
+    ] {
+        assert_eq!(
+            preprocess(&format!("{definitions}{call}\n")),
+            expected,
+            "{call}"
+        );
+    }
+}
+
+#[test]
+fn variadic_dispatch_does_not_expand_names_before_the_selected_macro_pastes_them() {
+    assert_eq!(
+        preprocess(concat!(
+            "#define FOO 12\n#define NV_FOO_BAR 31\n",
+            "#define NVVAL_X(drf,v) drf\n",
+            "#define NVDEF_N(X,d,r,f,v) NVVAL_X(d##_##r##_##f, d##_##r##_##f##_##v)\n",
+            "#define NVDEF_I(X,d,r,f,i,v) NVVAL_X(d##_##r##_##f(i), d##_##r##_##f##_##v)\n",
+            "#define NVDEF_(X,_1,_2,_3,_4,_5,IMPL,...) IMPL\n",
+            "#define NVDEF(A...) NVDEF_(X, ##A, NVDEF_I, NVDEF_N)(X, ##A)\n",
+            "NVDEF(NV,FOO,BAR,BAZ)\n",
+        )),
+        "31"
+    );
+}
+
+#[test]
 fn feature_query_tables_are_digest_checked_data() {
     let attributes = fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
