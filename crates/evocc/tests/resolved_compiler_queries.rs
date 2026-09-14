@@ -651,6 +651,30 @@ fn assigned_constants_and_finite_flags_survive_ssa_edges() {
 }
 
 #[test]
+fn infinite_control_flow_retains_effect_tokens_after_dead_address_pruning() {
+    for body in [
+        "stop(); while (1);",
+        "stop(); for (;;);",
+        "stop(); again: goto again;",
+        "asm volatile(\"\" ::: \"memory\"); while (1);",
+    ] {
+        let source = format!("void stop(void); void halt(void){{{body}}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(text.contains("mem<all>"), "{text}");
+        assert!(text.contains("world"), "{text}");
+        if body.starts_with("stop()") {
+            assert!(text.contains("call @stop"), "{text}");
+        }
+    }
+}
+
+#[test]
 fn unused_private_callback_tables_do_not_keep_unreachable_calls_linked() {
     let source = include_str!("../../../tests/fixtures/private-callback-reachability.c");
     let output = run(source, "--emit=evoir");

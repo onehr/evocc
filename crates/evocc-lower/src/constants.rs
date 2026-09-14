@@ -451,6 +451,12 @@ fn discard_unused_addresses(function: &mut evocc_evoir::Function) {
     let mut incoming = BTreeMap::<u32, Vec<u32>>::new();
     let mut needed = BTreeSet::new();
     for block in &function.blocks {
+        // Effect state must cross every edge, even when it only circulates
+        // around a non-returning loop. Absence of a later read or return is
+        // not permission to drop the current linear token.
+        needed.extend(block.args.iter().filter_map(|arg| {
+            matches!(arg.value.ty, EvoIRType::Mem(_) | EvoIRType::World).then_some(arg.value.id)
+        }));
         for inst in block.insts.iter().chain(std::iter::once(&block.terminator)) {
             let mut without_edges = inst.clone();
             edges(&mut without_edges, |target, args| {
