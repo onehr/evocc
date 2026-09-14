@@ -98,6 +98,21 @@ fn private_values_before_escape_discharge_build_assertions() {
 }
 
 #[test]
+fn normalized_initializers_share_nested_declaration_identities_with_the_written_form() {
+    for source in [
+        include_str!("../../../tests/fixtures/nested-initializer-identity.c"),
+        "int main(void){int n=1;unsigned long a[]={({int x=n++;x;}),({int y=n++;y;})};return a[0]!=1||a[1]!=2||n!=3;}",
+        "int main(void){int n=1;struct S{int x;}a[]={ (struct S){({int x=n++;x;})},(struct S){({int y=n++;y;})} };return a[0].x!=1||a[1].x!=2||n!=3;}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{source}: {mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n", "{mode}");
+        }
+    }
+}
+
+#[test]
 fn sequential_constants_stop_at_mutation_escape_and_external_entry() {
     for source in [
         "__attribute__((noinline))void replace(int*p){*p=7;}int main(void){int x=32;if(x!=32)return 1;replace(&x);return x!=7;}",

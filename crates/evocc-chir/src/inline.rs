@@ -1495,6 +1495,7 @@ impl<'a> Substitution<'a, '_> {
         let previous = c.expand_calls;
         c.expand_calls &= expand_calls;
         let mut actions = i.plan.actions().to_vec();
+        let mut written_values = HashMap::new();
         for a in &mut actions {
             let (InitAction::StoreScalar {
                 destination_type, ..
@@ -1512,7 +1513,20 @@ impl<'a> Substitution<'a, '_> {
             if let InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } =
                 a
             {
+                let original = *value;
                 *value = self.expr(value, c)?;
+                // Later entries may contain statement expressions which
+                // invalidate value facts. Keep this occurrence mapping apart
+                // from that cache: written syntax and the normalized plan
+                // still describe the same declarations, not fresh objects.
+                // Visit only this entry, not the accumulated memo for every
+                // preceding entry of a large aggregate initializer.
+                inspect_with_visitors([Node::Expr(original, false)], &mut |_| {}, &mut |e| {
+                    let key = (e as *const _ as usize, c.expand_calls);
+                    if let Some(value) = c.memo.get(&key) {
+                        written_values.insert(key, *value);
+                    }
+                });
             }
         }
         let mut plan = InitPlan::new(self.substituted_type(i.plan.target_type(), c), actions)
@@ -1522,7 +1536,7 @@ impl<'a> Substitution<'a, '_> {
         }
         // The manifest visits the written form too. Preserve the shared
         // expression identities between that form and its normalized plan.
-        let written = self.written(&i.written, c)?;
+        let written = self.written(&i.written, c, &written_values)?;
         c.expand_calls = previous;
         Ok(ObjectInitializer::new(written, plan))
     }
@@ -1530,17 +1544,25 @@ impl<'a> Substitution<'a, '_> {
         &mut self,
         written: &WrittenInitializer<'a>,
         c: &mut Context<'a>,
+        written_values: &HashMap<(usize, bool), &'a CHirExpr<'a>>,
     ) -> Result<WrittenInitializer<'a>, InlineError> {
         let mut written = written.clone();
         match &mut written {
-            WrittenInitializer::Expression(e) => *e = self.expr(e, c)?,
+            WrittenInitializer::Expression(e) => {
+                let key = (*e as *const _ as usize, c.expand_calls);
+                *e = if let Some(value) = written_values.get(&key) {
+                    value
+                } else {
+                    self.expr(e, c)?
+                };
+            }
             WrittenInitializer::List {
                 elements,
                 designations,
                 ..
             } => {
                 for element in elements {
-                    *element = self.written(element, c)?;
+                    *element = self.written(element, c, written_values)?;
                 }
                 // Designators are already checked integer constant expressions.
                 // A call in an unselected arm is syntax, not an execution site.

@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 10:43 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 11:02 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -71,6 +71,17 @@ remain separate in the full-selftest and KUnit receipts.
   not change or upgrade any prior kernel execution result.
 
 ## Runtime packaging: targeted guest replay complete
+
+The full module recompile exposed three additional initializer identity failures
+in the two DesignWare DMA debugfs units and `nouveau_uvmm.o`. Statement-expression
+fact invalidation discarded the occurrence mapping between a normalized plan
+and its written initializer, so later traversal cloned declarations with the
+same semantic identity. The repair pins that mapping per initializer entry,
+without weakening manifest checks or retaining stale value facts. The 50-test
+query suite and changed gate pass; GCC-14, Clang-19 and native EvoCC all return
+zero on the reduced fixture. All three original units now emit against the
+actual generated headers in `initializer-identity-20260914`. This remains a
+tailored repair until the full module composition installs the repaired objects.
 
 | Problem | Direct evidence | Repair / pending check |
 |---|---|---|

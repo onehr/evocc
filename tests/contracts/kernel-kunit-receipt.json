@@ -336,6 +336,18 @@
     "runtimeResultsSha256": "8136edbc8a43dd3551a224b4509c123fc132adbcf595e291860b31109825828f",
     "claimLimit": "Three modules exercised, not a complete module installation. Original tests and failed captures are unchanged. Full module C recompilation is in progress."
   },
+  "initializerOccurrenceIdentityRepair": {
+    "cause": "Rewriting later initializer entries invalidated the memo used to share declarations between the normalized plan and written syntax; revisiting the written form manufactured duplicate local objects.",
+    "repair": "Pin only each entry's rewritten expression occurrences for its written form, independently of flow-fact invalidation; retain manifest identity checks.",
+    "fixture": "tests/fixtures/nested-initializer-identity.c",
+    "red": "One declared DuplicateLocalObject failure in EvoIR execution, no build errors; C-HIR execution passed.",
+    "focused": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline -- --nocapture: 50 passed, 0 failed",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 54aa549 --offline -j2 --quiet: exit 0, including Clippy -D warnings and fmt",
+    "native": ".evidence/builtin-probes/20260914-initializer-identity/results.txt: GCC-14, Clang-19 and EvoCC each exit 0",
+    "originalUnits": ["drivers/dma/dw-edma/dw-edma-v0-debugfs.o", "drivers/dma/dw-edma/dw-hdma-v0-debugfs.o", "drivers/gpu/drm/nouveau/nouveau_uvmm.o"],
+    "replay": ".evidence/kunit/initializer-identity-20260914/units.jsonl: all three emit using the actual generated headers",
+    "claimLimit": "Tailored repair, not a new full module composition. The running full replay retains its original compiler binary and inputs."
+  },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
   "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
 }
