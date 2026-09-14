@@ -14,7 +14,7 @@ use std::process::Command;
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
     allocate, emit_module, frame_of, lower_module, out_of_ssa, verify_allocation, Allocated, BinOp,
-    MBlock, MFunction, MInst, MTerm, RegClass, VReg, Width,
+    LoadKind, MBlock, MFunction, MInst, MTerm, RegClass, StoreKind, VReg, Width,
 };
 
 /// The host assembler, and its version, or the reason there is none.
@@ -270,6 +270,191 @@ fn the_frame_is_a_multiple_of_sixteen_and_orders_its_areas() {
             assert!(*slot < frame.size, "@{}", allocated.name);
         }
     }
+}
+
+fn temporary_object(origin: u32) -> Vec<MInst> {
+    let g = |n| VReg::new(n, RegClass::Gpr64);
+    vec![
+        MInst::FrameSlot {
+            dst: g(origin * 3),
+            origin: u64::from(origin),
+            size: 8,
+            align: 8,
+        },
+        MInst::MovImm {
+            dst: g(origin * 3 + 1),
+            imm: u64::from(origin + 1),
+        },
+        MInst::Store {
+            align: 8,
+            src: g(origin * 3 + 1),
+            base: g(origin * 3),
+            offset: 0,
+            kind: StoreKind::X,
+            volatile: false,
+        },
+        MInst::Load {
+            align: 8,
+            dst: g(origin * 3 + 2),
+            base: g(origin * 3),
+            offset: 0,
+            kind: LoadKind::X,
+            volatile: false,
+        },
+    ]
+}
+
+fn allocated_temporaries(insts: Vec<MInst>) -> Allocated {
+    let function = MFunction {
+        name: "temporaries".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: vec![],
+            insts,
+            term: MTerm::Ret { values: vec![] },
+        }],
+    };
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocate private temporaries");
+    verify_allocation(&allocated).expect("allocation remains valid");
+    allocated
+}
+
+#[test]
+fn nonescaping_block_local_objects_reuse_frame_bytes_after_their_last_access() {
+    let allocated = allocated_temporaries((0..256).flat_map(temporary_object).collect());
+    let frame = frame_of(&allocated);
+    assert_eq!(
+        frame.slots.len(),
+        256,
+        "logical origins must remain distinct"
+    );
+    let offsets = frame
+        .slots
+        .values()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        offsets.len(),
+        1,
+        "disjoint private accesses need one physical slot"
+    );
+    assert!(
+        frame.size <= 32,
+        "short-lived objects must not accumulate: {}",
+        frame.size
+    );
+}
+
+#[test]
+fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
+    let g = |n| VReg::new(n, RegClass::Gpr64);
+    let cases = [
+        (
+            "later access",
+            MInst::Load {
+                align: 8,
+                dst: g(20),
+                base: g(0),
+                offset: 0,
+                kind: LoadKind::X,
+                volatile: false,
+            },
+        ),
+        (
+            "address copy",
+            MInst::Mov {
+                dst: g(20),
+                src: g(0),
+            },
+        ),
+        (
+            "address escape",
+            MInst::Store {
+                align: 8,
+                src: g(0),
+                base: g(3),
+                offset: 0,
+                kind: StoreKind::X,
+                volatile: false,
+            },
+        ),
+        (
+            "external call",
+            MInst::Bl {
+                symbol: "consume".to_owned(),
+                args: vec![g(0)],
+                results: vec![],
+            },
+        ),
+        (
+            "simultaneous copy",
+            MInst::MemCopy {
+                dst: g(3),
+                src: g(0),
+                size: 8,
+                align: 8,
+                volatile: evocc_evoir::CopyVolatility::None,
+            },
+        ),
+        ("address redefinition", MInst::MovImm { dst: g(0), imm: 0 }),
+    ];
+    for (name, extra) in cases {
+        let mut insts = temporary_object(0);
+        insts.extend(temporary_object(1));
+        insts.push(extra);
+        let frame = frame_of(&allocated_temporaries(insts));
+        assert_ne!(frame.slots[&0], frame.slots[&1], "{name}");
+    }
+    for (name, size, align, offset, volatile) in [
+        ("volatile access", 8, 8, 0, true),
+        ("out of bounds", 8, 8, 1, false),
+        ("negative offset", 8, 8, -1, false),
+        ("different size", 16, 8, 0, false),
+        ("different alignment", 8, 16, 0, false),
+    ] {
+        let mut insts = temporary_object(0);
+        insts[0] = MInst::FrameSlot {
+            dst: g(0),
+            origin: 0,
+            size,
+            align,
+        };
+        insts[3] = MInst::Load {
+            align: 8,
+            dst: g(2),
+            base: g(0),
+            offset,
+            kind: LoadKind::X,
+            volatile,
+        };
+        insts.extend(temporary_object(1));
+        let frame = frame_of(&allocated_temporaries(insts));
+        assert_ne!(frame.slots[&0], frame.slots[&1], "{name}");
+        assert_eq!(frame.slots[&0] % u64::from(align), 0, "{name}");
+    }
+}
+
+#[test]
+fn private_objects_in_different_blocks_reuse_bytes_but_cross_block_addresses_do_not() {
+    let mut allocated = allocated_temporaries(temporary_object(0));
+    allocated.blocks.push(MBlock {
+        id: 1,
+        args: vec![],
+        insts: temporary_object(1),
+        term: MTerm::Ret { values: vec![] },
+    });
+    let frame = frame_of(&allocated);
+    assert_eq!(frame.slots[&0], frame.slots[&1]);
+    allocated.blocks[1].insts.push(MInst::Load {
+        align: 8,
+        dst: VReg::new(30, RegClass::Gpr64),
+        base: VReg::new(0, RegClass::Gpr64),
+        offset: 0,
+        kind: LoadKind::X,
+        volatile: false,
+    });
+    let frame = frame_of(&allocated);
+    assert_ne!(frame.slots[&0], frame.slots[&1]);
 }
 
 #[test]

@@ -99,6 +99,68 @@ fn interpreted(module: &evocc_evoir::Module) -> u8 {
 }
 
 #[test]
+fn private_stack_reuse_preserves_loaded_values_and_overlapping_objects() {
+    use std::fmt::Write;
+    for overlapping in [false, true] {
+        let mut source = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 0\n");
+        let mut next = 3;
+        let mut fresh = || {
+            let id = next;
+            next += 1;
+            id
+        };
+        let (mut mem, mut world, mut sum) = (0, 1, 2);
+        let mut pending = Vec::new();
+        for i in 0..32 {
+            let (p, m, w, c, guard, m2, w2) = (
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+                fresh(),
+            );
+            writeln!(source, "    (%v{p}, %v{m}, %v{w}) = alloca %v{mem}, %v{world} [origin={i}, size=4, align=4]\n    %v{c} = const.bits<32> {}\n    %v{guard} = access_in_bounds %v{m}, %v{p} [size=4, align=4]\n    (%v{m2}, %v{w2}) = store %v{guard}, %v{w}, %v{p}, %v{c}", i + 1).unwrap();
+            (mem, world) = (m2, w2);
+            pending.push(p);
+            if !overlapping || i == 31 {
+                for p in pending.drain(..) {
+                    let (guard, value, m, w, total) = (fresh(), fresh(), fresh(), fresh(), fresh());
+                    writeln!(source, "    %v{guard} = access_in_bounds %v{mem}, %v{p} [size=4, align=4]\n    (%v{value}, %v{m}, %v{w}) = load %v{guard}, %v{world}, %v{p} : bits<32>\n    %v{total} = add.bits<32> %v{sum}, %v{value}").unwrap();
+                    (sum, mem, world) = (total, m, w);
+                }
+            }
+        }
+        writeln!(source, "    ret %v{sum}, %v{mem}, %v{world}\n}}\n").unwrap();
+        let (allocated, module) = build(&source);
+        let frame = evocc_mir::frame_of(&allocated[0]);
+        let offsets = frame
+            .slots
+            .values()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(offsets.len(), if overlapping { 32 } else { 1 });
+        let mir = lower_module(&module).unwrap();
+        assert_eq!(
+            evocc_mir::interpret_module(&mir, "main", &[], evocc_mir::MirLimits::new(10000))
+                .unwrap()
+                .results,
+            vec![evocc_mir::MirValue::Int(528)]
+        );
+        assert_eq!(interpreted(&module), 16);
+        let name = if overlapping {
+            "overlapping-objects"
+        } else {
+            "sequential-objects"
+        };
+        assert_eq!(
+            run_native(name, &emit_module(&allocated, &module.globals)).unwrap(),
+            16
+        );
+    }
+}
+
+#[test]
 fn computed_edges_keep_label_identity_and_simultaneous_parameter_locations() {
     use std::fmt::Write;
     let counter = include_str!("../../../tests/fixtures/computed-counter.evoir")
