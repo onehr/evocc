@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
                     'e2fsprogs', 'libarchive13t64', 'netsniff-ng', 'libteam-utils',
                     'iperf3', 'traceroute', 'conntrack', 'fuse3')
-BUILD_PACKAGES = ('openssl', 'python3-docutils')
+BUILD_PACKAGES = ('openssl', 'python3-docutils', 'xxd')
 # The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
 # The collection has no settings file, so the runner's 45s default cannot
 # possibly finish it. Keep this measured policy change explicit in receipts.
@@ -316,9 +316,7 @@ def collection_build_options(target, work, kernel_build=None):
     output = kernel_build if target == 'bpf' and kernel_build else work / 'obj'
     options = [f'O={output}', 'LLVM_STRIP=llvm-strip-19', 'LLVM_CONFIG=llvm-config-19']
     if kernel_build:
-        options.append(f'VMLINUX_BTF={kernel_build / "vmlinux"}')
-        if target == 'bpf':
-            options.append(f'KDIR={kernel_build}')
+        options.extend([f'VMLINUX_BTF={kernel_build / "vmlinux"}', f'KDIR={kernel_build}'])
     return options
 
 

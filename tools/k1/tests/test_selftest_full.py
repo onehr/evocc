@@ -34,8 +34,10 @@ class FullSelftest(unittest.TestCase):
         self.assertNotIn('O=/work/full/obj', options)
         other = lane.collection_build_options('mm', Path('/work/full'), Path('/work/kernel'))
         self.assertIn('O=/work/full/obj', other)
-        self.assertNotIn('KDIR=/work/kernel', other)
-        self.assertTrue({'openssl', 'python3-docutils'} <= set(lane.BUILD_PACKAGES))
+        self.assertIn('KDIR=/work/kernel', other)
+        livepatch = lane.collection_build_options('livepatch', Path('/work/full'), Path('/work/kernel'))
+        self.assertIn('KDIR=/work/kernel', livepatch)
+        self.assertTrue({'openssl', 'python3-docutils', 'xxd'} <= set(lane.BUILD_PACKAGES))
 
     def test_expanded_kernel_selection_uses_the_audited_images_not_the_frozen_pair(self):
         select = getattr(lane, 'kernel_selection', None)
