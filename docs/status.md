@@ -25,7 +25,7 @@ EvoCC ── (2026-09-14 UTC,EvoIR 1.9.97 / EvoMIR 0.29, checkout df76ece)
 │ 2,799/2,799 EvoCC C ; PASS; PASS │
 │ K6 read-only-storage-20260913 │
 │ K7 kselftest PASS: 125 PASS / 0 FAIL / 0 SKIP │
-│ KUnit: reference 1324 PASS / 8 FAIL / 108 SKIP; subject NOT_RUN                                                   │
+│ KUnit: reference 1324 PASS / 8 FAIL / 108 SKIP; subject 1325 PASS / 7 FAIL / 108 SKIP                             │
 │ K7 collection INCOMPLETE;// receipt │
 │   reference: 3 collections, 7 PASS / 6 FAIL / 56 SKIP (program-level)                                             │
 │   subject: 3 collections, 7 PASS / 6 FAIL / 55 SKIP (program-level)                                               │

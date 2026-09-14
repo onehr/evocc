@@ -1720,8 +1720,22 @@ impl<'arena> CHirUnit<'arena> {
 
     #[must_use]
     pub fn zero_initialize_automatic(&self, object: &ObjectDecl<'_>) -> bool {
+        object.initializer.is_none() && self.automatic_zero_applies(object)
+    }
+
+    /// Constructor members retain their explicit values. Only representation
+    /// gaps are implicit zeroes; an aggregate copy keeps its source padding.
+    #[must_use]
+    pub fn zero_initialize_automatic_padding(&self, object: &ObjectDecl<'_>) -> bool {
+        object
+            .initializer
+            .as_ref()
+            .is_some_and(|initializer| initializer.plan().zero_fills_unwritten())
+            && self.automatic_zero_applies(object)
+    }
+
+    fn automatic_zero_applies(&self, object: &ObjectDecl<'_>) -> bool {
         self.automatic_zero
-            && object.initializer.is_none()
             && !matches!(object.storage, StorageClass::Static | StorageClass::Extern)
             && !object.attributes.iter().any(|attribute| {
                 attribute.semantic_name() == Some("uninitialized")

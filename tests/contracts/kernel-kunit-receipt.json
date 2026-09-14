@@ -56,10 +56,38 @@
     }
   },
   "subject": {
-    "status": "NOT_RUN",
-    "buildStatus": "BUILTIN_OBJECTS_AUDITED_LINK_BLOCKED",
+    "status": "FAIL",
+    "buildStatus": "BUILT_AND_AUDITED",
+    "tests": 1440,
+    "outcomes": {"PASS": 1325, "FAIL": 7, "SKIP": 108},
+    "runtime": {
+      "capture": ".evidence/kunit/20260914-subject-padding-tcg",
+      "imageSha256": "df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c",
+      "bootVerdict": "PASS",
+      "bootLane": "tcg-cortex-a72",
+      "command": "K1_ALLOW_QEMU_DRIFT=1 K1_BOOT_LANE=tcg-cortex-a72 K1_BOOT_TIMEOUT=600 tools/k1/boot.sh .build/k7/out/arch/arm64/boot/Image .evidence/kunit/20260914-subject-padding-tcg",
+      "parseCommand": "python3 .build/linux-src/tools/testing/kunit/kunit.py parse <absolute boot.log> --json=<absolute kunit.json> --summary",
+      "serialLogSha256": "4df6507274cc2f21b6cca3e2412c94d9d8365157e7d9ecc390e9d58d27ae63d6",
+      "parsedResultsSha256": "6b873f892240ebb3632f82b7085ad9d97d9e04ee38b2f7e021d00229f6fda363",
+      "failures": {"hw_breakpoint": 7},
+      "comparison": "The full case sequence matches the GCC control; zero PASS-to-FAIL regressions. All 28 original stackinit regressions are repaired. The seven per-task EL1 breakpoint tests still report their original FAIL; arm64 explicitly rejects that interface."
+    },
+    "firstFullRuntime": {
+      "capture": ".evidence/kunit/20260914-subject-tcg",
+      "imageSha256": "c91eae2a3a2b710fe9f38a233f8ca46fbfca6bd7b8baa9a724d7dc08c9bbaf48",
+      "bootVerdict": "PASS",
+      "bootLane": "tcg-cortex-a72",
+      "command": "K1_ALLOW_QEMU_DRIFT=1 K1_BOOT_LANE=tcg-cortex-a72 K1_BOOT_TIMEOUT=600 tools/k1/boot.sh .build/k7/out/arch/arm64/boot/Image .evidence/kunit/20260914-subject-tcg",
+      "parseCommand": "python3 .build/linux-src/tools/testing/kunit/kunit.py parse <absolute boot.log> --json=<absolute kunit.json> --summary",
+      "serialLogSha256": "83dcfb806d62ba0d1c62ad82cbcaf47596fcee42e99bd859a519aec2fb594a8c",
+      "parsedResultsSha256": "79ea1e59da61b01c2feab124bf7ad72e5191426721435421dfdee9ea336e5c7a",
+      "failures": {"hw_breakpoint": 7, "stackinit": 28},
+      "comparison": "All 28 stackinit failures passed on the control. The seven hw_breakpoint failures are shared; the control's PM runtime failure passed here. The net count difference of 27 is not the regression count.",
+      "nextRepair": "Automatic brace initializers leave padding and unused union tails uninitialized under -ftrivial-auto-var-init=zero."
+    },
     "compilerCommit": "3b2a446",
     "compilerSha256": "768163d2f46349831c2a4999291022564387b740ab52570da703c27d0b507b99",
+    "compilerFieldsDescribe": "The initial expanded build survey below; runtime uses the per-object incremental composition recorded in builtInComposition",
     "targetCRecords": 6310,
     "generatedModuleCRecords": 704,
     "surveyRun": "expanded-config-20260914-resumed",
@@ -201,20 +229,23 @@
     "claimLimit": "Targeted repair and installation only. The complete built-in link and runtime audit remain separate; 46/52 original refusal repairs are not a new full-survey result."
   },
   "builtInComposition": {
-    "capture": ".evidence/kunit/builtin-composition-repaired-20260914",
-    "summarySha256": "489c8c9a73025ec30396b654df4be5647e7f47661fab982e345d7b17b7a19ff4",
-    "unitsSha256": "0fb218a86e3f56ff8d5c9ddbb2f6f66efb7d082bfbce0aff31deb490a6078def",
+    "capture": ".evidence/kunit/constructor-padding-20260914",
+    "summaryFile": "composition.json",
+    "summarySha256": "4b6f8ef9fcab6a96baac82c31ab13f00b5842cd15b3561ff38bdc872f7cf6ce8",
+    "unitsFile": "composition.jsonl",
+    "unitsSha256": "cb1282ca04c9863c2dd4c2d247b3a9e8e21a4c4009c7dd4f973c1a641f98bfa7",
     "targetCBuiltIns": 2897,
     "installedAndHashVerified": 2897,
     "gccFallback": 0,
     "generatedInputsStable": true,
     "generatedExportTableStable": true,
-    "linkExitCode": 2,
-    "linkBlockers": {
-      "lib/tests/ffs_kunit.o": "five impossible __compiletime_assert calls remain after private local constants lost before later address exposure",
-      "lib/tests/printf_kunit.o": "one impossible __compiletime_assert call remains after a numeric pointer argument hides a constant comparison"
-    },
-    "runtime": "NOT_RUN"
+    "linkExitCode": 0,
+    "imageSha256": "df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c",
+    "linkWarnings": "modpost reports text-to-init-data section mismatches; retained in modpost.log and not yet adjudicated",
+    "previousFailedComposition": ".evidence/kunit/builtin-composition-repaired-20260914/summary.json",
+    "firstBootedComposition": ".evidence/kunit/build-assertions-20260914/composition.json",
+    "runtime": "Full subject KUnit repeated; all 28 stackinit regressions repaired, seven source-explained shared arm64 breakpoint failures remain",
+    "compilerIdentity": "Incremental all-EvoCC composition; per-object compiler SHA and installed hash are retained, not a uniform compiler rebuild"
   },
   "buildAssertionReplay": {
     "run": "build-assertions-20260914",
@@ -229,8 +260,43 @@
     "red": "47 passed / 2 declared assertion failures / 0 build errors in resolved_compiler_queries",
     "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test resolved_compiler_queries --offline --no-fail-fast -- --nocapture: 49 passed, 0 failed, 0 ignored",
     "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 0d1fab9 --offline -j2 --quiet: exit 0, including Clippy and fmt",
-    "pending": ["sealed GCC/Clang and native fixture", "assemble and install the two repaired objects", "relink and audit", "EvoCC KUnit execution"],
-    "executionBlocker": "Automatic approval review repeatedly failed with Selected model is at capacity before container/VM commands started. No denied launch is counted as an executed test."
+    "nativeProbe": ".evidence/builtin-probes/20260914-private-constants/results.txt",
+    "nativeProbeSha256": "425b606c0f47d7a1825e0f9b80f5635ffbb821e88eec59d99a26d1119272f78e",
+    "nativeResults": {"gcc14": 0, "clang19": 0, "evocc": 0},
+    "installed": 2,
+    "pending": [],
+    "earlierExecutionBlocker": "Approval review failed before launch; later approved assembly, installation, full relink/audit and KUnit execution completed."
+  },
+  "constructorPaddingRepair": {
+    "cause": "Brace initializers wrote members but left record padding and unused union tails untouched under -ftrivial-auto-var-init=zero.",
+    "repair": "One shared initializer-plan traversal identifies representation gaps; member values, self-reference poison, exemptions and whole-aggregate copy representations stay unchanged.",
+    "red": "compilation_options constructor filter: 2 passed, 1 declared E3001 failure, no build errors",
+    "fixture": "tests/fixtures/automatic-initializer-padding.c",
+    "oracles": ".evidence/builtin-probes/20260914-constructor-padding/oracles.out",
+    "oraclesSha256": "dc452fbe6e4815d273b8330f3cbbe3f3fba09db4ec0a270b5a55bfec97393082",
+    "native": ".evidence/builtin-probes/20260914-constructor-padding/subject.out",
+    "nativeSha256": "359cee9fc01ab27d6a958a6cb3d88cc3523ab8d76419bbaefc7fcafdd4cc2af8",
+    "nativeResults": {"gcc14O0": 0, "gcc14O2": 0, "clang19O0": 0, "clang19O2": 0, "evocc": 0},
+    "focusedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 cargo test -p evocc --test compilation_options --offline -- --nocapture: 16 passed, 0 failed",
+    "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh f820e96 --offline -j2 --quiet: exit 0, including Clippy -D warnings and fmt",
+    "compilerSha256": "c4eb8810622368af1e51a31df76210566f92a4f88bdea5b84bd6a6f332d4eeb3",
+    "unit": "lib/tests/stackinit_kunit.o",
+    "replay": ".evidence/kunit/constructor-padding-20260914",
+    "compositionSha256": "4b6f8ef9fcab6a96baac82c31ab13f00b5842cd15b3561ff38bdc872f7cf6ce8",
+    "compositionUnitsSha256": "cb1282ca04c9863c2dd4c2d247b3a9e8e21a4c4009c7dd4f973c1a641f98bfa7",
+    "installedAndHashVerified": 2897,
+    "gccFallback": 0,
+    "linkExitCode": 0,
+    "imageSha256": "df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c",
+    "targetedKunit": {
+      "command": "K1_ALLOW_QEMU_DRIFT=1 K1_BOOT_LANE=tcg-cortex-a72 K1_KUNIT_FILTER='stackinit.*' K1_BOOT_TIMEOUT=180 tools/k1/boot.sh .build/k7/out/arch/arm64/boot/Image .evidence/kunit/constructor-padding-20260914/stackinit",
+      "tests": 108,
+      "outcomes": {"PASS": 106, "FAIL": 0, "SKIP": 2},
+      "serialLogSha256": "36518a8e821068dcc7018911501d354ca2bc17ff595b450a68671e92d9ba234e",
+      "parsedResultsSha256": "a8c0a66364c3b1b23aec8462e114921bcb8c845eb2706aaf4e72b9db579e01b4",
+      "skipReason": "Two upstream expected failures bypass declarations before switch case labels; unchanged"
+    },
+    "fullKunitRerun": {"status": "FAIL", "capture": ".evidence/kunit/20260914-subject-padding-tcg", "PASS": 1325, "FAIL": 7, "SKIP": 108, "newRegressionsAgainstReference": 0, "remainingFailures": "Seven per-task EL1 breakpoint cases, also refused by the reference kernel; original FAIL verdicts retained"}
   },
   "kunitAutorunControl": {
     "purpose": "Explicit K1_KUNIT_AUTORUN=0 can keep the complete KUnit run separate from per-program selftest boots; the default behavior is unchanged",
@@ -245,17 +311,17 @@
     "red": "2 declared failing subcases; no test import or build error",
     "gate": "python3 -m unittest discover -s tools/k1/tests -p 'test_*.py': 141 passed; ruff check tools/k1: clean; git diff --check: clean",
     "changedGate": "CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 tools/gate-changed.sh 0f3c64d --offline -j2 --quiet: exit 0, no changed Rust crate",
-    "nativeSymbolRead": "NOT_RUN: execution approval service unavailable"
+    "nativeSymbolRead": "PASS: both repaired objects and the regenerated export object matched symbols before installation"
   },
   "executionAvailability": {
-    "checkedAt": "2026-09-14T09:35:00Z",
-    "status": "BLOCKED_BEFORE_LAUNCH",
-    "reason": "Automatic approval review failed with Selected model is at capacity, including a narrowed offline request to assemble only the two repaired objects.",
+    "checkedAt": "2026-09-14T10:20:00Z",
+    "status": "EXECUTING",
+    "reason": "Approved container and QEMU runs resumed; intermittent approval-capacity failures are not counted as test executions.",
     "installedObjectAudit": {"records": 2897, "changedObjects": 0},
     "repairedAssemblyDigestMatches": 2,
-    "newBuildOrVmStarted": false,
-    "nextAction": "Once execution is available, assemble/install the two repaired objects, regenerate the export table, relink and audit, then run full EvoCC KUnit on the declared TCG lane."
+    "newBuildOrVmStarted": true,
+    "nextAction": "Install and execute matching EvoCC modules; complete the six NEON units, BTF metadata and remaining shared selftest diagnoses."
   },
   "unrepairedSurveyClasses": {"system includes and NEON": 6},
-  "claimLimit": "Reference KUnit execution is measured, not an EvoCC KUnit pass; modules are reference-built but not yet installed as an EvoCC test composition. The original K6 Image and receipt remain unchanged. Targeted replays repair 46 of the 52 refusals using later binaries; they are not added to the sealed full-survey numerator. The complete built-in composition failed linking; its two subsequent compiler repairs are not yet installed or booted."
+  "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
 }

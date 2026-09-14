@@ -308,6 +308,136 @@ pub struct InitPlan<'arena> {
 }
 
 impl<'arena> InitPlan<'arena> {
+    /// Byte gaps in a constructor's object representation. Named members,
+    /// selected union members and copied aggregate representations are kept;
+    /// the complement includes inter-member padding and unused union tails.
+    /// Bit-field bytes are initialized by the existing bit-field constructor
+    /// path, including their unused bits. No value is read by this traversal.
+    pub fn padding_ranges(
+        &self,
+        types: &TypeInterner,
+        target: TargetDataLayout,
+    ) -> Result<Vec<std::ops::Range<u64>>, LayoutError> {
+        let size = target.layout_of(types, self.target_type)?.size_bytes;
+        let mut occupied = Vec::new();
+        let mut pending = vec![(self.target_type, 0u64, SubobjectPath::root())];
+        while let Some((ty, offset, path)) = pending.pop() {
+            let kind = &types.get(ty).ok_or(LayoutError::UnknownType(ty))?.kind;
+            if matches!(
+                kind,
+                TypeKind::Array {
+                    bound: ArrayBound::Unbounded,
+                    ..
+                }
+            ) {
+                continue;
+            }
+            let extent = target.layout_of(types, ty)?.size_bytes;
+            let end = offset
+                .checked_add(extent)
+                .ok_or(LayoutError::ArithmeticOverflow)?;
+            if self.actions.iter().any(|action| {
+                matches!(action, InitAction::CopyAggregate { .. }) && action.path() == &path
+            }) {
+                occupied.push(offset..end);
+                continue;
+            }
+            match kind {
+                TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                    let definition = types.tag(*tag).ok_or(LayoutError::UnknownTag(*tag))?;
+                    let TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) = &definition.state
+                    else {
+                        return Err(LayoutError::IncompleteTag(*tag));
+                    };
+                    let layout = target.record_layout(types, *tag)?;
+                    let selected = if matches!(kind, TypeKind::Union(_)) {
+                        self.actions
+                            .iter()
+                            .find_map(|action| {
+                                match action.path().steps().strip_prefix(path.steps())?.first()? {
+                                    SubobjectStep::Field { field_index } => Some(*field_index),
+                                    SubobjectStep::Index { .. } => None,
+                                }
+                            })
+                            .or_else(|| {
+                                fields.iter().position(|field| {
+                                    field.name.is_some() || field.bit_field.is_none()
+                                })
+                            })
+                    } else {
+                        None
+                    };
+                    for field in &layout.fields {
+                        if selected.is_some_and(|selected| selected != field.field_index) {
+                            continue;
+                        }
+                        let source = &fields[field.field_index];
+                        if source.name.is_none() && source.bit_field.is_some() {
+                            continue;
+                        }
+                        let at = offset
+                            .checked_add(field.byte_offset)
+                            .ok_or(LayoutError::ArithmeticOverflow)?;
+                        if let Some(bits) = field.bit_field {
+                            let bytes =
+                                u64::from((bits.bit_offset % 8 + bits.width_bits).div_ceil(8));
+                            occupied.push(
+                                at..at
+                                    .checked_add(bytes)
+                                    .ok_or(LayoutError::ArithmeticOverflow)?,
+                            );
+                        } else {
+                            pending.push((
+                                source.ty,
+                                at,
+                                path.clone().with_field(field.field_index),
+                            ));
+                        }
+                    }
+                }
+                TypeKind::Array {
+                    element,
+                    bound: ArrayBound::Fixed(count),
+                } => {
+                    if matches!(
+                        types.get(*element).map(|ty| &ty.kind),
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Array { .. })
+                    ) {
+                        let stride = target.layout_of(types, *element)?.size_bytes;
+                        for index in 0..*count {
+                            let at = index
+                                .checked_mul(stride)
+                                .and_then(|n| offset.checked_add(n))
+                                .ok_or(LayoutError::ArithmeticOverflow)?;
+                            pending.push((*element, at, path.clone().with_index(index)));
+                        }
+                    } else {
+                        occupied.push(offset..end);
+                    }
+                }
+                _ => occupied.push(offset..end),
+            }
+        }
+        occupied.sort_unstable_by_key(|range| range.start);
+        let mut padding = Vec::new();
+        let mut end = 0;
+        for range in occupied {
+            if range.end > size {
+                return Err(LayoutError::ArithmeticOverflow);
+            }
+            if end < range.start {
+                padding.push(end..range.start);
+            }
+            end = end.max(range.end);
+        }
+        if end < size {
+            padding.push(end..size);
+        }
+        Ok(padding)
+    }
+
     #[must_use]
     pub fn new(target_type: TypeId, actions: Vec<InitAction<'arena>>) -> Self {
         Self {

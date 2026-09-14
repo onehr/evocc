@@ -7252,6 +7252,41 @@ impl<'a> FunctionLowerer<'a> {
             return Ok(());
         };
         let address = self.token(state, EnvKey::Address(object.symbol))?.value;
+        if self.unit.zero_initialize_automatic_padding(object) {
+            let ranges = initializer
+                .plan()
+                .padding_ranges(self.unit.types(), *self.target)
+                .map_err(|_| LowerError::UnsupportedType {
+                    ty: object.ty,
+                    span: object.span,
+                    feature: "constructor padding has no finite layout",
+                })?;
+            for range in ranges {
+                let mut offset = range.start;
+                while offset < range.end {
+                    let size = [8, 4, 2, 1]
+                        .into_iter()
+                        .find(|size| *size <= range.end - offset)
+                        .unwrap();
+                    let integer = match size {
+                        8 => CIntegerType::ULONG,
+                        4 => CIntegerType::UINT,
+                        2 => CIntegerType::USHORT,
+                        _ => CIntegerType::UCHAR,
+                    };
+                    let at = self.constant_offset_address(address.clone(), offset, state)?;
+                    let zero = self.constant(state, integer, 0)?;
+                    self.emit_memory_store_with_layout(
+                        at,
+                        zero,
+                        AccessLayout::new(size, 1),
+                        false,
+                        state,
+                    )?;
+                    offset += size;
+                }
+            }
+        }
         self.lower_initializer_at(address, object.ty, initializer, object.span, state)
             .map(|_| ())
     }

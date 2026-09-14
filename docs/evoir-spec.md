@@ -7065,10 +7065,17 @@ No diagnostic is allocated, and no additional kernel unit count is claimed for t
 
 ### Explicit automatic initialization and hosted environment options
 
-`-ftrivial-auto-var-init=zero` adds a zero representation initializer, including padding, at each executed declaration of an otherwise uninitialized automatic object; typed pointer subobjects receive Null provenance, explicit initializers are unchanged, and the declaration attribute `uninitialized` exempts that object.
+`-ftrivial-auto-var-init=zero` adds a zero representation initializer, including padding, at each executed declaration of an otherwise uninitialized automatic object; typed pointer subobjects receive Null provenance, explicit member values are unchanged, and the declaration attribute `uninitialized` exempts that object.
 The final `-ftrivial-auto-var-init=uninitialized` restores ordinary uninitialized semantics; storage activation or merely transporting its address does not execute the implicit initializer.
 `-ffreestanding` sets `__STDC_HOSTED__=0` and disables ordinary-name library builtin substitution, `-fhosted` restores both, and later explicit `-fbuiltin`/`-fno-builtin` options override substitution independently; reserved `__builtin_*` spellings remain available.
 Both sealed compilers at O0/O2 execute `tests/fixtures/automatic-zero.{c,out}` with exit zero; the option occurs in all 2,799 frozen commands, but this targeted measurement is not a full-kernel result and introduces no diagnostic.
+
+### Automatic constructor padding
+
+With `-ftrivial-auto-var-init=zero`, an automatic brace initializer also zeroes representation gaps between and after its members and beyond the selected union member, recursively through arrays and records; explicit member expressions still execute exactly once without implicit initialization of their own destinations.
+The declaration's `uninitialized` exemption and final `uninitialized` option retain the ordinary behavior, and whole-aggregate copy initializers retain the source representation, including padding and provenance, rather than clearing it.
+Sealed GCC-14 and Clang-19 both return zero at O0/O2 for `tests/fixtures/automatic-initializer-padding.c`; `.evidence/builtin-probes/20260914-constructor-padding/oracles.out` records the results (SHA-256 `dc452fbe6e4815d273b8330f3cbbe3f3fba09db4ec0a270b5a55bfec97393082`).
+This clarifies the earlier explicit-initializer statement without changing member values or aggregate-copy semantics; the first full subject KUnit run exposed 28 failures in one `stackinit_kunit.o` unit, and no diagnostic is allocated.
 
 ### Strong frame protection and native command options
 

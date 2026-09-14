@@ -41,6 +41,48 @@ fn zero_initialization_is_explicit_and_runs_at_each_declaration() {
 }
 
 #[test]
+fn automatic_zero_initializes_constructor_padding_without_changing_members() {
+    let source = include_str!("../../../tests/fixtures/automatic-initializer-padding.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(
+            successful(run(&[mode, "-ftrivial-auto-var-init=zero"], source)).trim(),
+            "0"
+        );
+    }
+    successful(run(&["--emit=asm", "-ftrivial-auto-var-init=zero"], source));
+}
+
+#[test]
+fn constructor_padding_zero_does_not_initialize_a_self_reference() {
+    let source =
+        "struct S { int n; long m; }; int main(void) { struct S s = {.n=s.n, .m=3}; return s.n; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(&[mode, "-ftrivial-auto-var-init=zero"], source);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
+    }
+}
+
+#[test]
+fn constructor_padding_zero_keeps_copy_initializers_and_exemptions_unchanged() {
+    let copy = "struct S { char n; long m; }; int main(void) { struct S s; __builtin_memset(&s, 0x39, sizeof(s)); struct S t = s; return ((unsigned char *)&t)[1]; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(
+            successful(run(&[mode, "-ftrivial-auto-var-init=zero"], copy)).trim(),
+            "57"
+        );
+        for (options, source) in [
+            (vec![mode], "struct S { char n; long m; }; int main(void) { struct S s={1,2}; return ((unsigned char *)&s)[1]; }"),
+            (vec![mode, "-ftrivial-auto-var-init=zero"], "struct S { char n; long m; }; int main(void) { struct S s __attribute__((uninitialized))={1,2}; return ((unsigned char *)&s)[1]; }"),
+        ] {
+            let output = run(&options, source);
+            assert!(!output.status.success());
+            assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
+        }
+    }
+}
+
+#[test]
 fn zero_initialization_does_not_erase_poison_without_the_option_or_for_exempt_objects() {
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
         for (flags, source) in [

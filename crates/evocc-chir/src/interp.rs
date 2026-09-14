@@ -3027,6 +3027,29 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             return Ok(());
         };
+        if self.unit.zero_initialize_automatic_padding(declaration) {
+            let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
+            let ranges = initializer
+                .plan()
+                .padding_ranges(self.unit.types(), self.target)
+                .map_err(|_| InterpreterError::UnsupportedType {
+                    ty: declaration.ty,
+                    span: declaration.span,
+                })?;
+            for range in ranges {
+                let at = binding
+                    .address
+                    .checked_offset(range.start as i64)
+                    .map_err(|error| self.memory_error(error, declaration.span))?;
+                let bytes =
+                    ByteSequence::try_from_bytes(vec![0; (range.end - range.start) as usize])
+                        .map_err(|error| self.memory_error(error, declaration.span))?;
+                self.memory = self
+                    .memory
+                    .store_bytes(at, AccessLayout::new(range.end - range.start, 1), &bytes)
+                    .map_err(|error| self.memory_error(error, declaration.span))?;
+            }
+        }
         if initializer.plan().zero_fills_unwritten() {
             let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
             self.zero_initialize_subobjects(

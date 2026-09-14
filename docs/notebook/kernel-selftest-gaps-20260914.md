@@ -1,6 +1,6 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-14 09:35 UTC. This is a diagnosis ledger, not a new full-run
+Updated 2026-09-14 10:20 UTC. This is a diagnosis ledger, not a new full-run
 result. The last complete 935-program comparison remains
 `.evidence/kselftest-full/20260913T145405Z/summary.json`; later targeted results
 remain separate in the full-selftest and KUnit receipts.
@@ -42,13 +42,28 @@ remain separate in the full-selftest and KUnit receipts.
   now stops at mutation/escape, and numeric pointer bits fold only in the
   execution context, not as source ICEs. The query suite is 49/49 and changed
   gate is green; both original units re-emit with no assertion calls.
-  Assembly, native probes, final relink and KUnit remain pending: the approval
-  service repeatedly rejected launches with `Selected model is at capacity`.
-  These commands did not start. This is not a test failure or a runtime pass.
-  The implementation is now committed as `cfc5d64`. A fresh read-only check
-  still finds all 2,897 installed object hashes unchanged and both repaired
-  assembly hashes matching. Even a narrowed two-object assembly request was
-  rejected before launch; no new build or VM is running.
+  The earlier approval-capacity failures prevented launches, not test passes.
+  After approval resumed, `cfc5d64`'s GCC/Clang/EvoCC native fixture passed,
+  both objects installed, the generated export object was recompiled, and
+  full linking completed. All **2,897/2,897 built-in target-C object hashes**
+  survive the post-link audit, with **zero GCC fallback**. Capture:
+  `build-assertions-20260914/composition.json`; this is an incremental compiler
+  composition, not a uniform latest-binary rebuild. Modpost section-mismatch
+  warnings remain in the capture and need separate investigation.
+- The first full EvoCC KUnit run completed and powered down on the same TCG
+  lane and 600-second cap as the control: **1,297 PASS / 35 FAIL / 108 SKIP**,
+  1,440 tests. Capture: `20260914-subject-tcg`. Seven hardware-breakpoint
+  failures match the control, **28 stackinit failures are new**, and the
+  control's PM race passed here. Comparing net totals alone would incorrectly
+  call this 27 regressions. The stackinit failures expose missing padding and
+  union-tail initialization with `-ftrivial-auto-var-init=zero`; a minimal RED
+  fails with E3001, while both sealed oracles pass O0/O2. A shared padding-only
+  repair passes 16 option tests and the changed-crate gate. The original
+  stackinit suite is **106 PASS / 0 FAIL / 2 existing SKIP**. Full replay
+  `20260914-subject-padding-tcg` then finishes **1,325 PASS / 7 FAIL / 108 SKIP**,
+  with the same case sequence as the reference and **zero new regressions**.
+  Only the seven source-explained arm64 breakpoint failures remain; they are
+  not relabeled PASS. All 2,897 installed target-C object hashes remain audited.
 - The symbol comparison now rejects failed `nm` execution or missing object
   verdicts instead of treating them as empty symbol sets. Genuine successful
   empty objects remain valid. Two declared RED subcases now pass; all **141**
@@ -62,6 +77,7 @@ remain separate in the full-selftest and KUnit receipts.
 | Missing `/mnt` and `mkfs.ext4` | `mount_setattr_test.c:397` mounts tmpfs there; ten later cases invoke the ext4 formatter. | Directory and e2fsprogs supplied; **34/34 subtests PASS on each Image**. |
 | Unmounted securityfs | CONFIG_SECURITYFS=y, but PID1 had not mounted it; LSM reads `/sys/kernel/security/lsm`. | Mounted when available; **3/3 programs, 15/15 subtests PASS on each Image**. |
 | FAT tools and wrong file ownership | The original test first lacked mkfs.vfat, then sudo rejected rootfs files owned by macOS uid 501. The share also strips set-ID bits. | dosfstools/sudo supplied; stream an archive with original Linux metadata to the Linux formatter. **Original FAT program PASS on each Image**. |
+| Hidden initramfs `/dev` mount | Foreign-namespace listmount selected the hidden first child and found one mount instead of ten. | Unmount temporary `/dev` before moving the ext4 root. Original `statmount_test_ns` **2/2 PASS on both Images**; subject `mount_setattr_test` still **34/34 PASS**. |
 
 Four new packaging assertions and the existing harness tests total 138 PASS;
 Ruff, shell syntax and the init's GCC `-Werror` build pass. Captures are
@@ -152,26 +168,28 @@ and source reasoning are distinguished from that unexecuted check.
 - GCC KUnit's seven failing hardware-breakpoint cases request per-task EL1
   breakpoints that arm64 `arch_build_bp_info` explicitly rejects with EINVAL.
   The one PM runtime failure does not reproduce in isolated 6/6 control
-  runs, but its full-run FAIL is retained. Neither fact proves EvoCC KUnit.
+  runs, but its full-run FAIL is retained. EvoCC's separate full run has the
+  same seven breakpoint failures; its 28 padding regressions are now repaired.
 - The two built-in KUnit compilation refusals require dynamic object size
   inferred from `alloc_size(1)` / `(1,2)`. Ten units depend on that rule.
   Revision 1.9.97 records the user-approved exception; `bb98e29` passes 45
   focused tests, the changed gate, and all ten original-unit replays. The
-  built-in objects have been rebuilt, but the later link blockers above still
-  prevent an EvoCC KUnit run.
+  built-in objects have been rebuilt; later link blockers are repaired and
+  the full EvoCC KUnit run now exists.
 - Six NEON module units reach the original GCC resource header and fail at
   its compiler vector type `__Int8x8_t`. C executable vectors and MIR vector
   lowering are missing. This is authorized compiler work still to do, not
   evidence that those modules are inapplicable to ARM64.
 - Other shared failures (including rseq's long workload, timer tolerances,
-  statmount, cgroup, perf and ptrace) still require individual diagnosis.
+  cgroup, perf and ptrace) still require individual diagnosis.
   Equality with the GCC control is not a blanket waiver.
 
 ## Next execution sequence
 
-1. Assemble/install the two repaired objects, relink/audit and execute EvoCC
-   KUnit when the execution approval service is available. Existing objects
-   and captures are retained; no clone or full recompile is needed to retry.
+1. Complete matching module installation and targeted runtime tests. The first
+   three high-impact modules are VETH, FUSE and overlayfs; their 31 original
+   target-C records now emit and assemble with exact symbol parity. This does
+   not close the complete module population or the six NEON refusals.
 2. Complete integer-vector implementation with original-unit replay; it is
    the remaining six-unit module compilation gap, not a hardware exclusion.
 3. Install matching modules; run the expanded Image's selftests against
@@ -179,6 +197,6 @@ and source reasoning are distinguished from that unexecuted check.
 4. Complete individual diagnoses of the other shared failures before a new
    full comparison. The original 935-program denominator remains visible.
 
-No new kernel clone was created. The stress and packaging VMs have exited
-normally. The built-in link failed, and the next container/VM launches were
-blocked by the approval service; there is no running composition to monitor.
+No new kernel clone was created. The first full KUnit and targeted packaging
+VMs exited normally; the padding repair's changed gate and release build pass.
+Existing runtime disks and earlier failed captures are retained.
