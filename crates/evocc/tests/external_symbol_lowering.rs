@@ -25,6 +25,69 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn fortified_library_builtins_bind_ordinary_functions_and_evaluate_once() {
+    let source = include_str!("../../../tests/fixtures/fortified-library-builtins.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+        let output = run_with_options(source, mode, &["-O2", "-fno-builtin"]);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if mode.starts_with("--interpret") {
+            assert_eq!(output.stdout, b"0\n", "{mode}");
+        }
+    }
+}
+
+#[test]
+fn fortified_library_builtins_supply_prototypes_without_visible_declarations() {
+    for (name, parameters, arguments) in [
+        ("strcat", "char *p,const char*q", "p,q"),
+        ("strncat", "char *p,const char*q,unsigned long n", "p,q,n"),
+        ("memchr", "const void*p,int c,unsigned long n", "p,c,n"),
+    ] {
+        let source = format!("void*f({parameters}){{return __builtin_{name}({arguments});}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains(&format!("declare @{name}(")), "{text}");
+        assert!(text.contains(&format!("call @{name}")), "{text}");
+        assert!(!text.contains("__builtin_"), "{text}");
+    }
+}
+
+#[test]
+fn fortified_library_builtins_keep_argument_and_declaration_checks() {
+    for (source, code) in [
+        ("void*f(char*p){return __builtin_strcat(p);}", "E2909"),
+        ("void*f(char*p){return __builtin_strncat(p,p);}", "E2909"),
+        ("void*f(char*p){return __builtin_memchr(p,0);}", "E2909"),
+        ("void*f(char*p){return __builtin_strcat(7,p);}", "E2913"),
+        (
+            "int strncat(int);void*f(char*p){return __builtin_strncat(p,p,1);}",
+            "E2927",
+        ),
+        (
+            "int memchr(int);void*f(char*p){return __builtin_memchr(p,0,1);}",
+            "E2927",
+        ),
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "{source}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn position_independent_options_preserve_external_address_semantics() {
     let source = include_str!("../../../tests/fixtures/relocation-mode.c");
     for (options, indirect) in [

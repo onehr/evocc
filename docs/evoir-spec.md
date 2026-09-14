@@ -7145,3 +7145,10 @@ Pure finite binary32/binary64 constant arithmetic may resolve to an integer befo
 This does not make a floating arithmetic expression an integer constant expression, admit runtime floating object reads, saturate out-of-range conversions, evaluate an unselected branch, or approximate binary128 with binary64.
 Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/floating-constant-integers.c` with exit zero (recorded in the adjacent `.out` file), including binary32 rounding, negative truncation and an integer-selected conditional with a floating common type.
 Seven original expanded-configuration units are affected; no diagnostic is allocated, and their compile/assembly replay is separate from kernel execution.
+
+### Library primitives used by fortified string wrappers
+
+`__builtin_strcat`, `__builtin_strncat`, and `__builtin_memchr` use the ordinary external prototypes `char *(char *, const char *)`, `char *(char *, const char *, size_t)`, and `void *(const void *, int, size_t)` through the existing unit-local builtin namespace, evaluating each argument once and introducing no intrinsic or new interpreter library model.
+Existing E2909 arity, E2913 argument-conversion, and E2927 visible-declaration checks remain unchanged.
+Both sealed GCC-14 and Clang-19 execute `tests/fixtures/fortified-library-builtins.c` at O0/O2 with exit zero, recorded in `.evidence/builtin-probes/20260914-fortified-library/oracles-consensus.out`; GCC's warning about the deliberately bounded append is retained, and the earlier Werror probe is recorded separately.
+Two selected original BPF units in the supplemental FORTIFY/BTF configuration first refuse in `fortify-string.h`; complete build and runtime coverage are measured separately rather than inferred from this prototype rule.

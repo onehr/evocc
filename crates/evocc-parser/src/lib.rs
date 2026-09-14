@@ -417,6 +417,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_puts"
                         | "__builtin_strchr"
                         | "__builtin_strncpy"
+                        | "__builtin_strcat"
+                        | "__builtin_strncat"
+                        | "__builtin_memchr"
                         | "__builtin_malloc"
                         | "__builtin_free"
                         | "__builtin_abs"
@@ -12448,6 +12451,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 "strncpy",
                 char_pointer,
                 vec![char_pointer, const_char_pointer, size_ty],
+            ),
+            "__builtin_strncat" => (
+                "strncat",
+                char_pointer,
+                vec![char_pointer, const_char_pointer, size_ty],
+            ),
+            "__builtin_strcat" => (
+                "strcat",
+                char_pointer,
+                vec![char_pointer, const_char_pointer],
+            ),
+            "__builtin_memchr" => (
+                "memchr",
+                void_pointer,
+                vec![const_void_pointer, int_ty, size_ty],
             ),
             "__builtin_malloc" => ("malloc", void_pointer, vec![size_ty]),
             "__builtin_free" => ("free", void_ty, vec![void_pointer]),
