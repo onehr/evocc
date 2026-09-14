@@ -17,6 +17,24 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
+        command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
+                   'args-test', str(PATH.parent / 'lib.sh')]
+        done = subprocess.run(command + ['mm:run_vmtests.sh', '-t cow'],
+                              text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(),
+                         'evo_selftest=mm:run_vmtests.sh KSELFTEST_RUN_VMTESTS_SH_ARGS="-t cow"')
+        done = subprocess.run(command + ['mm:sub/test+name.sh', '-n 1'],
+                              text=True, capture_output=True, check=True)
+        self.assertIn('KSELFTEST_TEST_NAME_SH_ARGS="-n 1"', done.stdout)
+        for program, args in [('mm', '-t cow'), ('mm:../cow', ''),
+                              ('mm:run_vmtests.sh', '" evil=1'),
+                              ('mm:run_vmtests.sh', '$(false)'),
+                              ('mm:run_vmtests.sh', '-t cow\n')]:
+            done = subprocess.run(command + [program, args], capture_output=True)
+            self.assertNotEqual(done.returncode, 0, (program, args))
+
     def test_boot_lane_uses_only_a_declared_machine_profile(self):
         library = PATH.parent / 'lib.sh'
         contract = PATH.parents[2] / 'contracts/kernel-target.json'

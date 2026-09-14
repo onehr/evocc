@@ -63,6 +63,31 @@ k1_boot_lane_args() {
     "$contract"
 }
 
+# Use Linux's normal init environment and the upstream runner's per-program
+# argument variable. No altered payload or separate diagnostic runner is needed.
+k1_selftest_cmdline() {
+  local program="$1" args="$2" name
+  if [ -z "$program" ]; then
+    [ -z "$args" ] || k1_die "selftest arguments require one program"
+    return
+  fi
+  case "$program" in
+    *[!a-zA-Z0-9_/:.+-]*|*..*) k1_die "invalid selftest collection or program" ;;
+  esac
+  printf ' evo_selftest=%s' "$program"
+  if [ -n "$args" ]; then
+    case "$program" in *:*) ;; *) k1_die "selftest arguments require one program" ;; esac
+    case "$args" in
+      *[!a-zA-Z0-9_/:.,+\ =-]*) k1_die "invalid selftest arguments" ;;
+    esac
+    [ "${#args}" -le 512 ] || k1_die "selftest arguments exceed the command-line bound"
+    name="${program##*/}"
+    name="${name#*:}"
+    name="$(printf '%s' "$name" | tr -c '[:alnum:]_' '_' | tr '[:lower:]' '[:upper:]')"
+    printf ' KSELFTEST_%s_ARGS="%s"' "$name" "$args"
+  fi
+}
+
 # k1_boot <contract> <image> <initramfs> <nonce> <serial-log> <timeout-seconds>
 #
 # Boots one Image on the hvf-host lane and evaluates the ordered predicate:
@@ -78,12 +103,9 @@ k1_boot() {
   smp="$("$K1_JQ" -r '.qemu.fixedArgv.smp' "$contract")"
   mem="$("$K1_JQ" -r '.qemu.fixedArgv.memoryMiB' "$contract")"
   local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
-  if [ -n "${K1_SELFTEST_COLLECTION:-}" ]; then
-    case "$K1_SELFTEST_COLLECTION" in
-      *[!a-zA-Z0-9_/:.+-]*|*..*) k1_die "invalid selftest collection or program" ;;
-    esac
-    command_line="$command_line evo_selftest=$K1_SELFTEST_COLLECTION"
-  fi
+  local selftest_cmdline
+  selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}")" || return 1
+  command_line="$command_line$selftest_cmdline"
   if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
     case "$K1_CONSOLE_LOGLEVEL" in
       [1-8]) command_line="$command_line loglevel=$K1_CONSOLE_LOGLEVEL" ;;
