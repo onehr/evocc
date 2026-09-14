@@ -1647,6 +1647,17 @@ fn symbolic_address(
             Ok((symbol, offset, exposed))
         }
         CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
+            // Addition permits the constant addend on either side. Only
+            // commute a proven integer constant; two symbols still cannot be
+            // represented by one relocation, and subtraction is not symmetric.
+            let (pointer, index) = if *op == BinaryOp::Add
+                && evocc_chir::interp::interpret_static_integer_expression(unit, pointer, target)
+                    .is_ok()
+            {
+                (*index, *pointer)
+            } else {
+                (*pointer, *index)
+            };
             let (symbol, offset, exposed) = symbolic_address(
                 unit,
                 target,
