@@ -86,7 +86,9 @@ fn transparent_union_arguments_preserve_the_member_value_in_chir() {
 
 #[test]
 fn transparent_union_arguments_preserve_the_member_value_in_evoir() {
-    let module = lower(include_str!("../../../tests/fixtures/transparent-union-calls.c"));
+    let module = lower(include_str!(
+        "../../../tests/fixtures/transparent-union-calls.c"
+    ));
     let main = module.functions.iter().find(|f| f.name == "main").unwrap();
     let args = main
         .params

@@ -75,6 +75,27 @@ fn cleanup_binds_a_compatible_function_and_keeps_ignored_placements() {
     );
 }
 
+#[test]
+fn transparent_union_conversion_requires_the_attribute_and_a_compatible_member() {
+    accepts(include_str!(
+        "../../../tests/fixtures/transparent-union-calls.c"
+    ));
+    for source in [
+        "union U { int *p; long *q; }; void f(union U); void g(int *p) { f(p); }",
+        "typedef union { int *p; long *q; } U __attribute__((transparent_union)); void f(U); void g(double *p) { f(p); }",
+        "typedef union { int *p; long *q; } U __attribute__((transparent_union)); void f(U); void g(void) { f(3); }",
+    ] {
+        rejects(source, "E2202");
+    }
+    for source in [
+        "typedef union { int x; long y; } U __attribute__((transparent_union));",
+        "union __attribute__((transparent_union)) U { int x; long y; };",
+        "typedef union { int x; unsigned y; } U __attribute__((transparent_union(1)));",
+    ] {
+        rejects(source, "E2903");
+    }
+}
+
 /// Size and alignment of the typedef named `name` after parsing `source`.
 fn layout_of(source: &str, name: &str) -> (u64, u32) {
     let arena = Arena::default();

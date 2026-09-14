@@ -480,6 +480,8 @@ pub struct Tag {
     pub state: TagState,
     /// GNU `packed` and `aligned` written on the tag itself.
     pub layout: TagLayoutAttributes,
+    /// A GNU union parameter accepts member values, constructed before a call.
+    pub transparent_union: bool,
 }
 
 /// Why a canonical type key could not be interned.
@@ -587,6 +589,10 @@ enum TypeInternerUndo {
     TagStateUpdated {
         tag: TagId,
         previous: TagState,
+    },
+    TransparentUnionUpdated {
+        tag: TagId,
+        previous: bool,
     },
 }
 
@@ -918,6 +924,7 @@ impl TypeInterner {
             name,
             state: TagState::Incomplete,
             layout: TagLayoutAttributes::default(),
+            transparent_union: false,
         });
         self.record_undo(TypeInternerUndo::TagDeclared);
         id
@@ -941,6 +948,20 @@ impl TypeInterner {
             (a, b) => a.or(b),
         };
         self.record_undo(TypeInternerUndo::TagLayoutUpdated { tag: id, previous });
+        true
+    }
+
+    /// The flag follows nominal tag identity, including speculative rollback.
+    pub fn set_transparent_union(&mut self, id: TagId) -> bool {
+        let Some(tag) = self.tags.get_mut(id.raw() as usize) else {
+            return false;
+        };
+        if tag.kind != TagKind::Union {
+            return false;
+        }
+        let previous = tag.transparent_union;
+        tag.transparent_union = true;
+        self.record_undo(TypeInternerUndo::TransparentUnionUpdated { tag: id, previous });
         true
     }
 
@@ -1023,6 +1044,9 @@ impl TypeInterner {
             }
             TypeInternerUndo::TagStateUpdated { tag, previous } => {
                 self.tags[tag.raw() as usize].state = previous;
+            }
+            TypeInternerUndo::TransparentUnionUpdated { tag, previous } => {
+                self.tags[tag.raw() as usize].transparent_union = previous;
             }
         }
     }
@@ -2097,6 +2121,19 @@ fn bits_to_bytes(bits: u64) -> Result<u64, LayoutError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transparent_union_attributes_roll_back_with_their_tag() {
+        let mut types = TypeInterner::new();
+        let tag = types.declare_tag(TagKind::Union, Some("U".to_owned()));
+        let transaction = types.begin_transaction();
+        assert!(types.set_transparent_union(tag));
+        assert!(types.tag(tag).unwrap().transparent_union);
+        types.rollback_transaction(&transaction).unwrap();
+        assert!(!types.tag(tag).unwrap().transparent_union);
+        let structure = types.declare_tag(TagKind::Struct, None);
+        assert!(!types.set_transparent_union(structure));
+    }
 
     // -----------------------------------------------------------------------
     // CType exhaustiveness

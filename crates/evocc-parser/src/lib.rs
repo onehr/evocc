@@ -5267,6 +5267,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         for attribute in attributes.iter_mut() {
             match attribute.semantic_name().unwrap_or("") {
                 "mode" => ty = self.apply_integer_mode(ty, attribute),
+                "transparent_union" => {
+                    if let Some(TypeKind::Union(tag)) = self.types.get(ty).map(|ty| ty.kind.clone())
+                    {
+                        self.apply_transparent_union(tag, attribute);
+                    } else {
+                        self.report("E2903", "malformed-attribute", attribute.span);
+                    }
+                }
                 "aligned" => {
                     let Some(bytes) = self.aligned_bytes(attribute) else {
                         continue;
@@ -5309,6 +5317,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                 }
                 _ => {}
+            }
+        }
+        if let Some(TypeKind::Union(tag)) = self.types.get(ty).map(|ty| &ty.kind) {
+            if self
+                .types
+                .tag(*tag)
+                .is_some_and(|tag| tag.transparent_union)
+                && attributes.last().is_some()
+            {
+                let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+                let first = match &self.types.tag(*tag).unwrap().state {
+                    TagState::Complete(TagDefinition::Union(fields)) => fields.first(),
+                    _ => None,
+                };
+                if first.is_some_and(|field| {
+                    target.layout_of(&self.types, field.ty).ok()
+                        != target.layout_of(&self.types, ty).ok()
+                }) {
+                    self.report(
+                        "E2903",
+                        "malformed-attribute",
+                        attributes.last().unwrap().span,
+                    );
+                }
             }
         }
         ty
@@ -5372,6 +5404,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
         for attribute in attributes.iter_mut() {
             match attribute.semantic_name().unwrap_or("") {
+                "transparent_union" => self.apply_transparent_union(tag, attribute),
                 "packed" => {
                     if !attribute.arguments.is_empty() {
                         self.report("E2903", "malformed-attribute", attribute.span);
@@ -5417,6 +5450,59 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => {}
             }
         }
+    }
+
+    fn apply_transparent_union(&mut self, tag: TagId, attribute: &mut Attribute) {
+        if !attribute.arguments.is_empty() || !self.types.set_transparent_union(tag) {
+            self.report("E2903", "malformed-attribute", attribute.span);
+            return;
+        }
+        // Tag-keyword attributes arrive before the fields are completed.
+        if matches!(
+            self.types.tag(tag).map(|tag| &tag.state),
+            Some(TagState::Complete(_))
+        ) && !self.transparent_union_has_register_representation(tag)
+        {
+            self.report("E2903", "malformed-attribute", attribute.span);
+            return;
+        }
+        attribute.applied = Some(AppliedAttribute::TransparentUnion);
+    }
+
+    fn transparent_union_has_register_representation(&self, tag: TagId) -> bool {
+        let Some(TagState::Complete(TagDefinition::Union(fields))) =
+            self.types.tag(tag).map(|tag| &tag.state)
+        else {
+            return false;
+        };
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let Some(first) = fields
+            .first()
+            .and_then(|field| target.layout_of(&self.types, field.ty).ok())
+        else {
+            return false;
+        };
+        let layout = self.types.tag(tag).unwrap().layout;
+        if (layout.packed && first.align_bytes > 1)
+            || layout
+                .aligned
+                .is_some_and(|align| align > first.align_bytes)
+            || layout.max_align.is_some_and(|cap| cap < first.align_bytes)
+        {
+            return false;
+        }
+        fields.iter().all(|field| {
+            field.bit_field.is_none()
+                && self.types.get(field.ty).is_some_and(|ty| {
+                    matches!(
+                        ty.kind,
+                        TypeKind::Pointer(_) | TypeKind::Int(_) | TypeKind::GnuInt128(_)
+                    )
+                })
+                && target
+                    .layout_of(&self.types, field.ty)
+                    .is_ok_and(|layout| layout == first)
+        })
     }
 
     /// The layout attributes a member carries, with `applied` marked.
@@ -6107,6 +6193,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     "duplicate-tag-definition",
                     name.as_ref().map_or(keyword_span, |name| name.span),
                 );
+            }
+            if self.types.tag(tag).is_some_and(|tag| tag.transparent_union)
+                && !self.transparent_union_has_register_representation(tag)
+            {
+                self.report("E2903", "malformed-attribute", keyword_span);
             }
             let specifier_span = self.merge_span(keyword_span, end);
             Some(ParsedSpecifier {
@@ -10992,6 +11083,64 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2942", "incompatible-union-cast", span);
             return None;
         };
+        self.construct_union_member(target, index, ty, operand, span)
+    }
+
+    fn resolve_union_argument(
+        &mut self,
+        target: TypeId,
+        operand: &'arena CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let Some(TypeKind::Union(tag)) = self.types.get(target).map(|ty| ty.kind.clone()) else {
+            return Some(operand);
+        };
+        let inferred = self.converted_expression_type(operand)?;
+        let source = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+        if self
+            .types
+            .compatible_ignoring_top_qualifiers(target, source)
+        {
+            return Some(operand);
+        }
+        let definition = self.types.tag(tag)?;
+        let member = match &definition.state {
+            TagState::Complete(TagDefinition::Union(fields)) if definition.transparent_union => {
+                fields
+                    .iter()
+                    .enumerate()
+                    .find(|(_, field)| {
+                        self.types
+                            .compatible_ignoring_top_qualifiers(field.ty, source)
+                            || (matches!(
+                                self.types.get(field.ty).map(|ty| &ty.kind),
+                                Some(TypeKind::Pointer(_))
+                            ) && self.assignment_constraint(
+                                AssignmentOp::Simple,
+                                field.ty,
+                                operand,
+                            ) != UpdateConstraint::Invalid)
+                    })
+                    .map(|(index, field)| (index, field.ty))
+            }
+            _ => None,
+        };
+        let Some((index, member_type)) = member else {
+            self.report("E2202", "invalid-initializer-type", operand.span());
+            return None;
+        };
+        let value =
+            self.construct_union_member(target, index, member_type, operand, operand.span())?;
+        Some(self.alloc_node(CHirExpr::Cast(target, value, operand.span())))
+    }
+
+    fn construct_union_member(
+        &mut self,
+        target: TypeId,
+        index: usize,
+        ty: TypeId,
+        operand: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
         let written = WrittenInitializer::Expression(operand);
         let mut actions = Vec::new();
         self.normalize_initializer_value(
@@ -11098,6 +11247,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2937", "invalid-call-target", expression.span());
                         return None;
                     };
+                    if let FunctionParameters::Prototype { types, .. } = &parameters {
+                        for (argument, parameter) in arguments.iter_mut().zip(types) {
+                            *argument = self.resolve_union_argument(*parameter, argument)?;
+                        }
+                    }
                     let default_promoted_from = match parameters {
                         FunctionParameters::Prototype {
                             types,

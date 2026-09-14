@@ -1188,6 +1188,8 @@ pub enum AppliedAttribute {
     IntegerMode,
     /// Scope-exit call, resolved on the owning automatic object declaration.
     Cleanup,
+    /// GNU union member arguments are normalized before the call.
+    TransparentUnion,
 }
 
 /// An attribute entry (or an equivalent C11 `_Noreturn`/`_Alignas` specifier),
@@ -2076,6 +2078,7 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
             Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
             Some(AppliedAttribute::IntegerMode) => "applied integer-mode".to_owned(),
             Some(AppliedAttribute::Cleanup) => "applied cleanup".to_owned(),
+            Some(AppliedAttribute::TransparentUnion) => "applied transparent-union".to_owned(),
             None => "preserved-not-applied".to_owned(),
         };
         let _ = writeln!(
