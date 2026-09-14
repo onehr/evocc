@@ -135,6 +135,36 @@ fn immutable_global_facts_do_not_cover_writes_volatile_reads_or_pointer_relocati
 }
 
 #[test]
+fn constant_queries_follow_sequential_writes_and_finite_initializer_values() {
+    let source = include_str!("../../../tests/fixtures/sequential-constant-queries.c");
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @invalid"));
+    assert_constant_program(source);
+}
+
+#[test]
+fn finite_query_facts_preserve_unknown_values_mutations_and_evaluation_counts() {
+    for source in [
+        "__attribute__((noinline)) int f(int c){int n=c?-1:255;return __builtin_constant_p(n>=0);}int main(void){return f(0)||f(1);}",
+        "int main(void){volatile int n=16;return __builtin_constant_p(n>=0);}",
+        "int main(void){goto next;int n=16;next:return __builtin_constant_p(n>=0);}",
+        "int calls;__attribute__((noinline)) int f(void){++calls;return calls;}int main(void){int n=f()?16:255;int p=__builtin_constant_p((long long)n>=0);return !p||calls!=1||n!=16;}",
+        "int main(void){int calls=0;int n=16;int p=__builtin_constant_p((calls++,n>=0));return p||calls;}",
+        "__attribute__((noinline)) int f(int c){int n;n=4;if(c)n=7;return n;}int main(void){return f(0)!=4||f(1)!=7;}",
+        "int *saved;void escape(int*p){saved=p;}void change(void){*saved=7;}int main(void){int n;n=4;escape(&n);n=6;change();return n!=7;}",
+        "int main(void){int n;n=4;for(int i=0;i<3;i++)n+=i;return n!=7;}",
+        "__attribute__((noinline)) int f(int c){unsigned char n=c?256:257;return __builtin_constant_p(n>=0);}int main(void){return !f(0)||!f(1);}",
+        "__attribute__((noinline)) int f(int c){unsigned char n=c?256:257;return __builtin_constant_p(n>=1);}int main(void){return f(0)||f(1);}",
+        "__attribute__((noinline)) int f(int c){signed char n=c?127:128;return __builtin_constant_p(n>=0);}int main(void){return f(0)||f(1);}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
 fn normalized_initializers_share_nested_declaration_identities_with_the_written_form() {
     for source in [
         include_str!("../../../tests/fixtures/nested-initializer-identity.c"),

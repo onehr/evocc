@@ -40,6 +40,7 @@ struct Uses<'a> {
     references: BTreeSet<SymbolId>,
     assembly: Vec<&'a str>,
     addresses: BTreeSet<SymbolId>,
+    exposed_objects: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     mutations: BTreeMap<SymbolId, usize>,
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
@@ -289,6 +290,7 @@ fn inspect_with_visitors<'a>(
                             if matches!(o.constraint.as_str(), "m" | "Q" | "Qo") {
                                 if let CHirExpr::Ident { symbol, .. } = o.expression {
                                     uses.mark_mutable(*symbol);
+                                    uses.exposed_objects.insert(*symbol);
                                 }
                             }
                         }
@@ -325,6 +327,7 @@ fn inspect_with_visitors<'a>(
                     }
                     CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::Ident { symbol, .. }, _) => {
                         uses.mark_mutable(*symbol);
+                        uses.exposed_objects.insert(*symbol);
                     }
                     _ => {}
                 }
@@ -367,6 +370,7 @@ fn inspect_with_visitors<'a>(
                     | CHirExpr::MemoryAssign { place, .. } => {
                         if let Some(s) = place.root_symbol() {
                             uses.mark_mutable(s);
+                            uses.exposed_objects.insert(s);
                             uses.references.insert(s);
                             if !matches!(e, CHirExpr::MemoryRead { .. }) {
                                 uses.writes.insert(s);
@@ -873,6 +877,7 @@ pub(crate) fn substitute_for_execution<'a>(
                     .id();
                 let mut c = Context::new(scope);
                 c.mutable = bodies[&f.symbol].mutable.clone();
+                c.exposed_objects = bodies[&f.symbol].exposed_objects.clone();
                 c.single_mutations = bodies[&f.symbol].single_mutations();
                 c.declaration_prefix = true;
                 if let Some(values) = parameter_values.get(&f.symbol) {
@@ -1031,12 +1036,14 @@ struct Context<'a> {
     replacements: BTreeMap<SymbolId, SymbolId>,
     constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     optimized_constants: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    possible_constants: BTreeMap<SymbolId, Vec<crate::integer::CInteger>>,
     assignment_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     sequential_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     allow_sequential_values: bool,
     object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
     single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
+    exposed_objects: BTreeSet<SymbolId>,
     declaration_prefix: bool,
     memo: HashMap<(usize, bool), &'a CHirExpr<'a>>,
     expand_calls: bool,
@@ -1052,12 +1059,14 @@ impl Context<'_> {
             replacements: BTreeMap::new(),
             constants: BTreeMap::new(),
             optimized_constants: BTreeMap::new(),
+            possible_constants: BTreeMap::new(),
             assignment_values: BTreeMap::new(),
             sequential_values: BTreeMap::new(),
             allow_sequential_values: false,
             object_bounds: BTreeMap::new(),
             single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
+            exposed_objects: BTreeSet::new(),
             declaration_prefix: false,
             memo: HashMap::new(),
             expand_calls: true,
@@ -1231,6 +1240,79 @@ impl<'a> Substitution<'a, '_> {
             CHirExpr::Comma(_, value, _) => self.value_after_execution(value, ty),
             _ => None,
         }
+    }
+
+    // Bounded alternatives from an already executed immutable initializer.
+    // Queries never execute an operand: calls, loads, updates and comma
+    // expressions receive no facts here. Unknown conditions may select either
+    // initializer arm, but are not speculatively evaluated inside a query.
+    fn possible_query_values(
+        &self,
+        expression: &CHirExpr<'_>,
+        c: &Context<'_>,
+        initialized: bool,
+    ) -> Option<Vec<crate::integer::CInteger>> {
+        use crate::integer::{eval_binary_integer, eval_unary_integer};
+        if let Some(value) = crate::constant::eval_executable_integer_constant(
+            expression,
+            &self.unit.types,
+            &self.unit.symbols,
+            self.target,
+        ) {
+            return Some(vec![value]);
+        }
+        let values = |e| self.possible_query_values(e, c, initialized);
+        let mut result = match expression {
+            CHirExpr::Ident { symbol, .. } => c.possible_constants.get(symbol)?.clone(),
+            CHirExpr::Cast(ty, operand, _) => {
+                let ty = crate::constant::canonical_integer_type(&self.unit.types, *ty)?;
+                values(operand)?.into_iter().map(|v| v.cast(ty)).collect()
+            }
+            CHirExpr::Unary(op, operand, _) => values(operand)?
+                .into_iter()
+                .map(|v| eval_unary_integer(*op, v).ok())
+                .collect::<Option<Vec<_>>>()?,
+            CHirExpr::Binary(op, left, right, _) => {
+                let left = values(left)?;
+                let right = values(right)?;
+                let mut result = Vec::new();
+                for a in left {
+                    for &b in &right {
+                        result.push(eval_binary_integer(*op, a, b).ok()?);
+                    }
+                }
+                result
+            }
+            CHirExpr::Ternary(condition, yes, no, _) => {
+                let conditions = values(condition);
+                if conditions.is_none() && !initialized {
+                    return None;
+                }
+                let ty = crate::constant::integer_expression_type(
+                    expression,
+                    &self.unit.types,
+                    &self.unit.symbols,
+                )?;
+                let mut result = Vec::new();
+                if conditions
+                    .as_ref()
+                    .is_none_or(|v| v.iter().any(|x| x.truth()))
+                {
+                    result.extend(values(yes)?);
+                }
+                if conditions
+                    .as_ref()
+                    .is_none_or(|v| v.iter().any(|x| !x.truth()))
+                {
+                    result.extend(values(no)?);
+                }
+                result.into_iter().map(|v| v.cast(ty)).collect()
+            }
+            _ => return None,
+        };
+        result.sort_by_key(|v| v.raw_bits());
+        result.dedup();
+        (result.len() <= 8).then_some(result)
     }
 
     /// Remove unselected statement ownership from an already-proven stable
@@ -1669,6 +1751,18 @@ impl<'a> Substitution<'a, '_> {
                 let replacement = value.and_then(|value| self.value_after_execution(value, o.ty));
                 let repeatable = replacement.is_some();
                 let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
+                if !repeatable
+                    && !c.mutable.contains(&original)
+                    && !qualifiers.is_volatile
+                    && !qualifiers.is_atomic
+                    && o.asm_label.is_none()
+                    && matches!(o.storage, StorageClass::None | StorageClass::Auto)
+                {
+                    if let Some(values) = value.and_then(|v| self.possible_query_values(v, c, true))
+                    {
+                        c.possible_constants.insert(o.symbol, values);
+                    }
+                }
                 if repeatable
                     && !qualifiers.is_volatile
                     && !qualifiers.is_atomic
@@ -1854,6 +1948,24 @@ impl<'a> Substitution<'a, '_> {
                 let rewritten = self.expr(operand, c);
                 c.expand_calls = expand;
                 *operand = rewritten?;
+                if self
+                    .possible_query_values(operand, c, false)
+                    .is_some_and(|values| values.len() == 1)
+                {
+                    // This proof is shared by C-HIR execution and lowering;
+                    // the original initialization remains and source-ICE
+                    // admission has already happened before this pass.
+                    let result = self.alloc(CHirExpr::Lit(
+                        IntLit {
+                            value: 1,
+                            suffix: IntSuffix::None,
+                            base: IntBase::Dec,
+                        },
+                        e.span(),
+                    ));
+                    c.memo.insert(key, result);
+                    return Ok(result);
+                }
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), a, b, _) => {
                 *a = self.expr(a, c)?;
@@ -2084,7 +2196,8 @@ impl<'a> Substitution<'a, '_> {
             return;
         };
         let symbol = place.symbol();
-        if !c.single_mutations.contains(&symbol) {
+        let stable = c.single_mutations.contains(&symbol);
+        if !stable && (!c.allow_sequential_values || c.exposed_objects.contains(&symbol)) {
             return;
         }
         let Ok(entry) = self.unit.symbols.symbol(symbol) else {
@@ -2109,11 +2222,15 @@ impl<'a> Substitution<'a, '_> {
         {
             return;
         }
-        // The real assignment remains. A single direct, unescaped write can
-        // supply a converted value to later queries in this straight-line scope.
+        // The real assignment remains. Later writes kill sequential facts
+        // before rewriting the next statement; escaped objects are excluded.
         let converted = self.alloc(CHirExpr::Cast(ty, value, value.span()));
         if let Some(value) = self.value_after_execution(converted, ty) {
-            c.assignment_values.insert(symbol, value);
+            if stable {
+                c.assignment_values.insert(symbol, value);
+            } else {
+                c.sequential_values.insert(symbol, value);
+            }
             c.memo.clear();
         }
     }
@@ -2432,6 +2549,7 @@ impl<'a> Substitution<'a, '_> {
         let mut c = Context::new(inline_scope);
         c.single_mutations = uses.single_mutations();
         c.mutable = uses.mutable;
+        c.exposed_objects = uses.exposed_objects;
         c.declaration_prefix = true;
         let serial = self.next();
         c.prefix = Some(serial);

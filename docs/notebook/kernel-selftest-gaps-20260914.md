@@ -341,3 +341,24 @@ Neither assertions nor test sources change. The reference rerun in
 console attempts are retained: one lost seven cases to a replayed partial
 line, and another interleaved the next module marker with delayed output.
 EvoCC must pass the same record-based execution after its module repairs.
+
+The 75 original module commands now emit and assemble without the retained
+assertion calls (`sequential-queries-20260914`). Two remaining shapes required
+sequential facts for unescaped assignments and bounded alternatives from an
+already evaluated immutable initializer. Initialization, conversions, side
+effects and source-ICE admission are unchanged; 54 focused tests, the changed
+gate and sealed GCC/Clang/EvoCC native probes pass. The full 702-module relink
+preserves all 3,407 audited C leaves and six assembly leaves, without fallback.
+
+The first repaired module execution is **not fully green**:
+`module-suites-20260914/subject-repaired-records` has 32 successful loads,
+780 cases (778 PASS, one FAIL, one SKIP), and one missing suite. The remaining
+iwlmvm load failure names `iwl_mvm_send_roaming_forbidden_event`: its caller is
+reachable only through an otherwise unused static callback table. The PRP
+failure compares a saved jiffies value with a later live read, differing by
+one tick; this needs a separate timing diagnosis, not a changed assertion.
+
+The original CPU-hotplug test now passes on both kernels in the TCG lane
+(`hotplug-tcg-20260914`). Its earlier shared HVF panic remains recorded:
+the CPU-off implementation returns from the CPU-die path. This isolates the
+execution backend rather than changing the test or calling the HVF result PASS.
