@@ -96,7 +96,12 @@ k1_selftest_cmdline() {
 }
 
 k1_kunit_cmdline() {
-  local filter="$1"
+  local filter="$1" autorun="${2:-}"
+  case "$autorun" in
+    '') ;;
+    0|1) printf ' kunit.autorun=%s' "$autorun" ;;
+    *) k1_die "KUnit autorun must be 0 or 1" ;;
+  esac
   [ -n "$filter" ] || return 0
   case "$filter" in *[!a-zA-Z0-9_.*?-]*) k1_die "invalid KUnit filter" ;; esac
   [ "${#filter}" -le 256 ] || k1_die "KUnit filter exceeds the command-line bound"
@@ -122,7 +127,7 @@ k1_boot() {
   selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}" "${K1_SELFTEST_TIMEOUT:-}")" || return 1
   command_line="$command_line$selftest_cmdline"
   local kunit_cmdline
-  kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}")" || return 1
+  kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}" "${K1_KUNIT_AUTORUN:-}")" || return 1
   command_line="$command_line$kunit_cmdline"
   if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
     case "$K1_CONSOLE_LOGLEVEL" in

@@ -49,6 +49,16 @@ class FullSelftest(unittest.TestCase):
         for value in ['suite.* init=/bin/sh', '$(false)', 'suite\n', 'a' * 257]:
             self.assertNotEqual(subprocess.run(command + [value], capture_output=True).returncode, 0)
 
+    def test_kunit_autorun_override_is_explicit_for_separate_selftest_boots(self):
+        command = ['bash', '-c', 'source "$1"; k1_kunit_cmdline "$2" "$3"',
+                   'kunit-test', str(PATH.parent / 'lib.sh')]
+        for value, expected in [('', ''), ('0', ' kunit.autorun=0'), ('1', ' kunit.autorun=1')]:
+            done = subprocess.run(command + ['', value], text=True, capture_output=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(done.stdout, expected)
+        for value in ['2', '0 init=/bin/sh']:
+            self.assertNotEqual(subprocess.run(command + ['', value], capture_output=True).returncode, 0)
+
     def test_targeted_arguments_use_the_upstream_environment_without_shell_code(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "$3"',
                    'args-test', str(PATH.parent / 'lib.sh')]
