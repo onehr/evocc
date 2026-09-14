@@ -2,9 +2,11 @@
 
 import importlib.util
 import copy
+import io
 from pathlib import Path
 import tempfile
 import subprocess
+import tarfile
 import unittest
 
 
@@ -106,6 +108,35 @@ class FullSelftest(unittest.TestCase):
 
     def test_fat_runtime_includes_the_formatter_and_privilege_wrapper(self):
         self.assertTrue({'dosfstools', 'sudo'} <= set(lane.RUNTIME_PACKAGES))
+
+    def test_mount_runtime_includes_the_ext4_formatter(self):
+        self.assertIn('e2fsprogs', lane.RUNTIME_PACKAGES)
+
+    def test_guest_archive_uses_root_ownership_without_changing_modes_or_links(self):
+        self.assertTrue(hasattr(lane, 'write_rootfs_tar'))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'etc').mkdir()
+            (root / 'etc/sudoers').write_text('root ALL=(ALL:ALL) ALL\n')
+            (root / 'etc/sudoers').chmod(0o440)
+            (root / 'etc/shadow').write_text('fixture')
+            (root / 'sudo').write_text('executable fixture')
+            (root / 'sudo').chmod(0o755)
+            (root / 'link').symlink_to('sudo')
+            output = io.BytesIO()
+            metadata = {'sudo': [0, 0, 0o4755], 'etc/shadow': [0, 42, 0o640]}
+            lane.write_rootfs_tar(root, output, metadata)
+            output.seek(0)
+            with tarfile.open(fileobj=output) as archive:
+                for member in archive.getmembers():
+                    expected = metadata.get(member.name.removeprefix('./'), [0, 0])[:2]
+                    self.assertEqual([member.uid, member.gid], expected, member.name)
+                self.assertEqual(archive.getmember('./etc/sudoers').mode, 0o440)
+                self.assertEqual(archive.getmember('./sudo').mode, 0o4755)
+                self.assertEqual(archive.getmember('./etc/shadow').mode, 0o640)
+                self.assertEqual(archive.getmember('./link').linkname, 'sudo')
+                self.assertEqual(archive.extractfile('./etc/sudoers').read(),
+                                 b'root ALL=(ALL:ALL) ALL\n')
 
     def test_mount_tests_have_their_standard_mountpoint(self):
         with tempfile.TemporaryDirectory() as temp:

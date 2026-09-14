@@ -13,11 +13,29 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
+import tarfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod')
+RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
+                    'e2fsprogs', 'libarchive13t64')
+# The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
+# The collection has no settings file, so the runner's 45s default cannot
+# possibly finish it. Keep this measured policy change explicit in receipts.
+PROGRAM_TIMEOUT_OVERRIDES = {
+    'filesystems:file_stressor': {
+        'seconds': 1800,
+        'source': 'tools/testing/selftests/filesystems/file_stressor.c',
+        'reason': 'TEST_F_TIMEOUT(..., 900 * 2); clock_nanosleep(..., 900)',
+    },
+}
+
+
+def program_timeout(build, ident):
+    override = PROGRAM_TIMEOUT_OVERRIDES.get(ident)
+    return override['seconds'] + 15 if override else build['programTimeoutSeconds']
 
 
 def install_runtime_helpers(source, installed):
@@ -28,7 +46,7 @@ def install_runtime_helpers(source, installed):
 
 def install_runtime_paths(rootfs):
     """Keep runtime aliases inside the guest root, including on the host."""
-    for part in ('dev', 'proc', 'sys', 'tmp', 'scratch', 'run/lock', 'root', 'var/tmp', 'var/log'):
+    for part in ('dev', 'proc', 'sys', 'tmp', 'mnt', 'scratch', 'run/lock', 'root', 'var/tmp', 'var/log'):
         (rootfs / part).mkdir(parents=True, exist_ok=True)
     for name, dest in (('bin', 'usr/bin'), ('sbin', 'usr/sbin'), ('lib', 'usr/lib'),
                        ('var/run', '../run'), ('var/lock', '../run/lock')):
@@ -38,6 +56,39 @@ def install_runtime_paths(rootfs):
                 raise ValueError(f'unexpected runtime link: {name}')
         else:
             path.symlink_to(dest)
+
+
+def write_rootfs_tar(rootfs, output, file_metadata=None):
+    """Use guest ownership and restore modes lost by the macOS bind mount."""
+    file_metadata = file_metadata or {}
+
+    def guest_owner(member):
+        member.uid, member.gid, member.mode = file_metadata.get(
+            member.name.removeprefix('./'), (0, 0, member.mode))
+        # Numeric IDs are authoritative; do not resolve macOS account names.
+        member.uname = member.gname = ''
+        return member
+
+    with tarfile.open(fileobj=output, mode='w|') as archive:
+        archive.add(rootfs, arcname='.', filter=guest_owner)
+
+
+def format_rootfs(rootfs, image, file_metadata=None, blocks='2097152'):
+    # Stream the archive directly: do not keep another multi-GB payload copy.
+    # Debian's formatter is built with archive support; the Homebrew build is
+    # not. Run this in the same Linux worker that collected the file metadata.
+    command = ['mke2fs', '-q', '-F', '-t', 'ext4', '-d', '-', '-E',
+               'root_owner=0:0,lazy_itable_init=0,lazy_journal_init=0', str(image), blocks]
+    with subprocess.Popen(command, stdin=subprocess.PIPE) as child:
+        try:
+            write_rootfs_tar(rootfs, child.stdin, file_metadata)
+            child.stdin.close()
+        except BrokenPipeError:
+            # Report the formatter's failure rather than an archive traceback.
+            child.wait()
+            raise subprocess.CalledProcessError(child.returncode, command) from None
+        if child.wait():
+            raise subprocess.CalledProcessError(child.returncode, command)
 
 
 def selected_programs(builds, selectors):
@@ -241,6 +292,7 @@ def build_worker(jobs):
 def refresh_runtime(work):
     """Update userspace prerequisites without rebuilding tests or kernel Images."""
     rootfs = work / 'rootfs'
+    file_metadata = {}
     install_runtime_helpers(Path('/work/src/tools/testing/selftests'), rootfs / 'tests')
     # A runtime root, not another kernel tree or complete compiler installation.
     for part in ('usr/bin', 'usr/sbin', 'usr/lib/aarch64-linux-gnu', 'usr/lib/python3',
@@ -251,6 +303,18 @@ def refresh_runtime(work):
             dest.mkdir(parents=True, exist_ok=True)
             subprocess.run(['rsync', '-a', '--exclude=*.a', '--exclude=*.o', '/' + part + '/',
                             str(dest) + '/'], check=True)
+            # The host share maps ownership and strips set-ID mode bits. Keep
+            # only exceptions to root ownership and the copied file's mode.
+            for source in Path('/' + part).rglob('*'):
+                name = str(source.relative_to('/'))
+                copied = rootfs / name
+                if not copied.exists() and not copied.is_symlink():
+                    continue
+                original = source.lstat()
+                mode = stat.S_IMODE(original.st_mode)
+                if (original.st_uid or original.st_gid
+                        or mode != stat.S_IMODE(copied.lstat().st_mode)):
+                    file_metadata[name] = [original.st_uid, original.st_gid, mode]
     install_runtime_paths(rootfs)
     shutil.copy2('/usr/lib/ld-linux-aarch64.so.1', rootfs / 'usr/lib/ld-linux-aarch64.so.1', follow_symlinks=True)
     subprocess.run(['gcc-14', '-static', '-O2', '-Wall', '-Wextra', '-Werror',
@@ -264,6 +328,8 @@ def refresh_runtime(work):
     metadata = json.loads((work / 'build.json').read_text())
     metadata['runtimePackages'] = subprocess.check_output(['dpkg-query', '-W'], text=True)
     metadata['runtimeHelpers'] = ['ublk/test_common.sh', 'ublk/trace']
+    metadata['runtimeFileMetadata'] = file_metadata
+    format_rootfs(rootfs, work / 'scratch.img', file_metadata)
     save(work / 'build.json', metadata)
     return 0
 
@@ -329,9 +395,6 @@ def main():
                       + packages + ' >> /work/full/dependencies.log 2>&1 && ' + worker)
         cmd += ['sh', '-c', worker]
         subprocess.run(cmd, check=True)
-        formatter = '/opt/homebrew/opt/e2fsprogs/sbin/mke2fs'
-        subprocess.run([formatter, '-q', '-F', '-t', 'ext4', '-d', str(work / 'rootfs'),
-                        '-E', 'lazy_itable_init=0,lazy_journal_init=0', str(work / 'scratch.img'), '2097152'], check=True)
     if args.build_only:
         return 0
     build = selftest.read(work / 'build.json')
@@ -355,9 +418,10 @@ def main():
                'initramfsSha256': selftest.sha(work / 'initramfs.cpio'),
                'rootfsSha256': selftest.sha(work / 'scratch.img'), 'execution': {}}
     receipt['runtimePolicy'] = {'isolation': 'fresh VM per program', 'workers': min(args.jobs, 2),
-                                'upstreamTimeouts': 'unchanged; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
+                                'upstreamTimeouts': 'collection settings retained except explicit source-declared program overrides; outer watchdog adds 15 seconds cleanup and 60 seconds boot',
                                 'unlimitedProgramWatchdogSeconds': 300,
                                 'modules': 'not built or installed; frozen Images and configuration unchanged'}
+    receipt['runtimePolicy']['programTimeoutOverrides'] = PROGRAM_TIMEOUT_OVERRIDES
     if args.select:
         receipt['selection'] = {'selectors': args.select, 'programs': selected,
                                 'unselected': 'NOT_RUN; original inventory retained'}
@@ -378,10 +442,13 @@ def main():
     def execute(label, b, number, ident):
         capture = label + '/' + ident.replace(':', '/')
         contract = {'consoleLoglevel': 5, 'hugePages': 1, 'bootOverheadSeconds': 60,
-                    'perProgramTimeoutSeconds': b['programTimeoutSeconds']}
+                    'perProgramTimeoutSeconds': program_timeout(b, ident)}
+        environment = {'K1_SELFTEST_COLLECTION': ident}
+        if override := PROGRAM_TIMEOUT_OVERRIDES.get(ident):
+            environment['K1_SELFTEST_TIMEOUT'] = str(override['seconds'])
         try:
             result = selftest.flight(capture, images[label], work, run, contract, [ident],
-                                    extra_env={'K1_SELFTEST_COLLECTION': ident})
+                                    extra_env=environment)
             case = program_case(ident, result)
         except ValueError as error:
             case = {'id': ident, 'outcome': 'NOT_RUN', 'started': False, 'valid': False, 'error': str(error)}

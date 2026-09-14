@@ -66,15 +66,22 @@ k1_boot_lane_args() {
 # Use Linux's normal init environment and the upstream runner's per-program
 # argument variable. No altered payload or separate diagnostic runner is needed.
 k1_selftest_cmdline() {
-  local program="$1" args="$2" name
+  local program="$1" args="$2" timeout="${3:-}" name
   if [ -z "$program" ]; then
     [ -z "$args" ] || k1_die "selftest arguments require one program"
+    [ -z "$timeout" ] || k1_die "selftest timeout requires one program"
     return
   fi
   case "$program" in
     *[!a-zA-Z0-9_/:.+-]*|*..*) k1_die "invalid selftest collection or program" ;;
   esac
   printf ' evo_selftest=%s' "$program"
+  if [ -n "$timeout" ]; then
+    case "$program" in *:*) ;; *) k1_die "selftest timeout requires one program" ;; esac
+    case "$timeout" in *[!0-9]*) k1_die "invalid selftest timeout" ;; esac
+    [ "${#timeout}" -le 5 ] && [ "$timeout" -ge 1 ] && [ "$timeout" -le 86400 ] || k1_die "selftest timeout outside 1..86400 seconds"
+    printf ' kselftest_override_timeout=%s' "$timeout"
+  fi
   if [ -n "$args" ]; then
     case "$program" in *:*) ;; *) k1_die "selftest arguments require one program" ;; esac
     case "$args" in
@@ -112,7 +119,7 @@ k1_boot() {
   mem="$("$K1_JQ" -r '.qemu.fixedArgv.memoryMiB' "$contract")"
   local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
   local selftest_cmdline
-  selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}")" || return 1
+  selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}" "${K1_SELFTEST_TIMEOUT:-}")" || return 1
   command_line="$command_line$selftest_cmdline"
   local kunit_cmdline
   kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}")" || return 1

@@ -44,6 +44,7 @@ LOG_SHA="$(k1_sha256 "$LOG")"
   --arg bootLane "${K1_BOOT_LANE:-hvf-host}" \
   --arg selftestProgram "${K1_SELFTEST_COLLECTION:-}" \
   --arg selftestArguments "${K1_SELFTEST_ARGS:-}" \
+  --arg selftestTimeout "${K1_SELFTEST_TIMEOUT:-}" \
   --arg kunitFilter "${K1_KUNIT_FILTER:-}" \
   --arg serialLog "$LOG" \
   --arg serialLogSha256 "$LOG_SHA" \
@@ -51,7 +52,7 @@ LOG_SHA="$(k1_sha256 "$LOG")"
   --argjson qemu "$(k1_qemu_facts "$CONTRACT")" \
   --arg flownAt "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
   '{verdict:$verdict,image:$image,imageSha256:$imageSha256,nonce:$nonce,bootLane:$bootLane,
-    selftestProgram:$selftestProgram,selftestArguments:$selftestArguments,
+    selftestProgram:$selftestProgram,selftestArguments:$selftestArguments,selftestTimeout:$selftestTimeout,
     kunitFilter:$kunitFilter,
     serialLog:$serialLog,serialLogSha256:$serialLogSha256,
     timeoutSeconds:$timeoutSeconds,qemu:$qemu,flownAt:$flownAt}' \

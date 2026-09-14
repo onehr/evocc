@@ -50,8 +50,13 @@ static int run(const char *id, unsigned timeout)
     if (!child) {
         if (setpgid(0, 0) || chdir(full_suite ? "/tests" : cwd))
             _exit(127);
-        if (full_suite)
+        if (full_suite) {
+            const char *override = getenv("kselftest_override_timeout");
+            if (override)
+                execl("/tests/run_kselftest.sh", "run_kselftest.sh", "-o", override,
+                      "-t", id, (char *)NULL);
             execl("/tests/run_kselftest.sh", "run_kselftest.sh", strchr(id, ':') ? "-t" : "-c", id, (char *)NULL);
+        }
         execl(path, path, (char *)NULL);
         _exit(127);
     }
@@ -110,6 +115,17 @@ int main(void)
     key = strstr(command, "evo_selftest=");
     if (key && sscanf(key + strlen("evo_selftest="), "%199s", collection) != 1)
         fatal("invalid collection");
+    unsigned timeout_override = 0;
+    const char *timeout_text = getenv("kselftest_override_timeout");
+    if (timeout_text) {
+        char *end;
+        errno = 0;
+        unsigned long seconds = strtoul(timeout_text, &end, 10);
+        if (!full_suite || !strchr(collection, ':') || errno || *end
+            || !seconds || seconds > 86400)
+            fatal("invalid per-program timeout");
+        timeout_override = (unsigned)seconds + 15;
+    }
     if (mount("sysfs", "/sys", "sysfs", 0, NULL)
         || mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
         || mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777"))
@@ -126,8 +142,8 @@ int main(void)
     if (full_suite) {
         if (system("ip link set lo up"))
             fatal("enable loopback");
-        const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf"};
-        const char *paths[] = {"/sys/kernel/debug", "/sys/kernel/tracing", "/sys/fs/cgroup", "/sys/fs/bpf"};
+        const char *types[] = {"debugfs", "tracefs", "cgroup2", "bpf", "securityfs"};
+        const char *paths[] = {"/sys/kernel/debug", "/sys/kernel/tracing", "/sys/fs/cgroup", "/sys/fs/bpf", "/sys/kernel/security"};
         for (unsigned i = 0; i < sizeof(types) / sizeof(types[0]); ++i)
             if (mount(types[i], paths[i], types[i], 0, NULL))
                 dprintf(1, "KSELFTEST_SETUP unavailable %s: %s\n", types[i], strerror(errno));
@@ -171,7 +187,7 @@ int main(void)
         }
         const char *selected = collection[0] ? collection : id;
         dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, selected);
-        int rc = run(selected, limit);
+        int rc = run(selected, timeout_override ? timeout_override : limit);
         dprintf(1, "KSELFTEST_END %s %s %d\n", nonce, selected, rc);
         count++;
     }

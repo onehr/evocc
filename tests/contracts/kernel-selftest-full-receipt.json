@@ -9849,5 +9849,30 @@
       {"class": "userfaultfd returns ENOSYS because CONFIG_USERFAULTFD is disabled", "subtests": 1}
     ],
     "claimLimit": "The repaired mm script completes without the previous compiler crashes; this is not a full-suite pass or closure of the shared environment requirements"
+  },
+  "sourceTimeoutReplay": {
+    "capture": ".evidence/kselftest-full/source-timeout-20260914",
+    "program": "filesystems:file_stressor",
+    "source": "tools/testing/selftests/filesystems/file_stressor.c: TEST_F_TIMEOUT(..., 900 * 2) and clock_nanosleep with tv_sec=900",
+    "policyChange": "One program uses its source-declared 1800s timeout via upstream run_kselftest.sh -o; PID1 limit 1815s and boot limit 1875s. Other program limits and the 2 GiB/4 CPU machine are unchanged.",
+    "command": "K1_ALLOW_QEMU_DRIFT=1 K1_INITRAMFS=.build/kselftest-full/initramfs.cpio K1_TEST_DISK=.build/kselftest-full/scratch.img K1_SELFTEST_COLLECTION=filesystems:file_stressor K1_SELFTEST_TIMEOUT=1800 K1_BOOT_TIMEOUT=1875 K1_CONSOLE_LOGLEVEL=5 tools/k1/boot.sh <image> <capture>/<lane>-cli",
+    "initramfsSha256": "f9dae4d28e68764820f00de05c7575a8f5aa019ab3e9f2dae5b139f7737faefb",
+    "rootfsSha256": "2c8bf58b8d802fb76eb4c66510daa01cf557ab89614fd9e0accf43c69985f3bc",
+    "reference": {"imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35", "serialLogSha256": "09aaf3139a9519aef8ed6bd560bb016dcc3e2c0589704459d370c064ff1dc46b", "program": "PASS", "subtests": {"PASS": 1, "FAIL": 0, "SKIP": 0}, "powerdownAtBootSeconds": 900.146506},
+    "subject": {"imageSha256": "25fa46a4d45f212b7e3aa5ece08f24db4f8bed73aeef87aa2e3908f78de90316", "serialLogSha256": "4f3cdd70ab94c68338467191b9a7afe106c3b76cfe6d247fa3f2180c386aaec9", "program": "PASS", "subtests": {"PASS": 1, "FAIL": 0, "SKIP": 0}, "powerdownAtBootSeconds": 900.221660},
+    "initialTransportAttempt": "reference/ and subject/ were interrupted after observing that upstream clears the environment-only override. Both remain MARKERS_MISSING/INCOMPLETE; only the later -cli runs pass.",
+    "claimLimit": "One previously timed-out program now finishes on both kernels. The subject is the recorded four-object repair composition, not a fresh 935-program run."
+  },
+  "runtimePrerequisiteRepair": {
+    "changes": ["/mnt directory", "securityfs mount", "dosfstools, sudo and e2fsprogs packages", "Linux file ownership and modes retained in the generated rootfs; libarchive required by the formatter"],
+    "tests": "python3 -m unittest discover -s tools/k1/tests -q: 138 PASS; ruff check tools/k1 and bash -n tools/k1/lib.sh tools/k1/boot.sh: PASS; runtime init compiles with gcc-14 -static -O2 -Wall -Wextra -Werror",
+    "execution": "Targeted original-program replay completed on both existing Images; no kernel or test source changed",
+    "command": "python3 tools/k1/selftest_full.py --refresh-runtime --install-deps --build-only --jobs 2",
+    "firstReplay": {"capture": ".evidence/kselftest-full/runtime-prerequisites-20260914", "summarySha256": "96fcfbc0b7f47ccc38c54d71b99b520d29def45dd7465b263f9d181e250e6701", "eachKernel": {"lsmProgramsPassed": 3, "lsmSubtestsPassed": 15, "mountSubtestsPassed": 24, "mountSubtestsFailedMissingMkfsExt4": 10, "fatFailedHostUidOnSudoFiles": 1}},
+    "ownershipReplay": {"capture": ".evidence/kselftest-full/guest-ownership-20260914", "summarySha256": "988740d019316f139b77efe8fc5f3c6239b71a75d9bad5ed3d7cd0f8636de6cc", "rootfsSha256": "e88f9b33afa13c33157f82209171dc69963e4e30122dded4bf15a81191aa2bbe", "eachKernel": {"programsPassed": 2, "mountSubtestsPassed": 34, "mountSubtestsFailed": 0, "fatProgramsPassed": 1}},
+    "imageAudit": "debugfs stat: /etc/sudoers uid 0 gid 0 mode 0440; /usr/bin/sudo uid 0 gid 0 mode 04755, restored from actual Linux package metadata",
+    "failedRefreshAttempts": "The first request was not started because the approval service was at capacity. Later format probes failed because Homebrew mke2fs omits libarchive support and Debian's runtime library was absent. Neither attempt ran a guest or was counted as PASS; installing libarchive13t64 completed the real refresh.",
+    "analysis": "docs/notebook/kernel-selftest-gaps-20260914.md",
+    "claimLimit": "Five targeted programs repaired, not a new 935-program comparison. Subject remains the recorded four-object repair composition."
   }
 }
