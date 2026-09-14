@@ -196,7 +196,10 @@ fn void_return_expressions_execute_effects_without_a_data_result() {
 
 #[test]
 fn local_label_lists_keep_each_name_and_nested_scope() {
-    check(include_str!("../../../tests/fixtures/local-label-list.c"), 0);
+    check(
+        include_str!("../../../tests/fixtures/local-label-list.c"),
+        0,
+    );
 }
 
 #[test]

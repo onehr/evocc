@@ -7105,3 +7105,10 @@ The physical-register clobber rule includes `v0` through `v31`; these names are 
 Normal AAPCS64 emission preserves the low 64 bits of clobbered `v8` through `v15` on every return, including asm-goto paths, with ordinary frame addressing and unwind locations; other SIMD clobbers need no callee save, and no vector-valued operand support is implied.
 Explicit `-mgeneral-regs-only` continues to forbid compiler-generated SIMD accesses: both sealed compilers with an explicit `.arch_extension simd` accept the probe but do not preserve those lanes in this mode, whereas both preserve them at ordinary O0/O2, as `.evidence/builtin-probes/20260914-vector-clobbers/oracles.out` records (general-only exit one is a negative control, not a pass).
 One measured module unit, `drivers/net/ethernet/mellanox/mlx5/core/wc.o`, names `v0` through `v3` after `kernel_neon_begin`; its original replay remains required, and malformed names remain E3021.
+
+### GNU alignment spelling and local-label declaration lists
+
+`__alignof` is the same operator as `__alignof__`, including type and unevaluated-expression operands and declared object alignment.
+`__label__` accepts a comma-separated list of identifiers, each receiving its own identity in the same existing block-local label scope; nested scopes do not share those identities.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/alignof-alternate-spelling.c` and `tests/fixtures/local-label-list.c` with exit zero, as `.evidence/builtin-probes/20260914-gnu-parser-forms/oracles.out` records; no diagnostic is added.
+The frozen expanded-configuration survey exposes one original zstd unit at the alignment spelling and one ALSA unit at the first local-label comma; scope and malformed-list checks are unchanged.

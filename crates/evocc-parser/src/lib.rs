@@ -391,7 +391,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         TokenKind::TargetBuiltinType
                     }
                     Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
-                    Some("__alignof__") => TokenKind::GnuAlignof,
+                    Some("__alignof" | "__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
                     Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
@@ -8613,18 +8613,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_local_label_declaration(&mut self) -> Option<()> {
         self.advance().expect("peeked __label__");
-        let token = self.expect(TokenKind::Identifier)?;
-        let spelling = self.token_text(&token).to_owned();
-        let internal = format!("{spelling}.__local_label.{}", self.next_local_label);
-        let Some(next_local_label) = self.next_local_label.checked_add(1) else {
-            self.report("E1001", "expected-declaration", token.span);
-            return None;
-        };
-        self.next_local_label = next_local_label;
-        self.local_label_scopes
-            .last_mut()
-            .expect("local-label declarations occur inside a compound statement")
-            .insert(spelling, internal);
+        loop {
+            let token = self.expect(TokenKind::Identifier)?;
+            let spelling = self.token_text(&token).to_owned();
+            let internal = format!("{spelling}.__local_label.{}", self.next_local_label);
+            let Some(next_local_label) = self.next_local_label.checked_add(1) else {
+                self.report("E1001", "expected-declaration", token.span);
+                return None;
+            };
+            self.next_local_label = next_local_label;
+            self.local_label_scopes
+                .last_mut()
+                .expect("local-label declarations occur inside a compound statement")
+                .insert(spelling, internal);
+            if self.peek_kind() != Some(TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+        }
         self.expect(TokenKind::Semicolon)?;
         Some(())
     }
