@@ -99,6 +99,32 @@ fn direct_inline_returns_preserve_allocation_extents_without_replaying_calls() {
 }
 
 #[test]
+fn inline_local_results_preserve_captured_extents_and_effects() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/inline-allocation-result.c"
+    ));
+    let declarations = "typedef unsigned long size_t;char storage[128];int calls;\
+        __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){++calls;return storage;}";
+    assert_constant_program(&format!(
+        "{declarations}static inline void*wrapper(size_t n){{void*p=allocate(n++);n=7;return p;}}\
+         int main(void){{volatile size_t input=13;void*p=wrapper(input);\
+         return __builtin_dynamic_object_size(p,1)!=13||calls!=1;}}"
+    ));
+    for wrapper in [
+        "static inline void*wrapper(size_t n){void*p=allocate(n);goto done;done:return p;}",
+        "static inline void*wrapper(size_t n){void*volatile p=allocate(n);return p;}",
+        "static inline void*wrapper(size_t n){char*p=allocate(n);p++;return p;}",
+        "static inline void*wrapper(size_t n){void*p=allocate(n);if(n)p=storage;return p;}",
+        "__attribute__((noinline)) void redirect(void**p){*p=storage;}static inline void*wrapper(size_t n){void*p=allocate(n);redirect(&p);return p;}",
+    ] {
+        assert_constant_program(&format!(
+            "{declarations}{wrapper}int main(void){{volatile size_t n=11;void*p=wrapper(n);\
+             return calls!=1||__builtin_dynamic_object_size(p,1)!=~0ul;}}"
+        ));
+    }
+}
+
+#[test]
 fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
     assert_constant_program(
         "typedef unsigned long size_t;char storage[128];\
@@ -1024,4 +1050,26 @@ fn object_size_declines_unproved_or_effectful_operands() {
         "struct s{char head[7],name[16],tail[5];};int main(void){char a[8];return __builtin_object_size(((struct s*)a)->name,1)!=1;}",
         "int main(void){char rows[3][4];return __builtin_object_size(rows[1],0)!=8||__builtin_object_size(rows[1],1)!=~0ul;}",
     ] { assert_constant_program(source); }
+}
+
+#[test]
+fn constant_queries_prove_literal_bytes_without_broadening_source_ice() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/constant-query-literal-bytes.c"
+    ));
+    for source in [
+        "int main(void){const char*p=\"a\\0b\";return !__builtin_constant_p(*(p+2))||!__builtin_constant_p((p+3)[0])||!__builtin_constant_p(1[p]);}",
+        "int main(void){const char*p=\"abc\";return __builtin_constant_p(p[-1])||__builtin_constant_p(p[4]);}",
+        "int main(void){const char*p=\"abc\";return __builtin_constant_p((p+5)[-3]);}",
+        "int main(void){const volatile char*p=\"abc\";return __builtin_constant_p(*p)||__builtin_constant_p(p[1]);}",
+        "int main(void){const char*volatile p=\"abc\";return __builtin_constant_p(*p);}",
+        "int calls;const char*text(void){++calls;return \"abc\";}int main(void){return __builtin_constant_p(*text())||calls;}",
+        "int main(void){const char*p=\"abc\";int i=0;return __builtin_constant_p(p[i++])||i;}",
+        "int main(void){const char*p=\"abc\";int i=0;return __builtin_constant_p((i++,p)[0])||i;}",
+        "int main(void){const char*p=\"abc\";volatile int i=0;return __builtin_constant_p(p[i]);}",
+        "int main(void){char bytes[]=\"abc\";return __builtin_constant_p(bytes[0]);}",
+        "int calls;unsigned long strlen(const char*p){++calls;return 37;}int main(void){const char*p=\"abc\";return __builtin_strlen(p)!=37||calls!=1;}",
+    ] {
+        assert_constant_program(source);
+    }
 }

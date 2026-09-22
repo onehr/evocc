@@ -10,6 +10,7 @@ use evocc_types::{TargetDataLayout, TypeId, TypeKind};
 
 use crate::*;
 
+mod literal_queries;
 mod object_size;
 mod ranges;
 
@@ -1410,8 +1411,9 @@ impl<'a> Substitution<'a, '_> {
     }
 
     // Bounded alternatives from an already executed immutable initializer.
-    // Queries never execute an operand: calls, loads, updates and comma
-    // expressions receive no facts here. Unknown conditions may select either
+    // Queries never execute an operand: calls, unknown loads, updates and comma
+    // expressions receive no facts here. Literal-byte reads can be proved from
+    // their immutable representation. Unknown conditions may select either
     // initializer arm, but are not speculatively evaluated inside a query.
     fn possible_query_values(
         &self,
@@ -1426,6 +1428,9 @@ impl<'a> Substitution<'a, '_> {
             &self.unit.symbols,
             self.target,
         ) {
+            return Some(vec![value]);
+        }
+        if let Some(value) = self.literal_byte_query(expression) {
             return Some(vec![value]);
         }
         let values = |e| self.possible_query_values(e, c, initialized);
@@ -1989,6 +1994,11 @@ impl<'a> Substitution<'a, '_> {
             && c.declaration_prefix
             && o.storage != StorageClass::Static
             && o.asm_label.is_none()
+            && self
+                .unit
+                .types
+                .get(o.ty)
+                .is_some_and(|ty| !ty.qualifiers.is_volatile && !ty.qualifiers.is_atomic)
         {
             if let Some(initializer) = &o.initializer {
                 if let [InitAction::StoreScalar { value, .. }] = initializer.plan.actions() {
@@ -2995,13 +3005,24 @@ impl<'a> Substitution<'a, '_> {
         self.active.push(f.symbol);
         let body = self.stmt(body, &mut c)?;
         self.active.pop();
-        // Only a single unconditional source return can export this fact.
-        // Its argument/allocation captures already execute in the caller;
-        // do not replay them or infer a promise for multiple return paths.
+        // A single final source return can export the fact proved at that
+        // return, including a local initialized by an earlier allocation.
+        // Earlier returns or source jumps cannot establish this boundary.
+        // The existing allocation-time captures belong to the caller; never
+        // replay the prefix, its calls or the returned pointer expression.
         let return_extent = match f.body.unwrap() {
-            CHirStmt::Compound(items, _) => match items.as_slice() {
-                [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))]
-                    if !inspect([Node::Expr(value, false)]).jumps =>
+            CHirStmt::Compound(items, _) => match items.split_last() {
+                Some((CHirBlockItem::Statement(CHirStmt::Return(Some(value), _)), prefix))
+                    if !inspect(
+                        prefix
+                            .iter()
+                            .map(|item| match item {
+                                CHirBlockItem::Declaration(declaration) => Node::Decl(declaration),
+                                CHirBlockItem::Statement(statement) => Node::Stmt(statement),
+                            })
+                            .chain([Node::Expr(value, false)]),
+                    )
+                    .jumps =>
                 {
                     c.return_extent
                 }
