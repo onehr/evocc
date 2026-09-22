@@ -149,6 +149,35 @@ fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment()
 }
 
 #[test]
+fn unrelated_volatile_stores_preserve_unescaped_allocation_size_facts() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/allocation-static-size-flow.c"
+    ));
+    let declarations = "typedef unsigned long size_t;char storage[128];\
+        char*volatile backing=storage;volatile size_t zero;\
+        __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){return backing;}";
+    for body in [
+        // An escaped scalar may be modified through the unrelated-looking
+        // address; neither its subsequent use nor a query can keep old facts.
+        "int main(void){size_t n;n=11;size_t*p=&n;*(volatile size_t*)p=7;\
+         void*q=allocate(n);return n!=7||__builtin_dynamic_object_size(q,1)!=7;}",
+        // Volatile sizes remain runtime values even when initialized by a
+        // literal. An independent volatile store must still execute.
+        "int main(void){volatile size_t n=11;size_t marker=0;\
+         void*p=allocate(n);*(volatile size_t*)&marker=9;\
+         return marker!=9||__builtin_object_size(p,1)!=~0ul||\
+         __builtin_dynamic_object_size(p,1)!=11;}",
+        // Real source writes retain their one-time effects and invalidate the
+        // old scalar fact while leaving an earlier allocation capture intact.
+        "int main(void){size_t n;n=11;if(!__builtin_constant_p(1))n+=zero;\
+         void*p=allocate(n);size_t*q=&n;*(volatile size_t*)q=7;\
+         return n!=7||__builtin_dynamic_object_size(p,1)!=11;}",
+    ] {
+        assert_constant_program(&format!("{declarations}{body}"));
+    }
+}
+
+#[test]
 fn extent_queries_do_not_read_unknown_values_or_escape_source_control_flow() {
     for source in [
         "int main(void){char a[16];int i;return __builtin_dynamic_object_size(a+i,0)!=~0ul;}",

@@ -2597,7 +2597,12 @@ impl<'a> Substitution<'a, '_> {
                         }]);
                         let before = c.sequential_values.len();
                         c.sequential_values.retain(|symbol, _| {
-                            !uses.unknown_memory && !uses.mutable.contains(symbol)
+                            // An indirect/volatile access cannot change an
+                            // automatic scalar whose address never escapes.
+                            // Keep its value fact (not the access itself) so
+                            // later queries retain the allocation-time size.
+                            !uses.mutable.contains(symbol)
+                                && (!uses.unknown_memory || !c.exposed_objects.contains(symbol))
                         });
                         if before != c.sequential_values.len() {
                             c.memo.clear();
