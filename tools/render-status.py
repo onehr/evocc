@@ -154,6 +154,13 @@ def kunit_progress(receipt: dict) -> str:
                         f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / "
                         f"{counts.get('SKIP', 0)} SKIP") if counts is not None else modules.get("status", "NOT_RUN")
             parts.append(f"{name} modules {measured}")
+    for followup in receipt.get("targetedFollowups", []):
+        counts = followup.get("outcomes")
+        measured = (f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / "
+                    f"{counts.get('SKIP', 0)} SKIP") if counts is not None else "NOT_RUN"
+        parts.append(f"follow-up {followup.get('suite', 'unnamed')} "
+                     f"({followup.get('tests', '?')} tests): {measured}; "
+                     "filtered; not a full KUnit rerun")
     records = receipt.get("config", {}).get("targetCRecords")
     label = f"KUnit ({records:,} C records)" if records is not None else "KUnit"
     return label + ":\n  " + "\n  ".join(parts)

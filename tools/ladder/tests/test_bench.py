@@ -580,6 +580,39 @@ class StatusAsciiTest(unittest.TestCase):
         self.assertIn("765 PASS / 0 FAIL / 0 SKIP", text)
         self.assertIn("31 files loaded", text)
 
+    def test_filtered_kunit_success_does_not_replace_full_campaign_failure(self):
+        receipt = {
+            "status": "FAIL", "executionComplete": True, "config": {"targetCRecords": 6916},
+            "reference": {"tests": 1504, "outcomes": {"PASS": 1438, "FAIL": 7, "SKIP": 59}},
+            "subject": {"tests": 1504, "outcomes": {"PASS": 1432, "FAIL": 12, "SKIP": 60}},
+            "targetedFollowups": [{
+                "suite": "fortify", "tests": 26, "outcomes": {"PASS": 26, "FAIL": 0, "SKIP": 0},
+                "scope": "filtered; not a full KUnit rerun",
+                "boot": "followup/boot.json", "parsedResults": "followup/kunit.json",
+            }],
+        }
+        unchanged = json.loads(json.dumps(receipt))
+        text = self.render({"kernel-expanded-kunit-receipt.json": receipt})
+        self.assertIn("Expanded KUnit: FAIL", text)
+        self.assertIn("reference 1438 PASS / 7 FAIL / 59 SKIP", text)
+        self.assertIn("subject 1432 PASS / 12 FAIL / 60 SKIP", text)
+        followups = [line for line in text.splitlines() if "follow-up fortify" in line]
+        self.assertEqual(len(followups), 1)
+        self.assertIn("26 tests", followups[0])
+        self.assertIn("26 PASS / 0 FAIL / 0 SKIP", followups[0])
+        self.assertIn("filtered; not a full KUnit rerun", followups[0])
+        self.assertLess(text.index("subject 1432 PASS"), text.index("follow-up fortify"))
+        self.assertLessEqual(self.renderer.cells(followups[0]), 110)
+        self.assertEqual(receipt, unchanged)
+
+    def test_kunit_status_without_targeted_followups_is_unchanged(self):
+        receipt = {"reference": {"outcomes": {"PASS": 1438, "FAIL": 7, "SKIP": 59}},
+                   "subject": {"outcomes": {"PASS": 1432, "FAIL": 12, "SKIP": 60}}}
+        expected = ("KUnit:\n  reference 1438 PASS / 7 FAIL / 59 SKIP\n"
+                    "  subject 1432 PASS / 12 FAIL / 60 SKIP")
+        self.assertEqual(self.renderer.kunit_progress(receipt), expected)
+        self.assertEqual(self.renderer.kunit_progress({**receipt, "targetedFollowups": []}), expected)
+
     def test_live_selftest_progress_preserves_every_outcome_and_not_run(self):
         outcomes = {"PASS": 2, "FAIL": 1, "SKIP": 1, "TIMEOUT": 1,
                     "INVALID_OUTPUT": 1, "INCOMPLETE": 1, "NOT_RUN": 3}
