@@ -1,9 +1,10 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-22. This is a diagnosis ledger. The latest complete
-935-program comparison is `.evidence/kselftest-full/20260914T121718Z/summary.json`;
-the historical entries below retain their original observations. Targeted
-results and additional configurations remain separate from that denominator.
+Updated 2026-09-22. This is a diagnosis ledger. The latest pair is
+`.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
+and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
+PASS. The historical 935-program comparison and observations remain below.
+Targeted results and additional configurations use separate denominators.
 
 ## Current closure queue — 2026-09-22
 
@@ -11,7 +12,7 @@ results and additional configurations remain separate from that denominator.
 |---|---|---|
 | BPF/module kernel, 6,765 target-C records | PASS: fresh BTF-repair run `20260921T230431Z` completed both passes, the generated-input fixed point, 746 generated descriptors/export units, 745 module links and nonce-bound boot/shutdown; all 6,765 installed object hashes survived linking unchanged | This configuration's composition/boot goal is closed; runtime selftests remain separate |
 | Matching runtime | PASS: 745 signed EvoCC modules and 17 rebuilt original GCC helpers installed with 970 programs. The new Image actually passes the original BPF module-loading selector: 9 groups / 33 subtests, zero FAIL/SKIP, including the previously failing `kfunc_call` | Signed installation is verified for 745 modules; this selector proves execution of its required modules, not loading every hardware driver |
-| Full kselftest, 970 installed programs | Fresh GCC/EvoCC pair started after the successful module preflight; no reference execution reused. Latest completed pair remains the older 935-program run until this campaign finishes | Retain every FAIL/SKIP/timeout and the four collection build gaps |
+| Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Diagnose seven reference-PASS differences, shared failures and four collection build gaps; do not relabel timeouts |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
 | Expanded KUnit modules | Both 809-module installations verified. The latest repaired Image actually loaded all 31 test modules and passed 765/765 cases; the GCC control also passed 765/765 with equal case/outcome multisets including duplicate multiplicity | This expanded configuration's module execution is complete; its signature option is disabled, unlike the separately signed BPF configuration |
@@ -104,6 +105,62 @@ The non-compiler boundaries remain explicit:
   regressions also cover nested wrappers and one-time argument side effects.
   The Rust source parses under rustfmt, but Cargo/native verification has not
   run yet and this repair is not part of either active kernel Image.
+
+The allocation and BTF paragraphs above/below preserve the earlier pending
+checkpoint. Their tailored verification is now complete as described next;
+neither repair has yet been installed into these kernel Images.
+
+### Isolated compiler follow-up — 2026-09-22
+
+Work proceeded against the existing frontend build directory with one Cargo
+worker, without rebuilding or changing the timed pair's compilers, Images or
+runtime disks. Three concrete checks now have RED/GREEN evidence:
+
+* **Inline allocation results:** a wrapper that stores an `alloc_size` result in
+  a local before returning it lost the proved extent. The shared C-HIR path now
+  transports the fact through a final unconditional return, using the original
+  allocation-time captures. Nested wrappers, offsets and one-time side effects
+  pass; jumps, mutated/escaped pointers and volatile locals remain conservative.
+  `tests/fixtures/inline-allocation-result.c` passes both interpreters and native
+  GCC14/Clang19/EvoCC. The opaque allocator reports extents 11 and 22, two
+  allocations and four wrapper effects. Native evidence is
+  `.build/floating-targeted/inline-allocation-opaque-20260922.c0NFLu/native.log`.
+  The first fixture exposed its 128-byte backing array to Clang and produced a
+  different valid query result; that source and divergent capture are retained,
+  not counted as three-way agreement.
+* **Literal-byte constant queries:** the frozen compiler returned 2 on the
+  minimal literal query case. The query-only helper now proves narrow literal
+  bytes without executing operands or changing source ICE admission. The full
+  `constant-query-literal-bytes.c` fixture and a separate original guarded Linux
+  `__compiletime_strlen` macro case pass GCC14/Clang19/EvoCC natively; the latter
+  prints 8. Both interpreters pass the full fixture. Negative cases retain
+  volatile, effects, unknown/mutable storage and bounds checks. Evidence is
+  `.build/floating-targeted/literal-bytes-native-20260922.ZxqqW3/native.log`.
+  Non-literal `strlen` ICE support remains a separate unresolved boundary.
+* **DWARF/BTF linkage:** the existing source repair is now tested through real
+  pahole 1.30 rather than assembly text alone. The frozen compiler incorrectly
+  marks two internal variables GLOBAL; repaired output has five correct variable
+  linkages, six correct function DWARF flags and 11 BTF records matching GCC.
+  All three ELF inputs pass `llvm-dwarfdump-19 --verify`. The first consumer
+  assertion wrongly assumed default pahole preserves function BTF linkage;
+  GCC disproved that assumption. Its failure remains recorded; function BTF is
+  checked for parity only. Evidence is
+  `.build/floating-targeted/dwarf-linkage-isolated-20260922.voHSnb/consumer-final.json`.
+
+Final tailored gate: 65 compiler-query tests + 31 compilation-option tests +
+42 C-HIR library tests = **138 PASS**, zero failures; `cargo clippy -p evocc
+--all-targets --offline -j 1 -- -D warnings`, workspace fmt and status-renderer
+checks PASS. This is not a new complete workspace/offline-replay gate. Original
+kernel FORTIFY/BTF object replay, relink and execution with these changes remain
+NOT RUN: small-case results do not close the four original FORTIFY failures.
+
+The 970-program pair finished at 17:04 +0800. Its seven reference-PASS differences
+are `kvm:demand_paging_test`, `kvm:memslot_modification_stress_test`,
+`net:ioam6.sh`, `net/forwarding:sch_tbf_prio.sh`, `pidfd:pidfd_test`,
+`sched_ext:runner` and `ublk:test_stress_04.sh`. Five are timeouts, two are FAILs;
+they need isolated replay and diagnosis, not automatic attribution to compiler
+semantics. `rseq:run_param_test.sh` passes both sides. The post-campaign gate also
+exited successfully; no QEMU or compiler test from this round remains running.
 
 Before the follow-up builds, 2.9 GiB of idle Cargo incremental cache was removed.
 Sources, executable test binaries, frozen compilers and runtime evidence were

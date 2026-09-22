@@ -36,11 +36,11 @@ KERNEL - configurations and runtime populations remain separate
     run=20260921T230431Z
   BPF module link/BTF: PASS; 745 modules (not a load-every-driver claim)
   K7 selected PASS: 125 PASS / 0 FAIL / 0 SKIP; run=20260913T144437Z
-  K7 all programs RUNNING; run=20260922T033617Z
-  reference [##########------] 650/970 recorded (not PASS)
-    358 PASS / 90 FAIL / 189 SKIP / 10 TIMEOUT / 1 INVALID_OUTPUT / 2 INCOMPLETE / 320 NOT_RUN
-  subject   [##########------] 649/970 recorded (not PASS)
-    355 PASS / 85 FAIL / 189 SKIP / 15 TIMEOUT / 2 INVALID_OUTPUT / 3 INCOMPLETE / 321 NOT_RUN
+  K7 all programs INCOMPLETE; run=20260922T033617Z
+  reference [################] 970/970 recorded (not PASS)
+    532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE / 0 NOT_RUN
+  subject   [################] 970/970 recorded (not PASS)
+    529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE / 0 NOT_RUN
   Module installation: PASS; 745 subject modules
     Signing/installation is not execution; helper compiler identities remain in the receipt.
   Expanded KUnit: FAIL; executionComplete=True
