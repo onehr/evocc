@@ -15,7 +15,8 @@ Targeted results and additional configurations use separate denominators.
 | Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Diagnose seven reference-PASS differences, shared failures and four collection build gaps; do not relabel timeouts |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
-| Expanded KUnit modules | Both 809-module installations verified. The latest repaired Image actually loaded all 31 test modules and passed 765/765 cases; the GCC control also passed 765/765 with equal case/outcome multisets including duplicate multiplicity | This expanded configuration's module execution is complete; its signature option is disabled, unlike the separately signed BPF configuration |
+| Filtered FORTIFY follow-up | Original 26-case suite on a one-object incremental Image: 23 PASS / 3 FAIL, previously 22 PASS / 4 FAIL; failed assertions 96 → 66. `kmalloc_const` now passes | Not a new 1,504-case run or module acceptance; checked-allocation return joins and remaining declared-object/source-ICE queries are still open |
+| Expanded KUnit modules | Both 809-module installations verified. The retained full-suite/module-tested Image actually loaded all 31 test modules and passed 765/765 cases; the GCC control also passed 765/765 with equal case/outcome multisets including duplicate multiplicity | That composition's module execution is complete, not the later filtered FORTIFY Image; its signature option is disabled, unlike the separately signed BPF configuration |
 | Function-section placement | CLOSED: EvoIR 1.9.104 / EvoMIR 0.34, tailored interpreter/native/ELF tests, seven original objects, full workspace gate and isolated offline replay pass. Fresh full composition has zero modpost warnings (previously 2,515), complete link and real boot PASS | Preserve regressions; this does not close unrelated KUnit or kselftest failures |
 | Further configuration coverage | Original Kconfig resolves 100 disabled requests in 27 collections in the small existing config-review directory | Build and test that configuration later; do not mutate either active kernel or advertise its proposed options as coverage |
 
@@ -64,7 +65,7 @@ execution is `expanded-subject-query-builtin-20260922` (1,432 PASS / 12 FAIL /
 cases; the real replay, not their small-case PASS, controls the ledger. The PM
 pending-resume expectation fails again in this flight.
 
-The latest Image is `985fc7ca62a06a07e2eadd78ff306d955258cf0a52a760ab6c65c49a8ccbe9d6`.
+The latest full-suite/module-tested Image is `985fc7ca62a06a07e2eadd78ff306d955258cf0a52a760ab6c65c49a8ccbe9d6`.
 Its matching unsigned 809-module runtime is
 `kunit-runtime-20260921/subject-repaired` under `.build/k7-coverage`, with disk
 SHA-256 `5df403aee1f87ef4c2c06019b40dcba7c6255443a41327fdc673ca0777929b99`.
@@ -161,6 +162,88 @@ are `kvm:demand_paging_test`, `kvm:memslot_modification_stress_test`,
 they need isolated replay and diagnosis, not automatic attribution to compiler
 semantics. `rseq:run_param_test.sh` passes both sides. The post-campaign gate also
 exited successfully; no QEMU or compiler test from this round remains running.
+
+### Cleanup and original-object follow-up — 2026-09-22
+
+After confirming there was no active project build or QEMU flight, removed
+1,777,400 KiB (about 1.70 GiB) of reproducible Cargo incremental cache. The
+kernel build volume was cleanly detached, compacted and remounted at its original
+path; `hdiutil` reclaimed another 8.9 GB of unused blocks. Both current Images,
+both configs and both System.map files retained all six before/after SHA-256
+values. No source, kernel object, runtime disk or evidence record was deleted.
+Historical reconnaissance text remains: its exact paths are receipt inputs, so
+compression or shared-write hardlinks are not an unqualified cleanup operation.
+Host free space reached 83 GiB, including concurrent unrelated cleanup; only
+the cache deletion and reported image compaction are attributed to this work.
+
+Original FORTIFY replay with the debug compiler timed out at the unchanged
+180-second bound. The separately identified optimized compiler replay completed
+in 37.001 seconds, assembled and preserved exact global-symbol parity using the
+actual generated headers. The debug timeout remains in `replay.json`; it is not
+relabeled. Original `kernel/bpf/bpf_cgrp_storage.o` also replayed successfully:
+pahole 1.30 reads `bpf_cgrp_storage_busy` as STATIC in repaired output and GCC,
+but GLOBAL in the installed old output. DWARF verification passed for both
+EvoCC objects; GCC's optional verifier was CPU-bound and stopped after 354.64
+CPU seconds, retained as TIMEOUT. The successful GCC BTF conversion is separate
+from that verifier timeout. Captures use the small existing directory
+`.build/floating-targeted/original-fortify-btf-20260922`.
+
+The original KUnit FORTIFY suite independently reproduces 22 PASS / 4 FAIL out
+of 26 on the previous Image (`expanded-fortify-baseline-20260922`), parsed by the
+unchanged upstream parser. A first attempt used the selftest-specific initramfs
+without its required root disk: its FORTIFY results were produced, but boot
+failed with `MARKERS_MISSING`; that failed invocation remains separate. The
+successful baseline uses the existing standalone boot initramfs, with no runtime
+disk copy. This also isolates the four failures from the timing-sensitive PM
+test and unrelated module tests.
+
+The static kmemdup-size failure now has a precise reduction: KUnit's unrelated
+volatile location store invalidated the fact for an unexposed automatic scalar
+length after allocation. The correction retains that scalar fact while keeping
+the volatile write and all real mutations; escaped and volatile scalar controls
+remain conservative. The 44-line `allocation-static-size-flow.c` passes both
+interpreters and GCC14/Clang19/EvoCC native execution. The 139-test tailored gate,
+Clippy and fmt pass. This does not authorize more source ICEs or merge arbitrary
+inline return paths. Review also identified memory-output asm constraints as an
+implicit address exposure; `=m`, `+m`, `=Q` and `+Q` now mark the object exposed,
+with validated-IR regression checks and unchanged register/unsupported-constraint
+controls. Final tailored gate: 140 Rust tests, 47 benchmark/status Python tests,
+Clippy, fmt and Ruff PASS. No full campaign was started for these changes.
+
+The one-object incremental relink completed in 789.997 seconds. All 6,916
+installed target-C objects match their expected hashes afterward; 6,915 are
+unchanged and only `lib/tests/fortify_kunit.o` was replaced. The 65 audited
+generated source/header/config inputs have unchanged content. The later compiler
+with the asm-exposure correction emitted byte-identical FORTIFY assembly, so its
+verified object was reused without another identical relink. This is an explicit
+mixed-compiler-version incremental composition, not a fresh single-compiler survey.
+
+Image `64a993ef5fa42345abe3a50bcddb552ec49aeacad5e33155178280bfa008dee9`
+booted and shut down with nonce `k1-20260922T100250Z-19714837`. The unchanged
+upstream parser reports **23 PASS / 3 FAIL / 0 SKIP of 26**, versus the same-lane
+baseline's 22/4/0. `fortify_test_alloc_size_kmalloc_const` is now PASS; failed
+assertions fell from 96 to 66. Raw records are in
+`.evidence/kunit/expanded-fortify-repaired-20260922`; composition and object audits
+are in `.evidence/k1/expanded-fortify-isolated-20260922/repair.json`.
+
+The working KUnit output now contains that filtered-test Image. The prior
+full-suite/module-tested Image remains at
+`.build/floating-targeted/original-fortify-btf-20260922/base-Image`, with unchanged
+SHA-256 `985fc7ca…be9d6`. The existing 809-module runtime and 765-case module PASS
+belong to that retained Image, **not** the new BTF base; no module install/load
+claim was made for the filtered repair. The BPF kselftest Image/runtime were not
+modified. `targetedFollowups` in the existing receipt and its status rendering
+keep these populations separate.
+
+Remaining FORTIFY cases are `known_sizes`, `alloc_size_devm_kmalloc_const` and
+`alloc_size_devm_kmalloc_dynamic`. The checked-multiply/early-NULL-return shape is
+now a 33-line RED at `original-fortify-btf-20260922/checked-array-return.c` under
+`.build/floating-targeted`: sealed GCC14/Clang19 execute with exit 0; both EvoCC
+interpreters compile without errors but return 1 on the missing dynamic extent.
+One-time argument evaluation and allocation count checks pass first. The next
+fix needs path-aware returned bounds, not a last-return fact applied to every
+path. Nonliteral `strlen` source ICEs remain the separate literal-only profile
+boundary; ordinary constant-object byte queries still need precision work.
 
 Before the follow-up builds, 2.9 GiB of idle Cargo incremental cache was removed.
 Sources, executable test binaries, frozen compilers and runtime evidence were
