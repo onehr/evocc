@@ -282,15 +282,28 @@ fn debug_external_attributes_follow_c_linkage_and_omit_false_flags() {
     };
     // The normal DWARF-to-BTF consumer treats external-attribute presence
     // as external linkage, so a false flag must be absent, not encoded zero.
-    assert_eq!(entry("local_counter")[1], ".uleb128 9");
+    for name in ["local_counter", "inherited_counter"] {
+        assert_eq!(
+            entry(name)[1],
+            ".uleb128 9",
+            "{name} has C internal linkage"
+        );
+    }
     for name in ["public_counter", "hidden_counter", "protected_counter"] {
         assert_eq!(entry(name)[1], ".byte 1", "{name} has C external linkage");
         assert_eq!(entry(name)[2], ".uleb128 9");
     }
-    let local = entry("local_function");
-    assert_eq!(local[2], ".byte 1"); // DW_AT_prototyped, no DW_AT_external.
-    assert!(local[3].starts_with(".uleb128 "));
-    for name in ["local_address", "inspect_counters"] {
+    for name in ["local_function", "inherited_function"] {
+        let local = entry(name);
+        assert_eq!(local[2], ".byte 1"); // DW_AT_prototyped, no DW_AT_external.
+        assert!(local[3].starts_with(".uleb128 "));
+    }
+    for name in [
+        "local_address",
+        "inspect_counters",
+        "hidden_function",
+        "protected_function",
+    ] {
         let external = entry(name);
         assert_eq!(external[2], ".byte 1"); // DW_AT_external.
         assert_eq!(external[3], ".byte 1"); // DW_AT_prototyped.
