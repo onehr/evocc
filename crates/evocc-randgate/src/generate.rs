@@ -256,6 +256,7 @@ fn generate_globals(
             };
             let bytes = (0..8).map(|_| (rng.next_u64() & 0xff) as u8).collect();
             GlobalObject {
+                read_only: false,
                 section: None,
                 linkage: evocc_evoir::Linkage::Strong,
                 relocs: Vec::new(),
@@ -398,6 +399,8 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
     let addend = u64::from(rng.next_u64() as u8);
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -596,6 +599,8 @@ fn generate_function(
     generator.close(block, Inst::Ret(returned));
 
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,

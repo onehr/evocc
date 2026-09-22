@@ -29,7 +29,7 @@ fn preprocess_tail(tail: &str) -> Vec<String> {
         .iter()
         .filter(|token| token.kind != TokenKind::Eof)
         .map(|token| match &token.text {
-            TokenText::Decoded(text) => text.clone(),
+            TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
             TokenText::Borrowed => {
                 source[token.span.byte_start as usize..token.span.byte_end as usize].to_owned()
             }

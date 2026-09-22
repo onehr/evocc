@@ -1,0 +1,68 @@
+Scalar binary32/binary64 targeted checkpoint, 2026-09-20.
+Shared dirty tree at 9f571cac; EvoIR 1.9.103, EvoMIR 0.33.
+Frozen post-classification compiler SHA256:
+d7b86bad9db77543f94072f02be483c7fe513fb004f24949be28b0859d8eae09
+Later driver/macro changes require a new application subject identity.
+Sealed linux/arm64 image, network none:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19, Clang 19.1.7, glibc 2.41.
+
+RED: scalar execution originally failed in C-HIR; classification fixture
+failed E2001 on __builtin_inf. Both tests built without compilation errors.
+GREEN: 51/51 language_semantics tests, including both interpreters and emission.
+floating-engine-vectors.c/.out: 3,072 exact f32/f64 add/sub/mul/div cases,
+special encodings and fixed LCG inputs. GCC and Clang at O0/O2 agree bytewise.
+Software target arithmetic matches all 3,072; EvoCC-generated native output
+matches all 3,072 when assembled/linked by either target compiler.
+This target corpus alone is not a proof of IEEE completeness. The later
+independent 661,848-case TestFloat check is recorded in floating-testfloat.out.
+
+floating-abi-{worker,driver}.c: all seven combinations pass: EvoCC self,
+each reference self and each reference/EvoCC direction. Mixed scalar banks,
+12 FP parameters, callback, HFA4-float/HFA2-double, HFA3-float stack fallback,
+12 anonymous float-to-double promotions and exhausted variadic HFA save area.
+floating-runtime-scalar.c: both interpreters and both native assemblers pass.
+floating-classification.c and floating-integer-boundaries.c: both interpreters,
+both native assemblers and both reference compilers at O0/O2 pass.
+Ten invalid conversion cases each report E3063 in both interpreters; the
+separate uninitialized case reports E3001. UB cases are not native PASS claims.
+floating-register-{worker,driver}.c: both reference controls and both mixed
+target drivers pass; 24 doubles, 8 floats and 4 complete vectors survive a
+call that clobbers all caller-saved SIMD physical registers.
+floating-fpcr-{worker,driver}.c: four incompatible settings each give SIGTRAP
+under GCC/Clang drivers; plain transport preserves caller FPCR, baseline adds.
+
+FP payload/operation/predicate proof mutation: rejected independently.
+Strict-fenv pragma: E3065. Fast/rounding/contraction requests: explicit refusal.
+Executable binary128, FP complex/vectors, strict fenv and broad application
+acceptance are not implied. No new kernel installation/boot/KUnit in this batch.
+
+Later original-program reductions: finite binary128 header literals explicitly
+cast to f32/f64 preserve exact source bits without binary128 arithmetic;
+padded aligned FP aggregates use the completed layout rather than a false HFA.
+Their small programs pass both interpreters and fixed native/mixed controls.
+The switch-default pointer reduction and nine-file SQLite replay are recorded
+separately; scalar FP alone was not enough to make the original application pass.
+Current language_semantics 54/54 and static_integer_initializers 15/15 pass.
+An otherwise object-free invalid FP-to-int constant now reaches the typed
+C-HIR task machine and reports E3063, matching EvoIR, instead of legacy E3007.
+Initialized static double zero remains valid; uninitialized automatic double
+still reports E3001. The IR retains the explicit conversion obligation.
+
+Post-repair isolated offline workspace gate: 2,571 PASS, zero failures,
+four historical ignored, 310 result groups; all-target Clippy -D warnings
+and fmt PASS. Empty Cargo home, vendored locked dependencies, existing
+target/frontend only. Temporary producer/API clients explicitly use that
+same dependency configuration; their separate 13-test replay passes.
+Fresh frozen layout comparison: 128/128 + 22/22, zero differences.
+Instruction grammar: 53/53. Ladder tools: 178 tests; K1 tools: 159 tests.
+Log: .build/floating-targeted/gate-20260920-4.txt. No clean clone is claimed.
+
+Frozen post-gate release subject for subsequent application measurements:
+.build/floating-targeted/evocc-20260920-fp
+SHA256 86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4
+EvoIR spec SHA256 de75874cfe6faaecb56306686c8c7a0c4f7d24c767c396bef6512fd744cecc03
+EvoMIR spec SHA256 f0784d4b597d34d525f437676c621001d836d497c00671397a44e5a223b7c3c0
+Cargo.lock SHA256 d8b076d300aab0aee94c6c82638bdc3750a2c9684cecc824c1f579dcf45b4d6a
+Application results belong to their fresh tools/bench.py receipts, not this
+targeted numeric/gate checkpoint.

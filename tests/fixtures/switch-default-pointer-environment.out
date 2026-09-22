@@ -1,0 +1,39 @@
+SQLite runtime reduction, 2026-09-20; source is unchanged by the test runner.
+Original 86/86 installed EvoCC objects (compiler SHA256
+0b9219f8ca579af4c4e8af6ebfd20d487cf267f6aa3d0b58def5dee76ed2c125)
+produced nine SIGSEGV failures in the original veryquick suite. The runner's
+zero exit was not PASS: the receipt is corrected from its preserved log.
+Targeted replay captured all nine crashes, including analyzeAggregate +0x468
+dereferencing a lost pSrcList. No floating arithmetic is needed to reproduce.
+
+RED: switch-default-pointer-environment.c returns 0 in C-HIR but E3013 in
+EvoIR. The lower test fails InvalidPointerRepresentation, zero build errors.
+Cause: case-dispatch suffix liveness omitted a default arm written earlier
+in source order, synthesizing uninitialized values on its eventual edge.
+Fix: retain default and its fallthrough environment through all failed case
+comparisons, using existing explicit edge arguments. No validator relaxation,
+zero initialization, whole-function memoryization or implicit cross-block SSA.
+GREEN: 31/31 switch tests, including first/middle/last default, fallthrough,
+and optimize=false/true; 7 deferred-form and 25 resolved-form tests pass.
+Native reduced case: GCC-14/Clang-19 O0/O2 controls 4/4, EvoCC output assembled
+and executed by both target toolchains 2/2. Both source interpreters pass;
+language_semantics 54/54 and day6 CLI 7/7 pass.
+Original sqlite3.c was recompiled with the original projected command by
+debug compiler SHA256
+c905ceacbda398fba498004c9b3c03cb7bae82bfe02729e78e782bbe299355bf
+in 90.726 seconds. Assembly SHA256
+def2ed90156e9a1a33dde4a79e997731874e2b1d741952a6a70e078d88b3c10b
+Replacing this one object in the existing fixture and rerunning the nine
+failed files yields 16 jobs, 1,207 assertions, zero errors, all jobs done.
+The independent read-only check of upstream testrunner.db, not only its exit
+status, validates this result. Full uniform-subject replay remains pending;
+the historical full-suite failure receipt is not promoted by this targeted run.
+
+Fresh uniform-subject replay now closes the original veryquick failure:
+tools/bench.py sqlite, child 20260919T204939Z, release compiler SHA256
+86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4.
+86/86 objects compiled and installed; zero excluded or replaced by make.
+Both complete subject trials and the unchanged GCC baseline report 1,238
+files, 329,803 assertions, zero errors, confirmed through testrunner.db.
+Receipt: tests/contracts/ladder-sqlite-receipt.json.
+This is the pinned public veryquick configuration, not TH3/all configurations.

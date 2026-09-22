@@ -49,7 +49,7 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
 fn unreadable_include_is_diagnosed_instead_of_becoming_empty() {
     let tree = TempTree::new("invalid-encoding");
     let header = tree.root.join("bytes.h");
-    fs::write(&header, b"#define LOST \"\xff\"\n").unwrap();
+    fs::write(&header, b"int bad\xff;\n").unwrap();
     let main = tree.write("main.c", "#include \"bytes.h\"\nint kept;\n");
     let (pp, _) = preprocess(
         &main,
@@ -89,7 +89,7 @@ fn include_next_resumes_after_the_directory_that_found_the_wrapper() {
         .iter()
         .filter(|t| t.kind != TokenKind::Eof)
         .filter_map(|t| match &t.text {
-            TokenText::Decoded(s) => Some(s.as_str()),
+            TokenText::Decoded(s) | TokenText::RawBytes { escaped: s, .. } => Some(s.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -114,7 +114,7 @@ fn preprocess(main_path: &Path, source: &str, main_file: FileId) -> (Preprocesso
 
 fn spelling<'a>(token: &'a Token, main_source: &'a str) -> &'a str {
     match &token.text {
-        TokenText::Decoded(text) => text,
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text,
         TokenText::Borrowed => {
             &main_source[token.span.byte_start as usize..token.span.byte_end as usize]
         }

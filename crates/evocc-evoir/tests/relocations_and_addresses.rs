@@ -1,6 +1,32 @@
 use evocc_evoir::{parse_section9_module, render_module};
 
 #[test]
+fn relative_block_relocations_preserve_both_targets_and_storage_width() {
+    let text = concat!(
+        "global @table origin=0 kind=file visibility=internal size=4 align=4 bytes=00000000 initialized=1111 relocs=[(0, @f^b1, 0, diff=@f^b2, bits=32)]\n\n",
+        "func @f() -> () cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n^entry():\n    br ^b1()\n\n^b1():\n    br ^b2()\n\n^b2():\n    ret\n}\n",
+    );
+    let module = parse_section9_module(text.as_bytes()).expect("relative label relocation");
+    assert_eq!(render_module(&module), text);
+    for invalid in [
+        text.replace("diff=@f^b2", "diff=@f^b999"),
+        text.replace("diff=@f^b2", "diff=@other^b2"),
+        text.replace("@f^b1, 0", "@table, 0"),
+        text.replace("bits=32", "bits=64"),
+        text.replace("bits=32", "bits=24"),
+        text.replace("bits=32", "bits=32, exposed"),
+        text.replace("(0, @f", "(1, @f"),
+    ] {
+        assert!(
+            parse_section9_module(invalid.as_bytes()).is_err(),
+            "{invalid}"
+        );
+    }
+}
+
+#[test]
 fn pointer_integer_forms_have_exact_operand_and_result_types() {
     let text = "func @f(%arg0: ptr<generic>) -> (ptr<generic>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: ptr<generic>):\n    %v1 = ptr.to_int %v0\n    %v2 = ptr.from_int.ptr<generic> %v1\n    ret %v2\n}\n";
     let module = parse_section9_module(text.as_bytes()).expect("pointer conversion syntax");

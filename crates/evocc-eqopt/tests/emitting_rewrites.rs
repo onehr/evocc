@@ -50,6 +50,8 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -85,6 +87,8 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -326,6 +330,8 @@ fn width_min_excludes_a_one_bit_value() {
         ty: EvoIRType::Bits(1),
     };
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -361,6 +367,8 @@ fn width_min_excludes_a_one_bit_value() {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

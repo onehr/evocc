@@ -1,0 +1,29 @@
+Original LLVM declaration-profile audit, 2026-09-16.
+Authority: reviewed R01/F01 in output/compiler-review/20260909/decisions.md.
+Source pin: llvm-test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
+Fixed image: evo-flight-lab:sealed, linux/arm64, network none.
+GCC-14 14.2.0-19 and Clang-19 19.1.7.
+
+The original 20260915T152557Z compilation database and 655 historical
+E1001/E2001 programs were inspected. Each probe keeps the source and semantic
+options, supplies the profile's default -std=gnu11 when no mode was specified,
+and removes diagnostic options (-w/-W*) to expose the language boundary.
+This is not the original benchmark invocation: its suppressed diagnostics
+allowed the reference build to proceed. No reference PASS becomes an oracle
+failure, and no original source is rewritten with prototypes or new types.
+
+636 programs are refused by both fixed compilers for an implicit declaration
+or implicit type in this mode. They divide into:
+6 file-scope implicit int; 314 implicit return type; 6 implicit parameter type;
+292 implicit library call; 2 implicit ordinary call; 16 where GCC first names
+the implicit return type and Clang first names an implicit parameter type.
+The other 19 programs remain outside this disposition table.
+
+Full measured probe argv, removed diagnostic flags, source SHA-256 and both
+first diagnostics: .build/vector-targeted/llvm-profile-declarations2.jsonl.
+Each applicable ledger row retains the source hash, original full compilation
+argv and both first diagnostics. Source or command changes invalidate that
+disposition; in particular GNU89 or -fwrapv cannot inherit a GNU11 finding.
+The status is not-applicable under the explicit reviewed profile, not PASS,
+not FP-deferred, and not a claim that either original reference run failed.
+Raw subject outcomes and all program identities remain unchanged.

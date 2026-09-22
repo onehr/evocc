@@ -1,0 +1,98 @@
+Targeted acceptance, 2026-09-15, AArch64 GNU11.
+Runtime: evo-flight-lab:sealed, glibc 2.41 (Debian 2.41-12+deb13u3).
+Compilers: GCC-14 14.2.0-19, Clang-19 19.1.7; no network.
+Artifacts were kept in .build/vector-targeted, not a cloned workspace.
+
+Reproduction convention:
+  target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm \
+    tests/fixtures/<source>.c > .build/vector-targeted/<source>.s
+  container run --rm --platform linux/arm64 --network none \
+    -v "$PWD/tests/fixtures:/work/fixtures:ro" \
+    -v "$PWD/.build/vector-targeted:/work/out" evo-flight-lab:sealed ...
+The native linker/driver is GCC-14; gcc and clang-19 compiled each reference
+side at O0/O2. Linking a reference driver does not replace the subject worker.
+The final release binary (working tree, not a clean committed subject) is
+sha256 eedbfb5fde307999b45856eb264536b5a6f12a4d3665a30eb5ca8b164bcd784e.
+Release repeats passed the nine fixed ABI pairs, eight late-load TLS pairs,
+four executable TLS models, two late-load models, lifecycle modes and DSO
+reload, eight usable vector-varargs pairs, and the five original programs.
+The GCC O2 HVA varargs self-control again failed with exit 2, as did the
+subject-caller/reference-callee pair; it remains ORACLE_UNUSABLE.
+
+Native command templates inside the container (cwd /work/out):
+  gcc -shared release-tls-worker.s release-tls-reference.s -o tls.so
+  gcc /work/fixtures/tls-driver.c -pthread -ldl -o tls-driver
+  ./tls-driver ./tls.so
+  gcc release-tls-worker-<model>.s release-tls-reference-<model>.s \
+    /work/fixtures/tls-driver.c -DTLS_LINKED -pthread -ldl -o tls-linked
+  ./tls-linked
+  gcc release-integer-vector-abi-worker.s release-integer-vector-abi-driver.s -o abi
+  ./abi
+Cross-compiler pairs replace exactly one side by gcc/clang-19 -std=gnu11
+-O0/-O2 -fPIC -I/work/fixtures -c on the corresponding unchanged fixture.
+Lifecycle uses gcc -Wl,--gc-sections on each -DMODE=0/1/2/3 assembly;
+the DSO driver is linked -rdynamic -ldl and receives the shared-object path.
+
+ELF lifecycle:
+  elf-lifecycle.c, MODE=0/1: init 201; init 202; main; fini 202; fini 201.
+  MODE=2/3: no finalizer (immediate termination); exit 0.
+  --gc-sections preserves both constructor/destructor roots.
+  elf-lifecycle-library.c + elf-lifecycle-driver.c (-rdynamic -ldl): PASS.
+  Two dlopen handles share initialization; the final glibc dlclose finalizes;
+  reopening creates a new load instance. Not a claim about musl dlclose.
+
+TLS:
+  tls-worker.c + tls-reference.c + tls-driver.c: PASS.
+  Linked executable, -DTLS_LINKED: all four -ftls-model values PASS.
+  Late-loaded DSO: global-dynamic/local-dynamic PASS.
+  Two worker threads exist before dlopen; they retain independent instances,
+  initializer values and function-static TLS. Escaped addresses still refer
+  to their owner when read/written by main. Cross-TU references agree.
+  Eight mixed late-loaded DSO combinations PASS:
+    EvoCC definition / gcc O0,O2 and clang-19 O0,O2 reference;
+    gcc O0,O2 and clang-19 O0,O2 definition / EvoCC reference.
+  .tdata/.tbss have SHF_TLS, symbols have STT_TLS, PIC uses TLSDESC relocations.
+  tls-alias.c: EvoCC and GCC exit 0; Clang exits 1 because its direct source
+  address comparison is folded unequal despite identical ELF TLS addresses.
+  Both subject interpreters return 0. This is not oracle-consensus evidence.
+
+Fixed vector ABI:
+  integer-vector-abi-worker.c + integer-vector-abi-driver.c: 9/9 PASS.
+  EvoCC/EvoCC plus GCC-14/Clang-19 O0/O2 in both directions.
+  Covers 8/16-byte values, ninth SIMD argument, HVA register exhaustion,
+  HVA return, 32-byte by-reference value, live-across-call spill, and a
+  128-bit integer after a stacked 8-byte vector and eight GPR arguments.
+  Initial mixed stack test: EvoCC/EvoCC passed, all eight foreign pairs
+  returned 7. Shared stack-cursor alignment repair makes all nine pass.
+
+Variadic vectors:
+  integer-vector-varargs-worker.c + integer-vector-varargs-driver.c:
+  EvoCC/EvoCC PASS; all four reference callers / EvoCC callee PASS;
+  EvoCC caller / GCC O0 and Clang-19 O0,O2 callee PASS.
+  GCC-14 O2 callee returns 2, including GCC-14 O2's own self-control.
+  This last combination is oracle-unusable, not a subject PASS or a waived
+  subject failure. Its HVA register path does not load the argument.
+
+Extension boundaries, integer-vector-extensions.c and small*.c:
+  ARM_TYPES under GCC: 8 8 0 16 16 0; lane64 1 0 1 0.
+  GCC target integer spellings keep nominal identity; Clang lacks the names.
+  VECTOR_INCREMENT / VECTOR_ADDRESS: GCC accepts, Clang rejects; subject refuses.
+  Sub-8-byte vectors: both self-controls pass; both crossed controls exit 1.
+  GCC returns through GPR, Clang through SIMD. Subject refuses their external
+  ABI with E4002 while still executing local small-vector operations.
+
+Original sources, unchanged:
+  LLVM SingleSource/UnitTests/Vector/divides.c:
+    U3.V = <1 1 1 1>
+    S3.V = <1 1 1 1>
+  LLVM SingleSource/Regression/C/ConstructorDestructorAttributes.c:
+    Create!
+    Create!
+  GCC torture pr105613.c, 20050607-1.c, pr94591.c: subject exits 0.
+  pr105613 and 20050607-1: both oracles exit 0; pr94591 uses the explicitly
+  admitted GCC-only __builtin_shuffle, which Clang rejects.
+  pr108292.c takes a vector-element address: GCC passes, Clang and subject
+  reject that construct. It is not relabelled as a passed program.
+  jq src/jv_aux.c using the original recorded argv projection:
+  TLS first error removed; next is line 77 __builtin_isnan (E2001).
+  The unit is still refused; no new whole-jq coverage number is inferred.

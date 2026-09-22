@@ -1,0 +1,19 @@
+Fixed image: evo-flight-lab:sealed, linux/arm64, network none
+Image digest: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Compilers: GCC 14.2.0-19, Clang 19.1.7.
+Command: CC -std=gnu11 -O{0,2} returned-array-members.c -o /tmp/returned-array
+All four builds and executions exit 0; program output is empty.
+Shapes: direct call, nested member, argument decay, comma, conditional and
+record assignment. Each expression is consumed within its full expression;
+the counter checks that value-producing operands execute exactly once.
+Reference: C11 N1570 6.3.2.1p3 and 6.2.4p8.
+https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf
+
+Subject RED: Rust regression compiles, then --interpret-c-hir refuses E2102
+at make(10).a[1]. It is not a NEON-only rule or an oracle disagreement.
+This probe does not test escaped temporary pointers or modification of an
+object with temporary lifetime; those are not licensed by the value results.
+
+GREEN: C-HIR and EvoIR each print 0; subject assembly links and returns 0
+with both GCC14 and Clang19 in the fixed ARM64 image (two native executions).
+The full language_semantics target passes 41/41, integer_vectors 17/17.

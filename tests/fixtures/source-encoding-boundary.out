@@ -1,0 +1,33 @@
+Source-encoding adjudication probes, 2026-09-15. Not an implementation change.
+Image evo-flight-lab:sealed, linux/arm64, network none.
+GCC-14 Debian 14.2.0-19; Clang-19 Debian 19.1.7.
+Input is supplied byte-for-byte on stdin, not decoded as UTF-8 first.
+
+Notation <FF> below means one raw byte 0xff, NOT those four ASCII characters:
+string:     int main(void){return (unsigned char)"<FF>"[0] != 255;}
+character:  int main(void){return (unsigned char)'<FF>' != 255;}
+comment:    /* <FF> */ int main(void){return 0;}
+identifier: int <FF>; int main(void){return 0;}
+
+For each case/CC/LEVEL:
+  raw-input | CC -std=gnu11 -OLEVEL -x c - -o /tmp/source-encoding-probe
+  if compilation exits 0: /tmp/source-encoding-probe
+Example exact input generator for the string case (shell printf):
+  printf 'int main(void){return (unsigned char)"\377"[0] != 255;}\n'
+
+case        gcc-O0 gcc-O2 clang-O0 clang-O2 (compile/run exit codes)
+string      0/0    0/0    0/0      0/0
+character   0/0    0/0    0/0      0/0
+comment     0/0    0/0    0/0      0/0
+identifier  1/-    1/-    1/-      1/-
+
+GCC identifier: error: stray '\377' in program.
+Clang identifier: error: source file is not valid UTF-8.
+Clang literal cases additionally warn: illegal character encoding in
+string/character literal [-Winvalid-source-encoding]. Warnings were retained.
+This measures the byte in these four lexical locations, not arbitrary source
+charset conversion, wide literals, macro stringization or include filenames.
+The approved revision 1.9.102 distinguishes raw literal bytes from Unicode
+source characters and preserves E0002 for unsupported positions. The new
+source_bytes lexer/CLI tests exercise shared main/stdin/include behavior;
+the historical observations above are not relabeled as a new campaign.

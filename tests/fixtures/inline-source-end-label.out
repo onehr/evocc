@@ -1,0 +1,40 @@
+Targeted replay: 2026-09-20, aarch64-unknown-linux-gnu
+Source: inline-source-end-label.c
+Source SHA-256: 83ceac7d6863328c9b47ebcb79cc946fe47cd6776900d6cf804dbae74c962c25
+
+RED:
+  cargo test --locked --offline -p evocc-lower --test switch_labels
+    inline_returns_do_not_collide_with_source_end_labels -- --exact
+  Zero compilation errors; one declared test failure. The inlined early return
+  reached source label end and dereferenced the null pointer. A smaller void
+  inline body with end: also gave E3101 duplicate label in the frozen CLI.
+
+GREEN:
+  The same automated test passes with optimization off and on; each invocation
+  checks C-HIR and EvoIR execution. Return value: 0 in both CLI interpreters.
+  Sealed gcc-14 / clang-19: -std=gnu11 -O0 and -O2, each native exit 0.
+  EvoCC -O2 --emit=asm, gcc-14 -no-pie link: native exit 0.
+  Debug EvoCC SHA-256: 1bfaf8c59a138753045ac5731cdf90eb8cfdc00995b547c40cf83e67124f754c
+  Native executable SHA-256: 5d61a7500e4287da518a4ae681f7f747acdc9b62016edfd103a02afb8ebd028e
+
+Original kernel replay:
+  tools.k1.cmdrecord.evocc_argv projection of the unchanged record
+  .build/k7-coverage/case/bpf-config/kernel/trace/.trace_fprobe.o.cmd,
+  against the original generated headers and sealed sysroot; debug compilation
+  emitted in 54.036 seconds under the unchanged 60-second limit.
+  Original assembler arguments: PASS. Defined external symbols: none on either
+  side; zero missing/extra symbols. The formerly failing internal handler is
+  present in the emitted assembly. llvm-dwarfdump-19 --verify: no errors.
+  Assembly SHA-256: 699611e0c9b6ce149ef52359e31b782e06089a07c320eb9708143986e348ca3c
+  Object SHA-256: 238a59e63ad957e2c83dc0b9036828fd716566711d8b6d5c97abc58505351376
+  Capture: .build/floating-targeted/inline-source-label-20260920/
+  No object installed; no full-survey count updated from this tailored replay.
+  Running full survey retains release 77faa6b3...f27d8a and its original failure.
+
+After that survey completes, fresh release
+07a8e66e3da4f282a4e5108547940d020ae4409e91201012c48480fc6442c237
+passes both CLI interpreters and the same native ARM64 reduction (exit 0).
+The original trace_fprobe record emits in 4.634 seconds with the unchanged
+60-second tailored limit. Its assembly is byte-identical to the verified
+debug result above (699611e0...8ca3c). This is still targeted evidence;
+the new full survey receives a separate run and binary identity.

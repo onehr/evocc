@@ -1,0 +1,26 @@
+Original-program boundary checks, 2026-09-15; not a full benchmark run.
+Image evo-flight-lab:sealed, linux/arm64, network none.
+GCC-14 Debian 14.2.0-19; Clang-19 Debian 19.1.7.
+Sources: pinned .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/.
+
+For each program, CC and LEVEL:
+  CC -std=gnu11 -OLEVEL SOURCE -o /tmp/vector-boundary
+  if compile status is zero: /tmp/vector-boundary
+
+program   gcc-O0 gcc-O2 clang-O0 clang-O2 (compile/run status)
+pr108292  0/0    0/0    1/-      1/-
+pr123753  0/0    0/0    1/-      1/-
+
+pr108292 SHA-256:
+b5e4f6a4c9f75156e1cdd4123f44da971bd279cd0c05fc4ce4807f20c7c23730
+Clang at line 12: error: address of vector element requested
+  __builtin_sub_overflow (0, 6, &x[5]);
+
+pr123753 SHA-256:
+6aaf3b1b7a1ccd45485738850b19cd1a57db7c45a38e43060127ea3159f6e693
+Clang at line 12: error: cannot decrement value of type 'W'
+  u.w--;
+
+Both constructs are already refused by the reviewed 1.9.101 integer-vector
+profile. No source edit, alternate seed or validator relaxation was used.
+These are source-bound not-applicable dispositions, not EvoCC PASSes.

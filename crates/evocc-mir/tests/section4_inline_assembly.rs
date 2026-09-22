@@ -28,6 +28,197 @@ fn g(id: u32) -> VReg {
 }
 
 #[test]
+fn simd_assembly_register_bank_and_clobbers_are_independently_verified() {
+    for class in [RegClass::Simd64, RegClass::Simd128] {
+        let a = VReg::new(0, class);
+        let b = VReg::new(1, class);
+        let r = VReg::new(2, class);
+        let function = MFunction {
+            name: "combine".into(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: vec![a, b],
+                insts: vec![MInst::Asm(AsmBody {
+                    template: "// %0 %1 %2".into(),
+                    volatile: true,
+                    outputs: vec![AsmOperand::reg(
+                        AsmConstraint::SimdEarlyClobber(AsmDirection::Write),
+                        r,
+                    )],
+                    inputs: vec![
+                        AsmOperand::reg(AsmConstraint::Simd(AsmDirection::Read), a),
+                        AsmOperand::reg(AsmConstraint::Simd(AsmDirection::Read), b),
+                    ],
+                    clobbers: vec![AsmClobber::VectorRegister(3)],
+                })],
+                term: MTerm::Ret { values: vec![r] },
+            }],
+        };
+        let module = MModule {
+            functions: vec![function.clone()],
+            globals: vec![],
+        };
+        let text = evocc_mir::render_module(&module);
+        assert_eq!(evocc_mir::parse_module(&text).unwrap(), module);
+        let allocated = allocate(&function).unwrap();
+        verify_allocation(&allocated).unwrap();
+        for change in 0..3 {
+            let mut forged = allocated.clone();
+            for block in &mut forged.blocks {
+                for inst in &mut block.insts {
+                    if let MInst::Asm(body) = inst {
+                        let output = body.outputs[0].register().unwrap();
+                        match change {
+                            0 => {
+                                body.outputs[0].constraint =
+                                    AsmConstraint::Register(AsmDirection::Write)
+                            }
+                            1 => body.clobbers.push(AsmClobber::VectorRegister(
+                                forged.assignment[&output.id] - 64,
+                            )),
+                            _ => {
+                                forged.assignment.insert(output.id, 0);
+                            }
+                        }
+                    }
+                }
+            }
+            assert!(
+                verify_allocation(&forged).is_err(),
+                "accepted mutation {change}"
+            );
+        }
+    }
+}
+
+#[test]
+fn simd_assembly_goto_outputs_spill_all_lanes_after_the_selected_edge() {
+    for taken in [false, true] {
+        let outputs = (0..12)
+            .map(|id| AsmOperand {
+                constraint: AsmConstraint::Simd(AsmDirection::Write),
+                fixed_register: None,
+                name: Some(format!("out{id}")),
+                value: AsmValue::Reg(VReg::new(id, RegClass::Simd128)),
+            })
+            .collect();
+        let mut template = (0..12)
+            .map(|id| format!("movi %[out{id}].16b, #{}", id + 1))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if taken {
+            template.push_str("\nb %l[0]");
+        }
+        let mut insts = vec![
+            MInst::Bl {
+                symbol: "touch_simd".into(),
+                args: vec![],
+                results: vec![],
+            },
+            MInst::MovImm {
+                dst: w(100),
+                imm: 1,
+            },
+            MInst::MovImm {
+                dst: g(101),
+                imm: 0,
+            },
+        ];
+        let mut sum = g(101);
+        for id in 0..12 {
+            let dst = g(102 + 2 * id);
+            insts.push(MInst::Vector {
+                dst,
+                extract: true,
+                lane_bits: 64,
+                bytes: 16,
+                args: vec![VReg::new(id, RegClass::Simd128), w(100)],
+            });
+            let next = g(103 + 2 * id);
+            insts.push(MInst::Binary {
+                op: BinOp::Add,
+                dst: next,
+                lhs: sum,
+                rhs: dst,
+                width: Width::X,
+            });
+            sum = next;
+        }
+        insts.extend([
+            MInst::MovImm {
+                dst: g(200),
+                imm: 0x4e4e4e4e4e4e4e4e,
+            },
+            MInst::Cmp {
+                dst: VReg::new(201, RegClass::Flags),
+                lhs: sum,
+                rhs: g(200),
+                width: Width::X,
+            },
+            MInst::Cset {
+                dst: w(202),
+                flags: VReg::new(201, RegClass::Flags),
+                cond: evocc_mir::Cond::Ne,
+            },
+        ]);
+        let function = MFunction {
+            name: "main".into(),
+            blocks: vec![
+                MBlock {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![],
+                    term: MTerm::AsmGoto {
+                        body: AsmBody {
+                            template,
+                            volatile: true,
+                            outputs,
+                            inputs: vec![],
+                            clobbers: vec![],
+                        },
+                        labels: vec![(1, vec![])],
+                        fallthrough: 2,
+                        fallthrough_args: vec![],
+                    },
+                },
+                MBlock {
+                    id: 1,
+                    args: vec![],
+                    insts: insts.clone(),
+                    term: MTerm::Ret {
+                        values: vec![w(202)],
+                    },
+                },
+                MBlock {
+                    id: 2,
+                    args: vec![],
+                    insts,
+                    term: MTerm::Ret {
+                        values: vec![w(202)],
+                    },
+                },
+            ],
+        };
+        let allocated = allocate(&function).unwrap();
+        assert!(allocated.spilled >= 12);
+        verify_allocation(&allocated).unwrap();
+        let clobber = (0..8)
+            .chain(16..32)
+            .map(|i| format!("movi v{i}.16b, #0"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let text = format!(
+            "{}\n.text\n.p2align 2\n_touch_simd:\n{clobber}\nret\n",
+            emit_module(&[allocated], &[])
+        );
+        assert_eq!(
+            run_native(&format!("simd-goto-spills-{taken}"), &text).unwrap(),
+            0
+        );
+    }
+}
+
+#[test]
 fn assembly_goto_outputs_survive_spilling_on_both_edges() {
     let outputs = (0..12)
         .map(|id| AsmOperand {
@@ -844,7 +1035,7 @@ fn both_assembly_forms_round_trip_byte_for_byte() {
 /// constraint named."
 #[test]
 fn a_constraint_outside_the_table_is_refused() {
-    for outside in ["v", "=v", "w", "rx", "&r", "Z", "m"] {
+    for outside in ["v", "=v", "rw", "rx", "&r", "&w", "Z", "m"] {
         assert!(
             AsmConstraint::parse(outside).is_none(),
             "'{outside}' is outside the measured table and must not parse"
@@ -852,8 +1043,8 @@ fn a_constraint_outside_the_table_is_refused() {
     }
     // Every row of the table does parse, and renders back to itself.
     for inside in [
-        "r", "=r", "+r", "=&r", "+&r", "rZ", "Q", "=Q", "+Q", "Qo", "0", "9", "I", "J", "K", "L",
-        "i", "n", "p",
+        "w", "=w", "+w", "=&w", "+&w", "r", "=r", "+r", "=&r", "+&r", "rZ", "Q", "=Q", "+Q", "Qo",
+        "0", "9", "I", "J", "K", "L", "i", "n", "p",
     ] {
         let constraint =
             AsmConstraint::parse(inside).unwrap_or_else(|| panic!("'{inside}' is in the table"));

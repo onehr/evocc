@@ -38,6 +38,37 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn simd_assembly_types_modifiers_and_ties_are_not_general_registers() {
+    let source = EDGES
+        .replace("bits<32>", "vec<2, bits<32>>")
+        .replace("\"+r\"", "\"+w\"")
+        .replace("\"r\"", "\"w\"")
+        .replace(
+            "cbnz %w1, %l[taken]\\x0a\\x09add %w0, %w0, #5",
+            "// %0 %1 %b0 %h0 %s0 %d0 %q0 %l[taken]",
+        );
+    let module = parse_section9_module(source.as_bytes()).expect("SIMD operands and views");
+    assert_eq!(render_module(&module), source);
+    for invalid in [
+        source.replace("\"+w\"", "\"+r\""),
+        source.replace("\"w\"", "\"r\""),
+        source.replace("vec<2, bits<32>>", "bits<64>"),
+        source.replace("vec<2, bits<32>>", "vec<4, bits<64>>"),
+        source.replace("%d0", "%w0"),
+        source.replace("%q0", "%x0"),
+    ] {
+        assert!(
+            parse_section9_module(invalid.as_bytes()).is_err(),
+            "{invalid}"
+        );
+    }
+    let tied = source
+        .replace("\"+w\"", "\"+&w\"")
+        .replace("\"w\"", "\"0\"");
+    assert!(parse_section9_module(tied.as_bytes()).is_ok());
+}
+
+#[test]
 fn vector_register_clobbers_keep_their_own_register_file() {
     let bound = EDGES
         .replace("\"+r\"", "\"+r@x8\"")

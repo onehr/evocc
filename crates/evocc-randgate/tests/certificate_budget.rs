@@ -53,6 +53,8 @@ fn module() -> Module {
     let world = value(6, EvoIRType::World);
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -91,6 +93,8 @@ fn module() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

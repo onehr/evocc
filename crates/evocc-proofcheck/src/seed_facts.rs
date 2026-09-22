@@ -600,6 +600,8 @@ mod tests {
         let more = flag(5);
         let result = bits(6);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: Linkage::Strong,
@@ -636,6 +638,8 @@ mod tests {
             ],
         };
         let mut module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             globals: Vec::new(),

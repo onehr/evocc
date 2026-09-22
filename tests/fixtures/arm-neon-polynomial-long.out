@@ -1,0 +1,14 @@
+2026-09-19, evo-flight-lab:sealed, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 / clang-19 19.1.7:
+  CC -std=gnu11 -march=armv8-a+crypto -O{0,2} arm-neon-polynomial-long.c -o probe
+  All four builds and executions exit 0, no program output.
+The source checks 36 operand pairs including bit 63, all-ones and asymmetric
+values, both 64-bit result halves, high-lane selection and once-only operands.
+RED: no Rust build errors; C-HIR first reports E3007 at the poly128 object
+declaration, exposing its missing nominal scalar storage classification.
+GREEN: C-HIR and EvoIR return 0; assembly is emitted using existing wide
+integer instructions, with no new instruction or external-call substitution.
+The emitted assembly is independently linked by both fixed compilers and
+both native executions return 0. Original object acceptance is a separate gate.
+Reference: https://arm-software.github.io/acle/neon_intrinsics/advsimd.html

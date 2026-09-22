@@ -18,6 +18,7 @@
 
 pub mod allocverify;
 pub mod emit;
+mod floating;
 pub mod interp;
 pub mod lane;
 pub mod linkage;
@@ -58,6 +59,9 @@ pub use validate::validate_module;
 pub enum RegClass {
     Gpr32,
     Gpr64,
+    Simd32,
+    Simd64,
+    Simd128,
     Flags,
 }
 
@@ -68,6 +72,9 @@ impl RegClass {
         match self {
             Self::Gpr32 => "gpr32",
             Self::Gpr64 => "gpr64",
+            Self::Simd32 => "simd32",
+            Self::Simd64 => "simd64",
+            Self::Simd128 => "simd128",
             Self::Flags => "flags",
         }
     }
@@ -78,8 +85,16 @@ impl RegClass {
         match self {
             Self::Gpr32 => Some(32),
             Self::Gpr64 => Some(64),
+            Self::Simd32 => Some(32),
+            Self::Simd64 => Some(64),
+            Self::Simd128 => Some(128),
             Self::Flags => None,
         }
+    }
+
+    #[must_use]
+    pub const fn is_simd(self) -> bool {
+        matches!(self, Self::Simd32 | Self::Simd64 | Self::Simd128)
     }
 }
 
@@ -157,7 +172,7 @@ impl Width {
         match class {
             RegClass::Gpr32 => Some(Self::W),
             RegClass::Gpr64 => Some(Self::X),
-            RegClass::Flags => None,
+            RegClass::Simd32 | RegClass::Simd64 | RegClass::Simd128 | RegClass::Flags => None,
         }
     }
 }
@@ -524,9 +539,33 @@ pub enum LoadKind {
     Sw,
     P,
     Pf,
+    S,
+    D,
+    Q,
 }
 
 impl LoadKind {
+    pub const fn atomic_suffix(self) -> &'static str {
+        match self {
+            Self::B => "b",
+            Self::H => "h",
+            Self::W => "w",
+            Self::X => "x",
+            Self::P => "p",
+            Self::Pf => "pf",
+            Self::S => "s",
+            Self::Sb => "sb",
+            Self::Sh => "sh",
+            Self::Sw => "sw",
+            Self::D => "d",
+            Self::Q => "q",
+        }
+    }
+    pub fn from_atomic_suffix(suffix: &str) -> Option<Self> {
+        [Self::B, Self::H, Self::W, Self::X, Self::P, Self::Pf]
+            .into_iter()
+            .find(|kind| kind.atomic_suffix() == suffix)
+    }
     #[must_use]
     pub const fn mnemonic(self) -> &'static str {
         match self {
@@ -539,6 +578,9 @@ impl LoadKind {
             Self::Sw => "ldrsw",
             Self::P => "ldr.p",
             Self::Pf => "ldr.pf",
+            Self::S => "ldr.s",
+            Self::D => "ldr.d",
+            Self::Q => "ldr.q",
         }
     }
 
@@ -554,6 +596,9 @@ impl LoadKind {
             "ldrsw" => Self::Sw,
             "ldr.p" => Self::P,
             "ldr.pf" => Self::Pf,
+            "ldr.s" => Self::S,
+            "ldr.d" => Self::D,
+            "ldr.q" => Self::Q,
             _ => return None,
         })
     }
@@ -564,8 +609,9 @@ impl LoadKind {
         match self {
             Self::B | Self::Sb => 1,
             Self::H | Self::Sh => 2,
-            Self::W | Self::Sw => 4,
-            Self::X | Self::P | Self::Pf => 8,
+            Self::W | Self::Sw | Self::S => 4,
+            Self::X | Self::P | Self::Pf | Self::D => 8,
+            Self::Q => 16,
         }
     }
 
@@ -584,6 +630,9 @@ pub enum StoreKind {
     W,
     X,
     P,
+    S,
+    D,
+    Q,
 }
 
 impl StoreKind {
@@ -595,6 +644,9 @@ impl StoreKind {
             Self::W => "str.w",
             Self::X => "str.x",
             Self::P => "str.p",
+            Self::S => "str.s",
+            Self::D => "str.d",
+            Self::Q => "str.q",
         }
     }
 
@@ -606,6 +658,9 @@ impl StoreKind {
             "str.w" => Self::W,
             "str.x" => Self::X,
             "str.p" => Self::P,
+            "str.s" => Self::S,
+            "str.d" => Self::D,
+            "str.q" => Self::Q,
             _ => return None,
         })
     }
@@ -615,8 +670,9 @@ impl StoreKind {
         match self {
             Self::B => 1,
             Self::H => 2,
-            Self::W => 4,
-            Self::X | Self::P => 8,
+            Self::W | Self::S => 4,
+            Self::X | Self::P | Self::D => 8,
+            Self::Q => 16,
         }
     }
 }
@@ -632,6 +688,48 @@ pub enum SymbolKind {
 /// operands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MInst {
+    /// Scalar floating instructions share the physical SIMD bank. Format and
+    /// ordered comparison / conversion kind remain semantic, not asm strings.
+    Floating {
+        dst: VReg,
+        op: evocc_evoir::FloatingOp,
+        kind: evocc_types::FloatKind,
+        args: Vec<VReg>,
+    },
+    /// One AES round or column transform, with explicit SIMD value operands.
+    Aes {
+        dst: VReg,
+        op: evocc_types::neon::AesOperation,
+        args: Vec<VReg>,
+    },
+    AtomicRmw {
+        dst: VReg,
+        base: VReg,
+        value: VReg,
+        expected: Option<VReg>,
+        operation: evocc_memory::AtomicRmwOp,
+        kind: LoadKind,
+        order: evocc_memory::AtomicOrder,
+        volatile: bool,
+    },
+    /// Pack scalar lanes into a short vector, or extract one lane. The index
+    /// is checked before extraction, rather than masked by the instruction.
+    Vector {
+        dst: VReg,
+        extract: bool,
+        lane_bits: u16,
+        bytes: u8,
+        args: Vec<VReg>,
+    },
+    /// Naturally aligned atomic access; order and volatile remain independent.
+    Atomic {
+        load: bool,
+        value: VReg,
+        base: VReg,
+        kind: LoadKind,
+        order: evocc_memory::AtomicOrder,
+        volatile: bool,
+    },
     /// `mov rd, rn`.
     Mov {
         dst: VReg,
@@ -917,12 +1015,19 @@ pub enum MInst {
         size: u64,
         align: u32,
     },
-    /// Subtract runtime-sized, aligned storage; its address lasts until return.
+    /// Subtract runtime-sized, aligned storage, with a private previous-SP
+    /// header so a scope-ending top allocation can be reclaimed.
     StackAlloc {
         dst: VReg,
         size: VReg,
         origin: u64,
         align: u32,
+    },
+    /// End a dynamic object's lifetime. Native code restores the saved SP
+    /// only when this object is still the top allocation: intervening alloca
+    /// storage has function lifetime and must not be released with a VLA.
+    StackRelease {
+        address: VReg,
     },
     /// Which part of Section 6's frame an address names.
     ///
@@ -945,6 +1050,8 @@ pub enum MInst {
     /// the pre-allocation form, which is why nothing else in the machine has
     /// to know about `x8`.
     IndirectResult,
+    /// Fail closed on a foreign FPCR before a hosted floating helper call.
+    FpEnvCheck,
     /// The register save area of a variadic callee (Section 6): a marker the
     /// frame layout reads and the prologue expands.
     ///
@@ -1109,6 +1216,10 @@ pub enum AsmConstraint {
     Register(AsmDirection),
     /// `=&r`, `+&r`: a register no input operand of the same `asm` holds.
     EarlyClobber(AsmDirection),
+    /// Short integer/polynomial vector in the shared SIMD physical bank.
+    Simd(AsmDirection),
+    /// SIMD output written before any independent input is consumed.
+    SimdEarlyClobber(AsmDirection),
     /// `rZ`: as `r`, except that a constant zero is the zero register.
     RegisterOrZero,
     /// `Q`, `=Q`, `+Q`, `Qo`: a register holding the operand's address.
@@ -1132,6 +1243,8 @@ impl AsmConstraint {
         match self {
             Self::Register(direction) => format!("{}r", direction.prefix()),
             Self::EarlyClobber(direction) => format!("{}&r", direction.prefix()),
+            Self::Simd(direction) => format!("{}w", direction.prefix()),
+            Self::SimdEarlyClobber(direction) => format!("{}&w", direction.prefix()),
             Self::RegisterOrZero => "rZ".to_owned(),
             Self::Memory {
                 direction,
@@ -1171,6 +1284,8 @@ impl AsmConstraint {
         };
         Some(match rest {
             "r" => Self::Register(direction),
+            "w" => Self::Simd(direction),
+            "&w" if direction != AsmDirection::Read => Self::SimdEarlyClobber(direction),
             // The table has `=&r` and `+&r` and no read-only early clobber:
             // an operand the template only reads cannot be clobbered early.
             "&r" if direction != AsmDirection::Read => Self::EarlyClobber(direction),
@@ -1198,12 +1313,24 @@ impl AsmConstraint {
         match self {
             Self::Register(direction)
             | Self::EarlyClobber(direction)
+            | Self::Simd(direction)
+            | Self::SimdEarlyClobber(direction)
             | Self::Memory { direction, .. } => direction,
             // A `rZ`, an address, an immediate and a tied operand are read.
             Self::RegisterOrZero | Self::Address | Self::Immediate(_) | Self::Tied(_) => {
                 AsmDirection::Read
             }
         }
+    }
+
+    #[must_use]
+    pub const fn early_clobber(self) -> bool {
+        matches!(self, Self::EarlyClobber(_) | Self::SimdEarlyClobber(_))
+    }
+
+    #[must_use]
+    pub const fn simd(self) -> bool {
+        matches!(self, Self::Simd(_) | Self::SimdEarlyClobber(_))
     }
 }
 
@@ -1267,8 +1394,16 @@ impl AsmOperand {
     #[must_use]
     pub fn spelling(&self) -> String {
         let base = self.constraint.spelling();
-        self.fixed_register
-            .map_or_else(|| base.clone(), |n| format!("{base}@x{n}"))
+        self.fixed_register.map_or_else(
+            || base.clone(),
+            |n| {
+                if n >= linscan::SIMD_BASE {
+                    format!("{base}@v{}", n - linscan::SIMD_BASE)
+                } else {
+                    format!("{base}@x{n}")
+                }
+            },
+        )
     }
 }
 
@@ -1301,7 +1436,7 @@ impl AsmClobber {
     /// Read one clobber name.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        if let Some(number) = text.strip_prefix('v') {
+        if let Some(number) = text.strip_prefix(['v', 'd', 's']) {
             return number
                 .parse::<u8>()
                 .ok()
@@ -1381,7 +1516,8 @@ impl AsmBody {
             .iter()
             .filter_map(|clobber| match clobber {
                 AsmClobber::Register(number) => Some(*number),
-                AsmClobber::VectorRegister(_) | AsmClobber::Flags | AsmClobber::Memory => None,
+                AsmClobber::VectorRegister(number) => Some(linscan::SIMD_BASE + *number),
+                AsmClobber::Flags | AsmClobber::Memory => None,
             })
             .collect()
     }
@@ -1478,6 +1614,17 @@ pub struct MModule {
 #[must_use]
 pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
     match inst {
+        MInst::AtomicRmw { dst, .. } => vec![*dst],
+        MInst::Vector { dst, .. } | MInst::Aes { dst, .. } | MInst::Floating { dst, .. } => {
+            vec![*dst]
+        }
+        MInst::Atomic { load, value, .. } => {
+            if *load {
+                vec![*value]
+            } else {
+                Vec::new()
+            }
+        }
         MInst::Mov { dst, .. }
         | MInst::MovImm { dst, .. }
         | MInst::Adrp { dst, .. }
@@ -1508,11 +1655,13 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         MInst::Ldp { rt1, rt2, .. } => vec![*rt1, *rt2],
         MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
         MInst::Store { .. }
+        | MInst::StackRelease { .. }
         | MInst::MemCopy { .. }
         | MInst::SpillStore { .. }
         | MInst::OutgoingArg { .. }
         | MInst::VaSaveArea { .. }
         | MInst::IndirectResult
+        | MInst::FpEnvCheck
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
         MInst::Asm(body) => body.defined(),
@@ -1523,6 +1672,28 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
 #[must_use]
 pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
     match inst {
+        MInst::AtomicRmw {
+            base,
+            value,
+            expected,
+            ..
+        } => {
+            let mut values = vec![*base, *value];
+            values.extend(expected.iter().copied());
+            values
+        }
+        MInst::Vector { args, .. } | MInst::Aes { args, .. } | MInst::Floating { args, .. } => {
+            args.clone()
+        }
+        MInst::Atomic {
+            load, value, base, ..
+        } => {
+            if *load {
+                vec![*base]
+            } else {
+                vec![*value, *base]
+            }
+        }
         MInst::Mov { src, .. }
         | MInst::AddPageOff { src, .. }
         | MInst::Extend { src, .. }
@@ -1535,8 +1706,10 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::FrameSlot { .. }
         | MInst::FrameAddress { .. }
         | MInst::IndirectResult
+        | MInst::FpEnvCheck
         | MInst::VaSaveArea { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
+        MInst::StackRelease { address } => vec![*address],
         MInst::StackAlloc { size, .. } => vec![*size],
         MInst::Store { src, base, .. } => vec![*src, *base],
         MInst::Binary { lhs, rhs, .. }

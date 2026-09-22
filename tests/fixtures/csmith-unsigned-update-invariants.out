@@ -1,0 +1,28 @@
+2026-09-20: finite transition controls, not original benchmark PASS.
+
+Source SHA256 8bec6d973b477ea3de948a08325769f307b4ec7c984987c4daa50d138eb8531d
+Assembly SHA256 e952048693ff238110bc18734668e8b6a8588c6455e85a629dd42d26fec74f9a
+EvoCC SHA256 07a8e66e3da4f282a4e5108547940d020ae4409e91201012c48480fc6442c237
+Target aarch64-unknown-linux-gnu; existing ladder-sysroot GCC private,
+architecture and generic system include directories, in that order.
+  --interpret-c-hir: 0; --interpret-evoir: 0.
+  -O2 --emit=asm; gcc-14 -no-pie link; native exit 0.
+Sealed offline linux/arm64, one CPU:
+  GCC 14.2.0-19, -std=gnu11 -O0 and -O2: exit 0 / 0.
+  Clang 19.1.7, -std=gnu11 -O0 and -O2: exit 0 / 0.
+
+Original source identities match the existing 136-run localization capture:
+.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+base/315: b72798bbcf266fcec97b0275068e9bb704a091241a9c6aaadb2cd65e093d42da
+bitfields/69: 6906bd6ef8b5c05edb5e3ccb03b19a65244907f2c5951803d36b50ec08fd6a35
+
+base/315 line 87: i32 g_2 receives a u16 subtraction by 7; its value is
+always nonnegative, so > -7 stays true. Body writes only other objects.
+bitfields/69 line 155: i32 g_7 receives a u16 subtraction by 1, so != -25
+stays true. Its body contains local initializers, no counter write or escape.
+The actual safe_math_macros_notmp.h helper narrows its subtraction result
+to uint16_t. The finite tests exercise wrap boundaries and the first path's
+16, 9, 2, 65531, 65524 progression; the range argument covers all u16 values.
+This identifies repeating reached paths, not whole-program definedness or
+a terminating checksum. Both original oracle-unusable outcomes remain.

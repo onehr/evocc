@@ -46,6 +46,7 @@ pub fn emitted_functions(module: &Module) -> BTreeSet<String> {
             kept.insert(alias.target.clone());
         }
     }
+    kept.extend(module.lifecycle.iter().map(|r| r.function.clone()));
 
     // A global is kept whatever its visibility, so every relocation it carries
     // is emitted and names a symbol the object must define. A relocation

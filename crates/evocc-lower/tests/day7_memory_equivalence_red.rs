@@ -441,6 +441,7 @@ fn lowered_volatile_ir_accesses(module: &Module) -> Vec<VolatileDirection> {
 
 fn expected_volatile_trace() -> Vec<VolatileEvent> {
     let origin = ObjectOrigin {
+        thread: None,
         // `port` is the first semantic storage object in this single-function
         // translation unit's canonical source-ordered allocation manifest.
         site: 0,

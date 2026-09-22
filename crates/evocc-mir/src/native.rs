@@ -113,6 +113,41 @@ pub fn compile_module_with_options(
     relocation: RelocationModel,
     options: &crate::emit::CodegenOptions,
 ) -> Result<String, NativeStop> {
+    if target != Target::Linux && module.functions.iter().any(|f| f.section.is_some()) {
+        return Err(NativeStop::Assembly(
+            "explicit function sections require the Linux ELF target".into(),
+        ));
+    }
+    if target != Target::Linux && !module.tls.is_empty() {
+        return Err(NativeStop::Assembly(
+            "ELF TLS requires the Linux target".into(),
+        ));
+    }
+    if target != Target::Linux
+        && module
+            .functions
+            .iter()
+            .any(|f| f.patchable_entry.is_some_and(|(n, _)| n != 0))
+    {
+        return Err(NativeStop::Assembly(
+            "patchable function entries require the Linux ELF target".into(),
+        ));
+    }
+    if target != Target::Linux
+        && module
+            .functions
+            .iter()
+            .map(|f| f.visibility)
+            .chain(module.declares.iter().map(|f| f.visibility))
+            .chain(module.globals.iter().map(|g| g.visibility))
+            .chain(module.extern_objects.iter().map(|g| g.visibility))
+            .chain(module.aliases.iter().map(|a| a.visibility))
+            .any(|v| v == evocc_evoir::GlobalVisibility::Protected)
+    {
+        return Err(NativeStop::Assembly(
+            "ELF protected visibility is unsupported by the Darwin target".into(),
+        ));
+    }
     // Section 8 (revision 0.16) drops an internal function nothing references
     // before emission. It is answered here rather than after lowering because
     // an unreferenced `static inline` stub from a shared header calls
@@ -130,6 +165,19 @@ pub fn compile_module_with_options(
     for function in &lowered.functions {
         if !keep(&function.name) {
             continue;
+        }
+        if options.general_registers_only
+            && function.blocks.iter().any(|block| {
+                block
+                    .args
+                    .iter()
+                    .copied()
+                    .chain(block.insts.iter().flat_map(crate::inst_defs))
+                    .chain(block.insts.iter().flat_map(crate::inst_uses))
+                    .any(|reg| reg.class.is_simd())
+            })
+        {
+            return Err(NativeStop::Lowering(vec!["E4002"]));
         }
         let mut allocated = allocate_for(target, &out_of_ssa(function))
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;

@@ -14,8 +14,11 @@
 
 pub mod allocation;
 pub mod constant;
+pub mod floating;
+pub mod function_definitions;
 pub mod initializer;
 pub mod inline;
+pub mod lifecycle;
 pub mod linkage;
 
 /// A use recorded before an incomplete array's later declaration retains its
@@ -50,14 +53,16 @@ pub fn type_at_use_matches_binding(
              evocc_types::TypeKind::Array { element: b, bound: evocc_types::ArrayBound::Fixed(_) }) if a == b
         )
 }
+pub mod complex;
 pub mod integer;
 pub mod interp;
 pub mod place;
 pub mod semantic;
+pub mod vector;
 
-/// Records in the general-register variadic class. Pointer members are values,
-/// not an instruction to classify the pointed-to object. Floating and vector
-/// records require the separate homogeneous-aggregate ABI class.
+/// Records whose representations can use the supported variadic ABI classes.
+/// A float member does not make a mixed record an HFA. Copying that member's
+/// bytes also does not execute a floating operation or initialize poison bytes.
 #[must_use]
 pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
     use evocc_types::{TagDefinition, TagState, TypeKind};
@@ -82,8 +87,14 @@ pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
                 accepted
             }
             Some(TypeKind::Array { element, .. }) => member(types, *element, active),
+            Some(TypeKind::Vector { element, .. }) => member(types, *element, active),
+            // Integer complex has two ordinary integer components and uses
+            // the composite ABI, including when nested in a record. Floating
+            // complex must not slip into this path as a non-HFA record.
+            Some(TypeKind::Complex(evocc_types::ComplexBase::Integer(_))) => true,
             Some(
                 TypeKind::Int(_)
+                | TypeKind::Float(_)
                 | TypeKind::Enum(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::GnuInt128(_),
@@ -93,8 +104,135 @@ pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
     }
     matches!(
         types.get(ty).map(|ty| &ty.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+        Some(
+            TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::Vector { .. }
+                | TypeKind::Complex(_)
+        )
     ) && member(types, ty, &mut Vec::new())
+        && homogeneous_floating_aggregate(types, ty).is_none_or(|f| {
+            matches!(
+                f.kind,
+                evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+            )
+        })
+}
+
+/// The AAPCS64 HFA class, distinguished from mixed or padded records which use
+/// general registers. Homogeneity is determined after completing the layout.
+#[must_use]
+pub fn is_homogeneous_floating_aggregate(types: &TypeInterner, ty: TypeId) -> bool {
+    homogeneous_floating_aggregate(types, ty).is_some()
+}
+
+#[must_use]
+pub fn homogeneous_floating_aggregate(
+    types: &TypeInterner,
+    ty: TypeId,
+) -> Option<evocc_types::FloatAggregate> {
+    use evocc_types::{FloatKind, TagDefinition, TagState, TypeKind};
+    #[derive(Clone, Copy)]
+    enum Shape {
+        Empty,
+        Float(FloatKind, u64),
+        General,
+    }
+    fn shape(types: &TypeInterner, ty: TypeId, active: &mut Vec<TagId>) -> Shape {
+        match types.get(ty).map(|ty| &ty.kind) {
+            Some(TypeKind::Float(kind)) => Shape::Float(*kind, 1),
+            Some(TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            }) => {
+                if *count == 0 {
+                    return Shape::Empty;
+                }
+                match shape(types, *element, active) {
+                    Shape::Float(kind, n) if count.checked_mul(n).is_some_and(|n| n <= 4) => {
+                        Shape::Float(kind, count * n)
+                    }
+                    Shape::Empty => Shape::Empty,
+                    _ => Shape::General,
+                }
+            }
+            Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => {
+                if active.contains(tag) {
+                    return Shape::General;
+                }
+                let Some(tag_info) = types.tag(*tag) else {
+                    return Shape::General;
+                };
+                let TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                ) = &tag_info.state
+                else {
+                    return Shape::General;
+                };
+                let union = matches!(types.get(ty).map(|ty| &ty.kind), Some(TypeKind::Union(_)));
+                active.push(*tag);
+                let mut result = Shape::Empty;
+                for field in fields {
+                    let member = if field.bit_field.is_some() {
+                        Shape::General
+                    } else {
+                        shape(types, field.ty, active)
+                    };
+                    result = match (result, member) {
+                        (Shape::Empty, right) => right,
+                        (left, Shape::Empty) => left,
+                        (Shape::Float(a, n), Shape::Float(b, m)) if a == b => {
+                            let count = if union { n.max(m) } else { n + m };
+                            if count <= 4 {
+                                Shape::Float(a, count)
+                            } else {
+                                Shape::General
+                            }
+                        }
+                        _ => Shape::General,
+                    };
+                }
+                active.pop();
+                result
+            }
+            _ => Shape::General,
+        }
+    }
+    match shape(types, ty, &mut Vec::new()) {
+        Shape::Float(kind, count @ 1..=4) => {
+            let element_bytes = match kind {
+                FloatKind::F16 => 2,
+                FloatKind::F32 => 4,
+                FloatKind::F64 => 8,
+                FloatKind::F128 => 16,
+            };
+            let target = evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu();
+            let layout = target.layout_of(types, ty).ok()?;
+            // AAPCS64 B.6/C.4 use member alignment before an adjustment of
+            // the whole record. A first aligned member can change transport
+            // alignment even when neither its offsets nor size change.
+            let natural_align = match types.get(ty).map(|ty| &ty.kind) {
+                Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => target
+                    .record_layout(types, *tag)
+                    .ok()?
+                    .fields
+                    .iter()
+                    .map(|field| field.layout.align_bytes)
+                    .max()
+                    .unwrap_or(1),
+                _ => layout.align_bytes,
+            };
+            // Counting floating members alone misses padding introduced by an
+            // aligned record or member. Such a record uses the composite ABI,
+            // not the HFA register convention (AAPCS64 5.10.5).
+            (layout.size_bytes == count * element_bytes).then_some(evocc_types::FloatAggregate {
+                kind,
+                count: count as u8,
+                abi_align: natural_align.clamp(8, 16) as u8,
+            })
+        }
+        _ => None,
+    }
 }
 
 pub use allocation::{
@@ -154,8 +292,37 @@ pub enum IntBase {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FloatLit {
-    pub value: f64,
+    pub value: FloatConstant,
     pub suffix: FloatSuffix,
+}
+
+/// Exact source-format bits; NaN builtin payloads also preserve their spelling's
+/// format until the literal suffix is applied.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FloatConstant {
+    Real(evocc_types::floating::FloatBits),
+    QuietNaN(u128),
+}
+
+impl FloatConstant {
+    pub fn real(self) -> Option<evocc_types::floating::FloatBits> {
+        match self {
+            Self::Real(value) => Some(value),
+            Self::QuietNaN(_) => None,
+        }
+    }
+}
+
+impl From<f64> for FloatConstant {
+    fn from(value: f64) -> Self {
+        Self::Real(
+            evocc_types::floating::FloatBits::from_bits(
+                evocc_types::FloatKind::F64,
+                u128::from(value.to_bits()),
+            )
+            .expect("a host double supplies exactly 64 representation bits"),
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -533,7 +700,51 @@ pub enum VarArgsBuiltinOp {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+pub struct CHirAtomicAccess<'arena> {
+    pub address: &'arena CHirExpr<'arena>,
+    pub value: Option<&'arena CHirExpr<'arena>>,
+    pub expected: Option<&'arena CHirExpr<'arena>>,
+    pub rmw: Option<(evocc_memory::AtomicRmwOp, AtomicRmwReturn)>,
+    pub order: &'arena CHirExpr<'arena>,
+    /// None denotes a source-dynamic order, strengthened to seq_cst after
+    /// evaluating the original expression. Inlining never discards it.
+    pub constant_order: Option<evocc_memory::AtomicOrder>,
+    pub access_ty: TypeId,
+    pub volatile: bool,
+    pub facts: ExprFacts,
+    pub span: SourceSpan,
+}
+
+pub use evocc_memory::{AtomicOrder, AtomicRmwOp};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicRmwReturn {
+    Old,
+    New,
+    Success,
+}
+
+impl<'arena> CHirAtomicAccess<'arena> {
+    pub fn operands(&self) -> impl DoubleEndedIterator<Item = &'arena CHirExpr<'arena>> {
+        std::iter::once(self.address)
+            .chain(self.expected)
+            .chain(self.value)
+            .chain(std::iter::once(self.order))
+    }
+    pub fn operands_mut(&mut self) -> impl Iterator<Item = &mut &'arena CHirExpr<'arena>> {
+        std::iter::once(&mut self.address)
+            .chain(self.expected.iter_mut())
+            .chain(self.value.iter_mut())
+            .chain(std::iter::once(&mut self.order))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum CHirExpr<'arena> {
+    Floating(floating::FloatingExpr<'arena>),
+    Complex(complex::ComplexExpr<'arena>),
+    Vector(vector::VectorExpr<'arena>),
+    Atomic(CHirAtomicAccess<'arena>),
     Lit(IntLit, SourceSpan),
     FloatLit(FloatLit, SourceSpan),
     CharLit(CharLit, SourceSpan),
@@ -569,6 +780,15 @@ pub enum CHirExpr<'arena> {
     /// must evaluate `operand` exactly once and use that same value as both
     /// the condition and the selected true result.
     Elvis(
+        &'arena CHirExpr<'arena>,
+        &'arena CHirExpr<'arena>,
+        SourceSpan,
+    ),
+    /// Runtime expectation: evaluate the converted value, save it, evaluate
+    /// the converted hint, then return the saved value. Source-ICE expectations
+    /// are resolved before this node is built; substitution cannot change the
+    /// evaluation contract. No expectation instruction reaches EvoIR.
+    BuiltinExpect(
         &'arena CHirExpr<'arena>,
         &'arena CHirExpr<'arena>,
         SourceSpan,
@@ -766,6 +986,10 @@ pub fn expression_is_void(
             is_void(facts.ty())
                 && value.is_none_or(|value| expression_is_void(value, symbols, types))
         }
+        CHirExpr::Atomic(access) => is_void(access.facts.ty()),
+        CHirExpr::Floating(access) => is_void(access.facts.ty()),
+        CHirExpr::Vector(access) => is_void(access.facts.ty()),
+        CHirExpr::Complex(access) => is_void(access.facts.ty()),
         CHirExpr::BuiltinVarArgs { facts, .. }
         | CHirExpr::BuiltinTrap { facts, .. }
         | CHirExpr::BuiltinUnreachable { facts, .. } => is_void(facts.ty()),
@@ -777,6 +1001,10 @@ impl CHirExpr<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
         match self {
+            Self::Atomic(access) => access.span,
+            Self::Floating(access) => access.span,
+            Self::Vector(access) => access.span,
+            Self::Complex(access) => access.span,
             Self::Lit(_, span)
             | Self::FloatLit(_, span)
             | Self::CharLit(_, span)
@@ -787,6 +1015,7 @@ impl CHirExpr<'_> {
             | Self::Binary(_, _, _, span)
             | Self::Ternary(_, _, _, span)
             | Self::Elvis(_, _, span)
+            | Self::BuiltinExpect(_, _, span)
             | Self::Call(_, _, span)
             | Self::BuiltinConstantP { span, .. }
             | Self::BuiltinObjectSize { span, .. }
@@ -992,6 +1221,34 @@ pub enum StorageClass {
     Auto,
     Register,
     ThreadLocal,
+    StaticThreadLocal,
+    ExternThreadLocal,
+}
+
+impl StorageClass {
+    pub const fn is_thread_local(self) -> bool {
+        matches!(
+            self,
+            Self::ThreadLocal | Self::StaticThreadLocal | Self::ExternThreadLocal
+        )
+    }
+    /// Linkage/storage-class spelling, independent of TLS storage duration.
+    pub const fn base(self) -> Self {
+        match self {
+            Self::ThreadLocal => Self::None,
+            Self::StaticThreadLocal => Self::Static,
+            Self::ExternThreadLocal => Self::Extern,
+            other => other,
+        }
+    }
+    pub const fn with_thread_local(self) -> Option<Self> {
+        match self {
+            Self::None => Some(Self::ThreadLocal),
+            Self::Static => Some(Self::StaticThreadLocal),
+            Self::Extern => Some(Self::ExternThreadLocal),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1000,7 +1257,7 @@ pub enum TypeofOperand {
     Expression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeSpecifier {
     Builtin {
         ty: TypeId,
@@ -1086,6 +1343,9 @@ pub enum WrittenDeclaratorLayer {
         span: SourceSpan,
     },
     Function {
+        /// Written parameter types are source metadata, not a second call
+        /// signature. Synthetic declarators may have no source parameter list.
+        parameters: Option<ParameterSyntax>,
         span: SourceSpan,
     },
 }
@@ -1209,6 +1469,8 @@ impl AttributeArgument {
 /// applied attributes, such as linkage marks, have their own representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppliedAttribute {
+    /// `vector_size(N)` changes canonical type identity, not just alignment.
+    VectorSize,
     /// `aligned(N)` or bare `aligned`, resolved to bytes.
     Aligned(u32),
     /// `packed`.
@@ -1324,7 +1586,7 @@ impl AttributeInventory {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParameterDecl {
     /// Named parameters have an ordinary-identifier binding. Unnamed
     /// prototype parameters deliberately have no symbol.
@@ -1340,7 +1602,7 @@ pub struct ParameterDecl {
     pub span: SourceSpan,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParameterSyntax {
     Unspecified,
     /// A definition's identifier list, in argument order. Each declaration
@@ -1491,8 +1753,8 @@ pub struct FunctionDecl<'arena> {
     ///
     /// An empty vector means the declaration is not inline; retaining every
     /// token preserves both the written count and each exact source origin.
-    /// Day 5 preserves syntax and provenance only; C11 6.7.4 inline-definition
-    /// and linkage semantics are not modeled by this field.
+    /// FunctionDefinitions combines this spelling with the complete declaration
+    /// chain and selected dialect to determine each body's definition role.
     pub inline_spans: Vec<SourceSpan>,
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     pub gnu_extension_spans: Vec<SourceSpan>,
@@ -1614,8 +1876,11 @@ pub struct CHirUnit<'arena> {
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
+    gnu_inline: bool,
     automatic_zero: bool,
+    tls_model: evocc_types::TlsModel,
     stack_protector: bool,
+    minimum_function_alignment: u32,
     profile_refusals: Vec<ProfileRefusal>,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
@@ -1670,8 +1935,11 @@ impl<'arena> CHirUnit<'arena> {
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
+            gnu_inline: false,
             automatic_zero: false,
+            tls_model: evocc_types::TlsModel::default(),
             stack_protector: false,
+            minimum_function_alignment: 4,
             profile_refusals: Vec::new(),
             resolved_linkage: std::sync::OnceLock::new(),
         }
@@ -1682,6 +1950,22 @@ impl<'arena> CHirUnit<'arena> {
         parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     ) {
         self.unprototyped_parameters = parameters;
+    }
+
+    pub fn set_gnu_inline(&mut self, enabled: bool) {
+        self.gnu_inline = enabled;
+        self.resolved_linkage.take();
+    }
+
+    pub fn gnu_inline(&self) -> bool {
+        self.gnu_inline
+    }
+
+    pub fn set_tls_model(&mut self, model: evocc_types::TlsModel) {
+        self.tls_model = model;
+    }
+    pub fn tls_model(&self) -> evocc_types::TlsModel {
+        self.tls_model
     }
 
     pub fn set_profile_refusals(&mut self, refusals: Vec<ProfileRefusal>) {
@@ -1718,6 +2002,18 @@ impl<'arena> CHirUnit<'arena> {
         self.stack_protector
     }
 
+    /// Machine minimum, separate from source `aligned` and `__alignof__`.
+    /// The driver supplies a validated power of two; substitution retains it.
+    pub fn set_minimum_function_alignment(&mut self, alignment: u32) {
+        assert!(alignment.is_power_of_two() && (4..=65536).contains(&alignment));
+        self.minimum_function_alignment = alignment;
+    }
+
+    #[must_use]
+    pub fn minimum_function_alignment(&self) -> u32 {
+        self.minimum_function_alignment
+    }
+
     #[must_use]
     pub fn zero_initialize_automatic(&self, object: &ObjectDecl<'_>) -> bool {
         object.initializer.is_none() && self.automatic_zero_applies(object)
@@ -1732,6 +2028,13 @@ impl<'arena> CHirUnit<'arena> {
             .as_ref()
             .is_some_and(|initializer| initializer.plan().zero_fills_unwritten())
             && self.automatic_zero_applies(object)
+    }
+
+    /// A block-scope compound literal is an automatic constructor too. Its
+    /// padding is reset on evaluation, not at scope entry or on later copies.
+    #[must_use]
+    pub fn zero_initialize_compound_padding(&self, initializer: &ObjectInitializer<'_>) -> bool {
+        self.automatic_zero && initializer.plan().zero_fills_unwritten()
     }
 
     fn automatic_zero_applies(&self, object: &ObjectDecl<'_>) -> bool {
@@ -2013,6 +2316,26 @@ fn inventory_of_statement(statement: &CHirStmt<'_>, inventory: &mut AttributeInv
 
 fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeInventory) {
     match expression {
+        CHirExpr::Complex(access) => {
+            for operand in &access.operands {
+                inventory_of_expression(operand, inventory);
+            }
+        }
+        CHirExpr::Floating(access) => {
+            for operand in &access.operands {
+                inventory_of_expression(operand, inventory);
+            }
+        }
+        CHirExpr::Vector(access) => {
+            for operand in &access.operands {
+                inventory_of_expression(operand, inventory);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                inventory_of_expression(operand, inventory);
+            }
+        }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
@@ -2027,6 +2350,7 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _)
         | CHirExpr::Assign {
             target: left,
             value: right,
@@ -2121,6 +2445,7 @@ fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
             Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
             Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
             Some(AppliedAttribute::IntegerMode) => "applied integer-mode".to_owned(),
+            Some(AppliedAttribute::VectorSize) => "applied vector-size".to_owned(),
             Some(AppliedAttribute::Cleanup) => "applied cleanup".to_owned(),
             Some(AppliedAttribute::TransparentUnion) => "applied transparent-union".to_owned(),
             None => "preserved-not-applied".to_owned(),
@@ -2239,6 +2564,26 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             }
         }
         match expression {
+            CHirExpr::Atomic(access) => {
+                for operand in access.operands() {
+                    checked_expression(operand, out, seen);
+                }
+            }
+            CHirExpr::Floating(access) => {
+                for operand in &access.operands {
+                    checked_expression(operand, out, seen);
+                }
+            }
+            CHirExpr::Vector(access) => {
+                for operand in &access.operands {
+                    checked_expression(operand, out, seen);
+                }
+            }
+            CHirExpr::Complex(access) => {
+                for operand in &access.operands {
+                    checked_expression(operand, out, seen);
+                }
+            }
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
@@ -2253,6 +2598,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::Index(lhs, rhs, _)
             | CHirExpr::Comma(lhs, rhs, _)
             | CHirExpr::Elvis(lhs, rhs, _)
+            | CHirExpr::BuiltinExpect(lhs, rhs, _)
             | CHirExpr::Assign {
                 target: lhs,
                 value: rhs,
@@ -2800,7 +3146,7 @@ mod tests {
                 &arena,
                 CHirExpr::FloatLit(
                     FloatLit {
-                        value: 3.14,
+                        value: 3.14.into(),
                         suffix: FloatSuffix::None,
                     },
                     s,
@@ -2942,7 +3288,10 @@ mod tests {
                     ty: function_id,
                     return_specifier: builtin_specifier(int_id),
                     written: WrittenDeclarator {
-                        layers: vec![WrittenDeclaratorLayer::Function { span: s }],
+                        layers: vec![WrittenDeclaratorLayer::Function {
+                            parameters: None,
+                            span: s,
+                        }],
                         span: s,
                     },
                     parameters: ParameterSyntax::Unspecified,

@@ -1,0 +1,90 @@
+2026-09-21: AArch64 ELF function placement acceptance.
+Source: function-section-boundaries.c
+Source SHA256 cf6a512a74ee63100c0fd9e7107703055e9424518b9c50a2efe6ffe946f8d8eb
+EvoCC release SHA256 4ec65ed2395fafc7c4b8f0728d3489ae29340a5cd1e3c98d649a5020ae2d866f
+EvoIR 1.9.104 / EvoMIR 0.34; HEAD alone does not identify this dirty tree.
+
+Offline sealed linux/arm64, GCC 14.2.0-19 and Clang 19.1.7:
+  cc -std=gnu11 -O{0,2} -c function-section-boundaries.c -o probe.o
+  readelf -SW probe.o; readelf -sW probe.o
+  cc probe.o -o probe; ./probe
+Both compilers at O0 and O2: late in .exit.text, boot and boot_alias in
+.init.text, ordinary in .text, no standalone inlined symbol; exit 0.
+The patchable entry table has WAL flags and links to the code section.
+
+EvoCC --target=aarch64-unknown-linux-gnu -std=gnu11 --emit=asm produces
+assembly accepted by BOTH gcc-14 and clang-19; both linked programs exit 0.
+late: .exit.text, offset 0, size 40.
+boot and boot_alias: .init.text, offset 64, size 100, section alignment 64.
+ordinary: .text, offset 0, size 40. No .discard.inline section is emitted.
+The static label relocation and indirect jump execute successfully.
+__patchable_function_entries remains WAL and link-ordered to .init.text.
+The callable-symbol alignment, unlike the oracle's offset 8 for this
+patchable-entry combination, follows the already recorded project profile;
+this is not claimed as byte-for-byte oracle code layout equivalence.
+Both C-HIR and EvoIR interpreters return 0.
+
+Boundary (same source, -DLATE_SECTION_ONLY):
+GCC-14 O0/O2: late in .exit.text.
+Clang-19 O0/O2: late in .text; warning: attribute declaration must precede
+definition [-Wignored-attributes]. Neither compiler rejects compilation.
+EvoCC: E2943 invalid-or-conflicting-symbol-attribute, exit 1, no assembly.
+The two-oracle disagreement is deliberately fail-closed, not counted as
+an agreed placement. Identical late repetitions of an earlier request pass.
+
+Two fixture programs (this and kernel-function-section.c), two assemblers:
+4 native executions PASS; both interpreters for both fixtures: 4 PASS.
+These are targeted placement/runtime results, not a full-kernel link verdict.
+
+Final encoding correction (same date):
+Release SHA256 73eff5c4835db643339c865da49698440202d4e40c75816e2951436c02e4a46b
+Added function-section-utf8.c, SHA256
+d9d967ac6719d0a73b4bf3da1f6224efd3aa28aff4bd13ebfec5cd4958316040.
+RED: ordinary UTF-8 had incorrectly become .text.<C3><83><C2><A9>.
+The decoded source units now form UTF-8 bytes once. The MIR regression also
+requires raw UTF-8 in assembler text: GNU as decodes octal section escapes,
+but LLVM retains those escapes literally, despite successful execution.
+GREEN: both assemblers' ELF section is exactly .text.<C3><A9>, AX, align 4.
+Both oracles at O0/O2 agree on raw/adjacent UTF-8 placement and return 0.
+The numeric-escape variant (-DNUMERIC_SECTION_ESCAPE) is accepted by GCC
+but rejected by Clang as an invalid escape in an unevaluated string literal;
+EvoCC explicitly rejects that function-attribute spelling with E2943.
+These source spelling restrictions do not restrict canonical IR hex escapes.
+
+Final release reruns all THREE fixtures: 6/6 interpreter executions and
+6/6 GCC/Clang-assembled native executions return 0; ELF placement is inspected
+separately. Both late-only and numeric-escape negative variants are E2943.
+The preliminary full attempt 20260921T031718Z and initial workspace gate were
+interrupted to include the discovered encoding fixes. No verified full batch
+or new link/boot verdict existed; interrupted attempts are not counted PASS.
+
+Final dirty-tree identity (not HEAD alone): sort the unique tracked and
+nonignored untracked regular paths, concatenate path bytes, NUL and raw SHA256
+of each file, then SHA256 that sequence. Compiler prefixes Cargo.toml,
+Cargo.lock, .cargo/, crates/, vendor/: 508 files,
+d42aaa955293df1581ff923ed59f05740b8e5144e1d3a4e9c3251858524ee6f8.
+EvoIR specification SHA256:
+4849b249105e46d3ea12b86a658b0f45fd054352fb3f7f7f1e4fba482f92772c
+EvoMIR specification SHA256:
+0cd239a4ee34c4f8e4d0b5c270fde2b6aa18dbd3aff4833ece81b94b5cda6c91
+
+Assembler-dialect boundary, not part of the two-assembler PASS above:
+function-section-quoted.c emits GNU-as escaping for quote/backslash names.
+The frozen Linux assembler (GCC-14/GNU as) produces exact .text.a\b and
+.text.a"b names. Clang's integrated assembler retains the escape backslashes
+in its names, despite both binaries returning 0. Thus direct use of LLVM's
+assembler for those escaped names is NOT equivalent and is not counted PASS;
+the kernel lane uses the fixed GNU assembler, not this alternate combination.
+
+Final all-workspace gate: PASS, process exit 0.
+  CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh HEAD --offline -j 2
+  2,598 tests PASS, zero failures, four historical ignored;
+  Clippy --all-targets -D warnings and cargo fmt --all -- --check PASS.
+  Log: .build/floating-targeted/gate-function-section-final-20260921.txt
+Additional checks: 197 K1 Python tests, 32 bench-entry Python tests, Ruff,
+53/53 textual grammar shapes (zero differences), and the two frozen layout
+corpora (128 + 22 exact observations) PASS. No isolated fresh clone was made.
+Full kernel attempt 20260921T033257Z was INTERRUPTED after a separate
+pointer-declarator attribute omission was found (pointer-declarator-section.out).
+Its partial compilation is not counted as link/boot PASS. The gate above
+belongs to the recorded pre-pointer-fix snapshot; the new snapshot is retested.

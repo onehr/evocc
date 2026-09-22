@@ -30,6 +30,7 @@ nonstring	1
 noreturn	202311
 overloadable	0
 packed	1
+patchable_function_entry	1
 pass_dynamic_object_size	0
 pass_object_size	0
 preserve_most	0

@@ -1,0 +1,14 @@
+2026-09-20: completed observation, INCONCLUSIVE ownership experiment.
+Source SHA256 ddd96ec919982f206bab15fa0391bb2ae413bad11dd560d9565f5fd038910236
+Same frozen GCC/EvoCC KUnit Image pair and offline GCC build recipe as
+cgroup-dead-reference-observation.out; program/boot budgets 45/90 seconds.
+Capture .build/floating-targeted/cgroup-dead-page/{reference,subject}/boot.log
+Reference serial 7054668e8ff7b31cd4a098b0470e05a441dd90ff8276c4fa4ae05f9408658cca
+Subject serial 562d6a75a8708dd02b99323d6c86ee7e96610f46871ccd6410e85083f40bd551
+At second 20, GCC dying=3 and EvoCC dying=5. Scanning 786432 PFNs finds
+zero matches for any of the thirty deleted child inode numbers.
+This does NOT prove that the deleted groups have no charged pages:
+the frozen page_cgroup_ino implementation returns the closest ONLINE ancestor
+when its owner is offline. Its public /proc/kpagecgroup value therefore cannot
+identify these deleted children. No test verdict or failure attribution is
+changed by this negative observation.

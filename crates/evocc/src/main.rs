@@ -16,18 +16,14 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::process::ExitCode;
 
-use evocc_chir::{
-    interp::{interpret_scalar_function, InterpreterLimits},
-    CHirDecl,
-};
+use evocc_chir::{interp::InterpreterLimits, CHirDecl};
 use evocc_common::{Arena, FileId};
 use evocc_cpp::{
-    pragma_pack_action, pragma_visibility_action, PragmaVisibilityAction, Preprocessor,
+    is_arm_neon_header_marker, pragma_pack_action, pragma_visibility_action, PragmaPackAction,
+    PragmaVisibilityAction, Preprocessor,
 };
 use evocc_eqopt::{optimize_scalar_module_certified_persistent, EqualityState, ScalarEqBudget};
-use evocc_evoir::{
-    interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
-};
+use evocc_evoir::{render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_mir::emit::{CodegenOptions, StackGuard};
 use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target as MirTarget};
@@ -86,6 +82,31 @@ impl PositionIndependence {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LanguageMode {
+    C89,
+    Gnu89,
+    C99,
+    C11,
+    Gnu99,
+    Gnu11,
+    Gnu17,
+}
+
+impl LanguageMode {
+    fn legacy_declarations(self) -> bool {
+        matches!(self, Self::C89 | Self::Gnu89)
+    }
+
+    fn iso_keywords(self) -> bool {
+        matches!(self, Self::C89 | Self::C99 | Self::C11)
+    }
+
+    fn legacy_literal_prefixes(self) -> bool {
+        self.legacy_declarations() || matches!(self, Self::Gnu99 | Self::C99)
+    }
+}
+
 struct DriverOptions {
     mode: DriverMode,
     target: DriverTarget,
@@ -103,10 +124,15 @@ struct DriverOptions {
     standard_builtins: bool,
     hosted: bool,
     automatic_zero: bool,
+    tls_model: evocc_types::TlsModel,
     stack_protector: bool,
+    patchable_entry: Option<(u16, u16)>,
+    minimum_function_alignment: u32,
     codegen: CodegenOptions,
-    legacy_declarations: bool,
+    language: LanguageMode,
+    gnu_inline: bool,
     short_wchar: bool,
+    signed_char: bool,
     position_independence: PositionIndependence,
     /// Report every diagnostic rather than the first.
     ///
@@ -119,9 +145,9 @@ struct DriverOptions {
 impl DriverOptions {
     fn target_layout(&self) -> TargetDataLayout {
         match self.target {
-            DriverTarget::Aarch64UnknownLinuxGnu => {
-                TargetDataLayout::aarch64_unknown_linux_gnu().with_short_wchar(self.short_wchar)
-            }
+            DriverTarget::Aarch64UnknownLinuxGnu => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .with_short_wchar(self.short_wchar)
+                .with_signed_char(self.signed_char),
         }
     }
 }
@@ -258,13 +284,18 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut standard_builtins = true;
     let mut hosted = true;
     let mut automatic_zero = false;
+    let mut tls_model = evocc_types::TlsModel::default();
     let mut stack_protector = false;
+    let mut patchable_entry = None;
+    let mut minimum_function_alignment = 4;
     let mut codegen = CodegenOptions::default();
     let mut guard_is_sysreg = false;
     let mut guard_register = None;
     let mut guard_offset = None;
-    let mut legacy_declarations = false;
+    let mut language = LanguageMode::Gnu11;
+    let mut gnu_inline = None;
     let mut short_wchar = false;
+    let mut signed_char = false;
     let mut position_independence = PositionIndependence::Pie(2);
     let mut survey = false;
     let mut index = 0;
@@ -293,6 +324,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
+            "-ffp-contract=off" | "-fno-fast-math" | "-fno-rounding-math" => {}
+            "-ffast-math" | "-frounding-math" | "-ffp-contract=fast" | "-ffp-contract=on" => {
+                return Err(format!("unsupported floating-point profile option `{arg}`"));
+            }
             "-fno-builtin" => standard_builtins = false,
             "-fbuiltin" => standard_builtins = true,
             "-ffreestanding" => {
@@ -305,8 +340,37 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-ftrivial-auto-var-init=zero" => automatic_zero = true,
             "-ftrivial-auto-var-init=uninitialized" => automatic_zero = false,
+            _ if arg.starts_with("-ftls-model=") => {
+                tls_model = evocc_types::TlsModel::parse(&arg[12..])
+                    .ok_or_else(|| format!("unsupported TLS model `{arg}`"))?;
+            }
             "-fstack-protector-strong" => stack_protector = true,
             "-fno-stack-protector" => stack_protector = false,
+            _ if arg.starts_with("-fmin-function-alignment=") => {
+                let value = &arg["-fmin-function-alignment=".len()..];
+                minimum_function_alignment = value
+                    .bytes()
+                    .all(|b| b.is_ascii_digit())
+                    .then(|| value.parse::<u32>().ok())
+                    .flatten()
+                    .filter(|value| *value <= 65536 && (*value == 0 || value.is_power_of_two()))
+                    .map(|value| value.max(4))
+                    .ok_or_else(|| format!("unsupported minimum function alignment `{value}`"))?;
+            }
+            _ if arg.starts_with("-fpatchable-function-entry=") => {
+                let value = &arg["-fpatchable-function-entry=".len()..];
+                let (total, before) = value.split_once(',').unwrap_or((value, "0"));
+                let number = |text: &str| {
+                    text.bytes()
+                        .all(|b| b.is_ascii_digit())
+                        .then(|| text.parse::<u16>().ok())
+                        .flatten()
+                };
+                let pair = number(total).zip(number(before)).filter(|(n, m)| m <= n);
+                patchable_entry = Some(
+                    pair.ok_or_else(|| format!("invalid patchable function entry `{value}`"))?,
+                );
+            }
             "-mbranch-protection=pac-ret" => codegen.sign_returns = true,
             "-mbranch-protection=none" => codegen.sign_returns = false,
             "-mgeneral-regs-only" => codegen.general_registers_only = true,
@@ -334,6 +398,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
+            "-fsigned-char" | "-fno-unsigned-char" => signed_char = true,
+            "-funsigned-char" | "-fno-signed-char" => signed_char = false,
             "-fpic" => position_independence = PositionIndependence::Pic(1),
             "-fPIC" => position_independence = PositionIndependence::Pic(2),
             "-fpie" => position_independence = PositionIndependence::Pie(1),
@@ -396,8 +462,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 }
                 macro_prefix_maps.push((old.to_owned(), new.to_owned()));
             }
-            "-std=gnu11" => legacy_declarations = false,
-            "-std=gnu89" => legacy_declarations = true,
+            "-std=gnu11" => language = LanguageMode::Gnu11,
+            "-std=gnu99" => language = LanguageMode::Gnu99,
+            "-std=c89" | "-std=c90" | "-ansi" => language = LanguageMode::C89,
+            "-std=c99" => language = LanguageMode::C99,
+            "-std=c11" => language = LanguageMode::C11,
+            "-std=gnu17" => language = LanguageMode::Gnu17,
+            "-std=gnu89" => language = LanguageMode::Gnu89,
+            "-fgnu89-inline" => gnu_inline = Some(true),
+            "-fno-gnu89-inline" => gnu_inline = Some(false),
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
             }
@@ -411,6 +484,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
         }
         index += 1;
+    }
+
+    if language.legacy_declarations() && gnu_inline == Some(false) {
+        return Err("unsupported inline mode: -fno-gnu89-inline with C89/GNU89".into());
     }
 
     let mode = mode.ok_or_else(|| {
@@ -450,10 +527,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         standard_builtins,
         hosted,
         automatic_zero,
+        tls_model,
         stack_protector,
+        patchable_entry,
+        minimum_function_alignment,
         codegen,
-        legacy_declarations,
+        language,
+        gnu_inline: gnu_inline.unwrap_or(language.legacy_declarations()),
         short_wchar,
+        signed_char,
         position_independence,
         survey,
     })
@@ -486,7 +568,7 @@ fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), Strin
 }
 
 fn run_preprocess(options: &DriverOptions) -> ExitCode {
-    let (src, tokens) = match read_and_lex(&options.input) {
+    let (src, tokens) = match read_and_lex(&options.input, options.language) {
         Ok(value) => value,
         Err(code) => return code,
     };
@@ -498,7 +580,7 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let result = pp.process(evocc_cpp::TokenStream::new(tokens), &src);
+    let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     if pp.has_errors() {
         for error in pp.errors() {
             emit_error(
@@ -527,7 +609,10 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read_and_lex(file: &str) -> Result<(String, Vec<evocc_lex::Token>), ExitCode> {
+fn read_and_lex(
+    file: &str,
+    language: LanguageMode,
+) -> Result<(Vec<u8>, Vec<evocc_lex::Token>), ExitCode> {
     let bytes = match fs::read(file) {
         Ok(s) => s,
         Err(e) => {
@@ -535,24 +620,27 @@ fn read_and_lex(file: &str) -> Result<(String, Vec<evocc_lex::Token>), ExitCode>
             return Err(ExitCode::from(1));
         }
     };
-    let src = match String::from_utf8(bytes) {
-        Ok(src) => src,
-        Err(_) => {
-            emit_error(file, 1, 1, "E0002", "source is not valid UTF-8");
-            return Err(ExitCode::from(1));
-        }
-    };
+    let src = bytes;
 
     let mut tokens = Vec::new();
-    let mut lex = Lexer::new(FileId::new(1), &src);
+    let mut lex = Lexer::from_bytes(FileId::new(1), &src);
+    lex.set_legacy_literal_prefixes(language.legacy_literal_prefixes());
     while let Some(token) = lex.next() {
-        if token.kind == TokenKind::Error {
+        if matches!(token.kind, TokenKind::Error | TokenKind::EncodingError) {
             emit_error(
                 file,
                 token.span.line_start.max(1),
                 token.span.column_start.max(1),
-                "E0001",
-                "invalid token",
+                if token.kind == TokenKind::EncodingError {
+                    "E0002"
+                } else {
+                    "E0001"
+                },
+                if token.kind == TokenKind::EncodingError {
+                    "invalid encoding at this source position"
+                } else {
+                    "invalid token"
+                },
             );
             return Err(ExitCode::from(1));
         }
@@ -587,6 +675,29 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             pp.define(name.to_owned(), decoded_tokens(value)?);
         }
     }
+    // The sealed target macro census is a header-compatibility baseline, not
+    // a claim that this compiler implements Annex F, complex FP or fast FMA.
+    for name in [
+        "__FP_FAST_FMA",
+        "__FP_FAST_FMAF",
+        "__FP_FAST_FMAF32",
+        "__FP_FAST_FMAF32x",
+        "__FP_FAST_FMAF64",
+        "__STDC_IEC_559__",
+        "__STDC_IEC_559_COMPLEX__",
+        "__STDC_IEC_60559_BFP__",
+        "__STDC_IEC_60559_COMPLEX__",
+    ] {
+        pp.undefine(name);
+    }
+    for name in [
+        "__GCC_IEC_559",
+        "__GCC_IEC_559_COMPLEX",
+        "__FLT_EVAL_METHOD__",
+        "__FLT_EVAL_METHOD_TS_18661_3__",
+    ] {
+        pp.define(name.to_owned(), decoded_tokens("0")?);
+    }
     if options.codegen.general_registers_only {
         for name in [
             "__ARM_FEATURE_FMA",
@@ -595,20 +706,8 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             "__ARM_FP16_ARGS",
             "__ARM_FP16_FORMAT_IEEE",
             "__ARM_NEON",
-            "__FP_FAST_FMA",
-            "__FP_FAST_FMAF",
-            "__FP_FAST_FMAF32",
-            "__FP_FAST_FMAF32x",
-            "__FP_FAST_FMAF64",
-            "__STDC_IEC_559_COMPLEX__",
-            "__STDC_IEC_559__",
-            "__STDC_IEC_60559_BFP__",
-            "__STDC_IEC_60559_COMPLEX__",
         ] {
             pp.undefine(name);
-        }
-        for name in ["__GCC_IEC_559", "__GCC_IEC_559_COMPLEX"] {
-            pp.define(name.to_owned(), decoded_tokens("0")?);
         }
     }
     pp.define(
@@ -649,8 +748,25 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     ] {
         pp.define(name.to_owned(), decoded_tokens(&replacement)?);
     }
-    if options.legacy_declarations {
-        pp.undefine("__STDC_VERSION__");
+    pp.set_signed_char(options.signed_char);
+    pp.set_legacy_literal_prefixes(options.language.legacy_literal_prefixes());
+    if options.signed_char {
+        pp.undefine("__CHAR_UNSIGNED__");
+    }
+    match options.language {
+        LanguageMode::C89 | LanguageMode::Gnu89 => pp.undefine("__STDC_VERSION__"),
+        LanguageMode::C99 | LanguageMode::Gnu99 => {
+            pp.define("__STDC_VERSION__".to_owned(), decoded_tokens("199901L")?);
+        }
+        LanguageMode::C11 | LanguageMode::Gnu11 => {}
+        LanguageMode::Gnu17 => {
+            pp.define("__STDC_VERSION__".to_owned(), decoded_tokens("201710L")?);
+        }
+    }
+    if options.language.iso_keywords() {
+        pp.define("__STRICT_ANSI__".to_owned(), decoded_tokens("1")?);
+    }
+    if options.gnu_inline {
         pp.undefine("__GNUC_STDC_INLINE__");
         pp.define("__GNUC_GNU_INLINE__".to_owned(), decoded_tokens("1")?);
     }
@@ -693,7 +809,10 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
                 if !is_identifier(name) {
                     return Err(format!("invalid macro name in -D: `{name}`"));
                 }
-                pp.define(name.to_owned(), decoded_tokens(replacement)?);
+                pp.define(
+                    name.to_owned(),
+                    decoded_tokens_in_mode(replacement, options.language)?,
+                );
             }
             MacroAction::Undefine(name) => {
                 if !is_identifier(name) {
@@ -707,8 +826,16 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
 }
 
 fn decoded_tokens(source: &str) -> Result<Vec<evocc_lex::Token>, String> {
+    decoded_tokens_in_mode(source, LanguageMode::Gnu11)
+}
+
+fn decoded_tokens_in_mode(
+    source: &str,
+    language: LanguageMode,
+) -> Result<Vec<evocc_lex::Token>, String> {
     let mut tokens = Vec::new();
     let mut lexer = Lexer::new(FileId::DUMMY, source);
+    lexer.set_legacy_literal_prefixes(language.legacy_literal_prefixes());
     while let Some(token) = lexer.next() {
         if token.kind == TokenKind::Eof {
             break;
@@ -718,6 +845,9 @@ fn decoded_tokens(source: &str) -> Result<Vec<evocc_lex::Token>, String> {
         }
         let text = match &token.text {
             evocc_lex::TokenText::Decoded(text) => text.clone(),
+            evocc_lex::TokenText::RawBytes { .. } => {
+                return Err("invalid macro option encoding".into())
+            }
             evocc_lex::TokenText::Borrowed => source
                 .get(token.span.byte_start as usize..token.span.byte_end as usize)
                 .ok_or_else(|| "invalid macro replacement span".to_string())?
@@ -737,35 +867,61 @@ fn is_identifier(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
-fn render_preprocessed(tokens: &[evocc_lex::Token], source: &str) -> Result<String, String> {
+fn render_preprocessed(tokens: &[evocc_lex::Token], source: &[u8]) -> Result<String, String> {
     let mut rendered = String::new();
     let mut unseparated: Vec<(TokenKind, String)> = Vec::new();
-    for token in tokens
-        .iter()
-        .filter(|token| token.kind != TokenKind::Eof && pragma_pack_action(token).is_none())
-    {
+    for token in tokens.iter().filter(|token| token.kind != TokenKind::Eof) {
+        // Semantic directives cross the internal token boundary as markers,
+        // but -E must emit their source form for the next parser invocation.
+        if let Some(action) = pragma_pack_action(token) {
+            if !rendered.is_empty() && !rendered.ends_with('\n') {
+                rendered.push('\n');
+            }
+            match action {
+                PragmaPackAction::Set(alignment) => {
+                    rendered.push_str(&format!("#pragma pack({alignment})\n"));
+                }
+                PragmaPackAction::Reset => rendered.push_str("#pragma pack()\n"),
+                PragmaPackAction::Push(None) => rendered.push_str("#pragma pack(push)\n"),
+                PragmaPackAction::Push(Some(alignment)) => {
+                    rendered.push_str(&format!("#pragma pack(push, {alignment})\n"));
+                }
+                PragmaPackAction::Pop => rendered.push_str("#pragma pack(pop)\n"),
+            }
+            unseparated.clear();
+            continue;
+        }
+        if is_arm_neon_header_marker(token) {
+            if !rendered.is_empty() && !rendered.ends_with('\n') {
+                rendered.push('\n');
+            }
+            rendered.push_str("#pragma GCC aarch64 \"arm_neon.h\"\n");
+            unseparated.clear();
+            continue;
+        }
         if let Some(action) = pragma_visibility_action(token) {
             if !rendered.is_empty() && !rendered.ends_with('\n') {
                 rendered.push('\n');
             }
-            rendered.push_str(match action {
-                PragmaVisibilityAction::Push { hidden: true } => {
-                    "#pragma GCC visibility push(hidden)\n"
+            match action {
+                PragmaVisibilityAction::Push { visibility } => {
+                    rendered.push_str(&format!("#pragma GCC visibility push({visibility})\n"));
                 }
-                PragmaVisibilityAction::Push { hidden: false } => {
-                    "#pragma GCC visibility push(default)\n"
-                }
-                PragmaVisibilityAction::Pop => "#pragma GCC visibility pop\n",
-            });
+                PragmaVisibilityAction::Pop => rendered.push_str("#pragma GCC visibility pop\n"),
+            }
             unseparated.clear();
             continue;
         }
         let text = match &token.text {
             evocc_lex::TokenText::Decoded(text) => text.clone(),
-            evocc_lex::TokenText::Borrowed => source
-                .get(token.span.byte_start as usize..token.span.byte_end as usize)
-                .ok_or_else(|| "token span does not belong to the active source".to_string())?
-                .to_owned(),
+            evocc_lex::TokenText::RawBytes { escaped, .. } => escaped.clone(),
+            evocc_lex::TokenText::Borrowed => std::str::from_utf8(
+                source
+                    .get(token.span.byte_start as usize..token.span.byte_end as usize)
+                    .ok_or_else(|| "token span does not belong to the active source".to_string())?,
+            )
+            .map_err(|_| "legacy token has invalid encoding".to_string())?
+            .to_owned(),
         };
         if text.is_empty() {
             continue;
@@ -802,7 +958,7 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
 }
 
 fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
-    let (src, tokens) = match read_and_lex(&options.input) {
+    let (src, tokens) = match read_and_lex(&options.input, options.language) {
         Ok(value) => value,
         Err(code) => return code,
     };
@@ -814,7 +970,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let result = pp.process(evocc_cpp::TokenStream::new(tokens), &src);
+    let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     if pp.has_errors() {
         for error in pp.errors() {
             emit_error(
@@ -831,17 +987,24 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let processed = result.into_vec();
 
     let arena = Arena::default();
-    let mut parser = Parser::new(processed, FileId::new(1), &src);
+    let mut parser = Parser::from_tokens(processed, FileId::new(1));
     parser.set_target_layout(options.target_layout());
     parser.set_standard_builtins(options.standard_builtins);
-    parser.set_legacy_declarations(options.legacy_declarations);
+    parser.set_legacy_declarations(options.language.legacy_declarations());
+    parser.use_language_keywords(
+        options.language.iso_keywords(),
+        options.language.legacy_declarations(),
+    );
+    parser.set_gnu_inline(options.gnu_inline);
     if !options.survey {
         parser.set_error_limit(NonZeroUsize::MIN);
     }
     let mut unit = parser.parse_translation_unit_in(&arena);
     unit.set_signed_wrapping(options.signed_wrapping);
     unit.set_automatic_zero(options.automatic_zero);
+    unit.set_tls_model(options.tls_model);
     unit.set_stack_protector(options.stack_protector);
+    unit.set_minimum_function_alignment(options.minimum_function_alignment);
     if parser.had_error() {
         // A build reports the first diagnostic only. The error limit bounds the
         // declaration loop, not the reports made while parsing one
@@ -879,7 +1042,12 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 &unit,
                 &target,
                 options.optimization != 0,
-                |resolved, module| {
+                |resolved, mut module| {
+                    for function in &mut module.functions {
+                        if function.patchable_entry.is_none() {
+                            function.patchable_entry = options.patchable_entry;
+                        }
+                    }
                     let module = if options.optimize_scalar_evoir {
                         optimize_scalar_evoir(module)
                     } else {
@@ -945,7 +1113,12 @@ fn interpret_chir(
         return ExitCode::from(1);
     };
 
-    let outcome = match interpret_scalar_function(unit, entry, InterpreterLimits::default()) {
+    let outcome = match evocc_chir::interp::interpret_program(
+        unit,
+        entry,
+        &options.target_layout(),
+        InterpreterLimits::default(),
+    ) {
         Ok(outcome) => outcome,
         Err(error) => {
             let span = error.span();
@@ -1080,13 +1253,14 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let outcome = match interpret_module(module, "main", &arguments, EvoIrLimits::new(100_000)) {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            emit_error(&options.input, 1, 1, error.code(), &error.message());
-            return ExitCode::from(1);
-        }
-    };
+    let outcome =
+        match evocc_evoir::interpret_program(module, &arguments, EvoIrLimits::new(100_000)) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                emit_error(&options.input, 1, 1, error.code(), &error.message());
+                return ExitCode::from(1);
+            }
+        };
     if outcome.return_values.len() != declared_results.len()
         || outcome
             .return_values

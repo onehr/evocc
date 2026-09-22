@@ -15,10 +15,16 @@ pub use evocc_types::{canonical_marks, param_mark, EvoIRType, ParamMark, RecordS
 use evocc_types::{AddressSpace, Region, TargetDataLayout};
 
 mod assembly;
+mod atomic;
+mod floating;
+pub use atomic::{AtomicAccess, AtomicOp, AtomicOrder, AtomicRmwOp};
+pub use floating::{floating_kind, FloatingInst, FloatingOp};
 mod text;
 mod text_parse;
 mod variadic;
+mod vector;
 pub use variadic::{call_argument_marks, VariadicAccess, VariadicOp};
+pub use vector::{integer_vector_shape, VectorInst, VectorOp};
 
 /// A terminator edge: positional SSA bindings, independent of its producer.
 pub use assembly::AssemblyEdge as Edge;
@@ -113,6 +119,7 @@ pub enum UbReason {
     SignedOverflow,
     InvalidShiftCount,
     InvalidSignedLeftShift,
+    FloatingToInteger,
 }
 
 impl UbReason {
@@ -126,6 +133,7 @@ impl UbReason {
             Self::SignedOverflow => "E3004",
             Self::InvalidShiftCount => "E3005",
             Self::InvalidSignedLeftShift => "E3006",
+            Self::FloatingToInteger => "E3063",
         }
     }
 
@@ -139,6 +147,7 @@ impl UbReason {
             Self::SignedOverflow => "signed-integer-overflow",
             Self::InvalidShiftCount => "invalid-shift-count",
             Self::InvalidSignedLeftShift => "invalid-signed-left-shift",
+            Self::FloatingToInteger => "floating-to-integer-not-representable",
         }
     }
 
@@ -152,6 +161,7 @@ impl UbReason {
             Self::SignedOverflow => "signed_overflow",
             Self::InvalidShiftCount => "invalid_shift_count",
             Self::InvalidSignedLeftShift => "invalid_signed_left_shift",
+            Self::FloatingToInteger => "floating_to_integer",
         }
     }
 }
@@ -207,8 +217,16 @@ impl TrapReason {
 /// cannot be confused with ordinary call arguments or results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inst {
+    Floating(FloatingInst),
+    TlsAddr(TlsAddress),
+    Vector(VectorInst),
+    /// One naturally aligned atomic access with an explicit memory order.
+    Atomic(AtomicAccess),
     /// Select one complete, explicitly bound successor by its code address.
-    IndirectBr { target: Value, edges: Vec<Edge> },
+    IndirectBr {
+        target: Value,
+        edges: Vec<Edge>,
+    },
     BitOperation {
         result: Value,
         operand: Value,
@@ -314,13 +332,22 @@ pub enum Inst {
     /// Construct the canonical null pointer.
     PtrNull(Value),
     /// Integer addresses and pointer provenance are bridged only by these forms.
-    PointerCast { result: Value, operand: Value },
+    PointerCast {
+        result: Value,
+        operand: Value,
+    },
 
     /// Return the stable address of one module global.
-    GlobalAddr { result: Value, symbol: String },
+    GlobalAddr {
+        result: Value,
+        symbol: String,
+    },
 
     /// Return one function's stable provenance with its complete signature.
-    FuncAddr { result: Value, symbol: String },
+    FuncAddr {
+        result: Value,
+        symbol: String,
+    },
 
     /// Return the address of the first instruction of one block of the
     /// current function, with *code* provenance (revision 1.9.68).
@@ -330,7 +357,10 @@ pub enum Inst {
     /// because the kernel writes `({ __label__ __here; __here: (unsigned
     /// long)&&__here; })` to record an instruction address; the value is only
     /// ever compared, stored and printed.
-    BlockAddr { result: Value, block: BlockId },
+    BlockAddr {
+        result: Value,
+        block: BlockId,
+    },
 
     /// Return the address the current activation will return to, with *code*
     /// provenance (revision 1.9.72).
@@ -339,7 +369,9 @@ pub enum Inst {
     /// storable, `ptr.to_int`-able, and `E3013` when dereferenced"; the
     /// interpreters give each activation a fresh value. It exists because the
     /// kernel's `_RET_IP_` is `(unsigned long)__builtin_return_address(0)`.
-    ReturnAddress { result: Value },
+    ReturnAddress {
+        result: Value,
+    },
 
     /// Return the address of this activation's frame record (depth zero), with
     /// *stack* provenance of an object no load or store may touch (revision
@@ -349,7 +381,10 @@ pub enum Inst {
     /// `return_address`; only `E3013` separates it from an ordinary object.
     /// A nonzero depth follows saved caller frame pointers on the machine;
     /// interpreters preserve their explicit physical-stack boundary.
-    FrameAddress { result: Value, depth: u16 },
+    FrameAddress {
+        result: Value,
+        depth: u16,
+    },
 
     /// Allocate one fresh automatic object in the current invocation.
     Alloca {
@@ -489,10 +524,14 @@ pub enum Inst {
 #[must_use]
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::TlsAddr(access) => access.results(),
+        Inst::Vector(operation) => vec![&operation.result],
+        Inst::Floating(operation) => vec![&operation.result],
         Inst::IndirectBr { .. } => vec![],
         Inst::PointerCast { result, .. } => vec![result],
         Inst::BitOperation { result, .. } => vec![result],
         Inst::VaAccess(access) => access.results(),
+        Inst::Atomic(access) => access.results(),
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.results(),
         Inst::Const(v, _)
         | Inst::Uninitialized(v)
@@ -583,12 +622,16 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::TlsAddr(access) => access.operands(),
+        Inst::Vector(operation) => operation.arguments.iter().collect(),
+        Inst::Floating(operation) => operation.arguments.iter().collect(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)
             .chain(edges.iter().flat_map(|edge| &edge.arguments))
             .collect(),
         Inst::PointerCast { operand, .. } => vec![operand],
         Inst::BitOperation { operand, .. } => vec![operand],
         Inst::VaAccess(access) => access.operands(),
+        Inst::Atomic(access) => access.operands(),
         Inst::Asm(assembly) => assembly.operands(),
         Inst::AsmGoto {
             assembly,
@@ -785,6 +828,11 @@ impl EffectSummary {
 /// A function in EvoIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
+    /// Explicit native code placement; not part of its callable signature.
+    pub section: Option<String>,
+    /// Native entry reservation: total NOPs and those before the callable symbol.
+    /// `Some((0, 0))` explicitly overrides a translation-unit default.
+    pub patchable_entry: Option<(u16, u16)>,
     /// Source-selected strong stack protection; native guard policy is a target option.
     pub stack_protect: bool,
     /// Alignment of the first instruction; absent from text when it is four.
@@ -815,6 +863,9 @@ pub struct Function {
 /// A collection of mutually callable EvoIR functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
+    pub tls: Vec<TlsSymbol>,
+    /// ELF registration order is semantic. Entries are roots even without calls.
+    pub lifecycle: Vec<LifecycleRegistration>,
     pub aliases: Vec<SymbolAlias>,
     /// File-scope assembler text, retained in source order and not interpreted.
     pub assembly: Vec<String>,
@@ -823,6 +874,24 @@ pub struct Module {
     pub declares: Vec<FunctionDeclaration>,
     pub functions: Vec<Function>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecyclePhase {
+    Constructor,
+    Destructor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LifecycleRegistration {
+    pub phase: LifecyclePhase,
+    pub function: String,
+    pub priority: u16,
+}
+
+mod lifecycle;
+pub use lifecycle::interpret_program;
+mod tls;
+pub use tls::{TlsAddress, TlsModel, TlsSymbol};
 
 /// Storage supplied by a linker, never allocated or initialized by this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -851,6 +920,8 @@ pub struct FunctionDeclaration {
 impl FunctionDeclaration {
     fn signature(&self) -> Function {
         Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             name: self.name.clone(),
@@ -952,6 +1023,25 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 #[allow(clippy::too_many_lines)]
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
+        Inst::Floating(_) => EffectSummary::default(),
+        Inst::TlsAddr(_) => EffectSummary {
+            reads_all: true,
+            writes_all: true,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::Vector(operation) => EffectSummary {
+            may_trap: operation.op == VectorOp::Extract,
+            ..EffectSummary::default()
+        },
+        Inst::Atomic(access) => EffectSummary {
+            reads_all: !matches!(access.op, AtomicOp::Store(_)),
+            writes_all: !access.is_load(),
+            volatile: access.volatile,
+            atomic: true,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
         Inst::IndirectBr { .. } => EffectSummary {
             may_trap: true,
             ..EffectSummary::default()
@@ -1059,7 +1149,7 @@ pub enum GlobalKind {
     CompoundLiteral,
 }
 
-/// Link visibility of one module global or function.
+/// Compact encoding of C linkage and ELF visibility for a symbol.
 ///
 /// `External` is the default because the canonical Section 9 text omits the
 /// field for an external function (revision 1.9.70).
@@ -1067,9 +1157,12 @@ pub enum GlobalKind {
 pub enum GlobalVisibility {
     #[default]
     External,
+    /// C internal linkage (static), not GNU visibility("internal").
     Internal,
     /// External linkage without interposition from outside the linked image.
     Hidden,
+    /// Externally exported, with references bound inside its final ELF component.
+    Protected,
 }
 
 impl GlobalVisibility {
@@ -1078,7 +1171,12 @@ impl GlobalVisibility {
             Self::External => "",
             Self::Internal => " visibility=internal",
             Self::Hidden => " visibility=hidden",
+            Self::Protected => " visibility=protected",
         }
+    }
+
+    pub const fn binds_locally(self) -> bool {
+        !matches!(self, Self::External)
     }
 }
 
@@ -1111,6 +1209,9 @@ pub struct SymbolAlias {
 /// One eagerly allocated module object and its byte initialization state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalObject {
+    /// Stores are forbidden after initialization and relocation. Independent
+    /// of source origin, linkage, and an explicitly selected native section.
+    pub read_only: bool,
     /// Explicit native object placement, independent of storage and type identity.
     pub section: Option<String>,
     pub linkage: Linkage,
@@ -1125,6 +1226,10 @@ pub struct GlobalObject {
 }
 
 impl GlobalObject {
+    pub fn is_read_only(&self) -> bool {
+        self.read_only || self.kind == GlobalKind::StringLiteral
+    }
+
     pub fn has_bss_section(&self) -> bool {
         self.section
             .as_deref()
@@ -1158,6 +1263,31 @@ pub struct Relocation {
     pub addend: i64,
     /// The static initializer converted this address to an integer.
     pub exposed: bool,
+    /// A same-function label difference, stored as integer bytes rather than
+    /// an address with provenance. Absolute relocations always occupy 8 bytes.
+    pub difference: Option<BlockDifference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockDifference {
+    pub base: String,
+    pub bits: u16,
+}
+
+impl Relocation {
+    pub fn size_bytes(&self) -> u64 {
+        self.difference
+            .as_ref()
+            .map_or(8, |difference| u64::from(difference.bits / 8))
+    }
+
+    pub fn symbols(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.symbol.as_str()).chain(
+            self.difference
+                .as_ref()
+                .map(|difference| difference.base.as_str()),
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1172,6 +1302,22 @@ pub struct Relocation {
 /// or an instruction result defined earlier in that same block.  Values that
 /// cross a CFG edge must be passed explicitly to the destination arguments.
 pub fn validate_ssa(func: &Function) -> Result<(), String> {
+    if func
+        .section
+        .as_ref()
+        .is_some_and(|name| name.is_empty() || name.chars().any(char::is_control))
+    {
+        return Err(format!("function '{}' has invalid section name", func.name));
+    }
+    if func
+        .patchable_entry
+        .is_some_and(|(total, before)| before > total)
+    {
+        return Err(format!(
+            "function '{}' has invalid patchable entry",
+            func.name
+        ));
+    }
     if func.alignment < 4 || !func.alignment.is_power_of_two() {
         return Err(format!(
             "function '{}' has invalid alignment {}",
@@ -1488,6 +1634,14 @@ fn validate_memory_contract(
         } => {
             access_guards.insert(mem_out.id, (pointer.id, *layout));
         }
+        Inst::Atomic(access) => {
+            let layout = access.layout()?;
+            if access_guards.get(&access.mem_in.id) != Some(&(access.address.id, layout)) {
+                return Err(format!(
+                    "E3062: invalid-atomic-access: natural alignment guard in block {block}"
+                ));
+            }
+        }
         Inst::Load {
             result,
             address,
@@ -1546,6 +1700,11 @@ fn validate_matching_access_guard(
 /// Target-profile scalar representation layout, also used for compiler-created storage.
 pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
     let size = match ty {
+        EvoIRType::Vec(..) => {
+            let (lanes, width) =
+                integer_vector_shape(ty).ok_or("unsupported vector memory type")?;
+            u64::from(lanes) * u64::from(width / 8)
+        }
         EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),
         EvoIRType::F32 => 4,
         EvoIRType::F64 => 8,
@@ -1595,7 +1754,7 @@ pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Resul
                 "parameter {index} carries a record mark but is not ptr<generic>"
             ));
         }
-        if shape.align == 0 || !shape.align.is_power_of_two() {
+        if !shape.valid() {
             return Err(format!(
                 "parameter {index} marks a record whose alignment {} is not a power of two",
                 shape.align
@@ -1689,8 +1848,13 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         validate_ssa(function)
             .map_err(|message| format!("function '{}': {message}", function.name))?;
         let mut taken = address_taken_blocks(function);
-        for relocation in module.globals.iter().flat_map(|global| &global.relocs) {
-            if let Some((owner, label)) = relocation.symbol.split_once("^b") {
+        for symbol in module
+            .globals
+            .iter()
+            .flat_map(|global| &global.relocs)
+            .flat_map(Relocation::symbols)
+        {
+            if let Some((owner, label)) = symbol.split_once("^b") {
                 if owner == function.name {
                     if let Ok(block) = label.parse::<BlockId>() {
                         taken.insert(block);
@@ -1703,6 +1867,27 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
     for declaration in &module.declares {
         validate_record_marks(&declaration.params, &declaration.param_marks)
             .map_err(|message| format!("declare '{}': {message}", declaration.name))?;
+    }
+    let mut registrations = HashSet::new();
+    for r in &module.lifecycle {
+        let function = functions.get(r.function.as_str()).ok_or_else(|| {
+            format!(
+                "lifecycle registration names undefined function '{}'",
+                r.function
+            )
+        })?;
+        let effects = [EvoIRType::Mem(Region::All), EvoIRType::World];
+        if r.priority < 101
+            || function.variadic
+            || function.params.iter().map(|p| &p.ty).ne(effects.iter())
+            || function.ret_tys != effects
+            || !registrations.insert((r.function.as_str(), r.phase == LifecyclePhase::Constructor))
+        {
+            return Err(format!(
+                "invalid lifecycle registration for '{}'",
+                r.function
+            ));
+        }
     }
     let declarations = module
         .declares
@@ -1738,6 +1923,23 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
     }
 
     let mut globals = HashMap::new();
+    let mut tls_symbols = HashSet::new();
+    let declared_tls: HashSet<_> = module.tls.iter().map(|t| t.symbol.as_str()).collect();
+    for symbol in &module.tls {
+        if !tls_symbols.insert(symbol.symbol.as_str())
+            || !(module.globals.iter().any(|g| {
+                g.symbol == symbol.symbol
+                    && g.kind != GlobalKind::StringLiteral
+                    && g.initialized.iter().all(|b| *b)
+            }) || externs.contains(symbol.symbol.as_str())
+                || module
+                    .aliases
+                    .iter()
+                    .any(|a| a.name == symbol.symbol && declared_tls.contains(a.target.as_str())))
+        {
+            return Err(format!("invalid TLS symbol '{}'", symbol.symbol));
+        }
+    }
     let mut origins = HashSet::new();
     for global in &module.globals {
         global.validate_section()?;
@@ -1752,6 +1954,9 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
         let mut previous_end = 0;
         for relocation in &global.relocs {
+            if tls_symbols.contains(relocation.symbol.as_str()) {
+                return Err("a TLS address is not a static relocation".into());
+            }
             let code_target = relocation
                 .symbol
                 .split_once("^b")
@@ -1764,9 +1969,31 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     function.name == name && function.blocks.iter().any(|block| block.id == id)
                 })
             });
+            if let Some(difference) = &relocation.difference {
+                let valid_base = difference
+                    .base
+                    .split_once("^b")
+                    .is_some_and(|(owner, label)| {
+                        code_target.is_some_and(|(function, _)| function == owner)
+                            && module.functions.iter().any(|function| {
+                                function.name == owner
+                                    && function
+                                        .blocks
+                                        .iter()
+                                        .any(|block| block.id.to_string() == label)
+                            })
+                    });
+                if !valid_code_target
+                    || !valid_base
+                    || relocation.exposed
+                    || !matches!(difference.bits, 8 | 16 | 32 | 64)
+                {
+                    return Err("malformed relative block relocation".into());
+                }
+            }
             let end = relocation
                 .offset
-                .checked_add(8)
+                .checked_add(relocation.size_bytes())
                 .filter(|end| *end <= global.layout.size_bytes)
                 .ok_or_else(|| {
                     format!(
@@ -1870,6 +2097,8 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     }
                     Inst::Load { .. }
                     | Inst::VaAccess(_)
+                    | Inst::Atomic(_)
+                    | Inst::TlsAddr(_)
                     | Inst::Store { .. }
                     | Inst::Copy { .. }
                     | Inst::Alloca { .. }
@@ -1895,6 +2124,12 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         for block in &caller.blocks {
             for (index, instruction) in block.insts.iter().enumerate() {
                 match instruction {
+                    Inst::TlsAddr(a) if !tls_symbols.contains(a.symbol.as_str()) => {
+                        return Err(format!("tls_addr names non-TLS object '{}'", a.symbol));
+                    }
+                    Inst::GlobalAddr { symbol, .. } if tls_symbols.contains(symbol.as_str()) => {
+                        return Err(format!("global_addr cannot name TLS object '{symbol}'"));
+                    }
                     Inst::GlobalAddr { symbol, .. }
                         if !globals.contains_key(symbol.as_str())
                             && !externs.contains(symbol.as_str()) =>
@@ -2095,13 +2330,7 @@ fn validate_call_signature(
         ));
     }
     for argument in &args[signature.ordinary_params.len()..] {
-        if !matches!(
-            argument.ty,
-            EvoIRType::Bits(32 | 64 | 128)
-                | EvoIRType::F64
-                | EvoIRType::Ptr(_)
-                | EvoIRType::FnPtr { .. }
-        ) {
+        if !variadic::promoted_type(&argument.ty) {
             return Err("anonymous argument is not a promoted scalar type".into());
         }
     }
@@ -2464,6 +2693,13 @@ impl EffectState {
 
     fn advance(&mut self, inst: &Inst, block: BlockId) -> Result<(), String> {
         let tokens = match inst {
+            Inst::TlsAddr(a) => Some((&a.mem_in, &a.world_in, &a.mem_out, &a.world_out)),
+            Inst::Atomic(access) => Some((
+                &access.mem_in,
+                &access.world_in,
+                &access.mem_out,
+                &access.world_out,
+            )),
             Inst::VaAccess(access) => Some((
                 &access.mem_in,
                 &access.world_in,
@@ -2611,7 +2847,11 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             }
             Ok(())
         }
+        Inst::Vector(operation) => operation.validate(),
+        Inst::Floating(operation) => operation.validate(),
         Inst::VaAccess(access) => access.validate(),
+        Inst::Atomic(access) => access.validate(),
+        Inst::TlsAddr(access) => access.validate(),
         Inst::Asm(assembly) => assembly.validate(&[]),
         Inst::AsmGoto {
             assembly, labels, ..
@@ -2935,15 +3175,9 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 ));
             }
             if *variadic
-                && args[fixed..].iter().any(|argument| {
-                    !matches!(
-                        argument.ty,
-                        EvoIRType::Bits(32 | 64 | 128)
-                            | EvoIRType::F64
-                            | EvoIRType::Ptr(_)
-                            | EvoIRType::FnPtr { .. }
-                    )
-                })
+                && args[fixed..]
+                    .iter()
+                    .any(|argument| !variadic::promoted_type(&argument.ty))
             {
                 return Err("anonymous argument is not a promoted scalar type".into());
             }
@@ -3446,6 +3680,7 @@ impl RuntimeValue {
 /// interpreter is executing validated EvoIR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InternalValue {
+    Vector(usize),
     Bits(u128),
     Pointer(Pointer),
     FunctionPointer(PointerValue),
@@ -3462,6 +3697,8 @@ pub struct InterpreterOutcome {
 }
 
 struct ExecutionState {
+    tls_templates: HashMap<String, GlobalObject>,
+    vectors: Vec<evocc_memory::ObjectRepresentation>,
     argument_lists: evocc_memory::ArgumentLists<(EvoIRType, ParamMark, InternalValue)>,
     memory: MemoryState,
     world: WorldState,
@@ -3511,6 +3748,8 @@ impl ExecutionState {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
+            tls_templates: HashMap::new(),
+            vectors: Vec::new(),
             argument_lists: evocc_memory::ArgumentLists::default(),
             memory,
             world,
@@ -4186,7 +4425,18 @@ fn interpret_module_in_state(
     entry_name: &str,
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
+    state: ExecutionState,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    interpret_module_execution(module, entry_name, entry_args, limits, state, false)
+}
+
+fn interpret_module_execution(
+    module: &Module,
+    entry_name: &str,
+    entry_args: &[RuntimeValue],
+    limits: InterpreterLimits,
     mut state: ExecutionState,
+    program: bool,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
     let mut function_indices: HashMap<&str, usize> = module
@@ -4263,22 +4513,43 @@ fn interpret_module_in_state(
             normalize_runtime_input(value, &argument.value.ty, index, entry_block.id)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let (entry_frame, entry_scope) =
-        begin_function_memory(&mut state, entry_function, entry_block.id)?;
-    let entry_activation = state.begin_activation()?;
-    let mut frames = vec![ModuleFrame::new(
-        entry_index,
-        entry_block.id,
-        incoming,
-        Vec::new(),
-        None,
-        entry_frame,
-        entry_scope,
-        entry_activation,
-    )];
+    let mut roots = lifecycle::program_entries(module, entry_index, program);
+    let mut root_kind = lifecycle::EntryKind::Main;
+    let mut program_result = Vec::new();
+    let mut frames = Vec::new();
     let mut steps = 0;
 
     loop {
+        if frames.is_empty() {
+            let Some((index, kind)) = roots.pop_front() else {
+                return Ok(InterpreterOutcome {
+                    return_values: program_result,
+                    steps,
+                    memory: state.memory,
+                    world: state.world,
+                });
+            };
+            root_kind = kind;
+            let function = &module.functions[index];
+            let block = function.blocks[0].id;
+            let values = if kind == lifecycle::EntryKind::Main {
+                incoming.clone()
+            } else {
+                vec![InternalValue::Bits(0), InternalValue::Bits(0)]
+            };
+            let (frame, scope) = begin_function_memory(&mut state, function, block)?;
+            let activation = state.begin_activation()?;
+            frames.push(ModuleFrame::new(
+                index,
+                block,
+                values,
+                Vec::new(),
+                None,
+                frame,
+                scope,
+                activation,
+            ));
+        }
         let frame_index =
             frames
                 .len()
@@ -4324,6 +4595,45 @@ fn interpret_module_in_state(
                         .iter()
                         .any(|declaration| declaration.name == callee)
                     {
+                        if program
+                            && matches!(callee.as_str(), "exit" | "_Exit" | "_exit" | "quick_exit")
+                        {
+                            let status =
+                                args.first()
+                                    .ok_or_else(|| InterpreterError::InvalidModule {
+                                        message: "termination needs an exit status".into(),
+                                    })?;
+                            let code = read_value(&frames[frame_index].values, status, block_id)?;
+                            program_result = entry_function
+                                .ret_tys
+                                .iter()
+                                .map(|ty| {
+                                    RuntimeValue::wide(
+                                        ty.clone(),
+                                        if matches!(ty, EvoIRType::Bits(_)) {
+                                            code
+                                        } else {
+                                            0
+                                        },
+                                    )
+                                })
+                                .collect();
+                            roots.retain(|(_, kind)| {
+                                callee == "exit" && *kind == lifecycle::EntryKind::Finalizer
+                            });
+                            for frame in frames.drain(..).rev() {
+                                if let Some(frame) = frame.memory_frame {
+                                    state.memory =
+                                        state.memory.end_frame(frame).map_err(|error| {
+                                            InterpreterError::MemoryAccess {
+                                                block: block_id,
+                                                error,
+                                            }
+                                        })?;
+                                }
+                            }
+                            continue;
+                        }
                         let returned = execute_external_call(
                             &mut state,
                             &callee,
@@ -4433,6 +4743,7 @@ fn interpret_module_in_state(
                         InternalValue::FunctionPointer(PointerValue::Object(_))
                         | InternalValue::FunctionPointer(PointerValue::Exposed(_))
                         | InternalValue::Pointer(_)
+                        | InternalValue::Vector(_)
                         | InternalValue::Bits(_) => {
                             return Err(InterpreterError::CallThroughNonFunctionPointer {
                                 block: block_id,
@@ -4640,14 +4951,10 @@ fn interpret_module_in_state(
                     if let Some(binding) = completed.return_binding {
                         bind_call_return(&mut frames, binding, returned_values)?;
                     } else {
-                        let return_values =
-                            public_return_values(returned_values, returned_types, block_id)?;
-                        return Ok(InterpreterOutcome {
-                            return_values,
-                            steps,
-                            memory: state.memory,
-                            world: state.world,
-                        });
+                        if root_kind == lifecycle::EntryKind::Main {
+                            program_result =
+                                public_return_values(returned_values, returned_types, block_id)?;
+                        }
                     }
                 }
                 Inst::AsmGoto { .. } => return Err(assembly_error(block_id)),
@@ -4821,7 +5128,9 @@ fn public_return_values(
         .enumerate()
         .map(|(index, (value, ty))| match value {
             InternalValue::Bits(raw_bits) => Ok(RuntimeValue::wide(ty, raw_bits)),
-            InternalValue::Pointer(_) | InternalValue::FunctionPointer(_) => {
+            InternalValue::Pointer(_)
+            | InternalValue::FunctionPointer(_)
+            | InternalValue::Vector(_) => {
                 Err(InterpreterError::UnsupportedRuntimeType { index, ty })
             }
             InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
@@ -4953,7 +5262,11 @@ fn execute_instruction(
     activation: ActivationAddresses,
 ) -> Result<(), InterpreterError> {
     match inst {
+        Inst::Vector(operation) => vector::execute(operation, block, values, state)?,
+        Inst::Floating(operation) => floating::execute(operation, block, values)?,
         Inst::VaAccess(access) => execute_variadic_access(access, &[], block, values, state)?,
+        Inst::Atomic(access) => atomic::execute_atomic(access, block, values, state)?,
+        Inst::TlsAddr(access) => tls::execute(access, block, values, state)?,
         Inst::BitOperation {
             result,
             operand,
@@ -5460,7 +5773,15 @@ fn execute_instruction(
             let address = read_pointer(values, address, block)?;
             let layout = matching_guard(state, memory_token, address, block)?;
             let loaded = match &result.ty {
-                EvoIRType::Bits(_) => {
+                EvoIRType::Vec(..) => {
+                    let (representation, world) = state
+                        .memory
+                        .load_representation(&state.world, address, layout, *volatile)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    state.world = world;
+                    state.save_vector(representation)
+                }
+                EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 => {
                     let raw = if *volatile {
                         let (raw, world) = state
                             .memory
@@ -5530,6 +5851,20 @@ fn execute_instruction(
             let address = read_pointer(values, address, block)?;
             let layout = matching_guard(state, memory_token, address, block)?;
             match read_internal(values, value, block)? {
+                InternalValue::Vector(identity) => {
+                    let (memory, world) = state
+                        .memory
+                        .store_representation(
+                            &state.world,
+                            address,
+                            layout,
+                            &state.vectors[identity],
+                            *volatile,
+                        )
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    state.memory = memory;
+                    state.world = world;
+                }
                 InternalValue::Bits(raw) => {
                     if *volatile {
                         let (memory, world) = state
@@ -5670,7 +6005,7 @@ fn select_indirect_edge<'a>(
         InternalValue::Uninitialized => {
             return Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) => return Err(error()),
+        InternalValue::Bits(_) | InternalValue::Vector(_) => return Err(error()),
     };
     let pointer = state
         .memory
@@ -5698,14 +6033,14 @@ fn read_value(
             value: value.id,
         })? {
         InternalValue::Bits(raw_bits) => Ok(raw_bits),
-        InternalValue::Pointer(_) | InternalValue::FunctionPointer(_) => {
-            Err(InterpreterError::InvalidFunction {
-                message: format!(
-                    "block {block} consumes pointer v{} as integer bits",
-                    value.id
-                ),
-            })
-        }
+        InternalValue::Pointer(_)
+        | InternalValue::FunctionPointer(_)
+        | InternalValue::Vector(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes pointer v{} as integer bits",
+                value.id
+            ),
+        }),
         InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
     }
 }
@@ -5737,12 +6072,14 @@ fn read_pointer(
         InternalValue::FunctionPointer(_) => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
-            message: format!(
-                "block {block} consumes non-pointer v{} as pointer",
-                value.id
-            ),
-        }),
+        InternalValue::Bits(_) | InternalValue::Vector(_) => {
+            Err(InterpreterError::InvalidFunction {
+                message: format!(
+                    "block {block} consumes non-pointer v{} as pointer",
+                    value.id
+                ),
+            })
+        }
     }
 }
 
@@ -5757,12 +6094,14 @@ fn read_pointer_value(
         InternalValue::Uninitialized => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
-            message: format!(
-                "block {block} consumes non-pointer v{} as a pointer value",
-                value.id
-            ),
-        }),
+        InternalValue::Bits(_) | InternalValue::Vector(_) => {
+            Err(InterpreterError::InvalidFunction {
+                message: format!(
+                    "block {block} consumes non-pointer v{} as a pointer value",
+                    value.id
+                ),
+            })
+        }
     }
 }
 
@@ -5800,6 +6139,12 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
         state.globals.insert(object.symbol.clone(), pointer);
     }
     for global in &module.globals {
+        if module.tls.iter().any(|t| t.symbol == global.symbol) {
+            state
+                .tls_templates
+                .insert(global.symbol.clone(), global.clone());
+            continue;
+        }
         let (memory, pointer) = match global.kind {
             GlobalKind::StringLiteral => {
                 let bytes = ByteSequence::try_from_bytes(global.bytes.clone())
@@ -5816,102 +6161,167 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
         };
         state.memory = memory;
         if global.kind != GlobalKind::StringLiteral {
-            let mut start = 0_usize;
-            while start < global.initialized.len() {
-                if !global.initialized[start] {
-                    start += 1;
-                    continue;
-                }
-                let mut end = start + 1;
-                while end < global.initialized.len() && global.initialized[end] {
-                    end += 1;
-                }
-                let offset = i64::try_from(start).map_err(|_| InterpreterError::InvalidModule {
-                    message: format!("global '{}' offset exceeds i64", global.symbol),
-                })?;
-                let address = pointer
-                    .checked_offset(offset)
-                    .map_err(|error| InterpreterError::MemorySetup { error })?;
-                let size =
-                    u64::try_from(end - start).map_err(|_| InterpreterError::InvalidModule {
-                        message: format!("global '{}' range exceeds u64", global.symbol),
-                    })?;
-                let bytes =
-                    ByteSequence::try_from_static_initializer(global.bytes[start..end].to_vec())
-                        .map_err(|error| InterpreterError::MemorySetup { error })?;
-                state.memory = state
-                    .memory
-                    .store_bytes(address, AccessLayout::new(size, 1), &bytes)
-                    .map_err(|error| InterpreterError::MemorySetup { error })?;
-                start = end;
-            }
+            initialize_global_bytes(global, pointer, state)?;
         }
         state.globals.insert(global.symbol.clone(), pointer);
     }
     for alias in &module.aliases {
+        if let Some(template) = state.tls_templates.get(&alias.target).cloned() {
+            state.tls_templates.insert(alias.name.clone(), template);
+        }
         if let Some(pointer) = state.globals.get(&alias.target).copied() {
             state.globals.insert(alias.name.clone(), pointer);
         }
     }
     for global in &module.globals {
-        for relocation in &global.relocs {
-            let pointer = if let Some(pointer) = state.globals.get(&relocation.symbol) {
-                PointerValue::object(
-                    pointer
-                        .checked_offset(relocation.addend)
-                        .map_err(|error| InterpreterError::MemorySetup { error })?,
-                )
-            } else if let Some(identity) = state.functions.get(&relocation.symbol) {
-                if relocation.addend != 0 {
-                    return Err(InterpreterError::InvalidModule {
-                        message: "function relocation has a nonzero addend".into(),
-                    });
-                }
-                PointerValue::Function(*identity)
-            } else if let Some((name, block)) = relocation.symbol.split_once("^b") {
-                let identity = block
-                    .parse::<BlockId>()
-                    .ok()
-                    .and_then(|block| state.blocks.get(&(name.to_owned(), block)))
-                    .copied()
-                    .ok_or_else(|| InterpreterError::InvalidModule {
-                        message: "relocation names an absent block".into(),
-                    })?;
-                let value = PointerValue::Function(identity);
-                if relocation.addend == 0 {
-                    value
-                } else {
-                    // A nonzero code addend is an integer address, not the
-                    // identity of another block or an object allocation.
-                    let address = state
-                        .memory
-                        .pointer_address(value)
-                        .map_err(|error| InterpreterError::MemorySetup { error })?;
-                    PointerValue::object(Pointer::from_address(
-                        address.wrapping_add_signed(relocation.addend),
-                    ))
-                }
-            } else {
-                return Err(InterpreterError::InvalidModule {
-                    message: "relocation names an absent symbol".into(),
-                });
-            };
-            let destination = state.globals[&global.symbol]
-                .checked_offset(relocation.offset as i64)
-                .map_err(|error| InterpreterError::MemorySetup { error })?;
-            if relocation.exposed {
-                (state.memory, _) = state
-                    .memory
-                    .expose_pointer(pointer)
-                    .map_err(|error| InterpreterError::MemorySetup { error })?;
-            }
+        if state.tls_templates.contains_key(&global.symbol) {
+            continue;
+        }
+        initialize_global_relocations(global, state.globals[&global.symbol], state)?;
+        if global.read_only && global.kind != GlobalKind::StringLiteral {
             state.memory = state
                 .memory
-                // A data relocation patches bytes, including packed fields;
-                // the subsequent load/store carries its own access alignment.
-                .store_pointer_value(destination, AccessLayout::new(8, 1), pointer)
+                .freeze_static(state.globals[&global.symbol])
                 .map_err(|error| InterpreterError::MemorySetup { error })?;
         }
+    }
+    Ok(())
+}
+
+fn initialize_global_bytes(
+    global: &GlobalObject,
+    pointer: Pointer,
+    state: &mut ExecutionState,
+) -> Result<(), InterpreterError> {
+    let mut start = 0_usize;
+    while start < global.initialized.len() {
+        if !global.initialized[start] {
+            start += 1;
+            continue;
+        }
+        let mut end = start + 1;
+        while end < global.initialized.len() && global.initialized[end] {
+            end += 1;
+        }
+        let offset = i64::try_from(start).map_err(|_| InterpreterError::InvalidModule {
+            message: format!("global '{}' offset exceeds i64", global.symbol),
+        })?;
+        let address = pointer
+            .checked_offset(offset)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        let size = u64::try_from(end - start).map_err(|_| InterpreterError::InvalidModule {
+            message: format!("global '{}' range exceeds u64", global.symbol),
+        })?;
+        let bytes = ByteSequence::try_from_static_initializer(global.bytes[start..end].to_vec())
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        state.memory = state
+            .memory
+            .store_bytes(address, AccessLayout::new(size, 1), &bytes)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        start = end;
+    }
+    Ok(())
+}
+
+fn initialize_global_relocations(
+    global: &GlobalObject,
+    base: Pointer,
+    state: &mut ExecutionState,
+) -> Result<(), InterpreterError> {
+    for relocation in &global.relocs {
+        if let Some(difference) = &relocation.difference {
+            let mut address = |symbol: &str| -> Result<u64, InterpreterError> {
+                let identity = symbol
+                    .split_once("^b")
+                    .and_then(|(name, block)| {
+                        block
+                            .parse::<BlockId>()
+                            .ok()
+                            .and_then(|block| state.blocks.get(&(name.to_owned(), block)))
+                    })
+                    .copied()
+                    .ok_or_else(|| InterpreterError::InvalidModule {
+                        message: "relative relocation names an absent block".into(),
+                    })?;
+                let (memory, address) = state
+                    .memory
+                    .expose_pointer(PointerValue::Function(identity))
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                state.memory = memory;
+                Ok(address)
+            };
+            let raw = address(&relocation.symbol)?
+                .wrapping_sub(address(&difference.base)?)
+                .wrapping_add_signed(relocation.addend);
+            let destination = base
+                .checked_offset(relocation.offset as i64)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+            state.memory = state
+                .memory
+                .store_integer(
+                    destination,
+                    AccessLayout::new(relocation.size_bytes(), 1),
+                    u128::from(raw),
+                )
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+            continue;
+        }
+        let pointer = if let Some(pointer) = state.globals.get(&relocation.symbol) {
+            PointerValue::object(
+                pointer
+                    .checked_offset(relocation.addend)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?,
+            )
+        } else if let Some(identity) = state.functions.get(&relocation.symbol) {
+            if relocation.addend != 0 {
+                return Err(InterpreterError::InvalidModule {
+                    message: "function relocation has a nonzero addend".into(),
+                });
+            }
+            PointerValue::Function(*identity)
+        } else if let Some((name, block)) = relocation.symbol.split_once("^b") {
+            let identity = block
+                .parse::<BlockId>()
+                .ok()
+                .and_then(|block| state.blocks.get(&(name.to_owned(), block)))
+                .copied()
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "relocation names an absent block".into(),
+                })?;
+            let value = PointerValue::Function(identity);
+            if relocation.addend == 0 {
+                value
+            } else {
+                // A nonzero code addend is an integer address, not the
+                // identity of another block or an object allocation.
+                let address = state
+                    .memory
+                    .pointer_address(value)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                PointerValue::object(Pointer::from_address(
+                    address.wrapping_add_signed(relocation.addend),
+                ))
+            }
+        } else {
+            return Err(InterpreterError::InvalidModule {
+                message: "relocation names an absent symbol".into(),
+            });
+        };
+        let destination = base
+            .checked_offset(relocation.offset as i64)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        if relocation.exposed {
+            (state.memory, _) = state
+                .memory
+                .expose_pointer(pointer)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+        }
+        state.memory = state
+            .memory
+            // A data relocation patches bytes, including packed fields;
+            // the subsequent load/store carries its own access alignment.
+            .store_pointer_value(destination, AccessLayout::new(8, 1), pointer)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
     }
     Ok(())
 }
@@ -5965,6 +6375,16 @@ fn normalize_runtime_input(
         });
     }
     match expected {
+        EvoIRType::F32 | EvoIRType::F64 => {
+            let kind = floating_kind(expected).unwrap();
+            evocc_types::floating::FloatBits::from_bits(kind, value.value()).ok_or_else(|| {
+                InterpreterError::InvalidEntryArgument {
+                    index,
+                    message: "floating representation exceeds format width".into(),
+                }
+            })?;
+            Ok(InternalValue::Bits(value.value()))
+        }
         EvoIRType::Bits(_) => Ok(InternalValue::Bits(
             IntegerKernel::for_type(expected, block)?.normalize(value.value()),
         )),
@@ -6261,6 +6681,25 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::Floating(operation) => {
+            for value in &mut operation.arguments {
+                remap(value, aliases);
+            }
+        }
+        Inst::TlsAddr(a) => {
+            remap(&mut a.mem_in, aliases);
+            remap(&mut a.world_in, aliases);
+        }
+        Inst::Vector(operation) => {
+            for value in &mut operation.arguments {
+                remap(value, aliases);
+            }
+        }
+        Inst::Atomic(access) => {
+            for value in access.operands_mut() {
+                remap(value, aliases);
+            }
+        }
         Inst::IndirectBr { target, edges } => {
             remap(target, aliases);
             for value in edges.iter_mut().flat_map(|edge| &mut edge.arguments) {
@@ -6499,6 +6938,8 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6539,6 +6980,8 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6590,6 +7033,8 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6653,6 +7098,8 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6737,6 +7184,8 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6804,6 +7253,8 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6922,6 +7373,8 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -6998,6 +7451,8 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7073,6 +7528,8 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7107,6 +7564,8 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7181,6 +7640,8 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7226,6 +7687,8 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7268,6 +7731,8 @@ mod tests {
             param_marks: Vec::new(),
         };
         let mut module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -7306,6 +7771,8 @@ mod tests {
             }
         };
         let main = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7349,6 +7816,8 @@ mod tests {
             param_marks: Vec::new(),
         };
         let mut module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -7382,6 +7851,8 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7473,6 +7944,8 @@ mod tests {
         };
         *callee = "countdown".to_owned();
         let mut module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -7810,6 +8283,8 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7878,6 +8353,8 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7913,6 +8390,8 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -7962,6 +8441,8 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8023,6 +8504,8 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8129,6 +8612,8 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8306,6 +8791,8 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                section: None,
+                patchable_entry: None,
                 stack_protect: false,
                 alignment: 4,
                 linkage: crate::Linkage::Strong,
@@ -8349,6 +8836,8 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8370,6 +8859,8 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8399,6 +8890,8 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                section: None,
+                patchable_entry: None,
                 stack_protect: false,
                 alignment: 4,
                 linkage: crate::Linkage::Strong,
@@ -8426,6 +8919,8 @@ mod tests {
         }
 
         let invalid_void = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8452,6 +8947,8 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8485,6 +8982,8 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                tls: Vec::new(),
+                lifecycle: Vec::new(),
                 aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),
@@ -8514,6 +9013,8 @@ mod tests {
         assert_eq!(
             interpret_module(
                 &Module {
+                    tls: Vec::new(),
+                    lifecycle: Vec::new(),
                     aliases: Vec::new(),
                     assembly: Vec::new(),
                     extern_objects: Vec::new(),
@@ -8544,6 +9045,8 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8608,6 +9111,8 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                tls: Vec::new(),
+                lifecycle: Vec::new(),
                 aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),
@@ -8631,6 +9136,8 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8667,6 +9174,8 @@ mod tests {
         assert_eq!(function_error.message(), "read-of-uninitialized-object");
 
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -8719,6 +9228,8 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8744,6 +9255,8 @@ mod tests {
             ),
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8769,6 +9282,8 @@ mod tests {
             ),
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8793,6 +9308,8 @@ mod tests {
             ),
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8817,6 +9334,8 @@ mod tests {
             ),
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8841,6 +9360,8 @@ mod tests {
             ),
             (
                 Function {
+                    section: None,
+                    patchable_entry: None,
                     stack_protect: false,
                     alignment: 4,
                     linkage: crate::Linkage::Strong,
@@ -8884,6 +9405,8 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -8994,6 +9517,8 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -9024,6 +9549,8 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: crate::Linkage::Strong,
@@ -9084,6 +9611,8 @@ mod tests {
 
         let module_error = interpret_module(
             &Module {
+                tls: Vec::new(),
+                lifecycle: Vec::new(),
                 aliases: Vec::new(),
                 assembly: Vec::new(),
                 extern_objects: Vec::new(),

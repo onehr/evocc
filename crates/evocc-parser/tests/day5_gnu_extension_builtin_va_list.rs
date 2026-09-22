@@ -46,7 +46,10 @@ fn preprocess(source: &SourceFile) -> Vec<Token> {
 fn token_spelling<'a>(source: &'a SourceFile, token: &'a Token) -> &'a str {
     match &token.text {
         TokenText::Borrowed => written(source, token.span),
-        TokenText::Decoded(spelling) => spelling,
+        TokenText::Decoded(spelling)
+        | TokenText::RawBytes {
+            escaped: spelling, ..
+        } => spelling,
     }
 }
 

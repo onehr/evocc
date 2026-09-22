@@ -72,6 +72,8 @@ fn module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -111,6 +113,8 @@ fn module() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -163,6 +167,8 @@ fn sparsely_numbered_module() -> Module {
     let result = value(6, EvoIRType::Bits(32));
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -199,6 +205,8 @@ fn sparsely_numbered_module() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -282,6 +290,8 @@ fn aliasing_module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -321,6 +331,8 @@ fn aliasing_module() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -403,6 +415,8 @@ fn nested_negation_module() -> Module {
     let world = value(9, EvoIRType::World);
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -444,6 +458,8 @@ fn nested_negation_module() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

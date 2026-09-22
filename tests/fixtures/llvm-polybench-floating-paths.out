@@ -1,0 +1,138 @@
+LLVM PolyBench floating-path source audit, 2026-09-16.
+Scope: the following 29 unchanged LLVM SingleSource C programs, not the separate E8 adapter.
+Upstream commit: 2919e55176a572ee085cb46b291c47b7092c363e.
+This is a source/command audit, not a new GCC/Clang or EvoCC execution result.
+The original Clang-19 ARM64 control reports PASS for each in the existing run
+.evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json.
+That run's compile-commands.json and the disposition ledger bind the complete original options.
+Raw outcomes and the 1735-program LLVM denominator are not rewritten.
+
+Shared source: SingleSource/Benchmarks/Polybench/utilities/polybench.h
+SHA256: 06a482eac0a930592356a52b3aa844856cfdc3bea00606f47d1b09e90d5df9d4
+At line 827 print_element takes double; print_array calls it for each result.
+Every selected command defines POLYBENCH_DUMP_ARRAYS, so this output is enabled.
+For the 12 commands with -DFMA_DISABLED=1 the secondary check is disabled;
+this does not eliminate their floating-array kernels or double output.
+Of the 17 other programs, 16 invoke check_FP: double temporaries, fabs and comparison.
+fdtd-2d defines but does not call check_FP; its executed floating stencil and
+double output, not that unused check, establish its floating requirement.
+In particular nussinov and floyd-warshall use integer algorithm data, but that
+actual original validation/output still executes floating conversions and values.
+The separate E8 nussinov smoke has different upstream support code and remains separate.
+No FP obligation is inferred merely from an unused declaration or diagnostic code.
+
+SingleSource/Benchmarks/Polybench/datamining/correlation/correlation.c a404851d62f06f9ff4f56568156136cb42ec89cf68db83526b3b1b6eb3bbfa47
+header SingleSource/Benchmarks/Polybench/datamining/correlation/correlation.h a01fbab134e2b8fcd9591f5349551dadc8f8c9814d6be03901d1977c156cca6f
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/datamining/covariance/covariance.c c4f5bbdcb8a860d64a882b1147b25a9d2e3d15a4eb32cbf5d03ec780bea50eab
+header SingleSource/Benchmarks/Polybench/datamining/covariance/covariance.h a08dcedbbbfdef91ac14360162ef337a1aea278a75478d49fea67022cc05681b
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemm/gemm.c 598f681d3ba72bbec148ac7d603818fb154dd537f0ab0b96b9e510e89a05eb08
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemm/gemm.h 69147d88e4d87e4e5e0be1fdfa0e766863072bc23aa73739a9d3fc378304ba52
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemver/gemver.c 2946fe535c0a7d204e4ecbf78ea4aa37cd33c64e6f16a6e019d145a57c5ca207
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemver/gemver.h bd216c5ae35e62511e2a421c744996870eaf0250e32079131b73e98f25211cd5
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/gesummv/gesummv.c e2af303c4a380b82b28613d28dda8a839820cbe8563c32c3c9ba8812af6e0dcc
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/gesummv/gesummv.h 5cb4e1e9e206df3dd134b60c7a6693c38b427d0edf9320c95ff76c4b8d3bc4a2
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/symm/symm.c aa481b698bdbdab6fdef39f75300ffb54c802f90d074940178dc3c6e2101b56f
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/symm/symm.h 8e824160c5f0feae7fbe82e8154308a36ce231b99c5aed6564a165f7aebffa63
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/syr2k/syr2k.c 123ab78380c8ca8759e45259f6191c7a0de729bfeb25493f82c59f9c927fbeca
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/syr2k/syr2k.h 605bf60a6dc8649cc4af39b205762bf89e25ce66818d735ff0b896b07326508d
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/syrk/syrk.c 37063078372d880ca5d5c9db7f2d708ccfbec1d9a051453c37436f147877ae60
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/syrk/syrk.h ba42fddf7484d3f75398f0a2cd95fb4ee8701b2c8fa04506a23ecc515b1a026c
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/blas/trmm/trmm.c c4c264a26cfb627489e0d1c3e42822e89b29877ab27d942313c52eb3dcc4a74e
+header SingleSource/Benchmarks/Polybench/linear-algebra/blas/trmm/trmm.h a72505ee819713260fa79ffff65f0e0577dec85751958dfb6928dafe9806b665
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/2mm/2mm.c 29c49b72eb262406c255142bcd131a041dd072f5a27c4d84b957cd3d999507e2
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/2mm/2mm.h 02e568b7c7eb4c0d4beef3d1fd223592147ea60779b1038c0d2a1192b7c7183d
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/3mm/3mm.c 4847f97187e58fdfc91d9d5b2daf359dd1682c12f362d35f48d8b47cb6d7811d
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/3mm/3mm.h 93158ef7ccd8f9558029303299d000548f888eb77bf52b8b42d618c12d669804
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/atax/atax.c 33800d8f9df1f2ca2e3dd0c2bd556778a466096d23bdedcb212a45770a733d91
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/atax/atax.h b896f0a5fab49f4d52b1fb2ea7bcd7c4afabecb20bfee0deea271ec05b033761
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/bicg/bicg.c 5fcbf000e0932694fb9a7d9d94004056de1dc349b2b018878736f2c91148a147
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/bicg/bicg.h 489f6d8c2f28fa6d4ef68625a1dc272acb4eade671ba8dcd2ccd8b5457573ecb
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/doitgen/doitgen.c b3cb9d00816327a9ad6aa30eede0b7f8b18f1df791e066963a4d177f02720df6
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/doitgen/doitgen.h 8de32c7d685c028f6c7f2e1992f4013bd5e64cd1548c653a4eed5e93dd318d35
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/kernels/mvt/mvt.c a0d89150edb30eff64e76d231d158901b7b38d2f3da6a7e2611c3ca5d1088c24
+header SingleSource/Benchmarks/Polybench/linear-algebra/kernels/mvt/mvt.h d4fc8f75f08150eeab3b5f94083912f2b61cb6404660ffbb3116107355ad18cd
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/solvers/cholesky/cholesky.c 87927e7faefb85fd283f51a907fca08a624e893141dfbc17a1593ab3f28f2b18
+header SingleSource/Benchmarks/Polybench/linear-algebra/solvers/cholesky/cholesky.h ec01164617696ab24b97db51286ce56332b025396584ffd36e2cfc5cf68728c0
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/solvers/durbin/durbin.c 33beb738c65e44aa30cb7106082aa8b29fa66c0419573bfdf77760e7faafc5b2
+header SingleSource/Benchmarks/Polybench/linear-algebra/solvers/durbin/durbin.h fa4fb13ad8dbf44edf1136ecdc9356bcb4ee62c1486432ef40b7dc1397a7f99c
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c 8e752a8d13e90c6464c3573cf75a7df201a36dc0d43914de49ae65a88da20f15
+header SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.h db525ac282f3abb84a0c9e022adff6c0087ddff3dd8acd1d858a685e8919867b
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c e724fc2006a0ea556eba773ead35c64532680ffdc185fd07ff40e8264280a549
+header SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.h 42794ff65a92c637f74323c0dd745d8daa57e684ec2c35ab361c252479a5d0e8
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/linear-algebra/solvers/trisolv/trisolv.c 9d6b1b092211a5ee609ab4ec9bda86a8614315e7879ec47c514d9689b26ecbc8
+header SingleSource/Benchmarks/Polybench/linear-algebra/solvers/trisolv/trisolv.h 85480b302ede62139db11019f733f8942dd4df52ebcc64f89bf73aa038930804
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/medley/deriche/deriche.c 181e1fa0c01e70a968d3fd8493136f81fdcbda65cfea6cfd24f929afeb434828
+header SingleSource/Benchmarks/Polybench/medley/deriche/deriche.h 8570ecf0f1db2dd23ee174861be7797cf636e1d6b87ca1604e34ab15536b3c91
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c 5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953
+header SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.h af409f8e3e9fe878d9ecada09155dc01b198144c730007bbdce9b27e941f42f1
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/medley/nussinov/nussinov.c 4ffd58f8bf14419bbb9914f434df14db2b6291179f525c38a0ab374215fc7f89
+header SingleSource/Benchmarks/Polybench/medley/nussinov/nussinov.h 50a7e9304987abe020311c31676f3f00d9adf8dd4c11bb44b2388a7d215cd297
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/stencils/adi/adi.c 9046331d0a1d1c30dc911f4d5a7796d36fa942820da8d2ba0ff72d5830dcbc9b
+header SingleSource/Benchmarks/Polybench/stencils/adi/adi.h 9085eaed851def7b595dd8db254898643150486f676b68ae0b4087335d847658
+secondary-check disabled by original -DFMA_DISABLED=1
+
+SingleSource/Benchmarks/Polybench/stencils/fdtd-2d/fdtd-2d.c 878181ad9e03908a01e8023b77252e4b86f49bdedad50ef2eca83b9989bc655c
+header SingleSource/Benchmarks/Polybench/stencils/fdtd-2d/fdtd-2d.h 3b388b26adaab0b8fd1f1b3f70f69e05adbf36309cf931c25a7a5e74f881bf30
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/stencils/heat-3d/heat-3d.c 4bbaf4dc7087b9c7abd864caf644f02653bbc00d541dbc5766db64b070dcbdcc
+header SingleSource/Benchmarks/Polybench/stencils/heat-3d/heat-3d.h 5d656fd597b04aef46d24606b7bbe5fe35986bcaac4179d111e316a964ace182
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/stencils/jacobi-1d/jacobi-1d.c e00073ecc513b97948bded66bfbf8b9e4d811abf51e75ef49a4bb0a47c7d7f82
+header SingleSource/Benchmarks/Polybench/stencils/jacobi-1d/jacobi-1d.h 5a0e5ad77e99cbbe979edbb98b2d0feae641d4930660695b6d786105b10efb85
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/stencils/jacobi-2d/jacobi-2d.c d5cf6def6fdb86b0d4ac52bdfceb16a2b7b347754465c93ec03ad51bfde79cc3
+header SingleSource/Benchmarks/Polybench/stencils/jacobi-2d/jacobi-2d.h 6ccf8928f16646cbf2f90a509c8d01a231063a08a76a670b7802b3b979f61770
+secondary-check enabled by original options
+
+SingleSource/Benchmarks/Polybench/stencils/seidel-2d/seidel-2d.c b3de93f0f117032909363d72ad9bd17f9866016ec15e477892c9ec4749cefed3
+header SingleSource/Benchmarks/Polybench/stencils/seidel-2d/seidel-2d.h 762333078b1c5041925203fbe9b06d423385b612ae5a0e0953cd0a55490a04a9
+secondary-check enabled by original options

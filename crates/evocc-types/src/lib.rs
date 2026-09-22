@@ -19,6 +19,37 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+pub mod floating;
+
+/// The requested ELF TLS addressing contract. It is independent of C linkage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TlsModel {
+    #[default]
+    GeneralDynamic,
+    LocalDynamic,
+    InitialExec,
+    LocalExec,
+}
+impl TlsModel {
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::GeneralDynamic => "global_dynamic",
+            Self::LocalDynamic => "local_dynamic",
+            Self::InitialExec => "initial_exec",
+            Self::LocalExec => "local_exec",
+        }
+    }
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "global_dynamic" | "global-dynamic" => Some(Self::GeneralDynamic),
+            "local_dynamic" | "local-dynamic" => Some(Self::LocalDynamic),
+            "initial_exec" | "initial-exec" => Some(Self::InitialExec),
+            "local_exec" | "local-exec" => Some(Self::LocalExec),
+            _ => None,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // C Type system
 // ---------------------------------------------------------------------------
@@ -28,6 +59,8 @@ use std::{collections::HashMap, sync::Arc};
 pub enum IntRank {
     Bool,
     Char,
+    /// Plain char selected by -fsigned-char, distinct from signed char.
+    SignedPlainChar,
     SChar,
     UChar,
     Short,
@@ -56,7 +89,13 @@ impl IntRank {
     pub fn is_signed(self) -> bool {
         !matches!(
             self,
-            Self::Bool | Self::UChar | Self::UShort | Self::UInt | Self::ULong | Self::ULongLong
+            Self::Bool
+                | Self::Char
+                | Self::UChar
+                | Self::UShort
+                | Self::UInt
+                | Self::ULong
+                | Self::ULongLong
         )
     }
 }
@@ -100,6 +139,7 @@ pub enum FloatKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ComplexBase {
+    Integer(IntRank),
     CF16,
     CF32,
     CF64,
@@ -262,6 +302,12 @@ pub enum TypeKind {
     Float(FloatKind),
     Complex(ComplexBase),
     Pointer(TypeId),
+    /// GNU vector identity. Vector expressions do not decay to pointers.
+    Vector {
+        element: TypeId,
+        lanes: u16,
+        family: VectorFamily,
+    },
     Array {
         element: TypeId,
         bound: ArrayBound,
@@ -275,6 +321,42 @@ pub enum TypeKind {
     Enum(TagId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VectorFamily {
+    Gnu,
+    ArmNeon,
+}
+
+pub mod neon;
+
+/// Integer NEON spellings used by GCC's target header. Their source identity
+/// is nominal even when GNU vector_size gives the same lane representation.
+pub fn arm_integer_vector(spelling: &str) -> Option<(IntRank, u16)> {
+    let (signed, rest) = if let Some(rest) = spelling.strip_prefix("__Int") {
+        (true, rest)
+    } else {
+        (false, spelling.strip_prefix("__Uint")?)
+    };
+    let (bits, lanes) = rest.strip_suffix("_t")?.split_once('x')?;
+    let bits = bits.parse::<u16>().ok()?;
+    let lanes = lanes.parse::<u16>().ok()?;
+    if !matches!(bits.checked_mul(lanes), Some(64 | 128)) {
+        return None;
+    }
+    let rank = match (bits, signed) {
+        (8, true) => IntRank::SChar,
+        (8, false) => IntRank::UChar,
+        (16, true) => IntRank::Short,
+        (16, false) => IntRank::UShort,
+        (32, true) => IntRank::Int,
+        (32, false) => IntRank::UInt,
+        (64, true) => IntRank::Long,
+        (64, false) => IntRank::ULong,
+        _ => return None,
+    };
+    Some((rank, lanes))
+}
+
 /// GNU target types needed by otherwise unused system-header prototypes.
 /// These are nominal builtins, not aliases of equal-sized scalar types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -286,15 +368,30 @@ pub enum TargetBuiltinType {
     GnuFloat32x,
     GnuFloat64x,
     ArmFp16,
-    ArmFloat32x4,
-    ArmFloat64x2,
+    ArmBf16,
+    ArmPoly8,
+    ArmPoly16,
+    ArmPoly64,
+    ArmPoly128,
     SvFloat32,
     SvFloat64,
     SvBool,
 }
 
 impl TargetBuiltinType {
-    const SPELLINGS: [(Self, &'static str); 12] = [
+    /// Polynomial values have unsigned integer representations, while their
+    /// nominal C type identity remains distinct from the unsigned base type.
+    pub const fn polynomial_bits(self) -> Option<u8> {
+        match self {
+            Self::ArmPoly8 => Some(8),
+            Self::ArmPoly16 => Some(16),
+            Self::ArmPoly64 => Some(64),
+            Self::ArmPoly128 => Some(128),
+            _ => None,
+        }
+    }
+
+    const SPELLINGS: [(Self, &'static str); 15] = [
         (Self::GnuFloat16, "_Float16"),
         (Self::GnuFloat32, "_Float32"),
         (Self::GnuFloat64, "_Float64"),
@@ -302,8 +399,11 @@ impl TargetBuiltinType {
         (Self::GnuFloat32x, "_Float32x"),
         (Self::GnuFloat64x, "_Float64x"),
         (Self::ArmFp16, "__fp16"),
-        (Self::ArmFloat32x4, "__Float32x4_t"),
-        (Self::ArmFloat64x2, "__Float64x2_t"),
+        (Self::ArmBf16, "__bf16"),
+        (Self::ArmPoly8, "__Poly8_t"),
+        (Self::ArmPoly16, "__Poly16_t"),
+        (Self::ArmPoly64, "__Poly64_t"),
+        (Self::ArmPoly128, "__Poly128_t"),
         (Self::SvFloat32, "__SVFloat32_t"),
         (Self::SvFloat64, "__SVFloat64_t"),
         (Self::SvBool, "__SVBool_t"),
@@ -327,10 +427,11 @@ impl TargetBuiltinType {
     #[must_use]
     pub const fn layout(self) -> Option<TypeLayout> {
         let bytes = match self {
-            Self::GnuFloat16 | Self::ArmFp16 => 2,
+            Self::ArmPoly8 => 1,
+            Self::GnuFloat16 | Self::ArmFp16 | Self::ArmBf16 | Self::ArmPoly16 => 2,
             Self::GnuFloat32 => 4,
-            Self::GnuFloat64 | Self::GnuFloat32x => 8,
-            Self::GnuFloat128 | Self::GnuFloat64x | Self::ArmFloat32x4 | Self::ArmFloat64x2 => 16,
+            Self::GnuFloat64 | Self::GnuFloat32x | Self::ArmPoly64 => 8,
+            Self::GnuFloat128 | Self::GnuFloat64x | Self::ArmPoly128 => 16,
             Self::SvFloat32 | Self::SvFloat64 | Self::SvBool => return None,
         };
         Some(TypeLayout::new(bytes as u64, bytes))
@@ -568,6 +669,7 @@ impl std::error::Error for TagCompletionError {}
 #[derive(Debug)]
 pub struct TypeInterner {
     identity: Arc<TypeInternerIdentity>,
+    signed_char: bool,
     types: Vec<CanonicalType>,
     canonical: HashMap<CanonicalType, TypeId>,
     tags: Vec<Tag>,
@@ -620,6 +722,7 @@ impl Default for TypeInterner {
     fn default() -> Self {
         Self {
             identity: Arc::new(TypeInternerIdentity),
+            signed_char: false,
             types: Vec::new(),
             canonical: HashMap::new(),
             tags: Vec::new(),
@@ -634,6 +737,7 @@ impl Clone for TypeInterner {
     fn clone(&self) -> Self {
         Self {
             identity: Arc::new(TypeInternerIdentity),
+            signed_char: self.signed_char,
             types: self.types.clone(),
             canonical: self.canonical.clone(),
             tags: self.tags.clone(),
@@ -706,7 +810,10 @@ impl TypeInterner {
     }
 
     /// Intern a canonical type key after validating all referenced IDs.
-    pub fn try_intern(&mut self, ty: CanonicalType) -> Result<TypeId, TypeInternError> {
+    pub fn try_intern(&mut self, mut ty: CanonicalType) -> Result<TypeId, TypeInternError> {
+        if self.signed_char && ty.kind == TypeKind::Int(IntRank::Char) {
+            ty.kind = TypeKind::Int(IntRank::SignedPlainChar);
+        }
         self.validate_type(&ty)?;
         if let Some(id) = self.canonical.get(&ty) {
             return Ok(*id);
@@ -726,6 +833,22 @@ impl TypeInterner {
         self.types.get(id.raw() as usize)
     }
 
+    /// Qualification of the complete object, following array elements but
+    /// never a pointer's target or an individual aggregate member.
+    #[must_use]
+    pub fn is_const_qualified_object(&self, mut id: TypeId) -> bool {
+        while let Some(ty) = self.get(id) {
+            if ty.qualifiers.is_const {
+                return true;
+            }
+            match ty.kind {
+                TypeKind::Array { element, .. } => id = element,
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// Canonical entries in allocation order, retaining recursive tag identity.
     pub fn iter(&self) -> impl Iterator<Item = (TypeId, &CanonicalType)> {
         self.types
@@ -737,7 +860,29 @@ impl TypeInterner {
     /// Look up an existing canonical type without changing interner identity or order.
     #[must_use]
     pub fn find(&self, ty: &CanonicalType) -> Option<TypeId> {
+        if self.signed_char && ty.kind == TypeKind::Int(IntRank::Char) {
+            return self
+                .canonical
+                .get(&CanonicalType {
+                    kind: TypeKind::Int(IntRank::SignedPlainChar),
+                    qualifiers: ty.qualifiers,
+                })
+                .copied();
+        }
         self.canonical.get(ty).copied()
+    }
+
+    /// Select the unit's plain-char representation before interning characters.
+    pub fn set_signed_char(&mut self, enabled: bool) {
+        assert!(
+            self.signed_char == enabled
+                || !self.types.iter().any(|ty| matches!(
+                    ty.kind,
+                    TypeKind::Int(IntRank::Char | IntRank::SignedPlainChar)
+                )),
+            "plain-char mode must precede character type construction"
+        );
+        self.signed_char = enabled;
     }
 
     /// C type compatibility, independent of canonical identity. Incomplete
@@ -756,6 +901,50 @@ impl TypeInterner {
     #[must_use]
     pub fn compatible_ignoring_top_qualifiers(&self, left: TypeId, right: TypeId) -> bool {
         self.compatible_with(left, right, true)
+    }
+
+    /// GNU pointer conversion treats array element cv-qualification as the
+    /// qualification of the pointed-to array. Array extents still compose,
+    /// atomic qualification still agrees, and an intervening pointer stops
+    /// this descent. This is not the type-query compatibility predicate.
+    #[must_use]
+    pub fn compatible_array_pointer_targets(&self, mut left: TypeId, mut right: TypeId) -> bool {
+        if !matches!(
+            self.get(left).map(|ty| &ty.kind),
+            Some(TypeKind::Array { .. })
+        ) || !matches!(
+            self.get(right).map(|ty| &ty.kind),
+            Some(TypeKind::Array { .. })
+        ) {
+            return false;
+        }
+        loop {
+            let (Some(a), Some(b)) = (self.get(left), self.get(right)) else {
+                return false;
+            };
+            if a.qualifiers.is_atomic != b.qualifiers.is_atomic {
+                return false;
+            }
+            match (&a.kind, &b.kind) {
+                (
+                    TypeKind::Array {
+                        element: a,
+                        bound: n,
+                    },
+                    TypeKind::Array {
+                        element: b,
+                        bound: m,
+                    },
+                ) => {
+                    if n.composite(m).is_none() {
+                        return false;
+                    }
+                    left = *a;
+                    right = *b;
+                }
+                _ => return self.compatible_ignoring_top_qualifiers(left, right),
+            }
+        }
     }
 
     fn compatible_with(&self, left: TypeId, right: TypeId, ignore_top_qualifiers: bool) -> bool {
@@ -782,6 +971,18 @@ impl TypeInterner {
             }
             (TypeKind::Float(left), TypeKind::Float(right)) => left == right,
             (TypeKind::Complex(left), TypeKind::Complex(right)) => left == right,
+            (
+                TypeKind::Vector {
+                    element: a,
+                    lanes: n,
+                    family: f,
+                },
+                TypeKind::Vector {
+                    element: b,
+                    lanes: m,
+                    family: g,
+                },
+            ) => n == m && f == g && self.compatible_with(*a, *b, false),
             (TypeKind::Pointer(left), TypeKind::Pointer(right)) => {
                 self.compatible_with(*left, *right, false)
             }
@@ -895,6 +1096,7 @@ impl TypeInterner {
                     | TypeKind::Pointer(_)
                     | TypeKind::Struct(_)
                     | TypeKind::Union(_)
+                    | TypeKind::Vector { .. }
                     | TypeKind::Void
                     | TypeKind::BuiltinVaList => true,
                     TypeKind::Int(_)
@@ -1070,7 +1272,9 @@ impl TypeInterner {
     fn validate_type(&self, ty: &CanonicalType) -> Result<(), TypeInternError> {
         match &ty.kind {
             TypeKind::Pointer(pointee) => self.require_type(*pointee),
-            TypeKind::Array { element, .. } => self.require_type(*element),
+            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. } => {
+                self.require_type(*element)
+            }
             TypeKind::Function {
                 return_type,
                 parameters,
@@ -1149,6 +1353,65 @@ pub enum Region {
 pub struct RecordShape {
     pub size: u64,
     pub align: u32,
+    pub vector: Option<VectorAggregate>,
+    pub floating: Option<FloatAggregate>,
+}
+
+/// AAPCS64 homogeneous floating aggregate, distinct from a short vector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FloatAggregate {
+    pub kind: FloatKind,
+    pub count: u8,
+    /// Alignment of the ABI transport copy, distinct from object alignment.
+    pub abi_align: u8,
+}
+
+/// AAPCS64 homogeneous short-vector aggregate. Equal byte size alone does
+/// not establish this calling convention: lane shape and member count do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VectorAggregate {
+    pub lanes: u16,
+    pub bits: u16,
+    pub count: u8,
+}
+
+impl RecordShape {
+    pub const fn new(size: u64, align: u32) -> Self {
+        Self {
+            size,
+            align,
+            vector: None,
+            floating: None,
+        }
+    }
+    pub fn valid(self) -> bool {
+        self.align.is_power_of_two()
+            && !(self.vector.is_some() && self.floating.is_some())
+            && self.floating.is_none_or(|f| {
+                matches!(f.kind, FloatKind::F32 | FloatKind::F64)
+                    && (1..=4).contains(&f.count)
+                    && matches!(f.abi_align, 8 | 16)
+                    && (f.abi_align == 8 || self.align >= 16)
+                    && self.size
+                        == u64::from(f.count) * if f.kind == FloatKind::F32 { 4 } else { 8 }
+            })
+            && self.vector.is_none_or(|v| {
+                matches!(v.bits, 8 | 16 | 32 | 64 | 128)
+                    && v.lanes.is_power_of_two()
+                    && matches!(u64::from(v.lanes) * u64::from(v.bits) / 8, 8 | 16)
+                    && (1..=4).contains(&v.count)
+                    && self.size == u64::from(v.lanes) * u64::from(v.bits) / 8 * u64::from(v.count)
+            })
+    }
+
+    pub fn simd_members(self) -> Option<(u8, u64)> {
+        self.floating
+            .map(|f| (f.count, if f.kind == FloatKind::F32 { 4 } else { 8 }))
+            .or_else(|| {
+                self.vector
+                    .map(|v| (v.count, u64::from(v.lanes) * u64::from(v.bits) / 8))
+            })
+    }
 }
 
 /// What EvoIR 10.1.3 (revision 1.9.73) says about one `ptr<generic>`
@@ -1492,12 +1755,27 @@ impl std::error::Error for LayoutError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TargetDataLayout {
     short_wchar: bool,
+    signed_char: bool,
 }
 
 impl TargetDataLayout {
     #[must_use]
     pub const fn aarch64_unknown_linux_gnu() -> Self {
-        Self { short_wchar: false }
+        Self {
+            short_wchar: false,
+            signed_char: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_signed_char(mut self, enabled: bool) -> Self {
+        self.signed_char = enabled;
+        self
+    }
+
+    #[must_use]
+    pub const fn plain_char_is_signed(&self) -> bool {
+        self.signed_char
     }
 
     /// Select the target ABI's optional 16-bit wide-character representation.
@@ -1674,6 +1952,15 @@ impl<'a> LayoutContext<'a> {
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),
             TypeKind::Complex(base) => Ok(complex_layout(base)),
+            TypeKind::Vector { element, lanes, .. } => {
+                let element = self.layout_type(element)?;
+                let bytes = element
+                    .size_bytes
+                    .checked_mul(u64::from(lanes))
+                    .filter(|size| *size != 0 && size.is_power_of_two())
+                    .ok_or(LayoutError::ArithmeticOverflow)?;
+                Ok(TypeLayout::new(bytes, bytes.min(16) as u32))
+            }
             TypeKind::Pointer(_) => Ok(self.target.pointer_layout()),
             TypeKind::Array { element, bound } => match bound {
                 ArrayBound::Fixed(count) => {
@@ -2064,7 +2351,11 @@ impl<'a> LayoutContext<'a> {
 
 fn integer_layout(rank: IntRank) -> TypeLayout {
     match rank {
-        IntRank::Bool | IntRank::Char | IntRank::SChar | IntRank::UChar => TypeLayout::new(1, 1),
+        IntRank::Bool
+        | IntRank::Char
+        | IntRank::SignedPlainChar
+        | IntRank::SChar
+        | IntRank::UChar => TypeLayout::new(1, 1),
         IntRank::Short | IntRank::UShort => TypeLayout::new(2, 2),
         IntRank::Int | IntRank::UInt => TypeLayout::new(4, 4),
         IntRank::Long | IntRank::ULong | IntRank::LongLong | IntRank::ULongLong => {
@@ -2084,6 +2375,19 @@ fn float_layout(kind: FloatKind) -> TypeLayout {
 
 fn complex_layout(base: ComplexBase) -> TypeLayout {
     match base {
+        ComplexBase::Integer(rank) => {
+            let size = match rank {
+                IntRank::Bool
+                | IntRank::Char
+                | IntRank::SignedPlainChar
+                | IntRank::SChar
+                | IntRank::UChar => 1,
+                IntRank::Short | IntRank::UShort => 2,
+                IntRank::Int | IntRank::UInt => 4,
+                IntRank::Long | IntRank::ULong | IntRank::LongLong | IntRank::ULongLong => 8,
+            };
+            TypeLayout::new(2 * size, size as u32)
+        }
         ComplexBase::CF16 => TypeLayout::new(4, 2),
         ComplexBase::CF32 => TypeLayout::new(8, 4),
         ComplexBase::CF64 => TypeLayout::new(16, 8),
@@ -2328,7 +2632,11 @@ mod tests {
             match ty {
                 CType::Void => 0,
                 CType::Int(r) => match r {
-                    IntRank::Bool | IntRank::Char | IntRank::SChar | IntRank::UChar => 1,
+                    IntRank::Bool
+                    | IntRank::Char
+                    | IntRank::SignedPlainChar
+                    | IntRank::SChar
+                    | IntRank::UChar => 1,
                     IntRank::Short | IntRank::UShort => 2,
                     IntRank::Int | IntRank::UInt => 4,
                     _ => 8,

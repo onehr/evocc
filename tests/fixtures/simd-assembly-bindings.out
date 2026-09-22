@@ -1,0 +1,69 @@
+Integer SIMD assembly closure, 2026-09-20, shared dirty tree at 9f571cac.
+Target: aarch64-unknown-linux-gnu. Frozen executable SHA-256:
+4f6f229163526758bf7b2fee4e81d4ed0b55427ea29f7dce0a5e801d2d4f515b
+Image: evo-flight-lab:sealed, network none, linux/arm64; digest
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC-14 14.2.0-19; Clang-19 19.1.7. Existing glibc 2.41 runtime.
+
+RED: inline_assembly_lowering and EvoIR inline_assembly SIMD filters each
+failed their declared +w acceptance assertion, with zero compilation errors.
+GREEN: CLI assembly 48/48; EvoIR assembly 10/10; MIR assembly 13/13.
+Independent proof mutation test rejects changing +w to +&w or adding v0.
+Independent allocation verification rejects a wrong bank, clobbered operand,
+and violated binding. Both asm.goto edges pass the native spill pressure test:
+12 complete 128-bit results survive a call clobbering the caller-saved v bank.
+The strengthened test compares the complete sum of upper lanes, not exit low bits.
+Clippy -p evocc -p evocc-proofcheck --all-targets -- -D warnings: PASS.
+
+simd-assembly-bindings.c: GCC/Clang O0/O2, all four default controls exit 0.
+Separate caller/callee units: GCC/Clang/EvoCC in all nine combinations exit 0.
+Template %b/%h/%s/%d/%q share the existing v bank; dN/sN clobbers alias vN.
+qN/hN/bN clobber spellings remain rejected: Clang rejects these spellings.
+Scalar floating operands, tiny/wide/SVE vectors and general-regs-only remain
+outside this integer SIMD assembly admission. Interpreters reached at asm
+still report E3021; no empty optimization barrier was deleted.
+
+Unpassed exploratory control, retained as PROBE_FIXED_LANE_READ in the source:
+reading a register-bound v19 variable's lanes directly after destructive asm
+gives GCC O2 exit 8, GCC O0 and Clang O0/O2 exit 0. GCC O2 emits mov w0,8.
+It is not counted as a passing four-lane source. The default local-register
+test uses v19 only as an asm operand and copies to an ordinary result to inspect.
+
+Original source/argv replay, not a new complete campaign numerator:
+kernel arch/arm64/lib/xor-neon.o: emitted in 35.473s, assembled with original
+assembler flags, 3/3 symbol kinds identical (init_module, cleanup_module,
+xor_block_inner_neon); case-sensitive exported sysroot. Assembly SHA-256
+a798e86bdf10bf8aefeed12dd813ac46281b9dae55cd2ec62b831604706f03b5
+Object SHA-256 819344892db3c097c59ec076432395e0f4fd780083b5cbfb1b37ed0a97a7429a
+Mbed TLS drivers/builtin/src/aesce.c: emitted; both fixed assemblers accept.
+Assembly SHA-256 43a34b3cf56f36456ced2716fc6631dfab22b2a5b2ea3ddbee5f2a2b83857586
+No kernel object was installed and no new kernel boot was performed by these
+targeted replays. Full Mbed TLS run 20260919T175507Z completed: 381/382 EvoCC
+objects in the passing selftest + 148/148 CTest build, no make-rebuilt objects;
+chacha20_neon.c timed out at 300 seconds, so full-object closure is INCOMPLETE.
+The separate bounded replay parsed in 2.175s and lowered to EvoIR in 6.899s,
+but assembly again timed out at 300s. The native process sample identifies
+compact_spill_slots conflict-graph insertion, not source/asm rejection.
+Packed sparse 64-slot chunks and precomputed degrees now preserve the exact
+set-based coloring on 128 CFG cases, plus dense/disjoint lifetime stress and
+flag-chain tests (5/5). Release compiler SHA256
+4615271cb2fe435c2eb25b229c73524dcc7feea5768e0c0edd7a3f13f587b0ca
+emits the unchanged chacha20_neon.c in 11.437 seconds, within the same 300s
+limit. Its object passes original ChaCha20 self-tests 0 and 1. This is a new
+release-build subject, not a same-build performance ratio or full-suite result.
+Same-debug-profile replay with compiler SHA256
+c905ceacbda398fba498004c9b3c03cb7bae82bfe02729e78e782bbe299355bf
+also emits the original unit in 166.932 seconds under the unchanged 300s cap.
+Debug and release produce identical assembly SHA256
+0152bc6bc82caf1ae298295d96e67aafb91b3349ed2046633676754600ef4806
+No source change, timeout increase or dropped assembly function was used.
+
+Original whole-build closure, 2026-09-20:
+.evidence/ladder/mbedtls/20260919T205613Z/summary.json
+Compiler 86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4
+382/382 objects assembled and retained; zero reference fallback, exclusions,
+or replaced objects. Original selftest and 148/148 CTest pass in both the first
+all-object trial and final relink/retest. Regenerated test-source emissions
+match the installed assembly before the second link. The unchanged 300-second
+per-unit emission limit is retained. This is the pinned default configuration,
+not all library build configurations.

@@ -1,0 +1,10 @@
+2026-09-14 UTC; evo-flight-lab:sealed, linux/arm64, network none.
+Source: addressed-local-before-loop.c, reduced from LLVM SingleSource
+UnitTests/2020-01-06-coverage-010.c without changing its global-write/read cause.
+
+gcc-14 and clang-19, each -std=gnu11 -O0 and -O2: native exit 0.
+RED: --interpret-c-hir prints 0; --interpret-evoir prints 1.
+GREEN: both interpreters print 0; emitted AArch64 assembly linked by
+gcc-14 -no-pie exits 0. No test assertion, input or compiler UB rule changed.
+Command: evocc --target=aarch64-unknown-linux-gnu --emit=asm addressed-local-before-loop.c
+Driver SHA-256: cdfdc2c676572bfd61e0dfcabe483d7a8dabd23d2ed48291cd77a2e50431f01b

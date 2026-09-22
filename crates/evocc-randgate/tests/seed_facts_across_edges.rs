@@ -120,6 +120,8 @@ fn counted_loop(remask: bool) -> Module {
     let carried_on = if remask { remasked } else { stepped };
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -190,6 +192,8 @@ fn counted_loop(remask: bool) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -481,6 +485,8 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
     let other = bits(6);
     let result = bits(9);
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -533,6 +539,8 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -600,6 +608,8 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         ty: EvoIRType::Bits(1),
     };
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -655,6 +665,8 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -721,6 +733,8 @@ fn double_negation(derived: bool) -> Module {
         )
     };
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -773,6 +787,8 @@ fn double_negation(derived: bool) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

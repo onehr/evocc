@@ -55,11 +55,12 @@ impl MirLimits {
 }
 
 /// One machine value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MirValue {
     Int(u64),
     Ptr(Pointer),
     Fn(PointerValue),
+    Vector(evocc_memory::ObjectRepresentation),
 }
 
 /// The condition-code register's content.
@@ -80,7 +81,7 @@ enum Flags {
     Identity { equal: bool },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Slot {
     Value(MirValue),
     Flags(Flags),
@@ -277,6 +278,7 @@ pub fn interpret_module(
         }
     }
     state.next_activation = next;
+    initialize_relocations(module, &mut state)?;
 
     let entry_index = module
         .functions
@@ -369,10 +371,10 @@ pub fn interpret_module(
                             values,
                             results.clone(),
                         )?;
-                    } else if let Some(outputs) = wide_division_runtime(symbol, &values)? {
+                    } else if let Some(outputs) = hosted_numeric_runtime(symbol, &values)? {
                         if results.len() != outputs.len() {
                             return Err(MirError::Invalid {
-                                detail: format!("@{symbol} requires two result registers"),
+                                detail: format!("@{symbol} has the wrong result register count"),
                             });
                         }
                         for (&reg, value) in results.iter().zip(outputs) {
@@ -554,6 +556,66 @@ pub fn interpret_module(
 
 /// Only the four pure hosted integer helpers have a model here. A module's
 /// own definition is executed first; unrelated unresolved calls stay errors.
+fn hosted_numeric_runtime(
+    symbol: &str,
+    args: &[MirValue],
+) -> Result<Option<Vec<MirValue>>, MirError> {
+    use evocc_types::{floating::FloatBits, FloatKind};
+    let conversion = match symbol {
+        "__floattisf" => Some((true, true, FloatKind::F32)),
+        "__floattidf" => Some((true, true, FloatKind::F64)),
+        "__floatuntisf" => Some((true, false, FloatKind::F32)),
+        "__floatuntidf" => Some((true, false, FloatKind::F64)),
+        "__fixsfti" => Some((false, true, FloatKind::F32)),
+        "__fixdfti" => Some((false, true, FloatKind::F64)),
+        "__fixunssfti" => Some((false, false, FloatKind::F32)),
+        "__fixunsdfti" => Some((false, false, FloatKind::F64)),
+        _ => None,
+    };
+    if let Some((from_integer, signed, kind)) = conversion {
+        let bytes = if kind == FloatKind::F32 { 4 } else { 8 };
+        let invalid = || MirError::Invalid {
+            detail: format!("invalid @{symbol} arguments"),
+        };
+        if from_integer {
+            let [MirValue::Int(lo), MirValue::Int(hi)] = args else {
+                return Err(invalid());
+            };
+            let raw = u128::from(*lo) | (u128::from(*hi) << 64);
+            let value = if signed {
+                FloatBits::from_signed(kind, raw as i128)
+            } else {
+                FloatBits::from_unsigned(kind, raw)
+            };
+            let mut repr = evocc_memory::ObjectRepresentation::uninitialized(bytes)
+                .map_err(|e| memory_error(&e))?;
+            repr.write_integer(
+                0,
+                bytes,
+                Some(value.bits()),
+                evocc_memory::ByteOrder::Little,
+            )
+            .map_err(|e| memory_error(&e))?;
+            return Ok(Some(vec![MirValue::Vector(repr)]));
+        }
+        let [MirValue::Vector(repr)] = args else {
+            return Err(invalid());
+        };
+        let raw = repr
+            .read_integer(0, bytes, evocc_memory::ByteOrder::Little)
+            .ok_or_else(invalid)?;
+        let value = FloatBits::from_bits(kind, raw)
+            .ok_or_else(invalid)?
+            .to_integer(128, signed)
+            .ok_or_else(invalid)?;
+        return Ok(Some(vec![
+            MirValue::Int(value as u64),
+            MirValue::Int((value >> 64) as u64),
+        ]));
+    }
+    Ok(wide_division_runtime(symbol, args)?.map(Vec::from))
+}
+
 fn wide_division_runtime(
     symbol: &str,
     args: &[MirValue],
@@ -662,6 +724,84 @@ fn initialize_globals(module: &MModule, state: &mut State) -> Result<(), MirErro
     Ok(())
 }
 
+fn initialize_relocations(module: &MModule, state: &mut State) -> Result<(), MirError> {
+    for global in &module.globals {
+        for relocation in &global.relocs {
+            let resolve = |symbol: &str| -> Result<PointerValue, MirError> {
+                if let Some(pointer) = state.globals.get(symbol) {
+                    return Ok(PointerValue::object(*pointer));
+                }
+                if let Some(identity) = state.identities.get(symbol) {
+                    return Ok(PointerValue::Function(*identity));
+                }
+                if let Some((function, block)) = symbol.split_once("^b") {
+                    if let Some(index) = module.functions.iter().position(|f| f.name == function) {
+                        if let Ok(block) = block.parse::<u32>() {
+                            return state
+                                .block_identity(index, block)
+                                .map(PointerValue::Function);
+                        }
+                    }
+                }
+                Err(MirError::Invalid {
+                    detail: format!("unresolved static relocation @{symbol}"),
+                })
+            };
+            let pointer = resolve(&relocation.symbol)?;
+            let base = relocation
+                .difference
+                .as_ref()
+                .map(|d| resolve(&d.base))
+                .transpose()?;
+            let destination = state.globals[&global.symbol]
+                .checked_offset(relocation.offset as i64)
+                .map_err(|error| memory_error(&error))?;
+            if let Some(base) = base {
+                let value = expose(state, pointer)?
+                    .wrapping_sub(expose(state, base)?)
+                    .wrapping_add_signed(relocation.addend);
+                state.memory = state
+                    .memory
+                    .store_integer(
+                        destination,
+                        AccessLayout::new(relocation.size_bytes(), 1),
+                        u128::from(value),
+                    )
+                    .map_err(|error| memory_error(&error))?;
+            } else {
+                let pointer = if relocation.addend == 0 {
+                    pointer
+                } else {
+                    match pointer {
+                        PointerValue::Object(pointer) => PointerValue::object(
+                            pointer
+                                .checked_offset(relocation.addend)
+                                .map_err(|error| memory_error(&error))?,
+                        ),
+                        _ => PointerValue::Exposed(
+                            expose(state, pointer)?.wrapping_add_signed(relocation.addend),
+                        ),
+                    }
+                };
+                if relocation.exposed {
+                    expose(state, pointer)?;
+                }
+                state.memory = state
+                    .memory
+                    .store_pointer_value(destination, AccessLayout::new(8, 1), pointer)
+                    .map_err(|error| memory_error(&error))?;
+            }
+        }
+        if global.read_only && global.kind != GlobalKind::StringLiteral {
+            state.memory = state
+                .memory
+                .freeze_static(state.globals[&global.symbol])
+                .map_err(|error| memory_error(&error))?;
+        }
+    }
+    Ok(())
+}
+
 fn allocate_global(state: &mut State, global: &GlobalObject) -> Result<Pointer, MirError> {
     let (memory, pointer) = match global.kind {
         GlobalKind::StringLiteral => {
@@ -713,7 +853,7 @@ fn allocate_global(state: &mut State, global: &GlobalObject) -> Result<Pointer, 
 
 fn read(frame: &Frame, reg: VReg) -> Result<MirValue, MirError> {
     match frame.regs.get(&reg.id) {
-        Some(Slot::Value(value)) => Ok(*value),
+        Some(Slot::Value(value)) => Ok(value.clone()),
         Some(Slot::Flags(_)) => Err(MirError::Invalid {
             detail: format!("%v{} holds flags and is read as a general value", reg.id),
         }),
@@ -742,7 +882,7 @@ fn expose(state: &mut State, pointer: PointerValue) -> Result<u64, MirError> {
 fn read_bits(frame: &Frame, reg: VReg) -> Result<u64, MirError> {
     match read(frame, reg)? {
         MirValue::Int(raw) => Ok(raw),
-        MirValue::Ptr(_) | MirValue::Fn(_) => Err(MirError::Invalid {
+        MirValue::Ptr(_) | MirValue::Fn(_) | MirValue::Vector(_) => Err(MirError::Invalid {
             detail: format!("%v{} holds a pointer and is read as raw bits", reg.id),
         }),
     }
@@ -755,7 +895,7 @@ fn read_pointer(frame: &Frame, reg: VReg) -> Result<Pointer, MirError> {
             code: "E3009",
             detail: "null-pointer-access".to_owned(),
         }),
-        MirValue::Int(_) | MirValue::Fn(_) => Err(MirError::Memory {
+        MirValue::Int(_) | MirValue::Fn(_) | MirValue::Vector(_) => Err(MirError::Memory {
             code: "E3013",
             detail: "invalid-pointer-representation".to_owned(),
         }),
@@ -786,17 +926,19 @@ fn write(frame: &mut Frame, reg: VReg, value: MirValue) {
 
 /// The identity two values compare by when at least one carries provenance
 /// (EvoIR Sections 1.3 and 3.5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Identity {
     Null,
     Object(Pointer),
     Function(u64),
     Bits(u64),
     ExposedAddress(u64),
+    Vector(evocc_memory::ObjectRepresentation),
 }
 
 fn identity(value: MirValue) -> Identity {
     match value {
+        MirValue::Vector(value) => Identity::Vector(value),
         MirValue::Int(0) => Identity::Null,
         MirValue::Int(raw) => Identity::Bits(raw),
         MirValue::Ptr(pointer) if pointer == Pointer::NULL => Identity::Null,
@@ -925,6 +1067,141 @@ fn layout_for(size: u64) -> AccessLayout {
 
 fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), MirError> {
     match inst {
+        MInst::Floating {
+            dst,
+            op,
+            kind,
+            args,
+        } => {
+            let operation = crate::floating::operation(*dst, *op, *kind, args)
+                .map_err(|detail| MirError::Invalid { detail })?;
+            let values = args
+                .iter()
+                .map(|arg| match read(frame, *arg)? {
+                    MirValue::Int(value) => Ok(u128::from(value)),
+                    MirValue::Vector(value) => value
+                        .read_integer(
+                            0,
+                            usize::from(arg.class.bit_width().unwrap() / 8),
+                            evocc_memory::ByteOrder::Little,
+                        )
+                        .ok_or(MirError::Memory {
+                            code: "E3001",
+                            detail: "uninitialized floating operand".into(),
+                        }),
+                    _ => Err(MirError::Invalid {
+                        detail: "invalid floating representation".into(),
+                    }),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let bits = operation.evaluate(&values);
+            let result = if dst.class.is_simd() {
+                let bytes = usize::from(dst.class.bit_width().unwrap() / 8);
+                let mut value = evocc_memory::ObjectRepresentation::uninitialized(bytes)
+                    .map_err(|e| memory_error(&e))?;
+                value
+                    .write_integer(0, bytes, Some(bits), evocc_memory::ByteOrder::Little)
+                    .map_err(|e| memory_error(&e))?;
+                MirValue::Vector(value)
+            } else {
+                MirValue::Int(bits as u64)
+            };
+            write(frame, *dst, result);
+        }
+        MInst::Aes { dst, op, args } => {
+            let inputs = args
+                .iter()
+                .map(|arg| {
+                    let MirValue::Vector(vector) = read(frame, *arg)? else {
+                        return Err(MirError::Invalid {
+                            detail: "AES needs a vector representation".into(),
+                        });
+                    };
+                    Ok(std::array::from_fn(|i| {
+                        vector
+                            .read_integer(i, 1, evocc_memory::ByteOrder::Little)
+                            .map(|b| b as u8)
+                    }))
+                })
+                .collect::<Result<Vec<_>, MirError>>()?;
+            let mut vector = evocc_memory::ObjectRepresentation::uninitialized(16)
+                .map_err(|error| memory_error(&error))?;
+            for (index, byte) in op.evaluate(&inputs).into_iter().enumerate() {
+                vector
+                    .write_integer(
+                        index,
+                        1,
+                        byte.map(u128::from),
+                        evocc_memory::ByteOrder::Little,
+                    )
+                    .map_err(|error| memory_error(&error))?;
+            }
+            write(frame, *dst, MirValue::Vector(vector));
+        }
+        MInst::Vector {
+            dst,
+            extract,
+            lane_bits,
+            bytes,
+            args,
+        } => {
+            let width = usize::from(*lane_bits / 8);
+            let value = if *extract {
+                let lane = read_bits(frame, args[1])?;
+                if lane >= (usize::from(*bytes) / width) as u64 {
+                    return Err(MirError::Memory {
+                        code: "E3011",
+                        detail: "vector-index-out-of-bounds".into(),
+                    });
+                }
+                let value = match read(frame, args[0])? {
+                    MirValue::Vector(vector) => vector
+                        .read_integer(
+                            lane as usize * width,
+                            width,
+                            evocc_memory::ByteOrder::Little,
+                        )
+                        .ok_or(MirError::Memory {
+                            code: "E3001",
+                            detail: "uninitialized-read".into(),
+                        })?,
+                    MirValue::Int(bits) if *bytes <= 4 => {
+                        u128::from(bits >> (lane * u64::from(*lane_bits)))
+                            & ((1_u128 << lane_bits) - 1)
+                    }
+                    _ => {
+                        return Err(MirError::Invalid {
+                            detail: "vector extraction needs a vector representation".into(),
+                        })
+                    }
+                };
+                MirValue::Int(value as u64)
+            } else {
+                let mut vector =
+                    evocc_memory::ObjectRepresentation::uninitialized(usize::from(*bytes))
+                        .map_err(|error| memory_error(&error))?;
+                for (lane, arg) in args.iter().enumerate() {
+                    vector
+                        .write_integer(
+                            lane * width,
+                            width,
+                            Some(u128::from(read_bits(frame, *arg)?)),
+                            evocc_memory::ByteOrder::Little,
+                        )
+                        .map_err(|error| memory_error(&error))?;
+                }
+                if *bytes <= 4 {
+                    MirValue::Int(
+                        vector
+                            .read_integer(0, usize::from(*bytes), evocc_memory::ByteOrder::Little)
+                            .unwrap() as u64,
+                    )
+                } else {
+                    MirValue::Vector(vector)
+                }
+            };
+            write(frame, *dst, value);
+        }
         MInst::Asm(_) => return Err(MirError::OpaqueAssembly),
         MInst::Mov { dst, src } => {
             let value = read(frame, *src)?;
@@ -1003,6 +1280,142 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             state.memory = memory;
             write(frame, *dst, MirValue::Ptr(pointer));
         }
+        MInst::StackRelease { address } => {
+            let pointer = read_pointer(frame, *address)?;
+            let id = frame.memory_frame.ok_or_else(|| MirError::Invalid {
+                detail: "stack release has no function frame".into(),
+            })?;
+            state.memory = state
+                .memory
+                .end_object_lifetime(id, pointer)
+                .map_err(|error| memory_error(&error))?;
+        }
+        MInst::AtomicRmw {
+            dst,
+            base,
+            value,
+            expected,
+            operation,
+            kind,
+            order,
+            volatile,
+        } => {
+            let address = read_pointer(frame, *base)?;
+            let convert = |value| match value {
+                MirValue::Int(raw) if !matches!(kind, LoadKind::P | LoadKind::Pf) => {
+                    Ok(evocc_memory::AtomicValue::Integer(raw as u128))
+                }
+                MirValue::Ptr(pointer) => Ok(evocc_memory::AtomicValue::Pointer(
+                    PointerValue::object(pointer),
+                )),
+                MirValue::Fn(pointer) => Ok(evocc_memory::AtomicValue::Pointer(pointer)),
+                _ => Err(MirError::Invalid {
+                    detail: "invalid atomic RMW operand".into(),
+                }),
+            };
+            let value = convert(read(frame, *value)?)?;
+            let expected = expected
+                .map(|value| read(frame, value).and_then(convert))
+                .transpose()?;
+            let (memory, world, result) = state
+                .memory
+                .atomic_rmw(
+                    &state.world,
+                    address,
+                    layout_for(kind.size_bytes()),
+                    *order,
+                    *volatile,
+                    *operation,
+                    value,
+                    expected,
+                )
+                .map_err(|error| memory_error(&error))?;
+            state.memory = memory;
+            state.world = world;
+            let result = match result.old {
+                evocc_memory::AtomicValue::Integer(raw) => MirValue::Int(raw as u64),
+                evocc_memory::AtomicValue::Pointer(pointer) => match (kind, pointer) {
+                    (LoadKind::Pf, _) => MirValue::Fn(pointer),
+                    (_, PointerValue::Null) => MirValue::Ptr(Pointer::NULL),
+                    (_, PointerValue::Object(pointer)) => MirValue::Ptr(pointer),
+                    (_, PointerValue::Exposed(address)) => {
+                        MirValue::Ptr(Pointer::from_address(address))
+                    }
+                    _ => MirValue::Fn(pointer),
+                },
+            };
+            write(frame, *dst, result);
+        }
+        MInst::Atomic {
+            load,
+            value,
+            base,
+            kind,
+            order,
+            volatile,
+        } => {
+            let address = read_pointer(frame, *base)?;
+            let layout = layout_for(kind.size_bytes());
+            if *load {
+                let (loaded, world) = state
+                    .memory
+                    .atomic_load(
+                        &state.world,
+                        address,
+                        layout,
+                        *order,
+                        *volatile,
+                        matches!(kind, LoadKind::P | LoadKind::Pf),
+                    )
+                    .map_err(|error| memory_error(&error))?;
+                state.world = world;
+                let loaded = match loaded {
+                    evocc_memory::AtomicValue::Integer(raw) => MirValue::Int(raw as u64),
+                    evocc_memory::AtomicValue::Pointer(pointer) => match (kind, pointer) {
+                        (LoadKind::Pf, _) => MirValue::Fn(pointer),
+                        (_, PointerValue::Null) => MirValue::Ptr(Pointer::NULL),
+                        (_, PointerValue::Object(value)) => MirValue::Ptr(value),
+                        (_, PointerValue::Exposed(value)) => {
+                            MirValue::Ptr(Pointer::from_address(value))
+                        }
+                        _ => MirValue::Fn(pointer),
+                    },
+                };
+                write(frame, *value, loaded);
+            } else {
+                let value = read(frame, *value)?;
+                let value = if matches!(kind, LoadKind::P | LoadKind::Pf) {
+                    evocc_memory::AtomicValue::Pointer(match value {
+                        MirValue::Ptr(value) => PointerValue::object(value),
+                        MirValue::Fn(value) => value,
+                        MirValue::Int(_) | MirValue::Vector(_) => {
+                            return Err(MirError::Memory {
+                                code: "E3013",
+                                detail: "invalid-pointer-representation".into(),
+                            })
+                        }
+                    })
+                } else {
+                    let raw = match value {
+                        MirValue::Int(value) => value,
+                        MirValue::Ptr(value) => expose(state, PointerValue::object(value))?,
+                        MirValue::Fn(value) => expose(state, value)?,
+                        MirValue::Vector(_) => {
+                            return Err(MirError::Invalid {
+                                detail: "vector used as scalar atomic value".into(),
+                            })
+                        }
+                    };
+                    evocc_memory::AtomicValue::Integer(u128::from(raw))
+                };
+                let (memory, world) = state
+                    .memory
+                    .atomic_store(&state.world, address, layout, *order, *volatile, value)
+                    .map_err(|error| memory_error(&error))?;
+                state.memory = memory;
+                state.world = world;
+            }
+        }
         MInst::Load {
             align,
             dst,
@@ -1019,6 +1432,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 access.align_bytes = *align;
             }
             let value = match kind {
+                LoadKind::S | LoadKind::D | LoadKind::Q => {
+                    let (value, world) = state
+                        .memory
+                        .load_representation(&state.world, address, access, *volatile)
+                        .map_err(|error| memory_error(&error))?;
+                    state.world = world;
+                    MirValue::Vector(value)
+                }
                 LoadKind::P => {
                     let pointer = if *volatile {
                         let (pointer, world) = state
@@ -1095,6 +1516,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             }
             let value = read(frame, *src)?;
             match (kind, value) {
+                (StoreKind::S | StoreKind::D | StoreKind::Q, MirValue::Vector(value)) => {
+                    let (memory, world) = state
+                        .memory
+                        .store_representation(&state.world, address, access, &value, *volatile)
+                        .map_err(|error| memory_error(&error))?;
+                    state.memory = memory;
+                    state.world = world;
+                }
                 (StoreKind::P, MirValue::Ptr(pointer)) => {
                     store_pointer_value(
                         state,
@@ -1125,6 +1554,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                         MirValue::Int(raw) => raw,
                         MirValue::Ptr(pointer) => expose(state, PointerValue::object(pointer))?,
                         MirValue::Fn(pointer) => expose(state, pointer)?,
+                        MirValue::Vector(_) => {
+                            return Err(MirError::Invalid {
+                                detail: "vector stored using a scalar width".into(),
+                            })
+                        }
                     };
                     let bits = kind.size_bytes() * 8;
                     let masked = if bits >= 64 {
@@ -1162,7 +1596,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         } => {
             let left = read(frame, *lhs)?;
             let right = read(frame, *rhs)?;
-            let value = binary(*op, left, right, *width)?;
+            let value = binary(state, *op, left, right, *width)?;
             write(frame, *dst, value);
         }
         MInst::BinaryImm {
@@ -1173,7 +1607,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             width,
         } => {
             let left = read(frame, *lhs)?;
-            let value = binary(*op, left, MirValue::Int(*imm), *width)?;
+            let value = binary(state, *op, left, MirValue::Int(*imm), *width)?;
             write(frame, *dst, value);
         }
         MInst::Msub {
@@ -1534,6 +1968,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         // ordinary last argument, which is what the interpreter passes, so
         // there is nothing here to do.
         MInst::IndirectResult => {}
+        MInst::FpEnvCheck => {} // The software interpreter has the fixed baseline environment.
         // Which arguments find no register is what allocation decides, so a
         // stack argument, like a spill, exists only after it.
         MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {
@@ -1621,18 +2056,44 @@ fn sign_extend(raw: u64, bits: u16) -> u64 {
 fn compare(left: MirValue, right: MirValue, width: Width) -> Flags {
     match (left, right) {
         (MirValue::Int(lhs), MirValue::Int(rhs)) => Flags::Int { lhs, rhs, width },
-        _ => Flags::Identity {
+        (left, right) => Flags::Identity {
             equal: identity(left) == identity(right),
         },
     }
 }
 
-fn binary(op: BinOp, left: MirValue, right: MirValue, width: Width) -> Result<MirValue, MirError> {
+fn binary(
+    state: &mut State,
+    op: BinOp,
+    left: MirValue,
+    right: MirValue,
+    width: Width,
+) -> Result<MirValue, MirError> {
+    // ptr.to_int/from_int need no native instruction. An address used by
+    // machine arithmetic therefore exposes its code identity here rather
+    // than rejecting the representation-preserving IR conversion.
+    let mut expose_code = |value| -> Result<MirValue, MirError> {
+        match value {
+            MirValue::Fn(pointer) => Ok(MirValue::Ptr(Pointer::from_address(expose(
+                state, pointer,
+            )?))),
+            other => Ok(other),
+        }
+    };
+    let left = expose_code(left)?;
+    let right = expose_code(right)?;
+    if let (BinOp::Sub, MirValue::Ptr(left), MirValue::Ptr(right)) = (op, &left, &right) {
+        return Ok(MirValue::Int(
+            expose(state, PointerValue::object(*left))?
+                .wrapping_sub(expose(state, PointerValue::object(*right))?)
+                & width.mask(),
+        ));
+    }
     // Pointer arithmetic keeps provenance, which is what makes an EvoIR
     // `ptr.offset` lowered to `add` denote the same value in both
     // interpreters.
     if let (BinOp::Add | BinOp::Sub, MirValue::Ptr(pointer), MirValue::Int(delta)) =
-        (op, left, right)
+        (op, left.clone(), right.clone())
     {
         let delta = delta as i64;
         let delta = if op == BinOp::Sub {
@@ -1645,7 +2106,9 @@ fn binary(op: BinOp, left: MirValue, right: MirValue, width: Width) -> Result<Mi
             .map(MirValue::Ptr)
             .map_err(|error| memory_error(&error));
     }
-    if let (BinOp::Add, MirValue::Int(delta), MirValue::Ptr(pointer)) = (op, left, right) {
+    if let (BinOp::Add, MirValue::Int(delta), MirValue::Ptr(pointer)) =
+        (op, left.clone(), right.clone())
+    {
         return pointer
             .checked_offset(delta as i64)
             .map(MirValue::Ptr)

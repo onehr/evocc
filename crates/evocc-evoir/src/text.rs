@@ -60,6 +60,9 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
         "alias @",
         "func @",
         "asm ",
+        "init @",
+        "fini @",
+        "tls @",
     ]
     .iter()
     .any(|prefix| first.starts_with(prefix))
@@ -93,8 +96,12 @@ pub fn render_global(global: &crate::GlobalObject) -> String {
         GlobalVisibility::External => "external",
         GlobalVisibility::Internal => "internal",
         GlobalVisibility::Hidden => "hidden",
+        GlobalVisibility::Protected => "protected",
     };
     let mut rendered = format!("global @{} origin={} kind={kind} visibility={visibility}{} size={} align={} bytes={bytes} initialized={initialized}", global.symbol, global.origin, global.linkage.suffix(), global.layout.size_bytes, global.layout.align_bytes);
+    if global.read_only {
+        rendered.push_str(" readonly=true");
+    }
     if let Some(section) = &global.section {
         rendered.push_str(" section=");
         rendered.push_str(&quoted_string(section));
@@ -106,6 +113,12 @@ pub fn render_global(global: &crate::GlobalObject) -> String {
                 .relocs
                 .iter()
                 .map(|r| {
+                    if let Some(difference) = &r.difference {
+                        return format!(
+                            "({}, @{}, {}, diff=@{}, bits={})",
+                            r.offset, r.symbol, r.addend, difference.base, difference.bits
+                        );
+                    }
                     let exposure = if r.exposed { ", exposed" } else { "" };
                     format!("({}, @{}, {}{exposure})", r.offset, r.symbol, r.addend)
                 })
@@ -207,6 +220,29 @@ pub fn render_module(module: &Module) -> String {
     }
     for template in &module.assembly {
         rendered.push_str(&format!("asm {}\n", quoted_string(template)));
+    }
+    if !module.tls.is_empty() && !rendered.is_empty() {
+        rendered.push('\n');
+    }
+    for symbol in &module.tls {
+        rendered.push_str(&format!(
+            "tls @{} model={}\n",
+            symbol.symbol,
+            symbol.model.mnemonic()
+        ));
+    }
+    if !module.lifecycle.is_empty() && !rendered.is_empty() {
+        rendered.push('\n');
+    }
+    for registration in &module.lifecycle {
+        let phase = match registration.phase {
+            crate::LifecyclePhase::Constructor => "init",
+            crate::LifecyclePhase::Destructor => "fini",
+        };
+        rendered.push_str(&format!(
+            "{phase} @{} priority={}\n",
+            registration.function, registration.priority
+        ));
     }
     rendered
 }
@@ -382,6 +418,100 @@ impl FunctionRenderer {
                 render_type(&result.ty),
                 render_value(operand)
             ),
+            Inst::Vector(operation) => format!(
+                "{} = vec.{} {} : {}",
+                render_value(&operation.result),
+                operation.op.mnemonic(),
+                operation
+                    .arguments
+                    .iter()
+                    .map(render_value)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                render_type(&operation.result.ty)
+            ),
+            Inst::Floating(operation) => {
+                if let crate::FloatingOp::Constant(bits) = operation.op {
+                    format!(
+                        "{} = const.{} 0x{:0width$x}",
+                        render_value(&operation.result),
+                        render_type(&operation.result.ty),
+                        bits,
+                        width = if operation.result.ty == EvoIRType::F32 {
+                            8
+                        } else {
+                            16
+                        }
+                    )
+                } else {
+                    format!(
+                        "{} = fp.{} {} : {}",
+                        render_value(&operation.result),
+                        operation.op.mnemonic(),
+                        operation
+                            .arguments
+                            .iter()
+                            .map(render_value)
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        render_type(&operation.result.ty)
+                    )
+                }
+            }
+            Inst::TlsAddr(a) => format!(
+                "({}, {}, {}) = tls_addr @{}, {}, {}",
+                render_value(&a.result),
+                render_value(&a.mem_out),
+                render_value(&a.world_out),
+                a.symbol,
+                render_value(&a.mem_in),
+                render_value(&a.world_in)
+            ),
+            Inst::Atomic(access) => {
+                let order = access.order.mnemonic();
+                let volatile = if access.volatile { " volatile" } else { "" };
+                match &access.op {
+                    crate::AtomicOp::Rmw {
+                        result,
+                        operation,
+                        value,
+                        expected,
+                    } => format!(
+                        "({}, {}, {}) = atomic.rmw.{} {order}{volatile} {}, {}, {}, {}{} : {}",
+                        render_value(result),
+                        render_value(&access.mem_out),
+                        render_value(&access.world_out),
+                        operation.mnemonic(),
+                        render_value(&access.mem_in),
+                        render_value(&access.world_in),
+                        render_value(&access.address),
+                        render_value(value),
+                        expected
+                            .as_ref()
+                            .map_or(String::new(), |value| format!(", {}", render_value(value))),
+                        render_type(&result.ty)
+                    ),
+                    crate::AtomicOp::Load(value) => format!(
+                        "({}, {}, {}) = atomic.load {order}{volatile} {}, {}, {} : {}",
+                        render_value(value),
+                        render_value(&access.mem_out),
+                        render_value(&access.world_out),
+                        render_value(&access.mem_in),
+                        render_value(&access.world_in),
+                        render_value(&access.address),
+                        render_type(&value.ty)
+                    ),
+                    crate::AtomicOp::Store(value) => format!(
+                        "({}, {}) = atomic.store {order}{volatile} {}, {}, {}, {}",
+                        render_value(&access.mem_out),
+                        render_value(&access.world_out),
+                        render_value(&access.mem_in),
+                        render_value(&access.world_in),
+                        render_value(&access.address),
+                        render_value(value)
+                    ),
+                }
+            }
             Inst::VaAccess(access) => {
                 let results = access
                     .results()
@@ -404,8 +534,14 @@ impl FunctionRenderer {
                         render_type(&value.ty)
                     ),
                     crate::VariadicOp::ArgRecord { destination, shape } => {
+                        let mark = render_mark(ParamMark::ByVal(*shape));
+                        let extra = mark
+                            .strip_prefix(&format!(" byval({}, {}", shape.size, shape.align))
+                            .unwrap()
+                            .strip_suffix(')')
+                            .unwrap();
                         format!(
-                        "({results}) = va_arg.byval {list}, {mem}, {world}, {} [size={}, align={}]",
+                        "({results}) = va_arg.byval {list}, {mem}, {world}, {} [size={}, align={}{extra}]",
                         render_value(destination), shape.size, shape.align
                     )
                     }
@@ -829,8 +965,31 @@ fn render_parameter_types(params: &[EvoIRType], marks: &[ParamMark], variadic: b
 fn render_mark(mark: ParamMark) -> String {
     match mark {
         ParamMark::None => String::new(),
-        ParamMark::ByVal(shape) => format!(" byval({}, {})", shape.size, shape.align),
-        ParamMark::Sret(shape) => format!(" sret({}, {})", shape.size, shape.align),
+        ParamMark::ByVal(shape) | ParamMark::Sret(shape) => {
+            let mut extra = shape.vector.map_or_else(String::new, |v| {
+                format!(", hva={}xvec<{}, bits<{}>>", v.count, v.lanes, v.bits)
+            });
+            if let Some(f) = shape.floating {
+                extra = format!(
+                    ", hfa={}x{}",
+                    f.count,
+                    if f.kind == evocc_types::FloatKind::F32 {
+                        "f32"
+                    } else {
+                        "f64"
+                    }
+                );
+                if f.abi_align != 8 {
+                    extra.push_str(&format!(", abi_align={}", f.abi_align));
+                }
+            }
+            format!(
+                " {}({}, {}{extra})",
+                if mark.is_sret() { "sret" } else { "byval" },
+                shape.size,
+                shape.align
+            )
+        }
     }
 }
 
@@ -889,8 +1048,16 @@ fn render_function(function: &Function) -> String {
     } else {
         format!(" align={}", function.alignment)
     };
+    let patchable = function
+        .patchable_entry
+        .map_or_else(String::new, |(total, before)| {
+            format!(" patchable_entry={total},{before}")
+        });
+    let section = function.section.as_ref().map_or_else(String::new, |name| {
+        format!(" section={}", quoted_string(name))
+    });
     rendered.push_str(&format!(
-        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}{}{alignment}{protection}\n",
+        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}{}{alignment}{protection}{patchable}{section}\n",
         function.name,
         function.linkage.suffix(),
     ));
@@ -958,12 +1125,16 @@ mod tests {
     #[test]
     fn first_block_is_entry_and_trap_uses_section_9_mnemonic() {
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
+                section: None,
+                patchable_entry: None,
                 stack_protect: false,
                 alignment: 4,
                 linkage: crate::Linkage::Strong,
@@ -1002,11 +1173,14 @@ mod tests {
     #[test]
     fn module_global_has_exact_section_9_text() {
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![GlobalObject {
+                read_only: false,
                 section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.string.7".to_owned(),

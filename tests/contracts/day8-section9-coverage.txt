@@ -1,8 +1,11 @@
 # Day 8 Section 9 field-completeness manifest.
 # Format: exhaustive-schema-key|non-default canonical-byte sentinel
 # The Rust test must enumerate exactly this key set and find every sentinel.
+Inst.Atomic.Load(result,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1920, %v1924, %v1925) = atomic.load consume volatile %v1922, %v1923, %v1921 : bits<32>
+Inst.Atomic.Rmw(result,operation,value,expected,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1960, %v1966, %v1967) = atomic.rmw.cmpxchg acq_rel volatile %v1964, %v1965, %v1963, %v1961, %v1962 : bits<16>
+Inst.Atomic.Store(value,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1934, %v1935) = atomic.store seq_cst %v1932, %v1933, %v1931, %v1930
 AccessLayout(size_bytes,align_bytes)|global @sentinel_file origin=7001 kind=file visibility=external size=3 align=4 bytes=a1b2c3 initialized=101
-AddressSpace.Generic|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default
+AddressSpace.Generic|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8, hva=3xvec<2, bits<32>>), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default
 AddressSpace.Global|ptr<global>
 AddressSpace.Stack|ptr<stack>
 AddressSpace.ThreadLocal|ptr<threadlocal>
@@ -25,18 +28,21 @@ EvoIRType.Tuple(elements)|tuple<bits<5>, f64>
 EvoIRType.Vec(count,element)|vec<7, f32>
 EvoIRType.Void|%arg17: void
 EvoIRType.World|%arg15: world
-Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,alignment,stack_protect,blocks)|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default visibility=hidden linkage=weak align=256 stack_protect
-SymbolAlias(name,target,visibility,linkage)|alias @sentinel_alias = @sentinel_file visibility=internal
+Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,alignment,stack_protect,patchable_entry,section,blocks)|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic> byval(24, 8, hva=3xvec<2, bits<32>>), %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(ptr<generic> sret(16, 16), mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default visibility=hidden linkage=weak align=256 stack_protect patchable_entry=4,2 section=".text.sentinel"
+Function.section|section=".text.sentinel"
+SymbolAlias(name,target,visibility,linkage)|alias @sentinel_alias = @sentinel_file visibility=protected
 FunctionParam(name[omitted],ty)|%arg17: void
 GlobalKind.CompoundLiteral|kind=compound_literal
 GlobalKind.File|kind=file
 GlobalKind.FunctionStatic|kind=function_static
 GlobalKind.StringLiteral|kind=string_literal
-GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3, exposed)]
+GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section,read_only)|global @__evocc.compound.7004 origin=7004 kind=compound_literal visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 readonly=true relocs=[(8, @sentinel_file, -3, exposed)]
+GlobalObject.read_only|readonly=true
 GlobalObject.section|section=".data.sentinel"
 GlobalVisibility.External|visibility=external
 GlobalVisibility.Internal|visibility=internal
 GlobalVisibility.Hidden|visibility=hidden
+GlobalVisibility.Protected|visibility=protected
 IndexSignedness.Signed|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
 IndexSignedness.Unsigned|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
 Inst.AShr(result,lhs,rhs)|%v1080 = ashr.bits<37> %v1081, %v1082
@@ -86,13 +92,21 @@ Inst.UbAssume(condition,reason)|ub.assume.invalid_signed_left_shift %v1200
 Inst.Uninitialized(result)|%v1010 = uninitialized.bits<29>
 Inst.Xor(result,lhs,rhs)|%v1120 = xor.bits<37> %v1121, %v1122
 Inst.ZExt(result,source,target_ty)|%v1410 = zext.bits<37> %v1411
-Module(assembly,globals,extern_objects,declares,aliases,functions)|asm ".globl sentinel_asm\x0a"
+Module(assembly,globals,extern_objects,declares,aliases,functions,tls,lifecycle)|asm ".globl sentinel_asm\x0a"
+TlsSymbol(symbol,model)|tls @sentinel_file model=initial_exec
+LifecycleRegistration(function,phase,priority)|init @sentinel_function priority=321
+Inst.TlsAddr(access)|(%v1940, %v1943, %v1944) = tls_addr @sentinel_file, %v1941, %v1942
+Inst.Vector(operation)|%v1950 = vec.pack %v1951, %v1952 : vec<2, bits<32>>
 OffsetDirection.Add|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
 OffsetDirection.Subtract|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
-ParamMark.ByVal(shape)|%arg3: ptr<generic> byval(24, 8)
+ParamMark.ByVal(shape)|%arg3: ptr<generic> byval(24, 8, hva=3xvec<2, bits<32>>)
 ParamMark.None|%arg0: bits<37>
 ParamMark.Sret(shape)|ptr<generic> sret(16, 16)
-RecordShape(size,align)|byval(24, 8)
+RecordShape(size,align,vector,floating)|byval(24, 8, hva=3xvec<2, bits<32>>)
+FloatAggregate(kind,count,abi_align)|byval(16, 16, hfa=4xf32, abi_align=16)
+Inst.Floating(result,op,arguments)|%v1971 = fp.to_int_defined.s73 %v1970 : bits<1>
+UbReason.FloatingToInteger|ub.assume.floating_to_integer %v1971
+VectorAggregate(lanes,bits,count)|byval(24, 8, hva=3xvec<2, bits<32>>)
 Region.All|%arg9: mem<all>
 Region.Escaped|%arg14: mem<escaped>
 Region.Global|%arg11: mem<global>

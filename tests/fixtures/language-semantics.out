@@ -1,0 +1,250 @@
+Targeted source reductions, 2026-09-15. Not a benchmark campaign.
+
+Later closure follow-up (same image and target):
+  inline-vector-objects.c: GCC-14/Clang-19 at O0/O2 all compile/run 0.
+  Subject RED: zero build errors, E3101 initializer-plan identity at the
+  inlined vector parameter. The inliner now produces CopyAggregate, matching
+  ordinary vector initialization; the independent plan validator is unchanged.
+  Native subject fixture plus unchanged torture simd-4.c (default and -O3):
+  six zero exits across gcc-14/clang-19 assembly/linking.
+  vector-scalar-conversions.{c,out}: separately records the second measured
+  repair, the boundary conflicts, and six subject native zero exits.
+  source-encoding-boundary.out: completed oracle measurements, not permission
+  to silently relax E0002 at every lexical position.
+
+Image: evo-flight-lab:sealed, linux/arm64, network disabled.
+GCC: Debian 14.2.0-19; Clang: Debian 19.1.7; glibc: 2.41.
+Sources: tests/fixtures/<name>.c, unchanged between compilers/optimization levels.
+Command for each compiler and optimization level:
+  CC -std=gnu11 -OLEVEL -fno-omit-frame-pointer -fno-optimize-sibling-calls SOURCE -o probe
+  ./probe
+
+name                            gcc-O0 gcc-O2 clang-O0 clang-O2 (exit status)
+variable-array-objects          0      0      0        0
+variable-size-type-query        0      0      0        0
+assembly-general-update         0      0      0        0
+assembly-tied-width             0      0      0        0
+null-conditional-qualification   0      0      0        0
+mixed-record-varargs            0      0      0        0
+relative-label-table            0      0      0        0
+atomic-read-modify-write        0      0      0        0
+integer-complex-values          0      0      0        0
+ancestor-return-address         1      1      0        0
+
+Both compilers warn on the immediate const discard in
+null-conditional-qualification.c. GCC: -Wdiscarded-qualifiers;
+Clang: -Wincompatible-pointer-types-discards-qualifiers. Neither rejects it.
+No warning was removed or promoted to a passing execution result.
+
+Ancestor return addresses are NOT consensus: GCC returns zero for level 1,
+Clang reads the saved ancestor LR. This confirms the existing Appendix D
+"Ancestor frame addresses and the return-address disagreement" rule; EvoCC's
+E2913 refusal is retained. The positive assertion in the initial RED was
+incorrect, not evidence of an implementation defect. Frame traversal is a
+separate already-implemented operation.
+
+Initial subject RED: cargo test -p evocc --test language_semantics --offline -j 2
+0 passed / 10 failed, zero build errors. After oracle classification, nine
+cases remain implementation RED and the ancestor case asserts refusal.
+Subject RED used the existing dirty implementation tree on 9f571ca;
+this file is a small observation record, not a sealed campaign receipt.
+
+Follow-up miniature checks, same image/target, gnu11, O0/O2:
+  variable-array-objects (main=4096 iterations, short_run=64): 0 0 0 0
+  variable-array-alloca-lifetime:                           0 0 0 0
+  immediate-pointer-qualifiers:                           0 0 0 0
+Immediate qualifier discards warn under both compilers in initialization,
+assignment, arguments and returns; the objects are only read, not modified.
+
+Native subject, --emit=asm --target=aarch64-unknown-linux-gnu, gcc -no-pie,
+executed inside the same offline container, exit 0:
+  assembly-general-update, assembly-tied-width, mixed-record-varargs,
+  relative-label-table, variable-array-objects (4096 iterations),
+  variable-array-alloca-lifetime, immediate-pointer-qualifiers.
+The VLA interpreter test executes short_run (64 iterations); its earlier
+4096-iteration debug snapshot stress was stopped, not counted as PASS.
+Intermediate Rust run: 9 passed, 2 declared failures (atomic RMW, integer complex).
+Subsequent language_semantics run: 12 passed / 0 failed; scalar_atomic_access:
+4 passed / 0 failed. The additional complex initialization fixture subsequently
+exposed E2202 in mixed scalar/complex conditional arms; after repair that
+expanded complex test passes both interpreters and emission again.
+This is not a full gate or a benchmark result.
+
+Integer complex / legacy atomic follow-up, same sealed image, gnu11 O0/O2:
+  integer-complex-operations (without division): 0 0 0 0
+  integer-complex-initialization:               0 0 0 0
+  atomic-rmw-widths:                           0 0 0 0
+integer-complex-profile.c stdout, both compilers and optimization levels:
+  layout=4/2,8/4,16/8 promotion=4/4
+  abi=5/7,5/7,5/7
+The last row DISAGREES:
+  GCC:   divide=4/3 conjugate=3/-4
+  Clang: divide=5/1 conjugate=3/-4
+The initial operations fixture assumed 5+1i and therefore exited 3 under GCC,
+0 under Clang. It was not consensus. Division is now a separate E2948 refusal
+test; the unchanged profile probe retains this disagreement for reproduction.
+
+Native ABI: for CC in gcc, clang-19, CC -no-pie DRIVER WORKER -o probe; ./probe.
+Driver/worker = integer-complex-abi-{driver,worker}.c, then replace worker,
+then driver with the corresponding subject --emit=asm output:
+  GCC self-control, subject worker, subject driver:   0 0 0
+  Clang self-control, subject worker, subject driver: 0 0 0
+This covers short/int/long pairs, integer neighbors and a stack-passed pair.
+Native integer-complex-values, operations, initialization, and atomic-rmw-widths
+all exit 0. The complex division disagreement is not included in these PASSes.
+
+Native RMW threaded check: CC -pthread -no-pie atomic-rmw-driver.c
+atomic-rmw-worker.s -o probe; ./probe. Both GCC and Clang now exit 0 (two
+10,000-iteration workers; final counter 20,000). This is a native atomicity
+check, not proof of a concurrent memory model.
+Clang's first attempt rejected :pg_hi21:counter before execution. The subject
+now emits ADRP's ordinary symbol operand, accepted by GNU as and LLVM's
+integrated assembler; the exact same threaded check then passed. No assembler
+override or reference worker was substituted for the subject.
+
+Captured typeof and representation follow-up, same image/target and O0/O2:
+  variable-array-typeof:          0 0 0 0
+  variable-array-typeof-array:    0 0 0 0
+  integer-complex-lvalues:        0 0 0 0
+The array-typed typeof probe evaluates its operand once, and the operand's
+local tag does not escape. The pointer-typed form is NOT consensus:
+variable-array-typeof-profile.c stdout:
+  GCC O0/O2:   pointer=0/12 array=1/12 pointer-statement=0/12 decayed=0/8
+  Clang O0/O2: pointer=1/12 array=1/12 pointer-statement=1/12 decayed=0/8
+The original positive pointer-effects fixture therefore exits 1 for GCC and
+0 for Clang. It is retained and now asserts E2904, not a chosen runtime answer.
+
+variable-array-zero.c, compiled with -ftrivial-auto-var-init=zero:
+  scalar-only initial probe:           GCC O0=0 O2=1, Clang O0=0 O2=0
+  integer/record/pointer expansion:    GCC O0=0 O2=0, Clang O0=0 O2=0
+  final expansion incl. double bytes:  GCC O0=0 O2=1, Clang O0=0 O2=0
+These differences are retained; this is not four-way consensus. The existing
+explicit project option rule requires zero representations and Null pointer
+subobjects. Both subject interpreters give 0 with the flag and E3001 without
+it. Native subject under gcc and clang-19 assemblers exits 0 in the final form.
+No watchdog, source input or oracle flag is changed to remove the discrepancy.
+
+constant-floating-representation.c: GCC/Clang O0/O2 all exit 0, as does native
+subject assembly linked by each compiler with -no-pie. Clang's
+-Wimplicit-const-int-float-conversion warning for 16777217 -> float is retained;
+the measured bits are 0x4b800000. Negative double zero is 0x8000000000000000.
+Both subject interpreters give 0; consuming a floating assignment's value,
+runtime floating conversions and invalid integer division remain refused.
+Source-literal signed wrapping follows the existing Appendix D rule:
+2147483647+1 and -(-2147483647-1), converted to double representation, both
+produce 0xc1e0000000000000 under GCC/Clang O0/O2 and both native assemblers.
+Runtime-variable overflow is not converted into a compile-time permission.
+
+The existing atomic-boolean-refusal.c is rejected by GCC and accepted by
+Clang. The source and IR negative tests preserve rejection, not a false claim
+of oracle consensus. legacy-discarded-return.c under -std=gnu89 is likewise
+accepted by GCC and rejected by Clang (-Wreturn-mismatch); no subject success
+is inferred from GCC's acceptance.
+
+Observed focused checks after these repairs (not a complete gate/campaign):
+  language_semantics: 20 passed / 0 failed
+  gnu_typeof + gnu_typeof_unqual: 23 passed / 0 failed
+  elf_lifecycles + integer_vectors + scalar_atomic_access: 25 passed / 0 failed
+  external_symbol_lowering + resolved_compiler_queries: 150 passed / 0 failed
+  check-textual-grammar.py: 51 renderer / 51 specified shapes, 0 differences
+All sources/expectations remain separate from the frozen original-program
+results. No full end-to-end benchmark or new offline clone was started.
+
+Final extensions, same sealed image and unchanged gnu11 O0/O2 controls:
+  variable-size-type-query statement-expression bound: 0 0 0 0
+  variable-array-capability (__STDC_NO_VLA__ absent):   0 0 0 0
+  integer-complex-lvalues array/member assignments:    0 0 0 0
+Both subject interpreters and both native assemblers return 0 for each.
+Integer-complex ABI controls additionally cover a struct of two complex-char
+members: four self-controls and four crossed native combinations return 0.
+Mixed-record varargs ABI: 8/16/24-byte records, with zero/seven leading long
+arguments, cover register, stack and indirect record transport without FP
+value execution. GCC/Clang at O0/O2, each with a self-control, subject caller
+and subject callee: 12 native zero exits. The combined source passes both
+interpreters; no HFA or arbitrary aggregate-varargs closure is inferred.
+
+Changed gate: CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2
+CARGO_NET_OFFLINE=true tools/gate-changed.sh 9f571ca --offline -j 2
+2432 passed / 0 failed / 4 historical ignored; 301 result groups, 16 affected
+and dependent crates; Clippy -D warnings and fmt passed. Ladder Python tests:
+148/148, Ruff clean, textual shapes 51/51 with no differences. No full campaign.
+
+Further reductions after that changed gate, same sealed image and O0/O2:
+  wide-vector-control-flow:                0 0 0 0
+  variable-array-label-scopes:             0 0 0 0
+  representation-only-array-places:        0 0 0 0
+  assembly-tied-pointer-width:             0 0 0 0
+The first three already passed the subject: wide vector value copies across
+branches/loops, VLA label re-entry, and unused floating array representation
+are regression coverage, not new implementation fixes. Both interpreters
+return 0. All four subject assembly files link and execute with exit 0 under
+both GCC and Clang, without disabling the integrated assembler.
+
+The pointer-tie reduction was RED: 1 failed / 0 passed, zero build errors,
+E3021 for matching constraint "0" (pointer input, 32-bit output). The shared
+asm input path now exposes the pointer as a 64-bit address before the existing
+narrowing conversion. The IR validator still requires equal tied types.
+language_semantics: 24 passed / 0 failed; inline_assembly_lowering: 46 passed /
+0 failed. The expanded tied-pointer IR comparison also passes for object and
+function pointers with 16-, 32- and 64-bit outputs; it produces the same IR as
+an explicit unsigned-long address cast. A narrower input tied to a wider
+output remains refused. These checks postdate the 2432-test gate above.
+
+Direct vector declarations exposed a further real E3101 in original pr123625:
+vector-declaration-attributes.c covers direct local/global declarations,
+comma-separated names, arrays, pointers, record members, parameters/array
+parameter adjustment and a vector result. Initial RED: 1 failed, no build
+errors (E2201 on the second comma-separated name). The previously tested
+typedef form was green; direct written declarations also failed independent
+lowering/interpreter type-identity checks.
+GCC/Clang O0/O2 on the final fixture all exit 0. The parser now applies the
+attribute to the scalar base through declarator layers, including each fresh
+comma-list declarator. Both C-HIR execution and lowering share the check that
+the written size, base type and qualifiers justify the canonical vector.
+Changing the size/base or removing the applied attribute remains rejected.
+Both interpreters and both native assembler/linker combinations exit 0.
+Focused checks: language_semantics 25/25, integer_vectors 10/10,
+inline_assembly_lowering 46/46, lower library 3/3 and resolved forms 24/24.
+
+Targeted unchanged-source native replay (not a complete campaign):
+  GCC and Clang assembly/link/run each exit 0 for stkalign, pr126405,
+  20221006-1, 20031214-1, 20030216-1, 920929-1, pr123625, pr94524-1,
+  pr94524-2 and 20041124-1 (20 zero exits).
+Compilation uses target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu
+--emit=asm and the unchanged exported GCC/system include directories.
+stkalign additionally keeps -DNDEBUG from its captured command; the LLVM
+adapter's recorded optimization/warning omissions remain omissions. These
+are not claims that -O3/-fno-inline were newly consumed. In 20030216-1 the
+__OPTIMIZE__ branch is inactive under this default run, so its optimization
+requirement and active floating-conversion path are not certified by exit 0.
+Native commands: CC -no-pie SUBJECT.s -o probe; timeout 10 ./probe.
+No old results.jsonl, source bytes, timeout, expected output or denominator
+was changed. Transient assembly is discarded after these observations.
+
+Final changed gate after the pointer-tie and direct-vector repairs:
+  CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true
+  tools/gate-changed.sh 9f571ca --offline -j 2
+2438 passed / 0 failed / 4 historical ignored, 301 groups, 16 crates;
+Clippy -D warnings and fmt pass. Fresh base and attributed layout observations
+match 128/128 and 22/22 frozen cases, respectively, with zero mismatches;
+textual instruction shapes remain 51/51. The gate is complete, not a running
+or timed-out process. No full benchmark campaign has run in this closure round.
+
+Later follow-up on the same baseline, after the FP research handoff:
+inline-vector-objects.c compiled as RED and failed E3101 initializer-plan
+identity after inlining a vector parameter. The inliner's object creation
+now uses CopyAggregate for vector objects, as for other complete aggregate
+representations, instead of a scalar-store plan. The independent consumer
+check is unchanged. GCC/Clang O0/O2 compile and execute the fixture with
+exit 0; both subject interpreters and native assembly/link paths pass.
+Unchanged simd-4.c at default and -O3 also executes with exit 0 through
+both native assemblers. The fixture checks once-only argument evaluation,
+copy isolation, the vector result and exact bitcast representation.
+
+The signed-to-unsigned scalar-vector fix and original pr94412 are measured
+separately in vector-scalar-conversions.out, including refused conflicts.
+Final changed gate with both fixes: 2441 passed / 0 failed / 4 historical
+ignored, 301 groups, 16 crates; Clippy -D warnings and fmt pass.
+language_semantics is 28/28; ladder Python tests are 150/150; Ruff is clean.
+Fresh layout observations equal all 128 base and 22 attributed oracle rows;
+textual shapes are 51/51. No full campaign or offline clone was created.

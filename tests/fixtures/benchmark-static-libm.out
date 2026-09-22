@@ -1,0 +1,21 @@
+2026-09-20: original c-testsuite 00174 library-call link reduction
+Original source SHA256:
+179432fa8f0ffd84d95e44c410d6203fede9a8cb439ddd0e5710d413e30ae80b
+Compiler SHA256:
+86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4
+Original failed whole-lane capture:
+.evidence/ladder/e0/20260919T212256Z/results.jsonl
+
+Sealed linux/arm64 image:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19 and Clang 19.1.7, gnu11 O0/O2, -fno-builtin-sin,
+-static original.c -lm: all four executions match original expected stdout.
+The flag prevents an oracle's constant folding from concealing missing libm.
+EvoCC original assembly linked with gcc -static, no -lm:
+(.text+0x394): undefined reference to `sin'
+Same unchanged assembly linked with gcc -static subject.s -lm:
+exit zero and byte-for-byte original expected stdout match.
+
+This establishes the existing E0 link command's missing library, not a new
+compiler math intrinsic or interpreter libm model. The old whole-lane failure
+is retained; a fresh E0 run must confirm the corrected harness.

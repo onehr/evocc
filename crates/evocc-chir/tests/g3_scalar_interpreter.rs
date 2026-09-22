@@ -258,7 +258,10 @@ impl<'arena> Fixture<'arena> {
                     span: span(0, 3),
                 },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span: span(4, 6) }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: None,
+                        span: span(4, 6),
+                    }],
                     span: span(0, 10),
                 },
                 parameters: ParameterSyntax::Prototype {

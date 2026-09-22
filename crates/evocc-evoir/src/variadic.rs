@@ -101,11 +101,12 @@ pub(crate) fn validate_anonymous_marks(
 }
 
 pub(crate) fn promoted_type(ty: &EvoIRType) -> bool {
-    matches!(
-        ty,
-        EvoIRType::Bits(32 | 64 | 128)
-            | EvoIRType::F64
-            | EvoIRType::Ptr(_)
-            | EvoIRType::FnPtr { .. }
-    )
+    crate::integer_vector_shape(ty).is_some()
+        || matches!(
+            ty,
+            EvoIRType::Bits(32 | 64 | 128)
+                | EvoIRType::F64
+                | EvoIRType::Ptr(_)
+                | EvoIRType::FnPtr { .. }
+        )
 }

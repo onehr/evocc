@@ -50,6 +50,8 @@ fn identity(width: u16) -> Function {
     let memory = mem(1);
     let ordered = world(2);
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -94,6 +96,8 @@ fn caller(insts: Vec<Inst>, result: Value, memory: Value, ordered: Value) -> Fun
     let memory_in = mem(0);
     let world_in = world(1);
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -133,6 +137,8 @@ fn null_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -172,6 +178,8 @@ fn static_signature_mismatch_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -312,12 +320,15 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
         call_world,
     );
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: match stored {
             StoredProvenance::Object => vec![GlobalObject {
+                read_only: false,
                 section: None,
                 relocs: Vec::new(),
                 symbol: "object_source".to_owned(),

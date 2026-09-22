@@ -37,6 +37,67 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn simd_assembly_keeps_vector_bindings_and_opaque_execution() {
+    let sources = [
+        include_str!("../../../tests/fixtures/arm-neon-assembly-update.c").to_owned(),
+        include_str!("../../../tests/fixtures/arm-neon-assembly.c").replace(
+            "#include <arm_neon.h>",
+            "typedef unsigned long uint64x2_t __attribute__((vector_size(16)));",
+        ),
+    ];
+    for source in sources {
+        let ir = emits(&source);
+        assert!(ir.contains("\"w\"") || ir.contains("\"+w\""), "{ir}");
+        let native = run(&source, "--emit=asm");
+        assert!(
+            native.status.success(),
+            "{}",
+            String::from_utf8_lossy(&native.stderr)
+        );
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let result = run(&source, mode);
+            assert!(!result.status.success());
+            assert!(String::from_utf8_lossy(&result.stderr).contains("E3021"));
+        }
+        let general = run_with_options(&source, "--emit=asm", &["-mgeneral-regs-only"]);
+        assert!(!general.status.success());
+        assert!(String::from_utf8_lossy(&general.stderr).contains("E4002"));
+    }
+}
+
+#[test]
+fn simd_assembly_executes_ties_early_writes_and_selected_edges() {
+    let source = include_str!("../../../tests/fixtures/simd-assembly-bindings.c");
+    let ir = emits(source);
+    assert!(ir.contains("asm.goto"), "{ir}");
+    assert!(ir.contains("+w@v19"), "{ir}");
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "simd-bindings");
+    for clobber in ["d2", "s2"] {
+        let source = source.replace(
+            "#define SIMD_CLOBBER \"v2\"",
+            &format!("#define SIMD_CLOBBER \"{clobber}\""),
+        );
+        assert!(run(&source, "--emit=asm").status.success());
+    }
+    for clobber in ["q2", "h2", "b2"] {
+        let source = source.replace(
+            "#define SIMD_CLOBBER \"v2\"",
+            &format!("#define SIMD_CLOBBER \"{clobber}\""),
+        );
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+}
+
+#[test]
 fn vector_clobbers_preserve_callee_saved_lanes_without_claiming_gpr_clobbers() {
     let source = include_str!("../../../tests/fixtures/assembly-vector-clobbers.c");
     let ir = emits(source);
@@ -147,12 +208,16 @@ fn memory_assembly_requires_addressable_inputs_and_writable_outputs() {
     }
     for source in [
         "void f(void){__uint128_t x=1;asm(\"\" : : \"g\"(x));}",
-        "void f(void){long x=1;asm(\"\" : \"=g\"(x));}",
+        "void f(void){__uint128_t x=1;asm(\"\" : \"+g\"(x));}",
     ] {
         let output = run(source, "--emit=evoir");
         assert!(!output.status.success(), "{source}");
         assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
     }
+    assert_eq!(
+        emits("void f(void){long x=1;asm(\"\" : \"=g\"(x));}"),
+        emits("void f(void){long x=1;asm(\"\" : \"=r\"(x));}")
+    );
 }
 
 #[test]
@@ -241,23 +306,29 @@ fn tied_address_operands_preserve_bits_and_single_evaluation() {
 
 #[test]
 fn tied_pointer_inputs_match_explicit_representation_casts() {
-    let source = r#"unsigned long hide(void *p) {
-        unsigned long bits; asm("" : "=r"(bits) : "0"(p)); return bits;
-    }"#;
-    let explicit = source.replace("\"0\"(p)", "\"0\"((unsigned long)p)");
-    let actual = run(source, "--emit=evoir");
-    let expected = run(&explicit, "--emit=evoir");
-    assert!(
-        actual.status.success(),
-        "{}",
-        String::from_utf8_lossy(&actual.stderr)
-    );
-    assert!(
-        expected.status.success(),
-        "{}",
-        String::from_utf8_lossy(&expected.stderr)
-    );
-    assert_eq!(actual.stdout, expected.stdout);
+    for ty in ["unsigned short", "unsigned", "unsigned long"] {
+        for argument in ["void *p", "void (*p)(void)"] {
+            let source = format!(
+                r#"{ty} hide({argument}) {{
+                {ty} bits; asm("" : "=r"(bits) : "0"(p)); return bits;
+            }}"#
+            );
+            let explicit = source.replace("\"0\"(p)", "\"0\"((unsigned long)p)");
+            let actual = run(&source, "--emit=evoir");
+            let expected = run(&explicit, "--emit=evoir");
+            assert!(
+                actual.status.success(),
+                "{ty} {argument}: {}",
+                String::from_utf8_lossy(&actual.stderr)
+            );
+            assert!(
+                expected.status.success(),
+                "{}",
+                String::from_utf8_lossy(&expected.stderr)
+            );
+            assert_eq!(actual.stdout, expected.stdout, "{ty} {argument}");
+        }
+    }
     let narrow = run(
         r#"long f(signed char input) {
         long output; asm("" : "=r"(output) : "0"(input)); return output;

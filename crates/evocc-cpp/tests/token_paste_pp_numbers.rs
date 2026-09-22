@@ -23,7 +23,8 @@ fn spellings(tokens: &[Token], source: &str) -> Vec<String> {
         .iter()
         .filter(|token| token.kind != TokenKind::Eof)
         .map(|token| match &token.text {
-            evocc_cpp::TokenText::Decoded(text) => text.clone(),
+            evocc_cpp::TokenText::Decoded(text)
+            | evocc_cpp::TokenText::RawBytes { escaped: text, .. } => text.clone(),
             evocc_cpp::TokenText::Borrowed => source
                 .get(token.span.byte_start as usize..token.span.byte_end as usize)
                 .expect("token span belongs to fixture")

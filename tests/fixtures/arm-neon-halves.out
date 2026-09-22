@@ -1,0 +1,16 @@
+2026-09-19, evo-flight-lab:sealed, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 / clang-19 19.1.7:
+  CC -std=gnu11 -O{0,2} arm-neon-halves.c -o probe
+  All four builds and executions exit 0, no program output.
+Eight low/high byte, halfword, word and doubleword interfaces are covered,
+including polynomial wrappers, signed/high-bit values and once-only operands.
+RED: target_extract_halves_preserves_lane_bits_and_scalar_doubleword,
+one declared E3052 failure and zero build errors.
+Original aesce.c still refused get_lowv2di on subject
+b1c87596a3173b3a1abeeb0d1e692b4911a0b1c28cb2eeacdd2bec80bae3aedb;
+successful object installation and upstream tests are not inferred.
+Subject C-HIR/EvoIR/assembly checks pass, as do both fixed native link/run
+tests. Indeterminate-lane RED also found Combine's eager scalar reads in
+C-HIR; using representation copies now transports unknown lanes and still
+reports E3001 when one is actually read. Both interpreters pass those cases.

@@ -1,0 +1,33 @@
+2026-09-20: diagnostic observation, NOT an upstream selftest PASS.
+
+Source SHA256 84b84673e9f226eb1f93f6ef419385cf443fbcfc3d72b34a31c14631bf7aec03
+Diagnostic ELF SHA256 d7eebf73fab41430313b9610d7393e62001c2594bb1ee90d0fad1d086b65abf9
+Initramfs SHA256 f314603371ffcd181ee2bdb77166f92fc3fe03c65aca52c31b8b5c184c7c701a
+
+Built by GCC-14 in evo-flight-lab:sealed (network none):
+gcc-14 -static -O2 -pthread -I/work/src/tools/testing/selftests/cgroup \
+  -I/work/src/tools/testing/selftests/cgroup/lib/include \
+  /work/fixtures/cgroup-dead-reference-observation.c \
+  /work/src/tools/testing/selftests/cgroup/lib/cgroup_util.c -o cgroup-dead-reference
+The first build omitted lib/include and failed to find the helper; corrected
+command above succeeds. Kernel/test source is unchanged and mounted read-only.
+
+Existing tools/k1/boot.sh, hvf-host, K1_KUNIT_AUTORUN=0,
+K1_CONSOLE_LOGLEVEL=1, K1_ALLOW_QEMU_DRIFT=1; program budget 45s,
+boot budget 90s, existing scratch.img in the QEMU snapshot lane.
+GCC Image 2dde028e5f4d6e835291985914387a3fadcd877e3fbfc746ec5f0ca73939ceed
+EvoCC Image df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c
+Capture .build/floating-targeted/cgroup-dead-reference/{reference,subject}
+Reference serial SHA256 8bb9a1e80329bacc06eb498563adbf100034295258228b026837b7c68d2cb2b9
+Subject serial SHA256 294cde3141d8fc7220059daee7dad49ac3c67699e94a1f40c33844b7297238e8
+
+At second 20: reference dying=5, subject dying=6, memory.current=278528 both.
+After visiting CPUs 0/1/2/3 (actual CPU checked) and another five seconds:
+the counts and memory.current are unchanged. Both observation processes exit
+0 and the machines shut down; this does not satisfy dying==0 upstream.
+It is negative evidence against releasing these references just by scheduling
+the live userspace address space on every CPU, not proof of their owner.
+
+The frozen cg_run_in_subcgroups calls cg_run(child, fn, NULL), dropping arg.
+Upstream a8c6daab4b0e276508b7ffdd66c60fd3020a9178 repairs that test coverage
+defect; no source change or waiver is applied here.

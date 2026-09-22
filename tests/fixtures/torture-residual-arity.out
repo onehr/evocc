@@ -1,0 +1,26 @@
+Original torture residual controls, measured 2026-09-19.
+Image evo-flight-lab:sealed, linux/arm64, network none.
+GCC 14.2.0-19 and Clang 19.1.7, each -std=gnu17 -O0 and -O2:
+  CC -std=gnu17 OPT SOURCE -o /tmp/original; /tmp/original
+Pinned sources under .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute.
+
+20051012-1.c SHA-256:
+9d1dc628e7796fec5cb8295c52f933e08383391af64a610366220300bf351f73
+All four compile/run statuses: 0/0. GCC has no diagnostic; Clang warns about
+too many arguments and a deprecated non-prototype call. foo() defines zero
+parameters; foo(t) supplies a struct. Reviewed F01 retains canonical call
+arity refusal (E3051). This is a profile not-applicable row, not oracle
+agreement on rejection and not an EvoCC PASS. The previous LLVM source of
+the same name has a different digest and is not this evidence identity.
+
+930608-1.c SHA-256:
+1a585f2362d3d8d71437cfdaf216e7a2e7a15249cbc6b875c656248b19c886f8
+All four compile/run statuses: 0/0. Clang warns that the non-void function
+f has no return; GCC does not. main compares its address but does not call
+f. The double signature alone does not prove an executed floating operation.
+Its current E3049 remains unresolved in the ledger; this probe assigns no
+FP disposition and changes no source or call semantics.
+
+Frozen full-run reference: .evidence/ladder/e0/20260915T210257Z/results.jsonl.
+The capture's raw outcomes and original two compiler-failure entries are
+unchanged; the new source-bound disposition applies to subsequent runs.

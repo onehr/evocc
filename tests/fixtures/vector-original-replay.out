@@ -1,0 +1,56 @@
+Targeted original-source vector replay, 2026-09-15; not a full campaign.
+Subject: target/frontend/debug/evocc, dirty tree based on 9f571ca.
+Image: evo-flight-lab:sealed, linux/arm64, network none.
+Native assemblers/linkers: GCC-14 Debian 14.2.0-19; Clang-19 Debian 19.1.7.
+
+Source inventory: unchanged pinned torture gcc/testsuite/gcc.c-torture/execute.
+Use tools/ladder/e0.py emit(), include_flags() and program_options(); preserve
+original includes and applicable options. Only pr53645 and pr53645-2 in this
+list supply an applied option, -std=gnu89; all other applied lists are empty.
+For each emitted assembly:
+  CC -no-pie subject.s -o /tmp/original
+  timeout 10 /tmp/original
+  compare stdout with original .c.expected when present and nonempty.
+
+32 programs emit, assemble/link and execute with exit 0 and expected output
+under BOTH native assemblers (64 executions, no failure):
+  20050607-1 pr105613 pr109040 pr109938 pr109986
+  pr110817-1 pr110817-2 pr110817-3 pr121957
+  pr123625 pr123625-2 pr123625-3 pr126405 pr126405-2 pr126405-3
+  pr53645 pr53645-2 pr56837 pr65427 pr70903 pr71626-1 pr85169
+  pr94412 pr94524-1 pr94524-2 pr94591 scal-to-vec2
+  simd-1 simd-2 simd-4 simd-5 simd-6
+These overlap earlier targeted runs and do not count as 32 new fixes.
+They do not change any historical results.jsonl or benchmark numerator.
+
+The other six inspected original sources remain refused:
+  pr60960: E4002, v4qi is a 4-byte vector passed/returned by f1/f2/f3.
+    The reviewed sub-8-byte external ABI conflict is measured independently
+    in elf-vector-tls.out (self-controls pass, both crossed controls fail).
+  20050604-1: E3101 at 31:12, foo executes v.v += a float vector;
+    main calls foo and compares all four floating elements.
+  pr85331: E3101 at 12:27, floating-vector shuffle; main reads/compares lanes.
+  pr92618: E3101 at 23:10, qux increments static double cnt;
+    main calls baz, which calls qux and sums/compares double elements.
+  scal-to-vec1: E3101 at 65:25, main performs float and double vector
+    arithmetic and compares floating results, after the integer subcase.
+  scal-to-vec3: E3101 at 27:24, main performs float/double vector arithmetic
+    with scalar operands and compares results.
+
+Additional original-source controls, no source transformations:
+  CC -std=gnu11 -OLEVEL SOURCE.c -o /tmp/original
+  timeout 10 /tmp/original
+                     gcc O0 gcc O2 clang O0 clang O2 (compile/run)
+  20050604-1          0/0    0/0    0/0      0/0
+  pr92618             0/0    0/0    0/0      0/0
+  scal-to-vec1        0/0    0/0    0/0      0/0
+  scal-to-vec3        0/0    0/0    0/0      0/0
+  pr85331             0/0    0/0    1/-      1/-
+Clang rejects pr85331's __builtin_shuffle as unknown, rather than executing
+the program. That control is NOT RUN, not PASS; integer shuffle's explicit
+profile admission does not certify floating shuffle execution. This case
+stays separately unresolved, not included in the four agreed FP deferrals.
+
+The inline-vector and unsigned scalar-broadcast repairs have separate RED,
+two-interpreter value checks and default/-O3 original native replays in
+language-semantics.out and vector-scalar-conversions.out.

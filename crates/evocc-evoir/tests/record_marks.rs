@@ -73,8 +73,8 @@ fn the_marks_parse_render_and_round_trip() {
     assert_eq!(
         span.param_marks,
         vec![
-            ParamMark::ByVal(RecordShape { size: 8, align: 8 }),
-            ParamMark::ByVal(RecordShape { size: 8, align: 8 }),
+            ParamMark::ByVal(RecordShape::new(8, 8)),
+            ParamMark::ByVal(RecordShape::new(8, 8)),
             ParamMark::None,
             ParamMark::None,
         ],
@@ -83,12 +83,12 @@ fn the_marks_parse_render_and_round_trip() {
     let make = &module.functions[1];
     assert_eq!(
         make.param_marks[1],
-        ParamMark::Sret(RecordShape { size: 24, align: 8 }),
+        ParamMark::Sret(RecordShape::new(24, 8)),
         "the return destination carries sret(size, align)"
     );
     assert_eq!(
         module.declares[0].param_marks[0],
-        ParamMark::ByVal(RecordShape { size: 8, align: 8 }),
+        ParamMark::ByVal(RecordShape::new(8, 8)),
         "a declare carries the same marks"
     );
 
@@ -138,7 +138,7 @@ fn the_marks_are_part_of_the_signature_for_equality() {
         results: vec![EvoIRType::Mem(evocc_types::Region::All), EvoIRType::World],
         variadic: false,
         marks: vec![
-            ParamMark::ByVal(RecordShape { size: 16, align: 8 }),
+            ParamMark::ByVal(RecordShape::new(16, 8)),
             ParamMark::None,
             ParamMark::None,
         ],

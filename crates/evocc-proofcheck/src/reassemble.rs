@@ -208,6 +208,16 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
     match instruction {
+        Inst::Floating(operation) => {
+            for value in &mut operation.arguments {
+                remap(value, aliases);
+            }
+        }
+        Inst::Vector(operation) => {
+            for value in &mut operation.arguments {
+                remap(value, aliases);
+            }
+        }
         Inst::IndirectBr { target, edges } => {
             remap(target, aliases);
             for value in edges.iter_mut().flat_map(|edge| &mut edge.arguments) {
@@ -216,6 +226,15 @@ fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
         }
         Inst::PointerCast { operand, .. } => remap(operand, aliases),
         Inst::BitOperation { operand, .. } => remap(operand, aliases),
+        Inst::Atomic(access) => {
+            for value in access.operands_mut() {
+                remap(value, aliases);
+            }
+        }
+        Inst::TlsAddr(a) => {
+            remap(&mut a.mem_in, aliases);
+            remap(&mut a.world_in, aliases);
+        }
         Inst::VaAccess(access) => {
             remap(&mut access.list, aliases);
             remap(&mut access.mem_in, aliases);
@@ -444,6 +463,10 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         Inst::BitOperation {
             result, operand, ..
         } => vec![result, operand],
+        Inst::Vector(operation) => operation.values_mut(),
+        Inst::Floating(operation) => operation.values_mut(),
+        Inst::Atomic(access) => access.values_mut(),
+        Inst::TlsAddr(access) => access.values_mut(),
         Inst::VaAccess(access) => {
             let mut values = vec![
                 &mut access.list,

@@ -172,21 +172,47 @@ fn a_later_file_declarator_cannot_hide_a_variable_bound() {
 }
 
 #[test]
-fn block_scope_variable_length_array_is_rejected_without_an_initializer() {
-    rejects(
+fn block_scope_variable_length_array_captures_its_bound() {
+    let arena = Arena::default();
+    let unit = parse(
         "int local(int bound) { int object[bound]; return 0; }\n",
-        "E2203",
-        "variable-length-object",
-    );
+        &arena,
+    )
+    .expect("automatic variable storage is supported");
+    assert!(unit.types().iter().any(|(_, ty)| matches!(
+        ty.kind,
+        evocc_types::TypeKind::Array {
+            bound: evocc_types::ArrayBound::Captured(_),
+            ..
+        }
+    )));
 }
 
 #[test]
-fn captured_typedef_sizes_do_not_fabricate_dynamic_object_storage() {
-    rejects(
+fn captured_typedef_sizes_are_retained_for_dynamic_object_storage() {
+    let arena = Arena::default();
+    let unit = parse(
         "int local(int bound) { typedef int A[bound]; A object; return 0; }",
-        "E2203",
-        "variable-length-object",
-    );
+        &arena,
+    )
+    .expect("a captured typedef can allocate an automatic object");
+    let captured = unit
+        .types()
+        .iter()
+        .find_map(|(id, ty)| {
+            matches!(
+                ty.kind,
+                evocc_types::TypeKind::Array {
+                    bound: evocc_types::ArrayBound::Captured(_),
+                    ..
+                }
+            )
+            .then_some(id)
+        })
+        .expect("the bound must not become a fabricated constant");
+    assert!(TargetDataLayout::aarch64_unknown_linux_gnu()
+        .layout_of(unit.types(), captured)
+        .is_err());
 }
 
 #[test]

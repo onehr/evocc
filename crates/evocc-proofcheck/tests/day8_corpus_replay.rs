@@ -194,6 +194,8 @@ evocc-types = {{ path = {:?} }}
     .expect("write corpus producer manifest");
     fs::write(client.join("src/main.rs"), CORPUS_PRODUCER).expect("write corpus producer source");
     let output = Command::new(env!("CARGO"))
+        .arg("--config")
+        .arg(proofcheck.join("../../.cargo/config.toml"))
         .args(["run", "--quiet", "--offline", "--"])
         .arg(&corpus.root)
         .current_dir(&client)

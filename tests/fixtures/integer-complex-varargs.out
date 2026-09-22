@@ -1,0 +1,25 @@
+Integer-complex variadic composite regression, 2026-09-16.
+Fixture SHA-256: 27baeb421c2e77e1821e4476af43be2444966c68c688b3f218e2cf957c54a837
+Subject debug SHA-256: bf52591cd2dc36dface7a6fcbae1eff664b6b90ddd515f4589bc6482b7e11c4f
+Fixed image: evo-flight-lab:sealed, linux/arm64, network none.
+GCC-14 14.2.0-19 and Clang-19 19.1.7.
+
+RED: E3030 in C-HIR, zero build errors. The shared variadic eligibility
+predicate omitted integer complex, including record members. Its repair
+exposed a default-promotion Cast taking the scalar path, then a missing
+recorded va_arg type that converted an object's address into its real part.
+All three paths now retain the composite type; floating complex stays refused.
+
+Fixture: CC -std=gnu11 -O0/-O2 SOURCE -o probe; four zero exits.
+Both subject interpreters return 0. Both native assemblers: two self-link
+passes and four crossed worker/driver passes, all exit 0. WORKER_ONLY and
+DRIVER_ONLY select the same source's two sides. Cases cover a 12-byte record,
+16-byte alignment, a 40-byte indirect record and a direct complex argument,
+with available and exhausted argument registers.
+
+Unchanged original LLVM SingleSource pr38151.c SHA-256:
+f76a13a5ed809eac1ebba442100fdbfc1ac505a5ee5969c79bf4266b89142f93
+Its captured original semantic argv emits successfully. Both assemblers link
+and upstream timeit-target --timeout 60 reports exit 0. The earlier invocation
+with an unsupported wrapper option executed no test and is not a PASS.
+No full benchmark numerator or installed kernel object is changed by this check.

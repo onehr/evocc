@@ -117,6 +117,47 @@ fn wide_checked_arithmetic_preserves_wrapped_results_and_overflow_flags() {
 }
 
 #[test]
+fn checked_products_do_not_introduce_division_runtime_dependencies() {
+    let arena = Arena::default();
+    let unit = parse(
+        include_str!("../../../tests/fixtures/wide-checked-arithmetic.c"),
+        &arena,
+    );
+    let module =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    for inst in module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+    {
+        assert!(
+            !matches!(inst, evocc_evoir::Inst::UDiv(..) | evocc_evoir::Inst::SDiv(..)),
+            "checked multiplication introduced division and a freestanding runtime dependency: {inst:?}"
+        );
+    }
+}
+
+#[test]
+fn checked_product_limb_carries_preserve_full_width_results() {
+    lowered(
+        "typedef unsigned __int128 U;
+         int product(U a,U b,U *p){return __builtin_mul_overflow(a,b,p);}
+         int main(void){U b=(U)1<<64,r;
+           if(product(b-1,b-1,&r)||r!=~(U)0-2*b+2)return 1;
+           if(product(b,b-1,&r)||r!=~(U)0-b+1)return 2;
+           if(product(b+1,b-1,&r)||r!=~(U)0)return 3;
+           if(product(b,b,&r)!=1||r!=0)return 4;
+           if(product(b+1,b+1,&r)!=1||r!=2*b+1)return 5;
+           if(product((U)1<<127,0,&r)||r!=0)return 6;
+           return 0;}",
+        0,
+        &["mul.bits<128>"],
+        true,
+    );
+}
+
+#[test]
 fn wide_checked_boundaries_include_cancellation_and_conditional_operands() {
     for body in [
         "return __builtin_add_overflow(imin, (U)1<<127, &u) || u!=0;",

@@ -4,6 +4,110 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 #[test]
+fn function_sections_follow_the_complete_declaration_chain() {
+    for source in [
+        include_str!("../../../tests/fixtures/kernel-function-section.c"),
+        "int boot_function(void) __attribute__((section(\".init.text\"))); int boot_function(void) { return 42; }\nint boot_function(void) __attribute__((section(\".init.text\")));",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45015);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let module =
+            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let text = evocc_evoir::render_module(&module);
+        let header = text.lines().find(|line| line.starts_with("func @boot_function(")).unwrap();
+        assert!(header.ends_with(" section=\".init.text\""), "{header}");
+    }
+}
+
+#[test]
+fn function_section_merging_keeps_symbol_identity_and_rejects_conflicts() {
+    let accepted = [
+        ("int f(void) __attribute__((section(\".init.\" \"text\"))); int f(void) __attribute__((section(\".init.text\"))); int f(void) { return 1; }", "f"),
+        ("int a(void) asm(\"f\") __attribute__((section(\".init.text\"))); int f(void) { return 1; } int call(void) { return a(); }", "f"),
+        ("int *__attribute__((section(\".init.text\"))) f(void) { return 0; }", "f"),
+        ("int f(void) __attribute__((section(\".init.text\"))); int f(void) { return 1; } int other(void) __attribute__((alias(\"f\"), section(\".init.text\")));", "f"),
+    ];
+    let rejected = [
+        "int f(void) { return 1; } int f(void) __attribute__((section(\".init.text\")));",
+        "int f(void) { return 1; } int a(void) asm(\"f\") __attribute__((section(\".init.text\")));",
+        "int f(void) __attribute__((section(\".init.text\"))); int f(void) __attribute__((section(\".exit.text\"))); int f(void) { return 1; }",
+        "int *__attribute__((section(\".init.text\"))) f(void); int *f(void) __attribute__((section(\".exit.text\"))); int *f(void) { return 0; }",
+        "int f(void) __attribute__((section(\"\"))); int f(void) { return 1; }",
+        "int f(void) __attribute__((section(\"bad\\nname\"))); int f(void) { return 1; }",
+        "int f(void) __attribute__((section(42))); int f(void) { return 1; }",
+        "int f(void) __attribute__((section(\".init.text\", \"extra\"))); int f(void) { return 1; }",
+        "int a(void) asm(\"f\") __attribute__((section(\".init.text\"))); int f(void) __attribute__((section(\".exit.text\"))); int f(void) { return 1; }",
+        "int f(void) __attribute__((section(\".init.text\"))); int f(void) { return 1; } int other(void) __attribute__((alias(\"f\"), section(\".exit.text\")));",
+    ];
+    for (source, name) in accepted
+        .into_iter()
+        .chain(rejected.into_iter().map(|s| (s, "")))
+    {
+        let arena = Arena::default();
+        let file = FileId::new(45016);
+        let mut lexer = Lexer::new(file, source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{source}: {:?}", parser.diagnostic());
+        let result = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu());
+        if name.is_empty() {
+            assert_eq!(result.unwrap_err().code(), "E2943", "{source}");
+        } else {
+            let module = result.unwrap_or_else(|e| panic!("{source}: {e}"));
+            assert_eq!(
+                module
+                    .functions
+                    .iter()
+                    .find(|f| f.name == name)
+                    .unwrap()
+                    .section
+                    .as_deref(),
+                Some(".init.text"),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn function_section_names_preserve_utf8_execution_bytes() {
+    for (spelling, expected) in [
+        (r#"".text.é""#, Some(".text.é")),
+        (r#"".text." "é""#, Some(".text.é")),
+        (r#"".text.\\x""#, Some(".text.\\x")),
+        (r#"".text.\xc3" "\xa9""#, None),
+        (r#"".text.\303\251""#, None),
+        (r#"".text.\xff""#, None),
+    ] {
+        let source = format!(
+            "int f(void) __attribute__((section({spelling}))); int f(void) {{ return 1; }}"
+        );
+        let arena = Arena::default();
+        let file = FileId::new(45017);
+        let mut lexer = Lexer::new(file, &source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect();
+        let mut parser = Parser::new(tokens, file, &source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let result = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu());
+        if let Some(expected) = expected {
+            assert_eq!(
+                result.unwrap().functions[0].section.as_deref(),
+                Some(expected)
+            );
+        } else {
+            assert_eq!(result.unwrap_err().code(), "E2943");
+        }
+    }
+}
+
+#[test]
 fn pointer_declarators_preserve_symbol_linkage() {
     let source = include_str!("../../../tests/fixtures/pointer-symbol-linkage.c");
     let arena = Arena::default();
@@ -44,6 +148,14 @@ fn pointer_symbol_attributes_keep_linkage_rejections() {
             "extern int * __attribute__((alias(\"missing\"))) other(void);",
             "E3061",
         ),
+        (
+            "int *__attribute__((section(\".data.first\"))) object; extern int *object __attribute__((section(\".data.second\")));",
+            "E2943",
+        ),
+        (
+            "void (*__attribute__((section(\"\"))) callback)(void);",
+            "E2943",
+        ),
     ] {
         let arena = Arena::default();
         let file = FileId::new(45014);
@@ -63,6 +175,18 @@ fn adjacent_attribute_strings_name_the_same_linker_entities() {
     for (source, section, hidden, alias) in [
         (
             "int target __attribute__((section(\".data..percpu\" \"\")));",
+            Some(".data..percpu"),
+            false,
+            false,
+        ),
+        (
+            "int *__attribute__((section(\".data..percpu\"))) target;",
+            Some(".data..percpu"),
+            false,
+            false,
+        ),
+        (
+            "void (*__attribute__((section(\".data..percpu\"))) target)(void);",
             Some(".data..percpu"),
             false,
             false,
@@ -107,7 +231,11 @@ fn adjacent_attribute_strings_name_the_same_linker_entities() {
         .expect(source);
         let object = module.globals.iter().find(|g| g.symbol == "target").unwrap();
         assert_eq!(object.section.as_deref(), section, "{source}");
-        assert_eq!(linkage.hidden.values().any(|&v| v), hidden, "{source}");
+        assert_eq!(
+            linkage.visibility.values().any(|&v| v == evocc_chir::linkage::SymbolVisibility::Hidden),
+            hidden,
+            "{source}"
+        );
         assert_eq!(!linkage.aliases.is_empty(), alias, "{source}");
         evocc_evoir::validate_module(&module).unwrap();
     }

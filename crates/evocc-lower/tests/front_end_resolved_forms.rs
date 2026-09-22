@@ -164,9 +164,54 @@ fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_alias
         let mut parser = Parser::new(tokens, file, &source);
         let unit = parser.parse_translation_unit_in(&arena);
         assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        if matches!(spelling, "float" | "double") {
+            let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+                .expect("approved scalar floating execution");
+            validate_module(&module).unwrap();
+            let expected = if spelling == "float" {
+                evocc_evoir::EvoIRType::F32
+            } else {
+                evocc_evoir::EvoIRType::F64
+            };
+            assert_eq!(module.functions[0].params[0].ty, expected);
+            assert_eq!(module.functions[0].ret_tys[0], expected);
+            continue;
+        }
         let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
             .expect_err("header admission must not invent execution support");
-        assert_eq!(error.code(), "E3101", "{source}: {error}");
+        let code = match spelling {
+            "long double" => "E3049",
+            "__Float32x4_t" => "E3050", // real vector with a floating element
+            _ => "E3101",               // declaration-only extended/sizeless target types
+        };
+        assert_eq!(error.code(), code, "{source}: {error}");
+    }
+}
+
+#[test]
+fn scalar_floating_values_use_typed_ir_in_previously_deferred_contexts() {
+    for (ordinal, source, ty) in [
+        (1, "double f(double x) { return x; }", "f64"),
+        (
+            2,
+            "struct h { double x; }; struct h f(struct h x) { return x; }",
+            "hfa=1xf64",
+        ),
+        (3, "int f(void) { extern float x; return x > 0; }", "f32"),
+        (4, "int f(float *p) { return *p > 0; }", "f32"),
+        (5, "void f(int n) { float a[1]; a[0] = n; }", "f32"),
+        (
+            6,
+            "struct S { double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }",
+            "hfa=1xf64",
+        ),
+    ] {
+        let module = lower(source, 2500 + ordinal);
+        let text = render_module(&module);
+        assert!(text.contains(ty), "{source}: {text}");
+        let parsed = parse_section9_module(text.as_bytes()).unwrap();
+        validate_module(&parsed).unwrap();
+        assert_eq!(render_module(&parsed), text);
     }
 }
 
@@ -320,8 +365,12 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
             "long f(void) { long x = 7; long *p = &x; return *(const volatile long *)p; }\n",
         ),
         (
-            "long f(int i) { return __builtin_expect(i + 1, i++); }\n",
+            "long f(int i) { return __builtin_expect(i + 1, 0); }\n",
             "long f(int i) { return (long)(i + 1); }\n",
+        ),
+        (
+            "long f(int i) { return __builtin_expect(4, i++); }\n",
+            "long f(int i) { return (long)4; }\n",
         ),
         (
             "int f(int i) { return __builtin_constant_p(i) + __builtin_constant_p(7); }\n",

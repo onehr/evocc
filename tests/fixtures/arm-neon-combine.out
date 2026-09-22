@@ -1,0 +1,15 @@
+2026-09-19, existing evo-flight-lab:sealed image, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 and clang-19 19.1.7, gnu11 O0/O2:
+  public arm-neon-combine.c, four builds and executions exit 0.
+RED: private interface, E3052 combinev8qi, no Rust build error.
+GREEN: C-HIR, EvoIR, assembly generation; both subject-native assembler/linker
+executions exit 0 using the unmodified public GCC arm_neon.h.
+The fixture checks byte/halfword/word/doubleword and polynomial lane order,
+full-width bit patterns and once-only arguments. All 18 vector regressions pass.
+Reference: https://arm-software.github.io/acle/neon_intrinsics/advsimd.html
+Original chacha20_neon.c: debug replay TIMEOUT at its unchanged 300-second cap,
+not PASS. Release cb2a38518e3e3acc5a53a86fda03b0daf01d1d2fcb9a84222879203252062a8a
+emits in 25.84s using its original captured command from 20260919T133245Z.
+Assembly digest 0152bc6bc82caf1ae298295d96e67aafb91b3349ed2046633676754600ef4806.
+Original object installation and upstream execution remain required.

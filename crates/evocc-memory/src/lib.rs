@@ -129,6 +129,9 @@ pub enum LibraryValue {
     Integer(u64),
 }
 
+mod atomic;
+pub use atomic::{AtomicEvent, AtomicOrder, AtomicRmwOp, AtomicRmwResult, AtomicValue};
+
 impl PointerValue {
     #[must_use]
     pub const fn object(pointer: Pointer) -> Self {
@@ -347,6 +350,7 @@ pub enum InitialState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ObjectOwner {
+    ThreadLocal { thread: ThreadId },
     External,
     Static,
     ReadOnlyStatic,
@@ -356,6 +360,7 @@ pub enum ObjectOwner {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LifetimeEnd {
+    ThreadExit(ThreadId),
     ScopeExit(ScopeId),
     FrameExit(FrameId),
     Explicit,
@@ -386,9 +391,13 @@ pub struct ObjectInfo {
 /// Cross-interpreter identity for one allocation-site execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectOrigin {
+    pub thread: Option<ThreadId>,
     pub site: u64,
     pub instance: u64,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ThreadId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MemoryLimits {
@@ -481,6 +490,85 @@ impl MemoryConfig {
 pub struct ByteSequence {
     bytes: Vec<u8>,
     pointer_fragments: Vec<Option<PointerFragment>>,
+}
+
+/// A transported object representation, including indeterminate bytes and
+/// opaque pointer fragments. Transport is not a semantic read of its bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectRepresentation {
+    value: ByteSequence,
+    initialized: Vec<bool>,
+}
+
+impl ObjectRepresentation {
+    pub fn uninitialized(size: usize) -> Result<Self, MemoryFault> {
+        Ok(Self {
+            value: ByteSequence::try_from_bytes(repeat_value(size, 0, size as u64)?)?,
+            initialized: repeat_value(size, false, size as u64)?,
+        })
+    }
+
+    pub fn size(&self) -> usize {
+        self.value.bytes.len()
+    }
+    pub fn bytes(&self) -> &[u8] {
+        self.value.bytes()
+    }
+    pub fn initialized(&self) -> &[bool] {
+        &self.initialized
+    }
+
+    pub fn write_integer(
+        &mut self,
+        offset: usize,
+        width: usize,
+        raw: Option<u128>,
+        order: ByteOrder,
+    ) -> Result<(), MemoryFault> {
+        let end = offset
+            .checked_add(width)
+            .filter(|end| *end <= self.size())
+            .ok_or(MemoryFault::InvalidAccessSize {
+                size_bytes: width as u64,
+            })?;
+        if width > 16 {
+            return Err(MemoryFault::InvalidAccessSize {
+                size_bytes: width as u64,
+            });
+        }
+        let bits = raw.unwrap_or(0);
+        let bytes = match order {
+            ByteOrder::Little => bits.to_le_bytes(),
+            ByteOrder::Big => bits.to_be_bytes(),
+        };
+        let slice = match order {
+            ByteOrder::Little => &bytes[..width],
+            ByteOrder::Big => &bytes[16 - width..],
+        };
+        self.value.bytes[offset..end].copy_from_slice(slice);
+        self.value.pointer_fragments[offset..end].fill(None);
+        self.initialized[offset..end].fill(raw.is_some());
+        Ok(())
+    }
+
+    pub fn read_integer(&self, offset: usize, width: usize, order: ByteOrder) -> Option<u128> {
+        let end = offset.checked_add(width)?;
+        if width > 16 || end > self.size() || !self.initialized[offset..end].iter().all(|bit| *bit)
+        {
+            return None;
+        }
+        let mut bytes = [0; 16];
+        match order {
+            ByteOrder::Little => {
+                bytes[..width].copy_from_slice(&self.value.bytes[offset..end]);
+                Some(u128::from_le_bytes(bytes))
+            }
+            ByteOrder::Big => {
+                bytes[16 - width..].copy_from_slice(&self.value.bytes[offset..end]);
+                Some(u128::from_be_bytes(bytes))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -645,6 +733,8 @@ pub struct VolatileEvent {
 /// Stable semantic category used by interpreter diagnostic mappings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MemoryFaultKind {
+    InvalidThread,
+    InvalidAtomicAccess,
     InvalidArgumentList,
     ExternalObject,
     ExternalFunction,
@@ -692,6 +782,10 @@ pub enum MemoryFaultKind {
 /// selection, but deliberately owns no source span or IR obligation type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryFault {
+    InvalidThread {
+        thread: ThreadId,
+    },
+    InvalidAtomicAccess,
     InvalidArgumentList,
     ExternalObject {
         object: ObjectId,
@@ -828,6 +922,8 @@ impl MemoryFault {
     #[must_use]
     pub const fn kind(&self) -> MemoryFaultKind {
         match self {
+            Self::InvalidThread { .. } => MemoryFaultKind::InvalidThread,
+            Self::InvalidAtomicAccess => MemoryFaultKind::InvalidAtomicAccess,
             Self::InvalidArgumentList => MemoryFaultKind::InvalidArgumentList,
             Self::ExternalObject { .. } => MemoryFaultKind::ExternalObject,
             Self::ExternalFunction { .. } => MemoryFaultKind::ExternalFunction,
@@ -880,6 +976,10 @@ impl MemoryFault {
     #[must_use]
     pub const fn runtime_diagnostic(&self) -> Option<MemoryDiagnostic> {
         let diagnostic = match self {
+            Self::InvalidAtomicAccess => MemoryDiagnostic {
+                code: "E3062",
+                message: "invalid-atomic-access",
+            },
             Self::InvalidArgumentList => MemoryDiagnostic {
                 code: "E3038",
                 message: "va-arg-mismatch",
@@ -973,6 +1073,11 @@ enum AllocationContents<'a> {
 /// Immutable snapshot of objects, bytes, initialization, and lifetimes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryState {
+    current_thread: ThreadId,
+    threads: BTreeSet<ThreadId>,
+    retired_threads: BTreeSet<ThreadId>,
+    frozen_objects: BTreeSet<ObjectId>,
+    tls_instances: BTreeMap<(u64, ThreadId), Pointer>,
     exposed_objects: BTreeSet<ObjectId>,
     exposed_functions: BTreeSet<u64>,
     argument_lists: BTreeMap<Pointer, usize>,
@@ -988,8 +1093,84 @@ pub struct MemoryState {
 }
 
 impl MemoryState {
+    pub fn current_thread(&self) -> ThreadId {
+        self.current_thread
+    }
+
+    pub fn begin_thread(&self, thread: ThreadId) -> Result<Self, MemoryFault> {
+        if self.threads.contains(&thread) || self.retired_threads.contains(&thread) {
+            return Err(MemoryFault::InvalidThread { thread });
+        }
+        let mut next = self.clone();
+        next.threads.insert(thread);
+        Ok(next)
+    }
+
+    pub fn select_thread(&self, thread: ThreadId) -> Result<Self, MemoryFault> {
+        if !self.threads.contains(&thread) {
+            return Err(MemoryFault::InvalidThread { thread });
+        }
+        let mut next = self.clone();
+        next.current_thread = thread;
+        Ok(next)
+    }
+
+    pub fn end_thread(&self, thread: ThreadId) -> Result<Self, MemoryFault> {
+        if !self.threads.contains(&thread) {
+            return Err(MemoryFault::InvalidThread { thread });
+        }
+        let mut next = self.clone();
+        next.threads.remove(&thread);
+        next.retired_threads.insert(thread);
+        for object in next.objects.values_mut() {
+            if object.info.owner == (ObjectOwner::ThreadLocal { thread }) {
+                object.info.lifetime = ObjectLifetime::Ended(LifetimeEnd::ThreadExit(thread));
+            }
+        }
+        Ok(next)
+    }
+
+    pub fn allocate_thread_local(
+        &self,
+        site: u64,
+        layout: AccessLayout,
+        initial: InitialState,
+    ) -> Result<(Self, Pointer, bool), MemoryFault> {
+        let thread = self.current_thread;
+        if !self.threads.contains(&thread) {
+            return Err(MemoryFault::InvalidThread { thread });
+        }
+        if let Some(pointer) = self.tls_instances.get(&(site, thread)) {
+            let info = self
+                .object_info(pointer.object)
+                .expect("TLS map owns its object");
+            if info.layout != layout {
+                return Err(MemoryFault::OriginAlreadyAllocated {
+                    origin: info.origin,
+                });
+            }
+            return Ok((self.clone(), *pointer, false));
+        }
+        let (mut next, pointer) = self.allocate_object(
+            ObjectOrigin {
+                site,
+                instance: 0,
+                thread: Some(thread),
+            },
+            layout,
+            ObjectOwner::ThreadLocal { thread },
+            AllocationContents::InitialState(initial),
+        )?;
+        next.tls_instances.insert((site, thread), pointer);
+        Ok((next, pointer, true))
+    }
     pub fn new(config: MemoryConfig) -> Result<Self, MemoryFault> {
         Ok(Self {
+            current_thread: ThreadId(0),
+            threads: BTreeSet::from([ThreadId(0)]),
+            retired_threads: BTreeSet::new(),
+            frozen_objects: BTreeSet::new(),
+            tls_instances: BTreeMap::new(),
             exposed_objects: BTreeSet::new(),
             exposed_functions: BTreeSet::new(),
             argument_lists: BTreeMap::new(),
@@ -1307,6 +1488,7 @@ impl MemoryState {
     ) -> Result<(Self, Pointer), MemoryFault> {
         self.allocate_object(
             ObjectOrigin {
+                thread: None,
                 site: origin_site,
                 instance: 0,
             },
@@ -1325,6 +1507,7 @@ impl MemoryState {
     ) -> Result<(Self, Pointer), MemoryFault> {
         let (mut next, pointer) = self.allocate_object(
             ObjectOrigin {
+                thread: None,
                 site: origin_site,
                 instance: 0,
             },
@@ -1351,7 +1534,12 @@ impl MemoryState {
             .ok_or(MemoryFault::UnknownObject {
                 object: pointer.object,
             })?;
-        if pointer.byte_offset != 0 || object.info.owner != ObjectOwner::Static {
+        if pointer.byte_offset != 0
+            || !matches!(
+                object.info.owner,
+                ObjectOwner::Static | ObjectOwner::ThreadLocal { .. }
+            )
+        {
             return Err(MemoryFault::ReadOnlyObject {
                 object: pointer.object,
             });
@@ -1381,12 +1569,21 @@ impl MemoryState {
             .ok_or(MemoryFault::UnknownObject {
                 object: pointer.object,
             })?;
-        if pointer.byte_offset != 0 || object.info.owner != ObjectOwner::Static {
+        if pointer.byte_offset != 0
+            || !matches!(
+                object.info.owner,
+                ObjectOwner::Static | ObjectOwner::ThreadLocal { .. }
+            )
+        {
             return Err(MemoryFault::ReadOnlyObject {
                 object: pointer.object,
             });
         }
         let mut next = self.clone();
+        if matches!(object.info.owner, ObjectOwner::ThreadLocal { .. }) {
+            next.frozen_objects.insert(pointer.object);
+            return Ok(next);
+        }
         next.objects
             .get_mut(&pointer.object)
             .expect("object checked immediately before cloning")
@@ -1403,6 +1600,7 @@ impl MemoryState {
     ) -> Result<(Self, Pointer), MemoryFault> {
         self.allocate_object(
             ObjectOrigin {
+                thread: None,
                 site: origin_site,
                 instance: 0,
             },
@@ -1445,6 +1643,7 @@ impl MemoryState {
             .unwrap_or(Some(0))
             .ok_or(MemoryFault::OriginInstanceExhausted { site: origin_site })?;
         let origin = ObjectOrigin {
+            thread: None,
             site: origin_site,
             instance,
         };
@@ -1599,6 +1798,89 @@ impl MemoryState {
             bytes: clone_slice(&object.bytes[range.clone()], access.size_bytes)?,
             pointer_fragments: clone_slice(&object.pointer_fragments[range], access.size_bytes)?,
         })
+    }
+
+    pub fn load_representation(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        volatile: bool,
+    ) -> Result<(ObjectRepresentation, WorldState), MemoryFault> {
+        let resolved = self.resolve_pointer(address)?;
+        self.check_argument_list_access(resolved, access, false)?;
+        let range = self.checked_range(resolved, access)?;
+        let object = &self.objects[&resolved.object];
+        let representation = ObjectRepresentation {
+            value: ByteSequence {
+                bytes: clone_slice(&object.bytes[range.clone()], access.size_bytes)?,
+                pointer_fragments: clone_slice(
+                    &object.pointer_fragments[range.clone()],
+                    access.size_bytes,
+                )?,
+            },
+            initialized: clone_slice(&object.initialized[range], access.size_bytes)?,
+        };
+        let world = if volatile {
+            self.append_world(
+                world,
+                VolatileDirection::Load,
+                address,
+                access,
+                ObservedValue::Representation {
+                    bytes: representation.value.bytes.clone(),
+                    initialized: representation.initialized.clone(),
+                },
+            )?
+        } else {
+            world.clone()
+        };
+        Ok((representation, world))
+    }
+
+    pub fn store_representation(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        representation: &ObjectRepresentation,
+        volatile: bool,
+    ) -> Result<(Self, WorldState), MemoryFault> {
+        if representation.size() as u64 != access.size_bytes {
+            return Err(MemoryFault::ByteLengthMismatch {
+                expected: access.size_bytes,
+                actual: representation.size() as u64,
+            });
+        }
+        let resolved = self.resolve_pointer(address)?;
+        self.check_argument_list_access(resolved, access, false)?;
+        let range = self.checked_store_range(resolved, access)?;
+        let mut next = self.clone();
+        let object = next
+            .objects
+            .get_mut(&resolved.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: resolved.object,
+            })?;
+        object.bytes[range.clone()].copy_from_slice(&representation.value.bytes);
+        object.pointer_fragments[range.clone()]
+            .clone_from_slice(&representation.value.pointer_fragments);
+        object.initialized[range].copy_from_slice(&representation.initialized);
+        let world = if volatile {
+            next.append_world(
+                world,
+                VolatileDirection::Store,
+                address,
+                access,
+                ObservedValue::Representation {
+                    bytes: representation.value.bytes.clone(),
+                    initialized: representation.initialized.clone(),
+                },
+            )?
+        } else {
+            world.clone()
+        };
+        Ok((next, world))
     }
 
     pub fn store_bytes(
@@ -2214,6 +2496,9 @@ impl MemoryState {
         // rotated instance made (site, 1) alias (site ^ (1 << 32), 0),
         // precisely the shape of temporaries in two different functions.
         let mut hash = origin.site;
+        if let Some(thread) = origin.thread {
+            hash = hash.wrapping_add(thread.0.wrapping_add(1).wrapping_mul(0xd6e8_feb8_6659_fd93));
+        }
         hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         hash =
@@ -2292,10 +2577,12 @@ impl MemoryState {
             .ok_or(MemoryFault::UnknownObject {
                 object: address.object,
             })?;
-        if matches!(
-            object.info.owner,
-            ObjectOwner::StringLiteral | ObjectOwner::ReadOnlyStatic
-        ) {
+        if self.frozen_objects.contains(&address.object)
+            || matches!(
+                object.info.owner,
+                ObjectOwner::StringLiteral | ObjectOwner::ReadOnlyStatic
+            )
+        {
             return Err(MemoryFault::ReadOnlyObject {
                 object: address.object,
             });
@@ -2555,6 +2842,7 @@ pub struct WorldState {
     limits: WorldLimits,
     next_sequence: Option<u64>,
     volatile_trace: Vec<VolatileEvent>,
+    atomic_trace: Vec<AtomicEvent>,
 }
 
 impl WorldState {
@@ -2564,6 +2852,7 @@ impl WorldState {
             limits,
             next_sequence: Some(0),
             volatile_trace: Vec::new(),
+            atomic_trace: Vec::new(),
         }
     }
 
@@ -2577,6 +2866,10 @@ impl WorldState {
         &self.volatile_trace
     }
 
+    pub fn atomic_trace(&self) -> &[AtomicEvent] {
+        &self.atomic_trace
+    }
+
     fn append(
         &self,
         direction: VolatileDirection,
@@ -2585,8 +2878,12 @@ impl WorldState {
         access: AccessLayout,
         value: ObservedValue,
     ) -> Result<Self, MemoryFault> {
-        if u64::try_from(self.volatile_trace.len())
-            .map_or(true, |count| count >= self.limits.max_volatile_events)
+        if u64::try_from(
+            self.volatile_trace
+                .len()
+                .saturating_add(self.atomic_trace.len()),
+        )
+        .map_or(true, |count| count >= self.limits.max_volatile_events)
         {
             return Err(MemoryFault::VolatileEventLimitExceeded {
                 max_events: self.limits.max_volatile_events,
@@ -2787,6 +3084,7 @@ mod tests {
         assert_eq!(
             memory.object_info(static_object.object()).unwrap().origin,
             ObjectOrigin {
+                thread: None,
                 site: 10,
                 instance: 0
             }
@@ -2794,6 +3092,7 @@ mod tests {
         assert_eq!(
             memory.object_info(literal.object()).unwrap().origin,
             ObjectOrigin {
+                thread: None,
                 site: 20,
                 instance: 0
             }
@@ -2801,6 +3100,7 @@ mod tests {
         assert_eq!(
             memory.object_info(first_at_site.object()).unwrap().origin,
             ObjectOrigin {
+                thread: None,
                 site: 30,
                 instance: 0
             }
@@ -2808,6 +3108,7 @@ mod tests {
         assert_eq!(
             memory.object_info(unrelated_site.object()).unwrap().origin,
             ObjectOrigin {
+                thread: None,
                 site: 40,
                 instance: 0
             }
@@ -2815,6 +3116,7 @@ mod tests {
         assert_eq!(
             memory.object_info(second_at_site.object()).unwrap().origin,
             ObjectOrigin {
+                thread: None,
                 site: 30,
                 instance: 1
             }
@@ -3679,6 +3981,7 @@ mod tests {
             without_prefix[0].value,
             ObservedValue::Pointer(ObservedPointer::Object {
                 origin: ObjectOrigin {
+                    thread: None,
                     site: 10,
                     instance: 0,
                 },
@@ -3689,6 +3992,7 @@ mod tests {
             (without_prefix[0].origin, without_prefix[0].byte_offset),
             (
                 ObjectOrigin {
+                    thread: None,
                     site: 20,
                     instance: 0,
                 },

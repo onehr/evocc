@@ -110,7 +110,11 @@ fn function_scope_value_contexts_report_their_own_constant_diagnostic() {
         "void check(void) { _Static_assert(({ 1; }), \"value\"); }\n",
         "E2912",
     );
-    rejects("void check(void) { int values[({ 4; })]; }\n", "E2203");
+    accepts("void check(void) { int values[({ 4; })]; }\n");
+    rejects(
+        "void check(void) { int values[({ 4; })] = { 1 }; }\n",
+        "E2203",
+    );
 }
 
 #[test]

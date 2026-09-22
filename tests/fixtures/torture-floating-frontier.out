@@ -1,0 +1,345 @@
+Original-source floating frontier audit, 2026-09-15
+
+Pinned GCC torture source: 78d4ac73dd391005b895a6148cd9831e28e1208b.
+Unchanged gcc/testsuite/gcc.c-torture/execute sources; no reduction replaces an original.
+Fixed linux/arm64 evo-flight-lab:sealed, network none, GCC 14.2 / Clang 19.1.7.
+Each source: CC -std=gnu11 <original applied options> -O0/-O2 SOURCE -lm -o probe;
+run the built executable with timeout 10. The original applied option is
+-std=gnu89 for 921013-1, 921124-1, 930106-1, 930513-1 and 930603-1;
+the other applied-option lists are empty. Written options follow -std=gnu11.
+Zero exits are oracle results, not EvoCC PASS. FP dispositions below are based
+on the named source operation, never on the E3101 code alone. Storage-only
+constant assignments have their own positive regression and are not waived.
+
+116 originals compile and exit 0 under all four oracle configurations:
+20000605-1 0201957d2776e0467c21a5428affeae829962f43c4ab93ebe71ad375e5939bf1
+  Requires double reciprocal and multiplication in the scaling loop.
+20010118-1 6d99053e082ef58a7f54ac184039e97954248768810e5ecba140e29847704375
+  Requires integer-to-double conversion, multiplication/division, then conversion back to int.
+20011217-1 f7587313713572270fdf254e5df681abf79287e2835ed0e1ffe5d65ad3b57686
+  Requires floating comparison and postfix decrement.
+20020213-1 153845b47ddb0d3ebc7e4bf6f0bfb3abac63562ed84cac21a821418e831c1297
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20020321-1 06a7d47f62e7ba826936f4624ab481b7457858ccfc335959525d0d2e41ba2fd0
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20020413-1 174c0584b0182b9dd51157210e1d7a42165700e8e5d33c0c46af23be7cb19ac0
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20020720-1 fa967332a209a596d6a8ef38a38d9ac2348073fb0087d597294abeb9010b9584
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20021118-2 5403880bca6352d2e126d1ca98b42cf7f3076901536ac40dd3410aed9be2726e
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20021120-1 fd35d6e5ec5fcb01655f03844bed5aa884c774699e3f5f28081a35201aa2a612
+  Requires COPYIN/COPYOUT of runtime double values.
+20030125-1 819596ea1220c57dbb6803fee962d6f1881063c31db821f65f754049941a2377
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20030209-1 a39032cf4413e86dc02402f7b6a7f9410c71a24219b348273a4fc0122c76fd51
+  Requires comparison of the stored double array element with 42 after its constant-representation store.
+20030910-1 f6ee2a7f1e037fc1e63bc9cbbc4220f10c7eae971bcb4b56cffd9706deaf72a7
+  Requires floating-complex real-component reads, writes and comparisons.
+20030914-1 e1144646acfaeec16469f32204884f69f82ad0cc575d06c40efb0a8baf6f2954
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20040208-1 f11de4efa0ce2f338deead8aaf7b245ee684e2f17001dcdef59075a0ae8078af
+  Requires hexadecimal floating constants and floating multiplication or comparison.
+20040831-1 eadcb4dbc48ac8cb3942508bd824657d941a581874d7394ec46833a06268c599
+  Requires comparison of double d and conversion to signed or unsigned long.
+20041113-1 d40b2c94b2f3748b538b251eeffc3b1d944680e75e42eba841aea43d2cadfaf1
+  Requires division of runtime double by 10.0 and conversion to int.
+20050121-1 d308d6526bbd2687d22dca160e57d124b28db42bb5ee6ffc5e5b861671d137d1
+  Requires both integer and floating complex instantiations, including float/double/long-double execution.
+20050316-2 e096ec82c6ec33d62c00335c4a3fc73b535ba2cd94b9bdf0532928e2ce2072d3
+  Requires float-vector external ABI and comparisons of the resulting floating lanes.
+20060420-1 cd7d81ae9a017a0c0c308153fdb88bc5aa1992cca079b468821cbe62a288a828
+  Requires summing float elements of a variable-size source array.
+20070614-1 25f7073f934cd82de2f3c11cf4ad250dc689acace7cdd8f01dafb726821c067a
+  Requires floating-complex construction and execution, not GNU integer complex.
+20071030-1 a149547a4bb6485847d48252da6eaf6d3b2e8185b74b062ac88bd6bcc23d79c2
+  Requires accumulating and averaging floating ping values after the now-supported constant store.
+20080502-1 62937a986b39ec2488385c15c0c5aa46a97f396f8390fcb18f39fd9722255012
+  Requires runtime floating sign-bit queries.
+20080529-1 7ea372bac1906fde771ed43ef5baf5c63dfc77ea941f6da4d0d9611fae4d7029
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+20120919-1 ce4e751620ea08602a3cae21044fcc3b42baf252bdca8c2eaa4da8e700d63f39
+  Requires loading and comparing double array elements with zero.
+20190901-1 efdbaf646a3a3ecabfa6080318d6b975adb3bee14552db591ad0f49079f758b5
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+920501-8 cb8282773b7c14ebe4c0d9bc436fc102145e62f43f2358affa849f01cd6ac1e6
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+920625-1 f52358d28729f1c4c4036e663871f090b9992c52d2669742b3aabf61c8728d4f
+  Requires homogeneous floating aggregates through varargs and floating-member comparisons; mixed-record storage-only controls are separately green.
+921013-1 494267732feac58da2cc6aec1812eeb53e565fbc191328d0132f3d72369f80e9
+  Requires comparing loaded floating array elements while updating pointers.
+921019-2 6335f9c2b7c227693fc2e843009637193cf1a4915f3f2de0134271a0aba10b65
+  Requires runtime double division and floating NaN comparison.
+921113-1 b791176b451294a07fbc2962a66ca47b38988041ffe0e0160016f808f8ecaea6
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+921124-1 37f4967e703e98c0f20088c3d419cc9763ae060bdbfe187802023ecc60722f8d
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+921208-1 70263e2971e1a53d79b4860a4d9bc69cffefdd117540fc444454c48b44041f4b
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+930106-1 3d4b38d0c9e91fc71edad141b47533fa3c10ff5f73154bce06ba8239cae0a440
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+930513-1 8f9d56a8caeb6a957f05c7c1fb8d57eacb41896c6b7e1073d9c920d22d31533b
+  Requires anonymous double argument through the printf function pointer.
+930603-1 ff5f1ffe89e7d17fd9f0381c9a80e9d963d54591ef4b598fa76629548555720e
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+930614-1 815196512bb1727e32158a913fd49c179a185314b541a4aa3253f8729aa4aa99
+  Requires floating absolute values and selecting the larger floating value.
+930614-2 9cb6c24688f1c331be79a4a0d6e9db2156627670b7cf3774c3635e875bb87a66
+  Requires reading and comparing multidimensional floating array elements.
+930622-2 c5a19a27d7bd2e12abdba67dc64fa11be958a5840ea597187e49fc873e4b63d8
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+941021-1 02edbb4e717f3304408d76c8d1a181af0965167073e4d94b16a4dc5d3a19a136
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+960215-1 f2012034c5b3c444ab7fc5b686ced75e104512744cc7784ab7b2a35626bc1253
+  Requires double add/subtract/multiply in the original numeric test.
+960405-1 ef5b9511818f3878873a4c9faf7f2c37c6ecff5a2cc7be011e04b6d56380c3e1
+  Requires comparison of loaded floating values.
+960513-1 aec9013b5cb129ca5bc6843a31910d156e156d9dc508cf646679491e5f518e60
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+980205 12b700b76e4f3efe5726e041f39d370f71140cea0a6da7e7a84581af34845ce3
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+980604-1 20d7fd6d765d8bcba277fbc6b2b20ea5757cc189311eb10251c3642298b55e68
+  Requires runtime unsigned-integer-to-float conversions before a conditional calculation.
+980605-1 4fce18a15b8674a4eb025d68f5c154bbfc61a066445526ef60ba52cfc22abfaf
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+980709-1 54368958f8fa7dce11630041f1333e5cf9f3ab65a056ddcb49b4265d1ecdf411
+  Requires pow on a volatile double and floating tolerance comparisons.
+990117-1 d789caf1863763a3aac9b470180c9150f6b04508aa4e19965e8f159e883e2f0a
+  Requires runtime integer-to-double conversions and divisions.
+990127-2 d0291b07a00ebc50e3ff23c7730f992cca9d2f455266e45039bdf2dad4c34d78
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+990826-0 7e70b4b33d21827679805af7083a70624d91a6a4be7b59bf43ccd7644f162166
+  Requires original math-library floating interfaces and computations.
+990829-1 575c60c6af37d89dd7922784a88dbfc329131fe89ff78d6a8dd9a75cd02658c6
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+991019-1 2d2eb0c511572590b8dafc4df6a841ebcdde0919f6d8129cf439b58813752df7
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+991030-1 fdf005e93cd153deac7321581a22a035cbccc3e035a8e20ffbf0b6fdcb50ff2d
+  Requires hexadecimal floating constants and floating multiplication or comparison.
+991228-1 ddb3f0d3698b8055a946ed2c464068448eb30893d5e6f5af6a6b89e269304b88
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+align-2 f61db3f451d76e6ef7fe4c475f3acf0f217f35781ddd21cfe85cb1747bb5c292
+  Requires reading and comparing float/double/long-double members, not merely their layout.
+cbrt 5af344d4e08d8326268b026f474dbc63d51f5528aa5fa97b5e0fa7ebaa982b14
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+complex-1 346f9d33f635adfa96ba4f9d3d3602caccd1372396679900e34e22612adaf7cb
+  Requires floating-complex construction and execution, not GNU integer complex.
+complex-2 cf52b8d4e65f4c3a714bf35282345919b8ad83bd82bdf7b6e29f5c41c9136cfc
+  Requires floating-complex construction and execution, not GNU integer complex.
+complex-3 f75c328ec0bd6fef7b9ac76aa0b5363bcb7af77c69159e5ce6a1bcf68ffc6c54
+  Requires floating real/imaginary argument and result values.
+complex-4 9ad20e4734a4a596683981c0f5e77830d8d6aeb06b5e1e2aa65c9e103a5d257d
+  Requires floating-complex comparisons including positive and negative zero.
+complex-5 9626fce271adb616a8e0ec349caf8ff1242172fc0eed7415399438006ab3ea8b
+  Requires floating-complex construction and execution, not GNU integer complex.
+complex-6 0410a78a4a86951981fa52b7a18a6ffc5d4d147580c9ef2264c76bfc1dcf6c0c
+  Requires both integer and floating complex instantiations, including float/double/long-double execution.
+complex-7 de95b7d46ae7e0fd0984c86e7e4cd023925a1f24fc6ff16f3e1e979abdd1a565
+  Requires floating-complex construction and execution, not GNU integer complex.
+conversion c71be59f131b7f95cd2ae58238422b205bc599446d9ed77fdfad68730bf2947b
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+cvt-1 17d830397cc66136b817f163dac53d86078c8dea4776592b1659625b7474837f
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+float-floor 7058e692773c39351cfbdf99abcf3c6245437bb7c32b57ec972914009cee83ad
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+floatunsisf-1 ec3c5354fbc75cbae1addd762ace8de45c3f1995ff3fb610b7721fb1ec7ccb7e
+  Requires runtime unsigned-to-float conversion and floating comparison.
+func-ptr-1 bf4686c7a8a6064e3eafd06739569113786ae5b26324d3d4853c3169aca0dd5e
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+gofast c4d952febd2fc7563328cf549014014dc0690357242491b7a333162502fcda20
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+ipa-sra-1 4e7a91f246600547232431ef63749e5e796f0fbc831442ba8b9df0ceec8055a5
+  Requires conditional float-to-int conversion of cow->red; the benchmark invocation not selecting the arm does not remove the callable operation.
+loop-8 e17724fa2e13e071cb75e798fff87d846fd36734fd40fbd5d3c58131318f1650
+  Requires double pointer load and comparison with 1.0.
+loop-ivopts-1 af3d6814164cd9af9c07374db2af3fb3daccad3ef974ed2c51225916c279717b
+  Requires loads, multiplications and accumulation of double array values.
+packed-aligned b05af614cb3d96f7077aa86d23754c241e7e9632f20b5f470e0debff51001be6
+  Requires homogeneous double aggregate passing and floating-member comparison.
+postmod-1 f681a8610186c63caee06160883642ced6bb41bac20755d2b9a966f185f94a5d
+  Requires accumulating float array loads into floating counters.
+pr107879 38af7839f7d7752343dbd042917b5e1c2202685d71220bcaccb5e1298409f039
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr15262-1 a66685499f0d76065c6c1a8afc0a7c9cf36de932ee7807911fc84822b7d2af33
+  Requires floating pointer load/comparison after the now-supported constant stores.
+pr15262-2 a97399092d6dc7b06b43ceb3f86a6940aa371c44bee2c6f453529be8c093bffb
+  Requires adding a loaded floating value to X and subsequent floating updates.
+pr15262 89ee2a24ca23b44d71e28ac3578fa8095341728c36b1097b7fdadadbd53cbdfa
+  Requires floating pointer load/comparison after the now-supported constant stores.
+pr23324 8b6c8e94d29e9bf08299873ef44903f8bf907525465bcac25a5f90a6501fce22
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr23941 0bb15827ccdd9dd80cd6766562d040c4613cc2fcec5b5634e4354cedca5d80a4
+  Requires double comparison around the minimum-float boundary.
+pr28982a 7fa896d2f4c4deb42265759ddc905bfaf7f9f1f64d9083caba86e357624a76ac
+  Requires macro-expanded floating loop operations and copying out floating values.
+pr28982b ac8687e81ae8fe0460f5c6eb559896cbd180ea41f9e89617598e3aaa09af5d99
+  Requires macro-expanded floating loop operations and copying out floating values.
+pr29798 c2c8752fa5868b5e5d188eb4944586c6ab3cd5e0ca2649b474d1bd346511b97e
+  Requires double products and quotients in a loop.
+pr35456 439a70fd3b4e169b9fa8e152cbfefa747f1d1fed58e6e7f96c59b244df6baf5d
+  Requires runtime floating sign-bit queries.
+pr36034-1 431c621ede26106e0685ed2516ae5126240e6922af64e1c67458b82f2d26fbb8
+  Requires copying runtime floating array elements as floating values.
+pr36034-2 7c1716ae8e21f95aa58d3fd00974a2f69079aa6febd944247900a2208fbcec6d
+  Requires copying runtime floating array elements as floating values.
+pr36343 c3005f683df31de2790342ea4d766278fe85d4f7022022599897dd28e84913fa
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr42691 12f670ae69af2f42e3cb81261746c0beeb3f2b1e6ea749783dd37f49cc657633
+  Requires floating key and entry comparison in the original search.
+pr44575 8fc674bb4a65450dfdaea5a7238d752ecdce2dfbfb3376ab3fc451ef170e0929
+  Requires homogeneous floating aggregates through varargs and floating-member comparisons; mixed-record storage-only controls are separately green.
+pr44683 016c5bd32e7d9885030a194c02c0742ae1a2bca5a0d9af761f8150ae1f4b312a
+  Requires floating arithmetic and copysign.
+pr44942 a593433333b8ef20fa39c196c472aca96eb4f332d3e0da4dcbafdaee61fdc75a
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr47538 7ddc400661a1d3c0585c8a1e3c93d6aa4a0ec3410b9e099eaf7a9c2331f9fbb0
+  Requires double interval-width computation and floating-bound copying.
+pr49218 3f80159895f89f16fc09db7f9e9b34312ce95b9a9e63d1a819686015169d02a4
+  Requires floating-to-integer conversion to the original integer type L.
+pr49644 228b6916df8f49eaf8bf4fce85958729fbd745ed87f88edd223b0acc98646e45
+  Requires floating-complex construction and execution, not GNU integer complex.
+pr56205 8ba26eb710dbed48e0610cf22ddc6ecde644d7ee7dc1df15ad4e07c2cee6214d
+  Requires floating va_arg extraction and consumption.
+pr58574 0d9ee9991bbcee2af0713c8f6846241e491e0ca8bdbc806bb9ccaae162d2f960
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr59643 9b103825a04442bb465f754a33ad4788b5138f6189cf87fbc0422f9bfdd55a23
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr64979 ebc80502935f4fca2dd98ae330c1da1e7e06d88ac8fa25d9f0a108ecc601e066
+  Requires floating va_arg extraction and consumption.
+pr66233 0764b4fa85aa77aa286e8e727e434331f5962f3553ec1d9f43532bd251ffe88b
+  Requires runtime integer-to-float-to-unsigned conversion.
+pr67929_1 7564232499a44eab571882bed7b328ea5d95920939bc2231bb6f510621c242cd
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+pr79354 6475f81c237d92bbdf59e5d690f7a82b35e9b78494b906984e42ea4dbbb9d489
+  Requires runtime unsigned-to-float conversion before inspecting the representation.
+pr92904 bce28f06aa69e28c01ce5e66aefddfce0273244d17aa59cc4036b463a8bc0795
+  Requires aggregate result requiring the floating homogeneous-aggregate calling convention.
+pr93434 6ecc8ddf38cbd2d69b38cc301b3fbb9860b980e49059dea9552573b788dd68cc
+  Requires floating complex-array computations beyond initial constant-representation stores.
+regstack-1 b2ce27db2aa43ee778a57d6296655f4605833c3aa770eb124ff10b549a5a40b1
+  Requires double add/subtract/multiply in the original numeric test.
+stdarg-1 468a06ec36cc47513c6108c9259e603a7b6a0ee5be1f7778920f05214fd27f74
+  Requires floating va_arg extraction and consumption.
+stdarg-2 560b59b0eeaa2d180429fb10e96bb98373fcde1c85aa0601bc915bfc57546b73
+  Requires floating va_arg extraction and consumption.
+stdarg-3 41807d647a4c4e20031c2bfedb1f37b6509863637fb45e6c12ef60412cf04bd3
+  Requires floating va_arg extraction and consumption.
+strct-pack-1 a07d290975cb2abba6f010e8ebbcc1134ae2d69fbd8604380d9afa1128e32699
+  Requires packed double member read/comparison after the supported constant store.
+struct-ret-1 cc8d3fc1dcaa9721231f0fcde3544356f5d859785219755cc649e9c7ead8fe78
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+va-arg-12 3ac1c4f014534ca3b3c10d0fc66df11b7d2fe0e97fff567fd00560029e470662
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+va-arg-15 bc9aefd3656145f3f3e0110bab4fe674903e26cdb8c23b474e6f185e5d705a3d
+  Requires floating va_arg extraction and consumption.
+va-arg-16 214db61e9e8a8749953ce90aa8d439142f6e51cca19d298af7cf268eb448b00a
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+va-arg-17 e3bd464100e2fc2a2657d338e921a84ff7e2626e1b04ca51fde765b56fd3f046
+  Requires floating va_arg extraction and consumption.
+va-arg-18 5164ef08accb5ddac18b0d27f4406fded13ae687a456aaeb76df3ba8f8cde462
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+va-arg-26 f3c7769ca80bb973c5251a07be8f90f0ab6580d55ca477b9f366c3d158c78e45
+  Requires floating argument/result calling conventions and floating value operations in the original callable interface.
+va-arg-5 c4f21f1570c49976849ab2d5cb5fe9a49ae430ff19d27a3dd9069c0c6df8f2dd
+  Requires floating va_arg extraction and consumption.
+va-arg-6 b0eb9fc5a52d4e43b24c9eb561410f72dbfc27027a2afdfa4c6ac55c80173401
+  Requires floating va_arg extraction and consumption.
+
+Three controls are not usable as dual-oracle execution consensus:
+pr39228 db812d882eb3636213f482b4cfcfc660bf24b2340ae40e0074de70f1b4c13e76
+  gcc O0: compile=0, run=0
+  gcc O2: compile=0, run=0
+  clang-19 O0: compile=1, run=NOT_RUN
+  clang-19 O2: compile=1, run=NOT_RUN
+/work/source/pr39228.c:9:10: error: use of unknown builtin '__builtin_isinff' [-Wimplicit-function-declaration]
+    9 |   return __builtin_isinff (c);
+      |          ^
+/work/source/pr39228.c:23:10: error: use of unknown builtin '__builtin_isinfl' [-Wimplicit-function-declaration]
+   23 |   return __builtin_isinfl (c);
+      |          ^
+2 errors generated.
+
+pr80692 1bf37020e7b5154a181f116a0fba8422b8a2880d3882a2ade2b154a8833ebcd6
+  gcc O0: compile=0, run=0
+  gcc O2: compile=0, run=0
+  clang-19 O0: compile=1, run=NOT_RUN
+  clang-19 O2: compile=1, run=NOT_RUN
+/work/source/pr80692.c:5:2: error: GNU decimal type extension not supported
+    5 |         _Decimal64 d64 = -0.DD;
+      |         ^
+/work/source/pr80692.c:5:22: error: invalid suffix 'DD' on floating constant
+    5 |         _Decimal64 d64 = -0.DD;
+      |                             ^
+/work/source/pr80692.c:7:15: error: invalid suffix 'DD' on floating constant
+    7 |         if (d64 != 0.DD)
+      |                      ^
+/work/source/pr80692.c:10:16: error: invalid suffix 'DD' on floating constant
+   10 |         if (d64 != -0.DD)
+      |                       ^
+4 errors generated.
+
+pr85331 35b9bec3b10824bb2b18389b075645c262c5a9d66099b8746fa4f1d8d3618309
+  gcc O0: compile=0, run=0
+  gcc O2: compile=0, run=0
+  clang-19 O0: compile=1, run=NOT_RUN
+  clang-19 O2: compile=1, run=NOT_RUN
+/work/source/pr85331.c:7:16: warning: unknown attribute 'noipa' ignored [-Wunknown-attributes]
+    7 | __attribute__((noipa)) void
+      |                ^~~~~
+/work/source/pr85331.c:12:8: error: use of unknown builtin '__builtin_shuffle' [-Wimplicit-function-declaration]
+   12 |   *r = __builtin_shuffle (y, m);
+      |        ^
+/work/source/pr85331.c:12:6: error: assigning to 'V' (vector of 2 'double' values) from incompatible type 'int'
+   12 |   *r = __builtin_shuffle (y, m);
+      |      ^ ~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning and 2 errors generated.
+
+
+Raw command/diagnostic capture: .build/vector-targeted/torture-floating-oracles.json.
+This is applicability evidence only; it changes no historical raw results.
+
+Four additional originals exposed by faithful option consumption:
+Fixed image and compilers as above. All sixteen compile/run combinations
+(GCC/Clang, O0/O2, four originals) exit 0. Options precede the selected -O0/-O2;
+they are -fgnu89-inline for the first, second and fourth rows, -O2 for pr68390.
+
+20001121-1 99066dd1517463627d7991c95b6a2c2f0e18d881db3609ec18e754275df69a4b
+  GNU inline foo supplies a real external definition returning the double d;
+  bar calls it. Discarding the call result does not remove the floating ABI.
+961223-1 46501b824f2ecd0efdd8168ed271fdfd62542e6707f5a2fa2d58ae58cd17b654
+  GNU inline sub takes/returns a homogeneous double aggregate and increments d.
+pr68390 bab36ab4474180ee6b3e51c921e2b9322995f4da27066febed276f13b5e3bebf
+  direct converts its integer product to a double return; broken calls it
+  indirectly and main compares the floating result.
+va-arg-7 d566662a26a3f877293048b058ac53e7ed8ccdb93717ded2a73ed96a836d4226
+  debug receives nine named double arguments through the floating ABI before
+  extracting integer anonymous arguments. No integer-varargs waiver is made.
+
+Raw capture: .build/vector-targeted/inline-floating-oracles.txt.
+
+Scalar-profile re-review, 2026-09-20 (not a new oracle execution):
+The complete run .evidence/ladder/e0/20260919T212324Z/results.jsonl exposes
+39 surviving refusals carrying historical broad FP reviews. All 39 original
+file hashes were rechecked against this registry; no source or seed changed.
+Their current explicit execution requirements are:
+binary128 (18): 20020413-1 20030914-1 20040208-1 20040709-1 20040709-2
+  20080502-1 930622-2 960215-1 960405-1 960513-1 align-2 conversion
+  pr44942 regstack-1 stdarg-1 stdarg-2 va-arg-5 va-arg-6.
+  These pass/read/compute long double, including named and anonymous ABI
+  arguments; constant storage or a finite-literal narrowing does not suffice.
+floating-complex (15): 20020227-1 20020411-1 20030910-1 20050121-1
+  20070614-1 960512-1 complex-1 complex-2 complex-4 complex-5 complex-6
+  complex-7 pr38969 pr42248 pr49644.
+  Each constructs, accesses, compares or passes float/double/long-double
+  complex values. GNU integer complex is not included in this boundary.
+floating-vector (6): 20050316-2 20050604-1 20060420-1 pr92618
+  scal-to-vec1 scal-to-vec3.
+  20060420-1's foo contains v4flt loads/additions/stores, not only its scalar
+  remainder loop; pr92618 qux constructs a double vector before bit conversion.
+  The other originals execute float/double vector calls, arithmetic or masks.
+
+These are explicit still-deferred features, never newly earned PASS results.
+The updated classifier cannot waive a newly emitted link/runtime failure.
+complex-4 was separately reduced to (_Complex double)0.0 comparisons: the
+generic E3101 refusal is repaired to E3050 (three float/double/long-double
+RED-to-GREEN cases). No floating-complex execution was silently introduced.

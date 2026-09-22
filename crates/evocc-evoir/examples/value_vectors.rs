@@ -233,12 +233,16 @@ fn build(shape: &Shape) -> Option<Module> {
     }
 
     Some(Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         globals: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         functions: vec![Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: Linkage::Strong,

@@ -52,7 +52,7 @@ fn signed(raw: u128, n: u16) -> i128 {
     ((raw << (128 - n)) as i128) >> (128 - n)
 }
 
-fn transfer(inst: &Inst, facts: &[Fact]) -> Fact {
+fn transfer(inst: &Inst, facts: &[Fact], aliases: &BTreeMap<u32, u32>) -> Fact {
     // These are facts on successful completion of the ORIGINAL instruction,
     // not permission to replace it. Even x & 0 must still consume x (and
     // report poison), and every evaluation/guard/effect stays in the CFG.
@@ -70,6 +70,36 @@ fn transfer(inst: &Inst, facts: &[Fact]) -> Fact {
         }
         Inst::Or(v, a, b) if absorbing(a, b, mask(width(v)?)) => {
             return Some(vec![mask(width(v)?)]);
+        }
+        Inst::Shl(_, a, b) | Inst::LShr(_, a, b) | Inst::AShr(_, a, b)
+            if facts[a.id as usize].as_deref() == Some(&[0])
+                && !facts[b.id as usize].as_ref().is_some_and(Vec::is_empty) =>
+        {
+            return Some(vec![0]);
+        }
+        Inst::AShr(v, a, b)
+            if facts[a.id as usize].as_deref() == Some(&[mask(width(v)?)])
+                && !facts[b.id as usize].as_ref().is_some_and(Vec::is_empty) =>
+        {
+            return Some(vec![mask(width(v)?)]);
+        }
+        Inst::ICmp(_, op, a, b)
+            if width(a).is_some()
+                && a.ty == b.ty
+                && aliases.get(&a.id).unwrap_or(&a.id) == aliases.get(&b.id).unwrap_or(&b.id) =>
+        {
+            return Some(
+                if facts[a.id as usize].as_ref().is_some_and(Vec::is_empty)
+                    || facts[b.id as usize].as_ref().is_some_and(Vec::is_empty)
+                {
+                    Vec::new()
+                } else {
+                    vec![u128::from(matches!(
+                        op,
+                        CmpOp::Eq | CmpOp::ULe | CmpOp::SLe
+                    ))]
+                },
+            );
         }
         Inst::Sub(_, a, b) | Inst::Xor(_, a, b) if a == b => {
             return Some(
@@ -327,12 +357,23 @@ pub(super) fn prune_constant_edges(
             continue;
         }
         let block = &blocks[index];
+        // Identities are local to this block's activation. Block parameters
+        // are fresh roots; loop iterations never acquire a shared value ID.
+        let mut aliases = BTreeMap::new();
         for inst in block.insts.iter().chain(block.terminator.iter()) {
             let value = if matches!(inst, Inst::Load { .. }) {
                 immutable_load(inst, &addresses, globals, order)
             } else {
-                transfer(inst, &facts)
+                transfer(inst, &facts, &aliases)
             };
+            if let Inst::Shl(result, left, count)
+            | Inst::LShr(result, left, count)
+            | Inst::AShr(result, left, count) = inst
+            {
+                if result.ty == left.ty && facts[count.id as usize].as_deref() == Some(&[0]) {
+                    aliases.insert(result.id, *aliases.get(&left.id).unwrap_or(&left.id));
+                }
+            }
             let address = address_transfer(inst, &facts, &addresses, globals);
             for result in inst_results(inst) {
                 let bits = if width(result).is_some() {

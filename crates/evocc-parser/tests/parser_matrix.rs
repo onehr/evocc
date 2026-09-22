@@ -212,6 +212,38 @@ fn parse_unit<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUni
 
 fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
     match expr {
+        CHirExpr::Floating(operation) => format!(
+            "floating({:?},{:?},[{}])",
+            operation.op,
+            types.get(operation.facts.ty()),
+            operation
+                .operands
+                .iter()
+                .map(|operand| canonical_expr(operand, types))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        CHirExpr::Complex(operation) => format!(
+            "complex({:?},{:?},[{}])",
+            operation.op,
+            types.get(operation.facts.ty()),
+            operation
+                .operands
+                .iter()
+                .map(|operand| canonical_expr(operand, types))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        CHirExpr::Vector(operation) => format!(
+            "vector({:?},[{}])",
+            operation.op,
+            operation
+                .operands
+                .iter()
+                .map(|operand| canonical_expr(operand, types))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         CHirExpr::BuiltinConstantP { operand, .. } => {
             format!("constant_p({})", canonical_expr(operand, types))
         }
@@ -276,6 +308,23 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             "elvis({},{})",
             canonical_expr(operand, types),
             canonical_expr(fallback, types)
+        ),
+        CHirExpr::BuiltinExpect(value, expected, _) => format!(
+            "expect({},{})",
+            canonical_expr(value, types),
+            canonical_expr(expected, types)
+        ),
+        CHirExpr::Atomic(access) => format!(
+            "atomic(store={},rmw={:?},order={:?},volatile={},[{}])",
+            access.value.is_some(),
+            access.rmw,
+            access.constant_order,
+            access.volatile,
+            access
+                .operands()
+                .map(|operand| canonical_expr(operand, types))
+                .collect::<Vec<_>>()
+                .join(",")
         ),
         CHirExpr::Call(callee, arguments, _) => format!(
             "call({},[{}])",
@@ -457,7 +506,7 @@ fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
         TypeKind::BuiltinVaList => "builtin-va-list".into(),
         TypeKind::GnuInt128(signedness) => format!("gnu-int128:{signedness:?}"),
         TypeKind::Int(rank) => match rank {
-            IntRank::Char => "char".into(),
+            IntRank::Char | IntRank::SignedPlainChar => "char".into(),
             IntRank::Short => "short".into(),
             IntRank::Int => "int".into(),
             IntRank::Long => "long".into(),
@@ -466,6 +515,9 @@ fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
         TypeKind::Float(kind) => format!("float:{kind:?}"),
         TypeKind::Complex(kind) => format!("complex:{kind:?}"),
         TypeKind::Pointer(inner) => format!("ptr({})", canonical_type(*inner, types)),
+        TypeKind::Vector { element, lanes, .. } => {
+            format!("vector({lanes},{})", canonical_type(*element, types))
+        }
         TypeKind::Array { element, bound } => {
             let bound = match bound {
                 ArrayBound::Fixed(value) => format!("fixed:{value}"),

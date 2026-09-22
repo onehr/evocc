@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
+use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::{
     inst_defs, inst_uses, linscan::physical, term_uses, Allocated, AsmBody, AsmClobber,
@@ -466,12 +466,13 @@ impl Target {
     }
 
     /// Section 4: the page-relative pair, "`@f@FUNCPAGE` / `@f@FUNCPAGEOFF`
-    /// for a function symbol ... (Darwin spelling; Linux uses `:pg_hi21:` and
-    /// `:lo12:`)".
+    /// for a function symbol. ELF ADRP's unmodified symbol operand requests
+    /// the page relocation in both GNU as and LLVM's integrated assembler;
+    /// the paired ADD uses `:lo12:`.
     fn adrp_operand(self, symbol: &str, page: &str) -> String {
         match self {
             Self::Darwin => format!("{}{symbol}@{page}", self.symbol_prefix()),
-            Self::Linux => format!(":pg_hi21:{symbol}"),
+            Self::Linux => symbol.to_owned(),
         }
     }
 
@@ -593,6 +594,58 @@ fn referenced_symbols<'a>(
     symbols
 }
 
+fn module_symbols(
+    module: &Module,
+) -> impl Iterator<Item = (&str, GlobalVisibility, Linkage, SymbolKind, bool)> {
+    module
+        .functions
+        .iter()
+        .map(|f| {
+            (
+                f.name.as_str(),
+                f.visibility,
+                f.linkage,
+                SymbolKind::Function,
+                true,
+            )
+        })
+        .chain(module.declares.iter().map(|f| {
+            (
+                f.name.as_str(),
+                f.visibility,
+                f.linkage,
+                SymbolKind::Function,
+                false,
+            )
+        }))
+        .chain(module.globals.iter().map(|g| {
+            (
+                g.symbol.as_str(),
+                g.visibility,
+                g.linkage,
+                SymbolKind::Global,
+                true,
+            )
+        }))
+        .chain(module.extern_objects.iter().map(|g| {
+            (
+                g.symbol.as_str(),
+                g.visibility,
+                g.linkage,
+                SymbolKind::Global,
+                false,
+            )
+        }))
+        .chain(module.aliases.iter().map(|a| {
+            let kind = if module.functions.iter().any(|f| f.name == a.target) {
+                SymbolKind::Function
+            } else {
+                SymbolKind::Global
+            };
+            (a.name.as_str(), a.visibility, a.linkage, kind, true)
+        }))
+}
+
 fn emit_unit(
     target: Target,
     functions: &[Allocated],
@@ -611,56 +664,22 @@ fn emit_unit(
     let mut indirect_addresses = BTreeSet::new();
     if let Some(module) = module {
         let mut references = referenced_symbols(functions, globals);
+        references.extend(module.lifecycle.iter().map(|r| r.function.as_str()));
         if module.functions.iter().any(|f| f.stack_protect) {
             references.insert("__stack_chk_fail");
             if options.stack_guard == StackGuard::Global {
                 references.insert("__stack_chk_guard");
             }
         }
-        for name in module
-            .functions
-            .iter()
-            .filter(|f| f.visibility == GlobalVisibility::Hidden)
-            .map(|f| f.name.as_str())
-            .chain(
-                module
-                    .declares
-                    .iter()
-                    .filter(|f| {
-                        f.visibility == GlobalVisibility::Hidden
-                            && references.contains(f.name.as_str())
-                    })
-                    .map(|f| f.name.as_str()),
-            )
-            .chain(
-                module
-                    .globals
-                    .iter()
-                    .filter(|g| g.visibility == GlobalVisibility::Hidden)
-                    .map(|g| g.symbol.as_str()),
-            )
-            .chain(
-                module
-                    .extern_objects
-                    .iter()
-                    .filter(|g| {
-                        g.visibility == GlobalVisibility::Hidden
-                            && references.contains(g.symbol.as_str())
-                    })
-                    .map(|g| g.symbol.as_str()),
-            )
-            .chain(
-                module
-                    .aliases
-                    .iter()
-                    .filter(|a| a.visibility == GlobalVisibility::Hidden)
-                    .map(|a| a.name.as_str()),
-            )
-        {
-            let directive = if target == Target::Linux {
-                ".hidden"
-            } else {
-                ".private_extern"
+        for (name, visibility, _, _, defined) in module_symbols(module) {
+            if !defined && !references.contains(name) {
+                continue;
+            }
+            let directive = match (target, visibility) {
+                (Target::Linux, GlobalVisibility::Hidden) => ".hidden",
+                (Target::Linux, GlobalVisibility::Protected) => ".protected",
+                (Target::Darwin, GlobalVisibility::Hidden) => ".private_extern",
+                _ => continue,
             };
             let _ = writeln!(text, "{directive} {prefix}{name}");
         }
@@ -694,42 +713,72 @@ fn emit_unit(
             };
             let _ = writeln!(text, "{directive} {prefix}{name}");
         }
-        indirect_addresses.extend(
-            module
-                .extern_objects
-                .iter()
-                .filter(|g| {
-                    g.linkage == Linkage::Weak
+        // A definition in this translation unit is not an ELF component
+        // binding promise. Default-visible PIC definitions use the GOT too;
+        // the final linker, not this module, decides interposition/relaxation.
+        indirect_addresses.extend(module_symbols(module).filter_map(
+            |(name, visibility, linkage, kind, defined)| {
+                ((!defined || target == Target::Linux)
+                    && (linkage == Linkage::Weak
                         || (relocation == RelocationModel::PositionIndependent
-                            && g.visibility != GlobalVisibility::Hidden)
-                })
-                .map(|g| (SymbolKind::Global, g.symbol.as_str()))
-                .chain(
-                    module
-                        .declares
-                        .iter()
-                        .filter(|f| {
-                            f.linkage == Linkage::Weak
-                                || (relocation == RelocationModel::PositionIndependent
-                                    && f.visibility != GlobalVisibility::Hidden)
-                        })
-                        .map(|f| (SymbolKind::Function, f.name.as_str())),
-                ),
-        );
+                            && !visibility.binds_locally())))
+                .then_some((kind, name))
+            },
+        ));
     }
     let mut static_blocks: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
-    for relocation in globals.iter().flat_map(|global| &global.relocs) {
-        if let Some((function, block)) = relocation_block(&relocation.symbol) {
+    for symbol in globals
+        .iter()
+        .flat_map(|global| &global.relocs)
+        .flat_map(evocc_evoir::Relocation::symbols)
+    {
+        if let Some((function, block)) = relocation_block(symbol) {
             static_blocks.entry(function).or_default().insert(block);
         }
     }
-    let alignments: BTreeMap<_, _> = module
+    let entries: BTreeMap<_, _> = module
         .into_iter()
         .flat_map(|module| &module.functions)
-        .map(|function| (function.name.as_str(), function.alignment))
+        .map(|function| {
+            (
+                function.name.as_str(),
+                (
+                    function.alignment,
+                    function.patchable_entry,
+                    function.section.as_deref(),
+                ),
+            )
+        })
         .collect();
+    let mut current_section = None;
     for function in functions {
-        let alignment = alignments.get(function.name.as_str()).copied().unwrap_or(4);
+        let (alignment, patchable_entry, section) = entries
+            .get(function.name.as_str())
+            .copied()
+            .unwrap_or((4, None, None));
+        // Every function selects its own placement; a preceding explicit
+        // section must never capture an ordinary following function.
+        if section.is_some() || current_section != section {
+            if let Some(section) = section {
+                let mut escaped = String::new();
+                for character in section.chars() {
+                    match character {
+                        '"' | '\\' => {
+                            escaped.push('\\');
+                            escaped.push(character);
+                        }
+                        // GNU as decodes octal section-name escapes while
+                        // LLVM's assembler retains them literally. Validated
+                        // UTF-8 must therefore remain UTF-8 in this directive.
+                        _ => escaped.push(character),
+                    }
+                }
+                let _ = writeln!(text, ".section \"{escaped}\",\"ax\",%progbits");
+            } else {
+                let _ = writeln!(text, "{}", target.text_section());
+            }
+            current_section = section;
+        }
         emit_function(
             &mut text,
             target,
@@ -738,6 +787,7 @@ fn emit_unit(
             weak_functions.contains(function.name.as_str()),
             &indirect_addresses,
             alignment,
+            patchable_entry,
             options,
             module.is_some_and(|module| {
                 module
@@ -753,6 +803,32 @@ fn emit_unit(
             "function",
         );
     }
+    if let Some(module) = module {
+        for r in &module.lifecycle {
+            let section = match (target, r.phase) {
+                (Target::Linux, evocc_evoir::LifecyclePhase::Constructor) => {
+                    format!(".section .init_array.{:05},\"aw\",%init_array", r.priority)
+                }
+                (Target::Linux, evocc_evoir::LifecyclePhase::Destructor) => {
+                    format!(".section .fini_array.{:05},\"aw\",%fini_array", r.priority)
+                }
+                (Target::Darwin, evocc_evoir::LifecyclePhase::Constructor) => {
+                    ".section __DATA,__mod_init_func,mod_init_funcs".into()
+                }
+                (Target::Darwin, evocc_evoir::LifecyclePhase::Destructor) => {
+                    ".section __DATA,__mod_term_func,mod_term_funcs".into()
+                }
+            };
+            let _ = writeln!(
+                text,
+                "\n{section}\n.p2align 3\n.xword {prefix}{}",
+                r.function
+            );
+        }
+        if !module.lifecycle.is_empty() {
+            let _ = writeln!(text, "{}", target.text_section());
+        }
+    }
     if !globals.is_empty() {
         let mut ordered: Vec<&GlobalObject> = globals.iter().collect();
         ordered.sort_by_key(|global| global.origin);
@@ -760,7 +836,24 @@ fn emit_unit(
         let mut section = String::new();
         for global in ordered {
             let zero_filled = is_zero_filled(global);
-            let wanted = if let Some(name) = &global.section {
+            let thread_local =
+                module.is_some_and(|m| m.tls.iter().any(|t| t.symbol == global.symbol));
+            let wanted = if thread_local {
+                if let Some(name) = &global.section {
+                    format!(
+                        ".section {name:?},\"awT\",%{}",
+                        if global.has_bss_section() {
+                            "nobits"
+                        } else {
+                            "progbits"
+                        }
+                    )
+                } else if zero_filled {
+                    ".section .tbss,\"awT\",%nobits".to_owned()
+                } else {
+                    ".section .tdata,\"awT\",%progbits".to_owned()
+                }
+            } else if let Some(name) = &global.section {
                 match target {
                     Target::Linux => format!(
                         ".section {name:?},\"aw\",%{}",
@@ -775,11 +868,18 @@ fn emit_unit(
                         None => format!(".section {name:?}"),
                     },
                 }
-            } else if global.kind == GlobalKind::StringLiteral {
+            } else if global.is_read_only() {
                 // Storage kind takes precedence over zero-fill compression:
                 // an empty string is read-only too. The kernel's kfree_const
                 // relies on these addresses belonging to its rodata range.
-                target.read_only_section().to_owned()
+                if !global.relocs.is_empty() && relocation == RelocationModel::PositionIndependent {
+                    match target {
+                        Target::Linux => ".section .data.rel.ro,\"aw\",%progbits".to_owned(),
+                        Target::Darwin => ".section __DATA_CONST,__const".to_owned(),
+                    }
+                } else {
+                    target.read_only_section().to_owned()
+                }
             } else if zero_filled {
                 target.bss_section().to_owned()
             } else {
@@ -805,7 +905,12 @@ fn emit_unit(
                 );
             }
             if target == Target::Linux {
-                let _ = writeln!(text, ".type {}, %object", global.symbol);
+                let _ = writeln!(
+                    text,
+                    ".type {}, %{}",
+                    global.symbol,
+                    if thread_local { "tls_object" } else { "object" }
+                );
             }
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
             emit_initializer(&mut text, target, global, zero_filled);
@@ -915,12 +1020,27 @@ fn emit_initializer(text: &mut String, target: Target, global: &GlobalObject, ze
                     || format!("{}{}", target.symbol_prefix(), relocation.symbol),
                     |(function, block)| block_symbol(target, function, block),
                 );
-                if addend == 0 {
-                    let _ = writeln!(text, "    .xword {symbol}");
+                let (directive, symbol) = if let Some(difference) = &relocation.difference {
+                    let (owner, block) =
+                        relocation_block(&difference.base).expect("validated relative label");
+                    let base = block_symbol(target, owner, block);
+                    let directive = match difference.bits {
+                        8 => ".byte",
+                        16 => ".hword",
+                        32 => ".word",
+                        64 => ".xword",
+                        _ => unreachable!("validated relative relocation width"),
+                    };
+                    (directive, format!("{symbol}-{base}"))
                 } else {
-                    let _ = writeln!(text, "    .xword {symbol}{sign}{magnitude}");
+                    (".xword", symbol)
+                };
+                if addend == 0 {
+                    let _ = writeln!(text, "    {directive} {symbol}");
+                } else {
+                    let _ = writeln!(text, "    {directive} {symbol}{sign}{magnitude}");
                 }
-                offset += 8;
+                offset += relocation.size_bytes() as usize;
                 relocations.next();
                 continue;
             }
@@ -1010,6 +1130,10 @@ fn label(target: Target, function: &str, block: u32) -> String {
 /// more than one instruction, and the growth relaxation itself adds.
 const RELAXATION_THRESHOLD: usize = 4_096;
 
+// ADR has a signed 21-bit byte displacement. Keep a factor-of-two margin for
+// branch relaxation and address expansion, as for the conditional branches.
+const BLOCK_ADDRESS_RELAXATION_THRESHOLD: usize = 131_072;
+
 /// The local symbol a `block_addr` names.
 ///
 /// Section 5, revision 0.15: "a static relocation against a block uses a local
@@ -1045,6 +1169,7 @@ fn instructions_in(body: &str) -> usize {
 struct SymbolEmission<'a> {
     target: Target,
     tiny_addresses: bool,
+    long_block_addresses: bool,
     indirect_addresses: &'a BTreeSet<(SymbolKind, &'a str)>,
 }
 
@@ -1057,6 +1182,7 @@ fn emit_function(
     weak: bool,
     indirect_addresses: &BTreeSet<(SymbolKind, &str)>,
     alignment: u32,
+    patchable_entry: Option<(u16, u16)>,
     options: &CodegenOptions,
     stack_protect: bool,
 ) {
@@ -1082,12 +1208,29 @@ fn emit_function(
         emit_definition_linkage(text, target, &allocated.name, weak);
     }
     let _ = writeln!(text, ".p2align {}", alignment.trailing_zeros());
+    let (total, before) = patchable_entry.unwrap_or((0, 0));
+    let patch_label = format!("{}{}_patch", target.label_prefix(), allocated.name);
+    if total != 0 {
+        // Align the callable symbol, not the earlier patch-region label.
+        // Padding is outside the region and never changes its N/M contract.
+        let padding = (alignment - (u32::from(before) * 4 % alignment)) % alignment;
+        if padding != 0 {
+            let _ = writeln!(text, ".space {padding}");
+        }
+        let _ = writeln!(text, "{patch_label}:");
+        for _ in 0..before {
+            text.push_str("    nop\n");
+        }
+    }
     if target == Target::Linux {
         let _ = writeln!(text, ".type {}, %function", allocated.name);
     }
     let _ = writeln!(text, "{prefix}{}:", allocated.name);
     if frame.unwind_tables {
         let _ = writeln!(text, ".cfi_startproc");
+    }
+    for _ in before..total {
+        text.push_str("    nop\n");
     }
     emit_prologue(text, &frame);
 
@@ -1117,6 +1260,7 @@ fn emit_function(
         &SymbolEmission {
             target,
             tiny_addresses: options.tiny_addresses,
+            long_block_addresses: false,
             indirect_addresses,
         },
         allocated,
@@ -1125,13 +1269,16 @@ fn emit_function(
         false,
         static_blocks,
     );
-    if instructions_in(&body) >= RELAXATION_THRESHOLD {
+    let instructions = instructions_in(&body);
+    if instructions >= RELAXATION_THRESHOLD {
         body.clear();
         emit_blocks(
             &mut body,
             &SymbolEmission {
                 target,
                 tiny_addresses: options.tiny_addresses,
+                long_block_addresses: !options.tiny_addresses
+                    && instructions >= BLOCK_ADDRESS_RELAXATION_THRESHOLD,
                 indirect_addresses,
             },
             allocated,
@@ -1147,6 +1294,13 @@ fn emit_function(
     }
     if target == Target::Linux {
         let _ = writeln!(text, ".size {0}, .-{0}", allocated.name);
+        if total != 0 {
+            // SHF_LINK_ORDER associates this entry with its real text section;
+            // the relocation names the first NOP, not the callable symbol.
+            let _ = writeln!(text,
+                ".pushsection __patchable_function_entries,\"awo\",%progbits,{}\n.p2align 3\n.xword {patch_label}\n.popsection",
+                allocated.name);
+        }
     }
 }
 
@@ -1175,6 +1329,7 @@ fn emit_blocks(
         .collect();
     let mut copies = 0_u32;
     let mut relaxations = 0_u32;
+    let fp_guards = crate::floating::guard_points(&allocated.blocks);
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
         if addressed.contains(&block.id)
@@ -1182,7 +1337,20 @@ fn emit_blocks(
         {
             let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
         }
-        for inst in &block.insts {
+        for (inst_index, inst) in block.insts.iter().enumerate() {
+            if fp_guards.contains(&(block.id, inst_index)) {
+                let name = format!(
+                    "{}{}_fp_env{}",
+                    target.label_prefix(),
+                    allocated.name,
+                    copies
+                );
+                copies += 1;
+                let _ = writeln!(
+                    text,
+                    "    mrs x16, fpcr\n    cbz x16, {name}\n    brk #3064\n{name}:"
+                );
+            }
             emit_inst(
                 text,
                 symbols,
@@ -1491,7 +1659,11 @@ fn emit_assembly(
     let operands = body.numbered();
     // The reference is resolved against the operand it names, at the width the
     // modifier asks for or the operand's own.
-    let render = |operand: &AsmOperand, width: Option<RegClass>, address: bool| -> String {
+    let render = |operand: &AsmOperand,
+                  width: Option<RegClass>,
+                  address: bool,
+                  view: Option<char>|
+     -> String {
         match &operand.value {
             AsmValue::Imm(value) => format!("{value}"),
             AsmValue::Symbol { name, addend } => {
@@ -1515,6 +1687,10 @@ fn emit_assembly(
                 .to_owned()
             }
             AsmValue::Reg(reg) => {
+                if reg.class.is_simd() {
+                    let physical = spell(*reg, reg.class);
+                    return format!("{}{}", view.unwrap_or('v'), &physical[1..]);
+                }
                 let spelled = spell(*reg, width.unwrap_or(reg.class));
                 if address || matches!(operand.constraint, AsmConstraint::Memory { .. }) {
                     format!("[{spelled}]")
@@ -1579,7 +1755,9 @@ fn emit_assembly(
             'x' | 'a' => Some(RegClass::Gpr64),
             _ => None,
         };
-        let at = if width.is_some() || characters[index] == 'c' {
+        let view =
+            matches!(characters[index], 'b' | 'h' | 's' | 'd' | 'q').then_some(characters[index]);
+        let at = if width.is_some() || view.is_some() || characters[index] == 'c' {
             index + 1
         } else {
             index
@@ -1602,7 +1780,7 @@ fn emit_assembly(
                     .iter()
                     .find(|operand| operand.name.as_deref() == Some(name.as_str()))
                 {
-                    rendered.push_str(&render(operand, width, address));
+                    rendered.push_str(&render(operand, width, address, view));
                     index = close + 1;
                     continue;
                 }
@@ -1611,7 +1789,7 @@ fn emit_assembly(
         // `%0` to `%9`.
         if let Some(digit) = characters[at].to_digit(10) {
             if let Some(operand) = operands.get(digit as usize) {
-                rendered.push_str(&render(operand, width, address));
+                rendered.push_str(&render(operand, width, address, view));
                 index = at + 1;
                 continue;
             }
@@ -1646,7 +1824,13 @@ fn load_mnemonic(kind: LoadKind) -> &'static str {
     match kind {
         LoadKind::B => "ldrb",
         LoadKind::H => "ldrh",
-        LoadKind::W | LoadKind::X | LoadKind::P | LoadKind::Pf => "ldr",
+        LoadKind::W
+        | LoadKind::X
+        | LoadKind::P
+        | LoadKind::Pf
+        | LoadKind::S
+        | LoadKind::D
+        | LoadKind::Q => "ldr",
         LoadKind::Sb => "ldrsb",
         LoadKind::Sh => "ldrsh",
         LoadKind::Sw => "ldrsw",
@@ -1657,7 +1841,9 @@ fn store_mnemonic(kind: StoreKind) -> &'static str {
     match kind {
         StoreKind::B => "strb",
         StoreKind::H => "strh",
-        StoreKind::W | StoreKind::X | StoreKind::P => "str",
+        StoreKind::W | StoreKind::X | StoreKind::P | StoreKind::S | StoreKind::D | StoreKind::Q => {
+            "str"
+        }
     }
 }
 
@@ -1672,6 +1858,9 @@ const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
         LoadKind::B | LoadKind::H | LoadKind::W => RegClass::Gpr32,
         LoadKind::X | LoadKind::P | LoadKind::Pf | LoadKind::Sw => RegClass::Gpr64,
         LoadKind::Sb | LoadKind::Sh => declared,
+        LoadKind::S => RegClass::Simd32,
+        LoadKind::D => RegClass::Simd64,
+        LoadKind::Q => RegClass::Simd128,
     }
 }
 
@@ -1681,6 +1870,9 @@ const fn store_class(kind: StoreKind) -> RegClass {
     match kind {
         StoreKind::B | StoreKind::H | StoreKind::W => RegClass::Gpr32,
         StoreKind::X | StoreKind::P => RegClass::Gpr64,
+        StoreKind::S => RegClass::Simd32,
+        StoreKind::D => RegClass::Simd64,
+        StoreKind::Q => RegClass::Simd128,
     }
 }
 
@@ -1698,12 +1890,141 @@ fn emit_inst(
     let name = |reg: VReg| spell(reg, reg.class);
     // Every operand of a two-width form takes the form's own width.
     let at = |reg: VReg, width: Width| spell(reg, width.class());
+    let vector_name = |reg: VReg| format!("v{}", &name(reg)[1..]);
     match inst {
+        MInst::Floating {
+            dst,
+            op,
+            kind,
+            args,
+        } => {
+            let label = format!(
+                "{}fp_{}_{}",
+                if target == Target::Linux { ".L" } else { "L" },
+                function,
+                *copies
+            );
+            *copies += 1;
+            crate::floating::emit(text, *dst, *op, *kind, args, &name, &label);
+        }
+        MInst::Aes { dst, op, args } => {
+            if target == Target::Linux {
+                let _ = writeln!(text, "    .arch_extension crypto");
+            }
+            if op.arity() == 2 {
+                // AESE/AESD overwrite their first operand. Do not overwrite
+                // a key coallocated with dst, nor a still-live source value.
+                // v30 is the existing reserved SIMD scratch register.
+                let _ = writeln!(
+                    text,
+                    "    mov v30.16b, {}.16b\n    {} v30.16b, {}.16b\n    mov {}.16b, v30.16b",
+                    vector_name(args[0]),
+                    op.mnemonic(),
+                    vector_name(args[1]),
+                    vector_name(*dst)
+                );
+            } else {
+                let _ = writeln!(
+                    text,
+                    "    {} {}.16b, {}.16b",
+                    op.mnemonic(),
+                    vector_name(*dst),
+                    vector_name(args[0])
+                );
+            }
+        }
+        MInst::Vector {
+            dst,
+            extract,
+            lane_bits,
+            bytes,
+            args,
+        } => {
+            let suffix = match lane_bits {
+                8 => "b",
+                16 => "h",
+                32 => "s",
+                64 => "d",
+                _ => unreachable!("validated vector lane"),
+            };
+            if *extract {
+                let source = args[0];
+                let lanes = u16::from(*bytes) * 8 / lane_bits;
+                let label = format!(
+                    "{}vector_lane_{}_{}",
+                    if target == Target::Linux { ".L" } else { "L" },
+                    function,
+                    *copies
+                );
+                *copies += 1;
+                let _ = writeln!(
+                    text,
+                    "    cmp {}, #{lanes}\n    b.lo {label}\n    brk #3011\n{label}:",
+                    at(args[1], Width::for_class(args[1].class).unwrap())
+                );
+                if *bytes <= 4 {
+                    let shift = lane_bits.trailing_zeros();
+                    let _ = writeln!(text, "    lsl w16, {}, #{shift}\n    lsr w16, {}, w16\n    ubfx {}, w16, #0, #{lane_bits}", at(args[1], Width::W), at(source, Width::W), at(*dst, Width::W));
+                    return;
+                }
+                // TBL selects bytes without changing their order. v30/v31
+                // and x16/x17 are reserved from allocation.
+                let shift = (lane_bits / 8).trailing_zeros();
+                let _ = writeln!(
+                    text,
+                    "    lsl w16, {}, #{shift}\n    dup v31.16b, w16",
+                    at(args[1], Width::W)
+                );
+                emit_immediate(text, "x17", RegClass::Gpr64, 0x0706_0504_0302_0100);
+                let _ = writeln!(text, "    fmov d30, x17");
+                emit_immediate(text, "x17", RegClass::Gpr64, 0x0f0e_0d0c_0b0a_0908);
+                let _ = writeln!(text, "    ins v30.d[1], x17\n    add v31.16b, v31.16b, v30.16b\n    tbl v30.16b, {{{}.16b}}, v31.16b\n    umov {}, v30.{suffix}[0]", vector_name(source), at(*dst, if *lane_bits == 64 { Width::X } else { Width::W }));
+            } else {
+                if *bytes <= 4 {
+                    let _ = writeln!(text, "    mov w16, wzr");
+                    for (index, source) in args.iter().enumerate() {
+                        let offset = index * usize::from(*lane_bits);
+                        let _ = writeln!(
+                            text,
+                            "    bfi w16, {}, #{offset}, #{lane_bits}",
+                            at(*source, Width::W)
+                        );
+                    }
+                    let _ = writeln!(text, "    mov {}, w16", at(*dst, Width::W));
+                    return;
+                }
+                let vector = vector_name(*dst);
+                let _ = writeln!(
+                    text,
+                    "    movi {vector}.{}b, #0",
+                    if dst.class == RegClass::Simd64 { 8 } else { 16 }
+                );
+                for (index, source) in args.iter().enumerate() {
+                    let _ = writeln!(
+                        text,
+                        "    ins {vector}.{suffix}[{index}], {}",
+                        at(*source, if *lane_bits == 64 { Width::X } else { Width::W })
+                    );
+                }
+            }
+        }
         MInst::Mov { dst, src } => {
             // The two classes are one register file at two widths, so a move
             // between them is the thirty-two-bit form: it truncates when it
             // reads the low half and zero-extends when it writes it.
-            if dst.class == src.class {
+            if dst.class.is_simd() && src.class.is_simd() {
+                let width = if dst.class == RegClass::Simd128 {
+                    16
+                } else {
+                    8
+                };
+                let _ = writeln!(
+                    text,
+                    "    mov {}.{width}b, {}.{width}b",
+                    vector_name(*dst),
+                    vector_name(*src)
+                );
+            } else if dst.class == src.class {
                 let _ = writeln!(text, "    mov {}, {}", name(*dst), name(*src));
             } else {
                 let _ = writeln!(
@@ -1714,14 +2035,36 @@ fn emit_inst(
                 );
             }
         }
-        MInst::MovImm { dst, imm } => emit_immediate(text, &name(*dst), dst.class, *imm),
+        MInst::MovImm { dst, imm } => {
+            if dst.class.is_simd() {
+                let _ = writeln!(
+                    text,
+                    "    movi {}.{}b, #{}",
+                    vector_name(*dst),
+                    if dst.class == RegClass::Simd128 {
+                        16
+                    } else {
+                        8
+                    },
+                    imm
+                );
+            } else {
+                emit_immediate(text, &name(*dst), dst.class, *imm);
+            }
+        }
         MInst::Adr { dst, block } => {
-            let _ = writeln!(
-                text,
-                "    adr {}, {}",
-                name(*dst),
-                block_symbol(target, function, *block)
-            );
+            let symbol = block_symbol(target, function, *block);
+            let register = name(*dst);
+            if symbols.long_block_addresses {
+                let (page, offset) = match target {
+                    Target::Linux => (symbol.clone(), format!(":lo12:{symbol}")),
+                    Target::Darwin => (format!("{symbol}@PAGE"), format!("{symbol}@PAGEOFF")),
+                };
+                let _ = writeln!(text, "    adrp {register}, {page}");
+                let _ = writeln!(text, "    add {register}, {register}, {offset}");
+            } else {
+                let _ = writeln!(text, "    adr {register}, {symbol}");
+            }
         }
         MInst::Adrp { dst, symbol, kind } => {
             if symbols.tiny_addresses {
@@ -1790,6 +2133,117 @@ fn emit_inst(
                 target.pageoff_operand(symbol)
             );
         }
+        MInst::AtomicRmw {
+            dst,
+            base,
+            value,
+            expected,
+            operation,
+            kind,
+            order,
+            ..
+        } => {
+            use evocc_memory::{AtomicOrder as O, AtomicRmwOp as R};
+            let size = kind.size_bytes();
+            let width = if size == 8 { Width::X } else { Width::W };
+            let old = at(*dst, width);
+            let operand = at(*value, width);
+            let temporary = if size == 8 { "x16" } else { "w16" };
+            let suffix = match size {
+                1 => "b",
+                2 => "h",
+                _ => "",
+            };
+            let acquire = matches!(order, O::Consume | O::Acquire | O::AcqRel | O::SeqCst);
+            let release = matches!(order, O::Release | O::AcqRel | O::SeqCst);
+            let load = if acquire { "ldaxr" } else { "ldxr" };
+            let store = if release { "stlxr" } else { "stxr" };
+            let label = format!("{}{function}_atomic{}", target.label_prefix(), *copies);
+            *copies += 1;
+            if *order == O::SeqCst {
+                text.push_str("    dmb ish\n");
+            }
+            let _ = writeln!(
+                text,
+                "{label}:\n    {load}{suffix} {old}, [{}]",
+                name(*base)
+            );
+            if let Some(expected) = expected {
+                if size < 4 {
+                    let _ = writeln!(
+                        text,
+                        "    ubfx {temporary}, {}, #0, #{}",
+                        at(*expected, width),
+                        size * 8
+                    );
+                    let _ = writeln!(text, "    eor {temporary}, {old}, {temporary}");
+                } else {
+                    let _ = writeln!(text, "    eor {temporary}, {old}, {}", at(*expected, width));
+                }
+                let _ = writeln!(text, "    cbnz {temporary}, {label}_failed");
+            }
+            match operation {
+                R::Exchange | R::CompareExchange => {
+                    let _ = writeln!(text, "    mov {temporary}, {operand}");
+                }
+                operation => {
+                    let instruction = match operation {
+                        R::Add => "add",
+                        R::Sub => "sub",
+                        R::And | R::Nand => "and",
+                        R::Or => "orr",
+                        R::Xor => "eor",
+                        _ => unreachable!(),
+                    };
+                    let _ = writeln!(text, "    {instruction} {temporary}, {old}, {operand}");
+                    if *operation == R::Nand {
+                        let _ = writeln!(text, "    mvn {temporary}, {temporary}");
+                    }
+                }
+            }
+            let _ = writeln!(
+                text,
+                "    {store}{suffix} w17, {temporary}, [{}]\n    cbnz w17, {label}",
+                name(*base)
+            );
+            if expected.is_some() {
+                let _ = writeln!(
+                    text,
+                    "    b {label}_done\n{label}_failed:\n    clrex\n{label}_done:"
+                );
+            }
+            if *order == O::SeqCst {
+                text.push_str("    dmb ish\n");
+            }
+        }
+        MInst::Atomic {
+            load,
+            value,
+            base,
+            kind,
+            order,
+            ..
+        } => {
+            let mnemonic = match (
+                *load,
+                *order == evocc_memory::AtomicOrder::Relaxed,
+                kind.size_bytes(),
+            ) {
+                (true, true, 1) => "ldrb",
+                (true, true, 2) => "ldrh",
+                (true, true, _) => "ldr",
+                (true, false, 1) => "ldarb",
+                (true, false, 2) => "ldarh",
+                (true, false, _) => "ldar",
+                (false, true, 1) => "strb",
+                (false, true, 2) => "strh",
+                (false, true, _) => "str",
+                (false, false, 1) => "stlrb",
+                (false, false, 2) => "stlrh",
+                (false, false, _) => "stlr",
+            };
+            let _ = writeln!(text, "    {mnemonic} {}, [{}]", name(*value), name(*base));
+        }
         MInst::Load {
             dst,
             base,
@@ -1799,6 +2253,19 @@ fn emit_inst(
             ..
         } => {
             if frame.strict_alignment && *align != 0 && u64::from(*align) < kind.size_bytes() {
+                if dst.class.is_simd() {
+                    let vector = vector_name(*dst);
+                    let _ = writeln!(text, "    movi {vector}.16b, #0");
+                    for byte in 0..kind.size_bytes() {
+                        let _ = writeln!(
+                            text,
+                            "    ldrb w16, [{}, #{}]\n    ins {vector}.b[{byte}], w16",
+                            name(*base),
+                            offset + byte as i64
+                        );
+                    }
+                    return;
+                }
                 let _ = writeln!(text, "    mov x16, #0");
                 for byte in 0..kind.size_bytes() {
                     let _ = writeln!(
@@ -1842,6 +2309,18 @@ fn emit_inst(
             ..
         } => {
             if frame.strict_alignment && *align != 0 && u64::from(*align) < kind.size_bytes() {
+                if src.class.is_simd() {
+                    let vector = vector_name(*src);
+                    for byte in 0..kind.size_bytes() {
+                        let _ = writeln!(
+                            text,
+                            "    umov w16, {vector}.b[{byte}]\n    strb w16, [{}, #{}]",
+                            name(*base),
+                            offset + byte as i64
+                        );
+                    }
+                    return;
+                }
                 for byte in 0..kind.size_bytes() {
                     let _ = writeln!(
                         text,
@@ -2129,6 +2608,9 @@ fn emit_inst(
         // Section 6 (revision 0.18): allocation has already pinned the
         // register the marker names to `x8`, so emission writes nothing.
         MInst::IndirectResult => {}
+        // emit_blocks places this check unless every incoming path already
+        // checked FPCR without intervening opaque execution.
+        MInst::FpEnvCheck => {}
         // Section 6: "one slot per `frame.slot` (its declared size, rounded to
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {
@@ -2140,10 +2622,28 @@ fn emit_inst(
         } => {
             // Keep a fresh outgoing-argument area below each allocation. It
             // must never overlap either the new object or a previous one.
+            let _ = writeln!(text, "    mov x17, sp");
             let _ = writeln!(text, "    sub x16, sp, {}", name(*size));
             let _ = writeln!(text, "    and x16, x16, #-{}", (*align).max(16));
+            let _ = writeln!(text, "    stur x17, [x16, #-16]");
             let _ = writeln!(text, "    mov {}, x16", name(*dst));
-            emit_add_immediate(text, "sub", "sp", "x16", align_up(frame.outgoing, 16));
+            emit_add_immediate(text, "sub", "sp", "x16", align_up(frame.outgoing, 16) + 16);
+        }
+        MInst::StackRelease { address } => {
+            let done = format!("{}{function}_release{}", target.label_prefix(), *copies);
+            *copies += 1;
+            // Non-flag-setting arithmetic preserves a live NZCV value.
+            let _ = writeln!(
+                text,
+                "    mov x16, sp\n    sub x16, {}, x16",
+                name(*address)
+            );
+            emit_add_immediate(text, "sub", "x16", "x16", align_up(frame.outgoing, 16) + 16);
+            let _ = writeln!(
+                text,
+                "    cbnz x16, {done}\n    ldur x16, [{}, #-16]\n    mov sp, x16\n{done}:",
+                name(*address)
+            );
         }
         MInst::SpillStore { src, slot } => {
             let offset = frame.spills.get(slot).copied().unwrap_or(0);

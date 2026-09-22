@@ -1,0 +1,42 @@
+2026-09-20: next-read spill selection, not a coalescing-policy change.
+
+EvoMIR section 7 already requires the furthest NEXT use. The previous scan
+compared final interval endpoints. The 27-register MIR RED expected victim
+1 but selected 0, with no Rust compilation error. A second test ensures a
+victim cannot lend a register reserved for a later fixed operand. Both pass;
+the MIR library has 7 passing tests. The selected floating, inline-assembly,
+allocation-verifier and linear-scan integration suites have 34 passing tests.
+Lowest-free assignment, call/clobber exclusions and no-coalescing remain.
+Whole changed gate: 2590 PASS, 0 FAIL, 4 historical ignored; Clippy
+all-targets -D warnings and cargo fmt --check PASS. Existing capture:
+.build/floating-targeted/gate-next-use-20260920.txt.
+
+C source SHA256 d48cb8fc6772e989718b7ab81ecd557a60d89db8df1a10c8eddb040c7097d55d
+New compiler SHA256 8960370ee128a2afaf4864624f23a1b7d7103942df16452cbfb9dd2f8611c849
+New assembly SHA256 e7ea973b5e28075dc7a3b4c9b583da026bb6f2acc255141b30feaca7f948e636
+C-HIR and EvoIR return 0; sealed ARM64 native execution exits 0.
+GCC 14.2.0-19 and Clang 19.1.7, each at O0/O2, all exit 0.
+The unsigned C control checks values, not the allocator's victim choice;
+the MIR RED establishes that choice independently.
+
+Original LLVM replay uses compile-commands.json from 20260919T230110Z,
+unchanged source/default LARGE_DATASET, -O3, FP_ABSTOLERANCE=1e-5,
+POLYBENCH_DUMP_ARRAYS, and the existing target sysroot. Only -w,
+-Werror=date-time and -Wno-error=incompatible-pointer-types are omitted.
+Sealed offline ARM64, one worker; GCC-14 links each assembly with -no-pie -lm.
+The upstream timeit-target enforces 60 seconds; original HashProgramOutput.sh
+and fpcmp-target compare against the original .reference_output files.
+
+Program         child exit   wall seconds   user seconds   comparison
+lu              137          59.9125        59.1944        FAIL
+ludcmp          137          60.0037        59.2303        FAIL
+floyd-warshall  137          60.0014        59.2237        FAIL
+
+All three remain runtime-timeout/compiler failures. No full-campaign count
+changes and no claim that the next-read fix closes their performance gap.
+Generated artifacts: .build/floating-targeted/next-use-<program>.s and
+next-use-correct-<program>.time/.out. The first diagnostic timing attempt
+incorrectly appended exit-status text and used a 60-second CPU limit; its
+comparisons are NOT acceptance evidence. The corrected replay above omits
+that text and keeps the upstream 7200-second CPU limit with the 60-second
+wall budget. The active kernel compiler (07a8e66e...42c237) is unchanged.

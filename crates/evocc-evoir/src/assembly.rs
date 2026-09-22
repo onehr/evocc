@@ -60,6 +60,21 @@ pub fn assembly_register_binding(constraint: &str) -> Result<(&str, Option<u8>),
     let Some((base, register)) = constraint.split_once('@') else {
         return Ok((constraint, None));
     };
+    if let Some(number) = register
+        .strip_prefix('v')
+        .and_then(|text| text.parse::<u8>().ok())
+    {
+        if matches!(number, 0..=7 | 16..=29)
+            && register == format!("v{number}")
+            && (matches!(base, "w" | "=w" | "+w" | "=&w" | "+&w")
+                || (base.len() == 1 && base.as_bytes()[0].is_ascii_digit()))
+        {
+            return Ok((base, Some(64 + number)));
+        }
+        return Err(format!(
+            "unsupported assembly register binding {constraint}"
+        ));
+    }
     let number = register
         .strip_prefix('x')
         .and_then(|text| text.parse::<u8>().ok());
@@ -141,14 +156,17 @@ impl InlineAssembly {
             if binding.is_some_and(|reg| {
                 self.clobbers
                     .iter()
-                    .any(|name| name == &format!("x{reg}") || name == &format!("w{reg}"))
+                    .any(|name| assembly_clobber_register(name) == Some(reg))
             }) {
                 return Err(format!(
                     "assembly register binding {} is clobbered",
                     output.constraint
                 ));
             }
-            if !matches!(constraint, "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q") {
+            if !matches!(
+                constraint,
+                "=r" | "+r" | "=&r" | "+&r" | "=w" | "+w" | "=&w" | "+&w" | "=Q" | "+Q"
+            ) {
                 return Err(format!(
                     "unsupported assembly output constraint {}",
                     output.constraint
@@ -167,9 +185,12 @@ impl InlineAssembly {
                     ));
                 }
             } else {
-                if !assembly_register_type(&output.ty)
-                    || results.next().map(|value| &value.ty) != Some(&output.ty)
-                {
+                let valid_type = if constraint.ends_with('w') {
+                    assembly_simd_type(&output.ty)
+                } else {
+                    assembly_register_type(&output.ty)
+                };
+                if !valid_type || results.next().map(|value| &value.ty) != Some(&output.ty) {
                     return Err("assembly register result does not match output type/order".into());
                 }
                 let incoming = output.incoming.as_ref().map(|value| &value.ty);
@@ -190,7 +211,7 @@ impl InlineAssembly {
             if binding.is_some_and(|reg| {
                 self.clobbers
                     .iter()
-                    .any(|name| name == &format!("x{reg}") || name == &format!("w{reg}"))
+                    .any(|name| assembly_clobber_register(name) == Some(reg))
             }) {
                 return Err(format!(
                     "assembly register binding {} is clobbered",
@@ -202,6 +223,7 @@ impl InlineAssembly {
             }
             let valid = match constraint {
                 "r" | "rZ" => assembly_register_type(&input.value.ty),
+                "w" => assembly_simd_type(&input.value.ty),
                 "Q" | "Qo" => matches!(input.value.ty, EvoIRType::Ptr(_)),
                 "p" => assembly_address_type(&input.value.ty),
                 "i" => matches!(
@@ -265,10 +287,12 @@ impl InlineAssembly {
                 position += 1;
                 continue;
             }
-            let modifier = bytes
-                .get(position)
-                .copied()
-                .filter(|byte| matches!(byte, b'w' | b'x' | b'l' | b'c' | b'a'));
+            let modifier = bytes.get(position).copied().filter(|byte| {
+                matches!(
+                    byte,
+                    b'w' | b'x' | b'l' | b'c' | b'a' | b'b' | b'h' | b's' | b'd' | b'q'
+                )
+            });
             position += usize::from(modifier.is_some());
             let operand = if bytes.get(position) == Some(&b'[') {
                 position += 1;
@@ -328,6 +352,15 @@ impl InlineAssembly {
                 ));
             };
             let (constraint, _) = assembly_register_binding(constraint)?;
+            let simd = assembly_simd_type(ty);
+            if (simd && matches!(modifier, Some(b'w' | b'x' | b'a' | b'c')))
+                || (!simd && matches!(modifier, Some(b'b' | b'h' | b's' | b'd' | b'q')))
+            {
+                return Err(format!(
+                    "assembly {} modifier changes operand register bank",
+                    &self.template[start..position]
+                ));
+            }
             if modifier == Some(b'a')
                 && !(operand.is_some_and(|index| index >= self.outputs.len())
                     && matches!(constraint, "r" | "p")
@@ -367,16 +400,34 @@ pub fn assembly_register_type(ty: &EvoIRType) -> bool {
     )
 }
 
+/// The approved SIMD asm subset carries the complete short-vector bits.
+#[must_use]
+pub fn assembly_simd_type(ty: &EvoIRType) -> bool {
+    match ty {
+        EvoIRType::Vec(lanes, element) => {
+            matches!(element.as_ref(), EvoIRType::Bits(8 | 16 | 32 | 64))
+                && matches!(element.as_ref(), EvoIRType::Bits(width) if matches!(u64::from(*lanes) * u64::from(*width), 64 | 128))
+        }
+        _ => false,
+    }
+}
+
 #[must_use]
 pub fn assembly_clobber(name: &str) -> bool {
-    matches!(name, "memory" | "cc")
-        || name
-            .strip_prefix('v')
-            .and_then(|number| number.parse::<u8>().ok())
-            .is_some_and(|number| number <= 31)
-        || name
-            .strip_prefix('x')
+    matches!(name, "memory" | "cc") || assembly_clobber_register(name).is_some()
+}
+
+fn assembly_clobber_register(name: &str) -> Option<u8> {
+    if let Some(number) = name.strip_prefix(['v', 'd', 's']) {
+        number
+            .parse::<u8>()
+            .ok()
+            .filter(|number| *number <= 31)
+            .map(|number| 64 + number)
+    } else {
+        name.strip_prefix('x')
             .or_else(|| name.strip_prefix('w'))
             .and_then(|number| number.parse::<u8>().ok())
-            .is_some_and(|number| number <= 30)
+            .filter(|number| *number <= 30)
+    }
 }

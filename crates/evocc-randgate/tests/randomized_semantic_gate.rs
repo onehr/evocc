@@ -33,6 +33,16 @@ fn budget() -> GateBudget {
 
 fn family(inst: &Inst) -> &'static str {
     match inst {
+        Inst::TlsAddr(_) => "tls_addr",
+        Inst::Vector(_) => "vec",
+        Inst::Floating(_) => "fp",
+        Inst::Atomic(access) => {
+            if access.is_load() {
+                "atomic.load"
+            } else {
+                "atomic.store"
+            }
+        }
         Inst::IndirectBr { .. } => "br.indirect",
         Inst::VaAccess(_) => "variadic",
         Inst::BitOperation { op, .. } => op.mnemonic(),

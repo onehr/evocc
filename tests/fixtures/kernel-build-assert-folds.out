@@ -1,0 +1,71 @@
+2026-09-21 local time: six retained kernel build assertions, tailored GREEN.
+
+The original full composition 20260920T103126Z failed final linking with
+four Landlock and two ICMPv6 __compiletime_assert_* references. Its receipt
+remains INCOMPLETE. No assertion stub, original-source edit, timeout change,
+installed-object replacement or successful full-kernel claim is made here.
+
+REDs compiled without errors: the initial reduction retained invalid_rule;
+the aggregate repair exposed invalid_destination; keeping check_sender
+noinline then retained invalid_sender. The final test requires both the
+check_sender definition and its call to survive, with no invalid_* calls.
+
+Shared repairs:
+  - Leave unsupported aggregate subobjects unknown in the complementary-byte
+    proof, while proving separately initialized integer members. Actual
+    initialization, loads, padding and pointer representations are unchanged.
+  - Use Boolean nonnull facts only after evaluating the original expression.
+    Weak symbols and numeric pointer representations are not invented facts.
+  - Propagate identical named-function arguments only into closed-world,
+    unmodified private parameters. Keep calls, conversions and argument effects.
+
+CARGO_TARGET_DIR=target/frontend cargo test -p evocc-lower \
+  --test compiler_hints --test switch_labels --offline -j 2
+Result: 48 PASS, 0 FAIL. Negative controls cover mutation, address escape,
+volatile objects, weak symbols, differing callers, external entry, parameter
+mutation and effectful function-pointer producers.
+
+Source SHA256 cbc1949590046213fb7a4421b64bcfa54983df6bf9b62a73c572587db8f647b5
+Release SHA256 4fbbf3a84881973b7c3ae79855e52b2406985dbd8d71e87b197ada786901eb2e
+Minimal assembly SHA256 c972bae1a57581369330d6f767e39a4d0c318763a1f371382d9418e574976ad3
+Release --interpret-c-hir and --interpret-evoir -O2: both return 0.
+Sealed offline AArch64: gcc-14 and clang-19 -std=gnu11 -O2, then execution:
+both exit 0. gcc-14 assembles/links EvoCC's final assembly; execution exits 0.
+Oracles: GCC 14.2.0-19, Clang 19.1.7. Image SHA256:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+
+Original-unit replay uses tools/k1/cmdrecord.py parse_record + evocc_argv:
+records = .build/k7-coverage/case/bpf/pristine/<dir>/.<object>.cmd
+source = .build/k7-coverage/case/linux-src
+headers = .build/k7-coverage/case/bpf/out (actual generated inputs)
+toolchain_root = .build/k7-coverage/case/ladder-sysroot
+compiler = target/frontend/release/evocc, normal 60-second per-unit cap.
+No newly installed kernel composition was constructed by this replay.
+
+unit                         emit seconds  assembly  undefined assertions  defined globals
+security/landlock/ruleset.o       9.67        PASS              0                 8
+security/landlock/syscalls.o     10.39        PASS              0                 4
+net/ipv6/icmp.o                   7.85        PASS              0                11
+
+Offline object audit: gcc-14 -Wa,-march=armv8.5-a -c <asm> -o <temporary.o>;
+nm -u; nm --defined-only --extern-only --format=posix. All three match their
+original reference object's defined names and binding kinds, with zero
+missing/extra symbols. Temporary objects were not retained or installed.
+Assembly paths: .build/floating-targeted/kernel-assert-fixed-<unit-with-dashes>.s
+Assembly SHA256 in table order:
+ed2f9b9928fceedc30d510fda491d3ba566ecea68536ea9d57844f132ed62c3b
+cfc855d26c09ad8015a67c0dbc3ea947a1705c8a6a8b46cfcee39672a89e032b
+c5cb7f2897c88a44b877730495abb8f6a0df31489f65bfaa27a87d817c492873
+Object SHA256 in table order:
+747f9d660da4a26bebfca872ab76ad6dbd2d9869b7af39b64a26a32e27fb9a22
+802c3cc10d0980796e57c0f434b92fa0b22b7cbb7616acf28f098ea3be07a55f
+13afad5799e0fc6b7551171bdc797a8ed52a946f375cd8cf9318aa9f02be0020
+
+Final changed gate: all workspace tests completed, 2593 PASS, 0 FAIL,
+4 historical ignored. Clippy -D warnings is still running, fmt is pending;
+the complete gate is not yet PASS. At 2026-09-20 17:00 UTC the gate wrapper
+is PID 25648 and cargo-clippy is PID 66377, progressing through new targets.
+Capture: .build/floating-targeted/gate-kernel-asserts-final-20260921.txt.
+An earlier intermediate-code gate was explicitly interrupted, not passed.
+Two early-boot CALL26 overflows and function-section semantics remain
+separate blockers; module link/BTF, boot and expanded KUnit are NOT_RUN.

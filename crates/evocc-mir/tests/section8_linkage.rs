@@ -56,6 +56,34 @@ const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=fa
 const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
 
 #[test]
+fn function_sections_preserve_entry_metadata_and_restore_default_text() {
+    let source = format!(
+        "alias @boot_alias = @boot\n\n{}\n{}",
+        adder(
+            "boot",
+            " align=64 patchable_entry=4,2 section=\".init.text\""
+        ),
+        adder("ordinary", ""),
+    );
+    let module = parse_section9_module(source.as_bytes()).unwrap();
+    let assembly = compile_module_for(Target::Linux, &module, &|_| true).unwrap();
+    let selected = assembly
+        .find(".section \".init.text\",\"ax\",%progbits")
+        .unwrap();
+    let body = &assembly[selected..];
+    assert!(body.find(".p2align 6").unwrap() < body.find("boot:").unwrap());
+    assert!(body.contains(".pushsection __patchable_function_entries,\"awo\",%progbits,boot"));
+    assert!(body.contains(".set boot_alias, boot"));
+    let restored = body.find("\n.text\n").unwrap();
+    assert!(restored < body.find("ordinary:").unwrap());
+    assert!(compile_module_for(Target::Darwin, &module, &|_| true).is_err());
+    let unicode = source.replace(".init.text", ".text.\\xc3\\xa9");
+    let unicode = emitted(Target::Linux, &unicode);
+    assert!(unicode.contains(".section \".text.é\",\"ax\",%progbits"));
+    assert!(!unicode.contains("\\303\\251"));
+}
+
+#[test]
 fn a_private_callee_unused_parameter_does_not_force_an_external_address() {
     let source = format!(
         "extern @absent size=4 align=4
@@ -94,7 +122,7 @@ func @entry(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = t
 }
 
 #[test]
-fn undefined_symbol_addresses_use_indirection_without_changing_definitions() {
+fn symbol_address_indirection_respects_target_binding() {
     let source = format!(
         "extern @value size=4 align=4 linkage=weak
 
@@ -160,20 +188,26 @@ func @function_address(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, wo
             "_optional@GOTPAGE"
         }));
 
-        // A definition in this module still takes the direct recipe, including
-        // a weak definition. Indirection is decided by the declaration table,
-        // not by a global spelling or a linkage flag alone.
+        // A Linux PIC definition is still interposable with default ELF
+        // visibility. C internal linkage and strong hidden definitions bind
+        // locally. Darwin keeps its existing defined-symbol address recipe.
         for (visibility, linkage) in [
             ("external", ""),
             ("external", " linkage=weak"),
             ("internal", ""),
+            ("hidden", ""),
         ] {
             let defined = source.replace(
                 "extern @value size=4 align=4 linkage=weak",
                 &format!("global @value origin=0 kind=file visibility={visibility}{linkage} size=4 align=4 bytes=07000000 initialized=1111"),
             );
             let defined = emitted(target, &defined);
-            assert!(!defined.contains(":got:value") && !defined.contains("_value@GOTPAGE"));
+            let got = defined.contains(":got:value") || defined.contains("_value@GOTPAGE");
+            assert_eq!(
+                got,
+                target == Target::Linux && visibility == "external",
+                "{target:?}, {visibility}{linkage}: {defined}"
+            );
         }
     }
 }

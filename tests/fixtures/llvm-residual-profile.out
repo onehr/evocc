@@ -1,0 +1,42 @@
+LLVM original-source residual profile audit, 2026-09-16
+Fixed Linux ARM64 image SHA256: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19 and Clang 19.1.7.
+Source pin: LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
+Commands preserve original semantic options, remove warning suppressions,
+and explicitly use GNU11 only when no language option was written.
+This is a profile diagnostic probe, not a replacement for original benchmark commands.
+Raw commands and complete stderr: .build/vector-targeted/llvm-residual-profile.json.
+
+Source (under SingleSource/)                           GCC / Clang compile
+Benchmarks/Dhrystone/dry.c                            1 / 1
+Benchmarks/Dhrystone/fldry.c                          1 / 1
+Benchmarks/Misc/flops.c                               1 / 1
+  Original GNU17 modes are preserved. Each has an implicit-int definition;
+  reviewed F01 excludes implicit types in these modern dialects.
+Regression/C/globalrefs.c                            1 / 0
+  line 26 initializes long* with int*: GCC error, Clang warning.
+  The reviewed incompatible-pointer profile retains E2202, not an implicit cast.
+Regression/C/gcc-c-torture/execute/20001111-1.c        1 / 1
+  line 19 assigns a nonconstant integer to char*, plus undeclared abort/exit.
+  This is not a missing ordinary-exit builtin; the original remains unmodified.
+UnitTests/Float/classify.c                            1 / 0
+  GCC lacks the LLVM classification builtin set (including __builtin_issubnormal);
+  Clang's successful original compile is retained, not called dual-oracle PASS.
+
+The following compile in both compilers but retain existing reviewed boundaries:
+Regression/C/gcc-c-torture/execute/20050119-2.c        0 / 0
+  enum members use mode(byte). The existing fixed-oracle canonical-type conflict
+  is .evidence/builtin-probes/20260908-integer-modes/results.txt, not a size guess.
+Regression/C/gcc-c-torture/execute/20050316-1.c        0 / 0
+  test4 takes a 4-byte vector across an external ABI. Both self-controls pass,
+  both crossed controls fail in tests/fixtures/elf-vector-tls.out.
+Regression/C/gcc-c-torture/execute/20051012-1.c        0 / 0
+  foo() defines zero parameters yet foo(t) passes a record. Reviewed F01 and the
+  canonical zero-parameter definition rule retain this rejection (now E3051).
+Regression/C/gcc-c-torture/execute/pr87623.c           0 / 0
+  scalar_storage_order is explicitly excluded by R01. This original uses only
+  byte members; successful execution cannot establish the excluded attribute.
+
+The ledger binds each source digest and original full argument list separately.
+No original PASS, refusal or runtime result is overwritten by these dispositions.
+The live supplemental kernel survey and its frozen input are not modified.

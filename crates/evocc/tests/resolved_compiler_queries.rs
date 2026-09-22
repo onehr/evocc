@@ -40,6 +40,89 @@ fn dynamic_object_queries_capture_allocation_sizes_without_repeating_effects() {
 }
 
 #[test]
+fn allocation_extents_survive_evaluated_statement_expression_results() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/allocation-statement-result.c"
+    ));
+    let declarations = "typedef unsigned long size_t;char storage[128];__attribute__((noinline,alloc_size(1))) void*allocate(size_t n){return storage;}";
+    for body in [
+        "int main(void){void*p=({void*r=allocate(25);r;});return __builtin_dynamic_object_size(p,1)!=25;}",
+        "int main(void){void*p=({void*r;r=allocate(25);r;});return __builtin_object_size(p,1)!=25;}",
+        "int main(void){size_t n=25;void*p=({void*r;if(0)r=allocate(n++);else r=allocate(n++);r;});return __builtin_dynamic_object_size(p,1)!=25||n!=26;}",
+    ] {
+        assert_constant_program(&format!("{declarations}{body}"));
+    }
+    for body in [
+        "int main(void){volatile int c=0;void*p=({void*r=allocate(25);if(c)r=allocate(9);r;});return __builtin_dynamic_object_size(p,1)!=~0ul;}",
+        "int main(void){void*p=({void*r=allocate(25);goto done;r=allocate(9);done:r;});return __builtin_dynamic_object_size(p,1)!=~0ul;}",
+        "int main(void){int calls=0;unsigned long n=__builtin_dynamic_object_size(({++calls;allocate(25);}),1);return n!=~0ul||calls;}",
+        "int main(void){void*p=({void*volatile r=allocate(25);r;});return __builtin_dynamic_object_size(p,1)!=~0ul;}",
+    ] {
+        assert_constant_program(&format!("{declarations}{body}"));
+    }
+}
+
+#[test]
+fn allocation_attributes_before_function_names_keep_their_parameter_indices() {
+    assert_constant_program(
+        "typedef unsigned long size_t;char storage[128];int calls;\
+         void * __attribute__((alloc_size(2))) allocate(void*device,size_t n);\
+         __attribute__((noinline)) void*allocate(void*device,size_t n){++calls;return storage;}\
+         int main(void){volatile size_t input=25;size_t n=input;void*p=allocate(0,n++);\
+         return __builtin_dynamic_object_size(p,1)!=25||n!=26||calls!=1;}",
+    );
+}
+
+#[test]
+fn direct_inline_returns_preserve_allocation_extents_without_replaying_calls() {
+    let declarations = "typedef unsigned long size_t;char storage[128];int calls;\
+        __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){++calls;return storage;}\
+        static inline void*wrapper(size_t n){return allocate(n);}\
+        static inline void*nested(size_t n){return wrapper(n);}";
+    for body in [
+        "int main(void){void*p=wrapper(11);return calls!=1||__builtin_object_size(p,1)!=11||__builtin_dynamic_object_size(p,1)!=11;}",
+        "int main(void){volatile size_t input=11;size_t n=input;void*p=nested(n++);return calls!=1||n!=12||__builtin_dynamic_object_size(p,1)!=11;}",
+    ] {
+        assert_constant_program(&format!("{declarations}{body}"));
+    }
+    for wrapper in [
+        "__attribute__((noinline)) void*indirect(size_t n){return allocate(n);}",
+        "static inline void*indirect(size_t n){if(n)return allocate(n);return allocate(7);}",
+    ] {
+        // No body-wide allocation promise is invented for an unexpanded call
+        // or multiple possible return paths. The runtime call still happens.
+        assert_constant_program(&format!(
+            "{declarations}{wrapper}int main(void){{volatile size_t n=11;void*p=indirect(n);\
+             return calls!=1||__builtin_dynamic_object_size(p,1)!=~0ul;}}"
+        ));
+    }
+}
+
+#[test]
+fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
+    assert_constant_program(
+        "typedef unsigned long size_t;char storage[128];\
+         __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){return storage;}\
+         int main(void){size_t n;n=11;void*p=allocate(n);n=7;\
+         return __builtin_object_size(p,1)!=11||__builtin_dynamic_object_size(p,1)!=11||n!=7;}",
+    );
+    assert_constant_program(
+        "typedef unsigned long size_t;char storage[128];volatile size_t zero;\
+         __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){return storage;}\
+         int main(void){size_t n;n=11;if(!__builtin_constant_p(1))n+=zero;\
+         void*p=allocate(n);return __builtin_object_size(p,1)!=11;}",
+    );
+    for source in [
+        "int main(void){int n=11;goto selected;if(0){selected:n=7;}return n!=7;}",
+        "int main(void){int n=11;switch(1){if(0){case 1:n=7;}}return n!=7;}",
+        "int main(void){int n=11;volatile int yes=1;if(yes)n=7;return n!=7;}",
+        "int main(void){int n=0;if(n++)return 9;return n!=1;}",
+    ] {
+        assert_constant_program(source);
+    }
+}
+
+#[test]
 fn extent_queries_do_not_read_unknown_values_or_escape_source_control_flow() {
     for source in [
         "int main(void){char a[16];int i;return __builtin_dynamic_object_size(a+i,0)!=~0ul;}",
@@ -210,6 +293,39 @@ fn numeric_pointer_bits_fold_in_execution_but_not_as_source_ice() {
     );
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("E2912"));
+}
+
+#[test]
+fn expectation_specialization_preserves_second_operand_failures() {
+    for (source, expected_error) in [
+        (
+            "int main(void){return __builtin_expect(1,1/0);}",
+            None,
+        ),
+        (
+            "int main(void){const long value=1;return __builtin_expect(value,1/0);}",
+            Some("E3002"),
+        ),
+        (
+            "int main(void){const long value=1;int uninitialized;return __builtin_expect(value,uninitialized);}",
+            Some("E3001"),
+        ),
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            if let Some(code) = expected_error {
+                assert!(!output.status.success(), "{mode}: {source}");
+                assert!(
+                    String::from_utf8_lossy(&output.stderr).contains(code),
+                    "{mode}: {source}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
+                assert!(output.status.success(), "{mode}: {source}");
+                assert_eq!(output.stdout, b"1\n");
+            }
+        }
+    }
 }
 
 #[test]

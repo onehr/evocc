@@ -1,0 +1,105 @@
+2026-09-21: section attributes on named pointer declarators.
+
+RED: two existing function_linkage table tests failed, six passed, zero
+compilation errors. The parser preserved section on the written pointer
+layer, so C-HIR symbol merging lost placement for pointer-returning functions,
+pointer objects and function-pointer objects. After-name attributes worked.
+Observed originals: init/main.o late_time_init and
+drivers/xen/xen-pciback/xenbus.o xen_pcibk_backend were B instead of D in nm.
+The full attempt 20260921T033257Z was stopped and recorded INTERRUPTED;
+6,208 completed verified rows were observed before cancellation. No complete
+composition, link or boot is inferred from that partial run.
+
+Fixed offline linux/arm64 control, evo-flight-lab:sealed configuration digest
+sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2:
+  gcc-14 / clang-19 -std=gnu11 -O0 / -O2 pointer-declarator-section.c
+  execute; compile -c; readelf -SW; readelf -sW
+All four programs exit 0. All four objects place pointer_result in executable
+.init.text and callback/before_name/after_name in their named writable
+PROGBITS sections. Each pointer object is eight bytes, aligned to eight.
+
+GREEN: parse_declarator sends section, like the existing weak/alias marks,
+to the declared symbol's inventory; other pointer attributes remain on the
+written type. No pointer-type identity change or special source-name rule.
+All eight function_linkage tests pass, including malformed/conflicting
+pointer-section cases. EvoIR 1.9.104 explicitly records the shared rule.
+
+Frozen release .build/floating-targeted/evocc-section-pointer-20260921:
+SHA256 dc6f68eeabee81f9332d25250b31048e9eb36f1b49d5b885b379dc962875763d
+Compiler tree (508 paths; path, NUL, raw file SHA256, sorted; same algorithm as
+function-section-boundaries.out):
+c2cef52b7af60ed252520240635ee7e7bdf37ee126b9033de7be8e1c42a1ceae
+
+Four fixtures: kernel-function-section, function-section-boundaries,
+function-section-utf8 and pointer-declarator-section.
+Both interpreters: 8/8 return 0.
+GCC-14 and Clang-19 assemble/link each EvoCC output: 8/8 native executions
+return 0. Separate ELF inspection confirms the requested sections; execution
+alone is not the placement verdict. Quote/backslash assembler differences
+remain bounded as recorded in function-section-boundaries.out.
+
+Seven original records replayed against ACTUAL generated headers without
+installing the objects. All assemble; no missing/extra defined names or nm
+category differences in these seven pairs:
+  arch/arm64/kernel/pi/map_range.o          3.008 s
+  arch/arm64/kernel/pi/map_kernel.o         3.034 s
+  security/landlock/syscalls.o             9.982 s
+  security/landlock/ruleset.o              9.382 s
+  net/ipv6/icmp.o                         9.074 s
+  init/main.o                           12.908 s
+  drivers/xen/xen-pciback/xenbus.o         3.599 s
+readelf: both PI targets and start_kernel are in .init.text;
+late_time_init is in .init.data, xen_pcibk_backend in .data..read_mostly.
+The three Landlock/ICMP objects have no undefined __compiletime_assert names.
+Artifacts: .build/floating-targeted/section-pointer-kernel-replay.
+
+Other full-run R/D category differences are not silently treated as identical
+storage or as binding-strength failures: eleven observed custom-section
+symbols follow the existing explicit-section permission policy in Appendix D.
+That policy was not changed by this repair. Full gate and new complete
+composition remain separate verdicts.
+
+Current snapshot full workspace gate: PASS, exit 0; 2,598 PASS, zero failures,
+four historical ignored. Clippy --all-targets -D warnings and fmt PASS.
+Log: .build/floating-targeted/gate-function-section-pointer-20260921.txt
+Text grammar: 53/53, zero differences.
+Both frozen layout corpora: 128 + 22 cases, zero mismatches. The first attempt
+to compare the attributed corpus omitted C30_LAYOUT_CASE_SET=attributed and
+was rejected for manifest count mismatch; the unchanged observations pass
+when invoking the comparator with its required case-set selection.
+The existing 197 K1 and 32 bench-entry Python tests and Ruff also pass.
+Bench-entry test receipt messages refer to their isolated temporary roots,
+not new real kernel measurements or edits of the active benchmark receipt.
+Isolated offline replay also passes: 13 tests, zero failures/ignored, using a
+new empty CARGO_HOME with the existing target and vendored sources, --locked
+--offline, two build jobs, serial tests. Packages: evocc-eqopt, evocc-lower,
+evocc-proofcheck; tests: day8_persistent_state_contract,
+day6_g1_equivalence_red, day8_corpus_replay, day8_proof_contract.
+Log: .build/floating-targeted/offline-section-clients-20260921.txt.
+
+Full kernel composition PASS, exit 0: run 20260921T065917Z.
+Receipt: tests/contracts/kernel-bpf-full-receipt.json.
+Capture: .build/floating-targeted/kernel-section-pointer-20260921.txt.
+Existing low-disk tree, eight workers, unchanged 180-second per-unit timeout.
+Both complete passes: 6,765/6,765; actual generated inputs reached a content
+fixed point; all 746 generated export/module descriptors recompiled.
+Final target-C audit: 6,765 installed hashes unchanged, zero rebuilt-by-kbuild,
+zero missing/extra defined names. Eleven historical R/D storage-category
+differences remain the documented explicit-section policy, not binding parity.
+modpost: zero warnings, zero section mismatches (old run: 2,515 warnings).
+Full vmlinux/Image link: exit 0; no CALL26, assertion or GOT/PLT errors.
+745/745 module links and BTF PASS; 3,552 module target-C inputs and five
+reference assembly inputs audited; protected hashes unchanged.
+vmlinux / module BTF base SHA256:
+9fe0eda3c38fb3f199fdbe6ad88d8dd8d0a9c9661993e108919fe23311c07b11
+Image SHA256:
+359d08356f4676dc875c25b56c719a349dd699cd0afcb89d0e4732e46678960b
+HVF-host real boot at 2026-09-21T11:00:24Z: PASS; ordered init markers,
+nonce k1-20260921T110023Z-63d0d43f, EVO_INIT_DONE, reboot: Power down.
+Boot serial SHA256:
+de1272d9f7a7f4abe1e329e8dcfb55f85debe2d9dc168e4c764cab9519383846
+Authorized --allow-qemu-drift records installed QEMU SHA256:
+45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+This closes function-section/link/boot acceptance for this configuration.
+Module signing/install/loading, expanded KUnit and full paired kselftests
+remain separate NOT_RUN acceptance work; the boot is not their PASS.

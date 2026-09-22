@@ -51,6 +51,26 @@ pub enum TokenText {
     Borrowed,
     // String and char literals carry the decoded value after escape processing.
     Decoded(String),
+    /// Raw ordinary-literal spelling. The escaped spelling is a lossless C
+    /// token serialization for text consumers, not a Unicode replacement.
+    RawBytes {
+        spelling: Vec<u8>,
+        escaped: String,
+    },
+}
+
+impl TokenText {
+    pub fn spelling(&self) -> Option<&str> {
+        match self {
+            Self::Borrowed => None,
+            Self::Decoded(s) => Some(s),
+            Self::RawBytes { escaped, .. } => Some(escaped),
+        }
+    }
+
+    pub fn has_raw_bytes(&self) -> bool {
+        matches!(self, Self::RawBytes { .. })
+    }
 }
 
 /// Enumeration of token categories carried by the lexical and preprocessing
@@ -59,6 +79,7 @@ pub enum TokenText {
 pub enum TokenKind {
     Eof,
     Error,
+    EncodingError,
     // Keywords. Sorted in a deterministic order so `TokenKind` comparisons
     // are stable; this is not a keyword table, just an enumeration.
     Auto,
@@ -105,6 +126,7 @@ pub enum TokenKind {
     Asm,
     /// GNU `__builtin_expect`, promoted only after preprocessing.
     BuiltinExpect,
+    BuiltinAtomic,
     /// GNU `__builtin_constant_p`, promoted only after preprocessing.
     BuiltinConstantP,
     /// GNU compile-time selection and type-query builtins, promoted only
@@ -163,6 +185,7 @@ pub enum TokenKind {
     Identifier,
     // Literals.
     IntLiteral,
+    ImaginaryIntLiteral,
     FloatLiteral,
     CharLiteral,
     StringLiteral,
@@ -253,11 +276,14 @@ const KEYWORDS: &[(&str, TokenKind)] = &[
     ("_Atomic", TokenKind::Atomic),
     ("_Bool", TokenKind::Bool),
     ("_Complex", TokenKind::Complex),
+    ("__complex", TokenKind::Complex),
+    ("__complex__", TokenKind::Complex),
     ("_Generic", TokenKind::Generic),
     ("_Imaginary", TokenKind::Imaginary),
     ("_Noreturn", TokenKind::Noreturn),
     ("_Static_assert", TokenKind::StaticAssert),
     ("_Thread_local", TokenKind::ThreadLocal),
+    ("__thread", TokenKind::ThreadLocal),
     ("__attribute__", TokenKind::Attribute),
     ("__attribute", TokenKind::Attribute),
     ("__typeof__", TokenKind::Typeof),
@@ -370,7 +396,10 @@ pub fn decode_character_literal(text: &str) -> Option<(u32, &str)> {
 /// disagree about where a UCN ends.
 #[must_use]
 pub fn universal_character_name_len_at(source: &str, pos: usize) -> Option<usize> {
-    let bytes = source.as_bytes();
+    universal_character_name_len_in_bytes(source.as_bytes(), pos)
+}
+
+fn universal_character_name_len_in_bytes(bytes: &[u8], pos: usize) -> Option<usize> {
     let digits = match bytes.get(pos..pos + 2)? {
         [b'\\', b'u'] => 4,
         [b'\\', b'U'] => 8,
@@ -389,7 +418,25 @@ pub fn universal_character_name_len_at(source: &str, pos: usize) -> Option<usize
 /// `1.2.3e+x`.
 #[must_use]
 pub fn preprocessing_number_len_at(source: &str, pos: usize) -> Option<usize> {
-    let bytes = source.as_bytes();
+    preprocessing_number_len_in_bytes(source.as_bytes(), pos)
+}
+
+fn source_character(bytes: &[u8], pos: usize) -> Option<char> {
+    let first = *bytes.get(pos)?;
+    let length = match first {
+        0..=0x7f => return Some(char::from(first)),
+        0xc2..=0xdf => 2,
+        0xe0..=0xef => 3,
+        0xf0..=0xf4 => 4,
+        _ => return None,
+    };
+    std::str::from_utf8(bytes.get(pos..pos + length)?)
+        .ok()?
+        .chars()
+        .next()
+}
+
+fn preprocessing_number_len_in_bytes(bytes: &[u8], pos: usize) -> Option<usize> {
     let first = *bytes.get(pos)?;
     let mut cursor = if first.is_ascii_digit() {
         pos + 1
@@ -399,21 +446,17 @@ pub fn preprocessing_number_len_at(source: &str, pos: usize) -> Option<usize> {
         return None;
     };
 
-    while cursor < source.len() {
-        if let Some(length) = universal_character_name_len_at(source, cursor) {
+    while cursor < bytes.len() {
+        if let Some(length) = universal_character_name_len_in_bytes(bytes, cursor) {
             cursor += length;
             continue;
         }
-        let character = source[cursor..]
-            .chars()
-            .next()
-            .expect("cursor is within the preprocessing number");
+        let Some(character) = source_character(bytes, cursor) else {
+            break;
+        };
         cursor += character.len_utf8();
         if matches!(character, 'e' | 'E' | 'p' | 'P')
-            && source[cursor..]
-                .chars()
-                .next()
-                .is_some_and(|next| matches!(next, '+' | '-'))
+            && source_character(bytes, cursor).is_some_and(|next| matches!(next, '+' | '-'))
         {
             cursor += 1;
         } else if character == '.'
@@ -431,7 +474,12 @@ pub fn preprocessing_number_len_at(source: &str, pos: usize) -> Option<usize> {
 }
 
 fn classify_c_number(spelling: &str) -> Option<TokenKind> {
-    if is_c_integer_constant(spelling) {
+    if spelling
+        .strip_suffix(['i', 'I', 'j', 'J'])
+        .is_some_and(is_c_integer_constant)
+    {
+        Some(TokenKind::ImaginaryIntLiteral)
+    } else if is_c_integer_constant(spelling) {
         Some(TokenKind::IntLiteral)
     } else if is_c_floating_constant(spelling) {
         Some(TokenKind::FloatLiteral)
@@ -576,7 +624,7 @@ struct NonAsciiLine {
 
 pub struct Lexer<'src> {
     file: FileId,
-    source: Cow<'src, str>,
+    source: Cow<'src, [u8]>,
     line_splices: Vec<LineSplice>,
     raw_line_starts: Vec<usize>,
     raw_non_ascii_lines: Vec<NonAsciiLine>,
@@ -585,10 +633,11 @@ pub struct Lexer<'src> {
     col: u32,
     eof_emitted: bool,
     preceded_by_whitespace: bool,
+    legacy_literal_prefixes: bool,
 }
 
-fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
-    let bytes = source.as_bytes();
+fn splice_physical_lines(source: &[u8]) -> (Cow<'_, [u8]>, Vec<LineSplice>) {
+    let bytes = source;
     let mut first_splice = None;
     for index in 0..bytes.len() {
         if bytes[index] == b'\\'
@@ -603,7 +652,7 @@ fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
         return (Cow::Borrowed(source), Vec::new());
     };
 
-    let mut logical = String::with_capacity(source.len());
+    let mut logical = Vec::with_capacity(source.len());
     let mut splices = Vec::new();
     let mut copied_through = 0;
     let mut cursor = first_splice;
@@ -621,7 +670,7 @@ fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
             continue;
         };
 
-        logical.push_str(&source[copied_through..cursor]);
+        logical.extend_from_slice(&source[copied_through..cursor]);
         removed_total += removed;
         splices.push(LineSplice {
             logical_offset: logical.len(),
@@ -630,18 +679,21 @@ fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
         cursor += removed;
         copied_through = cursor;
     }
-    logical.push_str(&source[copied_through..]);
+    logical.extend_from_slice(&source[copied_through..]);
     (Cow::Owned(logical), splices)
 }
 
 impl<'src> Lexer<'src> {
     #[must_use]
     pub fn new(file: FileId, source: &'src str) -> Self {
+        Self::from_bytes(file, source.as_bytes())
+    }
+
+    pub fn from_bytes(file: FileId, source: &'src [u8]) -> Self {
         let (logical_source, line_splices) = splice_physical_lines(source);
         let mut raw_line_starts = vec![0];
         raw_line_starts.extend(
             source
-                .as_bytes()
                 .iter()
                 .enumerate()
                 .filter_map(|(index, byte)| (*byte == b'\n').then_some(index + 1)),
@@ -654,16 +706,19 @@ impl<'src> Lexer<'src> {
                     .get(line_index + 1)
                     .copied()
                     .unwrap_or(source.len());
-                let bytes = &source.as_bytes()[*line_start..line_end];
+                let bytes = &source[*line_start..line_end];
                 (!bytes.is_ascii()).then(|| NonAsciiLine {
                     line_index,
-                    continuation_offsets: bytes
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(offset, byte)| {
-                            (byte & 0b1100_0000 == 0b1000_0000).then_some(*line_start + offset)
-                        })
-                        .collect(),
+                    continuation_offsets: {
+                        let mut offsets = Vec::new();
+                        let mut pos = 0;
+                        while pos < bytes.len() {
+                            let len = source_character(bytes, pos).map_or(1, char::len_utf8);
+                            offsets.extend((1..len).map(|i| *line_start + pos + i));
+                            pos += len;
+                        }
+                        offsets
+                    },
                 })
             })
             .collect();
@@ -678,7 +733,14 @@ impl<'src> Lexer<'src> {
             col: 1,
             eof_emitted: false,
             preceded_by_whitespace: false,
+            legacy_literal_prefixes: false,
         }
+    }
+
+    /// Before C11, u/U/u8 are identifiers, even immediately before a quote.
+    /// This choice must precede preprocessing, where those names can expand.
+    pub fn set_legacy_literal_prefixes(&mut self, enabled: bool) {
+        self.legacy_literal_prefixes = enabled;
     }
 
     fn physical_offset(&self, logical_offset: usize, include_splices_at_offset: bool) -> usize {
@@ -711,7 +773,7 @@ impl<'src> Lexer<'src> {
         ((line_index + 1) as u32, column as u32)
     }
 
-    fn make_token(&self, kind: TokenKind, logical_start: usize, logical_end: usize) -> Token {
+    fn make_token(&self, mut kind: TokenKind, logical_start: usize, logical_end: usize) -> Token {
         let physical_start = self.physical_offset(logical_start, true);
         let physical_end = if logical_start == logical_end {
             physical_start
@@ -720,6 +782,43 @@ impl<'src> Lexer<'src> {
         };
         let (line, column) = self.physical_line_col(physical_start);
         let logical_text = &self.source[logical_start..logical_end];
+        let text = match std::str::from_utf8(logical_text) {
+            Ok(text) => TokenText::Decoded(text.to_owned()),
+            Err(_) => {
+                if !matches!(kind, TokenKind::StringLiteral | TokenKind::CharLiteral)
+                    || !matches!(logical_text.first(), Some(b'\'' | b'"'))
+                {
+                    kind = TokenKind::EncodingError;
+                }
+                let mut escaped = String::new();
+                let mut pos = 0;
+                let mut after_backslash = false;
+                while pos < logical_text.len() {
+                    if let Some(ch) = source_character(logical_text, pos) {
+                        escaped.push(ch);
+                        after_backslash = ch == '\\' && !after_backslash;
+                        pos += ch.len_utf8();
+                    } else {
+                        use std::fmt::Write;
+                        // A written backslash followed by this raw byte is
+                        // one GNU unknown escape, not an escaped backslash
+                        // followed by three new octal-digit characters.
+                        // Keep the original bytes separately for tokens and
+                        // diagnostics; only serialize the equivalent value.
+                        if after_backslash {
+                            escaped.pop();
+                        }
+                        write!(escaped, "\\{:03o}", logical_text[pos]).unwrap();
+                        after_backslash = false;
+                        pos += 1;
+                    }
+                }
+                TokenText::RawBytes {
+                    spelling: logical_text.to_vec(),
+                    escaped,
+                }
+            }
+        };
         let mut token = Token::new(
             kind,
             SourceSpan::new(
@@ -729,7 +828,7 @@ impl<'src> Lexer<'src> {
                 line,
                 column,
             ),
-            TokenText::Decoded(logical_text.to_owned()),
+            text,
         );
         token.preceded_by_whitespace = self.preceded_by_whitespace;
         token
@@ -756,10 +855,10 @@ impl<'src> Lexer<'src> {
             return Some(self.quoted_literal(prefix_len, quote, start_pos));
         }
 
-        if self.source.as_bytes()[self.pos].is_ascii_digit()
-            || (self.source.as_bytes()[self.pos] == b'.'
+        if self.source.as_ref()[self.pos].is_ascii_digit()
+            || (self.source.as_ref()[self.pos] == b'.'
                 && self.pos + 1 < self.source.len()
-                && self.source.as_bytes()[self.pos + 1].is_ascii_digit())
+                && self.source.as_ref()[self.pos + 1].is_ascii_digit())
         {
             return Some(self.numeric_literal(start_pos));
         }
@@ -768,7 +867,7 @@ impl<'src> Lexer<'src> {
             return Some(self.identifier(start_pos));
         }
 
-        match self.source.as_bytes()[self.pos] {
+        match self.source.as_ref()[self.pos] {
             // Punctuators and operators
             b'(' => self.single(TokenKind::LParen, start_pos),
             b')' => self.single(TokenKind::RParen, start_pos),
@@ -779,7 +878,7 @@ impl<'src> Lexer<'src> {
             b';' => self.single(TokenKind::Semicolon, start_pos),
             b',' => self.single(TokenKind::Comma, start_pos),
             b'.' => {
-                let bytes = self.source.as_bytes();
+                let bytes = self.source.as_ref();
                 if self.pos + 2 < bytes.len()
                     && bytes[self.pos + 1] == b'.'
                     && bytes[self.pos + 2] == b'.'
@@ -828,7 +927,7 @@ impl<'src> Lexer<'src> {
                 start_pos,
             ),
             b'<' => {
-                let bytes = self.source.as_bytes();
+                let bytes = self.source.as_ref();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'<' {
@@ -850,7 +949,7 @@ impl<'src> Lexer<'src> {
                 }
             }
             b'>' => {
-                let bytes = self.source.as_bytes();
+                let bytes = self.source.as_ref();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'>' {
@@ -872,7 +971,7 @@ impl<'src> Lexer<'src> {
                 }
             }
             b'=' => {
-                let bytes = self.source.as_bytes();
+                let bytes = self.source.as_ref();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'=' {
@@ -884,7 +983,7 @@ impl<'src> Lexer<'src> {
                 }
             }
             b'!' => {
-                let bytes = self.source.as_bytes();
+                let bytes = self.source.as_ref();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'=' {
@@ -928,11 +1027,7 @@ impl<'src> Lexer<'src> {
                 // character as a preprocessing token. Consume one Unicode
                 // scalar so a later parser diagnostic points at exactly the
                 // token that survived preprocessing.
-                let character = self.source[self.pos..]
-                    .chars()
-                    .next()
-                    .expect("position is within the source");
-                self.pos += character.len_utf8();
+                self.pos += source_character(&self.source, self.pos).map_or(1, char::len_utf8);
                 self.col += 1;
                 Some(self.make_token(TokenKind::PpOther, start_pos, self.pos))
             }
@@ -942,7 +1037,7 @@ impl<'src> Lexer<'src> {
     // --- private helpers --------------------------------------------------
 
     fn skip_whitespace_and_comments(&mut self) -> Option<Token> {
-        let bytes = self.source.as_bytes();
+        let bytes = self.source.as_ref();
         loop {
             // Whitespace
             while self.pos < bytes.len()
@@ -1012,11 +1107,14 @@ impl<'src> Lexer<'src> {
     }
 
     fn literal_prefix(&self) -> Option<(usize, u8)> {
-        let rest = &self.source.as_bytes()[self.pos..];
+        let rest = &self.source.as_ref()[self.pos..];
         match rest {
             [quote @ (b'\'' | b'"'), ..] => Some((0, *quote)),
-            [b'L' | b'u' | b'U', quote @ (b'\'' | b'"'), ..] => Some((1, *quote)),
-            [b'u', b'8', b'"', ..] => Some((2, b'"')),
+            [b'L', quote @ (b'\'' | b'"'), ..] => Some((1, *quote)),
+            [b'u' | b'U', quote @ (b'\'' | b'"'), ..] if !self.legacy_literal_prefixes => {
+                Some((1, *quote))
+            }
+            [b'u', b'8', b'"', ..] if !self.legacy_literal_prefixes => Some((2, b'"')),
             _ => None,
         }
     }
@@ -1024,7 +1122,7 @@ impl<'src> Lexer<'src> {
     fn quoted_literal(&mut self, prefix_len: usize, quote: u8, start_pos: usize) -> Token {
         self.pos += prefix_len + 1;
         self.col += (prefix_len + 1) as u32;
-        let bytes = self.source.as_bytes();
+        let bytes = self.source.as_ref();
         let mut terminated = false;
         while self.pos < bytes.len() {
             if bytes[self.pos] == quote {
@@ -1051,11 +1149,7 @@ impl<'src> Lexer<'src> {
                     self.col += 2;
                 }
             } else {
-                let ch = self.source[self.pos..]
-                    .chars()
-                    .next()
-                    .expect("position is within the source");
-                self.pos += ch.len_utf8();
+                self.pos += source_character(&self.source, self.pos).map_or(1, char::len_utf8);
                 self.col += 1;
             }
         }
@@ -1072,11 +1166,12 @@ impl<'src> Lexer<'src> {
     }
 
     fn numeric_literal(&mut self, start_pos: usize) -> Token {
-        let length = preprocessing_number_len_at(self.source.as_ref(), start_pos)
+        let length = preprocessing_number_len_in_bytes(self.source.as_ref(), start_pos)
             .expect("numeric dispatch begins at a preprocessing number");
         self.pos = start_pos + length;
-        self.col += self.source[start_pos..self.pos].chars().count() as u32;
-        let spelling = &self.source[start_pos..self.pos];
+        let spelling = std::str::from_utf8(&self.source[start_pos..self.pos])
+            .expect("validated number characters");
+        self.col += spelling.chars().count() as u32;
         self.make_token(
             classify_c_number(spelling).unwrap_or(TokenKind::PpNumber),
             start_pos,
@@ -1089,7 +1184,7 @@ impl<'src> Lexer<'src> {
             if self.consume_ucn() {
                 continue;
             }
-            let Some(ch) = self.source[self.pos..].chars().next() else {
+            let Some(ch) = source_character(&self.source, self.pos) else {
                 break;
             };
             if !(ch == '_' || ch == '$' || ch.is_alphanumeric()) {
@@ -1098,24 +1193,23 @@ impl<'src> Lexer<'src> {
             self.pos += ch.len_utf8();
             self.col += 1;
         }
-        let lexeme = &self.source[start_pos..self.pos];
+        let lexeme = std::str::from_utf8(&self.source[start_pos..self.pos])
+            .expect("validated identifier characters");
         let kind = try_keyword(lexeme).unwrap_or(TokenKind::Identifier);
         self.make_token(kind, start_pos, self.pos)
     }
 
     fn is_identifier_start_at(&self, pos: usize) -> bool {
-        let bytes = self.source.as_bytes();
+        let bytes = self.source.as_ref();
         if bytes.get(pos) == Some(&b'\\') {
-            return universal_character_name_len_at(self.source.as_ref(), pos).is_some();
+            return universal_character_name_len_in_bytes(self.source.as_ref(), pos).is_some();
         }
-        self.source[pos..]
-            .chars()
-            .next()
+        source_character(&self.source, pos)
             .is_some_and(|ch| ch == '_' || ch == '$' || ch.is_alphabetic())
     }
 
     fn consume_ucn(&mut self) -> bool {
-        if let Some(len) = universal_character_name_len_at(self.source.as_ref(), self.pos) {
+        if let Some(len) = universal_character_name_len_in_bytes(self.source.as_ref(), self.pos) {
             self.pos += len;
             self.col += len as u32;
             true
@@ -1125,7 +1219,7 @@ impl<'src> Lexer<'src> {
     }
 
     fn match_next(&mut self, expected: u8) -> Option<u8> {
-        let bytes = self.source.as_bytes();
+        let bytes = self.source.as_ref();
         if self.pos + 1 < bytes.len() && bytes[self.pos + 1] == expected {
             self.pos += 2;
             self.col += 2;
@@ -1150,7 +1244,7 @@ impl<'src> Lexer<'src> {
     ) -> Option<Token> {
         self.pos += 1;
         self.col += 1;
-        let bytes = self.source.as_bytes();
+        let bytes = self.source.as_ref();
         if self.pos < bytes.len() {
             if bytes[self.pos] == b'=' {
                 self.pos += 1;
@@ -1194,30 +1288,19 @@ mod tests {
     #[test]
     fn lexer_recognizes_all_c11_tokens() {
         let tokens = lex("int main(void) { return 0x42 + /* comment */ 7; }\n");
-        // Verify token kinds at minimum. Full golden comparison follows
-        // once the lexer is implemented.
         assert!(!tokens.is_empty());
         // First token should be `int`.
         assert_eq!(tokens[0].kind, TokenKind::Int);
     }
 
     #[test]
-    fn lexer_rejects_invalid_utf8() {
-        // The input is valid Rust `&str`, so the lexer receives valid UTF-8
-        // by construction. An invalid-UTF8 scenario means a raw byte sequence
-        // that is not valid UTF-8 — in Rust, this cannot be represented as a
-        // `&str`. The lexer's contract is: it operates on valid `&str` input
-        // and produces tokens; invalid byte sequences that appear in a C source
-        // file (which Rust cannot load as `&str`) are caught at the file-load
-        // layer, not at the lexer.
-        //
-        // The test asserts that the lexer does not panic on normal input and
-        // produces tokens structured correctly.
-        let tokens = lex("int x;");
-        assert!(!tokens.is_empty());
-        for t in &tokens {
-            assert!(t.span.is_valid());
-        }
+    fn lexer_rejects_invalid_encoding_at_an_identifier_position() {
+        let mut lexer = Lexer::from_bytes(FileId::new(1), b"int \xff;");
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Int);
+        let invalid = lexer.next().unwrap();
+        assert_eq!(invalid.kind, TokenKind::EncodingError);
+        assert_eq!((invalid.span.byte_start, invalid.span.byte_end), (4, 5));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Semicolon);
     }
 
     // ========================================================================
@@ -2004,7 +2087,7 @@ mod tests {
         );
 
         let spelling = |token: &Token| match &token.text {
-            TokenText::Decoded(text) => text.clone(),
+            TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
             TokenText::Borrowed => {
                 source[token.span.byte_start as usize..token.span.byte_end as usize].to_owned()
             }

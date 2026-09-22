@@ -49,7 +49,7 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
 
 fn spelling<'a>(token: &'a Token, main_source: &'a str) -> &'a str {
     match &token.text {
-        TokenText::Decoded(text) => text,
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text,
         TokenText::Borrowed => {
             &main_source[token.span.byte_start as usize..token.span.byte_end as usize]
         }

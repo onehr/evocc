@@ -1,0 +1,38 @@
+Quiet NaN object-representation audit, 2026-09-16
+Target: aarch64-unknown-linux-gnu, LP64 little-endian; -std=gnu11.
+Image: evo-flight-lab:sealed
+Image SHA256: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Fixed compilers: GCC 14.2.0-19 and Clang 19.1.7, each at O0/O2.
+Source: tests/fixtures/nan-constant-representation.c
+Source SHA256: cc5fdb4ed93dc3078391d46e52122ea118a0398c9b5dd89a56fb0102ede59011
+
+Matrix command: CC -std=gnu11 -O0/-O2 -DPROBE_PRINT '-DPAYLOAD="STRING"' SOURCE -o probe; ./probe
+76 compiler invocations, 19 payload strings x 2 compilers x 2 optimization levels.
+The eleven payloads below compile/run in all four modes and have identical bytes.
+Columns: payload; float; double; long double; negative double (hex, high byte first).
+empty / 0; 7fc00000; 7ff8000000000000; 7fff8000000000000000000000000000; fff8000000000000
+1 / 01 / 0x1 / 0X1; 7fc00001; 7ff8000000000001; 7fff8000000000000000000000000001; fff8000000000001
+0x7fffff; 7fffffff; 7ff80000007fffff; 7fff80000000000000000000007fffff; fff80000007fffff
+0xffffffffffffffffffffffffffffffff; 7fffffff; 7fffffffffffffff; 7fffffffffffffffffffffffffffffff; ffffffffffffffff
+0x1000000000000000000000000000000001f; 7fc0001f; 7ff800000000001f; 7fff800000000000000000000000001f; fff800000000001f
+340282366920938463463374607431768211457; same bytes as payload 1
+010; 7fc00008; 7ff8000000000008; 7fff8000000000000000000000000008; fff8000000000008
+
+Retained constant-context boundaries:
+-1, +1, leading-space 1: GCC accepts, Clang rejects; no constant projection.
+0x with no digits and embedded NUL in "1\0z": GCC accepts, Clang rejects; no constant projection.
+xyz, 1x, 08: both reject the static initializer.
+No claim is made about executing a runtime nan-library call.
+
+Full commands/diagnostics/outputs: .build/vector-targeted/nan-constant/final-matrix.json.
+Earlier exploratory matrices remain in oracles.json and edges.json, not relabeled as the final source.
+RED: two declared failing tests, zero build errors (.build/vector-targeted/nan-constant-red.txt).
+GREEN: 35/35 language regressions; both interpreters pass the representation fixture.
+Native source controls: fixture and original LLVM builtin-nan-1.c each pass both compilers at O0/O2 (8/8).
+Subject SHA256: 62b85a3af3d5a1d990c7c24352a4ec29d2fd983704e1cda60e66bf1c279c29cd
+Subject fixture and original: GCC and Clang assembly/link/native execution all exit 0 (4/4).
+The eleven supported payloads also match the complete four-format printed bytes under both native assemblers (22/22); subject-matrix-native.json.
+Original source SHA256: bd80d9b0bc24317fec2b9e462d85f3d8c2444e650d5ec0d9ef8cdcf8d0ef82d8
+Original projected command and omitted warning flags: subject.json; native executions: native.json.
+No original source, LLVM expectation or runtime floating-point waiver was changed.
+These are targeted checks, not a newly measured whole-suite result.

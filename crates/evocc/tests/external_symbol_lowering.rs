@@ -25,6 +25,197 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
 }
 
 #[test]
+fn minimum_function_alignment_reaches_every_definition_and_both_interpreters() {
+    let source = include_str!("../../../tests/fixtures/kernel-minimum-function-alignment.c");
+    for mode in [
+        "--interpret-c-hir",
+        "--interpret-evoir",
+        "--emit=evoir",
+        "--emit=asm",
+    ] {
+        let output = run_with_options(source, mode, &["-O2", "-fmin-function-alignment=128"]);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if mode.starts_with("--interpret") {
+            assert_eq!(output.stdout, b"0\n", "{mode}");
+        } else if mode == "--emit=evoir" {
+            let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+            for function in &module.functions {
+                assert_eq!(
+                    function.alignment,
+                    if function.name == "overaligned" {
+                        256
+                    } else {
+                        128
+                    }
+                );
+            }
+        } else {
+            assert!(String::from_utf8(output.stdout)
+                .unwrap()
+                .contains(".p2align 7"));
+        }
+    }
+    for (options, expected) in [
+        (
+            vec!["-fmin-function-alignment=128", "-fmin-function-alignment=8"],
+            8,
+        ),
+        (vec!["-fmin-function-alignment=0"], 4),
+    ] {
+        let output = run_with_options("int f(void){return 0;}", "--emit=evoir", &options);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        assert_eq!(module.functions[0].alignment, expected);
+    }
+    for option in [
+        "-fmin-function-alignment=",
+        "-fmin-function-alignment=-1",
+        "-fmin-function-alignment=65",
+        "-fmin-function-alignment=65537",
+        "-fmin-function-alignment=8:4",
+    ] {
+        assert!(
+            !run_with_options("int f(void){return 0;}", "--emit=asm", &[option])
+                .status
+                .success()
+        );
+    }
+}
+
+#[test]
+fn patchable_function_entries_keep_the_kernel_override_and_ir_identity() {
+    let source = include_str!("../../../tests/fixtures/kernel-function-entry.c");
+    let output = run_with_options(source, "--emit=evoir", &["-fpatchable-function-entry=4,2"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(
+        module,
+        evocc_evoir::parse_section9_module(evocc_evoir::render_module(&module).as_bytes()).unwrap()
+    );
+    for (function, entry) in [
+        ("ordinary", "4,2"),
+        ("notrace_entry", "0,0"),
+        ("local_override", "3,1"),
+    ] {
+        let header = text
+            .lines()
+            .find(|line| line.starts_with(&format!("func @{function}(")))
+            .unwrap();
+        assert!(
+            header.contains(&format!(" patchable_entry={entry}")),
+            "{header}"
+        );
+    }
+    let changed = text.replacen("patchable_entry=4,2", "patchable_entry=4,1", 1);
+    assert_ne!(
+        module,
+        evocc_evoir::parse_section9_module(changed.as_bytes()).unwrap()
+    );
+    let invalid = text.replacen("patchable_entry=4,2", "patchable_entry=1,2", 1);
+    assert!(evocc_evoir::parse_section9_module(invalid.as_bytes()).is_err());
+    let output = run_with_options(
+        source,
+        "--emit=asm",
+        &[
+            "-fpatchable-function-entry=4,2",
+            "-mbranch-protection=pac-ret",
+            "-fasynchronous-unwind-tables",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    assert!(assembly.contains("__patchable_function_entries"));
+    for (function, after) in [("ordinary", 2), ("notrace_entry", 0), ("local_override", 2)] {
+        let body = assembly.split_once(&format!("\n{function}:\n")).unwrap().1;
+        let nops = body
+            .lines()
+            .skip_while(|line| line.starts_with('.'))
+            .take_while(|line| line.trim() == "nop")
+            .count();
+        assert_eq!(nops, after, "{function}");
+    }
+    for option in [
+        "-fpatchable-function-entry=2,3",
+        "-fpatchable-function-entry=65536",
+        "-fpatchable-function-entry=-1",
+        "-fpatchable-function-entry=1,2,3",
+    ] {
+        assert!(
+            !run_with_options("int f(void){return 0;}", "--emit=asm", &[option])
+                .status
+                .success()
+        );
+    }
+}
+
+#[test]
+fn patchable_entries_merge_declarations_and_evaluate_constant_arguments() {
+    for (source, entry) in [
+        ("__attribute__((patchable_function_entry(1+2, sizeof(char)))) int f(void); int f(void){return 0;}", "3,1"),
+        ("__attribute__((patchable_function_entry(3,1))) int f(void); __attribute__((patchable_function_entry(4,2))) int f(void){return 0;}", "4,2"),
+        ("__attribute__((patchable_function_entry(3))) int f(void){return 0;}", "3,0"),
+    ] {
+        let output = run_with_options(source, "--emit=evoir", &["-fpatchable-function-entry=8,4", "-O2"]);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains(&format!("patchable_entry={entry}")), "{text}");
+    }
+    for source in [
+        "__attribute__((patchable_function_entry(3,1))) int f(void){return 0;} __attribute__((patchable_function_entry(4,2))) int f(void);",
+        "int f(void){return 0;} __attribute__((patchable_function_entry(4,2))) int f(void);",
+        "__attribute__((patchable_function_entry(1,2))) int f(void){return 0;}",
+        "__attribute__((patchable_function_entry(65536))) int f(void){return 0;}",
+        "__attribute__((patchable_function_entry(-1))) int f(void){return 0;}",
+        "__attribute__((patchable_function_entry(1,2,3))) int f(void){return 0;}",
+        "__attribute__((patchable_function_entry(1))) int object;",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "{source}");
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains("E2903") || error.contains("E2943"), "{source}: {error}");
+    }
+    let output = run_with_options(
+        "int f(void){return 0;}",
+        "--emit=evoir",
+        &[
+            "-fpatchable-function-entry=4,2",
+            "-fpatchable-function-entry=0",
+        ],
+    );
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .contains("patchable_entry=0,0"));
+    let output = run(
+        "int main(void){return !__has_attribute(patchable_function_entry);}",
+        "--interpret-evoir",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"0\n");
+}
+
+#[test]
 fn fortified_library_builtins_bind_ordinary_functions_and_evaluate_once() {
     let source = include_str!("../../../tests/fixtures/fortified-library-builtins.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
@@ -184,6 +375,120 @@ fn visibility_pragmas_preserve_link_time_address_binding() {
 }
 
 #[test]
+fn elf_visibility_keeps_external_definitions_declarations_and_aliases() {
+    for (spelling, effective) in [("protected", "protected"), ("internal", "hidden")] {
+        let source = format!(
+            "int value __attribute__((visibility(\"{spelling}\")))=11; \
+             __attribute__((visibility(\"{spelling}\"),noinline)) int implementation(void){{return value;}} \
+             extern int alternate(void) __attribute__((weak,alias(\"implementation\"),visibility(\"{spelling}\"))); \
+             extern int outside __attribute__((visibility(\"{spelling}\"))); \
+             extern int missing(void) __attribute__((visibility(\"{spelling}\"))); \
+             int (*callback(void))(void){{return missing;}} int *address(void){{return &outside;}}"
+        );
+        let output = run_with_options(&source, "--emit=evoir", &["-O2", "-fPIC"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        for (kind, name) in [
+            ("global", "value"),
+            ("func", "implementation"),
+            ("alias", "alternate"),
+            ("extern", "outside"),
+            ("declare", "missing"),
+        ] {
+            let row = text
+                .lines()
+                .find(|line| line.starts_with(&format!("{kind} @{name}")))
+                .unwrap();
+            assert!(row.contains(&format!("visibility={effective}")), "{row}");
+        }
+        assert!(
+            text.contains("visibility=hidden linkage=weak")
+                || text.contains("visibility=protected linkage=weak")
+        );
+        let output = run_with_options(&source, "--emit=asm", &["-O2", "-fPIC"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        for name in ["value", "implementation", "alternate", "outside", "missing"] {
+            assert!(text.contains(&format!(".{effective} {name}")), "{text}");
+        }
+        assert!(
+            text.contains(".globl implementation"),
+            "source internal must not become C static: {text}"
+        );
+    }
+}
+
+#[test]
+fn default_visible_definitions_remain_interposable_in_pic_code() {
+    let source = "int value=11; int function(void){return value;} int *address(void){return &value;} int (*callback(void))(void){return function;}";
+    let output = run_with_options(source, "--emit=asm", &["-fPIC"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    for name in ["value", "function"] {
+        assert!(
+            text.contains(&format!(":got:{name}")),
+            "definition is not a component binding promise: {text}"
+        );
+    }
+}
+
+#[test]
+fn visibility_alias_spellings_preserve_conflict_checks() {
+    let equivalent = "extern int value __attribute__((visibility(\"internal\"))); extern int value __attribute__((visibility(\"hidden\"))); int *address(void){return &value;}";
+    let output = run(equivalent, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for source in [
+        "extern int value __attribute__((visibility(\"protected\"))); extern int value __attribute__((visibility(\"hidden\"))); int *address(void){return &value;}",
+        "extern int value __attribute__((visibility(\"internal\"))); extern int value __attribute__((visibility(\"default\"))); int *address(void){return &value;}",
+        "int value __attribute__((visibility(\"not-a-visibility\")));",
+    ] {
+        let output = run(source, "--emit=evoir");
+        assert!(!output.status.success(), "{source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E2943"));
+    }
+}
+
+#[test]
+fn visibility_pragmas_use_the_same_protected_and_internal_meanings() {
+    for (spelling, effective) in [("protected", "protected"), ("internal", "hidden")] {
+        let source = format!("#pragma GCC visibility push({spelling})\nextern int value;\n#pragma GCC visibility pop\nint *address(void){{return &value;}}\n");
+        let direct = run(&source, "--emit=evoir");
+        assert!(
+            direct.status.success(),
+            "{}",
+            String::from_utf8_lossy(&direct.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&direct.stdout).contains(&format!("visibility={effective}"))
+        );
+        let preprocessed = run(&source, "-E");
+        assert!(preprocessed.status.success());
+        let replay = run(
+            &String::from_utf8(preprocessed.stdout).unwrap(),
+            "--emit=evoir",
+        );
+        assert!(replay.status.success());
+        assert_eq!(direct.stdout, replay.stdout);
+    }
+}
+
+#[test]
 fn visibility_pragma_defaults_preserve_explicit_attributes_and_redeclarations() {
     for source in [
         "#pragma GCC visibility push(hidden)\nextern int data;\n#pragma GCC visibility pop\nextern int data;",
@@ -208,7 +513,7 @@ fn visibility_pragma_defaults_preserve_explicit_attributes_and_redeclarations() 
     }
     for source in [
         "#pragma GCC visibility pop\nint data;",
-        "#pragma GCC visibility push(protected)\nint data;",
+        "#pragma GCC visibility push(unknown)\nint data;",
         "#pragma GCC visibility push(hidden)\nextern int data;\nextern int data __attribute__((visibility(\"default\")));int read(void){return data;}",
     ] {
         let output = run(source, "--emit=evoir");

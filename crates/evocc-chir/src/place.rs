@@ -526,7 +526,15 @@ impl<'arena> MemoryPlace<'arena> {
                         return Err(MemoryPlaceError::UnknownType(element_ty));
                     }
                     match types.get(current).map(|ty| &ty.kind) {
-                        Some(TypeKind::Array { element, .. }) if *element == element_ty => {
+                        Some(
+                            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
+                        ) if *element == element_ty => {
+                            if matches!(
+                                types.get(current).map(|ty| &ty.kind),
+                                Some(TypeKind::Vector { .. })
+                            ) {
+                                addressable = false;
+                            }
                             access_qualifiers = merge_qualifiers(
                                 access_qualifiers,
                                 types
@@ -932,6 +940,16 @@ fn pointer_expression_type(
     }
 
     match expression {
+        CHirExpr::Atomic(access) => {
+            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
+        }
+        CHirExpr::Floating(access) => {
+            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
+        }
+        CHirExpr::Vector(access) => {
+            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
+        }
+        CHirExpr::Complex(_) => Err(MemoryPlaceError::PointerExpressionTypeMismatch),
         CHirExpr::Ident {
             symbol,
             spelling,
@@ -1008,18 +1026,28 @@ fn pointer_expression_type(
         | CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),
-        CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
-            converted_pointer_type(
-                types,
-                addressed_expression_type(symbols, types, expression)?,
-            )
+        CHirExpr::Member(base, name, _) => {
+            // Array members of record values decay too (C11 6.3.2.1p3).
+            // Reconstruct the base's record type, not an invented address-of
+            // the call/assignment/conditional that produced the value.
+            let base = record_expression_type(symbols, types, base)?;
+            let ty = record_member_path(types, base, name)
+                .and_then(|path| path.last().copied())
+                .map(FieldProjection::field_ty)
+                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?;
+            converted_pointer_type(types, ty)
         }
+        CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => converted_pointer_type(
+            types,
+            addressed_expression_type(symbols, types, expression)?,
+        ),
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::Unary(_, _, _)
         | CHirExpr::Binary(_, _, _, _)
+        | CHirExpr::BuiltinExpect(_, _, _)
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BitBuiltin { .. }
         | CHirExpr::BuiltinTrap { .. }
@@ -1083,6 +1111,7 @@ fn string_literal_matches(
             crate::StringPrefix::None | crate::StringPrefix::U8,
             TypeKind::Int(
                 evocc_types::IntRank::Char
+                    | evocc_types::IntRank::SignedPlainChar
                     | evocc_types::IntRank::SChar
                     | evocc_types::IntRank::UChar
             )
@@ -1159,6 +1188,60 @@ fn is_null_pointer_constant(
     };
     eval_integer_constant(operand, types, symbols, &target)
         .is_some_and(|value| value.mathematical_value() == 0)
+}
+
+pub(crate) fn record_expression_type(
+    symbols: &SymbolTable,
+    types: &TypeInterner,
+    expression: &CHirExpr<'_>,
+) -> Result<TypeId, MemoryPlaceError> {
+    let ty = match expression {
+        CHirExpr::Call(callee, ..) => call_expression_return_type(symbols, types, callee)?,
+        CHirExpr::MemoryAssign { place, facts, .. } => {
+            if facts.ty() != place.value_ty() || facts.category() != crate::ExprCategory::Value {
+                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
+            }
+            place.value_ty()
+        }
+        CHirExpr::Comma(_, right, _) | CHirExpr::EvaluateOnce(right, _) => {
+            record_expression_type(symbols, types, right)?
+        }
+        CHirExpr::Ternary(_, left, right, _) => {
+            let ty = record_expression_type(symbols, types, left)?;
+            let other = record_expression_type(symbols, types, right)?;
+            if !types.compatible_ignoring_top_qualifiers(ty, other) {
+                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
+            }
+            ty
+        }
+        CHirExpr::Member(base, name, _) => {
+            let base = record_expression_type(symbols, types, base)?;
+            record_member_path(types, base, name)
+                .and_then(|path| path.last().copied())
+                .map(FieldProjection::field_ty)
+                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
+        }
+        CHirExpr::StatementExpr {
+            value: Some(value),
+            facts,
+            ..
+        } => {
+            let ty = record_expression_type(symbols, types, value)?;
+            if !types.compatible_ignoring_top_qualifiers(ty, facts.ty()) {
+                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
+            }
+            ty
+        }
+        _ => addressed_expression_type(symbols, types, expression)?,
+    };
+    if matches!(
+        types.get(ty).map(|ty| &ty.kind),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+    ) {
+        Ok(ty)
+    } else {
+        Err(MemoryPlaceError::PointerExpressionTypeMismatch)
+    }
 }
 
 /// The bounded addressable forms needed to validate a pointer yielded by a
@@ -1251,6 +1334,7 @@ pub fn is_modifiable_object_type(types: &TypeInterner, ty: TypeId) -> bool {
             .tag(tag)
             .is_some_and(|tag| matches!(tag.state, TagState::Complete(TagDefinition::Enum(_)))),
         TypeKind::BuiltinVaList
+        | TypeKind::Vector { .. }
         | TypeKind::GnuInt128(_)
         | TypeKind::Int(_)
         | TypeKind::Float(_)
@@ -1299,6 +1383,7 @@ fn type_contains_const_subobject(
         }
         TypeKind::Void
         | TypeKind::BuiltinVaList
+        | TypeKind::Vector { .. }
         | TypeKind::TargetBuiltin(_)
         | TypeKind::GnuInt128(_)
         | TypeKind::Int(_)

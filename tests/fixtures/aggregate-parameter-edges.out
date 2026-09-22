@@ -1,0 +1,24 @@
+Integer-complex and wide-vector parameter edges, 2026-09-16.
+Source SHA-256: f6cfc6b59b15ca26116db86028a0904a84e97acfdc171cbcf1b3e735ca07fee7
+Subject debug SHA-256: ca5085a15b5795c4bdbe1192541d5b8eb7295902b80fa54590c49e2c402f46d1
+Fixed environment: evo-flight-lab:sealed, linux/arm64, network none.
+
+RED: lowering the reduction refused with E3101; the execution regression also
+exposed E3007 in the C-HIR omitted-middle conditional path. No build errors.
+The parameter collector now uses the existing aggregate-representation
+predicate. Both conditional forms share arm conversions; the omitted-middle
+form tests the retained complex value without evaluating it twice.
+
+GCC-14 and Clang-19, each -std=gnu11 -O0 and -O2: exit 0 (4/4).
+Subject C-HIR and EvoIR interpreters: result 0 (2/2).
+Subject assembly linked and executed with GCC-14 and Clang-19: exit 0 (2/2).
+-DREAD_UNINITIALIZED=1: both interpreters report E3001 at the actual read.
+The unselected uninitialized fallback is not read; zero complex values do
+select the fallback. Wide-vector parameters retain their original objects.
+
+Original LLVM SingleSource/UnitTests/conditional-gnu-ext.c was replayed using
+its unchanged projected -DNDEBUG -O3 -DNDEBUG command and exported headers.
+For both GCC-14 and Clang-19 assembly/link combinations, the original LLVM
+timeit-target runner and fpcmp-target accepted the reference output (2/2).
+The complete log is .build/vector-targeted/aggregate-parameter-final-native.txt.
+No full LLVM campaign numerator is updated by this targeted replay.

@@ -102,6 +102,8 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         | Inst::AccessInBounds { .. }
         | Inst::Load { .. }
         | Inst::Store { .. }
+        | Inst::Atomic(_)
+        | Inst::TlsAddr(_)
         | Inst::Copy { .. }
         | Inst::Call { .. }
         | Inst::IndirectCall { .. } => {

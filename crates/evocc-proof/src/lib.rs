@@ -962,8 +962,12 @@ mod tests {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
         assert_eq!(
-            sha256_hex(b"aarch64-unknown-linux-gnu/evoir-layout-v1\n"),
-            "4f12297e5b4b84815a07e990a1e67102e2a33e87efd72a25d5efca3b4dde07e8"
+            sha256_hex(b"aarch64-unknown-linux-gnu/evoir-layout-v3-scalar-fp-rne\n"),
+            "ee1edc5535aaf75577005b534e9ac87bb7dbb34626aef3586987b2720523d905"
+        );
+        assert_eq!(
+            sha256_hex(b"aarch64-unknown-linux-gnu/evoir-layout-v4-hfa-natural-alignment\n"),
+            "9460b084c6b110935328ced6acded2c869d6718a6fdbfa69516b989cc1d59798"
         );
     }
 

@@ -1,0 +1,28 @@
+Fixed linux/arm64 evo-flight-lab:sealed, network none, 2026-09-15.
+Each source below was compiled independently with gcc-14 and clang-19,
+using -std=MODE -x c -c -o /tmp/mode.o - (source on stdin).
+
+Sources, in order:
+  char*a=u8"x";
+  unsigned short*a=u"x";
+  unsigned*a=U"x";
+  _Alignas(16) int x;
+  _Thread_local int x;
+  _Atomic(int) x;
+  int f(void){for(int i=0;i<1;i++){}return 0;}
+
+Mode    GCC14 exit codes     Clang19 exit codes
+gnu89   1 1 1 0 0 0 1        1 1 1 0 0 0 0
+gnu99   0 0 0 0 0 0 0        1 1 1 0 0 0 0
+c99     1 1 1 0 0 0 0        1 1 1 0 0 0 0
+gnu11   0 0 0 0 0 0 0        0 0 0 0 0 0 0
+c11     0 0 0 0 0 0 0        0 0 0 0 0 0 0
+
+The GNU99 UTF-prefix extension and GNU89 declaration-for extension conflict.
+The profile does not admit either extension: pre-C11 u/U/u8 remain identifier
+tokens, and GNU89 for initializers must be expressions or empty. This does not
+disable L literals, or the independently accepted underscore extensions.
+An identifier token still follows ordinary macro replacement; this matters
+before lexing an adjacent narrow literal, including raw bytes and -D bodies.
+The route and paste assertions are regression tests of that lexical rule,
+not claims that both compilers implement the GNU99 UTF extension identically.

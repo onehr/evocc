@@ -6,4 +6,4 @@ license.workspace = true
 description = "C type and EvoIR type universes with target data layout"
 
 [dependencies]
-
+rustc_apfloat = "=0.2.3"

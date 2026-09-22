@@ -5,14 +5,17 @@
 //! locations/line tables. DWARF 4 sections use CU-relative references, so the
 //! assembler/linker can combine independent translation units normally.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use evocc_chir::{CHirDecl, CHirUnit};
+use evocc_chir::{
+    CHirDecl, CHirUnit, ParameterSyntax, SymbolId, TagMembers, TypeSpecifier,
+    WrittenDeclaratorLayer,
+};
 use evocc_evoir::{GlobalKind, GlobalVisibility, Module};
 use evocc_types::{
     ArrayBound, CanonicalType, ComplexBase, FloatKind, FunctionParameters, GnuInt128Signedness,
-    IntRank, TagDefinition, TagState, TargetBuiltinType, TargetDataLayout, TypeId, TypeKind,
+    IntRank, TagDefinition, TagId, TagState, TargetBuiltinType, TargetDataLayout, TypeId, TypeKind,
 };
 
 // DWARF attributes and forms, from dwarfstd.org/doc/DWARF4.pdf, Section 7.
@@ -20,6 +23,7 @@ const NAME: u16 = 0x03;
 const BYTE_SIZE: u16 = 0x0b;
 const TYPE: u16 = 0x49;
 const DECLARATION: u16 = 0x3c;
+const EXTERNAL: u16 = 0x3f;
 
 enum Attribute {
     String(String),
@@ -56,6 +60,9 @@ struct Abbreviation {
 struct Writer {
     text: String,
     abbreviations: Vec<Abbreviation>,
+    source_types: BTreeMap<(TypeId, SymbolId, TypeId), String>,
+    member_types: BTreeMap<(TagId, usize), String>,
+    written_declarators: usize,
 }
 
 fn quoted(text: &str) -> String {
@@ -88,7 +95,318 @@ fn type_label(id: TypeId) -> String {
     format!(".L_evocc_type_{}", id.raw())
 }
 
+fn alias_label(symbol: SymbolId) -> String {
+    format!(".L_evocc_typedef_{}", symbol.raw())
+}
+
 impl Writer {
+    /// Keep source typedef edges in metadata without changing canonical C
+    /// type identity. BTF deduplication observes these edges inside records.
+    fn source_type(
+        &mut self,
+        unit: &CHirUnit<'_>,
+        id: TypeId,
+        specifier: &TypeSpecifier,
+    ) -> Result<String, String> {
+        let TypeSpecifier::TypedefName {
+            symbol, ty: base, ..
+        } = specifier
+        else {
+            return Ok(type_label(id));
+        };
+        let key = (id, *symbol, *base);
+        if let Some(label) = self.source_types.get(&key) {
+            return Ok(label.clone());
+        }
+        let canonical = unit.types().get(id).ok_or("missing written type")?;
+        let alias = unit.symbols().symbol(*symbol).map_err(|e| e.to_string())?;
+        let alias_type = unit.types().get(alias.ty()).ok_or("missing typedef type")?;
+        if id != *base
+            && matches!(canonical.kind, TypeKind::Array { .. })
+            && matches!(alias_type.kind, TypeKind::Array { .. })
+        {
+            // A further array declarator combines the dimensions of an
+            // array typedef. GNU DWARF encodes the complete matrix in one
+            // array DIE, while retaining the typedef declaration itself.
+            let target = type_label(id);
+            self.source_types.insert(key, target.clone());
+            return Ok(target);
+        }
+        let label = format!(".L_evocc_written_type_{}", self.source_types.len());
+        // Reserve before recursively processing declarator layers.
+        self.source_types.insert(key, label.clone());
+        let (kind, attributes, children) = if id == *base && canonical.kind == alias_type.kind {
+            let qualifiers = canonical.qualifiers;
+            let inherited = alias_type.qualifiers;
+            let tags: Vec<_> = [
+                (qualifiers.is_const && !inherited.is_const, 0x26),
+                (qualifiers.is_volatile && !inherited.is_volatile, 0x35),
+                (qualifiers.is_restrict && !inherited.is_restrict, 0x37),
+                (qualifiers.is_atomic && !inherited.is_atomic, 0x47),
+            ]
+            .into_iter()
+            .filter_map(|(enabled, tag)| enabled.then_some(tag))
+            .collect();
+            let mut target = alias_label(*symbol);
+            for (index, tag) in tags.iter().enumerate().rev() {
+                let current = if index == 0 {
+                    label.clone()
+                } else {
+                    format!("{label}_{index}")
+                };
+                self.label(&current);
+                self.node(*tag, false, &[(TYPE, Attribute::Reference(target))]);
+                target = current;
+            }
+            self.source_types.insert(key, target.clone());
+            return Ok(target);
+        } else {
+            match canonical.kind {
+                TypeKind::Pointer(pointee) => (
+                    0x0f,
+                    vec![
+                        (BYTE_SIZE, Attribute::Unsigned(8)),
+                        (
+                            TYPE,
+                            Attribute::Reference(self.source_type(unit, pointee, specifier)?),
+                        ),
+                    ],
+                    false,
+                ),
+                TypeKind::Array { .. } => {
+                    let (element, _) = array_dimensions(unit, id, Some(*base));
+                    (
+                        0x01,
+                        vec![(
+                            TYPE,
+                            Attribute::Reference(self.source_type(unit, element, specifier)?),
+                        )],
+                        true,
+                    )
+                }
+                TypeKind::Function {
+                    return_type,
+                    ref parameters,
+                } => (
+                    0x15,
+                    vec![
+                        (
+                            TYPE,
+                            Attribute::Reference(self.source_type(unit, return_type, specifier)?),
+                        ),
+                        (
+                            0x27,
+                            Attribute::Flag(matches!(
+                                parameters,
+                                FunctionParameters::Prototype { .. }
+                            )),
+                        ),
+                    ],
+                    has_parameters(parameters),
+                ),
+                _ => {
+                    // A source type attribute may replace the base kind (for
+                    // example vector_size). Its real canonical type wins.
+                    let target = type_label(id);
+                    self.source_types.insert(key, target.clone());
+                    return Ok(target);
+                }
+            }
+        };
+        self.label(&label);
+        let mut next = label.clone();
+        for (enabled, tag) in [
+            (canonical.qualifiers.is_const, 0x26),
+            (canonical.qualifiers.is_volatile, 0x35),
+            (canonical.qualifiers.is_restrict, 0x37),
+            (canonical.qualifiers.is_atomic, 0x47),
+        ] {
+            if enabled {
+                next.push('_');
+                self.node(tag, false, &[(TYPE, Attribute::Reference(next.clone()))]);
+                self.label(&next);
+            }
+        }
+        self.node(kind, children, &attributes);
+        match &canonical.kind {
+            TypeKind::Array { .. } => {
+                let (_, dimensions) = array_dimensions(unit, id, Some(*base));
+                self.array_subranges(&dimensions);
+            }
+            TypeKind::Function { parameters, .. } => self.parameters(parameters, &[], &[]),
+            _ => {}
+        }
+        Ok(label)
+    }
+
+    /// The source parameter list distinguishes callbacks whose canonical
+    /// signatures are equal but whose DWARF typedef edges are different.
+    fn written_type(
+        &mut self,
+        unit: &CHirUnit<'_>,
+        id: TypeId,
+        specifier: &TypeSpecifier,
+        layers: &[WrittenDeclaratorLayer],
+    ) -> Result<String, String> {
+        if !layers.iter().any(|layer| {
+            matches!(
+                layer,
+                WrittenDeclaratorLayer::Function {
+                    parameters: Some(_),
+                    ..
+                }
+            )
+        }) {
+            return self.source_type(unit, id, specifier);
+        }
+        let canonical = unit
+            .types()
+            .get(id)
+            .ok_or("missing written declarator type")?;
+        let label = format!(".L_evocc_declarator_{}", self.written_declarators);
+        self.written_declarators += 1;
+        let (kind, attributes, parameters, dimensions) = match (&canonical.kind, layers.first()) {
+            (TypeKind::Pointer(pointee), Some(layer)) => {
+                // Function/array parameter adjustment adds a pointer even
+                // when no '*' appears in the written parameter declarator.
+                let rest = if matches!(layer, WrittenDeclaratorLayer::Function { .. }) {
+                    layers
+                } else {
+                    &layers[1..]
+                };
+                let target = self.written_type(unit, *pointee, specifier, rest)?;
+                (
+                    0x0f,
+                    vec![
+                        (BYTE_SIZE, Attribute::Unsigned(8)),
+                        (TYPE, Attribute::Reference(target)),
+                    ],
+                    None,
+                    Vec::new(),
+                )
+            }
+            (TypeKind::Array { .. }, Some(WrittenDeclaratorLayer::Array { .. })) => {
+                let mut element = id;
+                let mut dimensions = Vec::new();
+                for layer in layers {
+                    let Some(CanonicalType {
+                        kind:
+                            TypeKind::Array {
+                                element: next,
+                                bound,
+                            },
+                        ..
+                    }) = unit.types().get(element)
+                    else {
+                        break;
+                    };
+                    if !matches!(layer, WrittenDeclaratorLayer::Array { .. }) {
+                        break;
+                    }
+                    dimensions.push(bound.clone());
+                    element = *next;
+                }
+                let target =
+                    self.written_type(unit, element, specifier, &layers[dimensions.len()..])?;
+                (
+                    0x01,
+                    vec![(TYPE, Attribute::Reference(target))],
+                    None,
+                    dimensions,
+                )
+            }
+            (
+                TypeKind::Function {
+                    return_type,
+                    parameters,
+                },
+                Some(WrittenDeclaratorLayer::Function {
+                    parameters: Some(syntax),
+                    ..
+                }),
+            ) => {
+                let target = self.written_type(unit, *return_type, specifier, &layers[1..])?;
+                let parameter_types = self.parameter_types(unit, parameters, syntax)?;
+                (
+                    0x15,
+                    vec![
+                        (TYPE, Attribute::Reference(target)),
+                        (
+                            0x27,
+                            Attribute::Flag(matches!(
+                                parameters,
+                                FunctionParameters::Prototype { .. }
+                            )),
+                        ),
+                    ],
+                    Some((parameters, parameter_types)),
+                    Vec::new(),
+                )
+            }
+            _ => return self.source_type(unit, id, specifier),
+        };
+        self.label(&label);
+        let mut next = label.clone();
+        for (enabled, tag) in [
+            (canonical.qualifiers.is_const, 0x26),
+            (canonical.qualifiers.is_volatile, 0x35),
+            (canonical.qualifiers.is_restrict, 0x37),
+            (canonical.qualifiers.is_atomic, 0x47),
+        ] {
+            if enabled {
+                next.push('_');
+                self.node(tag, false, &[(TYPE, Attribute::Reference(next.clone()))]);
+                self.label(&next);
+            }
+        }
+        self.node(
+            kind,
+            !dimensions.is_empty() || parameters.as_ref().is_some_and(|(p, _)| has_parameters(p)),
+            &attributes,
+        );
+        if let Some((parameters, types)) = parameters {
+            // A subroutine type does not bind parameter variables. Preserve
+            // their names on subprogram DIEs, not on callback type identity.
+            self.parameters(parameters, &[], &types);
+        } else if !dimensions.is_empty() {
+            self.array_subranges(&dimensions);
+        }
+        Ok(label)
+    }
+
+    fn parameter_types(
+        &mut self,
+        unit: &CHirUnit<'_>,
+        parameters: &FunctionParameters,
+        syntax: &ParameterSyntax,
+    ) -> Result<Vec<String>, String> {
+        let FunctionParameters::Prototype { types, .. } = parameters else {
+            return Ok(Vec::new());
+        };
+        types
+            .iter()
+            .enumerate()
+            .map(|(index, &id)| {
+                if let Some(source) = syntax.parameters().get(index) {
+                    self.written_type(unit, id, &source.specifier, &source.written.layers)
+                } else {
+                    Ok(type_label(id))
+                }
+            })
+            .collect()
+    }
+
+    fn array_subranges(&mut self, dimensions: &[ArrayBound]) {
+        for bound in dimensions {
+            let mut attrs = vec![(TYPE, Attribute::Reference(".L_evocc_index_type".into()))];
+            if let ArrayBound::Fixed(count) = bound {
+                attrs.push((0x37, Attribute::Unsigned(*count)));
+            }
+            self.node(0x21, false, &attrs);
+        }
+        self.end_children();
+    }
+
     fn label(&mut self, name: &str) {
         let _ = writeln!(self.text, "{name}:");
     }
@@ -164,14 +482,27 @@ impl Writer {
         self.text
     }
 
-    fn parameters(&mut self, parameters: &FunctionParameters, names: &[Option<&str>]) {
+    fn parameters(
+        &mut self,
+        parameters: &FunctionParameters,
+        names: &[Option<&str>],
+        written: &[String],
+    ) {
         if !has_parameters(parameters) {
             return;
         }
         match parameters {
             FunctionParameters::Prototype { types, variadic } => {
                 for (index, &parameter) in types.iter().enumerate() {
-                    let mut attributes = vec![ty(parameter)];
+                    let mut attributes = vec![(
+                        TYPE,
+                        Attribute::Reference(
+                            written
+                                .get(index)
+                                .cloned()
+                                .unwrap_or_else(|| type_label(parameter)),
+                        ),
+                    )];
                     if let Some(Some(spelling)) = names.get(index) {
                         attributes.push(name(spelling));
                     }
@@ -227,7 +558,7 @@ impl Writer {
                                 2
                             } else if matches!(rank, IntRank::Char | IntRank::UChar) {
                                 8
-                            } else if *rank == IntRank::SChar {
+                            } else if matches!(rank, IntRank::SChar | IntRank::SignedPlainChar) {
                                 6
                             } else if integer.is_signed() {
                                 5
@@ -247,7 +578,7 @@ impl Writer {
                         name(if signed {
                             "__int128"
                         } else {
-                            "unsigned __int128"
+                            "__int128 unsigned"
                         }),
                         (BYTE_SIZE, Attribute::Unsigned(16)),
                         (0x3e, Attribute::Unsigned(if signed { 5 } else { 7 })),
@@ -265,12 +596,13 @@ impl Writer {
             TypeKind::Complex(base) => self.base_type(
                 &format!(
                     "{} _Complex",
-                    float_name(match base {
-                        ComplexBase::CF16 => FloatKind::F16,
-                        ComplexBase::CF32 => FloatKind::F32,
-                        ComplexBase::CF64 => FloatKind::F64,
-                        ComplexBase::CF128 => FloatKind::F128,
-                    })
+                    match base {
+                        ComplexBase::Integer(rank) => integer_name(*rank),
+                        ComplexBase::CF16 => float_name(FloatKind::F16),
+                        ComplexBase::CF32 => float_name(FloatKind::F32),
+                        ComplexBase::CF64 => float_name(FloatKind::F64),
+                        ComplexBase::CF128 => float_name(FloatKind::F128),
+                    }
                 ),
                 target
                     .layout_of(unit.types(), id)
@@ -279,44 +611,18 @@ impl Writer {
                 3,
             ),
             TypeKind::TargetBuiltin(builtin) => {
-                match builtin {
-                    TargetBuiltinType::ArmFloat32x4 | TargetBuiltinType::ArmFloat64x2 => {
-                        let element_label = format!("{label}_element");
-                        let (element_name, size, count) =
-                            if *builtin == TargetBuiltinType::ArmFloat32x4 {
-                                ("float", 4, 4)
-                            } else {
-                                ("double", 8, 2)
-                            };
-                        self.node(
-                            0x01,
-                            true,
-                            &[
-                                name(builtin.spelling()),
-                                (TYPE, Attribute::Reference(element_label.clone())),
-                                (0x2107, Attribute::Flag(true)), // DW_AT_GNU_vector
-                            ],
-                        );
-                        self.node(
-                            0x21,
-                            false,
-                            &[
-                                (TYPE, Attribute::Reference(".L_evocc_index_type".into())),
-                                (0x37, Attribute::Unsigned(count)),
-                            ],
-                        );
-                        self.end_children();
-                        self.label(&element_label);
-                        self.base_type(element_name, size, 4);
-                    }
-                    _ => {
-                        if let Some(layout) = builtin.layout() {
-                            self.base_type(builtin.spelling(), layout.size_bytes, 4);
-                        } else {
-                            // Sizeless target builtins do not have a fabricated size.
-                            self.node(0x3b, false, &[name(builtin.spelling())]);
-                        }
-                    }
+                if let Some(layout) = builtin.layout() {
+                    let encoding = match builtin {
+                        TargetBuiltinType::ArmPoly8
+                        | TargetBuiltinType::ArmPoly16
+                        | TargetBuiltinType::ArmPoly64
+                        | TargetBuiltinType::ArmPoly128 => 7,
+                        _ => 4,
+                    };
+                    self.base_type(builtin.spelling(), layout.size_bytes, encoding);
+                } else {
+                    // Sizeless target builtins do not have a fabricated size.
+                    self.node(0x3b, false, &[name(builtin.spelling())]);
                 }
             }
             TypeKind::BuiltinVaList => {
@@ -341,15 +647,23 @@ impl Writer {
                     ty(*pointee),
                 ],
             ),
-            TypeKind::Array { element, bound } => {
-                self.node(0x01, true, &[ty(*element)]);
-                let mut attrs = vec![(TYPE, Attribute::Reference(".L_evocc_index_type".into()))];
-                if let ArrayBound::Fixed(count) = bound {
-                    attrs.push((0x37, Attribute::Unsigned(*count)));
-                }
-                // Runtime/incomplete bounds are unknown, never fabricated as zero.
-                self.node(0x21, false, &attrs);
+            TypeKind::Vector { element, lanes, .. } => {
+                self.node(0x01, true, &[ty(*element), (0x2107, Attribute::Flag(true))]);
+                self.node(
+                    0x21,
+                    false,
+                    &[
+                        (TYPE, Attribute::Reference(".L_evocc_index_type".into())),
+                        (0x37, Attribute::Unsigned(u64::from(*lanes))),
+                    ],
+                );
                 self.end_children();
+            }
+            TypeKind::Array { .. } => {
+                let (element, dimensions) = array_dimensions(unit, id, None);
+                self.node(0x01, true, &[ty(element)]);
+                // Runtime/incomplete bounds are unknown, never fabricated as zero.
+                self.array_subranges(&dimensions);
             }
             TypeKind::Function {
                 return_type,
@@ -369,7 +683,7 @@ impl Writer {
                         ),
                     ],
                 );
-                self.parameters(parameters, &[]);
+                self.parameters(parameters, &[], &[]);
             }
             TypeKind::Struct(tag_id) | TypeKind::Union(tag_id) | TypeKind::Enum(tag_id) => {
                 let tag = unit.types().tag(*tag_id).ok_or("missing canonical tag")?;
@@ -405,9 +719,13 @@ impl Writer {
                 }
                 let has_members = match definition {
                     TagDefinition::Enum(values) => !values.is_empty(),
-                    TagDefinition::Struct(fields) | TagDefinition::Union(fields) => fields
-                        .iter()
-                        .any(|field| !field.bit_field.is_some_and(|bits| bits.width_bits == 0)),
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields) => {
+                        fields.iter().any(|field| {
+                            !field
+                                .bit_field
+                                .is_some_and(|bits| bits.width_bits == 0 || field.name.is_none())
+                        })
+                    }
                 };
                 self.node(tag_kind, has_members, &attrs);
                 match definition {
@@ -436,11 +754,24 @@ impl Writer {
                         let layout = target
                             .record_layout(unit.types(), *tag_id)
                             .map_err(|e| e.to_string())?;
-                        for (field, location) in fields.iter().zip(layout.fields) {
-                            if field.bit_field.is_some_and(|bits| bits.width_bits == 0) {
+                        for (index, (field, location)) in
+                            fields.iter().zip(layout.fields).enumerate()
+                        {
+                            if field
+                                .bit_field
+                                .is_some_and(|bits| bits.width_bits == 0 || field.name.is_none())
+                            {
                                 continue;
                             }
-                            let mut attrs = vec![ty(field.ty)];
+                            let mut attrs = vec![(
+                                TYPE,
+                                Attribute::Reference(
+                                    self.member_types
+                                        .get(&(*tag_id, index))
+                                        .cloned()
+                                        .unwrap_or_else(|| type_label(field.ty)),
+                                ),
+                            )];
                             if let Some(spelling) = &field.name {
                                 attrs.push(name(spelling));
                             }
@@ -480,6 +811,26 @@ impl Writer {
     }
 }
 
+fn array_dimensions(
+    unit: &CHirUnit<'_>,
+    mut id: TypeId,
+    typedef_base: Option<TypeId>,
+) -> (TypeId, Vec<ArrayBound>) {
+    let mut dimensions = Vec::new();
+    while dimensions.is_empty() || Some(id) != typedef_base {
+        let Some(CanonicalType {
+            kind: TypeKind::Array { element, bound },
+            ..
+        }) = unit.types().get(id)
+        else {
+            break;
+        };
+        dimensions.push(bound.clone());
+        id = *element;
+    }
+    (id, dimensions)
+}
+
 fn float_name(kind: FloatKind) -> &'static str {
     match kind {
         FloatKind::F16 => "__fp16",
@@ -494,19 +845,21 @@ fn has_parameters(parameters: &FunctionParameters) -> bool {
 }
 
 fn integer_name(rank: IntRank) -> &'static str {
+    // BTF includes base-type names in structural deduplication. Use the
+    // frozen GNU toolchain's vocabulary, not abbreviated pretty-print names.
     match rank {
         IntRank::Bool => "_Bool",
-        IntRank::Char => "char",
+        IntRank::Char | IntRank::SignedPlainChar => "char",
         IntRank::SChar => "signed char",
         IntRank::UChar => "unsigned char",
-        IntRank::Short => "short",
-        IntRank::UShort => "unsigned short",
+        IntRank::Short => "short int",
+        IntRank::UShort => "short unsigned int",
         IntRank::Int => "int",
         IntRank::UInt => "unsigned int",
-        IntRank::Long => "long",
-        IntRank::ULong => "unsigned long",
-        IntRank::LongLong => "long long",
-        IntRank::ULongLong => "unsigned long long",
+        IntRank::Long => "long int",
+        IntRank::ULong => "long unsigned int",
+        IntRank::LongLong => "long long int",
+        IntRank::ULongLong => "long long unsigned int",
     }
 }
 
@@ -537,26 +890,52 @@ pub(crate) fn type_information(
             (0x3e, Attribute::Unsigned(7)),
         ],
     );
-    for (id, canonical) in unit.types().iter() {
-        writer.c_type(unit, target, id, canonical)?;
-    }
     let linkage = unit.symbol_linkage().map_err(|e| e.message.to_owned())?;
     // Use the backend's exact retention rule; debug relocations must never
     // keep a function alive after executable emission has discarded it.
     let emitted_functions = evocc_mir::emitted_functions(module);
     let mut functions = BTreeMap::new();
-    let mut aliases = BTreeSet::new();
+    let mut aliases = BTreeMap::new();
+    let mut records = BTreeMap::new();
     evocc_chir::inline::for_each_declaration(unit, |decl| match decl {
         CHirDecl::Function(function) if function.body.is_some() => {
             functions.insert(function.symbol, function);
         }
         CHirDecl::Typedef(alias) => {
-            aliases.insert((alias.name.spelling.as_str(), alias.ty));
+            aliases.insert(alias.symbol, alias);
+        }
+        CHirDecl::Tag(tag)
+            if matches!(tag.members, TagMembers::Struct(_) | TagMembers::Union(_)) =>
+        {
+            records.insert(tag.tag, &tag.members);
         }
         _ => {}
     });
-    for (spelling, id) in aliases {
-        writer.node(0x16, false, &[name(spelling), ty(id)]);
+    for alias in aliases.into_values() {
+        let target =
+            writer.written_type(unit, alias.ty, &alias.specifier, &alias.written.layers)?;
+        writer.label(&alias_label(alias.symbol));
+        writer.node(
+            0x16,
+            false,
+            &[
+                name(&alias.name.spelling),
+                (TYPE, Attribute::Reference(target)),
+            ],
+        );
+    }
+    for (tag, members) in records {
+        let (TagMembers::Struct(members) | TagMembers::Union(members)) = members else {
+            unreachable!()
+        };
+        for (index, member) in members.iter().enumerate() {
+            let target =
+                writer.written_type(unit, member.ty, &member.specifier, &member.written.layers)?;
+            writer.member_types.insert((tag, index), target);
+        }
+    }
+    for (id, canonical) in unit.types().iter() {
+        writer.c_type(unit, target, id, canonical)?;
     }
     // This is the normalized inventory used by lowering, including lifted
     // inline statics. Never guess their source types from synthetic names.
@@ -567,29 +946,25 @@ pub(crate) fn type_information(
                 return None;
             };
             let symbol = unit.symbols().symbol(object.symbol).ok()?;
-            Some((symbol.spelling(), symbol.ty()))
+            Some((symbol.spelling(), (symbol.ty(), object)))
         })
         .collect();
     for global in &module.globals {
         if global.kind != GlobalKind::File {
             continue;
         }
-        let Some(&id) = file_objects.get(global.symbol.as_str()) else {
+        let Some(&(id, object)) = file_objects.get(global.symbol.as_str()) else {
             return Err(format!("file object {} has no source type", global.symbol));
         };
-        writer.node(
-            0x34,
-            false,
-            &[
-                name(&global.symbol),
-                ty(id),
-                (
-                    0x3f,
-                    Attribute::Flag(global.visibility == GlobalVisibility::External),
-                ),
-                (0x02, Attribute::ObjectLocation(global.symbol.clone())),
-            ],
-        );
+        let written = writer.written_type(unit, id, &object.specifier, &object.written.layers)?;
+        let mut attributes = vec![name(&global.symbol), (TYPE, Attribute::Reference(written))];
+        // The normal DWARF-to-BTF loader checks attribute presence. Omit
+        // false external flags; ELF visibility does not change C linkage.
+        if global.visibility != GlobalVisibility::Internal {
+            attributes.push((EXTERNAL, Attribute::Flag(true)));
+        }
+        attributes.push((0x02, Attribute::ObjectLocation(global.symbol.clone())));
+        writer.node(0x34, false, &attributes);
     }
     for function in functions.into_values() {
         let spelling = linkage.function_name(function.symbol, &function.name.spelling);
@@ -607,30 +982,34 @@ pub(crate) fn type_information(
         else {
             return Err("function has no canonical function type".into());
         };
-        writer.node(
-            0x2e,
-            has_parameters(parameters),
-            &[
-                name(spelling),
-                ty(*return_type),
-                (0x11, Attribute::Address(spelling.into())),
-                (
-                    0x3f,
-                    Attribute::Flag(!function.has_internal_linkage(unit.symbols())),
-                ),
-                (
-                    0x27,
-                    Attribute::Flag(matches!(parameters, FunctionParameters::Prototype { .. })),
-                ),
-            ],
-        );
+        let return_layers = function.written.layers.get(1..).unwrap_or_default();
+        let written_return = writer.written_type(
+            unit,
+            *return_type,
+            &function.return_specifier,
+            return_layers,
+        )?;
+        let written_parameters = writer.parameter_types(unit, parameters, &function.parameters)?;
+        let mut attributes = vec![
+            name(spelling),
+            (TYPE, Attribute::Reference(written_return)),
+            (0x11, Attribute::Address(spelling.into())),
+        ];
+        if !function.has_internal_linkage(unit.symbols()) {
+            attributes.push((EXTERNAL, Attribute::Flag(true)));
+        }
+        attributes.push((
+            0x27,
+            Attribute::Flag(matches!(parameters, FunctionParameters::Prototype { .. })),
+        ));
+        writer.node(0x2e, has_parameters(parameters), &attributes);
         let names = function
             .parameters
             .parameters()
             .iter()
             .map(|parameter| parameter.name.as_ref().map(|name| name.spelling.as_str()))
             .collect::<Vec<_>>();
-        writer.parameters(parameters, &names);
+        writer.parameters(parameters, &names, &written_parameters);
     }
     writer.end_children();
     Ok(writer.finish())

@@ -8,7 +8,7 @@ fn process(pp: &mut Preprocessor, source: &str) -> Vec<String> {
         .into_iter()
         .filter(|token| token.kind != TokenKind::Eof)
         .map(|token| match token.text {
-            TokenText::Decoded(text) => text,
+            TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text,
             TokenText::Borrowed => panic!("lexer must own spelling"),
         })
         .collect()

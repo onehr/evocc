@@ -1,0 +1,37 @@
+2026-09-20: finite transition controls; NOT original Csmith benchmark PASS.
+
+Source SHA256 71f4a20cb110ce2bfbf2cedf132983ee44dea632bf2bed03de4eee9885edf130
+Compiler SHA256 07a8e66e3da4f282a4e5108547940d020ae4409e91201012c48480fc6442c237
+Assembly SHA256 f2d63967139b9976d76d353346b2ff50555602a0275e5a0b71d9846619333601
+
+Frozen EvoCC, same source:
+  --interpret-c-hir: return 0
+  --interpret-evoir: return 0
+  -O2 --emit=asm, linked by gcc-14 -no-pie: native exit 0
+
+Sealed offline linux/arm64 image:
+  sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  gcc-14 (Debian 14.2.0-19) 14.2.0, -std=gnu11 -O0 and -O2: exit 0 each
+  Debian clang version 19.1.7 (3+b1), -std=gnu11 -O0 and -O2: exit 0 each
+The initial CLI attempt used unsupported -o and produced no assembly; only
+the corrected stdout assembly output above is the executed subject.
+
+Original-source diagnostic capture:
+  .build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+  SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+  Original results SHA256 f75debf768b64354452d61a8b07f150050196dc5140acb2698aa377d8c51b6bf
+  Sampler SHA256 3781a2a5c5f0ac7b5536aa9d4ad189f1360f0866a4c370370c7307cdeacc03b7
+All 68 unchanged sources compile independently with gcc-14/clang-19 at O0 -g,
+linked with the separate sampling TU. All 136 runs terminate after three PC
+samples with diagnostic exit 77. A three-second diagnostic timeout bounds
+the sampling run; the original ten-second campaign timeout is not changed.
+The capture retains exact argv, source/runtime hashes and symbolized samples.
+No binary, source clone or private worktree is retained from sampling.
+
+Scope: exhaustive u8 transitions for base/237, finite representative controls
+and a source residue argument for base/287, and reset/predicate controls for
+base/42, 64, 88, 128 and bitfields/128. This is not an exhaustive proof of the
+full originals or a common terminating checksum. Together with source review
+and the previous four paths, 12 of the 68 unavailable identities now have a
+repeating source path identified; 56 remain undetermined. All 68 keep the
+oracle-unusable benchmark verdict. No seed or original source is replaced.

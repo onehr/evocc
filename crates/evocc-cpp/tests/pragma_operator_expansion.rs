@@ -15,7 +15,7 @@ fn lex(source: &str) -> Vec<Token> {
 
 fn spelling(token: &Token, source: &str) -> String {
     match &token.text {
-        TokenText::Decoded(text) => text.clone(),
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
         TokenText::Borrowed => source
             .get(token.spelling_span.byte_start as usize..token.spelling_span.byte_end as usize)
             .expect("token spelling belongs to the fixture")
@@ -33,6 +33,21 @@ fn preprocess(source: &str) -> (Vec<Token>, Vec<PreprocessError>, u64) {
         preprocessor.errors().to_vec(),
         preprocessor.ignored_pragma_count(),
     )
+}
+
+#[test]
+fn strict_floating_environment_requests_are_not_ignored() {
+    for source in [
+        "#pragma STDC FENV_ACCESS ON\nint x;",
+        "_Pragma(\"STDC FENV_ACCESS ON\") int x;",
+    ] {
+        let (_, errors, ignored) = preprocess(source);
+        assert_eq!(errors.iter().map(|e| e.code).collect::<Vec<_>>(), ["E3065"]);
+        assert_eq!(ignored, 0);
+    }
+    let (_, errors, ignored) = preprocess("#pragma STDC FENV_ACCESS OFF\nint x;");
+    assert!(errors.is_empty());
+    assert_eq!(ignored, 0);
 }
 
 #[test]

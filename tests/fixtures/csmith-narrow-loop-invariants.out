@@ -1,0 +1,31 @@
+2026-09-20: reduced transition controls; not original benchmark passes.
+
+Source SHA256 86be8f3917e585232cc810849590cf20efe6eecf87e4fe6f4f4c9f4561e6e9c1
+Assembly SHA256 21c111019cd673dde46d89bc4978d19e751a5994ace2699b5827b1444a7f5d73
+EvoCC SHA256 07a8e66e3da4f282a4e5108547940d020ae4409e91201012c48480fc6442c237
+
+EvoCC target aarch64-unknown-linux-gnu, existing ladder sysroot with GCC-14
+private, architecture and generic include directories in that order:
+  --interpret-c-hir: 0
+  --interpret-evoir: 0
+  -O2 --emit=asm, gcc-14 -no-pie link: native exit 0
+Sealed linux/arm64, network none, one CPU:
+  GCC-14.2.0-19 -std=gnu11 -O0 / -O2: native exit 0 / 0
+  Clang-19.1.7 -std=gnu11 -O0 / -O2: native exit 0 / 0
+Initial unsupported --interpret and omitted-include CLI attempts failed;
+the corrected modes and includes above are the measured executions.
+
+Original reachability/localization remains bound by
+.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171.
+The additional identified paths are base/112, base/327, bitfields/192,
+bitfields/259, bitfields/322, bitfields/357 and bitfields/404.
+Their counters receive an unsigned narrow helper result into a wider signed
+destination. Once initialized/updated, the negative exit value is unreachable;
+the inspected loop bodies do not modify that counter or break/return.
+The tests exhaust u8 transitions and check their finite cycles; u16/u32
+controls cover wrap boundaries, accompanied by the source type-range argument.
+This does not prove the whole program free of undefined behavior, nor yield
+a common terminating checksum. Together with the earlier paths, 19 identities
+have repeating source paths identified and 49 remain undetermined; all 68
+retain oracle-unusable. No original source, seed, timeout or receipt changes.

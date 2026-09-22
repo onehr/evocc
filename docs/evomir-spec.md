@@ -1,6 +1,21 @@
 # EvoMIR Specification
 
-**Revision 0.29** | **Authoritative reference** | **2026-09-12**
+**Revision 0.34** | **Authoritative reference** | **2026-09-21**
+
+Function-placement addendum (revision 0.34): the associated validated EvoIR
+module carries each definition's optional `section`, just as it carries alignment
+and patchable-entry metadata. This association remains an explicit input through
+lowering/allocation/native emission; standalone MIR text cannot replace it. Linux
+selects `.section "name","ax",%progbits` before that function's alignment,
+entry padding, symbol and complete body, or ordinary `.text` when absent.
+Local block-address labels, CFI and `.size` remain in that same section, and
+`__patchable_function_entries` retains SHF_LINK_ORDER association with the actual
+code section. Aliases share the target symbol and allocate no body; section names
+do not alter visibility or retention. The next function reselects its own section,
+including the default, and strings are assembler-escaped rather than interpolated
+as directives. Unsupported non-ELF function placement is E4009. Linker scripts
+retain ownership of final placement/range checking; no warning suppression,
+source-specific section inference or invented relocation replaces this contract.
 
 Native command-option addendum (2026-09-13): validated EvoIR `stack_protect`
 marks select an extra private canary slot above local storage; emission loads
@@ -13,6 +28,19 @@ it and authenticates after restoring that same SP; return-address builtins
 strip authentication bits. General-register-only emission omits SIMD vararg
 saves; it does not enable floating-point lowering. Positive, failure and
 over-aligned/dynamic-frame results are in `tests/fixtures/protected-frames.out`.
+
+Patchable-entry addendum (2026-09-20): the associated validated EvoIR module
+also supplies each emitted function's `patchable_entry=N,M`; standalone MIR
+text is not a replacement for that metadata input. Linux emission places M
+NOPs before the callable symbol and N-M immediately after it, before PAC,
+frame setup or any user instruction. CFI begins at the callable symbol and
+the function's size excludes its preceding pad. For N>0, an aligned 64-bit
+relocation in `__patchable_function_entries` names the first NOP and uses
+SHF_LINK_ORDER to associate the table entry with its code section; N=0 emits
+neither NOPs nor an entry. Aliases retain the callable symbol's identity,
+not a second patch region. The callable symbol still meets EvoIR's explicit
+alignment: any required extra padding precedes the patch region. Nonzero
+patching on Darwin is refused, not emitted without its ELF registration.
 
 Strict-alignment addendum (2026-09-13): scalar MIR loads/stores retain the
 EvoIR access guard's alignment as optional ` [align=N]` after the address;
@@ -101,6 +129,9 @@ Every virtual register has exactly one **register class**:
 |---|---|---|
 | `gpr32` | `bits<N>` with `1 <= N <= 32` | `w0` to `w30` |
 | `gpr64` | `bits<N>` with `33 <= N <= 64`, every pointer | `x0` to `x30` |
+| `simd32` | f32 | `s0` to `s31` |
+| `simd64` | f64 or 8-byte integer vector | `d0` to `d31` |
+| `simd128` | 16-byte integer vector | `q0` to `q31` |
 | `flags` | the result of a comparison or a flag-setting arithmetic form, consumed by the next conditional | `nzcv` |
 
 `gpr32` and `gpr64` name the same physical register file viewed at two
@@ -110,8 +141,23 @@ own: lowering represents it as **two `gpr64` virtual registers**, the low
 half first, and every operation on it becomes a sequence over the halves
 (Section 5, revision 0.10). The allocator, the verifier and the interpreter
 see only 64-bit registers; the pair is a fact of lowering and of the calling
-convention (Section 6), never of allocation. There is no floating-point class in this
-revision; `f32`, `f64` and `vec` values are refused (Section 10).
+convention (Section 6), never of allocation. Scalar FP and vector
+classes share one physical bank, including all s/d/q aliases. v30/v31 are emission scratch; v8..v15 are
+not allocated for vector temporaries because their upper halves are not
+callee-saved. Live-across-call vectors spill at full width. Integer SIMD does
+not bypass `-mgeneral-regs-only`; scalar FP is separately admitted by revision 0.33.
+
+**Scalar FP (0.33).** `fp.OP.f32/f64` preserves the operation and format from
+EvoIR 3.13; constants use exact GPR-to-SIMD bit moves. Scalar arithmetic uses
+FADD/FSUB/FMUL/FDIV/FNEG, conversions FCVT/SCVTF/UCVTF/FCVTZS/FCVTZU, and
+ordered/unordered comparisons FCMP plus the corresponding condition. Before
+environment-dependent operations the baseline requires FPCR=0; otherwise
+BRK #3064, without MSR FPCR. `fp.env.check` is the explicit machine check
+before 128-bit conversion helpers, represented as ordinary ABI-visible calls
+to `__float[un]ti{sf,df}` / `__fix[uns]{sf,df}ti`, not hidden emitter calls.
+Invalid raw integer conversions yield zero; source UB obligations remain.
+Spills/copies preserve exact width; FP predicates cannot invalidate a live
+NZCV value because the existing immediate-consumer rule still applies.
 
 A `flags` value may be consumed only by the instruction that immediately
 follows its producer in the same block, and nothing between them may write
@@ -177,6 +223,25 @@ the table is executable, not descriptive.
 
 **Data movement.**
 
+**Integer-vector representation forms (revision 0.32).**
+`%v = vec.pack.N.B (%args)` and `%v = vec.extract.N.B (%src, %index)`
+preserve lane width N and representation bytes B. B=8/16 uses simd64/simd128;
+local B=1/2/4 uses gpr32. Pack/extract expand to lane moves and indexed
+selection; an invalid index traps E3011 before hardware index masking.
+Wider vectors are represented by local objects and scalarized operations.
+The machine text, validator and interpreter retain both N and B.
+
+**Linux ELF registrations and TLS (revision 0.32).** Lifecycle roots emit
+aligned symbol relocations into `.init_array.NNNNN`/`.fini_array.NNNNN`,
+or the unsuffixed default-priority sections. CRT/loader performs ordering
+and lifetime processing; no hidden calls are inserted into ordinary main.
+TLS emits SHF_TLS `.tdata`/`.tbss` (or the explicit TLS section), STT_TLS,
+template bytes/relocations and declared alignment; the linker builds PT_TLS.
+Global/local-dynamic addressing uses the standard TLSDESC sequence and
+resolver clobbers, with TPIDR_EL0, never x18. Initial/local-exec use their
+corresponding relocations; explicit model choices are preserved. Native
+loader/runtime owns thread creation and late-loaded TLS instantiation.
+
 | Form | Semantics |
 |---|---|
 | `mov rd, rn` | `rd := rn` |
@@ -187,6 +252,22 @@ the table is executable, not descriptive.
 | `str rt, [rn, #off]` / `strb` / `strh` | `memory[rn + off] := low bytes of rt` |
 | `ldp`/`stp rt1, rt2, [rn, #off]` | two registers, prologue and epilogue only (Section 6) |
 | ` volatile` marker on any load or store | the access appears in the volatile trace (EvoIR Section 4.3); it adds nothing else on this target and forbids merging with a neighbouring access, which this revision never does |
+
+**Scalar atomic memory operations (revision 0.31).** `atomic.load.K order
+[volatile] [base]` and `atomic.store.K order [volatile] value, [base]`
+retain order, volatile, width and pointer kind. `K` is `b`, `h`, `w`, `x`,
+`p` or `pf`; the last two are provenance-carrying object/function pointers.
+The base is gpr64, values are gpr32 for b/h/w and gpr64 otherwise, and the
+access requires natural alignment. Validation accepts only the load/store
+orders specified by EvoIR 3.8. The interpreter uses its shared atomic event
+and memory rules, not a concurrent memory-model simulation.
+
+On AArch64 Normal memory, relaxed b/h/w/x use LDRB/LDRH/LDR W/LDR X and
+STRB/STRH/STR W/STR X. Consume/acquire/SC loads use LDARB/LDARH/LDAR W/LDAR X;
+release/SC stores use STLRB/STLRH/STLR W/STLR X. Pointer accesses use the X
+form. There is one source access; no additional DMB is inserted for relaxed
+accesses, and the volatile marker does not select a second access. No pass
+may replace these with ordinary accesses, split/merge them, or discard order.
 
 **Arithmetic and logic.** Every form has a 32-bit (`w`) and a 64-bit (`x`)
 spelling chosen by the destination class.
@@ -277,6 +358,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker |
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
 | `store [volatile]` | `str` of the matching width, `str.p` for a pointer |
+| `atomic.load/store order [volatile]` | corresponding `atomic.load/store.K` with identical order/volatile and scalar/pointer kind |
 | `copy` with static size | `mem.copy` |
 | `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; validated size 1/2/4/8 and alignment >= size guarantee exactly one source load and one destination store, with only the specified sides observable; initializedness and pointer metadata follow ordinary `mem.copy` |
 | `br ^b(args)` | `b ^b(args)` |
@@ -297,11 +379,35 @@ The UB predicates were absent from revision 0.1's table, which refused
 19,410 of 20,000 generated functions; they are ordinary boolean
 computations and lower whether or not a `ub.assume` consumes them.
 
-Every other EvoIR form is refused: widths other than 1 to 64 and 128,
-floating point, vectors, tuples, computed goto, frame address, aggregate
-arguments and results, and pointer difference each have a code in Section 10.
+Every form outside this table and the later explicitly admitted families is
+refused; scalar f32/f64 is admitted by revision 0.33, not by the legacy E4001 row.
 
 ## 6. Frame and Calling Convention (Darwin arm64, scalar)
+
+**Linux integer-vector ABI (revision 0.32).** 8/16-byte vectors use v0..v7,
+independently of x0..x7; the ninth and later vectors use the shared argument
+stack with 8/16-byte alignment. All argument classes share that stack cursor,
+so a 128-bit integer or aligned record after a stacked 8-byte vector must
+round the physical stack offset, not the count of integer arguments.
+Homogeneous vector aggregates of one to four identical short vectors retain
+`hva=Cxvec<L, bits<N>>` in byval/sret marks. They use consecutive SIMD
+registers or go wholly to stack if the group does not fit; return uses v0..v3.
+Nonhomogeneous and wider-than-16-byte vectors use the ordinary by-reference
+record convention. Variadic vectors use the VR save area (16-byte slots),
+with HVA register slots gathered into their contiguous object layout;
+stack-resident HVAs use their packed object layout, not save-area stride.
+Mixed-compiler acceptance is required; self-calls alone cannot validate ABI.
+
+**Linux scalar FP/HFA ABI (0.33).** f32/f64 and HFA members consume the same
+v0..v7 cursor as integer vectors/HVAs. HFA groups go wholly to stack when they
+do not fit, with contiguous object bytes (not one eight-byte slot per float);
+return uses v0..v3. Anonymous float is promoted to double; double/HFA va_arg
+uses VR save slots when available and the packed stack object otherwise.
+HFA stack transport consumes the natural-member alignment recorded by EvoIR
+(`abi_align=16`, or 8 when omitted), not the complete object's overalignment.
+Caller placement, callee entry and `va_arg` use that same cursor alignment;
+copies from the stack may not claim a stronger source alignment than it supplies.
+This does not import Linux variadic rules into Darwin.
 
 The convention is Apple's AArch64 variant of AAPCS64, restricted to what
 this revision lowers; the restriction is refused, never approximated.
@@ -488,10 +594,10 @@ consequence: with `vr_offs = 0`, every musl variadic wrapper EvoCC compiled
 tests of libc-test fail (`printf-fmt-g-*`, `printf-1e9-oob`, `snprintf`,
 `swprintf`, `strtod_simple`: 12 cases in run `20260909T070307Z`), and the
 bisection could not separate them, which capped the passing build at 498
-of 995 assembled units. Named floating-point parameters still do not
-exist in this profile, so the vector registers consumed by named
-parameters are always zero and `vr_offs` is always `-128`; `va_arg` of a
-floating type remains outside the profile. Darwin passes every anonymous
+of 995 assembled units. Named scalar FP, HFAs and integer vectors/HVAs consume vector
+registers: `vr_offs = -16 * (8 - named_vector_registers)` with the count
+capped at eight. Revision 0.33 admits `va_arg.f64` and marked scalar HFAs.
+Darwin passes every anonymous
 argument on the stack and has no save areas (revision 0.20's note). `va_arg` of a type of size `S` (rounded up to a
 multiple of 8 as `S8`) and alignment `A` performs the procedure of the
 AAPCS64 Appendix B restricted to general registers:
@@ -591,6 +697,21 @@ target is `@function^bN+addend`. Emission uses the same platform symbol or
 block spelling as static relocations, and `%c` suppresses any immediate prefix.
 Only `i` admits symbolic operands. The interpreter's opaque-assembly refusal
 and the allocator's register constraints are unchanged (revision 0.25).
+
+**Approved integer SIMD assembly (2026-09-20).** The `w`, `=w`, `+w`,
+`=&w` and `+&w` constraints carry `simd64`/`simd128` values in the existing
+shared SIMD register bank; a tied input inherits its output's class and
+location, including an early-clobber output, while independent inputs and
+distinct outputs must not overlap forbidden locations. Input copies precede
+the asm, output stores follow it (on each selected `asm.goto` successor),
+and existing spill/parallel-copy machinery preserves all 64/128 bits and
+live source values. The allocator excludes every aliased clobber and its
+reserved scratch registers; the independent checker validates the constraint
+bank and assigned physical bank as well as overlap and dataflow. Default
+references emit `vN`; `%b/%h/%s/%d/%q` select that register's views, with
+accepted `vN/dN/sN` clobbers normalized to the same physical identity.
+`-mgeneral-regs-only` still rejects generated SIMD use; this extension does
+not admit scalar floating/SVE asm or pretend that interpreters execute asm.
 
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
@@ -698,6 +819,22 @@ where the emitter states one, is stated for the target only. The Linux target
 is the one this revision measures; the Darwin spellings are stated, not yet
 measured.
 
+**ELF visibility (revision 0.30).** Carry the validated EvoIR symbol marks
+through allocation to emission. Hidden and protected definitions remain
+global/weak according to their independent strength; emit `.hidden` or
+`.protected` for definitions, aliases and actually referenced declarations.
+An unused undefined declaration must not create a new linker dependency.
+Protected binding applies to the final executable/DSO, not this module;
+strong hidden/protected references may use direct addresses, whereas
+default-visible PIC references use the GOT even for a same-module definition.
+Weak references retain GOT lookup and unresolved-null behavior. Direct calls
+retain named relocations so the linker applies final component binding.
+Source visibility("internal") already arrives as hidden, never as C static.
+Darwin has no protected equivalent: native compilation refuses that mark,
+not silently replacing it with hidden. The ELF component probes are
+`tests/fixtures/symbol-component-*.c`; `.protected` has the GNU assembler's
+[component-binding semantics](https://sourceware.org/binutils/docs/as/Protected.html).
+
 **Data spelling (revision 0.20).** A global whose bytes are all zero,
 whose EvoIR 2.1 `initialized=` bits are all set and which carries no
 relocation is emitted in the target's zero-filled section (`.bss`;
@@ -777,8 +914,8 @@ sides, and are never emitted today.
 
 | Code | Name | Meaning |
 |---|---|---|
-| `E4001` | `not-lowered: floating-point` | `f32`/`f64` operand or result |
-| `E4002` | `not-lowered: vector` | `vec` operand or result |
+| `E4001` | legacy `not-lowered: floating-point` | Withdrawn for admitted scalar f32/f64; deferred formats remain frontend refusals |
+| `E4002` | `not-lowered: vector` | Unsupported vector execution or external ABI; supported integer vectors are admitted. Sub-8-byte native arguments/results remain refused after conflicting cross-link controls (`integer-vector-small*.c`), without rejecting local operations. |
 | `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division and remainder (the UB predicates lower since revision 0.26) |
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
 | `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
@@ -818,7 +955,11 @@ instruction     := "%v" int ":" class " = " op operands
                  | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
                  | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " [" reg "], [" reg "], #" int ", #" int
                  | store-form [" volatile"]
+                 | "%v" int ":" class " = atomic.load." atomic-kind " " atomic-order [" volatile"] " [" reg "]"
+                 | "atomic.store." atomic-kind " " atomic-order [" volatile"] " " reg ", [" reg "]"
                  | call-form
+atomic-kind     := "b" | "h" | "w" | "x" | "p" | "pf"
+atomic-order    := "relaxed" | "consume" | "acquire" | "release" | "seq_cst"
 terminator      := "b ^" ident "(" args ")"
                  | "br " reg " [" indirect-edge (", " indirect-edge)* "]"
                  | ("b." cond | "cbz " reg | "cbnz " reg | "tbz " reg ", #" int | "tbnz " reg ", #" int) ", ^" ident "(" args ")" ", ^" ident "(" args ")"
@@ -870,6 +1011,11 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.34 | 2026-09-21 | Preserve validated function-section placement through native emission, including aliases, code labels, CFI and link-ordered patch registrations; restore each following function's own placement. |
+| 0.31 | 2026-09-15 | Carry bounded scalar atomic order/volatile/pointer metadata through validation, text, allocation and interpretation; emit the natural-width AArch64 LDR/STR or LDAR/STLR mapping. |
+| 0.32 | 2026-09-15 | Add integer SIMD representation/classes, real fixed/variadic vector and HVA ABI, ELF lifecycle registrations, and all four Linux TLS addressing models. |
+| 0.33 | 2026-09-20 | Add shared-bank scalar FP, fail-closed FPCR checks, visible 128-bit conversion calls and scalar/HFA ABI. |
+| 0.30 | 2026-09-15 | Emit the reviewed protected/hidden ELF binding without changing C linkage or weak strength; preserve interposition for same-module default-visible PIC definitions and retain all symbol marks through native emission. |
 | 0.29 | 2026-09-12 | Specifies computed branches with complete CFG edges, joint pre-allocation parameter transport, cycle/spill handling and live target capture, preserving direct-entry and code-label identity. Implements the approved design boundary, not a native acceptance claim. |
 | 0.28 | 2026-09-09 | A variadic callee saves `q0` to `q7` in a 128-byte vector save area and writes `vr_top`/`vr_offs = -128`, as both oracles do; the earlier `vr_offs = 0` lost every `double` a reference-compiled caller passed through an EvoCC-compiled wrapper, the cause of musl's floating-point formatting failures in the mixed link. |
 | 0.27 | 2026-09-09 | Corrects the stack-realignment instruction sequence to use the reserved scratch register, because logical instructions cannot read SP. Both sealed assemblers reject the previous spelling and accept the replacement. Authorized review correction; this changes no compiler code. |

@@ -1,0 +1,51 @@
+Fixed image: evo-flight-lab:sealed, linux/arm64, network none
+Image digest: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Compilers: gcc-14 (14.2.0-19), clang-19 (19.1.7).
+Source: arm-neon-interleave-shifts.c, public-header branch.
+Command: CC -std=gnu11 -O{0,2} SOURCE -o /tmp/neon-check; /tmp/neon-check.
+Four combinations: build 0, run 0, empty program stdout/stderr.
+GCC compilation warns that 4294967304 converts to int 8. Clang is silent.
+The source tests signed/unsigned 16/32/64-bit narrowing, insertion at the
+lowest/highest counts, full-width right insertion, once-only operand effects,
+and 2/3/4-way interleaving at element alignment (not vector alignment).
+Arm reference: https://arm-software.github.io/acle/neon_intrinsics/advsimd.html
+
+Invalid immediate probes, each CC at O0/O2, all 24 builds refuse:
+  vshrn_n_u16(a,0): GCC constant-immediate error; Clang range [1,8].
+  vshrn_n_u16(a,9): GCC unrecognizable-insn failure; Clang range [1,8].
+  vshrn_n_u16(a,n), parameter n: both require a constant immediate.
+  vsli_n_u8(a,b,8): GCC constant-immediate error; Clang range [0,7].
+  vsriq_n_u8(a,b,0): GCC constant-immediate error; Clang range [1,8].
+  vsriq_n_u8(a,b,n), parameter n: both require a constant immediate.
+GCC's failure on 9 is not evidence of a usable implementation of that input;
+the profile retains the architectural range and a typed refusal.
+An initial container command without stdin attachment executed no probe; it
+is not counted. The measured 24 builds used explicit interactive stdin.
+
+Declared RED, no compiler build errors:
+  release 4bc75461c69a599043363d462f2bd415be10a0a6033f86791689c9026072dc94
+  TEST_PRIVATE + each TEST_NARROW / TEST_INSERT / TEST_INTERLEAVE:
+    --interpret-evoir refuses E3052 at shrn / usli / ld2 respectively.
+  Rust regression compiles; fails at TEST_NARROW --interpret-c-hir, E3052.
+  Original zstd lib/compress/zstd_lazy.c in run 20260919T125112Z stops at
+    __builtin_aarch64_shrn_nv8hi_uus in the unchanged arm_neon.h:4779.
+Targeted GREEN:
+  Three selected fixture cases pass C-HIR, EvoIR and assembly generation.
+  The public-header subject assembly links and exits 0 with each fixed
+  assembler/linker (two native executions); no libc intrinsic substitutes.
+  All 17 integer-vector regressions pass, including E3011 bounds, E3001
+  uninitialized lanes and E3012 misalignment in interleaved loads.
+  The memory negatives exposed a general returned-record array decay E2102;
+  its independent reduction and oracle runs are returned-array-members.{c,out}.
+  Original zstd_lazy.c debug replay exits 0 in 156.16s, below its original
+  300s cap. This debug run is not a release timing or passing-program claim.
+Release bb298881b208e0059e6feb3518d6d6b17ace7f58da85ed393520ed84c8f2a310
+includes these repairs. Run 20260919T132907.970164Z completed:
+  zstd child 20260919T132908Z: 31/44 objects in passing unchanged tests,
+  including zstd_lazy.o; 9 E3049 and 4 E3050 remain.
+  Mbed TLS child 20260919T133245Z: 379/382 objects, selftest and 148/148
+  CTest PASS; zero exclusions or final installed-object replacements.
+  E3052 AES, E3052 Combine and E1005 VLA cast remain; not FP-only.
+  Changed gate: 2503 PASS, 0 FAIL, 4 historical ignored; Clippy/fmt clean.
+Later driver/Combine/returned-array-projection repairs are not covered by
+that immutable release's benchmark or frozen changed gate.

@@ -240,7 +240,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
     let lowering = TempSource::new(
         "lowering",
-        "struct S { double x; }; int f(int, ...); int pass(struct S s) { return f(1, s); }\n",
+        "struct S { long double x; }; int f(int, ...); int pass(struct S s) { return f(1, s); }\n",
     );
     let runtime = TempSource::new(
         "runtime",
@@ -285,7 +285,9 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
                 "{stderr}"
             ),
             "lowering" => assert!(
-                stderr.ends_with("error[E3030]: evoir-lowering-failed: not-lowered: varargs\n"),
+                stderr.ends_with(
+                    "error[E3049]: evoir-lowering-failed: not-lowered: floating-call-interface\n"
+                ),
                 "{stderr}"
             ),
             "runtime" => assert!(

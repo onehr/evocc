@@ -7,6 +7,68 @@ use evocc_lower::lower_unit;
 use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
+#[test]
+fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
+    for (ordinal, source, code, message) in [
+        (
+            301,
+            "long double f(long double x) { return x; }",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+        (
+            302,
+            "struct h { long double x; }; struct h f(struct h x) { return x; }",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+        (
+            303,
+            "int f(void) { extern long double x; return x > 0; }",
+            "E3050",
+            "not-lowered: floating-value",
+        ),
+        (
+            304,
+            "int f(void) { long double *p = 0; return *p > 0; }",
+            "E3050",
+            "not-lowered: floating-value",
+        ),
+        (
+            305,
+            "void f(int n) { long double a[1]; a[0] = n; }",
+            "E3050",
+            "not-lowered: floating-value",
+        ),
+        (
+            306,
+            "int f() { return 1; } int main(void) { return f(1); }",
+            "E3051",
+            "malformed function f: call arity disagrees with the canonical prototype",
+        ),
+        (
+            307,
+            "_Complex float f(_Complex float x) { return x; }",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+        (
+            308,
+            "_Complex double f(_Complex double x) { return x; }",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+        (
+            309,
+            "_Complex long double f(_Complex long double x) { return x; }",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+    ] {
+        assert_lowering_error(source, ordinal, code, message);
+    }
+}
+
 fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) {
     let arena = Arena::default();
     let file = FileId::new(9_610 + ordinal);
@@ -154,22 +216,21 @@ fn function_pointer_arithmetic_uses_exposed_address_instructions() {
 }
 
 #[test]
-fn floating_record_variable_arguments_remain_outside_the_integer_abi() {
-    for (ordinal, source) in [
+fn binary128_record_variable_arguments_remain_outside_the_executable_abi() {
+    for (ordinal, source, code, message) in [
         (
             5,
-            "struct S { double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+            "struct S { long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+            "E3049",
+            "not-lowered: floating-call-interface",
         ),
         (
             6,
-            "struct S { double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
-        ),
-    ] {
-        assert_lowering_error(
-            source,
-            ordinal,
+            "struct S { long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
             "E3030",
             "not-lowered: varargs",
-        );
+        ),
+    ] {
+        assert_lowering_error(source, ordinal, code, message);
     }
 }

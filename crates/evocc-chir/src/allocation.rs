@@ -549,10 +549,9 @@ struct Deriver<'unit, 'arena> {
     strings: Vec<PendingSite<'arena>>,
     local_object_declarations: HashMap<SymbolId, SourceSpan>,
     function_static_objects: Vec<&'arena crate::ObjectDecl<'arena>>,
-    function_definitions: HashMap<SymbolId, SourceSpan>,
     parameter_owners: HashMap<SymbolId, SymbolId>,
     function_scope_owners: HashMap<ScopeId, SymbolId>,
-    definition_function_scopes: HashMap<SymbolId, ScopeId>,
+    definition_function_scopes: HashSet<(SymbolId, ScopeId)>,
     declaration_occurrences: HashMap<usize, SourceSpan>,
     statement_owners: HashMap<usize, FunctionAuthority>,
     visited_expressions: HashSet<usize>,
@@ -568,10 +567,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             strings: Vec::new(),
             local_object_declarations: HashMap::new(),
             function_static_objects: Vec::new(),
-            function_definitions: HashMap::new(),
             parameter_owners: HashMap::new(),
             function_scope_owners: HashMap::new(),
-            definition_function_scopes: HashMap::new(),
+            definition_function_scopes: HashSet::new(),
             declaration_occurrences: HashMap::new(),
             statement_owners: HashMap::new(),
             visited_expressions: HashSet::new(),
@@ -580,6 +578,13 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
     }
 
     fn derive(mut self) -> Result<AllocationSiteManifest<'arena>, AllocationSiteManifestError> {
+        crate::function_definitions::FunctionDefinitions::derive(self.unit).map_err(|e| {
+            AllocationSiteManifestError::DuplicateFunctionDefinition {
+                function: e.symbol,
+                first: e.first,
+                duplicate: e.duplicate,
+            }
+        })?;
         let mut work = Vec::new();
         for declaration in self.unit.declarations().iter().rev().copied() {
             work.push(WorkItem::Declaration {
@@ -761,7 +766,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         symbol: SymbolId,
         authority: FunctionAuthority,
     ) -> bool {
-        if self.definition_function_scopes.get(&authority.symbol) != Some(&authority.scope)
+        if !self
+            .definition_function_scopes
+            .contains(&(authority.symbol, authority.scope))
             || self.function_scope_owners.get(&authority.scope) != Some(&authority.symbol)
         {
             return false;
@@ -780,18 +787,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         &mut self,
         function: &crate::FunctionDecl<'arena>,
     ) -> Result<FunctionAuthority, AllocationSiteManifestError> {
-        if let Some(first) = self
-            .function_definitions
-            .insert(function.symbol, function.span)
-        {
-            return Err(AllocationSiteManifestError::DuplicateFunctionDefinition {
-                function: function.symbol,
-                first,
-                duplicate: function.span,
-            });
-        }
         let Some(WrittenDeclaratorLayer::Function {
             span: declarator_span,
+            ..
         }) = function.written.layers.first()
         else {
             return Err(AllocationSiteManifestError::FunctionScopeMismatch {
@@ -814,7 +812,13 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 scope.kind() == ScopeKind::Function
                     && scope.parent() == Some(self.unit.symbols().file_scope())
                     && match scope.function_owner() {
-                        Some(owner) => owner == function.symbol,
+                        Some(owner) => {
+                            owner == function.symbol
+                                && scope.span().is_some_and(|span| {
+                                    span.file == declarator_span.file
+                                        && span.byte_start == declarator_span.byte_start
+                                })
+                        }
                         // Legacy, manually constructed C-HIR may omit the
                         // binding. Accept only an unambiguous location match.
                         None => {
@@ -834,17 +838,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 span: function.span,
             });
         };
-        if let Some(existing) = self
-            .definition_function_scopes
-            .insert(function.symbol, *scope)
-        {
-            if existing != *scope {
-                return Err(AllocationSiteManifestError::FunctionScopeMismatch {
-                    function: function.symbol,
-                    span: function.span,
-                });
-            }
-        }
+        self.definition_function_scopes
+            .insert((function.symbol, *scope));
         if let Some(owner) = self.function_scope_owners.insert(*scope, function.symbol) {
             if owner != function.symbol {
                 return Err(
@@ -903,7 +898,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 span: object.span,
             });
         };
-        if object.storage == StorageClass::Extern {
+        if object.storage.base() == StorageClass::Extern {
             if !self.symbol_is_bound_under_function(object.symbol, current_function) {
                 return Err(AllocationSiteManifestError::LocalScopeMismatch {
                     symbol: object.symbol,
@@ -931,10 +926,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             primary_scope.kind(),
             ScopeKind::Function | ScopeKind::Block | ScopeKind::For
         ) || !primary_scope.symbols().contains(&object.symbol)
-            || self
+            || !self
                 .definition_function_scopes
-                .get(&current_function.symbol)
-                != Some(&current_function.scope)
+                .contains(&(current_function.symbol, current_function.scope))
             || self.function_scope_owners.get(&current_function.scope)
                 != Some(&current_function.symbol)
             || self.function_scope_ancestor(symbol.scope) != Some(current_function.scope)
@@ -1144,7 +1138,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         current_function,
                     });
                 }
-                if !file_scope && object.storage == StorageClass::Static {
+                if !file_scope && object.storage.base() == StorageClass::Static {
                     self.function_static_objects.push(object);
                 }
                 let strength = if file_scope {
@@ -1157,12 +1151,12 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         None
                     } else if object.initializer.is_some() {
                         Some(AnchorStrength::Definition)
-                    } else if object.storage == StorageClass::Extern {
+                    } else if object.storage.base() == StorageClass::Extern {
                         None
                     } else {
                         Some(AnchorStrength::Tentative)
                     }
-                } else if object.storage == StorageClass::Extern {
+                } else if object.storage.base() == StorageClass::Extern {
                     None
                 } else {
                     Some(AnchorStrength::Definition)
@@ -1412,6 +1406,38 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         }
 
         match expression {
+            CHirExpr::Atomic(access) => {
+                for expression in access.operands().rev() {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
+            }
+            CHirExpr::Floating(access) => {
+                for &expression in access.operands.iter().rev() {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
+            }
+            CHirExpr::Vector(access) => {
+                for &expression in access.operands.iter().rev() {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
+            }
+            CHirExpr::Complex(access) => {
+                for &expression in access.operands.iter().rev() {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
+            }
             CHirExpr::StringLit(_, anchor) => {
                 let encounter = self.encounter()?;
                 self.strings.push(PendingSite {
@@ -1434,7 +1460,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
             | CHirExpr::Comma(left, right, _)
-            | CHirExpr::Elvis(left, right, _) => {
+            | CHirExpr::Elvis(left, right, _)
+            | CHirExpr::BuiltinExpect(left, right, _) => {
                 work.push(WorkItem::Expression {
                     expression: right,
                     current_function,
@@ -1665,6 +1692,11 @@ fn file_object_storage_compatible(
     canonical: Option<StorageClass>,
     declaration: StorageClass,
 ) -> bool {
+    if canonical.is_some_and(StorageClass::is_thread_local) != declaration.is_thread_local() {
+        return false;
+    }
+    let declaration = declaration.base();
+    let canonical = canonical.map(StorageClass::base);
     match canonical {
         Some(StorageClass::Static) => {
             matches!(declaration, StorageClass::Static | StorageClass::Extern)
@@ -1672,14 +1704,18 @@ fn file_object_storage_compatible(
         Some(StorageClass::None | StorageClass::Extern) => {
             matches!(declaration, StorageClass::None | StorageClass::Extern)
         }
-        Some(StorageClass::ThreadLocal) => declaration == StorageClass::ThreadLocal,
+        Some(
+            StorageClass::ThreadLocal
+            | StorageClass::StaticThreadLocal
+            | StorageClass::ExternThreadLocal,
+        ) => false,
         Some(StorageClass::Typedef | StorageClass::Auto | StorageClass::Register) | None => false,
     }
 }
 
 fn block_extern_storage_compatible(canonical: Option<StorageClass>) -> bool {
     matches!(
-        canonical,
+        canonical.map(StorageClass::base),
         Some(StorageClass::None | StorageClass::Extern | StorageClass::Static)
     )
 }
@@ -1697,7 +1733,9 @@ fn function_storage_compatible(canonical: Option<StorageClass>, declaration: Sto
             StorageClass::Typedef
             | StorageClass::Auto
             | StorageClass::Register
-            | StorageClass::ThreadLocal,
+            | StorageClass::ThreadLocal
+            | StorageClass::StaticThreadLocal
+            | StorageClass::ExternThreadLocal,
         )
         | None => false,
     }
@@ -2022,7 +2060,10 @@ mod tests {
             ty,
             return_specifier: specifier(ty, at),
             written: WrittenDeclarator {
-                layers: vec![WrittenDeclaratorLayer::Function { span: span(at + 1) }],
+                layers: vec![WrittenDeclaratorLayer::Function {
+                    parameters: None,
+                    span: span(at + 1),
+                }],
                 span: span(at),
             },
             parameters: ParameterSyntax::Prototype {

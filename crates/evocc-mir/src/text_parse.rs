@@ -213,6 +213,9 @@ fn parse_definition(text: &str) -> Result<VReg, String> {
     let class = match class {
         "gpr32" => RegClass::Gpr32,
         "gpr64" => RegClass::Gpr64,
+        "simd64" => RegClass::Simd64,
+        "simd32" => RegClass::Simd32,
+        "simd128" => RegClass::Simd128,
         "flags" => RegClass::Flags,
         other => return Err(format!("unknown register class '{other}'")),
     };
@@ -676,6 +679,12 @@ fn take_clobbers(text: &mut &str) -> Result<Vec<AsmClobber>, String> {
 }
 
 fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, String> {
+    if let Some(rest) = body.strip_prefix("stack.release ") {
+        let mut scan = Scan::new(rest, classes);
+        let address = scan.use_of()?;
+        scan.finish()?;
+        return Ok(Parsed::Inst(MInst::StackRelease { address }));
+    }
     // An `asm` carries a template whose text is arbitrary, so it is recognised
     // by its keyword before anything splits the body on a separator.
     if let Some(parsed) = parse_assembly(body, classes)? {
@@ -701,6 +710,81 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
         None => (rest, ""),
     };
     let mut scan = Scan::new(arguments, classes);
+
+    if let Some(rmw) = mnemonic.strip_prefix("atomic.rmw.") {
+        let (operation, suffix) = rmw.split_once('.').ok_or("missing atomic RMW width")?;
+        let operation = evocc_memory::AtomicRmwOp::from_mnemonic(operation)
+            .ok_or("invalid atomic RMW operation")?;
+        let kind = LoadKind::from_atomic_suffix(suffix).ok_or("invalid atomic RMW width")?;
+        let (order, rest) = arguments
+            .split_once(' ')
+            .ok_or("missing atomic RMW order")?;
+        let order =
+            evocc_memory::AtomicOrder::from_mnemonic(order).ok_or("invalid atomic RMW order")?;
+        let (volatile, rest) = rest
+            .strip_prefix("volatile ")
+            .map_or((false, rest), |rest| (true, rest));
+        let mut scan = Scan::new(rest, classes);
+        let value = scan.use_of()?;
+        scan.expect(", [")?;
+        let base = scan.use_of()?;
+        scan.expect("]")?;
+        let expected = if operation == evocc_memory::AtomicRmwOp::CompareExchange {
+            scan.expect(", ")?;
+            Some(scan.use_of()?)
+        } else {
+            None
+        };
+        scan.finish()?;
+        return Ok(Parsed::Inst(MInst::AtomicRmw {
+            dst: dst.ok_or("missing atomic RMW result")?,
+            base,
+            value,
+            expected,
+            operation,
+            kind,
+            order,
+            volatile,
+        }));
+    }
+    if let Some(atomic) = mnemonic.strip_prefix("atomic.") {
+        let (operation, suffix) = atomic.split_once('.').ok_or("missing atomic width")?;
+        let load = match operation {
+            "load" => true,
+            "store" => false,
+            _ => return Err("unknown atomic operation".into()),
+        };
+        let kind = LoadKind::from_atomic_suffix(suffix).ok_or("invalid atomic width")?;
+        let (order, rest) = arguments.split_once(' ').ok_or("missing atomic order")?;
+        let order =
+            evocc_memory::AtomicOrder::from_mnemonic(order).ok_or("invalid atomic order")?;
+        let (volatile, rest) = rest
+            .strip_prefix("volatile ")
+            .map_or((false, rest), |rest| (true, rest));
+        let mut scan = Scan::new(rest, classes);
+        let value = if load {
+            dst.ok_or("missing atomic result")?
+        } else {
+            if dst.is_some() {
+                return Err("atomic store has a result".into());
+            }
+            let value = scan.use_of()?;
+            scan.expect(", ")?;
+            value
+        };
+        scan.expect("[")?;
+        let base = scan.use_of()?;
+        scan.expect("]")?;
+        scan.finish()?;
+        return Ok(Parsed::Inst(MInst::Atomic {
+            load,
+            value,
+            base,
+            kind,
+            order,
+            volatile,
+        }));
+    }
 
     // Terminators first: none of them defines a register.
     if dst.is_none() {
@@ -879,6 +963,10 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::IndirectResult));
         }
+        if mnemonic == "fp.env.check" {
+            scan.finish()?;
+            return Ok(Parsed::Inst(MInst::FpEnvCheck));
+        }
         if mnemonic == "va.save" {
             scan.expect("[named=")?;
             let named: u8 = scan
@@ -1002,6 +1090,57 @@ fn parse_defining(
         let cond = scan.condition()?;
         scan.finish()?;
         return Ok(MInst::Cset { dst, flags, cond });
+    }
+    if let Some(name) = mnemonic.strip_prefix("crypto.") {
+        let op = evocc_types::neon::AesOperation::parse(name).ok_or("unknown AES operation")?;
+        let args = scan.use_list()?;
+        scan.finish()?;
+        return Ok(MInst::Aes { dst, op, args });
+    }
+    if let Some(name) = mnemonic.strip_prefix("fp.") {
+        let (op, kind) = name.rsplit_once('.').ok_or("missing FP format")?;
+        let kind = match kind {
+            "f32" => evocc_types::FloatKind::F32,
+            "f64" => evocc_types::FloatKind::F64,
+            _ => return Err("unsupported FP format".into()),
+        };
+        let op = evocc_evoir::FloatingOp::parse(op).ok_or("unknown FP operation")?;
+        let args = scan.use_list()?;
+        scan.finish()?;
+        return Ok(MInst::Floating {
+            dst,
+            op,
+            kind,
+            args,
+        });
+    }
+    if let Some((operation, bits)) = mnemonic
+        .strip_prefix("vec.")
+        .and_then(|v| v.split_once('.'))
+    {
+        let extract = match operation {
+            "extract" => true,
+            "pack" => false,
+            _ => return Err("unknown vector operation".into()),
+        };
+        let (bits, size) = bits
+            .split_once('.')
+            .ok_or("missing vector representation size")?;
+        let lane_bits = bits
+            .parse::<u16>()
+            .map_err(|_| "invalid vector lane width")?;
+        let bytes = size
+            .parse::<u8>()
+            .map_err(|_| "invalid vector representation size")?;
+        let args = scan.use_list()?;
+        scan.finish()?;
+        return Ok(MInst::Vector {
+            dst,
+            extract,
+            lane_bits,
+            bytes,
+            args,
+        });
     }
     if let Some(op) = WideMul::from_mnemonic(mnemonic) {
         let lhs = scan.use_of()?;

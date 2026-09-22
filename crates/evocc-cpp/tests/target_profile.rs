@@ -10,7 +10,7 @@ use evocc_proof::sha256_hex;
 
 const PROFILE_SHA256: &str = "74801974f845be4d198bbedc2f20130ddd98645550c05e3453d0294d47bc5a95";
 const ATTRIBUTE_TABLE_SHA256: &str =
-    "093c3ed56931f03c69f74cacae0b45c92ddc3996b527dc29388d4c260bc04e79";
+    "6429082232ca76ee2c7ff5593decea43b4cf6f97a87cccd81192e27173abc8dd";
 const BUILTIN_NAMES: &str = concat!(
     "__builtin_add_overflow\n",
     "__builtin_constant_p\n",
@@ -73,7 +73,7 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
 
 fn spelling(token: &Token, source: &str) -> String {
     match &token.text {
-        TokenText::Decoded(text) => text.clone(),
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
         TokenText::Borrowed => source
             .get(token.span.byte_start as usize..token.span.byte_end as usize)
             .expect("token span belongs to fixture")
@@ -140,8 +140,8 @@ fn preprocess(source: &str) -> String {
 }
 
 #[test]
-fn the_profile_advertises_its_variable_length_array_refusal() {
-    assert_eq!(preprocess("__STDC_NO_VLA__\n"), "1");
+fn the_profile_no_longer_claims_variable_length_arrays_are_absent() {
+    assert_eq!(preprocess("__STDC_NO_VLA__\n"), "__STDC_NO_VLA__");
 }
 
 fn first_error_code(source: &str) -> &'static str {
@@ -299,7 +299,7 @@ fn feature_query_tables_are_digest_checked_data() {
     ))
     .expect("read attribute answer table");
     assert_eq!(sha256_hex(attributes.as_bytes()), ATTRIBUTE_TABLE_SHA256);
-    assert_eq!(attributes.lines().count(), 45);
+    assert_eq!(attributes.lines().count(), 46);
 
     let builtins = fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -447,7 +447,9 @@ fn pragma_lines_are_classified() {
             .iter()
             .filter_map(pragma_visibility_action)
             .collect::<Vec<_>>(),
-        vec![PragmaVisibilityAction::Push { hidden: false }]
+        vec![PragmaVisibilityAction::Push {
+            visibility: "default"
+        }]
     );
     assert_eq!(pp.ignored_pragma_count(), 0);
     assert_eq!(preprocess("#pragma GCC poison bad\nok\n"), "ok");

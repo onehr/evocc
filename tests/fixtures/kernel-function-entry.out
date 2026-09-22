@@ -1,0 +1,122 @@
+2026-09-20 supplemental oracle probe; compiler implementation remains RED.
+Source: tests/fixtures/kernel-function-entry.c
+SHA-256 5727a5132ea6fc2b0f33025d93870e321949095a8f8e74913e33fc39993972ee.
+Base image linux/arm64, network none:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+GCC-14 14.2.0-19 and Clang-19 19.1.7, each:
+  CC -std=gnu11 -O2 -fpatchable-function-entry=4,2
+    -mbranch-protection=pac-ret -fasynchronous-unwind-tables
+    -S kernel-function-entry.c -o entry.s
+  CC entry.s -o entry
+Both compile/link and both original executions exit zero.
+Generated assembly SHA-256:
+  GCC   74e5b6892719b5f00d4ae52a1021109a1769635d7a11852ae52effd21cd08364
+  Clang 4c44efca6f42257e04695d7261e8e029beefd74cb83dc23d81e18df825e29ae1
+Small outputs remain under .build/floating-targeted/function-entry/.
+
+Both emit two NOPs before ordinary's function symbol and two after it;
+local_override has one before and two after; notrace_entry has none and
+no patch-table entry. The nonleaf aligned_entry places the two entry NOPs
+before PACIASP and its frame setup, with CFI beginning at the function label.
+The existing O0/O2 table/relocation probe is retained at
+.evidence/builtin-probes/20260914-function-entry/oracles.out.
+
+Important alignment interaction: both controls align the patch-region start,
+not the callable symbol, to the explicit 64-byte alignment. The linked
+aligned_entry addresses are GCC 0x948 and Clang 0x8c8, each 8 modulo 64.
+This is not evidence that the function symbol is 64-byte aligned; it must be
+reconciled explicitly with EvoIR's existing function-alignment contract before
+implementing their combined mode. No general alignment rule is changed here.
+
+Subject ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882:
+  --emit=asm -fpatchable-function-entry=4,2 SOURCE
+exits 1: unsupported option `-fpatchable-function-entry=4,2`.
+No new EvoCC object, tracing-enabled kernel, installation or boot is credited.
+
+Implementation follow-up, 2026-09-20:
+The CLI/IR/native reduction was RED with zero Rust compile errors, then GREEN.
+Both gcc-14 and clang-19 assemble/link the subject's exact same assembly;
+both native executions exit 0. ELF inspection verifies four link-ordered
+WAL table entries, first-NOP relocation addresses, all N/M instruction bytes,
+no entry for notrace_entry, and aligned_entry's callable address divisible
+by 64. The latter deliberately follows EvoIR Section 5.2, not the conflicting
+oracle combined-alignment behavior above. CFI starts at the callable symbol;
+the post-symbol NOPs precede PAC and frame setup.
+The 23 command-projection tests pass; -fpatchable-function-entry options now
+reach EvoCC in written order rather than being omitted. The 13 independent
+proof tests pass, including patch size/offset/removal mutations even with a
+recomputed output digest. This is targeted closure, not a new kernel boot.
+
+Additional fixed-image declaration probes (gnu11, O0, -S, source on stdin):
+  A: attribute(3,1) declaration, followed by unmarked definition:
+     GCC and Clang both emit (3,1).
+  B: attribute(3,1) declaration, followed by attribute(4,2) definition:
+     GCC and Clang both emit (4,2).
+  C: attribute(3,1) definition, followed by attribute(4,2) declaration:
+     GCC emits (4,2), Clang (3,1); EvoCC rejects E2943.
+  D: attribute(1,2) definition: GCC warns, Clang rejects; EvoCC rejects E2903.
+Here attribute means __attribute__((patchable_function_entry(N,M))); all
+function declarations are int f(void), and all bodies are {return 0;}.
+
+Minimum machine alignment follow-up, 2026-09-20:
+Source kernel-minimum-function-alignment.c SHA-256
+1ad169522f77d6b62698339e20b6cde9d16ca081b60a6e4db9a9372f549baea4.
+Debug subject 0379e8c59be996eb9c3ef3c0d3b418c135d498e529f6e2c0b65405cef1856af1:
+  --emit=asm -O2 -fmin-function-alignment=128
+    -fpatchable-function-entry=4,2 SOURCE
+Assembly SHA-256
+7420e74bb011b5a773246d5ca4fa3f43df092c31c28f482a4dc7fb76e3bbd106.
+Both fixed toolchains assemble/link and execute this assembly, exit 0;
+ELF callable addresses ordinary=0x980, cold_entry=0xa80, overaligned=0xc00,
+main=0xd00 satisfy the 128-byte minimum and the explicit 256-byte request.
+Source __alignof__ remains 4/4/256. Both interpreters return zero.
+The external-symbol CLI suite is 94/94 PASS, textual completeness 1/1 PASS,
+and all 161 K1 harness tests pass (including 24 command-projection checks).
+The preceding full gate failed to compile one exhaustive Function pattern;
+the field and its independent non-default sentinel are repaired and the full
+gate is being rerun, not credited from these targeted results.
+
+GCC14 -O2 -fmin-function-alignment=N emits .align 2/3/7 for N=4/8/128.
+Clang19 rejects this GCC option spelling; its source-option run is NOT PASS.
+GCC14's observed N=65 uses .align 6, contrary to the manual's next-power-of-two
+description; EvoCC deliberately refuses non-power-of-two requests rather
+than making a new rounding choice. The recorded kernel uses N=8.
+
+Original configured Kbuild replays, release subject SHA-256
+77faa6b3479296b0560e55f611254585146f5b0d443dcd72c3d6c82e48f27d8a:
+  arch/arm64/kernel/ftrace.o       emitted 2.475 s, assembled, symbol parity PASS
+  kernel/fork.o                   emitted 8.744 s, assembled, symbol parity PASS
+  kernel/sched/build_policy.o     emitted 16.494 s, assembled, symbol parity PASS
+The scheduler unit includes ext.c; it is not a separate ext.o Kbuild record.
+Both missing/extra global-symbol lists are empty for all three objects.
+Object SHA-256, respectively:
+  3ad2c3e016f358a817b7085260235bf88558f1805617a5172daced038293ca99
+  bac1b277a3c5ea793c463cdff0ae09c9bcf048efb87b6fff081ba8199397d6d2
+  33ee56298ddd5e2759e79255c081dd55949fe664d61a162311999572c4933cc2
+Source and generated headers are the separate current bpf-config reference
+build; the recorded command projection includes the minimum alignment and
+patchable-entry options when present. No objects were installed by this replay.
+
+All three original objects also pass llvm-dwarfdump-19 --verify with no errors
+and pahole --btf_encode_detached in the fixed image. Resulting BTF sizes are
+325941 / 768747 / 868007 bytes, in the same object order above; this does not
+assert whole-vmlinux BTF integration.
+An independent all-unaligned-declarations control also returns zero in both
+interpreters with -fmin-function-alignment=128 (no aligned(256) declaration
+exists to accidentally raise the shared virtual-address stride):
+  int first(void){return 1;} int second(void){return 2;}
+  int main(void){int (*volatile a)(void)=first; int (*volatile b)(void)=second;
+    return ((unsigned long)a & 127) || ((unsigned long)b & 127);}
+
+The next full gate ran 2,586 tests successfully but failed the old capability
+table digest assertion: its single added row is patchable_function_entry=1.
+Both fixed preprocessors answer "1 1" for the ordinary and __wrapped__
+__has_attribute spellings. The digest and 45-to-46 row-count assertion are
+updated together; all 13 target-profile tests pass. The failed full attempt
+is retained and does not count as a green gate.
+
+The subsequent frozen full changed gate exits 0: 2,587 PASS / 0 FAIL /
+4 historical ignored, Clippy -D warnings and fmt PASS. Capture:
+.build/floating-targeted/gate-minimum-entry-20260920-2.txt.
+All 186 ladder and 162 K1 Python harness tests also pass, as do Ruff and
+the 53/53 textual grammar comparison (zero missing/extra shapes).

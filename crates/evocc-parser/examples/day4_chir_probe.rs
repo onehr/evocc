@@ -85,6 +85,14 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
             TypeKind::Float(kind) => format!("float:{kind:?}"),
             TypeKind::Complex(kind) => format!("complex:{kind:?}"),
             TypeKind::Pointer(pointee) => format!("ptr({})", self.type_fingerprint(*pointee)),
+            TypeKind::Vector {
+                element,
+                lanes,
+                family,
+            } => format!(
+                "vector({family:?},{lanes},{})",
+                self.type_fingerprint(*element)
+            ),
             TypeKind::Array { element, bound } => {
                 let bound = match bound {
                     ArrayBound::Fixed(value) => format!("Constant({value})"),
@@ -160,7 +168,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
             let span = match layer {
                 WrittenDeclaratorLayer::Pointer { span, .. }
                 | WrittenDeclaratorLayer::Array { span, .. }
-                | WrittenDeclaratorLayer::Function { span } => *span,
+                | WrittenDeclaratorLayer::Function { span, .. } => *span,
             };
             self.record(format!("{path}.layer[{index}]"), span);
         }
@@ -245,6 +253,28 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let operand = self.expression(&format!("{path}.operand"), operand);
                 let fallback = self.expression(&format!("{path}.fallback"), fallback);
                 format!("elvis({operand},{fallback})")
+            }
+            CHirExpr::BuiltinExpect(value, expected, _) => {
+                let value = self.expression(&format!("{path}.value"), value);
+                let expected = self.expression(&format!("{path}.expected"), expected);
+                format!("expect({value},{expected})")
+            }
+            CHirExpr::Atomic(access) => {
+                let operands = access
+                    .operands()
+                    .enumerate()
+                    .map(|(index, operand)| {
+                        self.expression(&format!("{path}.operand[{index}]"), operand)
+                    })
+                    .collect::<Vec<_>>();
+                format!(
+                    "atomic(store={},rmw={:?},order={:?},volatile={},[{}])",
+                    access.value.is_some(),
+                    access.rmw,
+                    access.constant_order,
+                    access.volatile,
+                    operands.join(",")
+                )
             }
             CHirExpr::Call(callee, arguments, _) => {
                 let callee = self.expression(&format!("{path}.callee"), callee);
@@ -368,6 +398,54 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let left = self.expression(&format!("{path}.left"), left);
                 let right = self.expression(&format!("{path}.right"), right);
                 format!("comma({left},{right})")
+            }
+            CHirExpr::Vector(vector) => {
+                let operands = vector
+                    .operands
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        self.expression(&format!("{path}.operand[{index}]"), value)
+                    })
+                    .collect::<Vec<_>>();
+                format!(
+                    "vector({:?},{},[{}])",
+                    vector.op,
+                    self.type_fingerprint(vector.facts.ty()),
+                    operands.join(",")
+                )
+            }
+            CHirExpr::Floating(operation) => {
+                let operands = operation
+                    .operands
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        self.expression(&format!("{path}.operand[{index}]"), value)
+                    })
+                    .collect::<Vec<_>>();
+                format!(
+                    "floating({:?},{},[{}])",
+                    operation.op,
+                    self.type_fingerprint(operation.facts.ty()),
+                    operands.join(",")
+                )
+            }
+            CHirExpr::Complex(operation) => {
+                let operands = operation
+                    .operands
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        self.expression(&format!("{path}.operand[{index}]"), value)
+                    })
+                    .collect::<Vec<_>>();
+                format!(
+                    "complex({:?},{},[{}])",
+                    operation.op,
+                    self.type_fingerprint(operation.facts.ty()),
+                    operands.join(",")
+                )
             }
         }
     }
@@ -825,6 +903,8 @@ fn storage_name(storage: StorageClass) -> &'static str {
         StorageClass::Auto => "auto",
         StorageClass::Register => "register",
         StorageClass::ThreadLocal => "thread_local",
+        StorageClass::StaticThreadLocal => "static_thread_local",
+        StorageClass::ExternThreadLocal => "extern_thread_local",
     }
 }
 

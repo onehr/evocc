@@ -13,6 +13,8 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
     let mem = value(0, EvoIRType::Mem(Region::All));
     let world = value(1, EvoIRType::World);
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -49,6 +51,8 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -104,6 +108,8 @@ fn dynamic_stack_size_is_a_typed_ssa_operand_and_preserves_object_lifetime() {
         },
     );
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: vec![],
         assembly: vec![],
         extern_objects: vec![],
@@ -208,6 +214,8 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
         vec![loaded, mem3, world3],
     );
     let module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -315,11 +323,14 @@ fn initialized_global_and_volatile_trace_are_observable() {
         vec![loaded, mem1, world1],
     );
     let module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![GlobalObject {
+            read_only: false,
             section: None,
             relocs: Vec::new(),
             symbol: "counter".to_owned(),

@@ -1,0 +1,29 @@
+Original build language-mode probes, 2026-09-15
+Target linux/arm64; evo-flight-lab:sealed; network none.
+language-mode-versions.c SHA-256:
+a08960dd2f4f83defa22a22122bc92bf130eb8f43bd8f1b2632e2f8fb6d8cf66
+iso-c99-language-mode.c SHA-256:
+149ddb485c3d32de87738af5f2a95175f6afe7e81d31710390dbf07d7045cfa0
+
+For each mode, each compiler gcc-14/clang-19 and each optimization -O0/-O2:
+  $cc -std=$mode $opt -DEXPECT_VERSION=$version -DEXPECT_ISO=$iso SOURCE -o program
+  ./program
+mode    version  iso  compilations/executions
+c99     199901L   1    4/4 exit 0
+c11     201112L   1    4/4 exit 0
+gnu99   199901L   0    4/4 exit 0
+gnu11   201112L   0    4/4 exit 0
+gnu17   201710L   0    4/4 exit 0
+The separate ISO C99 source also compiles/executes at all four oracle settings.
+
+Subject debug SHA-256:
+a4413f4f090efb9fe4e4500c71d5daeb67152cd1c241585756a92a96474fd483
+For each table row:
+  evocc --emit=asm -std=$mode -DEXPECT_VERSION=$version -DEXPECT_ISO=$iso SOURCE
+  gcc-14/clang-19 -no-pie subject.s -o program
+  ./program
+All ten native mode/assembler combinations exit 0; both assembler combinations
+for iso-c99-language-mode.c also exit 0. The focused test separately checks
+normal undeclared-call rejection, bare GNU keyword rejection in ISO mode,
+reserved keyword spellings, final-option reduction and user macro overrides.
+No original application pass is inferred from these tailored checks.

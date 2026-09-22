@@ -1,0 +1,151 @@
+Target-header and integer NEON targeted replay, 2026-09-19.
+This is not a complete application campaign, kernel installation or boot.
+Fixed image: evo-flight-lab:sealed, linux/arm64, network none.
+Image digest: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+Oracles: GCC 14.2.0-19 and Clang 19.1.7; GNU11, O0/O2.
+
+No replacement arm_neon.h is used. Subject include paths come from the
+existing tools/ladder/e0.py include_flags over .build/ladder/sysroot.
+The GCC14 vendor header is parsed, including otherwise unused inline bodies.
+The frozen target's nominal types/private builtin spellings are a GCC-header
+profile, not a claim that Clang exposes GCC's private interface.
+
+Interface extraction:
+  container run --rm --platform linux/arm64 --network none -v "$PWD:/work:ro" \
+    evo-flight-lab:sealed python3 /work/tools/extract-aarch64-builtins.py \
+    --seed /work/crates/evocc-types/src/neon-signatures.tsv
+  exit 0; 2,980 unique prototypes; stdout equals checked-in TSV byte-for-byte.
+  SHA256 d936c48b70199f4dcf7d4c1403070f4beb619b049b952961a2190647925e15ca.
+  This includes 450 public reinterpret prototypes injected by GCC's pragma;
+  same-type identity spellings are not declared by that pragma.
+  90 tuple typedefs are ordinary records with a val array, not opaque sizes.
+
+Small sources:
+  arm-neon-header-types.c
+    SHA256 0ffb652ec3c564cb265245aefce5a041b6f5ce9d2ee6f333db3d8beeccfd50b1
+  arm-neon-integer-memory.c
+    SHA256 c360db5bdd6e135766ec8c29ad591db6957c32543b23421edeab19163a6d1200
+  arm-neon-polynomial.c
+    SHA256 6454143160b36838a9e9d41d8dfe38b6cf181fd1666c6053e5ac740939efc777
+  Each original source: gcc-14 and clang-19, -std=gnu11 -O0/-O2,
+    build exit 0, run exit 0, empty stdout/stderr (12 runs).
+  Subject debug assembly, linked separately by gcc-14 and clang-19:
+    build exit 0, run exit 0, empty stdout/stderr (6 runs).
+  Header types include half/bfloat/polynomial layouts without executing FP.
+  Memory test checks once-only argument evaluation, byte-aligned vector
+    load/store, table indices 16/255 => zero, shifts, and zip/unzip tuples.
+  Polynomial test exhausts all 65,536 byte pairs against scalar carryless
+    multiplication, not ordinary integer multiplication.
+  Integer-memory also returns 0 in both subject interpreters.
+
+Original LLVM program, unchanged:
+  SingleSource/UnitTests/Vector/NEON/simple.c
+  Frozen LLVM tree: llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e
+  Source SHA256 e99e4973fc99bebecf895cc5c406df1b13ee707af9e51c67e2277795b747e181.
+  Subject debug assembly, gcc-14/clang-19 assembler+linker: 2 zero exits.
+  GCC14 and Clang19 original-source controls O0/O2: 4 zero exits.
+  All six stdout values equal byte-for-byte, 876 bytes, SHA256
+    94184c03197d1cf512042ecfb69e7fb67b3719c37f687b187616d6994c1a29f9.
+
+Original supplemental-kernel replay (release):
+  Subject SHA256 1d5dbe34fbb8d5d73a33708528f4be0615a64abd604ac246235f73f1d703dff6.
+  Original records: .evidence/k1/survey-20260915T161109.904239Z/units.jsonl.
+  Existing cmdrecord.parse_record/substitute.emit_assembly/assemble_batch/
+    check_symbol_parity; original source and .o.cmd, no source rewriting.
+  Serial emission, 60s per unit; another small targeted process was active
+    for part of the run, so times are coarse observations, not a speed claim.
+  Each row retains 61 omitted flags through the existing command projector.
+  Unit                                  seconds  result       symbol kinds
+  arch/arm64/lib/xor-neon.o                2.566  E3021 =w      NOT RUN
+  lib/raid6/neon1.o                       1.706  assembled      2/2 identical
+  lib/raid6/neon2.o                       0.824  assembled      2/2 identical
+  lib/raid6/neon4.o                       2.345  assembled      2/2 identical
+  lib/raid6/neon8.o                      13.060  assembled      2/2 identical
+  lib/raid6/recov_neon_inner.o             0.580  assembled      2/2 identical
+  Assembly SHA256, in the five successful rows' order:
+    05a7c9f3455e8b68b14b42c01342567efa69c369eec5cd2dc834007549fc7155
+    4de75b2c8e92e6fc8119f85ff5a262c3b1dd2477506edbb1440ad9d12d29be63
+    7dff7558111ae9ff9324ec7e5d0ac4cbdd59c1ff6fe3396515605588acfe3e6b
+    dbe47c7c6ad4fb24c5beb7469a74f53b6ae4e3dfcddf8941aca213117b5353cb
+    9406a866e514c0c67e493c0a26d1c935bc4b468694cf922a856d79891091ceb1
+  Object SHA256, same order:
+    476f82f0ca6860205365f180f897d3292d6f5b784068754efa0142529f32bc56
+    3947931ddb8979358121fec99f0c8d8fffa86a1880537f30d5d1e6242db176b8
+    df39adbdde75dfb28ffc5ab1485b355cfe79046170ccce80cd6317ebf7bc61e8
+    82cf3b3cb91fd68aaaf2a01b6422524b628442e4cd6601473869eaaa9f4bd4bc
+    dced8356669a27ca9eb9ef270ce2ff108c2e885be8268bc817dc2429adf9ae71
+  No objects installed. The earlier debug neon8 run left no successful
+    artifact and is not counted as PASS; it is not the release measurement.
+
+Unmodified application spot replays on that release:
+  zstd: entropy_common, fse_decompress, timefn => emission exit 0.
+  Mbed TLS: certs, asn1_helpers, aes => emission exit 0.
+  Commands reconstructed by the existing subject.evocc_argv from the original
+    20260915T213951Z / 20260915T214458Z compile-commands.json respectively.
+  These six are emission checks, not new upstream-test or substitution counts.
+
+SIMD assembly contract gap, arm-neon-assembly.c:
+  gcc-14/clang-19 at O0/O2: build 0, run 0 (4 runs).
+  Current Section 3.11 explicitly refuses constraints outside its table;
+    w/=w is not in that table. xor-neon.c:188 needs =w/w for eor3.
+  Retain E3021; do not select general registers for SIMD operands or replace
+    a particular assembly template with guessed C semantics.
+
+Immediate boundary probe:
+  vshrq_n_u8(a,0x100000001ULL): both fixed compilers O0 build/run 0;
+    GCC warns that conversion to int changes 4294967297 to 1.
+  Private __builtin_aarch64_lshrv16qi_uus has the same measured GCC behavior.
+  vshrq_n_u8(a,(0,1)): GCC accepts/runs 0, Clang refuses non-constant argument.
+    Source ICE requirement is retained; do not substitute optimizer folding.
+  Before repair, the private wide-constant case reports E3063 in both subject
+    interpreters and assembly emission: a declared failing case, not a build error.
+  After applying declared-parameter conversion in both consumers, the dedicated
+    Rust regression passes C-HIR, EvoIR interpretation and assembly emission.
+  arm-neon-immediate-conversion.c also passes both fixed oracles at O0/O2;
+    GCC warns on 4294967297 -> 1 and 4294967303 -> 7, Clang emits no warning.
+
+Post-conversion native confirmation:
+  Debug compiler SHA256
+    e69adbd6f2f5c2069f167266a16b84fa515f1a6f13cc5a29ac251dd742135499.
+  The four public-header fixtures (types, integer-memory, polynomial,
+    immediate-conversion) all emit, assemble/link under gcc-14 and clang-19,
+    and run with exit 0, empty stdout/stderr: 8/8 native runs.
+  Both interpreters return 0 for integer-memory and immediate-conversion.
+  Final assembly SHA256, in that order:
+    0aa7099b0c4f3a36de37665cc0eee16e8f2340dfb1066673eef7b778503db073
+    4f11375ea699915c7448f6d9c0a4fe0c55cbf97a4400cc58438e747732e9ff79
+    3455344d65622c6c65f346da97a0252649c031d5ac881142b0bf0203bdedd226
+    0d0986b56d0e8712fe87189fd438660b07753dc652b4252f04a774abd49f5805
+  The conversion source SHA256 is
+    d9f7116ae1841b3bf29a48b6f9ecd9d15338d7544b9ed3476781be93b18b686c.
+  Current focused suites: execution/semantic 89/89, parser 15/15,
+    benchmark tooling 169/169; textual shapes 51/51 and Ruff pass.
+  The broader changed gate is still pending at this checkpoint.
+
+Final release original-kernel confirmation after the conversion repair:
+  SHA256 1b6e1fa3a18f6d25a5e85f5f02e76507a09f86d3532c690f736ecae042deb2c0.
+  All five successful assembly files remain byte-identical to the digests
+    above; fresh sealed assembly and symbol-kind comparisons pass again.
+  neon1 0.590s, neon2 0.780s, neon4 2.279s, neon8 13.590s,
+    recov_neon_inner 1.006s. Coarse times while the debug gate was compiling.
+  xor-neon still reports E3021 =w (2.902s); no object is installed.
+
+Gate follow-up and diagnostic allocation:
+  The first broad gate completed 2,498 PASS, 2 FAIL, 4 historical ignored.
+  Both failures were stale expectations after replacing the opaque float
+    vector with its actual lane type: DWARF's anonymous vector DIE and E3050.
+  The tests now follow the typedef to its element/count and pin the named
+    floating-value diagnostic. The 59-test affected group passes.
+  Independently, sealed gcc-14 assembly plus readelf confirms DW_TAG_array_type,
+    DW_AT_GNU_vector=1, DW_AT_count=4 and a 4-byte DW_ATE_float element;
+    the sizeless predicate remains DW_TAG_unspecified_type.
+  The new target-builtin diagnostic is allocated as E3052 within the authorized
+    E3042-E3059 interval. Earlier E3063 observations above retain their original
+    spelling; they are not claims about the current code.
+  Current release SHA256:
+    4bc75461c69a599043363d462f2bd415be10a0a6033f86791689c9026072dc94.
+  The fresh layout probe observes the frozen consensus bytes exactly:
+    base 128/128, 5840e458a396780b1bd452257fb7e35b1a56334ffed0aefd876fbd60584c5add;
+    attributed 22/22, 8e1bffbf0e784653d575b08ef80a7df3324d83770a5d4bc5e3ed7d000d9fddbb.
+  Broad gate retry and affected zstd/Mbed TLS application replays remain in
+    progress here; no full-configuration or all-benchmark PASS is asserted.

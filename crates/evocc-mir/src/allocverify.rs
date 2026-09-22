@@ -6,7 +6,7 @@
 //! allocator concluded: the input is the allocated function, and the three
 //! properties are re-derived from it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     inst_defs, inst_uses, term_edges, term_uses, Allocated, AsmBody, AsmConstraint, AsmOperand,
@@ -49,7 +49,10 @@ fn verify_assembly(
             ));
         }
         if let Some(expected) = operand.fixed_register {
-            if !matches!(expected, 0..=15 | 19..=28 | 30) || number(operand) != Some(expected) {
+            if !(matches!(expected, 0..=15 | 19..=28 | 30)
+                || crate::linscan::SIMD_CALLER_SAVED.contains(&expected))
+                || number(operand) != Some(expected)
+            {
                 return Err(refuse(
                     block,
                     format!("assembly binding x{expected} does not match its assigned register"),
@@ -81,6 +84,31 @@ fn verify_assembly(
                 ))
             }
             AsmValue::Reg(reg) => {
+                let constraint = if let AsmConstraint::Tied(digit) = operand.constraint {
+                    body.outputs
+                        .get(usize::from(digit))
+                        .map(|out| out.constraint)
+                } else {
+                    Some(operand.constraint)
+                };
+                if constraint.is_none_or(|constraint| constraint.simd() != reg.class.is_simd()) {
+                    return Err(refuse(
+                        block,
+                        "assembly constraint has an incompatible register bank".into(),
+                    ));
+                }
+                if register(reg).is_some_and(|number| {
+                    if reg.class.is_simd() {
+                        !(64..=95).contains(&number)
+                    } else {
+                        number >= 31
+                    }
+                }) {
+                    return Err(refuse(
+                        block,
+                        "assembly allocation has an incompatible register bank".into(),
+                    ));
+                }
                 if register(reg).is_none() {
                     return Err(refuse(
                         block,
@@ -91,16 +119,30 @@ fn verify_assembly(
         }
     }
 
+    let outputs: Vec<_> = body
+        .outputs
+        .iter()
+        .filter(|output| !matches!(output.constraint, AsmConstraint::Memory { .. }))
+        .filter_map(number)
+        .collect();
+    if outputs.iter().collect::<BTreeSet<_>>().len() != outputs.len() {
+        return Err(refuse(
+            block,
+            "distinct assembly outputs share a physical register".into(),
+        ));
+    }
+
     // Early clobber: no input holds the register.
-    let inputs: Vec<u8> = body.inputs.iter().filter_map(number).collect();
-    for operand in &body.outputs {
-        if !matches!(operand.constraint, AsmConstraint::EarlyClobber(_)) {
+    for (index, operand) in body.outputs.iter().enumerate() {
+        if !operand.constraint.early_clobber() {
             continue;
         }
         let Some(assigned) = number(operand) else {
             continue;
         };
-        if inputs.contains(&assigned) {
+        if body.inputs.iter().any(|input| {
+            input.constraint != AsmConstraint::Tied(index as u8) && number(input) == Some(assigned)
+        }) {
             return Err(refuse(
                 block,
                 format!("an early-clobber output shares register {assigned} with an input"),
@@ -177,6 +219,33 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
         }
     };
 
+    for reg in allocated.blocks.iter().flat_map(|block| {
+        block
+            .insts
+            .iter()
+            .flat_map(inst_defs)
+            .chain(block.insts.iter().flat_map(inst_uses))
+            .chain(term_uses(&block.term))
+    }) {
+        if reg.class == RegClass::Flags {
+            continue;
+        }
+        let Some(number) = register(reg) else {
+            return Err(refuse(0, format!("%v{} is unassigned", reg.id)));
+        };
+        let valid = if reg.class.is_simd() {
+            (64..=95).contains(&number)
+        } else {
+            number < 31
+        };
+        if !valid {
+            return Err(refuse(
+                0,
+                format!("%v{} has an incompatible register bank", reg.id),
+            ));
+        }
+    }
+
     // Section 6: the parameters arrive in x0 onwards, and nothing else is
     // defined when the function is entered. Which virtual registers those are
     // is recovered here rather than taken from the allocator: they are exactly
@@ -215,7 +284,11 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
             }
             continue;
         }
-        if number >= limit {
+        if if number >= crate::linscan::SIMD_BASE {
+            number - crate::linscan::SIMD_BASE >= limit.min(8)
+        } else {
+            number >= limit.min(8)
+        } {
             return Err(refuse(
                 0,
                 format!(
@@ -270,6 +343,17 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
         };
         let mut state = state;
         for (index, inst) in block.insts.iter().enumerate() {
+            if let MInst::AtomicRmw { dst, .. } = inst {
+                if inst_uses(inst)
+                    .iter()
+                    .any(|input| register(*input) == register(*dst))
+                {
+                    return Err(refuse(
+                        block.id,
+                        "atomic RMW output overlaps an input of its exclusive loop".into(),
+                    ));
+                }
+            }
             for reg in inst_uses(inst) {
                 if reg.class == RegClass::Flags {
                     continue;
@@ -402,7 +486,11 @@ fn transfer(state: &State, block: &crate::MBlock, register: &impl Fn(VReg) -> Op
 fn apply(state: &mut State, inst: &MInst, register: &impl Fn(VReg) -> Option<u8>) {
     // A call destroys every caller-saved register before its results arrive.
     if matches!(inst, MInst::Bl { .. } | MInst::Blr { .. }) {
-        for number in CLOBBERED {
+        for number in CLOBBERED
+            .into_iter()
+            .chain(crate::linscan::SIMD_CALLER_SAVED)
+            .chain([94, 95])
+        {
             state.remove(&number);
         }
     }

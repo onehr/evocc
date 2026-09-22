@@ -1,0 +1,55 @@
+Static object permissions and placement, 2026-09-19.
+Fixed image evo-flight-lab:sealed, linux/arm64, network none:
+GCC 14.2.0-19 and Clang 19.1.7.
+For each compiler, -O0/-O2 and [-fno-pic -fno-pie]/[-fPIC]:
+  CC -std=gnu11 OPT MODEL -c tests/fixtures/static-readonly-storage.c -o case.o
+  nm --defined-only case.o
+  CC case.o -no-pie -o case; ./case
+Eight compilations and executions succeed, all executions exit 0.
+Both warn that literal discards const; the default case only reads it.
+
+Both compilers place scalar, zero, array and device in read-only R storage;
+pointers is R without PIC and relocatable read-only data (nm D) with PIC.
+object, pointee, mixed, literal and mutable_literal are D in both modes.
+The const compound literal is r; the non-const compound literal is d.
+The function-static const object is r at O0 and folded away at O2.
+Explicit .data.explicit conflicts: GCC makes it writable (D), Clang does not
+(R). Existing explicit-section placement is retained; this fix changes only
+automatic placement, not the permission interpretation of user section names.
+None of the write-through-const cases 1..7 is claimed as defined C execution
+or run natively; those are interpreter E3014 instrumentation assertions.
+
+RED: missing readonly metadata in emitted global @scalar; C-HIR case 1
+permits the store. Two declared failing tests, zero build errors.
+Original trigger: mm/page_alloc.o zone_names and migratetype_names, both D
+versus R in the GCC reference on the original non-PIC kernel command.
+
+GREEN subject, target/frontend/release/evocc SHA-256:
+2214908df66602b0fcbf72291e98f6909abcd2e391211f7cb279da27b8da860c
+Forty language-semantic tests pass, including both interpreter permission
+checks, shared EvoIR/EvoMIR metadata round trips, exact native placement and
+EvoMIR E3014 execution. The independent checker accepts unchanged permission
+and refuses a removed readonly field even with a recomputed output digest.
+Const TLS initialization/permission and the exhaustive text-field sentinel
+tests pass separately.
+Default/-O2 times static/PIC assembly, each built and executed using GCC-14
+and Clang-19: 8/8 exits 0 with the expected object symbol kinds. Linking uses
+-no-pie -Wl,-z,relro,-z,now. No undefined write-through-const case runs natively.
+
+The PIC fixture, emitted with -Dmain=readonly_entry, additionally passes
+4/4 shared-library executions (default/-O2, GCC-14/Clang-19 assembler/linker):
+  CC -shared OPT-dso.s -Wl,-z,relro,-z,now -o /tmp/libreadonly.so
+  CC tests/fixtures/static-readonly-driver.c -ldl -o /tmp/driver
+  /tmp/driver /tmp/libreadonly.so
+Each DSO has .data.rel.ro covered by GNU_RELRO and no TEXTREL dynamic tag.
+The driver loads, resolves, runs and closes the DSO; all four exit 0.
+These checks were repeated with the same frozen assembly on 2026-09-19.
+
+Original mm/page_alloc.o replay with the existing K1 command projection:
+81/81 symbol names and kinds match; zone_names and migratetype_names are R.
+Assembly c574a429d0de7da7de0d10b3336a9150319865e81fb9e040d77292dc41c19c47
+Object 5662218cbb8d496a32beb895ca3c14c0be611bf249a79e2d36fd78bc5cd53bcb
+Output: .build/vector-targeted/page-alloc-readonly/mm/.
+The first replay invocation had a missing Python helper argument and failed
+before starting the compiler; the corrected original-command run above is
+the measurement. No full survey, installation or boot is inferred.

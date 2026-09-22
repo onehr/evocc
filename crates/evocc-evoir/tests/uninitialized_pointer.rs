@@ -30,6 +30,8 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
         },
     );
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -53,6 +55,8 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
     validate_ssa(&function).expect("pointer poison must be an ordinary typed definition");
 
     let module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

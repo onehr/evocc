@@ -192,7 +192,7 @@ fn multiline_declaration_surface_spans_are_exact() {
     );
     assert_eq!(compute.written.layers.len(), 1);
     let function_layer_span = match &compute.written.layers[0] {
-        evocc_chir::WrittenDeclaratorLayer::Function { span } => *span,
+        evocc_chir::WrittenDeclaratorLayer::Function { span, .. } => *span,
         other => panic!("expected function layer, got {other:?}"),
     };
     assert_origin(

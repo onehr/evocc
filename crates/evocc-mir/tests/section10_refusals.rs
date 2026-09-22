@@ -100,8 +100,13 @@ func @main(%arg0: f64, %arg1: mem<all>, %arg2: world) -> (f64, mem<all>, world) 
 ";
 
 #[test]
-fn a_floating_point_operand_is_e4001() {
-    assert_eq!(codes(FLOATING_POINT), vec!["E4001"]);
+fn supported_scalar_floating_identity_uses_the_simd_bank() {
+    let module = parse_section9_module(FLOATING_POINT.as_bytes()).unwrap();
+    let module = evocc_mir::lower_module(&module).unwrap();
+    assert_eq!(
+        module.functions[0].blocks[0].args[0].class,
+        evocc_mir::RegClass::Simd64
+    );
 }
 
 const POINTER_IN_STATIC_DATA: &str = "\

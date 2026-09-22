@@ -558,6 +558,7 @@ fn assert_unnamed_parameter(source: &str, expected: UnnamedParameterShape) {
                 ..
             }, WrittenDeclaratorLayer::Function {
                 span: function_span,
+                ..
             }] = parameter.written.layers.as_slice()
             else {
                 panic!("unnamed function pointer must retain pointer then function layers");

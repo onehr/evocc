@@ -11,6 +11,7 @@ use evocc_types::{TargetDataLayout, TypeId, TypeKind};
 use crate::*;
 
 mod object_size;
+mod ranges;
 
 #[derive(Debug)]
 pub struct InlineError {
@@ -150,6 +151,14 @@ pub fn for_each_declaration<'a>(unit: &CHirUnit<'a>, mut visit: impl FnMut(&'a C
     inspect_with_declarations(unit.iter().map(Node::Decl), &mut visit);
 }
 
+/// Declaration-chain consumers need lexical order, unlike reference-set scans.
+pub fn for_each_declaration_ordered<'a>(
+    unit: &CHirUnit<'a>,
+    mut visit: impl FnMut(&'a CHirDecl<'a>),
+) {
+    inspect_ordered(unit.iter().map(Node::Decl), &mut visit, &mut |_| {}, true);
+}
+
 fn inspect_with_declarations<'a>(
     nodes: impl IntoIterator<Item = Node<'a>>,
     visit: &mut impl FnMut(&'a CHirDecl<'a>),
@@ -162,9 +171,22 @@ fn inspect_with_visitors<'a>(
     visit: &mut impl FnMut(&'a CHirDecl<'a>),
     visit_expression: &mut impl FnMut(&'a CHirExpr<'a>),
 ) -> Uses<'a> {
+    inspect_ordered(nodes, visit, visit_expression, false)
+}
+
+fn inspect_ordered<'a>(
+    nodes: impl IntoIterator<Item = Node<'a>>,
+    visit: &mut impl FnMut(&'a CHirDecl<'a>),
+    visit_expression: &mut impl FnMut(&'a CHirExpr<'a>),
+    ordered: bool,
+) -> Uses<'a> {
     let mut work: Vec<_> = nodes.into_iter().collect();
+    if ordered {
+        work.reverse();
+    }
     let mut uses = Uses::default();
     while let Some(node) = work.pop() {
+        let children = work.len();
         uses.nodes += 1;
         match node {
             Node::Decl(decl) => {
@@ -332,6 +354,27 @@ fn inspect_with_visitors<'a>(
                     _ => {}
                 }
                 match e {
+                    CHirExpr::Floating(access) => {
+                        for operand in &access.operands {
+                            work.push(Node::Expr(operand, false));
+                        }
+                    }
+                    CHirExpr::Vector(access) => {
+                        for operand in &access.operands {
+                            work.push(Node::Expr(operand, false));
+                        }
+                    }
+                    CHirExpr::Complex(access) => {
+                        for operand in &access.operands {
+                            work.push(Node::Expr(operand, false));
+                        }
+                    }
+                    CHirExpr::Atomic(access) => {
+                        uses.unknown_memory = true;
+                        for operand in access.operands() {
+                            work.push(Node::Expr(operand, false));
+                        }
+                    }
                     CHirExpr::Call(f, args, _) => {
                         uses.has_calls = true;
                         if let CHirExpr::Ident { symbol, .. } = f {
@@ -351,7 +394,8 @@ fn inspect_with_visitors<'a>(
                     CHirExpr::Binary(_, a, b, _)
                     | CHirExpr::Index(a, b, _)
                     | CHirExpr::Comma(a, b, _)
-                    | CHirExpr::Elvis(a, b, _) => {
+                    | CHirExpr::Elvis(a, b, _)
+                    | CHirExpr::BuiltinExpect(a, b, _) => {
                         work.push(Node::Expr(a, false));
                         work.push(Node::Expr(b, false));
                     }
@@ -428,6 +472,9 @@ fn inspect_with_visitors<'a>(
                 }
             }
         }
+        if ordered {
+            work[children..].reverse();
+        }
     }
     uses
 }
@@ -438,23 +485,41 @@ pub fn retained_functions(
     unit: &CHirUnit<'_>,
 ) -> Result<BTreeSet<SymbolId>, crate::linkage::LinkageError> {
     let linkage = unit.symbol_linkage()?;
-    let definitions: BTreeMap<_, _> = unit
-        .iter()
-        .filter_map(|declaration| match declaration {
-            CHirDecl::Function(function) if function.body.is_some() => {
-                Some((function.symbol, function))
+    let mut definitions: BTreeMap<_, Vec<_>> = BTreeMap::new();
+    for declaration in unit.iter() {
+        if let CHirDecl::Function(function) = declaration {
+            if function.body.is_some() {
+                definitions
+                    .entry(function.symbol)
+                    .or_default()
+                    .push(function);
             }
-            _ => None,
-        })
-        .collect();
+        }
+    }
     let mut assembly_names = BTreeMap::new();
     let mut pending = Vec::new();
-    for (&symbol, function) in &definitions {
+    // Attributes may occur on an earlier prototype, not the definition.
+    pending.extend(unit.iter().filter_map(|decl| {
+        match decl {
+            CHirDecl::Function(f)
+                if f.attributes
+                    .iter()
+                    .any(|a| matches!(a.semantic_name(), Some("constructor" | "destructor"))) =>
+            {
+                Some(f.symbol)
+            }
+            _ => None,
+        }
+    }));
+    for (&symbol, bodies) in &definitions {
+        let function = bodies[0];
         if !function.has_internal_linkage(unit.symbols())
-            || function
-                .attributes
-                .iter()
-                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
+            || function.attributes.iter().any(|a| {
+                matches!(
+                    a.semantic_name(),
+                    Some("used" | "retain" | "constructor" | "destructor")
+                )
+            })
         {
             pending.push(symbol);
         }
@@ -490,11 +555,14 @@ pub fn retained_functions(
     );
     let mut retained = BTreeSet::new();
     while let Some(symbol) = pending.pop() {
-        let Some(function) = definitions.get(&symbol) else {
+        let Some(bodies) = definitions.get(&symbol) else {
             continue;
         };
         if retained.insert(symbol) {
-            add_uses(inspect([Node::Stmt(function.body.unwrap())]), &mut pending);
+            add_uses(
+                inspect(bodies.iter().map(|f| Node::Stmt(f.body.unwrap()))),
+                &mut pending,
+            );
         }
     }
     Ok(retained)
@@ -541,7 +609,8 @@ fn constant_inline_return<'a>(
 pub fn needs_substitution(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {
     unit.iter().any(|d| {
         matches!(d, CHirDecl::Function(f) if f.body.is_some()
-        && (f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
+        && (!f.inline_spans.is_empty()
+            || f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
             || constant_inline_return(unit, f, target).is_some()
             || f.has_internal_linkage(unit.symbols())))
     }) || !static_integer_values(unit, target).is_empty()
@@ -552,7 +621,38 @@ pub(crate) fn has_constant_queries(unit: &CHirUnit<'_>) -> bool {
     inspect(unit.iter().map(Node::Decl)).constant_queries
 }
 
+pub(crate) fn needs_execution_resolution(unit: &CHirUnit<'_>) -> bool {
+    has_constant_queries(unit)
+        || unit.iter().any(|d| {
+            matches!(d, CHirDecl::Function(f)
+        if f.body.is_some() && !f.inline_spans.is_empty())
+        })
+}
+
 type ParameterConstants<'a> = BTreeMap<SymbolId, BTreeMap<SymbolId, (&'a CHirExpr<'a>, TypeId)>>;
+
+// A named function address is stable across callers; an object containing a
+// function pointer, an indirect call result, or arbitrary address arithmetic
+// is not. Preserve the original parameter conversion and call evaluation.
+fn named_function_argument(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) -> Option<SymbolId> {
+    match expression {
+        CHirExpr::Ident { symbol, .. }
+            if unit.symbols().symbol(*symbol).ok()?.kind() == SymbolKind::Function =>
+        {
+            Some(*symbol)
+        }
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => match operand {
+            CHirExpr::Ident { .. } => named_function_argument(unit, operand),
+            _ => None,
+        },
+        CHirExpr::Cast(ty, operand, _)
+            if matches!(unit.types().get(*ty)?.kind, TypeKind::Pointer(_)) =>
+        {
+            named_function_argument(unit, operand)
+        }
+        _ => None,
+    }
+}
 
 // Closed-world facts only: every direct caller must pass the same converted
 // value, and neither address-taking nor assembly may supply another caller.
@@ -610,14 +710,37 @@ fn common_parameter_values<'a>(
             let Some(symbol) = parameter.symbol else {
                 continue;
             };
-            let Some(integer) = crate::constant::canonical_integer_type(unit.types(), parameter.ty)
-            else {
-                continue;
-            };
             let qualifiers = unit.types.get(parameter.ty).unwrap().qualifiers;
             if mutable.contains(&symbol) || qualifiers.is_volatile || qualifiers.is_atomic {
                 continue;
             }
+            let Some(integer) = crate::constant::canonical_integer_type(unit.types(), parameter.ty)
+            else {
+                let Some(TypeKind::Pointer(pointee)) =
+                    unit.types().get(parameter.ty).map(|ty| &ty.kind)
+                else {
+                    continue;
+                };
+                if !matches!(
+                    unit.types().get(*pointee).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) {
+                    continue;
+                }
+                let Some(first) = named_function_argument(unit, callers[0][index]) else {
+                    continue;
+                };
+                if callers
+                    .iter()
+                    .all(|args| named_function_argument(unit, args[index]) == Some(first))
+                {
+                    result
+                        .entry(function.symbol)
+                        .or_insert_with(BTreeMap::new)
+                        .insert(symbol, (callers[0][index], parameter.ty));
+                }
+                continue;
+            };
             let mut values = callers.iter().map(|args| {
                 crate::constant::eval_executable_integer_constant(
                     args[index],
@@ -700,6 +823,13 @@ pub(crate) fn substitute_for_execution<'a>(
     target: &TargetDataLayout,
     keep_definitions: bool,
 ) -> Result<CHirUnit<'a>, InlineError> {
+    let roles = crate::function_definitions::FunctionDefinitions::derive(unit).map_err(|e| {
+        InlineError {
+            span: e.duplicate,
+            cycle: false,
+            message: "incompatible-redeclaration".to_owned(),
+        }
+    })?;
     let mut uses = inspect(unit.iter().map(Node::Decl));
     let linkage = crate::linkage::SymbolLinkage::derive(unit).map_err(|e| InlineError {
         span: e.span,
@@ -717,11 +847,12 @@ pub(crate) fn substitute_for_execution<'a>(
     for declaration in unit.iter() {
         if let CHirDecl::Function(function) = declaration {
             let name = linkage.function_name(function.symbol, &function.name.spelling);
-            if function
-                .attributes
-                .iter()
-                .any(|a| matches!(a.semantic_name(), Some("used" | "retain")))
-                || assembly_names.contains(name)
+            if function.attributes.iter().any(|a| {
+                matches!(
+                    a.semantic_name(),
+                    Some("used" | "retain" | "constructor" | "destructor")
+                )
+            }) || assembly_names.contains(name)
                 || assembly_names.contains(format!("_{name}").as_str())
             {
                 uses.addresses.insert(function.symbol);
@@ -729,7 +860,8 @@ pub(crate) fn substitute_for_execution<'a>(
         }
     }
     let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
-    // Honor ordinary inline hints for small, acyclic private helpers too.
+    // Honor ordinary inline hints for small, acyclic private or inline-only
+    // helpers too. An inline-only body's external fallback is still distinct.
     // The bound limits code growth; mandatory always_inline remains separate.
     let bodies: BTreeMap<_, _> = unit
         .iter()
@@ -763,33 +895,32 @@ pub(crate) fn substitute_for_execution<'a>(
         }
         false
     };
-    let eligible: BTreeMap<_, _> = unit
-        .iter()
-        .filter_map(|d| match d {
-            CHirDecl::Function(f)
-                if f.body.is_some()
-                    && (f
-                        .attributes
-                        .iter()
-                        .any(|a| a.semantic_name() == Some("always_inline"))
-                        || constant_inline_return(unit, f, target).is_some()
-                        || (!f.inline_spans.is_empty()
-                            && f.has_internal_linkage(unit.symbols())
-                            && !f
-                                .attributes
-                                .iter()
-                                .any(|a| a.semantic_name() == Some("noinline"))
-                            && bodies[&f.symbol].nodes <= 128
-                            && !sensitive_control_flow(f.symbol)))
-                    && !uses.addresses.contains(&f.symbol)
-                    && !matches!(
-                        f.parameters,
-                        ParameterSyntax::Prototype { variadic: true, .. }
-                    ) =>
-            {
-                Some((f.symbol, f))
-            }
-            _ => None,
+    let mut candidates = roles.definitions.clone();
+    candidates.extend(
+        roles
+            .inline_bodies
+            .iter()
+            .map(|(&symbol, &body)| (symbol, body)),
+    );
+    let eligible: BTreeMap<_, _> = candidates
+        .into_iter()
+        .filter(|(_, f)| {
+            f.body.is_some()
+                && (roles.always_inline.contains(&f.symbol)
+                    || constant_inline_return(unit, f, target).is_some()
+                    || (!f.inline_spans.is_empty()
+                        && (f.has_internal_linkage(unit.symbols()) || !roles.is_definition(f))
+                        && !f
+                            .attributes
+                            .iter()
+                            .any(|a| a.semantic_name() == Some("noinline"))
+                        && bodies[&f.symbol].nodes <= 128
+                        && !sensitive_control_flow(f.symbol)))
+                && (!uses.addresses.contains(&f.symbol) || roles.always_inline.contains(&f.symbol))
+                && !matches!(
+                    f.parameters,
+                    ParameterSyntax::Prototype { variadic: true, .. }
+                )
         })
         .collect();
     let pure_constants = eligible
@@ -868,17 +999,46 @@ pub(crate) fn substitute_for_execution<'a>(
     for declaration in unit.iter() {
         if let CHirDecl::Function(f) = declaration {
             if let Some(body) = f.body {
+                if !roles.is_definition(f) {
+                    // This body can supply direct substitutions, never a
+                    // callable fallback. Addresses and remaining calls retain
+                    // the existing external symbol identity.
+                    let mut external = f.clone();
+                    external.body = None;
+                    declarations.push(pass.alloc(CHirDecl::Function(external)));
+                    continue;
+                }
+                let body_uses = inspect([Node::Stmt(body)]);
+                let declarator_span = f.written.layers.first().and_then(|layer| match layer {
+                    WrittenDeclaratorLayer::Function { span, .. } => Some(*span),
+                    _ => None,
+                });
                 let scope = unit
                     .symbols
                     .scopes_in_source_order()
                     .iter()
-                    .find(|s| s.function_owner() == Some(f.symbol))
+                    .find(|s| {
+                        s.function_owner() == Some(f.symbol)
+                            && s.span().zip(declarator_span).is_some_and(|(a, b)| {
+                                a.file == b.file && a.byte_start == b.byte_start
+                            })
+                    })
+                    .or_else(|| {
+                        let mut bound = unit
+                            .symbols
+                            .scopes_in_source_order()
+                            .iter()
+                            .filter(|s| s.function_owner() == Some(f.symbol));
+                        let first = bound.next()?;
+                        bound.next().is_none().then_some(first)
+                    })
                     .ok_or_else(|| pass.error(f.span, "function scope missing"))?
                     .id();
                 let mut c = Context::new(scope);
-                c.mutable = bodies[&f.symbol].mutable.clone();
-                c.exposed_objects = bodies[&f.symbol].exposed_objects.clone();
-                c.single_mutations = bodies[&f.symbol].single_mutations();
+                c.mutable = body_uses.mutable.clone();
+                c.exposed_objects = body_uses.exposed_objects.clone();
+                c.track_ranges = body_uses.constant_queries;
+                c.single_mutations = body_uses.single_mutations();
                 c.declaration_prefix = true;
                 if let Some(values) = parameter_values.get(&f.symbol) {
                     for (&symbol, &(value, ty)) in values {
@@ -896,6 +1056,7 @@ pub(crate) fn substitute_for_execution<'a>(
                 if !keep_definitions
                     && f.has_internal_linkage(pass.unit.symbols())
                     && pass.eligible.contains_key(&f.symbol)
+                    && !uses.addresses.contains(&f.symbol)
                 {
                     continue;
                 }
@@ -1039,6 +1200,8 @@ struct Context<'a> {
     possible_constants: BTreeMap<SymbolId, Vec<crate::integer::CInteger>>,
     assignment_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     sequential_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    path_ranges: BTreeMap<SymbolId, ranges::Range>,
+    track_ranges: bool,
     allow_sequential_values: bool,
     object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
     single_mutations: BTreeSet<SymbolId>,
@@ -1049,6 +1212,7 @@ struct Context<'a> {
     expand_calls: bool,
     prefix: Option<u64>,
     result: Option<SymbolId>,
+    return_extent: Option<object_size::Bounds<'a>>,
     end: Option<SpannedName>,
 }
 
@@ -1062,6 +1226,8 @@ impl Context<'_> {
             possible_constants: BTreeMap::new(),
             assignment_values: BTreeMap::new(),
             sequential_values: BTreeMap::new(),
+            path_ranges: BTreeMap::new(),
+            track_ranges: false,
             allow_sequential_values: false,
             object_bounds: BTreeMap::new(),
             single_mutations: BTreeSet::new(),
@@ -1072,6 +1238,7 @@ impl Context<'_> {
             expand_calls: true,
             prefix: None,
             result: None,
+            return_extent: None,
             end: None,
         }
     }
@@ -1429,6 +1596,16 @@ impl<'a> Substitution<'a, '_> {
         Some(self.alloc(value))
     }
 
+    fn complete_object_value(&self, ty: TypeId) -> bool {
+        matches!(
+            self.unit.types.get(ty).unwrap().kind,
+            TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::BuiltinVaList
+                | TypeKind::Vector { .. }
+        )
+    }
+
     fn object(
         &self,
         s: SymbolId,
@@ -1438,12 +1615,10 @@ impl<'a> Substitution<'a, '_> {
         let symbol = self.unit.symbols.symbol(s).unwrap();
         let ty = symbol.ty();
         let initializer = value.map(|v| {
-            // A list parameter is the same complete-object copy as an
-            // ordinary record parameter, never a scalar store of its address.
-            let action = if matches!(
-                self.unit.types.get(ty).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-            ) {
+            // Record, list and vector parameters use the same complete-object
+            // initialization as an ordinary declaration. A vector is not a
+            // scalar destination in the checked initialization plan.
+            let action = if self.complete_object_value(ty) {
                 InitAction::CopyAggregate {
                     path: SubobjectPath::root(),
                     destination_type: ty,
@@ -1751,6 +1926,18 @@ impl<'a> Substitution<'a, '_> {
                 let replacement = value.and_then(|value| self.value_after_execution(value, o.ty));
                 let repeatable = replacement.is_some();
                 let qualifiers = self.unit.types.get(o.ty).unwrap().qualifiers;
+                if !c.path_ranges.is_empty()
+                    && !qualifiers.is_volatile
+                    && !qualifiers.is_atomic
+                    && o.asm_label.is_none()
+                    && matches!(o.storage, StorageClass::None | StorageClass::Auto)
+                    && !c.exposed_objects.contains(&original)
+                {
+                    if let Some(range) = value.and_then(|v| self.query_range(v, c, 16)) {
+                        c.path_ranges.insert(o.symbol, range);
+                        c.memo.clear();
+                    }
+                }
                 if !repeatable
                     && !c.mutable.contains(&original)
                     && !qualifiers.is_volatile
@@ -1855,6 +2042,20 @@ impl<'a> Substitution<'a, '_> {
         e: &'a CHirExpr<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
+        if !c.path_ranges.is_empty()
+            && matches!(
+                e,
+                CHirExpr::Assign { .. }
+                    | CHirExpr::Update { .. }
+                    | CHirExpr::MemoryAssign { .. }
+                    | CHirExpr::MemoryUpdate { .. }
+                    | CHirExpr::Atomic(_)
+                    | CHirExpr::Call(..)
+                    | CHirExpr::Unary(UnaryOp::AddrOf, ..)
+            )
+        {
+            self.invalidate_ranges(&inspect([Node::Expr(e, false)]), c);
+        }
         let key = (e as *const _ as usize, c.expand_calls);
         if let Some(e) = c.memo.get(&key) {
             return Ok(e);
@@ -1893,6 +2094,35 @@ impl<'a> Substitution<'a, '_> {
         }
         let mut out = e.clone();
         match &mut out {
+            CHirExpr::Floating(access) => {
+                for operand in &mut access.operands {
+                    *operand = self.expr(operand, c)?;
+                }
+                access.facts = access
+                    .facts
+                    .with_type(self.substituted_type(access.facts.ty(), c));
+            }
+            CHirExpr::Vector(access) => {
+                for operand in &mut access.operands {
+                    *operand = self.expr(operand, c)?;
+                }
+                access.facts = access
+                    .facts
+                    .with_type(self.substituted_type(access.facts.ty(), c));
+            }
+            CHirExpr::Complex(access) => {
+                for operand in &mut access.operands {
+                    *operand = self.expr(operand, c)?;
+                }
+                access.facts = access
+                    .facts
+                    .with_type(self.substituted_type(access.facts.ty(), c));
+            }
+            CHirExpr::Atomic(access) => {
+                for operand in access.operands_mut() {
+                    *operand = self.expr(operand, c)?;
+                }
+            }
             CHirExpr::BuiltinObjectSize {
                 operand,
                 mode,
@@ -1996,7 +2226,8 @@ impl<'a> Substitution<'a, '_> {
             CHirExpr::Binary(_, a, b, _)
             | CHirExpr::Index(a, b, _)
             | CHirExpr::Comma(a, b, _)
-            | CHirExpr::Elvis(a, b, _) => {
+            | CHirExpr::Elvis(a, b, _)
+            | CHirExpr::BuiltinExpect(a, b, _) => {
                 *a = self.expr(a, c)?;
                 *b = self.expr(b, c)?;
             }
@@ -2157,6 +2388,17 @@ impl<'a> Substitution<'a, '_> {
                     }),
                     _ => None,
                 };
+                if self.track_extents && c.expand_calls {
+                    if let Some(value) = value {
+                        if let Some(bounds) = self.statement_result_bounds(body, value, c) {
+                            let result = self.alloc(out);
+                            self.extent_calls
+                                .insert(result as *const _ as usize, bounds);
+                            c.memo.insert(key, result);
+                            return Ok(result);
+                        }
+                    }
+                }
             }
             CHirExpr::CompoundLit(ty, i, _) => {
                 *ty = self.substituted_type(*ty, c);
@@ -2173,6 +2415,32 @@ impl<'a> Substitution<'a, '_> {
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. } => {}
+        }
+        if matches!(
+            out,
+            CHirExpr::Binary(
+                BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge
+                    | BinaryOp::Eq
+                    | BinaryOp::Ne,
+                ..
+            )
+        ) {
+            if let Some(value) = self
+                .query_range(&out, c, 16)
+                .and_then(ranges::Range::boolean)
+            {
+                out = CHirExpr::Lit(
+                    IntLit {
+                        value: u64::from(value),
+                        suffix: IntSuffix::None,
+                        base: IntBase::Dec,
+                    },
+                    e.span(),
+                );
+            }
         }
         let out = self.alloc(out);
         c.memo.insert(key, out);
@@ -2203,10 +2471,15 @@ impl<'a> Substitution<'a, '_> {
         let Ok(entry) = self.unit.symbols.symbol(symbol) else {
             return;
         };
-        if !matches!(
-            entry.storage_class(),
-            Some(StorageClass::None | StorageClass::Auto)
-        ) {
+        // No explicit storage class also describes file-scope objects. Their
+        // mutations in other functions are absent from this body's use counts,
+        // so those counts cannot establish an invariant value across a call.
+        if entry.scope() == self.unit.symbols.file_scope()
+            || !matches!(
+                entry.storage_class(),
+                Some(StorageClass::None | StorageClass::Auto)
+            )
+        {
             return;
         }
         let CHirStmt::Expr(CHirExpr::Assign { value, place, .. }, _) = rewritten else {
@@ -2251,6 +2524,11 @@ impl<'a> Substitution<'a, '_> {
                 let outer_assignments = c.assignment_values.clone();
                 let outer_sequential = c.sequential_values.keys().copied().collect::<BTreeSet<_>>();
                 let outer_allow_sequential = c.allow_sequential_values;
+                let outer_ranges = c.path_ranges.keys().copied().collect::<BTreeSet<_>>();
+                if incoming {
+                    c.path_ranges.clear();
+                    c.memo.clear();
+                }
                 c.allow_sequential_values = !incoming;
                 if incoming && !c.sequential_values.is_empty() {
                     c.sequential_values.clear();
@@ -2260,7 +2538,48 @@ impl<'a> Substitution<'a, '_> {
                     c.declaration_prefix = true;
                 }
                 let mut result = Vec::new();
-                for i in items.iter() {
+                for original_item in items.iter() {
+                    // A source-ICE branch cannot execute its unselected writes.
+                    // Prune before invalidating sequential facts, but preserve
+                    // labels (including switch cases) that can enter an arm.
+                    let live_item = match original_item {
+                        CHirBlockItem::Statement(statement @ CHirStmt::If(test, yes, no, span))
+                            if !inspect([Node::Stmt(statement)]).entry_labels
+                                && crate::constant::eval_integer_constant(
+                                    test,
+                                    &self.unit.types,
+                                    &self.unit.symbols,
+                                    self.target,
+                                )
+                                .is_some() =>
+                        {
+                            // Optimization queries must first consume the
+                            // substituted arguments and current path facts.
+                            // Unresolved queries can still gain information in
+                            // later stages; never freeze their fallback here.
+                            let rewritten = self.expr(test, c)?;
+                            let queries = inspect([Node::Expr(rewritten, false)]);
+                            let condition = if queries.constant_queries || queries.object_queries {
+                                None
+                            } else {
+                                crate::constant::eval_integer_constant(
+                                    rewritten,
+                                    &self.unit.types,
+                                    &self.unit.symbols,
+                                    self.target,
+                                )
+                            };
+                            condition.map(|condition| {
+                                CHirBlockItem::Statement(if condition.truth() {
+                                    yes
+                                } else {
+                                    no.unwrap_or_else(|| self.alloc(CHirStmt::Null(*span)))
+                                })
+                            })
+                        }
+                        _ => None,
+                    };
+                    let i = live_item.as_ref().unwrap_or(original_item);
                     if !c.sequential_values.is_empty() {
                         let uses = inspect([match i {
                             CHirBlockItem::Declaration(d) => Node::Decl(d),
@@ -2297,6 +2616,8 @@ impl<'a> Substitution<'a, '_> {
                 // declarations in a conditionally executed nested scope.
                 c.sequential_values
                     .retain(|symbol, _| outer_sequential.contains(symbol));
+                c.path_ranges
+                    .retain(|symbol, _| outer_ranges.contains(symbol));
                 c.memo.clear();
                 // A conditional/loop body may never execute. Its assignments
                 // prove later uses inside that body, not uses after its exit.
@@ -2317,14 +2638,14 @@ impl<'a> Substitution<'a, '_> {
                     let expression = if let Some(result) = c.result {
                         let target = self.ident(result, *span);
                         let ty = self.unit.symbols.symbol(result).unwrap().ty();
-                        let value = if matches!(
-                            self.unit.types.get(ty).unwrap().kind,
-                            TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-                        ) {
+                        let value = if self.complete_object_value(ty) {
                             value
                         } else {
                             self.alloc(CHirExpr::Cast(ty, value, *span))
                         };
+                        if self.track_extents {
+                            c.return_extent = self.pointer_bounds(value, c, 0);
+                        }
                         if let Ok(place) =
                             ScalarPlace::bind(&self.unit.symbols, &self.unit.types, result)
                         {
@@ -2370,18 +2691,48 @@ impl<'a> Substitution<'a, '_> {
             CHirStmt::Return(e, _) => *e = e.map(|e| self.expr(e, c)).transpose()?,
             CHirStmt::If(e, a, b, _) => {
                 *e = self.expr(e, c)?;
+                let incoming = c.path_ranges.clone();
+                self.assume_range(e, true, c);
                 *a = self.stmt(a, c)?;
+                let yes = c.path_ranges.clone();
+                c.path_ranges = incoming.clone();
+                c.memo.clear();
+                self.assume_range(e, false, c);
                 *b = b.map(|b| self.stmt(b, c)).transpose()?;
+                c.path_ranges.retain(|symbol, range| {
+                    incoming.get(symbol) == Some(range) && yes.get(symbol) == Some(range)
+                });
+                c.memo.clear();
             }
-            CHirStmt::Switch(e, b, _) | CHirStmt::While(e, b, _) | CHirStmt::Case(e, b, _) => {
+            CHirStmt::While(e, b, _) => {
+                self.invalidate_ranges(&inspect([Node::Stmt(b)]), c);
+                *e = self.expr(e, c)?;
+                let incoming = c.path_ranges.clone();
+                self.assume_range(e, true, c);
+                *b = self.stmt(b, c)?;
+                c.path_ranges = incoming;
+                c.memo.clear();
+            }
+            CHirStmt::Switch(e, b, _) | CHirStmt::Case(e, b, _) => {
+                c.path_ranges.clear();
+                c.memo.clear();
                 *e = self.expr(e, c)?;
                 *b = self.stmt(b, c)?;
             }
             CHirStmt::DoWhile(b, e, _) => {
+                // A do/while macro executes its body once even with a false
+                // test. Preserve dominating facts only for untouched locals.
+                self.invalidate_ranges(&inspect([Node::Stmt(b), Node::Expr(e, false)]), c);
+                let incoming = c.path_ranges.clone();
                 *b = self.stmt(b, c)?;
                 *e = self.expr(e, c)?;
+                c.path_ranges
+                    .retain(|symbol, range| incoming.get(symbol) == Some(range));
+                c.memo.clear();
             }
             CHirStmt::For(i, test, update, body, _) => {
+                c.path_ranges.clear();
+                c.memo.clear();
                 match i {
                     CHirForInit::Empty => {}
                     CHirForInit::Expression(e) => *e = self.expr(e, c)?,
@@ -2396,8 +2747,12 @@ impl<'a> Substitution<'a, '_> {
                 *test = test.map(|e| self.expr(e, c)).transpose()?;
                 *update = update.map(|e| self.expr(e, c)).transpose()?;
                 *body = self.stmt(body, c)?;
+                c.path_ranges.clear();
+                c.memo.clear();
             }
             CHirStmt::Label(label, b, _) => {
+                c.path_ranges.clear();
+                c.memo.clear();
                 *label = self.label(label, c);
                 *b = self.stmt(b, c)?;
             }
@@ -2409,6 +2764,7 @@ impl<'a> Substitution<'a, '_> {
                 *s = self.stmt(s, c)?;
             }
             CHirStmt::Asm(a) => {
+                self.invalidate_ranges(&inspect([Node::Stmt(s)]), c);
                 for o in a.inputs.iter_mut().chain(&mut a.outputs) {
                     o.expression = self.expr(o.expression, c)?;
                 }
@@ -2550,11 +2906,15 @@ impl<'a> Substitution<'a, '_> {
         c.single_mutations = uses.single_mutations();
         c.mutable = uses.mutable;
         c.exposed_objects = uses.exposed_objects;
+        c.track_ranges = uses.constant_queries;
         c.declaration_prefix = true;
         let serial = self.next();
         c.prefix = Some(serial);
         c.end = Some(SpannedName {
-            spelling: format!("__evocc_inline_{serial}_end"),
+            // Source labels use `__evocc_inline_{serial}_<source>`. Keep the
+            // synthetic return destination in a disjoint namespace: a valid
+            // source label named `end` must not intercept an early return.
+            spelling: format!("__evocc_inline_exit_{serial}"),
             span,
         });
         // Parameter types can refer forward to captures initialized at body
@@ -2595,10 +2955,7 @@ impl<'a> Substitution<'a, '_> {
             let s = self.fresh(scope, return_type, StorageClass::None, span)?;
             c.result = Some(s);
             let object = self.object(s, None, span);
-            if matches!(
-                self.unit.types.get(return_type).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-            ) {
+            if self.complete_object_value(return_type) {
                 // Like the existing call-result buffer, an aggregate result
                 // belongs to the caller, not the callee's ended block.
                 self.temporaries.push(object);
@@ -2609,10 +2966,7 @@ impl<'a> Substitution<'a, '_> {
         for ((parameter, arg), bounds) in parameters.iter().zip(args).zip(argument_bounds) {
             let ty = self.substituted_type(parameter.ty, &c);
             let fresh = self.fresh(inline_scope, ty, StorageClass::None, span)?;
-            let arg = if matches!(
-                self.unit.types.get(ty).unwrap().kind,
-                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-            ) {
+            let arg = if self.complete_object_value(ty) {
                 *arg
             } else {
                 self.alloc(CHirExpr::Cast(ty, arg, span))
@@ -2641,6 +2995,20 @@ impl<'a> Substitution<'a, '_> {
         self.active.push(f.symbol);
         let body = self.stmt(body, &mut c)?;
         self.active.pop();
+        // Only a single unconditional source return can export this fact.
+        // Its argument/allocation captures already execute in the caller;
+        // do not replay them or infer a promise for multiple return paths.
+        let return_extent = match f.body.unwrap() {
+            CHirStmt::Compound(items, _) => match items.as_slice() {
+                [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))]
+                    if !inspect([Node::Expr(value, false)]).jumps =>
+                {
+                    c.return_extent
+                }
+                _ => None,
+            },
+            _ => None,
+        };
         items.push(CHirBlockItem::Statement(body));
         let end = self.alloc(CHirStmt::Null(span));
         items.push(CHirBlockItem::Statement(self.alloc(CHirStmt::Label(
@@ -2655,12 +3023,17 @@ impl<'a> Substitution<'a, '_> {
             ));
         }
         let body = self.alloc(CHirStmt::Compound(items, span));
-        Ok(self.alloc(CHirExpr::StatementExpr {
+        let result = self.alloc(CHirExpr::StatementExpr {
             body,
             value,
             facts: ExprFacts::value(return_type),
             span,
-        }))
+        });
+        if let Some(bounds) = return_extent {
+            self.extent_calls
+                .insert(result as *const _ as usize, bounds);
+        }
+        Ok(result)
     }
 }
 

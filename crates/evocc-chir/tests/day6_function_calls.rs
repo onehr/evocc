@@ -673,7 +673,10 @@ fn program_with_options(
                             span: at,
                         }]
                     } else {
-                        vec![WrittenDeclaratorLayer::Function { span: at }]
+                        vec![WrittenDeclaratorLayer::Function {
+                            parameters: None,
+                            span: at,
+                        }]
                     },
                     span: at,
                 },
@@ -757,7 +760,10 @@ fn program_with_options(
                     span: span(0, 3),
                 },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span: span(3, 5) }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: None,
+                        span: span(3, 5),
+                    }],
                     span: span(0, 6),
                 },
                 parameters,
@@ -906,6 +912,7 @@ fn malformed_call_free_signature_program(arena: &Arena) -> CompositionProgram<'_
             },
             written: WrittenDeclarator {
                 layers: vec![WrittenDeclaratorLayer::Function {
+                    parameters: None,
                     span: span(504, 506),
                 }],
                 span: span(500, 512),
@@ -1547,7 +1554,10 @@ fn composition_program_with_signature(
                 ty,
                 return_specifier: TypeSpecifier::Builtin { ty: int, span: at },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span: at }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: None,
+                        span: at,
+                    }],
                     span: at,
                 },
                 parameters: if malformed_main_signature && name == "main" {
@@ -1612,7 +1622,10 @@ fn function_declaration<'arena>(
                 span: at,
             },
             written: WrittenDeclarator {
-                layers: vec![WrittenDeclaratorLayer::Function { span: at }],
+                layers: vec![WrittenDeclaratorLayer::Function {
+                    parameters: None,
+                    span: at,
+                }],
                 span: at,
             },
             parameters: ParameterSyntax::Prototype {

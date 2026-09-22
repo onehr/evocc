@@ -78,6 +78,8 @@ fn sentinel_types() -> Vec<EvoIRType> {
                 ParamMark::Sret(RecordShape {
                     size: 16,
                     align: 16,
+                    vector: None,
+                    floating: None,
                 }),
                 ParamMark::None,
                 ParamMark::None,
@@ -98,6 +100,71 @@ fn sentinel_types() -> Vec<EvoIRType> {
 
 fn sentinel_instructions() -> Vec<Inst> {
     vec![
+        Inst::Floating(evocc_evoir::FloatingInst {
+            result: value(1970, EvoIRType::F64),
+            op: evocc_evoir::FloatingOp::Constant(0xfff8000000000123),
+            arguments: vec![],
+        }),
+        Inst::Floating(evocc_evoir::FloatingInst {
+            result: value(1971, EvoIRType::Bits(1)),
+            op: evocc_evoir::FloatingOp::ToIntDefined {
+                width: 73,
+                signed: true,
+            },
+            arguments: vec![value(1970, EvoIRType::F64)],
+        }),
+        Inst::UbAssume(value(1971, EvoIRType::Bits(1)), UbReason::FloatingToInteger),
+        Inst::Atomic(evocc_evoir::AtomicAccess {
+            op: evocc_evoir::AtomicOp::Rmw {
+                result: value(1960, EvoIRType::Bits(16)),
+                operation: evocc_evoir::AtomicRmwOp::CompareExchange,
+                value: value(1961, EvoIRType::Bits(16)),
+                expected: Some(value(1962, EvoIRType::Bits(16))),
+            },
+            address: pointer(1963),
+            order: evocc_evoir::AtomicOrder::AcqRel,
+            volatile: true,
+            mem_in: mem(1964),
+            world_in: world(1965),
+            mem_out: mem(1966),
+            world_out: world(1967),
+        }),
+        Inst::TlsAddr(evocc_evoir::TlsAddress {
+            result: pointer(1940),
+            symbol: "sentinel_file".into(),
+            mem_in: mem(1941),
+            world_in: world(1942),
+            mem_out: mem(1943),
+            world_out: world(1944),
+        }),
+        Inst::Vector(evocc_evoir::VectorInst {
+            result: value(1950, EvoIRType::Vec(2, Box::new(EvoIRType::Bits(32)))),
+            op: evocc_evoir::VectorOp::Pack,
+            arguments: vec![
+                value(1951, EvoIRType::Bits(32)),
+                value(1952, EvoIRType::Bits(32)),
+            ],
+        }),
+        Inst::Atomic(evocc_evoir::AtomicAccess {
+            op: evocc_evoir::AtomicOp::Load(value(1920, EvoIRType::Bits(32))),
+            address: pointer(1921),
+            order: evocc_evoir::AtomicOrder::Consume,
+            volatile: true,
+            mem_in: mem(1922),
+            world_in: world(1923),
+            mem_out: mem(1924),
+            world_out: world(1925),
+        }),
+        Inst::Atomic(evocc_evoir::AtomicAccess {
+            op: evocc_evoir::AtomicOp::Store(value(1930, EvoIRType::Bits(64))),
+            address: pointer(1931),
+            order: evocc_evoir::AtomicOrder::SeqCst,
+            volatile: false,
+            mem_in: mem(1932),
+            world_in: world(1933),
+            mem_out: mem(1934),
+            world_out: world(1935),
+        }),
         Inst::PointerCast {
             result: value(1430, EvoIRType::Bits(64)),
             operand: pointer(1431),
@@ -300,19 +367,38 @@ fn sentinel_module() -> Module {
     // Revision 1.9.73: the third parameter is the `ptr<generic>` of the type
     // list, so it is the one a record argument can ride on.
     let mut param_marks = vec![ParamMark::None; count];
-    param_marks[3] = ParamMark::ByVal(RecordShape { size: 24, align: 8 });
-    Module {
+    param_marks[3] = ParamMark::ByVal(RecordShape {
+        size: 24,
+        align: 8,
+        vector: Some(evocc_types::VectorAggregate {
+            lanes: 2,
+            bits: 32,
+            count: 3,
+        }),
+        floating: None,
+    });
+    let mut module = Module {
+        tls: vec![evocc_evoir::TlsSymbol {
+            symbol: "sentinel_file".into(),
+            model: evocc_evoir::TlsModel::InitialExec,
+        }],
+        lifecycle: vec![evocc_evoir::LifecycleRegistration {
+            function: "sentinel_function".into(),
+            phase: evocc_evoir::LifecyclePhase::Constructor,
+            priority: 321,
+        }],
         assembly: vec![".globl sentinel_asm\n".into()],
         aliases: vec![evocc_evoir::SymbolAlias {
             name: "sentinel_alias".into(),
             target: "sentinel_file".into(),
-            visibility: GlobalVisibility::Internal,
+            visibility: GlobalVisibility::Protected,
             linkage: evocc_evoir::Linkage::Strong,
         }],
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![
             GlobalObject {
+                read_only: false,
                 section: Some(".data.sentinel".into()),
                 relocs: Vec::new(),
                 symbol: "sentinel_file".to_owned(),
@@ -325,6 +411,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![true, false, true],
             },
             GlobalObject {
+                read_only: false,
                 section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.static.sentinel.7002".to_owned(),
@@ -337,6 +424,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![false, true],
             },
             GlobalObject {
+                read_only: false,
                 section: None,
                 relocs: Vec::new(),
                 symbol: "__evocc.string.7003".to_owned(),
@@ -349,6 +437,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![true],
             },
             GlobalObject {
+                read_only: true,
                 section: None,
                 symbol: "__evocc.compound.7004".into(),
                 origin: 7004,
@@ -363,10 +452,13 @@ fn sentinel_module() -> Module {
                     symbol: "sentinel_file".into(),
                     addend: -3,
                     exposed: true,
+                    difference: None,
                 }],
             },
         ],
         functions: vec![Function {
+            section: Some(".text.sentinel".into()),
+            patchable_entry: Some((4, 2)),
             stack_protect: true,
             alignment: 256,
             linkage: evocc_evoir::Linkage::Weak,
@@ -398,11 +490,46 @@ fn sentinel_module() -> Module {
             ],
             param_marks,
         }],
-    }
+    };
+    let mut hfa = module.functions[0].clone();
+    hfa.name = "sentinel_hfa".into();
+    hfa.params = vec![FunctionParam {
+        name: "hfa".into(),
+        ty: EvoIRType::Ptr(AddressSpace::Generic),
+    }];
+    hfa.param_marks = vec![ParamMark::ByVal(RecordShape {
+        size: 16,
+        align: 16,
+        vector: None,
+        floating: Some(evocc_types::FloatAggregate {
+            kind: evocc_types::FloatKind::F32,
+            count: 4,
+            abi_align: 16,
+        }),
+    })];
+    module.functions.push(hfa);
+    module
 }
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::TlsAddr(access) => {
+            let _ = access;
+            "Inst.TlsAddr(access)"
+        }
+        Inst::Vector(operation) => {
+            let _ = operation;
+            "Inst.Vector(operation)"
+        }
+        Inst::Floating(operation) => {
+            let evocc_evoir::FloatingInst {
+                result,
+                op,
+                arguments,
+            } = operation;
+            let _ = (result, op, arguments);
+            "Inst.Floating(result,op,arguments)"
+        }
         Inst::IndirectBr { target, edges } => {
             let _ = (target, edges);
             "Inst.IndirectBr(target,edges)"
@@ -635,6 +762,40 @@ fn inst_schema(inst: &Inst) -> &'static str {
             let _ = (mem_in, pointer, mem_out, layout);
             "Inst.AccessInBounds(mem_in,pointer,mem_out,layout)"
         }
+        Inst::Atomic(access) => {
+            let evocc_evoir::AtomicAccess {
+                op,
+                address,
+                order,
+                volatile,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+            } = access;
+            let _ = (
+                address, order, volatile, mem_in, world_in, mem_out, world_out,
+            );
+            match op {
+                evocc_evoir::AtomicOp::Rmw {
+                    result,
+                    operation,
+                    value,
+                    expected,
+                } => {
+                    let _ = (result, operation, value, expected);
+                    "Inst.Atomic.Rmw(result,operation,value,expected,address,order,volatile,mem_in,world_in,mem_out,world_out)"
+                }
+                evocc_evoir::AtomicOp::Load(result) => {
+                    let _ = result;
+                    "Inst.Atomic.Load(result,address,order,volatile,mem_in,world_in,mem_out,world_out)"
+                }
+                evocc_evoir::AtomicOp::Store(value) => {
+                    let _ = value;
+                    "Inst.Atomic.Store(value,address,order,volatile,mem_in,world_in,mem_out,world_out)"
+                }
+            }
+        }
         Inst::Load {
             result,
             address,
@@ -777,6 +938,8 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
 
 fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     let Module {
+        tls,
+        lifecycle,
         aliases,
         assembly,
         globals,
@@ -785,8 +948,22 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         functions,
     } = module;
     let _ = (assembly, extern_objects, declares, aliases);
-    let mut keys =
-        BTreeSet::from(["Module(assembly,globals,extern_objects,declares,aliases,functions)"]);
+    let mut keys = BTreeSet::from([
+        "Module(assembly,globals,extern_objects,declares,aliases,functions,tls,lifecycle)",
+    ]);
+    for evocc_evoir::TlsSymbol { symbol, model } in tls {
+        let _ = (symbol, model);
+        keys.insert("TlsSymbol(symbol,model)");
+    }
+    for evocc_evoir::LifecycleRegistration {
+        function,
+        phase,
+        priority,
+    } in lifecycle
+    {
+        let _ = (function, phase, priority);
+        keys.insert("LifecycleRegistration(function,phase,priority)");
+    }
     for alias in aliases {
         let evocc_evoir::SymbolAlias {
             name,
@@ -799,6 +976,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     }
     for global in globals {
         let GlobalObject {
+            read_only,
             section,
             linkage,
             symbol,
@@ -812,6 +990,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         } = global;
         let _ = (
             section,
+            read_only,
             linkage,
             symbol,
             origin,
@@ -823,8 +1002,9 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             relocs,
         );
         keys.insert(
-            "GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section)",
+            "GlobalObject(symbol,origin,kind,visibility,linkage,layout,bytes,initialized,relocs,section,read_only)",
         );
+        keys.insert("GlobalObject.read_only");
         keys.insert("GlobalObject.section");
         let AccessLayout {
             size_bytes,
@@ -835,6 +1015,8 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     }
     for function in functions {
         let Function {
+            section,
+            patchable_entry,
             stack_protect,
             alignment,
             linkage,
@@ -855,14 +1037,36 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             linkage,
             alignment,
             stack_protect,
+            patchable_entry,
+            section,
         );
         keys.insert(
-            "Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,alignment,stack_protect,blocks)",
+            "Function(name,params,param_marks,variadic,ret_tys,effects,visibility,linkage,alignment,stack_protect,patchable_entry,section,blocks)",
         );
+        keys.insert("Function.section");
         for mark in param_marks {
-            if let Some(RecordShape { size, align }) = mark.shape() {
+            if let Some(RecordShape {
+                size,
+                align,
+                vector,
+                floating,
+            }) = mark.shape()
+            {
                 let _ = (size, align);
-                keys.insert("RecordShape(size,align)");
+                keys.insert("RecordShape(size,align,vector,floating)");
+                if let Some(evocc_types::FloatAggregate {
+                    kind,
+                    count,
+                    abi_align,
+                }) = floating
+                {
+                    let _ = (kind, count, abi_align);
+                    keys.insert("FloatAggregate(kind,count,abi_align)");
+                }
+                if let Some(evocc_types::VectorAggregate { lanes, bits, count }) = vector {
+                    let _ = (lanes, bits, count);
+                    keys.insert("VectorAggregate(lanes,bits,count)");
+                }
             }
         }
         for param in params {
@@ -940,6 +1144,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         UbReason::SignedOverflow,
         UbReason::InvalidShiftCount,
         UbReason::InvalidSignedLeftShift,
+        UbReason::FloatingToInteger,
     ];
     let directions = [OffsetDirection::Add, OffsetDirection::Subtract];
     let signedness = [IndexSignedness::Signed, IndexSignedness::Unsigned];
@@ -953,13 +1158,16 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         GlobalVisibility::External,
         GlobalVisibility::Internal,
         GlobalVisibility::Hidden,
+        GlobalVisibility::Protected,
     ];
     let marks = [
         ParamMark::None,
-        ParamMark::ByVal(RecordShape { size: 24, align: 8 }),
+        ParamMark::ByVal(RecordShape::new(24, 8)),
         ParamMark::Sret(RecordShape {
             size: 16,
             align: 16,
+            vector: None,
+            floating: None,
         }),
     ];
 
@@ -996,6 +1204,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         keys.insert(match value {
             UbReason::DivisionByZero => "UbReason.DivisionByZero",
             UbReason::BitBuiltinZeroOperand => "UbReason.BitBuiltinZeroOperand",
+            UbReason::FloatingToInteger => "UbReason.FloatingToInteger",
             UbReason::RemainderByZero => "UbReason.RemainderByZero",
             UbReason::SignedOverflow => "UbReason.SignedOverflow",
             UbReason::InvalidShiftCount => "UbReason.InvalidShiftCount",
@@ -1038,6 +1247,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             GlobalVisibility::External => "GlobalVisibility.External",
             GlobalVisibility::Internal => "GlobalVisibility.Internal",
             GlobalVisibility::Hidden => "GlobalVisibility.Hidden",
+            GlobalVisibility::Protected => "GlobalVisibility.Protected",
         });
     }
     for value in marks {

@@ -1,0 +1,50 @@
+Measured 2026-09-15, AArch64 Linux, evo-flight-lab:sealed, --network none.
+gcc-14: Debian 14.2.0-19; clang-19: Debian 19.1.7 (3+b1).
+Subject: HEAD 9f571ca plus working-tree changes, release SHA-256
+e6323dfdc2cea598fa1400d914895053aed3b66344817592c039934df5b78082.
+
+Input SHA-256:
+scalar-atomic-access.c 1364f511d7fe23baebf1e66867e2addbc4af6ee382d3ca00eb11e1c3203495d0
+atomic-thread-worker.c 93082cd1f0bf9efc07f395cd3bf1e2efee182b3c26cf159c2e0ae0747b51df66
+atomic-thread-driver.c 03d58e2825882e028ac7d11e6380fa085ec2371bfb19b46f3387aab48a7fd7f1
+
+Value probe:
+  gcc-14 / clang-19 -std=gnu11 -O0 / -O2 scalar-atomic-access.c -o value
+  ./value
+All four exits: 0.
+  evocc --target=aarch64-unknown-linux-gnu --emit=asm -O2 -Oeq-scalar scalar-atomic-access.c
+  gcc-14 value.s -o value && ./value
+Subject exit: 0, including signed narrow, bool, object and function pointers.
+Both fixed oracles and EvoCC emit the expected eight width/order instructions:
+LDRB, LDARH, LDAR W, LDAR X, STRB, STLRH, STLR W, STLR X.
+
+Thread probe uses the same two source worker roles compiled separately:
+  CC -std=gnu11 -O2 -DSIDE_A -c atomic-thread-worker.c -o CC-a.o
+  CC -std=gnu11 -O2 -c atomic-thread-worker.c -o CC-b.o
+For EvoCC use --target=aarch64-unknown-linux-gnu --emit=asm -O2 -Oeq-scalar,
+the same SIDE_A definition, then gcc-14 -c on the resulting assembly.
+Driver: gcc-14 -std=gnu11 -O2 -pthread -c atomic-thread-driver.c -o driver.o
+Link: gcc-14 -pthread driver.o A-a.o B-b.o -o threads
+Execute: timeout 45 ./threads
+Each combination uses 5,000 release/acquire publications and 5,000 SC rounds:
+role A / role B   | publication errors | forbidden SC outcomes | exit
+gcc-14 / gcc-14   | 0                  | 0                     | 0
+clang-19 / clang-19 | 0                | 0                     | 0
+evocc / evocc     | 0                  | 0                     | 0
+evocc / gcc-14    | 0                  | 0                     | 0
+gcc-14 / evocc    | 0                  | 0                     | 0
+evocc / clang-19  | 0                  | 0                     | 0
+clang-19 / evocc  | 0                  | 0                     | 0
+These are executed litmus/stress observations, not a memory-model proof.
+
+Original SQLite unit replay, existing subject.emit helper and unchanged
+captured argv from .evidence/ladder/sqlite/20260914T190334Z/compile-commands.json:
+  fixture-objects/085-sqlite3.o, sqlite3.c, timeout=300
+  previous E2001 __atomic_store_n at line 31591 is gone;
+  current E2001 undeclared-identifier: __builtin_isnan at sqlite3.c:36452:8.
+This is the isnan(x) call in sqlite3IsNaN(double x); it executes floating-point
+classification. The object is still refused; no install or Tcl rerun occurred.
+Existing harness projection omitted (recorded, not silently honored):
+-L/work/sqlite/tcl-install/lib, -O2, -Wl,-rpath,/usr/local/lib, -fPIC, -g,
+-ldl, -lm, -lpthread, -ltcl8.6, -lz, -no-pie.
+This targeted replay does not replace the full 59/86 SQLite coverage receipt.

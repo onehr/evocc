@@ -81,12 +81,13 @@ fn star_arrays_do_not_admit_objects_definitions_or_invalid_bracket_modifiers() {
 }
 
 #[test]
-fn prototype_star_support_does_not_enable_actual_variable_length_objects() {
+fn prototype_star_and_automatic_captured_arrays_have_distinct_contexts() {
     accepts("extern int n; void f(int values[n]);");
-    let source = "void f(int n) { int values[n]; }";
+    accepts("void f(int n) { int values[n]; }");
+    let source = "void f(int n) { int values[*]; }";
     let arena = Arena::default();
-    let error = parse(source, &arena).expect_err("dynamic object storage remains separate");
-    assert_eq!(error.code, "E2203", "{source}: {error:?}");
+    let error = parse(source, &arena).expect_err("star bounds are still prototype-only");
+    assert_eq!(error.code, "E1005", "{source}: {error:?}");
 }
 
 #[test]

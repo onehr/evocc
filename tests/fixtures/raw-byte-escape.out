@@ -1,0 +1,46 @@
+Raw narrow-literal escape boundary, 2026-09-16
+Image: evo-flight-lab:sealed
+Image SHA256: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Fixed target: aarch64-linux-gnu; GCC 14.2.0-19, Clang 19.1.7
+
+Initial byte probes: each row compiled and ran at -std=gnu11 -O0/-O2
+with each fixed compiler. Printed sizeof, then every byte including NUL:
+payload hex     output (same in all four runs)
+5c ff           2 255 0
+5c 5c ff        3 92 255 0
+ff 31 32 33     5 255 49 50 51 0
+5c 78 31 ff     3 1 255 0
+ff 5c ff        3 255 255 0
+Both compilers warn about the raw-byte unknown escape. Clang also warns
+about unescaped invalid source encoding. Warnings are not compile errors.
+No Unicode/Latin-1 substitution was used to prepare these sources.
+
+Combined regression source is the Rust byte literal in
+crates/evocc/tests/source_bytes.rs:
+escaped_raw_bytes_do_not_turn_into_literal_octal_digits.
+Decoded source: 488 bytes, SHA256
+154725d153647b55143652265449fecde03c7eaaefcaa10f9277b013c10846b2
+It also covers three written backslashes, macro transport and a raw-byte
+character escape under both plain-char signedness choices.
+For cc in gcc-14/clang-19, opt in -O0/-O2, mode in signed/unsigned:
+  cc -std=gnu11 opt -fMODE-char -DEXPECT=VALUE combined.c -o program
+  program
+VALUE is -1 for signed and 255 for unsigned.
+Eight compilations succeed; all eight executions exit 0.
+Original source and compiler warnings remain in
+.build/vector-targeted/raw-byte-escape/combined*.
+
+RED: the lexer serialized backslash + FF as two backslashes plus 377;
+the C regression reported E1006 for the corresponding character literal.
+The string-only interpreter reduction returned 1116 instead of 511:
+four data bytes starting with backslash instead of one FF byte.
+No build errors occurred in either RED.
+
+GREEN: 3/3 lexer source-byte tests and 7/7 CLI source-byte tests pass.
+The new CLI test uses stdin, main file and include routes, both interpreters,
+assembly emission and both character modes. Existing metadata/width/paste/
+stringization rejection tests remain unchanged.
+Subject debug SHA256:
+b01a20520b8ea4e0d2a73502cdfe4666a1b860a63a594e7b4963569126eabaf0
+Subject assembly for each mode was linked by gcc-14 and clang-19 -no-pie;
+all four native executions exit 0. No original benchmark gain is inferred.

@@ -1,0 +1,23 @@
+2026-09-19, evo-flight-lab:sealed, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 / clang-19 19.1.7, gnu11 O0/O2, with/without -DWITH_ASM:
+  eight builds and executions exit 0, no program output.
+RED: two CLI regressions fail E1005 unsupported-abstract-declarator;
+  zero Rust build errors.
+GREEN: both interpreters, assembly generation, memory asm variant; six native
+  executions (Combine plus both cast variants with each assembler) exit 0.
+Cast bound assignments remain on their evaluated expression paths; sizeof
+pointer does not execute its cast, sizeof VLA does; loop and conditional
+captures do not hoist their side effects. Existing typeof-conflict tests pass.
+Combined targeted suites: language_semantics 44, integer_vectors 18,
+  compilation_options 23: 85 PASS, zero failures.
+Original platform_util.c: release
+  cb2a38518e3e3acc5a53a86fda03b0daf01d1d2fcb9a84222879203252062a8a
+  emits in 0.52s using the command captured in 20260919T133245Z.
+Assembly digest 13f1f97db75e0ae7fb40e323efbe5ef648dcafc0a80a0660f51ca3e70df74c19.
+Not yet added to a new whole-program passing-build numerator.
+
+Additional variable-array-cast-entry.c control covers entering at a label,
+repeating the cast via goto, and a switch case with its own bound capture.
+Both subject interpreters, four fixed oracle O0/O2 runs, and both native
+subject assembly runs return 0; no additional production change was needed.

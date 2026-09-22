@@ -501,6 +501,8 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
@@ -638,6 +640,10 @@ fn branch_target(id: BlockId, args: &[Value]) -> String {
 fn render_inst(inst: &Inst) -> String {
     match inst {
         Inst::IndirectBr { .. }
+        | Inst::TlsAddr(_)
+        | Inst::Vector(_)
+        | Inst::Floating(_)
+        | Inst::Atomic(_)
         | Inst::Asm(_)
         | Inst::AsmGoto { .. }
         | Inst::VaAccess(_)
@@ -1932,6 +1938,8 @@ fn main() {
     let left = value(2, bits32.clone());
     let right = value(3, bits32.clone());
     let valid = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         variadic: false,
@@ -2005,6 +2013,8 @@ fn main() {
 
     let output =
         std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+            .arg("--config")
+            .arg(workspace.join(".cargo/config.toml"))
             .args(["run", "--offline", "--quiet"])
             .current_dir(&probe)
             .env("CARGO_TARGET_DIR", probe.join("target"))

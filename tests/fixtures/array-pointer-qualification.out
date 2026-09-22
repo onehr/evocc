@@ -1,0 +1,43 @@
+Array-pointer cv conversion, fixed ARM64 oracle probe, 2026-09-19.
+Image: evo-flight-lab:sealed (network none), GCC 14.2.0-19, Clang 19.1.7.
+Command per row: CC -std=gnu11 OPT -DCASE=N
+  /work/tests/fixtures/array-pointer-qualification.c -o /tmp/array-pointer
+followed by /tmp/array-pointer when compilation succeeds.
+OPT: -O0 and -O2; N: 1 through 9; 36 compile attempts total.
+
+Cases 1..5: both compilers compile without diagnostics, all 20 runs exit 0.
+Case 6: both compile and all 4 runs exit 0, with qualifier-discard warnings:
+  GCC: initialization discards 'const' qualifier from pointer target type
+       [-Wdiscarded-array-qualifiers]
+  Clang: initializing 'mask_t (*)[]' with 'const mask_t (*)[2]' discards
+         qualifiers [-Wincompatible-pointer-types-discards-qualifiers]
+Cases 7..9: GCC refuses all six attempts with incompatible-pointer-types:
+  7: const mask_t (*)[3] from mask_t (*)[2]
+  8: const mask_t * (*)[] from mask_t * (*)[2]
+  9: const mask_t (*)[] from _Atomic mask_t (*)[2]
+Clang warns with -Wincompatible-pointer-types for all six and exits 0.
+The profile retains refusal for these three conflicts; no target object is
+accessed through those incompatible pointers by the oracle probes.
+Every case also checks that type-query compatibility retains element const.
+
+Subject RED: case 1 reports E2202 at the request initializer; the negative
+cases already pass. No build errors. Native subject and original-unit replay
+are separate from this oracle measurement.
+
+Subject GREEN, 2026-09-19:
+target/frontend/release/evocc SHA-256
+d94f937c5c9ae232e414dcc6405ee7a65204a22e432037f1161bf77d4a161004
+Cases 1..6 pass C-HIR and EvoIR execution; cases 7..9 retain E2202.
+Cases 1..6 emitted at default and -O2, assembled/linked independently with
+gcc-14 and clang-19 in the same sealed image: 24/24 executions exit 0.
+Original-command replays, existing K1 emit_assembly/assemble_batch/
+check_symbol_parity with case/pristine records and ladder-sysroot:
+  security/landlock/fs.o: assembled, 2/2 defined symbols and kinds match,
+    assembly 5c896c2cb3bad60f7abf21d342a93d3687937d9f0ccf30f8a6504e84efbe481e
+    object d8aef95972c756ccdc9071f934c2c0a2c0af65a79c847b1bc95a68c8fd3e2524
+  security/landlock/net.o: assembled, 2/2 defined symbols and kinds match,
+    assembly 7238b84b95aaa42084e589e85cb87d09590f51a02fda7bb3131a48826f85aca5
+    object 20d0318629053c0bdb3f51813b7693bee30f9b72ff4fac2097fdcc48739f1ac3
+Output: .build/vector-targeted/landlock-array-replay/.
+This is targeted compilation and native fixture execution, not installation,
+a new full configuration result, or a kernel boot/selftest result.

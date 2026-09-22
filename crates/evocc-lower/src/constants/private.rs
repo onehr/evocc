@@ -138,6 +138,7 @@ struct Predicate {
 
 struct BlockFacts {
     killed: BTreeSet<u32>,
+    stored: BTreeMap<u32, (Cell, u128)>,
     condition: Option<Predicate>,
 }
 
@@ -230,9 +231,29 @@ pub(super) fn prune_guarded_reads(
     if private.is_empty() {
         return;
     }
+    // Strong store facts need one object per function activation. Restrict
+    // them to entry allocations with no entry backedge; a loop's repeated
+    // alloca instruction must not identify its distinct dynamic objects.
+    let entry_objects: BTreeSet<_> = if blocks.iter().any(|block| {
+        edges(block)
+            .iter()
+            .any(|(target, _)| *target == blocks[0].id)
+    }) {
+        BTreeSet::new()
+    } else {
+        blocks[0]
+            .insts
+            .iter()
+            .filter_map(|inst| match inst {
+                Inst::Alloca { result, .. } => Some(result.id),
+                _ => None,
+            })
+            .collect()
+    };
     let mut information = Vec::new();
     for block in blocks.iter() {
         let mut killed = BTreeSet::new();
+        let mut stored = BTreeMap::new();
         let mut loads = BTreeMap::<u32, Cell>::new();
         let mut predicates = BTreeMap::<u32, Predicate>::new();
         for inst in block.insts.iter().chain(block.terminator.iter()) {
@@ -245,6 +266,7 @@ pub(super) fn prune_guarded_reads(
             };
             if let Some(Point::Local(root, _)) = writes.map(|v| points[v.id as usize]) {
                 killed.insert(root);
+                stored.remove(&root);
                 loads.retain(|_, cell| cell.object != root);
                 predicates.retain(|_, p| p.cell.object != root);
             }
@@ -253,8 +275,35 @@ pub(super) fn prune_guarded_reads(
                 killed.extend(&private);
                 loads.clear();
                 predicates.clear();
+                stored.clear();
             }
             match inst {
+                Inst::Store {
+                    address,
+                    value,
+                    volatile: false,
+                    ..
+                } => {
+                    if let (Point::Local(object, offset), Some(bits), Some([raw])) = (
+                        points[address.id as usize],
+                        width(value),
+                        facts[value.id as usize].as_deref(),
+                    ) {
+                        if private.contains(&object) && entry_objects.contains(&object) {
+                            stored.insert(
+                                object,
+                                (
+                                    Cell {
+                                        object,
+                                        offset,
+                                        width: bits,
+                                    },
+                                    *raw,
+                                ),
+                            );
+                        }
+                    }
+                }
                 Inst::Load {
                     result,
                     address,
@@ -313,7 +362,11 @@ pub(super) fn prune_guarded_reads(
             Some(Inst::CondBr(value, ..)) => predicates.get(&value.id).copied(),
             _ => None,
         };
-        information.push(BlockFacts { killed, condition });
+        information.push(BlockFacts {
+            killed,
+            stored,
+            condition,
+        });
     }
     let mut predecessors = vec![Vec::new(); blocks.len()];
     for (parent, block) in blocks.iter().enumerate() {
@@ -361,6 +414,16 @@ fn prior_observation(
     predecessors: &[Vec<(usize, bool)>],
     budget: &mut usize,
 ) -> Option<bool> {
+    let stored_answer = |block: &BlockFacts| {
+        block
+            .stored
+            .get(&wanted.cell.object)
+            .filter(|(cell, _)| *cell == wanted.cell)
+            .map(|(_, value)| (*value == wanted.value) == wanted.equal)
+    };
+    if let Some(answer) = stored_answer(&info[index]) {
+        return Some(answer);
+    }
     if index == 0 || info[index].killed.contains(&wanted.cell.object) {
         return None;
     }
@@ -376,11 +439,13 @@ fn prior_observation(
         }
         for &(parent, edge_true) in &predecessors[index] {
             *budget = budget.checked_sub(1)?;
-            if let Some(p) = info[parent]
-                .condition
-                .filter(|p| p.cell == wanted.cell && p.value == wanted.value)
-            {
-                let observed = wanted.equal == (p.equal == edge_true);
+            let observed = stored_answer(&info[parent]).or_else(|| {
+                info[parent]
+                    .condition
+                    .filter(|p| p.cell == wanted.cell && p.value == wanted.value)
+                    .map(|p| wanted.equal == (p.equal == edge_true))
+            });
+            if let Some(observed) = observed {
                 if answer.is_some_and(|previous| previous != observed) {
                     return None;
                 }

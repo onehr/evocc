@@ -19,7 +19,7 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
 
 fn spelling(token: &Token, source: &str) -> String {
     match &token.text {
-        TokenText::Decoded(text) => text.clone(),
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
         TokenText::Borrowed => source
             .get(token.spelling_span.byte_start as usize..token.spelling_span.byte_end as usize)
             .expect("token spelling span belongs to fixture")

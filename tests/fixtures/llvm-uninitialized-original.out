@@ -1,0 +1,79 @@
+Original LLVM 20090113-1.c diagnostic investigation, 2026-09-15.
+Source: llvm-test-suite 2919e55176a572ee085cb46b291c47b7092c363e,
+SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c.
+SHA-256: 95564445bb0083c9904587014c8d5ec3ef1f61c96c7f498dbf8cc8d7382243b0.
+Image: evo-flight-lab:sealed; linux/arm64; network none.
+No source was modified, initialized, or removed from the original population.
+
+The source declares automatic int adata[9] at line 55 without an initializer.
+main passes its address to msum_i4 at line 59. The first loop iteration reads
+*base at line 43 in result += *base before any write to adata.
+
+GCC-14 Debian 14.2.0-19:
+  gcc-14 -std=gnu11 -O1 -Wall -Wextra -fanalyzer -c SOURCE -o /tmp/gcc.o
+Exit 0, warning at 43:19:
+  use of uninitialized value '*base' [-Wanalyzer-use-of-uninitialized-value]
+The analyzer trace identifies the stack declaration and call from main.
+
+Clang-19 Debian 19.1.7:
+  clang-19 --analyze -std=gnu11 -O1 -Xanalyzer -analyzer-output=text
+    SOURCE -o /tmp/analysis.plist
+Exit 0, warning at 43:9:
+  Assigned value is garbage or undefined [core.uninitialized.Assign]
+The analyzer trace enters msum_i4 from main and takes the first read.
+
+Attempted dynamic diagnostic:
+  clang-19 -std=gnu11 -O1 -g -fno-omit-frame-pointer -fsanitize=memory
+    -fsanitize-memory-track-origins=2 -fPIE -pie SOURCE -o /tmp/uninitialized
+Link exits 1: the sealed image lacks libclang_rt.msan.a for AArch64.
+Dynamic sanitizer execution: NOT RUN. Static analyzer agreement is recorded
+as such, not renamed a dual-sanitizer PASS. The benchmark disposition stays
+unresolved under the existing dynamic-evidence acceptance rule; E3001 is not
+disabled and the original expected result is not changed.
+
+2026-09-19 follow-up on the same sealed image: `command -v valgrind` also
+finds no installed Memcheck alternative. No software was installed and no
+new dynamic initializedness result or disposition is claimed.
+
+2026-09-20 dynamic follow-up (same original source digest and base image):
+The missing diagnostic tool is supplied only to an ephemeral offline ARM64
+container, not installed on the host or committed into the sealed image.
+Debian Valgrind 1:3.24.0-3, arm64:
+  https://deb.debian.org/debian/pool/main/v/valgrind/valgrind_3.24.0-3_arm64.deb
+  SHA-256 77c79eb0fa410c2faf9feae46d603aa0915b8c9b7a48d16e872c635d2082db0c
+Matching libc6-dbg 2.41-12+deb13u3, arm64:
+  https://snapshot.debian.org/file/0ad843e9ae3e00b2838dd3dbe98193d452a687b2
+  SHA-256 827f760483cad481db6f12945bb0e114d0ccd9cbce05eb210b3223d6843c9da5
+The installed libc remains 2.41-12+deb13u3. Only detached debug symbols are
+extracted inside the temporary container; no runtime library is replaced.
+Base image SHA-256:
+  2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+For CC in gcc-14 (14.2.0-19) and clang-19 (19.1.7):
+  CC -std=gnu11 -O0 -g -fsanitize=undefined -fno-sanitize-recover=all
+    -c SOURCE -o instrumented.o
+  gcc-14 -fsanitize=undefined -fno-sanitize-recover=all instrumented.o
+    -o instrumented
+  valgrind --tool=memcheck --track-origins=yes --error-exitcode=97 instrumented
+Both compile/link steps exit 0. Clang supplies its own instrumentation;
+the final GCC driver supplies the available compatible libubsan runtime.
+Both executions exit 97 with 9 errors from one context:
+  Conditional jump or move depends on uninitialised value(s)
+    msum_i4 (20090113-1.c:43)
+    main (20090113-1.c:59)
+  Uninitialised value was created by a stack allocation
+    main (20090113-1.c:53)
+
+Controls: /bin/true under the same Memcheck exits 0 with zero errors.
+Both unchanged originals compiled at O0 without UBSan also exit 0 with zero
+Memcheck errors. This is expected: ordinary Memcheck transports unknown data
+without reporting until it affects an observable decision. The UBSan overflow
+check makes that use explicit; Memcheck, not UBSan alone, diagnoses its unknown
+input. Neither original source nor expected output was modified. These are
+positive dynamic initializedness observations from both independently compiled
+original programs, not a claim that plain UBSan detects uninitialized memory.
+Short raw diagnostic files: .build/floating-targeted/memcheck/
+  uninit-gcc-14-{plain,ubsan}.memcheck
+  uninit-clang-19-{plain,ubsan}.memcheck
+The active frozen benchmark and its loaded disposition ledger are unchanged;
+its result must be retained before any subsequent source-bound reclassification.

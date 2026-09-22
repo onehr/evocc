@@ -4,6 +4,48 @@ mod floating;
 mod object_size;
 pub use object_size::builtin_object_size;
 
+/// Constant path selection must use the same source-width arithmetic as stores
+/// and integer projection, not a second evaluator in host double precision.
+pub fn floating_constant_truth(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<bool> {
+    floating::truth(expression, types, symbols, target)
+}
+
+/// Finite numeric constant for type-checking a lossless vector broadcast.
+/// A successful query does not admit runtime floating vector execution.
+pub fn floating_constant_value(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<evocc_types::floating::FloatBits> {
+    floating::value(expression, types, symbols, target).filter(|value| value.is_finite())
+}
+
+/// Materialize a pure cast into an executable FP format. In particular, target
+/// headers can narrow a finite binary128 literal without executing binary128.
+pub fn floating_constant_cast(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<evocc_types::floating::FloatBits> {
+    let CHirExpr::Cast(ty, ..) = expression else {
+        return None;
+    };
+    if !matches!(
+        types.get(*ty)?.kind,
+        TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64)
+    ) {
+        return None;
+    }
+    floating::value(expression, types, symbols, target)
+}
+
 /// Pure floating subexpressions may be resolved before producing an integer;
 /// object reads and runtime floating execution are not admitted by this fold.
 pub fn fold_floating_integer_arithmetic(
@@ -13,6 +55,102 @@ pub fn fold_floating_integer_arithmetic(
     target: &TargetDataLayout,
 ) -> Option<CInteger> {
     floating::fold(expression, types, symbols, target)
+}
+
+/// Materialize a pure constant's binary32/binary64 object representation.
+/// This is not a floating runtime value and never reads a floating object.
+pub fn floating_constant_representation(
+    expression: &CHirExpr<'_>,
+    destination: TypeId,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<CInteger> {
+    floating::representation(expression, destination, types, symbols, target)
+}
+
+/// A discarded simple assignment may store a constant floating representation
+/// without creating an executable floating value. Named and projected lvalues
+/// use the same checked memory-place representation; callers must not use this
+/// projection when the assignment's floating result is consumed.
+pub fn floating_representation_store<'a>(
+    expression: &CHirExpr<'a>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<(crate::MemoryPlace<'a>, CInteger, SourceSpan)> {
+    let destination_ty = match expression {
+        CHirExpr::Assign { place, .. } => place.ty(),
+        CHirExpr::MemoryAssign { place, .. } => place.value_ty(),
+        _ => return None,
+    };
+    if !matches!(types.get(destination_ty)?.kind, TypeKind::Float(_)) {
+        return None;
+    }
+    let (place, value, facts, span) = match expression {
+        CHirExpr::Assign {
+            op: crate::AssignmentOp::Simple,
+            place,
+            target: destination,
+            value,
+            facts,
+            ..
+        } => {
+            let CHirExpr::Ident {
+                symbol,
+                spelling,
+                facts: destination_facts,
+                ..
+            } = destination
+            else {
+                return None;
+            };
+            let declaration = symbols.symbol(*symbol).ok()?;
+            if *symbol != place.symbol()
+                || declaration.spelling() != spelling
+                || crate::ScalarPlace::bind(symbols, types, *symbol).ok()? != *place
+                || destination_facts.ty() != place.ty()
+                || destination_facts.category() != crate::ExprCategory::LValue
+                || !destination_facts.is_modifiable_lvalue()
+            {
+                return None;
+            }
+            (
+                crate::MemoryPlace::derive(
+                    symbols,
+                    types,
+                    PlaceRoot::Object { symbol: *symbol },
+                    Vec::new(),
+                    place.ty(),
+                )
+                .ok()?,
+                *value,
+                facts,
+                destination.span(),
+            )
+        }
+        CHirExpr::MemoryAssign {
+            op: crate::AssignmentOp::Simple,
+            place,
+            value,
+            facts,
+            target_span,
+            ..
+        } => {
+            place.validate_against(symbols, types).ok()?;
+            (place.clone(), *value, facts, *target_span)
+        }
+        _ => return None,
+    };
+    if !place.is_modifiable()
+        || place.access_qualifiers().is_atomic
+        || facts.ty() != place.value_ty()
+        || facts.category() != crate::ExprCategory::Value
+    {
+        return None;
+    }
+    let bits = floating_constant_representation(value, place.value_ty(), types, symbols, target)?;
+    Some((place, bits, span))
 }
 
 use evocc_common::SourceSpan;
@@ -437,6 +575,21 @@ fn expression_contains_declaration(
     attribute: &str,
 ) -> bool {
     match expression {
+        CHirExpr::Floating(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_declaration(operand, target, attribute)),
+        CHirExpr::Vector(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_declaration(operand, target, attribute)),
+        CHirExpr::Complex(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_declaration(operand, target, attribute)),
+        CHirExpr::Atomic(access) => access
+            .operands()
+            .any(|operand| expression_contains_declaration(operand, target, attribute)),
         CHirExpr::BuiltinObjectSize { .. } => false,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
@@ -452,6 +605,7 @@ fn expression_contains_declaration(
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _)
         | CHirExpr::Assign {
             target: left,
             value: right,
@@ -563,6 +717,55 @@ pub fn eval_executable_integer_constant(
         target,
         ConstantContext::Executable,
     )
+}
+
+/// GNU static-initializer extension. The supplied values describe preceding
+/// explicitly initialized const integer objects, not general execution facts.
+/// Ordinary ICE and constant_p evaluation deliberately do not use this map.
+#[must_use]
+pub fn eval_static_integer_constant(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+    objects: &std::collections::HashMap<crate::SymbolId, CInteger>,
+) -> Option<CInteger> {
+    eval_integer_constant_in(
+        expression,
+        types,
+        symbols,
+        target,
+        ConstantContext::StaticInitializer(objects),
+    )
+}
+
+/// A same-function GNU label difference is a link-time integer, not an ICE
+/// and not a single-symbol address. Keep the two original label nodes so the
+/// lowering's validated function/block mapping, rather than their spellings,
+/// supplies the relocation targets.
+#[must_use]
+pub fn label_address_difference<'tree, 'arena>(
+    mut expression: &'tree CHirExpr<'arena>,
+    types: &TypeInterner,
+) -> Option<(&'tree CHirExpr<'arena>, &'tree CHirExpr<'arena>)> {
+    while let CHirExpr::Cast(ty, operand, _) = expression {
+        if !matches!(
+            types.get(*ty)?.kind,
+            TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)
+        ) {
+            return None;
+        }
+        expression = operand;
+    }
+    match expression {
+        CHirExpr::Binary(
+            BinaryOp::Sub,
+            left @ CHirExpr::LabelAddress { .. },
+            right @ CHirExpr::LabelAddress { .. },
+            _,
+        ) => Some((left, right)),
+        _ => None,
+    }
 }
 
 /// Numeric static addresses have bits, not allocation provenance. Preserve
@@ -701,9 +904,10 @@ pub fn eval_absolute_address_constant(
 }
 
 #[derive(Clone, Copy)]
-enum ConstantContext {
+enum ConstantContext<'a> {
     Required,
     Executable,
+    StaticInitializer(&'a std::collections::HashMap<crate::SymbolId, CInteger>),
 }
 
 /// Resolve the source-width wrapping case before runtime arithmetic is emitted
@@ -746,11 +950,22 @@ fn eval_integer_constant_in(
     types: &TypeInterner,
     symbols: &SymbolTable,
     target: &TargetDataLayout,
-    context: ConstantContext,
+    context: ConstantContext<'_>,
 ) -> Option<CInteger> {
     let evaluate =
         |expression| eval_integer_constant_in(expression, types, symbols, target, context);
     match expression {
+        CHirExpr::Atomic(_) | CHirExpr::Vector(_) | CHirExpr::Floating(_) => None,
+        CHirExpr::Complex(operation) => {
+            // Constant queries share the parser's component evaluator. Runtime
+            // complex arithmetic still executes its own overflow obligations.
+            if !matches!(context, ConstantContext::Required) {
+                return None;
+            }
+            canonical_integer_type(types, operation.facts.ty())?;
+            crate::complex::constant_components(expression, types, symbols, target)
+                .map(|pair| pair[0])
+        }
         CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
         CHirExpr::BuiltinObjectSize {
             operand,
@@ -772,7 +987,25 @@ fn eval_integer_constant_in(
             facts,
             ..
         } => {
-            let symbol = symbols.symbol(*symbol).ok()?;
+            let id = *symbol;
+            let symbol = symbols.symbol(id).ok()?;
+            if let ConstantContext::StaticInitializer(objects) = context {
+                let canonical = types.get(symbol.ty())?;
+                if symbol.kind() == SymbolKind::Object
+                    && symbol.spelling() == spelling
+                    && facts.ty() == symbol.ty()
+                    && facts.category() == crate::ExprCategory::LValue
+                    && canonical.qualifiers.is_const
+                    && !canonical.qualifiers.is_volatile
+                    && !canonical.qualifiers.is_atomic
+                {
+                    return Some(
+                        objects
+                            .get(&id)?
+                            .cast(canonical_integer_type(types, symbol.ty())?),
+                    );
+                }
+            }
             if symbol.kind() != SymbolKind::Enumerator
                 || symbol.spelling() != spelling
                 || facts.ty() != symbol.ty()
@@ -789,6 +1022,18 @@ fn eval_integer_constant_in(
             eval_constant_unary_integer(*operator, evaluate(operand)?).ok()
         }
         CHirExpr::EvaluateOnce(operand, _) => evaluate(operand),
+        CHirExpr::BuiltinExpect(value, expected, _) => {
+            // Source classification is fixed by the parser. Execution may
+            // still fold a runtime expectation when *both* evaluations are
+            // independently replaceable; knowing only the first value must
+            // never discard an effect or failure in the second operand.
+            if !matches!(context, ConstantContext::Executable) {
+                return None;
+            }
+            let value = evaluate(value)?;
+            evaluate(expected)?;
+            Some(value)
+        }
         CHirExpr::Binary(operator, left, right, _) => {
             let left = evaluate(left)?;
             if *operator == BinaryOp::And && !left.truth() {
@@ -885,6 +1130,7 @@ fn eval_integer_constant_in(
 
 pub(crate) fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
     match types.get(ty)?.kind {
+        TypeKind::TargetBuiltin(kind) => crate::integer::integer_type_for_target(kind),
         TypeKind::Int(rank) => Some(integer_type_for_rank(rank)),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => {
@@ -925,6 +1171,11 @@ pub fn integer_expression_type(
     symbols: &SymbolTable,
 ) -> Option<CIntegerType> {
     match expression {
+        CHirExpr::Atomic(access) => canonical_integer_type(types, access.facts.ty()),
+        CHirExpr::Floating(access) => canonical_integer_type(types, access.facts.ty()),
+        CHirExpr::Vector(access) => canonical_integer_type(types, access.facts.ty()),
+        CHirExpr::Complex(access) => canonical_integer_type(types, access.facts.ty()),
+        CHirExpr::BuiltinExpect(..) => Some(CIntegerType::LONG),
         CHirExpr::Lit(literal, _) => Some(integer_literal_value(*literal).ok()?.ty()),
         CHirExpr::BuiltinConstantP { .. } => Some(CIntegerType::INT),
         CHirExpr::BuiltinObjectSize { .. } => Some(CIntegerType::ULONG),

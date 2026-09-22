@@ -37,6 +37,13 @@ use crate::{
     SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
+mod complex;
+mod floating;
+mod lifecycle;
+mod neon;
+mod vector;
+pub use lifecycle::interpret_program;
+
 const DEFAULT_FUEL: u64 = 100_000;
 const MAX_MEMORY_OBJECTS: u64 = 65_536;
 const MAX_MEMORY_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
@@ -125,6 +132,10 @@ pub struct InterpretOutcome {
 /// A fail-closed scalar interpreter error.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterpreterError {
+    TargetBuiltin {
+        name: String,
+        span: SourceSpan,
+    },
     Profile(crate::ProfileRefusal),
     Linkage(crate::linkage::LinkageError),
     VolatileAggregate {
@@ -215,6 +226,9 @@ pub enum InterpreterError {
     UninitializedValue {
         span: SourceSpan,
     },
+    FloatingToInteger {
+        span: SourceSpan,
+    },
     OutOfScopeObject {
         symbol: SymbolId,
         spelling: String,
@@ -267,10 +281,12 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::TargetBuiltin { .. } => "E3052",
             Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
             Self::VolatileAggregate { .. } => "E2922",
             Self::ReadOfUninitializedObject { .. } | Self::UninitializedValue { .. } => "E3001",
+            Self::FloatingToInteger { .. } => "E3063",
             Self::Integer {
                 error: IntegerError::DivisionByZero,
                 ..
@@ -335,10 +351,12 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::TargetBuiltin { name, .. } => format!("not-executed: target-builtin: {name}"),
             Self::Profile(error) => error.message.to_owned(),
             Self::Linkage(error) => error.message.to_owned(),
             Self::VolatileAggregate { .. } => "volatile-aggregate-copy-unsupported".to_owned(),
             Self::UninitializedValue { .. } => "read-of-uninitialized-object".to_owned(),
+            Self::FloatingToInteger { .. } => "floating-to-integer-not-representable".to_owned(),
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
@@ -438,6 +456,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::TargetBuiltin { span, .. } => Some(*span),
             Self::Profile(error) => Some(error.span),
             Self::Linkage(error) => Some(error.span),
             Self::UnknownFunction { .. }
@@ -467,6 +486,7 @@ impl InterpreterError {
             | Self::InvalidScalarPlace { span, .. }
             | Self::ReadOfUninitializedObject { span, .. }
             | Self::UninitializedValue { span }
+            | Self::FloatingToInteger { span }
             | Self::OutOfScopeObject { span, .. }
             | Self::Integer { span, .. }
             | Self::InvalidControlFlow { span, .. }
@@ -505,6 +525,7 @@ enum CValue {
     /// A missing function result can be discarded without being read.
     Uninitialized(ValueType),
     Integer(CInteger),
+    Floating(evocc_types::floating::FloatBits),
     Pointer {
         value: Pointer,
         ty: PointerTypeDesc,
@@ -528,6 +549,7 @@ enum CValue {
 enum ValueType {
     Void,
     Integer(CIntegerType),
+    Floating(evocc_types::FloatKind),
     Pointer(PointerTypeDesc),
     Aggregate(TypeId),
 }
@@ -598,6 +620,17 @@ struct ValidatedFunctionSignature {
 
 #[derive(Debug)]
 enum MachineTask<'arena> {
+    BeginConstantRepresentationStore {
+        place: MemoryPlace<'arena>,
+        bits: CInteger,
+        span: SourceSpan,
+    },
+    FinishConstantRepresentationStore {
+        place: MemoryPlace<'arena>,
+        bits: CInteger,
+        span: SourceSpan,
+    },
+    ApplyAtomic(&'arena crate::CHirAtomicAccess<'arena>),
     IndirectGoto(SourceSpan),
     ApplyVarArgs {
         op: crate::VarArgsBuiltinOp,
@@ -663,6 +696,10 @@ enum MachineTask<'arena> {
         items: &'arena [CHirBlockItem<'arena>],
         index: usize,
         value: Option<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+    },
+    PreserveStatementExpressionValue {
+        parent: MemoryScopeId,
         span: SourceSpan,
     },
     WhileCheck {
@@ -744,6 +781,9 @@ enum MachineTask<'arena> {
         expression: &'arena CHirExpr<'arena>,
         allow_root_mutation: bool,
     },
+    ApplyVector(&'arena crate::vector::VectorExpr<'arena>),
+    ApplyFloating(&'arena crate::floating::FloatingExpr<'arena>),
+    ApplyComplex(&'arena crate::complex::ComplexExpr<'arena>),
     ApplyUnary {
         operator: crate::UnaryOp,
         expression_span: SourceSpan,
@@ -897,7 +937,7 @@ pub fn interpret_scalar_function_with_target(
             span,
         }
     })?;
-    if crate::inline::has_constant_queries(unit) {
+    if crate::inline::needs_execution_resolution(unit) {
         let arena = evocc_common::Arena::default();
         let resolved = crate::inline::substitute_for_execution(unit, &arena, target, true)
             .map_err(|error| InterpreterError::UnsupportedExpression {
@@ -951,6 +991,8 @@ struct SymbolOrder {
 }
 
 struct Interpreter<'unit, 'arena> {
+    program: bool,
+    termination: Option<(u128, bool)>,
     linkage: &'unit crate::linkage::SymbolLinkage,
     argument_lists: evocc_memory::ArgumentLists<CValue>,
     unit: &'unit CHirUnit<'arena>,
@@ -994,7 +1036,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .map(|symbol| symbol.declared_alignment())
             .max()
             .unwrap_or(4)
-            .max(4);
+            .max(unit.minimum_function_alignment());
         let config = MemoryConfig::for_target(target, memory_limits)
             .and_then(|config| config.with_function_alignment(alignment))
             .map_err(|error| InterpreterError::MemorySetup { error })?;
@@ -1004,6 +1046,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
+            program: false,
+            termination: None,
             linkage: unit.symbol_linkage().map_err(InterpreterError::Linkage)?,
             argument_lists: evocc_memory::ArgumentLists::default(),
             unit,
@@ -1168,10 +1212,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     })?
                     .declared_alignment(),
             );
-            let (memory, address) = self
-                .memory
-                .allocate_static(*site, layout, InitialState::Zeroed)
-                .map_err(|error| self.memory_error(error, declaration.span))?;
+            let allocation = if declaration.storage.is_thread_local() {
+                self.memory
+                    .allocate_thread_local(*site, layout, InitialState::Zeroed)
+                    .map(|(memory, address, _)| (memory, address))
+            } else {
+                self.memory
+                    .allocate_static(*site, layout, InitialState::Zeroed)
+            };
+            let (memory, address) =
+                allocation.map_err(|error| self.memory_error(error, declaration.span))?;
             self.memory = memory;
             if self
                 .static_bindings
@@ -1203,7 +1253,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .unwrap_or_else(|| self.unit.iter().next().expect("nonempty unit").span()),
                 }
             })?;
-            if entry.storage_class() != Some(StorageClass::Extern) {
+            if entry.storage_class().map(StorageClass::base) != Some(StorageClass::Extern) {
                 continue;
             }
             let (size, align) = self
@@ -1256,12 +1306,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .memory
                 .finish_static_initializer(binding.address)
                 .map_err(|error| self.memory_error(error, *span))?;
-            if self
-                .unit
-                .types()
-                .get(*ty)
-                .is_some_and(|canonical| canonical.qualifiers.is_const)
-            {
+            if self.unit.types().is_const_qualified_object(*ty) {
                 self.memory = self
                     .memory
                     .freeze_static(binding.address)
@@ -1270,9 +1315,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
 
         for (declaration, _) in plans {
-            let Some(initializer) = &declaration.initializer else {
-                continue;
-            };
             self.validate_initializer_plan(&declaration)?;
             let binding = self
                 .static_bindings
@@ -1282,11 +1324,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     symbol: declaration.symbol,
                     span: declaration.span,
                 })?;
-            self.initialize_static_plan(binding, initializer, declaration.span)?;
+            if let Some(initializer) = &declaration.initializer {
+                self.initialize_static_plan(binding, initializer, declaration.span)?;
+            }
             self.memory = self
                 .memory
                 .finish_static_initializer(binding.address)
                 .map_err(|error| self.memory_error(error, declaration.span))?;
+            if self.unit.types().is_const_qualified_object(binding.ty) {
+                self.memory = self
+                    .memory
+                    .freeze_static(binding.address)
+                    .map_err(|error| self.memory_error(error, declaration.span))?;
+            }
         }
         Ok(())
     }
@@ -1313,6 +1363,50 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value,
                     ..
                 } => {
+                    if let Some(bits) = crate::constant::floating_constant_representation(
+                        value,
+                        *destination_type,
+                        self.unit.types(),
+                        self.unit.symbols(),
+                        &self.target,
+                    ) {
+                        self.store_constant_representation(
+                            address,
+                            *destination_type,
+                            bits,
+                            false,
+                            span,
+                        )?;
+                        continue;
+                    }
+                    if let Some(element) =
+                        crate::complex::element(self.unit.types(), *destination_type)
+                    {
+                        let pair = crate::complex::constant_components(
+                            value,
+                            self.unit.types(),
+                            self.unit.symbols(),
+                            &self.target,
+                        )
+                        .ok_or(InterpreterError::UnsupportedType {
+                            ty: *destination_type,
+                            span,
+                        })?;
+                        let layout = self.access_layout(element, span)?;
+                        let integer = self.integer_type(element, span)?;
+                        for (index, value) in pair.into_iter().enumerate() {
+                            let at = address
+                                .checked_offset(index as i64 * layout.size_bytes as i64)
+                                .map_err(|e| self.memory_error(e, span))?;
+                            self.store_static_scalar(
+                                at,
+                                element,
+                                CValue::Integer(value.cast(integer)),
+                                span,
+                            )?;
+                        }
+                        continue;
+                    }
                     self.guard_static_initializer_evaluation(value)?;
                     let value = self.eval_static_initializer_value(value)?;
                     let value = cast_machine_value(
@@ -1338,6 +1432,29 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 InitAction::ZeroScalar {
                     destination_type, ..
                 } => {
+                    if matches!(
+                        self.unit.types().get(*destination_type).map(|ty| &ty.kind),
+                        Some(TypeKind::Float(
+                            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                        ))
+                    ) {
+                        self.store_constant_representation(
+                            address,
+                            *destination_type,
+                            CInteger::new(0, CIntegerType::ULONG),
+                            false,
+                            span,
+                        )?;
+                        continue;
+                    }
+                    if crate::complex::rank(self.unit.types(), *destination_type).is_some() {
+                        let layout = self.access_layout(*destination_type, span)?;
+                        self.memory = self
+                            .memory
+                            .store_integer(address, layout, 0)
+                            .map_err(|e| self.memory_error(e, span))?;
+                        continue;
+                    }
                     let value = self.zero_value(*destination_type, span)?;
                     if let Some(field) = bit_field {
                         self.store_bit_field(
@@ -1402,6 +1519,30 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .store_bytes(address, layout, bytes)
             .map_err(|error| self.memory_error(error, span))?;
         Ok(())
+    }
+
+    // An admitted numeric address expression computes representation bits,
+    // not an access. Named objects still require the symbolic relocation path.
+    fn numeric_static_address(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Result<Option<CValue>, InterpreterError> {
+        let Some(integer) = crate::constant::eval_absolute_address_constant(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) else {
+            return Ok(None);
+        };
+        cast_machine_value(
+            CValue::Integer(integer),
+            ValueType::Pointer(self.pointer_type_of_expression(expression)?),
+            expression.span(),
+            self.unit.types(),
+            &mut self.memory,
+        )
+        .map(Some)
     }
 
     fn eval_static_initializer_value(
@@ -1480,7 +1621,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.apply_machine_binary(*operator, left, right, *span)
             }
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
-                self.static_address_value(operand, false)
+                if let Some(value) = self.numeric_static_address(expression)? {
+                    Ok(value)
+                } else {
+                    self.static_address_value(operand, false)
+                }
             }
             CHirExpr::Ident { facts, .. }
                 if self.unit.types().get(facts.ty()).is_some_and(|ty| {
@@ -1718,6 +1863,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn run_with_calls(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
+        let outcome = self
+            .run_root(function)?
+            .expect("function invocation has a result");
+        Ok(InterpretOutcome {
+            return_value: outcome.return_value,
+            steps: self.consumed,
+            memory: self.memory,
+            world: self.world,
+        })
+    }
+
+    fn run_root(&mut self, function: SymbolId) -> Result<Option<MachineOutcome>, InterpreterError> {
         let mut tasks = Vec::new();
         let root_span = self
             .unit
@@ -1727,16 +1884,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .map_err(|_| InterpreterError::UnknownFunction { symbol: function })?;
         self.enter_function(function, Vec::new(), None, None, None, false, 0, &mut tasks)?;
         let (outcome, _) = self.run_tasks(tasks)?;
+        if self.termination.is_some() {
+            return Ok(None);
+        }
         let outcome = outcome.ok_or(InterpreterError::UnsupportedStatement {
             feature: "interpreter call stack ended without a root result",
             span: root_span,
         })?;
-        Ok(InterpretOutcome {
-            return_value: outcome.return_value,
-            steps: self.consumed,
-            memory: self.memory,
-            world: self.world,
-        })
+        Ok(Some(outcome))
     }
 
     fn run_tasks(
@@ -1745,7 +1900,47 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<(Option<MachineOutcome>, Vec<CValue>), InterpreterError> {
         let mut values = Vec::new();
         while let Some(task) = tasks.pop() {
+            if self.termination.is_some() {
+                return Ok((None, values));
+            }
             let outcome = match task {
+                MachineTask::BeginConstantRepresentationStore { place, bits, span } => {
+                    self.tick(span)?;
+                    let completion = tasks.len();
+                    self.schedule_place_operands(&place, span, &mut tasks, &mut values)?;
+                    // Operand tasks must run before the store. Insert the
+                    // completion below them, using the same scheduling order
+                    // as every other projected memory access.
+                    tasks.insert(
+                        completion,
+                        MachineTask::FinishConstantRepresentationStore { place, bits, span },
+                    );
+                    None
+                }
+                MachineTask::FinishConstantRepresentationStore { place, bits, span } => {
+                    let subscripts = place
+                        .projections()
+                        .iter()
+                        .filter(|projection| projection.source_expression().is_some())
+                        .count();
+                    let address =
+                        self.resolve_projected_address(&place, subscripts, &mut values, span)?;
+                    let layout = self.place_access_layout(&place, span)?;
+                    if place.access_qualifiers().is_volatile {
+                        let (memory, world) = self
+                            .memory
+                            .volatile_store_integer(&self.world, address, layout, bits.raw_bits())
+                            .map_err(|e| self.memory_error(e, span))?;
+                        self.memory = memory;
+                        self.world = world;
+                    } else {
+                        self.memory = self
+                            .memory
+                            .store_integer(address, layout, bits.raw_bits())
+                            .map_err(|e| self.memory_error(e, span))?;
+                    }
+                    None
+                }
                 MachineTask::IndirectGoto(span) => {
                     let value = pop_machine_value(&mut values, span)?;
                     let error = || InterpreterError::InvalidIndirectBranchTarget { span };
@@ -1837,6 +2032,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                     None
                 }
+                MachineTask::PreserveStatementExpressionValue { parent, span } => {
+                    // A complete-object rvalue must survive the closing brace;
+                    // a pointer value still points at the original object and
+                    // must not acquire an extended lifetime here.
+                    if let Some(value @ CValue::Aggregate { ty, .. }) = values.last().copied() {
+                        let layout = self.access_layout(ty, span)?;
+                        let frame = self
+                            .memory_frame
+                            .as_ref()
+                            .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+                        let (memory, destination) = self
+                            .memory
+                            .allocate_automatic(
+                                frame.id,
+                                parent,
+                                self.temporary_origin_site,
+                                layout,
+                            )
+                            .map_err(|error| self.memory_error(error, span))?;
+                        self.memory = memory;
+                        let preserved = self.store_memory_value(
+                            destination,
+                            ty,
+                            Qualifiers::default(),
+                            value,
+                            span,
+                        )?;
+                        *values
+                            .last_mut()
+                            .expect("statement expression value checked") = preserved;
+                    }
+                    None
+                }
                 MachineTask::StatementExpressionContinue {
                     items,
                     index,
@@ -1910,7 +2138,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
+                    if self.complex_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::WhileCheck { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -1933,7 +2161,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
+                    if self.complex_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::DoWhileCondition { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -1973,7 +2201,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
+                    if self.complex_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::ForStep {
                             condition,
                             step,
@@ -2133,7 +2361,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_expression,
                     else_expression,
                 } => {
-                    let selected = if machine_truth(
+                    let selected = if self.complex_truth(
                         pop_machine_value(&mut values, then_expression.span())?,
                         then_expression.span(),
                     )? {
@@ -2148,7 +2376,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_statement,
                     else_statement,
                 } => {
-                    let condition = machine_truth(
+                    let condition = self.complex_truth(
                         pop_machine_value(&mut values, then_statement.span())?,
                         then_statement.span(),
                     )?;
@@ -2171,6 +2399,58 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     )?;
                     None
                 }
+                MachineTask::ApplyFloating(access) => {
+                    let start = values.len().checked_sub(access.operands.len()).ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "floating operand stack",
+                            span: access.span,
+                        },
+                    )?;
+                    let arguments = values.split_off(start);
+                    values.push(floating::builtin(access, &arguments)?);
+                    None
+                }
+                MachineTask::ApplyVector(access) => {
+                    let start = values.len().checked_sub(access.operands.len()).ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "vector operand stack",
+                            span: access.span,
+                        },
+                    )?;
+                    let arguments = values.split_off(start);
+                    values.push(self.apply_vector(access, &arguments)?);
+                    None
+                }
+                MachineTask::ApplyComplex(access) => {
+                    let start = values.len().checked_sub(access.operands.len()).ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "complex operand stack",
+                            span: access.span,
+                        },
+                    )?;
+                    let arguments = values.split_off(start);
+                    values.push(self.apply_complex(access, &arguments)?);
+                    None
+                }
+                MachineTask::ApplyAtomic(access) => {
+                    let _order = expect_machine_integer(
+                        pop_machine_value(&mut values, access.span)?,
+                        access.span,
+                    )?;
+                    let stored = if access.value.is_some() {
+                        Some(pop_machine_value(&mut values, access.span)?)
+                    } else {
+                        None
+                    };
+                    let expected = if access.expected.is_some() {
+                        Some(pop_machine_value(&mut values, access.span)?)
+                    } else {
+                        None
+                    };
+                    let address = pop_machine_value(&mut values, access.span)?;
+                    values.push(self.apply_atomic(access, address, stored, expected)?);
+                    None
+                }
                 MachineTask::ApplyUnary {
                     operator,
                     expression_span,
@@ -2178,10 +2458,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let operand = pop_machine_value(&mut values, expression_span)?;
                     if operator == UnaryOp::Not {
-                        values.push(CValue::Integer(CInteger::int(i32::from(!machine_truth(
-                            operand,
-                            expression_span,
-                        )?))));
+                        values.push(CValue::Integer(CInteger::int(i32::from(
+                            !self.complex_truth(operand, expression_span)?,
+                        ))));
+                        continue;
+                    }
+                    if let CValue::Floating(value) = operand {
+                        values.push(CValue::Floating(match operator {
+                            UnaryOp::Plus => value,
+                            UnaryOp::Neg => value.negated(),
+                            _ => {
+                                return Err(InterpreterError::UnsupportedExpression {
+                                    feature: "invalid floating unary operator",
+                                    span: expression_span,
+                                })
+                            }
+                        }));
                         continue;
                     }
                     let operand = expect_machine_integer(operand, expression_span)?;
@@ -2209,10 +2501,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let left = pop_machine_value(&mut values, span)?;
                     match operator {
-                        BinaryOp::And if !machine_truth(left, span)? => {
+                        BinaryOp::And if !self.complex_truth(left, span)? => {
                             values.push(CValue::Integer(CInteger::int(0)));
                         }
-                        BinaryOp::Or if machine_truth(left, span)? => {
+                        BinaryOp::Or if self.complex_truth(left, span)? => {
                             values.push(CValue::Integer(CInteger::int(1)));
                         }
                         BinaryOp::Comma => {
@@ -2298,7 +2590,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     else_expression,
                     result_type,
                 } => {
-                    let condition = machine_truth(
+                    let condition = self.complex_truth(
                         pop_machine_value(&mut values, then_expression.span())?,
                         then_expression.span(),
                     )?;
@@ -2322,7 +2614,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 } => {
                     let operand = pop_machine_value(&mut values, span)?;
-                    if machine_truth(operand, span)? {
+                    if self.complex_truth(operand, span)? {
                         values.push(cast_machine_value(
                             operand,
                             result_type,
@@ -2628,6 +2920,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                     expects_value,
                 } => {
+                    if index == 0 {
+                        self.check_neon_immediates(callee, arguments, span)?;
+                    }
                     if index == arguments.len() {
                         if matches!(
                             callee,
@@ -2979,7 +3274,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         self.validate_memory_object_declaration(declaration)?;
         self.validate_initializer_plan(declaration)?;
         if matches!(
-            declaration.storage,
+            declaration.storage.base(),
             StorageClass::Static | StorageClass::Extern
         ) {
             if self.memory_binding(declaration.symbol).is_none() {
@@ -3008,7 +3303,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let Some(initializer) = &declaration.initializer else {
             if self.unit.zero_initialize_automatic(declaration) {
                 let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
-                let layout = self.access_layout(declaration.ty, declaration.span)?;
+                let layout = self.object_access_layout(declaration.ty, None, declaration.span)?;
                 if layout.size_bytes != 0 {
                     let bytes = ByteSequence::try_from_bytes(vec![0; layout.size_bytes as usize])
                         .map_err(|error| self.memory_error(error, declaration.span))?;
@@ -3029,26 +3324,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         if self.unit.zero_initialize_automatic_padding(declaration) {
             let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
-            let ranges = initializer
-                .plan()
-                .padding_ranges(self.unit.types(), self.target)
-                .map_err(|_| InterpreterError::UnsupportedType {
-                    ty: declaration.ty,
-                    span: declaration.span,
-                })?;
-            for range in ranges {
-                let at = binding
-                    .address
-                    .checked_offset(range.start as i64)
-                    .map_err(|error| self.memory_error(error, declaration.span))?;
-                let bytes =
-                    ByteSequence::try_from_bytes(vec![0; (range.end - range.start) as usize])
-                        .map_err(|error| self.memory_error(error, declaration.span))?;
-                self.memory = self
-                    .memory
-                    .store_bytes(at, AccessLayout::new(range.end - range.start, 1), &bytes)
-                    .map_err(|error| self.memory_error(error, declaration.span))?;
-            }
+            self.zero_constructor_padding(binding, initializer, declaration.span)?;
         }
         if initializer.plan().zero_fills_unwritten() {
             let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
@@ -3131,7 +3407,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 SubobjectStep::Index { index } => {
                     let element = match self.unit.types().get(current).map(|ty| &ty.kind) {
-                        Some(TypeKind::Array { element, .. }) => *element,
+                        Some(
+                            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
+                        ) => *element,
                         _ => return Err(InterpreterError::UnsupportedType { ty: current, span }),
                     };
                     let size = i64::try_from(self.access_layout(element, span)?.size_bytes)
@@ -3176,6 +3454,38 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let Some(action) = initializer.plan().actions().get(index) else {
             return Ok(());
         };
+        if let InitAction::StoreScalar {
+            path,
+            destination_type,
+            value,
+            span,
+        } = action
+        {
+            if let Some(bits) = crate::constant::floating_constant_representation(
+                value,
+                *destination_type,
+                self.unit.types(),
+                self.unit.symbols(),
+                &self.target,
+            ) {
+                let (address, actual_ty, bit_field) =
+                    self.subobject_address(target.binding, path, *span)?;
+                if actual_ty != *destination_type || bit_field.is_some() {
+                    return Err(invalid_initializer_target(target, *span));
+                }
+                let volatile = self
+                    .unit
+                    .types()
+                    .get(actual_ty)
+                    .is_some_and(|ty| ty.qualifiers.is_volatile);
+                self.store_constant_representation(address, actual_ty, bits, volatile, *span)?;
+                tasks.push(MachineTask::ContinueMemoryInitializer {
+                    target,
+                    index: index + 1,
+                });
+                return Ok(());
+            }
+        }
         match action {
             InitAction::StoreScalar {
                 path, span, value, ..
@@ -3201,6 +3511,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let span = initializer.span();
                 let (address, ty, bit_field) =
                     self.subobject_address(target.binding, path, span)?;
+                if matches!(
+                    self.unit.types().get(ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Float(
+                        evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                    ))
+                ) {
+                    self.store_constant_representation(
+                        address,
+                        ty,
+                        CInteger::new(0, CIntegerType::ULONG),
+                        false,
+                        span,
+                    )?;
+                    tasks.push(MachineTask::ContinueMemoryInitializer {
+                        target,
+                        index: index + 1,
+                    });
+                    return Ok(());
+                }
                 let value = self.zero_value(ty, span)?;
                 if let Some(field) = bit_field {
                     self.store_bit_field(address, ty, field, value, false, span)?;
@@ -3485,6 +3814,29 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 continue;
             }
             if self.memory_mode {
+                // A backward jump before a VLA declaration leaves that
+                // object's declaration scope even within the same compound.
+                // Fixed automatic objects keep their scope-wide identity.
+                for skipped in items[index..].iter().rev() {
+                    let CHirBlockItem::Declaration(CHirDecl::Object(object)) = skipped else {
+                        continue;
+                    };
+                    if self
+                        .target
+                        .array_size_factors(self.unit.types(), object.ty)
+                        .is_ok_and(|(_, captures)| !captures.is_empty())
+                    {
+                        if let Some(binding) = self.memory_binding(object.symbol) {
+                            let frame = self.memory_frame.as_mut().expect("active memory scope");
+                            frame.bindings.remove(&object.symbol);
+                            let id = frame.id;
+                            self.memory = self
+                                .memory
+                                .end_object_lifetime(id, binding.address)
+                                .map_err(|error| self.memory_error(error, object.span))?;
+                        }
+                    }
+                }
                 // A jump can enter a block after automatic declarations.
                 // Their storage exists, but their initializers did not run.
                 // Existing bindings belong to this active scope and must not
@@ -3662,6 +4014,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
+        if self.memory_mode {
+            if let Some((place, bits, span)) = crate::constant::floating_representation_store(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                &self.target,
+            ) {
+                tasks.push(MachineTask::BeginConstantRepresentationStore { place, bits, span });
+                return Ok(());
+            }
+        }
         if let CHirExpr::Comma(left, right, _) = expression {
             self.schedule_discarded_expression(right, tasks)?;
             self.schedule_discarded_expression(left, tasks)?;
@@ -3754,7 +4117,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let saved = self.activate_block_items(items)?;
         tasks.push(MachineTask::RestoreSlots(saved));
         if let Some(exit) = self.enter_memory_scope(body.span())? {
+            let parent = exit.parent;
             tasks.push(MachineTask::ExitMemoryScope(exit));
+            if value.is_some_and(|value| {
+                !crate::expression_is_void(value, self.unit.symbols(), self.unit.types())
+            }) {
+                tasks.push(MachineTask::PreserveStatementExpressionValue { parent, span });
+            }
         }
         tasks.push(MachineTask::StatementExpressionContinue {
             items,
@@ -3861,6 +4230,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     (CValue::Integer(value), ValueType::Integer(ty)) => {
                         value.ty().bits() == ty.bits()
                     }
+                    (CValue::Floating(value), ValueType::Floating(kind)) => value.kind() == kind,
                     (CValue::Pointer { .. }, ValueType::Pointer(ty)) => !matches!(
                         self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
                         Some(TypeKind::Function { .. })
@@ -3902,6 +4272,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
+        if let Some(value) = crate::constant::floating_constant_cast(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            &self.target,
+        ) {
+            values.push(CValue::Floating(value));
+            return Ok(());
+        }
         if let Some(value) = crate::constant::fold_floating_integer_arithmetic(
             expression,
             self.unit.types(),
@@ -3935,6 +4314,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         if self.static_integer_evaluation {
+            if matches!(expression, CHirExpr::Unary(UnaryOp::AddrOf, ..)) {
+                if let Some(value) = self.numeric_static_address(expression)? {
+                    values.push(value);
+                    return Ok(());
+                }
+            }
             // Reusing the execution machine must not admit calls, reads of
             // objects, or mutations into constant initialization. Inspect only
             // the evaluated path: sizeof and unselected arms stay unevaluated.
@@ -3963,7 +4348,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .is_ok_and(|symbol| symbol.enumerator_value().is_some()),
                 // Numeric pointer round trips use the same iterative casts
                 // and fuel as other constants. The operand whitelist still
-                // excludes object reads, addresses and calls.
+                // excludes object reads, symbolic addresses and calls.
                 CHirExpr::Cast(ty, ..) => matches!(
                     self.value_type(*ty, span),
                     Ok(ValueType::Integer(_) | ValueType::Pointer(_))
@@ -3978,6 +4363,42 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         match expression {
+            CHirExpr::Atomic(access) => {
+                tasks.push(MachineTask::ApplyAtomic(access));
+                for expression in access.operands().rev() {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression,
+                        allow_root_mutation: true,
+                    });
+                }
+            }
+            CHirExpr::Floating(access) => {
+                tasks.push(MachineTask::ApplyFloating(access));
+                for &expression in access.operands.iter().rev() {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression,
+                        allow_root_mutation: true,
+                    });
+                }
+            }
+            CHirExpr::Vector(access) => {
+                tasks.push(MachineTask::ApplyVector(access));
+                for &expression in access.operands.iter().rev() {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression,
+                        allow_root_mutation: true,
+                    });
+                }
+            }
+            CHirExpr::Complex(access) => {
+                tasks.push(MachineTask::ApplyComplex(access));
+                for &expression in access.operands.iter().rev() {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression,
+                        allow_root_mutation: true,
+                    });
+                }
+            }
             CHirExpr::Lit(literal, _) => values.push(CValue::Integer(
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))?,
             )),
@@ -4072,6 +4493,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::RestoreNestedMutationDepth(previous));
                 tasks.push(MachineTask::EvalExpression {
                     expression: operand,
+                    allow_root_mutation: true,
+                });
+            }
+            CHirExpr::BuiltinExpect(value, expected, _) => {
+                // The saved first value stays below the second on the value
+                // stack. A nonreturning second operand never yields a result.
+                tasks.push(MachineTask::DiscardExpression(expected.span()));
+                tasks.push(MachineTask::EvalExpression {
+                    expression: expected,
+                    allow_root_mutation: true,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: value,
                     allow_root_mutation: true,
                 });
             }
@@ -4460,11 +4894,37 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::StringLit(_, _) => values.push(self.string_pointer(expression, true)?),
-            CHirExpr::FloatLit(_, _) => {
-                return Err(InterpreterError::UnsupportedExpression {
-                    feature: "outside executable Day-7 scalar memory subset",
-                    span,
-                });
+            CHirExpr::FloatLit(literal, _) => {
+                let kind = match literal.suffix {
+                    crate::FloatSuffix::F => evocc_types::FloatKind::F32,
+                    crate::FloatSuffix::None => evocc_types::FloatKind::F64,
+                    _ => {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "deferred floating format",
+                            span,
+                        })
+                    }
+                };
+                let value = match literal.value {
+                    crate::FloatConstant::Real(value) => value.target_convert(kind).ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "deferred floating format",
+                            span,
+                        },
+                    )?,
+                    crate::FloatConstant::QuietNaN(payload) => {
+                        evocc_types::floating::FloatBits::from_bits(
+                            kind,
+                            if kind == evocc_types::FloatKind::F32 {
+                                0x7fc00000 | (payload & 0x3fffff)
+                            } else {
+                                0x7ff8000000000000 | (payload & 0x7ffffffffffff)
+                            },
+                        )
+                        .unwrap()
+                    }
+                };
+                values.push(CValue::Floating(value));
             }
         }
         Ok(())
@@ -4515,6 +4975,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
 
+        if self.unit.symbols().is_builtin_function(*symbol)
+            && evocc_types::neon::signature(spelling).is_some()
+        {
+            return self.neon_call(spelling, facts.ty(), &arguments, call_span);
+        }
+        if spelling == "__sync_synchronize" && self.unit.symbols().is_builtin_function(*symbol) {
+            if !arguments.is_empty() {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "full memory barrier arity",
+                    span: call_span,
+                });
+            }
+            // Match the lowered, ordered assembly boundary instead of
+            // pretending that this interpreter models concurrent execution.
+            return Err(InterpreterError::Asm { span: call_span });
+        }
         if spelling == "__builtin_prefetch" && self.unit.symbols().is_builtin_function(*symbol) {
             // Argument evaluation has already run through the normal call
             // continuation; the hint itself performs no abstract memory access.
@@ -4562,6 +5038,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         arguments: &[CValue],
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
+        if self.program && matches!(spelling, "exit" | "_Exit" | "_exit" | "quick_exit") {
+            let [CValue::Integer(value)] = arguments else {
+                return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
+            };
+            self.termination = Some((value.raw_bits() & u128::from(u32::MAX), spelling == "exit"));
+            return Ok(CValue::Integer(*value));
+        }
         let entry = self
             .unit
             .symbols()
@@ -4829,7 +5312,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         functions.insert(entry.spelling().to_owned(), symbol);
                     }
                     SymbolKind::Object
-                        if entry.storage_class() == Some(StorageClass::Extern)
+                        if entry.storage_class().map(StorageClass::base)
+                            == Some(StorageClass::Extern)
                             && !self
                                 .manifest
                                 .as_ref()
@@ -4939,6 +5423,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 continue;
             };
             match (ty, argument) {
+                (ValueType::Floating(kind), CValue::Floating(value)) => {
+                    parameter_bindings.push((
+                        symbol,
+                        ValueType::Floating(kind),
+                        CValue::Floating(value),
+                    ));
+                }
                 (ValueType::Integer(ty), CValue::Integer(value)) => {
                     parameter_bindings.push((
                         symbol,
@@ -5156,6 +5647,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 declaration.return_specifier.type_id(),
                 Some(&declaration.parameters),
                 false,
+                &declaration.attributes,
             )
         {
             return Err(InterpreterError::UnsupportedFunctionSignature {
@@ -5194,6 +5686,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         parameter.specifier.type_id(),
                         None,
                         true,
+                        &parameter.attributes,
                     ) || !matches!(
                         parameter.storage,
                         StorageClass::None | StorageClass::Register
@@ -5301,6 +5794,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         terminal: TypeId,
         function_syntax: Option<&ParameterSyntax>,
         adjusted_parameter: bool,
+        attributes: &[crate::Attribute],
     ) -> bool {
         if adjusted_parameter
             && (matches!(
@@ -5383,6 +5877,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
         }
         current == terminal
+            || crate::vector::attribute_matches_base(
+                self.unit.types(),
+                &self.target,
+                attributes,
+                current,
+                terminal,
+            )
             || (adjusted_parameter
                 && written.layers.is_empty()
                 && matches!(
@@ -5446,6 +5947,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let mut return_value = match (exit, end.return_value_type) {
+            (FunctionExit::Explicit(Some(value)), ValueType::Floating(kind)) => {
+                Some(cast_machine_value(
+                    value,
+                    ValueType::Floating(kind),
+                    end.body_span,
+                    self.unit.types(),
+                    &mut self.memory,
+                )?)
+            }
             (FunctionExit::Explicit(Some(CValue::Uninitialized(source))), target)
                 if source == target =>
             {
@@ -5485,7 +5995,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             (
                 FunctionExit::Explicit(None),
-                ValueType::Integer(_) | ValueType::Pointer(_) | ValueType::Aggregate(_),
+                ValueType::Integer(_)
+                | ValueType::Floating(_)
+                | ValueType::Pointer(_)
+                | ValueType::Aggregate(_),
             ) => {
                 return Err(InterpreterError::UnsupportedStatement {
                     feature: "empty return in scalar function",
@@ -5500,7 +6013,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             (
                 FunctionExit::FellOffEnd,
-                ValueType::Integer(_) | ValueType::Pointer(_) | ValueType::Aggregate(_),
+                ValueType::Integer(_)
+                | ValueType::Floating(_)
+                | ValueType::Pointer(_)
+                | ValueType::Aggregate(_),
             ) => Some(CValue::Uninitialized(end.return_value_type)),
         };
 
@@ -5581,6 +6097,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: end.return_type,
                     raw_bits: value.raw_bits(),
                 }),
+                Some(CValue::Floating(value)) => Some(ScalarValue {
+                    ty: end.return_type,
+                    raw_bits: value.bits(),
+                }),
                 Some(CValue::Pointer { .. } | CValue::FunctionPointer { .. }) => {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "pointer return from scalar interpreter root",
@@ -5624,9 +6144,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
-            Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList) => {
-                Ok(ValueType::Aggregate(ty))
-            }
+            Some(TypeKind::Float(
+                kind @ (evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64),
+            )) => Ok(ValueType::Floating(*kind)),
+            Some(
+                TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::BuiltinVaList
+                | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
+                | TypeKind::Vector { .. },
+            ) => Ok(ValueType::Aggregate(ty)),
             Some(TypeKind::Pointer(_)) => {
                 PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty)
                     .map(ValueType::Pointer)
@@ -5676,6 +6203,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<AccessLayout, InterpreterError> {
         let Some(initializer) = initializer else {
+            if self
+                .target
+                .array_size_factors(self.unit.types(), ty)
+                .is_ok_and(|(_, captures)| !captures.is_empty())
+            {
+                let size = self.pointer_arithmetic_scale(ty, Pointer::NULL, span)?;
+                let align = self
+                    .target
+                    .alignof_type(self.unit.types(), ty)
+                    .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+                return Ok(AccessLayout::new(size, align));
+            }
             return self.access_layout(ty, span);
         };
         if initializer.plan().target_type() != ty {
@@ -5814,13 +6353,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             || symbol.spelling() != declaration.name.spelling
             || !self.unit.types().compatible(symbol.ty(), declaration.ty)
             || !(symbol.storage_class() == Some(declaration.storage)
-                || (declaration.storage == StorageClass::Extern
+                || (declaration.storage.base() == StorageClass::Extern
                     && matches!(
-                        symbol.storage_class(),
+                        symbol.storage_class().map(StorageClass::base),
                         Some(StorageClass::None | StorageClass::Static)
                     )))
             || !matches!(
-                declaration.storage,
+                declaration.storage.base(),
                 StorageClass::None
                     | StorageClass::Auto
                     | StorageClass::Register
@@ -5841,9 +6380,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: declaration.ty,
                     span: declaration.span,
                 })?;
-        // Aggregates are storage like any other object here: the interpreter
-        // never materialises one as a value, it only ever accesses subobjects
-        // through a place, so admitting them costs nothing in the value model.
+        // Object storage includes nominal target scalar types as well as
+        // ordinary scalars and aggregates. Execution checks their value kind
+        // separately; an object declaration is not an arithmetic operation.
         if canonical.qualifiers.is_atomic
             || !matches!(
                 canonical.kind,
@@ -5852,11 +6391,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     | TypeKind::Enum(_)
                     | TypeKind::Pointer(_)
                     | TypeKind::Array { .. }
+                    | TypeKind::Vector { .. }
                     | TypeKind::Struct(_)
                     | TypeKind::Union(_)
                     | TypeKind::BuiltinVaList
                     | TypeKind::Float(_)
                     | TypeKind::Complex(_)
+                    | TypeKind::TargetBuiltin(_)
             )
         {
             return Err(InterpreterError::UnsupportedType {
@@ -5866,8 +6407,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         // A declaration does not allocate an object: an earlier extern array
         // may still be incomplete even when its later definition is complete.
-        if declaration.storage != StorageClass::Extern {
-            self.access_layout(declaration.ty, declaration.span)?;
+        if declaration.storage.base() != StorageClass::Extern {
+            self.object_access_layout(
+                declaration.ty,
+                declaration.initializer.as_ref(),
+                declaration.span,
+            )?;
         }
         Ok(())
     }
@@ -5927,6 +6472,34 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(())
     }
 
+    fn zero_constructor_padding(
+        &mut self,
+        binding: MemoryBinding,
+        initializer: &crate::ObjectInitializer<'arena>,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        let ranges = initializer
+            .plan()
+            .padding_ranges(self.unit.types(), self.target)
+            .map_err(|_| InterpreterError::UnsupportedType {
+                ty: binding.ty,
+                span,
+            })?;
+        for range in ranges {
+            let at = binding
+                .address
+                .checked_offset(range.start as i64)
+                .map_err(|error| self.memory_error(error, span))?;
+            let bytes = ByteSequence::try_from_bytes(vec![0; (range.end - range.start) as usize])
+                .map_err(|error| self.memory_error(error, span))?;
+            self.memory = self
+                .memory
+                .store_bytes(at, AccessLayout::new(range.end - range.start, 1), &bytes)
+                .map_err(|error| self.memory_error(error, span))?;
+        }
+        Ok(())
+    }
+
     fn zero_initialize_subobjects(
         &mut self,
         address: Pointer,
@@ -5949,6 +6522,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .kind
             .clone();
         match kind {
+            TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64) => self
+                .store_constant_representation(
+                    address,
+                    ty,
+                    CInteger::new(0, CIntegerType::ULONG),
+                    false,
+                    span,
+                ),
             TypeKind::Int(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_)
@@ -5961,11 +6542,27 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(())
             }
             TypeKind::BuiltinVaList => Ok(()),
+            TypeKind::Vector { element, lanes, .. } => {
+                let layout = self.access_layout(element, span)?;
+                for index in 0..u64::from(lanes) {
+                    let at = address
+                        .checked_offset((index * layout.size_bytes) as i64)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.zero_initialize_subobjects(
+                        at,
+                        element,
+                        path.clone().with_index(index),
+                        actions,
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),
             } => {
-                let element_layout = self.access_layout(element, span)?;
+                let element_layout = self.object_access_layout(element, None, span)?;
                 for index in 0..count {
                     let offset = index
                         .checked_mul(element_layout.size_bytes)
@@ -5990,7 +6587,30 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ..
             } => Ok(()),
             TypeKind::Array {
-                bound: ArrayBound::Variable | ArrayBound::Captured(_),
+                element,
+                bound: ArrayBound::Captured(_),
+            } => {
+                let layout = self.object_access_layout(ty, None, span)?;
+                let element_layout = self.object_access_layout(element, None, span)?;
+                if element_layout.size_bytes == 0 {
+                    return Ok(());
+                }
+                for index in 0..layout.size_bytes / element_layout.size_bytes {
+                    let at = address
+                        .checked_offset((index * element_layout.size_bytes) as i64)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.zero_initialize_subobjects(
+                        at,
+                        element,
+                        path.clone().with_index(index),
+                        actions,
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
+            TypeKind::Array {
+                bound: ArrayBound::Variable,
                 ..
             }
             | TypeKind::Void
@@ -6156,9 +6776,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok((destination, value))
     }
 
-    fn zero_value(&self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
+    fn zero_value(&mut self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
+        if crate::complex::rank(self.unit.types(), ty).is_some() {
+            let address = self.vector_temporary(ty, span)?;
+            let layout = self.access_layout(ty, span)?;
+            self.memory = self
+                .memory
+                .store_integer(address, layout, 0)
+                .map_err(|e| self.memory_error(e, span))?;
+            return Ok(CValue::Aggregate {
+                address,
+                ty,
+                qualifiers: Qualifiers::default(),
+            });
+        }
         match self.value_type(ty, span)? {
             ValueType::Integer(integer) => Ok(CValue::Integer(CInteger::new(0, integer))),
+            ValueType::Floating(kind) => Ok(CValue::Floating(
+                evocc_types::floating::FloatBits::from_bits(kind, 0).unwrap(),
+            )),
             ValueType::Pointer(pointer)
                 if matches!(
                     self.unit.types().get(pointer.pointee()).map(|ty| &ty.kind),
@@ -6388,8 +7024,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<ValueType, InterpreterError> {
+        if let Some(ty) =
+            crate::vector::expression_type(self.unit.types(), expression).filter(|ty| {
+                crate::vector::shape(self.unit.types(), *ty).is_some()
+                    || crate::complex::rank(self.unit.types(), *ty).is_some()
+            })
+        {
+            return self.value_type(ty, expression.span());
+        }
         if self.static_integer_evaluation {
             return self.infer_integer_type(expression).map(ValueType::Integer);
+        }
+        if let Ok(ty) =
+            crate::place::record_expression_type(self.unit.symbols(), self.unit.types(), expression)
+        {
+            return self.value_type(ty, expression.span());
         }
         if let Ok(pointer) =
             PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
@@ -6452,7 +7101,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     /// designating syntax is not retained alongside the place.
     fn schedule_place_operands(
         &mut self,
-        place: &'arena MemoryPlace<'arena>,
+        place: &MemoryPlace<'arena>,
         target_span: SourceSpan,
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
@@ -6569,6 +7218,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 binding
             }
         };
+        if !static_storage && self.unit.zero_initialize_compound_padding(initializer) {
+            self.zero_constructor_padding(binding, initializer, *span)?;
+        }
         if !static_storage && initializer.plan().zero_fills_unwritten() {
             self.zero_initialize_subobjects(
                 binding.address,
@@ -7025,6 +7677,165 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             })
     }
 
+    fn apply_atomic(
+        &mut self,
+        access: &crate::CHirAtomicAccess<'arena>,
+        address: CValue,
+        stored: Option<CValue>,
+        expected: Option<CValue>,
+    ) -> Result<CValue, InterpreterError> {
+        let span = access.span;
+        let (address, _) = expect_machine_pointer(address, span)?;
+        let layout = self.access_layout(access.access_ty, span)?;
+        let order = access
+            .constant_order
+            .unwrap_or(evocc_memory::AtomicOrder::SeqCst);
+        let ty = self.value_type(access.access_ty, span)?;
+        if let Some((operation, result_kind)) = access.rmw {
+            let value = self.atomic_operand_value(
+                stored.ok_or(InterpreterError::UnsupportedType {
+                    ty: access.access_ty,
+                    span,
+                })?,
+                ty,
+                span,
+            )?;
+            let expected = expected
+                .map(|value| self.atomic_operand_value(value, ty, span))
+                .transpose()?;
+            let (memory, world, result) = self
+                .memory
+                .atomic_rmw(
+                    &self.world,
+                    address,
+                    layout,
+                    order,
+                    access.volatile,
+                    operation,
+                    value,
+                    expected,
+                )
+                .map_err(|error| self.memory_error(error, span))?;
+            self.memory = memory;
+            self.world = world;
+            return match result_kind {
+                crate::AtomicRmwReturn::Old => self.atomic_result_value(result.old, ty, span),
+                crate::AtomicRmwReturn::New => self.atomic_result_value(result.new, ty, span),
+                crate::AtomicRmwReturn::Success => Ok(CValue::Integer(CInteger::new(
+                    u64::from(result.exchanged),
+                    CIntegerType::BOOL,
+                ))),
+            };
+        }
+        if let Some(stored) = stored {
+            let stored = cast_machine_value(stored, ty, span, self.unit.types(), &mut self.memory)?;
+            let stored = match stored {
+                CValue::Integer(value) => evocc_memory::AtomicValue::Integer(value.raw_bits()),
+                CValue::Pointer { value, .. } => {
+                    evocc_memory::AtomicValue::Pointer(PointerValue::object(value))
+                }
+                CValue::FunctionPointer { value, .. } => evocc_memory::AtomicValue::Pointer(value),
+                CValue::Uninitialized(_) => {
+                    return Err(InterpreterError::UninitializedValue { span })
+                }
+                _ => {
+                    return Err(InterpreterError::UnsupportedType {
+                        ty: access.access_ty,
+                        span,
+                    })
+                }
+            };
+            let (memory, world) = self
+                .memory
+                .atomic_store(&self.world, address, layout, order, access.volatile, stored)
+                .map_err(|error| self.memory_error(error, span))?;
+            self.memory = memory;
+            self.world = world;
+            Ok(CValue::Integer(CInteger::int(0)))
+        } else {
+            let (value, world) = self
+                .memory
+                .atomic_load(
+                    &self.world,
+                    address,
+                    layout,
+                    order,
+                    access.volatile,
+                    matches!(ty, ValueType::Pointer(_)),
+                )
+                .map_err(|error| self.memory_error(error, span))?;
+            self.world = world;
+            match (value, ty) {
+                (evocc_memory::AtomicValue::Integer(raw), ValueType::Integer(ty)) => {
+                    Ok(CValue::Integer(CInteger::from_raw(raw, ty)))
+                }
+                (evocc_memory::AtomicValue::Pointer(value), ValueType::Pointer(ty)) => {
+                    if pointer_type_is_function(self.unit.types(), ty) {
+                        return Ok(CValue::FunctionPointer { value, ty });
+                    }
+                    let value = match value {
+                        PointerValue::Null => Pointer::NULL,
+                        PointerValue::Object(value) => value,
+                        PointerValue::Exposed(value) => Pointer::from_address(value),
+                        PointerValue::Function(_) => {
+                            return Ok(CValue::FunctionPointer { value, ty })
+                        }
+                    };
+                    Ok(CValue::Pointer { value, ty })
+                }
+                _ => Err(InterpreterError::UnsupportedType {
+                    ty: access.access_ty,
+                    span,
+                }),
+            }
+        }
+    }
+
+    fn atomic_operand_value(
+        &mut self,
+        value: CValue,
+        ty: ValueType,
+        span: SourceSpan,
+    ) -> Result<evocc_memory::AtomicValue, InterpreterError> {
+        match cast_machine_value(value, ty, span, self.unit.types(), &mut self.memory)? {
+            CValue::Integer(value) => Ok(evocc_memory::AtomicValue::Integer(value.raw_bits())),
+            CValue::Pointer { value, .. } => Ok(evocc_memory::AtomicValue::Pointer(
+                PointerValue::object(value),
+            )),
+            CValue::FunctionPointer { value, .. } => Ok(evocc_memory::AtomicValue::Pointer(value)),
+            _ => Err(InterpreterError::UninitializedValue { span }),
+        }
+    }
+
+    fn atomic_result_value(
+        &self,
+        value: evocc_memory::AtomicValue,
+        ty: ValueType,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        match (value, ty) {
+            (evocc_memory::AtomicValue::Integer(raw), ValueType::Integer(ty)) => {
+                Ok(CValue::Integer(CInteger::from_raw(raw, ty)))
+            }
+            (evocc_memory::AtomicValue::Pointer(value), ValueType::Pointer(ty)) => {
+                if pointer_type_is_function(self.unit.types(), ty) {
+                    return Ok(CValue::FunctionPointer { value, ty });
+                }
+                let value = match value {
+                    PointerValue::Null => Pointer::NULL,
+                    PointerValue::Object(pointer) => pointer,
+                    PointerValue::Exposed(address) => Pointer::from_address(address),
+                    PointerValue::Function(_) => return Ok(CValue::FunctionPointer { value, ty }),
+                };
+                Ok(CValue::Pointer { value, ty })
+            }
+            _ => Err(InterpreterError::UnsupportedExpression {
+                span,
+                feature: "atomic result type disagrees with access",
+            }),
+        }
+    }
+
     fn load_memory_value_with_layout(
         &mut self,
         address: Pointer,
@@ -7051,6 +7862,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         match self.value_type(ty, span)? {
+            ValueType::Floating(kind) => {
+                let raw = if qualifiers.is_volatile {
+                    let (raw, world) = self
+                        .memory
+                        .volatile_load_integer(&self.world, address, layout)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.world = world;
+                    raw
+                } else {
+                    self.memory
+                        .load_integer(address, layout)
+                        .map_err(|error| self.memory_error(error, span))?
+                };
+                Ok(CValue::Floating(
+                    evocc_types::floating::FloatBits::from_bits(kind, raw).unwrap(),
+                ))
+            }
             ValueType::Integer(integer_type) => {
                 let raw = if qualifiers.is_volatile {
                     let (raw, world) = self
@@ -7113,11 +7941,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: pointer_type,
                 })
             }
-            ValueType::Aggregate(aggregate_type) => Ok(CValue::Aggregate {
-                address,
-                ty: aggregate_type,
-                qualifiers,
-            }),
+            ValueType::Aggregate(aggregate_type) => {
+                if matches!(
+                    self.unit.types().get(aggregate_type).map(|ty| &ty.kind),
+                    Some(
+                        TypeKind::Vector { .. }
+                            | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
+                    )
+                ) {
+                    let snapshot = self.vector_temporary(aggregate_type, span)?;
+                    let (memory, world) = self
+                        .memory
+                        .copy_with_volatile(
+                            &self.world,
+                            snapshot,
+                            address,
+                            layout,
+                            CopyVolatility::new(qualifiers.is_volatile, false),
+                        )
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    self.world = world;
+                    return Ok(CValue::Aggregate {
+                        address: snapshot,
+                        ty: aggregate_type,
+                        qualifiers: Qualifiers::default(),
+                    });
+                }
+                Ok(CValue::Aggregate {
+                    address,
+                    ty: aggregate_type,
+                    qualifiers,
+                })
+            }
             ValueType::Void => Err(InterpreterError::UnsupportedType { ty, span }),
         }
     }
@@ -7148,6 +8004,42 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         self.store_initialized_value(address, ty, value, span)
+    }
+
+    fn store_constant_representation(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        bits: CInteger,
+        volatile: bool,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        let mut layout = self.access_layout(ty, span)?;
+        let object = self
+            .memory
+            .object_info(address.object())
+            .map_err(|e| self.memory_error(e, span))?;
+        layout.align_bytes = layout.align_bytes.min(object.layout.align_bytes);
+        let offset = address.byte_offset().unsigned_abs();
+        if offset != 0 {
+            layout.align_bytes = layout
+                .align_bytes
+                .min(1_u32 << offset.trailing_zeros().min(31));
+        }
+        if volatile {
+            let (memory, world) = self
+                .memory
+                .volatile_store_integer(&self.world, address, layout, bits.raw_bits())
+                .map_err(|e| self.memory_error(e, span))?;
+            self.memory = memory;
+            self.world = world;
+        } else {
+            self.memory = self
+                .memory
+                .store_integer(address, layout, bits.raw_bits())
+                .map_err(|e| self.memory_error(e, span))?;
+        }
+        Ok(())
     }
 
     /// The initializer path has already verified the subobject's identity.
@@ -7185,6 +8077,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         layout: AccessLayout,
     ) -> Result<CValue, InterpreterError> {
         match (self.value_type(ty, span)?, value) {
+            (ValueType::Floating(kind), value) => {
+                let value = floating::convert(value, kind, span)?;
+                if qualifiers.is_volatile {
+                    let (memory, world) = self
+                        .memory
+                        .volatile_store_integer(&self.world, address, layout, value.bits())
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    self.world = world;
+                } else {
+                    self.memory = self
+                        .memory
+                        .store_integer(address, layout, value.bits())
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                Ok(CValue::Floating(value))
+            }
             (_, CValue::Uninitialized(_)) => Err(InterpreterError::UninitializedValue { span }),
             (ValueType::Integer(integer_type), CValue::Integer(value)) => {
                 let value = value.cast(integer_type);
@@ -7290,7 +8199,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         matches!(
             (self.unit.types().get(left), self.unit.types().get(right)),
             (Some(left), Some(right))
-                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
+                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList | TypeKind::Vector { .. } | TypeKind::Complex(evocc_types::ComplexBase::Integer(_)))
                     && left.kind == right.kind
         )
     }
@@ -7568,6 +8477,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             UpdateOp::PreDecrement | UpdateOp::PostDecrement => OffsetDirection::Subtract,
         };
         match previous {
+            CValue::Floating(value) => floating::binary(
+                if direction == OffsetDirection::Add {
+                    BinaryOp::Add
+                } else {
+                    BinaryOp::Sub
+                },
+                CValue::Floating(value),
+                CValue::Integer(CInteger::int(1)),
+                span,
+            ),
             CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
             CValue::Integer(previous) => {
                 let binary = if direction == OffsetDirection::Add {
@@ -7737,16 +8656,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn apply_machine_binary(
-        &self,
+        &mut self,
         operator: BinaryOp,
         left: CValue,
         right: CValue,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         if matches!(operator, BinaryOp::And | BinaryOp::Or) {
-            return Ok(CValue::Integer(CInteger::int(i32::from(machine_truth(
-                right, span,
-            )?))));
+            return Ok(CValue::Integer(CInteger::int(i32::from(
+                self.complex_truth(right, span)?,
+            ))));
         }
         if operator == BinaryOp::Comma {
             return Ok(right);
@@ -7771,6 +8690,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         match (left, right) {
+            (CValue::Floating(_), _) | (_, CValue::Floating(_)) => {
+                floating::binary(operator, left, right, span)
+            }
             (CValue::Uninitialized(_), _) | (_, CValue::Uninitialized(_)) => {
                 Err(InterpreterError::UninitializedValue { span })
             }
@@ -8058,9 +8980,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 scale_bytes.max(1),
             )
             .map_err(|error| self.memory_error(error, span))?;
-        self.memory
-            .check_pointer(value)
-            .map_err(|error| self.memory_error(error, span))?;
+        // Exposed integer/code addresses have no object until an access
+        // resolves one. Arithmetic transports those bits; it must not try to
+        // dereference a label address as an object. Genuine object pointers
+        // retain the ordinary lifetime/one-past checks.
+        if !pointer.object().is_null() {
+            self.memory
+                .check_pointer(value)
+                .map_err(|error| self.memory_error(error, span))?;
+        }
         Ok(CValue::Pointer {
             value,
             ty: pointer_type,
@@ -8172,6 +9100,29 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         right: Pointer,
         span: SourceSpan,
     ) -> Result<i64, InterpreterError> {
+        let address = |pointer| {
+            self.memory
+                .pointer_address(PointerValue::object(pointer))
+                .map_err(|error| self.memory_error(error, span))
+        };
+        let left_address = address(left)?;
+        let right_address = address(right)?;
+        let owner = |address| {
+            self.symbol_order()
+                .labels
+                .values()
+                .find_map(|(owner, _, identity)| {
+                    (self
+                        .memory
+                        .pointer_address(PointerValue::Function(*identity))
+                        == Ok(address))
+                    .then_some(*owner)
+                })
+        };
+        if owner(left_address).is_some_and(|left| Some(left) == owner(right_address)) {
+            return i64::try_from(i128::from(left_address) - i128::from(right_address))
+                .map_err(|_| self.integer_error(IntegerError::SignedOverflow, span));
+        }
         self.memory
             .check_pointer(left)
             .map_err(|error| self.memory_error(error, span))?;
@@ -8220,6 +9171,57 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         let left =
             self.load_memory_value_with_layout(address, ty, qualifiers, target_span, layout)?;
+        if matches!(left, CValue::Floating(_)) || matches!(right, CValue::Floating(_)) {
+            let op =
+                assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "invalid floating compound assignment",
+                    span,
+                })?;
+            let result = self.apply_machine_binary(op, left, right, span)?;
+            let result = cast_machine_value(
+                result,
+                self.value_type(ty, span)?,
+                span,
+                self.unit.types(),
+                &mut self.memory,
+            )?;
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
+        }
+        if crate::complex::rank(self.unit.types(), ty).is_some() {
+            let op = crate::vector::assignment_binary(operator).ok_or(
+                InterpreterError::UnsupportedExpression {
+                    feature: "invalid complex assignment",
+                    span,
+                },
+            )?;
+            let operation = crate::complex::ComplexExpr {
+                op: crate::complex::ComplexOp::Binary(op),
+                operands: Vec::new(),
+                facts: ExprFacts::value(ty),
+                span,
+            };
+            let result = self.apply_complex(&operation, &[left, right])?;
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
+        }
+        if crate::vector::shape(self.unit.types(), ty).is_some() {
+            let op = crate::vector::assignment_binary(operator).ok_or(
+                InterpreterError::UnsupportedExpression {
+                    span,
+                    feature: "invalid vector assignment",
+                },
+            )?;
+            let operation = crate::vector::VectorExpr {
+                op: crate::vector::VectorOp::Binary(op),
+                operands: Vec::new(),
+                facts: ExprFacts::value(ty),
+                span,
+            };
+            let result = self.apply_vector(&operation, &[left, right])?;
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
+        }
         if matches!(
             left,
             CValue::Pointer { .. } | CValue::FunctionPointer { .. }
@@ -8342,6 +9344,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<(), InterpreterError> {
         match expression {
+            CHirExpr::Complex(access) => {
+                for operand in &access.operands {
+                    self.predeclare_expr(operand)?;
+                }
+            }
+            CHirExpr::Floating(access) => {
+                for operand in &access.operands {
+                    self.predeclare_expr(operand)?;
+                }
+            }
+            CHirExpr::Vector(access) => {
+                for operand in &access.operands {
+                    self.predeclare_expr(operand)?;
+                }
+            }
+            CHirExpr::Atomic(access) => {
+                for operand in access.operands() {
+                    self.predeclare_expr(operand)?;
+                }
+            }
             CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::EvaluateOnce(operand, _)
@@ -8351,7 +9373,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
             | CHirExpr::Comma(left, right, _)
-            | CHirExpr::Elvis(left, right, _) => {
+            | CHirExpr::Elvis(left, right, _)
+            | CHirExpr::BuiltinExpect(left, right, _) => {
                 self.predeclare_expr(left)?;
                 self.predeclare_expr(right)?;
             }
@@ -8652,6 +9675,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         match expression {
+            CHirExpr::Atomic(_)
+            | CHirExpr::Vector(_)
+            | CHirExpr::Complex(_)
+            | CHirExpr::Floating(_) => Err(InterpreterError::UnsupportedExpression {
+                feature: "atomic access outside memory execution",
+                span,
+            }),
             CHirExpr::Lit(literal, _) => {
                 integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))
             }
@@ -8735,6 +9765,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let result = self.eval_expr(operand, true);
                 self.nested_mutation_depth = previous;
                 result
+            }
+            CHirExpr::BuiltinExpect(value, expected, _) => {
+                let value = self.eval_expr(value, true)?;
+                self.eval_expr(expected, true)?;
+                Ok(value)
             }
             CHirExpr::Binary(operator, left, right, _) => {
                 self.eval_binary(*operator, left, right, span)
@@ -8915,6 +9950,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             pending.push(TypeTask::Cache(key));
             let span = expression.span();
             let immediate = match expression {
+                CHirExpr::Atomic(access) => self.integer_type(access.facts.ty(), span),
+                CHirExpr::Floating(access) => self.integer_type(access.facts.ty(), span),
+                CHirExpr::Vector(access) => self.integer_type(access.facts.ty(), span),
+                CHirExpr::Complex(access) => self.integer_type(access.facts.ty(), span),
                 CHirExpr::Lit(literal, _) => integer_literal_value(*literal)
                     .map(|value| value.ty())
                     .map_err(|error| self.integer_error(error, span)),
@@ -9004,6 +10043,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     continue;
                 }
                 CHirExpr::Cast(ty, _, _) => self.integer_type(*ty, span),
+                CHirExpr::BuiltinExpect(..) => Ok(CIntegerType::LONG),
                 CHirExpr::Call(callee, _, _) => {
                     let function_type = self.call_designator_function_type(callee).ok_or(
                         InterpreterError::UnsupportedExpression {
@@ -9324,7 +10364,7 @@ fn has_static_storage_duration(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
         .symbols()
         .is_bound_in_scope(symbol, unit.symbols().file_scope())
         .unwrap_or(false);
-    file_scope || declaration.storage_class() == Some(StorageClass::Static)
+    file_scope || declaration.storage_class().map(StorageClass::base) == Some(StorageClass::Static)
 }
 
 fn reachable_memory_requirements(
@@ -9632,6 +10672,26 @@ fn collect_expression_symbols<'arena>(
     output: &mut ReferencedSymbols,
 ) {
     match expression {
+        CHirExpr::Complex(access) => {
+            for operand in &access.operands {
+                collect_expression_symbols(operand, output);
+            }
+        }
+        CHirExpr::Floating(access) => {
+            for operand in &access.operands {
+                collect_expression_symbols(operand, output);
+            }
+        }
+        CHirExpr::Vector(access) => {
+            for operand in &access.operands {
+                collect_expression_symbols(operand, output);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                collect_expression_symbols(operand, output);
+            }
+        }
         CHirExpr::LabelAddress { label, .. } => {
             output.labels.insert(
                 expression as *const CHirExpr<'_> as usize,
@@ -9648,7 +10708,8 @@ fn collect_expression_symbols<'arena>(
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             collect_expression_symbols(left, output);
             collect_expression_symbols(right, output);
         }
@@ -9804,6 +10865,14 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         return true;
     }
     match expression {
+        CHirExpr::Atomic(_)
+        | CHirExpr::Vector(_)
+        | CHirExpr::Complex(_)
+        | CHirExpr::Floating(_)
+        // The legacy integer-only evaluator cannot execute an unfolderable
+        // floating literal/cast. Use the typed task machine even if no object
+        // is read, so invalid conversions retain their E3063 obligation.
+        | CHirExpr::FloatLit(_, _) => true,
         CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => false,
         // A file-scope *object* has static storage and therefore lives in
         // memory. A parameter can never legitimately be declared at file scope,
@@ -9841,7 +10910,8 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             expression_requires_memory(unit, left) || expression_requires_memory(unit, right)
         }
         CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
@@ -9877,7 +10947,6 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         }
         CHirExpr::Update { target, .. } => expression_requires_memory(unit, target),
         CHirExpr::Lit(_, _)
-        | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
@@ -9908,13 +10977,26 @@ fn find_storage_object_declaration<'arena>(
         .or_else(|| {
             declarations
                 .iter()
-                .find(|declaration| declaration.storage != StorageClass::Extern)
+                .find(|declaration| declaration.storage.base() != StorageClass::Extern)
         })
         .map(|object| (*object).clone())
 }
 
 fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
     match expression {
+        CHirExpr::Complex(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_call(operand)),
+        CHirExpr::Floating(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_call(operand)),
+        CHirExpr::Vector(access) => access
+            .operands
+            .iter()
+            .any(|operand| expression_contains_call(operand)),
+        CHirExpr::Atomic(access) => access.operands().any(expression_contains_call),
         // Comma needs the discarded-expression path for its left operand,
         // which need not produce a scalar value even without a function call.
         CHirExpr::Call(_, _, _)
@@ -9937,7 +11019,8 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             expression_contains_call(left) || expression_contains_call(right)
         }
         CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
@@ -10013,6 +11096,7 @@ fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterEr
     match value {
         CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span: _span }),
         CValue::Integer(value) => Ok(value.truth()),
+        CValue::Floating(value) => Ok(!value.is_zero()),
         CValue::Pointer { value, .. } => Ok(value != Pointer::NULL),
         CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
         CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
@@ -10034,12 +11118,13 @@ fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, I
     match value {
         CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
         CValue::Integer(value) => Ok(value),
-        CValue::Pointer { .. } | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
-            Err(InterpreterError::UnsupportedExpression {
-                feature: "pointer value in integer task-machine operation",
-                span,
-            })
-        }
+        CValue::Floating(_)
+        | CValue::Pointer { .. }
+        | CValue::FunctionPointer { .. }
+        | CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
+            feature: "pointer value in integer task-machine operation",
+            span,
+        }),
     }
 }
 
@@ -10050,12 +11135,13 @@ fn expect_machine_pointer(
     match value {
         CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
         CValue::Pointer { value, ty } => Ok((value, ty)),
-        CValue::Integer(_) | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
-            Err(InterpreterError::UnsupportedExpression {
-                feature: "integer value in pointer task-machine operation",
-                span,
-            })
-        }
+        CValue::Floating(_)
+        | CValue::Integer(_)
+        | CValue::FunctionPointer { .. }
+        | CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
+            feature: "integer value in pointer task-machine operation",
+            span,
+        }),
     }
 }
 
@@ -10068,6 +11154,25 @@ fn cast_machine_value(
 ) -> Result<CValue, InterpreterError> {
     match (value, target) {
         (CValue::Uninitialized(_), _) => Err(InterpreterError::UninitializedValue { span }),
+        (value, ValueType::Floating(kind)) => {
+            floating::convert(value, kind, span).map(CValue::Floating)
+        }
+        (CValue::Floating(value), ValueType::Integer(target)) => {
+            let raw = if target == CIntegerType::BOOL {
+                u128::from(!value.is_zero())
+            } else {
+                value
+                    .to_integer(u16::from(target.bits()), target.is_signed())
+                    .ok_or(InterpreterError::FloatingToInteger { span })?
+            };
+            Ok(CValue::Integer(CInteger::from_raw(raw, target)))
+        }
+        (CValue::Floating(_), ValueType::Pointer(_) | ValueType::Aggregate(_)) => {
+            Err(InterpreterError::UnsupportedExpression {
+                feature: "invalid floating conversion",
+                span,
+            })
+        }
         (CValue::Pointer { value, .. }, ValueType::Integer(target)) => {
             if target == CIntegerType::BOOL {
                 return Ok(CValue::Integer(CInteger::from_raw(
@@ -10155,15 +11260,20 @@ fn cast_machine_value(
                 qualifiers,
             },
             ValueType::Aggregate(target),
-        ) if types
-            .get(ty)
-            .zip(types.get(target))
-            .is_some_and(|(source, target)| {
-                matches!(
-                    source.kind,
-                    TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-                ) && source.kind == target.kind
-            }) =>
+        ) if crate::vector::assignment_compatible(types, ty, target)
+            || types
+                .get(ty)
+                .zip(types.get(target))
+                .is_some_and(|(source, target)| {
+                    matches!(
+                        source.kind,
+                        TypeKind::Struct(_)
+                            | TypeKind::Union(_)
+                            | TypeKind::BuiltinVaList
+                            | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
+                            | TypeKind::Vector { .. }
+                    ) && source.kind == target.kind
+                }) =>
         {
             Ok(CValue::Aggregate {
                 address,
@@ -10361,6 +11471,7 @@ fn default_argument_promotion_preserves_type(types: &TypeInterner, ty: TypeId) -
         | TypeKind::Function { .. } => false,
         TypeKind::BuiltinVaList
         | TypeKind::GnuInt128(_)
+        | TypeKind::Vector { .. }
         | TypeKind::Complex(_)
         | TypeKind::Pointer(_)
         | TypeKind::Struct(_)
@@ -10380,13 +11491,16 @@ fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> b
         StorageClass::Typedef
         | StorageClass::Auto
         | StorageClass::Register
-        | StorageClass::ThreadLocal => false,
+        | StorageClass::ThreadLocal
+        | StorageClass::StaticThreadLocal
+        | StorageClass::ExternThreadLocal => false,
     }
 }
 
 fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
     let canonical = types.get(ty)?;
     match canonical.kind {
+        TypeKind::TargetBuiltin(kind) => crate::integer::integer_type_for_target(kind),
         TypeKind::Int(rank) => Some(integer_type_for_rank(rank)),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => {
@@ -10742,7 +11856,10 @@ mod tests {
                     span: span(0, 3),
                 },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span: span(3, 5) }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: None,
+                        span: span(3, 5),
+                    }],
                     span: span(0, 5),
                 },
                 parameters: ParameterSyntax::Prototype {
@@ -11048,7 +12165,10 @@ mod tests {
                 span: at,
             },
             written: WrittenDeclarator {
-                layers: vec![WrittenDeclaratorLayer::Function { span: at }],
+                layers: vec![WrittenDeclaratorLayer::Function {
+                    parameters: None,
+                    span: at,
+                }],
                 span: at,
             },
             parameters: ParameterSyntax::Prototype {

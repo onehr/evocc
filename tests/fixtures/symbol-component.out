@@ -1,0 +1,50 @@
+Measured 2026-09-15, AArch64 Linux, evo-flight-lab:sealed, network none.
+Compilers: gcc-14 (Debian 14.2.0-19) 14.2.0;
+Debian clang version 19.1.7 (3+b1).
+EvoCC: HEAD 9f571ca with working-tree changes; release SHA-256
+59dae2616510eead3fed79285bc8fe0c3831e028efde2156b9e81d43cdca3db1.
+
+Inputs: symbol-component.h, symbol-component-{definition,reference,caller,copy}.c.
+VIS_KIND: 1 protected; 2 source internal; 3 hidden; 4 default.
+EvoCC: --target=aarch64-unknown-linux-gnu --emit=asm -O2 -fPIC -DVIS_KIND=N.
+Oracles: -std=gnu11 -O2 -fPIC -DVIS_KIND=N -c SOURCE -o OBJECT.
+Assemble EvoCC output: gcc-14 -c SOURCE.s -o OBJECT.
+Link: gcc-14 -shared definition.o reference.o -o /tmp/libcomponent.so.
+Caller: gcc-14 -O2 -DVIS_KIND=N symbol-component-caller.c -Wl,-E -L/tmp -lcomponent -o /tmp/caller.
+Execute: LD_LIBRARY_PATH=/tmp /tmp/caller.
+
+Each row gives executable exit status for protected/internal/hidden/default.
+definition compiler / reference compiler | exits
+gcc-14 / gcc-14                         | 0 0 0 0
+clang-19 / clang-19                     | 0 0 0 0
+evocc / evocc                           | 0 0 0 0
+evocc / gcc-14                          | 0 0 0 0
+gcc-14 / evocc                          | 0 0 0 0
+evocc / clang-19                        | 0 0 0 0
+clang-19 / evocc                        | 0 0 0 0
+For evocc/evocc, also assemble the EvoCC caller and link with the same
+gcc-14 -Wl,-E -L/tmp -lcomponent command: exits 0 0 0 0.
+Total: 32 executable passes.
+
+readelf -Ws on EvoCC definition objects:
+VIS_KIND=1: component_data GLOBAL PROTECTED OBJECT;
+            component_function GLOBAL PROTECTED FUNC;
+            component_alias WEAK PROTECTED OBJECT.
+VIS_KIND=2 and 3: the same bindings and kinds, visibility HIDDEN.
+VIS_KIND=4: the same bindings and kinds, visibility DEFAULT.
+Source internal differs intentionally: GCC emits INTERNAL; Clang and this
+profile emit HIDDEN. This is not an object-file equivalence claim.
+
+Copy-relocation negative: compile symbol-component-copy.c with -fno-pic,
+link with gcc-14 -no-pie against the protected EvoCC DSO.
+gcc-14, clang-19 and EvoCC caller objects all refused by ld:
+  copy reloc against protected `component_data' is dangerous
+  copy relocation against non-copyable protected symbol `component_data'
+Expected refusals: 3/3. No visibility or PIC macro was removed.
+
+Probe refinement: the initial default-visible control omitted noinline;
+Clang O2 inlined the definition, so read_definition returned a different
+value and its caller exited 2. The final shared declaration is noinline to
+isolate ELF binding from inlining; the oracle and subject inputs are equal.
+This matrix tests native ELF binding, not interpreter loader emulation,
+all linker implementations, or the complete musl/Lua test suites.

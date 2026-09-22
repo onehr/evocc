@@ -274,6 +274,8 @@ fn fold_function(name: &str, shapes: &[Shape]) -> Function {
         .collect::<Vec<_>>();
     let (acc, mem_out, world_out) = fold(&mut builder, shapes, &args, mem, world);
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -340,6 +342,8 @@ fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
     });
 
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -382,6 +386,8 @@ fn probe_module() -> Module {
         ));
     }
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         globals: Vec::new(),
@@ -526,6 +532,8 @@ fn probe_source() -> String {
 fn nine_register_arguments() -> Module {
     let shapes = vec![Shape::Bits(32); 9];
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         globals: Vec::new(),
@@ -658,6 +666,8 @@ fn narrow_result_function(name: &str, width: u16) -> Function {
     builder.push(Inst::Sub(negated.clone(), zero, narrowed));
 
     Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -711,6 +721,8 @@ fn narrow_module() -> Module {
         ));
     }
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         globals: Vec::new(),

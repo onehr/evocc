@@ -28,6 +28,53 @@ fn successful(output: Output) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+fn check_preprocessed_program(source: &str) -> String {
+    successful(run(&["--parse-only"], source));
+    let text = successful(run(&["-E"], source));
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(successful(run(&[mode], &text)).trim(), "0");
+    }
+    successful(run(&["--emit=asm"], &text));
+    text
+}
+
+#[test]
+fn baseline_floating_profile_does_not_advertise_strict_environment_or_fma() {
+    let source = "#if defined(__STDC_IEC_559__) || defined(__STDC_IEC_60559_BFP__) || defined(__STDC_IEC_559_COMPLEX__) || defined(__FP_FAST_FMA) || defined(__FP_FAST_FMAF)\n#error unsupported_floating_contract_advertised\n#endif\n#if __FLT_EVAL_METHOD__ != 0 || __GCC_IEC_559 != 0 || __GCC_IEC_559_COMPLEX != 0\n#error incorrect_numerical_profile\n#endif\nint main(void){return 0;}\n";
+    successful(run(&["--parse-only"], source));
+}
+
+#[test]
+fn preprocessed_text_preserves_nested_pack_actions() {
+    let text = check_preprocessed_program(include_str!(
+        "../../../tests/fixtures/preprocessed-packing.c"
+    ));
+    assert!(text.contains("#pragma pack(push, 1)"));
+    assert!(text.contains("#pragma pack(pop)"));
+    assert!(text.contains("#pragma pack()"));
+}
+
+#[test]
+fn preprocessed_text_preserves_target_header_declarations() {
+    let source = "int before;\n#pragma GCC aarch64 \"arm_neon.h\"\n\
+        _Static_assert(sizeof(uint8x8x3_t) == 24, \"tuple\");\n\
+        int main(void) { return 0; }";
+    let text = check_preprocessed_program(source);
+    assert!(text.contains("#pragma GCC aarch64 \"arm_neon.h\"\n"));
+    assert!(!text.contains('\u{1e}'));
+}
+
+#[test]
+fn preprocessed_text_preserves_visibility_scope() {
+    let source = "#pragma GCC visibility push(hidden)\n\
+        int hidden;\n#pragma GCC visibility pop\n\
+        int visible; int main(void) { return 0; }";
+    let text = check_preprocessed_program(source);
+    let assembly = successful(run(&["--emit=asm"], &text));
+    assert!(assembly.contains(".hidden hidden\n"));
+    assert!(!assembly.contains(".hidden visible\n"));
+}
+
 #[test]
 fn debug_types_are_opt_in_and_do_not_change_executable_assembly() {
     let source = include_str!("../../../tests/fixtures/debug-types.c");
@@ -55,12 +102,154 @@ fn debug_types_are_opt_in_and_do_not_change_executable_assembly() {
 }
 
 #[test]
+fn debug_members_keep_their_written_typedef_identity() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        "typedef struct {int counter;} atomic_t;
+         typedef struct refcount_struct {atomic_t refs;} refcount_t;
+         struct common {refcount_t refcnt; const refcount_t *ptr;};
+         struct common object;",
+    ));
+    let alias_label = |spelling: &str| {
+        let prefix = debug
+            .split_once(&format!(".asciz {spelling:?}\n"))
+            .unwrap()
+            .0;
+        prefix
+            .lines()
+            .rev()
+            .find_map(|line| line.strip_suffix(':'))
+            .unwrap()
+            .to_owned()
+    };
+    for (member, alias) in [("refs", "atomic_t"), ("refcnt", "refcount_t")] {
+        let prefix = debug.split_once(&format!(".asciz {member:?}\n")).unwrap().0;
+        assert_eq!(
+            prefix.lines().last().unwrap(),
+            format!(".4byte {} - .L_evocc_debug_cu", alias_label(alias)),
+            "{member} must reference its source typedef, not only its canonical record"
+        );
+    }
+}
+
+#[test]
+fn debug_integer_names_match_the_sealed_btf_type_vocabulary() {
+    let debug = successful(run(&["--emit=asm", "-g"],
+        "struct R { short a; unsigned short b; long c; unsigned long d; long long e; unsigned long long f; unsigned __int128 g; }; struct R object;"));
+    for spelling in [
+        "short int",
+        "short unsigned int",
+        "long int",
+        "long unsigned int",
+        "long long int",
+        "long long unsigned int",
+        "__int128 unsigned",
+    ] {
+        assert!(
+            debug.contains(&format!(".asciz {spelling:?}")),
+            "missing BTF-compatible base type {spelling}"
+        );
+    }
+}
+
+#[test]
+fn debug_padding_bitfields_do_not_create_member_dies() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        "struct P {unsigned first:3; unsigned :5; unsigned last:1;}; struct P object;",
+    ));
+    let abbreviations = debug.split_once(".L_evocc_debug_abbrev:\n").unwrap().1;
+    assert_eq!(abbreviations.matches("\n.uleb128 13\n.byte 0\n").count(), 1,
+        "only named bitfields have member DIEs; padding must not add a nameless-member abbreviation");
+}
+
+#[test]
+fn debug_callback_parameters_keep_their_written_typedefs() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        "typedef unsigned long argument_size;
+         struct callbacks { int (*send)(argument_size count); };
+         struct callbacks object;",
+    ));
+    let prefix = debug.split_once(".asciz \"argument_size\"\n").unwrap().0;
+    let label = prefix
+        .lines()
+        .rev()
+        .find_map(|line| line.strip_suffix(':'))
+        .unwrap();
+    assert!(
+        debug.contains(&format!(".4byte {label} - .L_evocc_debug_cu\n")),
+        "the callback parameter must reference argument_size, not its canonical integer"
+    );
+    assert!(!debug.contains(".asciz \"count\"\n"));
+}
+
+#[test]
+fn debug_multidimensional_arrays_use_one_die_with_all_subranges() {
+    for source in [
+        "unsigned long object[4][5];",
+        "typedef unsigned long row[5]; row object[4];",
+    ] {
+        let debug = successful(run(&["--emit=asm", "-g"], source));
+        let label = debug
+            .split_once(".asciz \"object\"\n.4byte ")
+            .unwrap()
+            .1
+            .split_once(" - ")
+            .unwrap()
+            .0;
+        // Delimit by label lines, not by the labels used inside references.
+        let array = debug
+            .split_once(&format!("{label}:\n"))
+            .unwrap()
+            .1
+            .split("\n.L_evocc_")
+            .next()
+            .unwrap();
+        assert_eq!(
+            array.matches(".4byte .L_evocc_index_type - ").count(),
+            2,
+            "a source matrix must have two subranges, not nested BTF array elements"
+        );
+    }
+}
+
+#[test]
 fn debug_target_vectors_are_not_described_as_floating_scalars() {
     let debug = successful(run(
         &["--emit=asm", "-g"],
         "typedef __Float32x4_t lanes; typedef __SVBool_t predicates; int anchor;",
     ));
-    assert!(debug.contains(".asciz \"__Float32x4_t\""));
+    // A real NEON vector is an array DIE over its scalar element, not the
+    // former opaque builtin DIE. Follow the typedef instead of requiring an
+    // invented name on that canonical vector type.
+    let vector_label = debug
+        .split_once(".asciz \"lanes\"\n.4byte ")
+        .unwrap()
+        .1
+        .split_once(" - ")
+        .unwrap()
+        .0;
+    let vector = debug.split_once(&format!("\n{vector_label}:\n")).unwrap().1;
+    let element_label = vector
+        .lines()
+        .nth(1)
+        .unwrap()
+        .strip_prefix(".4byte ")
+        .unwrap()
+        .split_once(" - ")
+        .unwrap()
+        .0;
+    assert!(
+        vector.contains(".4byte .L_evocc_index_type - .L_evocc_debug_cu\n.uleb128 4\n.byte 0\n")
+    );
+    let element = debug
+        .split_once(&format!("\n{element_label}:\n"))
+        .unwrap()
+        .1;
+    assert_eq!(element.lines().nth(1), Some(".asciz \"float\""));
+    assert_eq!(element.lines().nth(2), Some(".uleb128 4")); // element size
+    assert_eq!(element.lines().nth(3), Some(".uleb128 4")); // DW_ATE_float
     assert!(debug.contains(".asciz \"__SVBool_t\""));
     assert!(debug.contains(".uleb128 8455")); // DW_AT_GNU_vector
     assert!(!debug.contains("TargetBuiltin("));
@@ -74,6 +263,38 @@ fn debug_information_does_not_resurrect_an_unemitted_internal_function() {
     ));
     assert!(!debug.contains(".8byte \"unused\""));
     assert!(debug.contains(".8byte \"main\""));
+}
+
+#[test]
+fn debug_external_attributes_follow_c_linkage_and_omit_false_flags() {
+    let debug = successful(run(
+        &["--emit=asm", "-g"],
+        include_str!("../../../tests/fixtures/debug-linkage.c"),
+    ));
+    let entry = |name: &str| {
+        debug
+            .split_once(&format!(".asciz {name:?}\n"))
+            .unwrap()
+            .1
+            .lines()
+            .take(6)
+            .collect::<Vec<_>>()
+    };
+    // The normal DWARF-to-BTF consumer treats external-attribute presence
+    // as external linkage, so a false flag must be absent, not encoded zero.
+    assert_eq!(entry("local_counter")[1], ".uleb128 9");
+    for name in ["public_counter", "hidden_counter", "protected_counter"] {
+        assert_eq!(entry(name)[1], ".byte 1", "{name} has C external linkage");
+        assert_eq!(entry(name)[2], ".uleb128 9");
+    }
+    let local = entry("local_function");
+    assert_eq!(local[2], ".byte 1"); // DW_AT_prototyped, no DW_AT_external.
+    assert!(local[3].starts_with(".uleb128 "));
+    for name in ["local_address", "inspect_counters"] {
+        let external = entry(name);
+        assert_eq!(external[2], ".byte 1"); // DW_AT_external.
+        assert_eq!(external[3], ".byte 1"); // DW_AT_prototyped.
+    }
 }
 
 #[test]
@@ -111,6 +332,21 @@ fn automatic_zero_initializes_constructor_padding_without_changing_members() {
             successful(run(&[mode, "-ftrivial-auto-var-init=zero"], source)).trim(),
             "0"
         );
+    }
+    successful(run(&["--emit=asm", "-ftrivial-auto-var-init=zero"], source));
+}
+
+#[test]
+fn automatic_zero_covers_evaluated_compound_literal_padding() {
+    let source = include_str!("../../../tests/fixtures/automatic-compound-padding.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(
+            successful(run(&[mode, "-ftrivial-auto-var-init=zero"], source)).trim(),
+            "0"
+        );
+        let output = run(&[mode], source);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
     }
     successful(run(&["--emit=asm", "-ftrivial-auto-var-init=zero"], source));
 }

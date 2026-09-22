@@ -96,7 +96,7 @@ fn gnu_alignof_accepts_types_and_unevaluated_expressions() {
 }
 
 #[test]
-fn builtin_expect_returns_long_and_evaluates_only_its_first_operand() {
+fn builtin_expect_distinguishes_runtime_evaluation_from_source_constant_projection() {
     assert_eq!(
         run(concat!(
             "long main(void) { int first = 3; int second = 9; ",
@@ -104,7 +104,7 @@ fn builtin_expect_returns_long_and_evaluates_only_its_first_operand() {
             "return value * 100 + first * 10 + second; }\n"
         ))
         .unwrap(),
-        349
+        350
     );
     assert_eq!(
         object_layout(
@@ -119,6 +119,30 @@ fn builtin_expect_returns_long_and_evaluates_only_its_first_operand() {
             "a"
         ),
         (1, 1)
+    );
+}
+
+#[test]
+fn builtin_expect_constant_projection_still_checks_the_unevaluated_operand() {
+    let source = concat!(
+        "int side; volatile int input; int call(void); ",
+        "_Static_assert(__builtin_expect(1, side++), \"increment is unevaluated\"); ",
+        "enum { VALUE = __builtin_expect(4, input) }; ",
+        "static long initial = __builtin_expect(1, call()); ",
+        "char bound[__builtin_expect(VALUE, side++)];"
+    );
+    assert_eq!(object_layout(source, "bound"), (4, 1));
+    rejects(
+        "long f(void){return __builtin_expect(1, missing);}",
+        "E2001",
+    );
+    rejects(
+        "long f(void){struct S { int a; } s; return __builtin_expect(1, s);}",
+        "E2913",
+    );
+    rejects(
+        "void f(void){const long k=1; _Static_assert(__builtin_expect(k,0), \"not source ICE\");}",
+        "E2912",
     );
 }
 

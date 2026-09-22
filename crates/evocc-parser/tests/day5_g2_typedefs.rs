@@ -659,7 +659,7 @@ fn parenthesized_typedef_in_parameter_is_an_abstract_function_declarator() {
             "anonymous parameter has no SymbolId"
         );
         assert_alias_specifier(&parameter.specifier, source, "T", 2, alias.symbol, alias.ty);
-        let [WrittenDeclaratorLayer::Function { span }] = parameter.written.layers.as_slice()
+        let [WrittenDeclaratorLayer::Function { span, .. }] = parameter.written.layers.as_slice()
         else {
             panic!("parameter must retain the written abstract function layer");
         };

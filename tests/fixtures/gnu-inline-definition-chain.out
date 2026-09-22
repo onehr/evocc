@@ -1,0 +1,34 @@
+GNU inline complete-declaration-chain regression, 2026-09-15.
+Source SHA-256: b8e2bd2159dcfc1eb6bfaaac0be9bf3fc2774ea9c1119d652849da4c6a430161
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+Fixed compilers: GCC 14.2.0-19 and Clang 19.1.7.
+
+Each oracle:
+  $cc -std=gnu11 -O$opt gnu-inline-definition-chain.c -o program
+  ./program
+GCC O0/O2 and Clang O0/O2: compile 0, program exit 0 in all four cases.
+
+The exploratory print probe used an extern-inline body returning x+100,
+a direct caller before the real definition, a real definition returning x+7,
+a caller after it, and an indirect call through f's address. With x=2 every
+oracle printed "9 9 9" at O0 and O2. The prior subject instead expanded
+x+100 into both direct callers: its focused regression exited 1.
+
+After the repair the shared definition-role resolver chooses the real body's
+parameter and local-object identities for direct substitution as well as the
+out-of-line definition. The checked fixture also verifies that side effects
+of the superseded inline-only body do not execute.
+
+Subject debug SHA-256: 2671ad2d8ff56f70228ef3e493576c3a6d6465fe4c3da0b0dd6cca1a11b5cc36
+  evocc --target=aarch64-unknown-linux-gnu --emit=asm source.c > source.s
+  $cc source.s -o program && ./program
+Both GCC and Clang assembly/link/program exits: 0.
+Both C-HIR and EvoIR interpreters: 0.
+This is a targeted regression, not a full-configuration result.
+
+Related option boundary, same sealed compilers and target:
+  $cc -std=gnu89 -fno-gnu89-inline -fsyntax-only -x c /dev/null
+GCC exit 1: cc1: error: '-fno-gnu89-inline' is only supported in GNU99 or C99 mode
+Clang exit 0.
+The profile refuses that final effective combination. A later -std=gnu11
+is accepted: options are reduced in their written order before this check.

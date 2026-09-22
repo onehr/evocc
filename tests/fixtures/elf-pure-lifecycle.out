@@ -1,0 +1,49 @@
+Pure lifecycle interface regression, 2026-09-16.
+Authority: EvoIR module registrations and shared program state; no new rule.
+RED: an empty registered constructor or destructor lowered with no mem/world
+interface and failed existing validation: E3101 invalid lifecycle registration.
+Repair: resolved registrations join the existing function participant set;
+the same registrations then construct the module table. Validator unchanged.
+
+Focused test: pure_lifecycle_handlers_still_participate_in_program_effect_threading.
+Constructor/destructor, before/after/on-definition attributes, C-HIR/EvoIR/asm.
+All 18 checks pass; the two complete lifecycle/inline test groups pass 26/26.
+
+Native fixture: elf-pure-lifecycle.c.
+The subject assembly contains before in .init_array.00201,
+on_definition in .init_array.00202 and after in .fini_array.00201.
+GCC-14 and Clang-19 each assemble/link it with -Wl,--gc-sections; both exit 0.
+Both fixed compilers also compile/run the source at -std=gnu11 -O0/-O2: exit 0.
+Clang reports -Wignored-attributes for the late destructor declaration.
+That source control does not prove registration equivalence; the project's
+existing declaration-chain rule governs the subject's retained registration.
+Empty bodies make native exit alone insufficient; emitted registrations and
+EvoIR validation explicitly check the missing interface which caused the RED.
+
+Environment: evo-flight-lab:sealed, ARM64, network none;
+image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+GCC 14.2.0-19, Clang 19.1.7.
+Reproduce:
+  CARGO_TARGET_DIR=target/frontend cargo test -p evocc --offline -j1 \
+    --test elf_lifecycles --test inline_definition_roles
+  target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm \
+    tests/fixtures/elf-pure-lifecycle.c > /tmp/elf-pure-lifecycle.s
+  # In the fixed ARM64 image, for gcc-14 and clang-19:
+  gcc-14 -Wl,--gc-sections elf-pure-lifecycle.s -o pure && ./pure
+
+Separate exploratory boundary, not a compiler fix: an initial test assumed
+used/retain on any redeclaration forced emission. It was withdrawn after 48
+fixed-oracle object probes and the spec audit: retain is not blanket emission,
+and late attributes differ between compilers. No production retention change
+or gate-PASS claim is based on that withdrawn expectation.
+
+Release confirmation:
+Subject bbeac066b71954fb239d5876f7ee0fda5bf2218fff9f4ebba76a6a40a33a99eb.
+Source af55a509a17ff43e8b055085ab6d6c0306c98b2bec3d0ac909ac0ad6053a081b.
+Assembly 08c55a2ce4fb340ef99a35dd1220fd5d9d9f08664c05890b5dd8effb1315e2e8;
+byte-identical to the native-tested debug emission. Both interpreters return 0.
+Existing elf-lifecycle.c MODE=0/1/2/3 replay passes with both native assemblers,
+including exact stdout and absence of finalization after _Exit/quick_exit.
+elf-lifecycle-library.c + elf-lifecycle-driver.c also pass with each assembler:
+two dlopen handles share initialization, final glibc dlclose finalizes, and
+reopening starts the next load instance. Ten release native checks pass.

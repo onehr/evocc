@@ -1,0 +1,39 @@
+2026-09-20 diagnostic, not an upstream selftest PASS or a kernel patch.
+
+Source SHA256 273f7e486723b7e3ea62bfe3a79a9a52ae9b0a800105a7b929bba6047d9a3997
+GCC-14 diagnostic ELF e32c06899be3aeff184f36a3b35288c78fc0c17721ffec7a60c9cc0b062dedff
+Initramfs caae0fc9825265b3e7f87fb9cf87b48bd3c45d66f174daed736e50124161b65b
+Offline sealed image, source mounted read-only; compile:
+gcc-14 -static -O2 -pthread -I/work/src/tools/testing/selftests/cgroup \
+  -I/work/src/tools/testing/selftests/cgroup/lib/include \
+  /work/fixtures/cgroup-dead-stock-observation.c \
+  /work/src/tools/testing/selftests/cgroup/lib/cgroup_util.c -o cgroup-dead-stock
+
+Existing tools/k1/boot.sh, tcg-cortex-a72, four CPUs, 2048 MiB,
+K1_KUNIT_AUTORUN=0, K1_CONSOLE_LOGLEVEL=1, K1_ALLOW_QEMU_DRIFT=1;
+45-second program limit, 90-second boot limit; original scratch snapshot.
+GCC Image 2dde028e5f4d6e835291985914387a3fadcd877e3fbfc746ec5f0ca73939ceed
+EvoCC Image df7ca716ba1b074c16e6a4a54c76c380119430c1bc6ad9baa723b584685c2d6c
+Capture .build/floating-targeted/cgroup-dead-stock/{reference-tcg,subject-tcg}
+Serial SHA256:
+  reference 2a8acd1fa4781e32adc0d19b97895bbee7b5a56723ddf88001b8b00a57f92c87
+  subject   899ab52f4e4b22003603ca6b8a193ef76fe9bc8008db5699bc9bd27447e33763
+
+Unchanged 30-child workload, twenty-second wait:
+  GCC dying=8, memory.current=438272; EvoCC dying=9, current=344064.
+After sequential CPU 0/1/2/3 offline/online, observing one second per CPU:
+  GCC dying=6/3/3/0; EvoCC dying=9/6/4/0.
+Both stay at zero for another five seconds and shut down normally.
+This demonstrates retained per-CPU state on BOTH frozen kernels. Hotplug also
+drains object stocks, so it alone does not name one specific reference holder.
+Frozen consume_stock nevertheless has the exact empty-slot reference defect
+fixed upstream by 48863da10ba1ffe3889fc5945d3292b4e4bf1c60:
+https://lists.openwall.net/linux-kernel/2026/08/18/1232
+The frozen is_memcg_drain_needed skips zero-page slots. This source evidence
+and the causal intervention support the upstream-stock diagnosis, not a
+compiler-specific failure. Original test_kmem_dead_cgroups remains FAIL.
+
+Earlier CPU1-pinned variant did not reproduce retained descendants, then
+failed on CPU restoration in the HVF lane; not counted as a passing probe.
+Old source 3f706e0602e811a5c35349ccd51b53b75e834cc447468978c0497d6eed7ef759;
+capture reference/boot.log b34e8c2c3168657d11f38748774ddb5bb6750863739365204f70a287dd5b5c67.

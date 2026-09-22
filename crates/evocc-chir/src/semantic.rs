@@ -1203,7 +1203,8 @@ impl ScalarPlace {
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
                 | TypeKind::GnuInt128(_)
-        ) {
+        ) && !matches!(canonical.kind, TypeKind::TargetBuiltin(kind) if kind.polynomial_bits().is_some())
+        {
             return Err(ScalarPlaceError::NonScalarType { symbol, ty });
         }
         Ok(Self { symbol, ty })

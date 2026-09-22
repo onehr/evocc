@@ -224,7 +224,10 @@ fn validate_block(
 }
 
 fn expect_general(name: &str, block: u32, reg: VReg, role: &str) -> Result<(), String> {
-    if reg.class == RegClass::Flags {
+    if matches!(
+        reg.class,
+        RegClass::Flags | RegClass::Simd32 | RegClass::Simd64 | RegClass::Simd128
+    ) {
         return Err(format!(
             "@{name} block {block}: {role} is a flags value, which no general form reads"
         ));
@@ -250,6 +253,160 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
         }
     }
     match inst {
+        MInst::Floating {
+            dst,
+            op,
+            kind,
+            args,
+        } => crate::floating::operation(*dst, *op, *kind, args).map(|_| ()),
+        MInst::Asm(body) => validate_assembly_classes(body),
+        MInst::Aes { dst, op, args } => {
+            if dst.class != RegClass::Simd128
+                || args.len() != op.arity()
+                || args.iter().any(|arg| arg.class != RegClass::Simd128)
+            {
+                return Err("invalid AES operand types or arity".into());
+            }
+            Ok(())
+        }
+        MInst::Vector {
+            dst,
+            extract,
+            lane_bits,
+            bytes,
+            args,
+        } => {
+            let vector_class = match bytes {
+                1 | 2 | 4 => Some(RegClass::Gpr32),
+                8 => Some(RegClass::Simd64),
+                16 => Some(RegClass::Simd128),
+                _ => None,
+            };
+            let valid = matches!(lane_bits, 8 | 16 | 32 | 64)
+                && u16::from(*bytes) * 8 >= *lane_bits
+                && if *extract {
+                    args.len() == 2
+                        && Some(args[0].class) == vector_class
+                        && matches!(args[1].class, RegClass::Gpr32 | RegClass::Gpr64)
+                        && dst.class
+                            == if *lane_bits == 64 {
+                                RegClass::Gpr64
+                            } else {
+                                RegClass::Gpr32
+                            }
+                } else {
+                    Some(dst.class) == vector_class
+                        && args.len() * usize::from(*lane_bits) == usize::from(*bytes) * 8
+                        && args.iter().all(|arg| {
+                            arg.class
+                                == if *lane_bits == 64 {
+                                    RegClass::Gpr64
+                                } else {
+                                    RegClass::Gpr32
+                                }
+                        })
+                };
+            if valid {
+                Ok(())
+            } else {
+                Err(format!(
+                    "@{name} block {block}: invalid vector representation operation"
+                ))
+            }
+        }
+        MInst::Mov { dst, src } if dst.class.is_simd() || src.class.is_simd() => {
+            if dst.class == src.class {
+                Ok(())
+            } else {
+                Err("a SIMD move cannot change register bank or width".into())
+            }
+        }
+        MInst::MovImm { dst, imm } if dst.class.is_simd() => {
+            if *imm == 0 {
+                Ok(())
+            } else {
+                Err("SIMD immediate is only the zero representation".into())
+            }
+        }
+        MInst::Load {
+            dst, base, kind, ..
+        } if dst.class.is_simd() || matches!(kind, crate::LoadKind::D | crate::LoadKind::Q) => {
+            if base.class == RegClass::Gpr64
+                && matches!(
+                    (kind, dst.class),
+                    (crate::LoadKind::S, RegClass::Simd32)
+                        | (crate::LoadKind::D, RegClass::Simd64)
+                        | (crate::LoadKind::Q, RegClass::Simd128)
+                )
+            {
+                Ok(())
+            } else {
+                Err("invalid SIMD load shape".into())
+            }
+        }
+        MInst::Store {
+            src, base, kind, ..
+        } if src.class.is_simd() || matches!(kind, crate::StoreKind::D | crate::StoreKind::Q) => {
+            if base.class == RegClass::Gpr64
+                && matches!(
+                    (kind, src.class),
+                    (crate::StoreKind::S, RegClass::Simd32)
+                        | (crate::StoreKind::D, RegClass::Simd64)
+                        | (crate::StoreKind::Q, RegClass::Simd128)
+                )
+            {
+                Ok(())
+            } else {
+                Err("invalid SIMD store shape".into())
+            }
+        }
+        MInst::Bl { args, results, .. } | MInst::Blr { args, results, .. } => {
+            if args
+                .iter()
+                .chain(results)
+                .any(|r| r.class == RegClass::Flags)
+            {
+                Err("flags cannot cross a call".into())
+            } else {
+                Ok(())
+            }
+        }
+        MInst::SpillStore { .. }
+        | MInst::SpillReload { .. }
+        | MInst::IncomingArg { .. }
+        | MInst::OutgoingArg { .. } => Ok(()),
+        MInst::Atomic {
+            load,
+            value,
+            base,
+            kind,
+            order,
+            ..
+        } => {
+            if !order.valid_for(*load)
+                || !matches!(
+                    kind,
+                    crate::LoadKind::B
+                        | crate::LoadKind::H
+                        | crate::LoadKind::W
+                        | crate::LoadKind::X
+                        | crate::LoadKind::P
+                        | crate::LoadKind::Pf
+                )
+                || base.class != crate::RegClass::Gpr64
+                || value.class
+                    != if kind.size_bytes() <= 4 {
+                        crate::RegClass::Gpr32
+                    } else {
+                        crate::RegClass::Gpr64
+                    }
+            {
+                return Err(format!(
+                    "@{name} block {block}: invalid atomic access shape/order"
+                ));
+            }
+            Ok(())
+        }
         MInst::Cmp { dst, lhs, rhs, .. } => {
             expect_flags(name, block, *dst, "a cmp result")?;
             expect_general(name, block, *lhs, "a cmp operand")?;
@@ -353,6 +510,33 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             }
             Ok(())
         }
+        MInst::AtomicRmw {
+            dst,
+            base,
+            value,
+            expected,
+            operation,
+            kind,
+            ..
+        } => {
+            if base.class != RegClass::Gpr64
+                || dst.class != value.class
+                || dst.class
+                    != if kind.size_bytes() == 8 {
+                        RegClass::Gpr64
+                    } else {
+                        RegClass::Gpr32
+                    }
+                || !matches!(kind.size_bytes(), 1 | 2 | 4 | 8)
+                || expected.as_ref().is_some_and(|e| e.class != dst.class)
+                || (*operation == evocc_memory::AtomicRmwOp::CompareExchange) != expected.is_some()
+            {
+                return Err(format!(
+                    "@{name} block {block}: invalid atomic RMW operands"
+                ));
+            }
+            Ok(())
+        }
         MInst::StackAlloc {
             dst, size, align, ..
         } => {
@@ -364,7 +548,10 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             }
             Ok(())
         }
-        MInst::Adrp { dst, .. } | MInst::Adr { dst, .. } | MInst::FrameSlot { dst, .. } => {
+        MInst::Adrp { dst, .. }
+        | MInst::Adr { dst, .. }
+        | MInst::FrameSlot { dst, .. }
+        | MInst::StackRelease { address: dst } => {
             if dst.class != RegClass::Gpr64 {
                 return Err(format!(
                     "@{name} block {block}: an address is a gpr64 value"
@@ -394,10 +581,7 @@ fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), Strin
             }
             Ok(())
         }
-        // An `asm.goto`'s shape is its constraint list, checked by the
-        // allocation verifier of Section 9 rather than here: nothing about it
-        // is a class or a count this pass knows how to judge.
-        MTerm::AsmGoto { .. } => Ok(()),
+        MTerm::AsmGoto { body, .. } => validate_assembly_classes(body),
         MTerm::BCond { flags, .. } => expect_flags(name, block, *flags, "a b.cond condition"),
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => {
             expect_general(name, block, *src, "a branch operand")
@@ -405,17 +589,56 @@ fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), Strin
         MTerm::Ret { values } => {
             // Section 6: "an EvoMIR function returns up to eight integer or
             // pointer results in x0 to x7 in order."
-            if values.len() > 8 {
+            if values.iter().filter(|r| r.class.is_simd()).count() > 8
+                || values.iter().filter(|r| !r.class.is_simd()).count() > 8
+            {
                 return Err(format!(
                     "@{name} block {block}: {} results exceed x0 to x7",
                     values.len()
                 ));
             }
             for value in values {
-                expect_general(name, block, *value, "a result")?;
+                if value.class == RegClass::Flags {
+                    return Err("flags cannot be returned".into());
+                }
             }
             Ok(())
         }
         MTerm::B { .. } | MTerm::Brk { .. } => Ok(()),
     }
+}
+
+fn validate_assembly_classes(body: &crate::AsmBody) -> Result<(), String> {
+    use crate::{AsmConstraint, AsmDirection, AsmValue};
+    for (index, operand) in body.numbered().into_iter().enumerate() {
+        let output = index < body.outputs.len();
+        if output == (operand.constraint.direction() == AsmDirection::Read) {
+            return Err("assembly constraint direction does not match operand role".into());
+        }
+        let constraint = if let AsmConstraint::Tied(digit) = operand.constraint {
+            let output = body
+                .outputs
+                .get(usize::from(digit))
+                .ok_or("assembly tie names a missing output")?;
+            if output.register().map(|reg| reg.class) != operand.register().map(|reg| reg.class) {
+                return Err("assembly tied operands have different classes".into());
+            }
+            output.constraint
+        } else {
+            operand.constraint
+        };
+        if let AsmValue::Reg(reg) = operand.value {
+            if constraint.simd() != reg.class.is_simd() || reg.class == RegClass::Flags {
+                return Err("assembly operand has the wrong register class".into());
+            }
+            if matches!(
+                constraint,
+                AsmConstraint::Memory { .. } | AsmConstraint::Address
+            ) && reg.class != RegClass::Gpr64
+            {
+                return Err("assembly address requires gpr64".into());
+            }
+        }
+    }
+    Ok(())
 }

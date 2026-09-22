@@ -36,7 +36,6 @@ pub struct Refusal {
 }
 
 /// The Section 10 table.
-const E4001: (&str, &str) = ("E4001", "not-lowered: floating-point");
 const E4002: (&str, &str) = ("E4002", "not-lowered: vector");
 const E4003: (&str, &str) = ("E4003", "not-lowered: wide-integer");
 const E4004: (&str, &str) = ("E4004", "not-lowered: tuple");
@@ -222,8 +221,14 @@ fn class_of(ty: &EvoIRType) -> Result<RegClass, (&'static str, &'static str)> {
             _ => Err(E4003),
         },
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Ok(RegClass::Gpr64),
-        EvoIRType::F32 | EvoIRType::F64 => Err(E4001),
-        EvoIRType::Vec { .. } => Err(E4002),
+        EvoIRType::F32 => Ok(RegClass::Simd32),
+        EvoIRType::F64 => Ok(RegClass::Simd64),
+        EvoIRType::Vec { .. } => match vector_bytes(ty) {
+            Some(1 | 2 | 4) => Ok(RegClass::Gpr32),
+            Some(8) => Ok(RegClass::Simd64),
+            Some(16) => Ok(RegClass::Simd128),
+            _ => Err(E4002),
+        },
         EvoIRType::Tuple(_) => Err(E4004),
         _ => Err(E4009),
     }
@@ -234,10 +239,70 @@ fn is_pair(ty: &EvoIRType) -> bool {
     matches!(ty, EvoIRType::Bits(128))
 }
 
+fn vector_bytes(ty: &EvoIRType) -> Option<u64> {
+    let (lanes, bits) = evocc_evoir::integer_vector_shape(ty)?;
+    Some(u64::from(lanes) * u64::from(bits) / 8)
+}
+
+fn short_vector_bytes(ty: &EvoIRType) -> Option<u64> {
+    vector_bytes(ty).filter(|bytes| matches!(bytes, 8 | 16))
+}
+
+fn simd_argument_bytes(ty: &EvoIRType) -> Option<u64> {
+    match ty {
+        EvoIRType::F32 => Some(4),
+        EvoIRType::F64 => Some(8),
+        _ => short_vector_bytes(ty),
+    }
+}
+
+fn simd_class(bytes: u64) -> RegClass {
+    match bytes {
+        4 => RegClass::Simd32,
+        8 => RegClass::Simd64,
+        16 => RegClass::Simd128,
+        _ => unreachable!("validated SIMD size"),
+    }
+}
+fn simd_load(bytes: u64) -> LoadKind {
+    match bytes {
+        4 => LoadKind::S,
+        8 => LoadKind::D,
+        16 => LoadKind::Q,
+        _ => unreachable!("validated SIMD size"),
+    }
+}
+fn simd_store(bytes: u64) -> StoreKind {
+    match bytes {
+        4 => StoreKind::S,
+        8 => StoreKind::D,
+        16 => StoreKind::Q,
+        _ => unreachable!("validated SIMD size"),
+    }
+}
+
+/// An HFA is packed as an object on the stack, not one eight-byte slot per
+/// float member. These are private ABI transport pieces, not a new C type.
+fn simd_argument_pieces(shape: RecordShape, stack: bool) -> Vec<(u64, u64)> {
+    if stack && shape.floating.is_some() {
+        (0..shape.size)
+            .step_by(8)
+            .map(|offset| (offset, (shape.size - offset).min(8)))
+            .collect()
+    } else {
+        let (count, size) = shape.simd_members().unwrap();
+        (0..count)
+            .map(|member| (u64::from(member) * size, size))
+            .collect()
+    }
+}
+
 /// The number of significant bits a value carries: Section 3's `N`.
 fn significant_bits(ty: &EvoIRType) -> u16 {
     match ty {
         EvoIRType::Bits(width) => *width,
+        EvoIRType::F32 => 32,
+        EvoIRType::Vec { .. } => vector_bytes(ty).map_or(64, |bytes| bytes as u16 * 8),
         _ => 64,
     }
 }
@@ -347,6 +412,14 @@ fn scan_function(
         );
     }
     for ty in &params {
+        if matches!(vector_bytes(ty), Some(1 | 2 | 4)) {
+            report(
+                E4002,
+                entry_block,
+                0,
+                "sub-8-byte vector ABI differs between the sealed compilers".into(),
+            );
+        }
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("parameter of type {ty:?}"));
         }
@@ -365,6 +438,14 @@ fn scan_function(
         );
     }
     for ty in &results {
+        if matches!(vector_bytes(ty), Some(1 | 2 | 4)) {
+            report(
+                E4002,
+                entry_block,
+                0,
+                "sub-8-byte vector ABI differs between the sealed compilers".into(),
+            );
+        }
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("result of type {ty:?}"));
         }
@@ -413,6 +494,20 @@ fn scan_inst(
     index: usize,
     report: &mut impl FnMut((&'static str, &'static str), u32, usize, String),
 ) {
+    if let Inst::Call { args, results, .. } | Inst::IndirectCall { args, results, .. } = inst {
+        if args
+            .iter()
+            .chain(results)
+            .any(|value| matches!(vector_bytes(&value.ty), Some(1 | 2 | 4)))
+        {
+            report(
+                E4002,
+                block,
+                index,
+                "sub-8-byte vector ABI differs between the sealed compilers".into(),
+            );
+        }
+    }
     // Every operand and result must have a class before the form is judged, so
     // that a floating-point add is E4001 rather than E4009.
     for value in inst_results(inst).into_iter().chain(inst_uses(inst)) {
@@ -430,6 +525,8 @@ fn scan_inst(
 
     match inst {
         // The Section 5 table, row by row.
+        Inst::Vector(_) => {}
+        Inst::Floating(_) => {}
         // Section 5's bit-counting and byte-swap row (revision 0.14). EvoIR
         // 3.4 fixes `bswap` at 16, 32 or 64; the counting forms take any `N`
         // the register classes hold, and width 128 has no row.
@@ -456,6 +553,14 @@ fn scan_inst(
         // has no class for are refused by the operand scan above.
         Inst::VaAccess(access) => {
             if let VariadicOp::Arg(result) = &access.op {
+                if matches!(vector_bytes(&result.ty), Some(1 | 2 | 4)) {
+                    report(
+                        E4002,
+                        block,
+                        index,
+                        "sub-8-byte vector ABI differs between the sealed compilers".into(),
+                    );
+                }
                 if variadic_slot(&result.ty).is_none() {
                     report(
                         E4009,
@@ -512,6 +617,16 @@ fn scan_inst(
         | Inst::Ret(_)
         | Inst::Trap(_)
         | Inst::UbAssume(..) => {}
+        Inst::Atomic(access) => {
+            if let Err(detail) = access.validate() {
+                report(E4009, block, index, detail);
+            }
+        }
+        Inst::TlsAddr(access) => {
+            if let Err(detail) = access.validate() {
+                report(E4009, block, index, detail);
+            }
+        }
         Inst::Load { result, .. } => {
             if let Some(detail) = unsupported_access(&result.ty) {
                 report(E4009, block, index, detail);
@@ -627,7 +742,8 @@ fn scan_inst(
 /// no matching width.
 fn unsupported_access(ty: &EvoIRType) -> Option<String> {
     match ty {
-        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => None,
+        EvoIRType::Vec { .. } if matches!(vector_bytes(ty), Some(1 | 2 | 4 | 8 | 16)) => None,
+        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::F32 | EvoIRType::F64 => None,
         // Sixteen is the pair Section 5 accesses with `ldp`/`stp`.
         EvoIRType::Bits(width) if matches!(width.div_ceil(8), 1 | 2 | 4 | 8 | 16) => None,
         other => Some(format!("an access of type {other:?} has no matching width")),
@@ -639,6 +755,7 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 struct Lowerer {
+    dynamic_addresses: HashSet<u32>,
     access_alignments: HashMap<u32, u32>,
     function_name: String,
     next_vreg: u32,
@@ -651,7 +768,7 @@ struct Lowerer {
     traps: Vec<(u16, u32)>,
     /// Named argument register count and incoming stack extent in bytes.
     /// `None` in a fixed function; both are from the call placement plan.
-    named_arguments: Option<(u8, u64)>,
+    named_arguments: Option<(u8, u8, u64)>,
     /// Every `const` this function has lowered, by value id.
     ///
     /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
@@ -1078,6 +1195,84 @@ impl Lowerer {
     }
 }
 
+/// Must-originate analysis for automatic addresses passed through local SSA
+/// edges. Unknown pointers and mixed fixed/dynamic joins are not reclaimed.
+fn dynamic_addresses(function: &Function) -> HashSet<u32> {
+    let mut roots = HashSet::new();
+    let mut incoming: HashMap<u32, Vec<u32>> = HashMap::new();
+    let blocks = function
+        .blocks
+        .iter()
+        .map(|block| (block.id, block))
+        .collect::<HashMap<_, _>>();
+    for block in &function.blocks {
+        for inst in &block.insts {
+            match inst {
+                Inst::DynamicAlloca { result, .. } => {
+                    roots.insert(result.id);
+                }
+                Inst::PointerCast { result, operand }
+                    if matches!(result.ty, EvoIRType::Ptr(_))
+                        && matches!(operand.ty, EvoIRType::Ptr(_)) =>
+                {
+                    incoming.entry(result.id).or_default().push(operand.id);
+                }
+                _ => {}
+            }
+        }
+        let mut edge = |target, args: &[Value]| {
+            if let Some(target) = blocks.get(&target) {
+                for (param, arg) in target.args.iter().zip(args) {
+                    if matches!(param.value.ty, EvoIRType::Ptr(_)) {
+                        incoming.entry(param.value.id).or_default().push(arg.id);
+                    }
+                }
+            }
+        };
+        match &block.terminator {
+            Inst::Br(target, args) => edge(*target, args),
+            Inst::CondBr(_, left, a, right, b) => {
+                edge(*left, a);
+                edge(*right, b);
+            }
+            Inst::IndirectBr { edges, .. } => {
+                for e in edges {
+                    edge(e.target, &e.arguments);
+                }
+            }
+            Inst::AsmGoto {
+                labels,
+                fallthrough,
+                ..
+            } => {
+                for label in labels {
+                    edge(label.edge.target, &label.edge.arguments);
+                }
+                edge(fallthrough.target, &fallthrough.arguments);
+            }
+            _ => {}
+        }
+    }
+    let mut possible = roots.clone();
+    possible.extend(incoming.keys().copied());
+    loop {
+        let before = possible.len();
+        let remove = incoming
+            .iter()
+            .filter_map(|(id, args)| {
+                (!roots.contains(id) && args.iter().any(|arg| !possible.contains(arg)))
+                    .then_some(*id)
+            })
+            .collect::<Vec<_>>();
+        for id in remove {
+            possible.remove(&id);
+        }
+        if possible.len() == before {
+            return possible;
+        }
+    }
+}
+
 fn lower_function(
     target: Target,
     signatures: &Signatures<'_>,
@@ -1097,6 +1292,7 @@ fn lower_function(
     let _ = entry;
 
     let mut lowerer = Lowerer {
+        dynamic_addresses: dynamic_addresses(function),
         access_alignments: HashMap::new(),
         function_name: function.name.clone(),
         next_vreg: 0,
@@ -1157,6 +1353,7 @@ fn lower_function(
 
 /// The record marks of every callee this module can name.
 pub(crate) struct Signatures<'a> {
+    tls: &'a [evocc_evoir::TlsSymbol],
     functions: HashMap<&'a str, &'a [ParamMark]>,
 }
 
@@ -1177,7 +1374,10 @@ impl<'a> Signatures<'a> {
                 functions.insert(alias.name.as_str(), marks);
             }
         }
-        Self { functions }
+        Self {
+            functions,
+            tls: &module.tls,
+        }
     }
 
     fn marks(&self, callee: &str) -> &[ParamMark] {
@@ -1261,12 +1461,43 @@ fn lower_block(
                     lowerer.bind(&arg.value, slot);
                     continue;
                 }
+                Passing::Vectors {
+                    shape,
+                    skipped,
+                    stack,
+                } => {
+                    for _ in 0..skipped {
+                        args.push(lowerer.fresh(RegClass::Simd64));
+                    }
+                    let slot = lowerer.fresh(RegClass::Gpr64);
+                    prologue.push(MInst::FrameSlot {
+                        dst: slot,
+                        origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
+                        size: shape.size,
+                        align: shape.align,
+                    });
+                    lowerer.record_origins += 1;
+                    for (offset, size) in simd_argument_pieces(shape, stack) {
+                        let reg = lowerer.fresh(simd_class(size));
+                        args.push(reg);
+                        prologue.push(MInst::Store {
+                            align: shape.align.min(size as u32),
+                            src: reg,
+                            base: slot,
+                            offset: offset as i64,
+                            kind: simd_store(size),
+                            volatile: false,
+                        });
+                    }
+                    lowerer.bind(&arg.value, slot);
+                    continue;
+                }
                 // Section 6: at most sixteen bytes the destination is the
                 // callee's own, and `ret` loads the result out of it; above
                 // sixteen the caller's pointer arrives in `x8`, which the
                 // marker names and allocation pins.
                 Passing::Destination(shape) => {
-                    if shape.size <= RECORD_REGISTER_LIMIT {
+                    if shape.size <= RECORD_REGISTER_LIMIT || shape.simd_members().is_some() {
                         let slot = lowerer.fresh(RegClass::Gpr64);
                         prologue.push(MInst::FrameSlot {
                             dst: slot,
@@ -1321,7 +1552,7 @@ fn lower_block(
     // anything writes an argument register. The marker is the first thing in
     // the entry block, which is where the frame layout finds it.
     if entry {
-        if let Some((named, _)) = lowerer.named_arguments {
+        if let Some((named, _, _)) = lowerer.named_arguments {
             insts.push(MInst::VaSaveArea { named });
         }
     }
@@ -1380,6 +1611,26 @@ fn lower_block(
         // where a block can be split, exactly as the `ub.assume` row above is.
         if let Inst::VaAccess(access) = inst {
             if let Some((slot, alignment)) = variadic_access_slot(&access.op) {
+                let vector_group = match &access.op {
+                    VariadicOp::Arg(result) => {
+                        simd_argument_bytes(&result.ty).map(|bytes| (1, bytes))
+                    }
+                    VariadicOp::ArgRecord { shape, .. } => shape
+                        .simd_members()
+                        .map(|(count, size)| (u64::from(count), size)),
+                    _ => None,
+                };
+                let offsets_field = if vector_group.is_some() {
+                    VA_VR_OFFS
+                } else {
+                    VA_GR_OFFS
+                };
+                let top_field = if vector_group.is_some() {
+                    VA_VR_TOP
+                } else {
+                    VA_GR_TOP
+                };
+                let register_slot = vector_group.map_or(slot, |(count, _)| count * 16);
                 let ap = lowerer.reg(&access.list)?;
                 let mut carried = live_across(lowerer, block, index + 1);
                 // The destination is an input of this instruction, so a last
@@ -1414,7 +1665,7 @@ fn lower_block(
                     align: 0,
                     dst: offs,
                     base: ap,
-                    offset: VA_GR_OFFS,
+                    offset: offsets_field,
                     kind: LoadKind::Sw,
                     volatile: false,
                 });
@@ -1450,12 +1701,13 @@ fn lower_block(
                 let list = params[width];
                 let offset = params[width + 1];
                 let mut body = Vec::new();
-                let aligned = if alignment == 16 {
+                let aligned = if alignment == 16 && vector_group.is_none() {
                     round_to_sixteen(lowerer, &mut body, offset)
                 } else {
                     offset
                 };
-                let next = lowerer.binary_imm(&mut body, BinOp::Add, aligned, slot, Width::X);
+                let next =
+                    lowerer.binary_imm(&mut body, BinOp::Add, aligned, register_slot, Width::X);
                 let decided = lowerer.fresh(RegClass::Flags);
                 body.push(MInst::CmpImm {
                     dst: decided,
@@ -1493,7 +1745,7 @@ fn lower_block(
                     align: 0,
                     src: next,
                     base: list,
-                    offset: VA_GR_OFFS,
+                    offset: offsets_field,
                     kind: StoreKind::W,
                     volatile: false,
                 });
@@ -1502,11 +1754,33 @@ fn lower_block(
                     align: 0,
                     dst: top,
                     base: list,
-                    offset: VA_GR_TOP,
+                    offset: top_field,
                     kind: LoadKind::P,
                     volatile: false,
                 });
                 let address = lowerer.binary(&mut body, BinOp::Add, top, aligned, Width::X);
+                if let (Some((count, bytes)), Some(destination)) = (vector_group, destination_index)
+                {
+                    for i in 0..count {
+                        let v = lowerer.fresh(simd_class(bytes));
+                        body.push(MInst::Load {
+                            dst: v,
+                            base: address,
+                            offset: (i * 16) as i64,
+                            kind: simd_load(bytes),
+                            volatile: false,
+                            align: bytes as u32,
+                        });
+                        body.push(MInst::Store {
+                            src: v,
+                            base: params[destination],
+                            offset: (i * bytes) as i64,
+                            kind: simd_store(bytes),
+                            volatile: false,
+                            align: bytes as u32,
+                        });
+                    }
+                }
                 let mut reached = params[..width].to_vec();
                 reached.push(address);
                 lowerer.blocks.push(MBlock {
@@ -1529,7 +1803,7 @@ fn lower_block(
                         align: 0,
                         src: zero,
                         base: list,
-                        offset: VA_GR_OFFS,
+                        offset: offsets_field,
                         kind: StoreKind::W,
                         volatile: false,
                     },
@@ -1567,6 +1841,17 @@ fn lower_block(
                     raw
                 };
                 let bumped = lowerer.binary_imm(&mut body, BinOp::Add, address, slot, Width::X);
+                if let (Some(_), Some(destination), VariadicOp::ArgRecord { shape, .. }) =
+                    (vector_group, destination_index, &access.op)
+                {
+                    body.push(MInst::MemCopy {
+                        dst: params[destination],
+                        src: address,
+                        size: shape.size,
+                        align: shape.align.min(alignment as u32),
+                        volatile: evocc_memory::CopyVolatility::None,
+                    });
+                }
                 body.push(MInst::Store {
                     align: 0,
                     src: bumped,
@@ -1594,27 +1879,29 @@ fn lower_block(
                 let address = params[width];
                 let mut body = Vec::new();
                 if let VariadicOp::ArgRecord { shape, .. } = &access.op {
-                    let src = if shape.size > 16 {
-                        let src = lowerer.fresh(RegClass::Gpr64);
-                        body.push(MInst::Load {
-                            align: 0,
-                            dst: src,
-                            base: address,
-                            offset: 0,
-                            kind: LoadKind::P,
-                            volatile: false,
+                    if shape.simd_members().is_none() {
+                        let src = if shape.size > 16 {
+                            let src = lowerer.fresh(RegClass::Gpr64);
+                            body.push(MInst::Load {
+                                align: 0,
+                                dst: src,
+                                base: address,
+                                offset: 0,
+                                kind: LoadKind::P,
+                                volatile: false,
+                            });
+                            src
+                        } else {
+                            address
+                        };
+                        body.push(MInst::MemCopy {
+                            dst: params[destination_index.expect("record destination is carried")],
+                            src,
+                            size: shape.size,
+                            align: shape.align.min(8),
+                            volatile: evocc_memory::CopyVolatility::None,
                         });
-                        src
-                    } else {
-                        address
-                    };
-                    body.push(MInst::MemCopy {
-                        dst: params[destination_index.expect("record destination is carried")],
-                        src,
-                        size: shape.size,
-                        align: shape.align.min(8),
-                        volatile: evocc_memory::CopyVolatility::None,
-                    });
+                    }
                 } else if let VariadicOp::Arg(result) = &access.op {
                     if is_pair(&result.ty) {
                         let (low, high) = lowerer.fresh_pair();
@@ -1999,6 +2286,21 @@ fn lower_terminator(
             if let Some((shape, _)) = lowerer.destination {
                 let base = lowerer.fresh(RegClass::Gpr64);
                 lowerer.destination_readers.insert(current_id, base);
+                if let Some((count, size)) = shape.simd_members() {
+                    for member in 0..count {
+                        let chunk = lowerer.fresh(simd_class(size));
+                        insts.push(MInst::Load {
+                            align: shape.align.min(size as u32),
+                            dst: chunk,
+                            base,
+                            offset: i64::from(member) * size as i64,
+                            kind: simd_load(size),
+                            volatile: false,
+                        });
+                        results.push(chunk);
+                    }
+                    return Ok(MTerm::Ret { values: results });
+                }
                 let mut offset = 0;
                 for size in record_chunks(shape.size) {
                     let chunk = load_chunk(lowerer, insts, base, offset, size);
@@ -2086,6 +2388,35 @@ fn lower_inst(
             let dst = lowerer.fresh(class);
             insts.push(MInst::MovImm { dst, imm: *bits });
             lowerer.bind(result, dst);
+        }
+        Inst::TlsAddr(a) => {
+            if target != Target::Linux {
+                return Err("TLS requires AArch64 ELF".into());
+            }
+            let model = signatures
+                .tls
+                .iter()
+                .find(|s| s.symbol == a.symbol)
+                .ok_or("missing TLS symbol")?
+                .model;
+            let name = &a.symbol;
+            let (template, clobbers) = match model {
+                evocc_evoir::TlsModel::LocalExec => (format!("mrs %0, tpidr_el0\nadd %0, %0, #:tprel_hi12:{name}\nadd %0, %0, #:tprel_lo12_nc:{name}"), vec![]),
+                evocc_evoir::TlsModel::InitialExec => (format!("adrp x0, :gottprel:{name}\nldr x0, [x0, #:gottprel_lo12:{name}]\nmrs %0, tpidr_el0\nadd %0, %0, x0"), vec![AsmClobber::Register(0)]),
+                evocc_evoir::TlsModel::GeneralDynamic | evocc_evoir::TlsModel::LocalDynamic => (format!("adrp x0, :tlsdesc:{name}\nldr x1, [x0, #:tlsdesc_lo12:{name}]\nadd x0, x0, #:tlsdesc_lo12:{name}\n.tlsdesccall {name}\nblr x1\nmrs %0, tpidr_el0\nadd %0, %0, x0"), vec![AsmClobber::Register(0),AsmClobber::Register(1),AsmClobber::Register(30),AsmClobber::Flags,AsmClobber::Memory]),
+            };
+            let dst = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::Asm(AsmBody {
+                template,
+                volatile: true,
+                outputs: vec![AsmOperand::reg(
+                    AsmConstraint::EarlyClobber(crate::AsmDirection::Write),
+                    dst,
+                )],
+                inputs: vec![],
+                clobbers,
+            }));
+            lowerer.bind(&a.result, dst);
         }
         // Section 5: "any value is permitted; zero is chosen so the output is
         // deterministic".
@@ -2217,6 +2548,8 @@ fn lower_inst(
             insts.push(MInst::Asm(body));
         }
         // Section 5's bit-counting and byte-swap row (revision 0.14).
+        Inst::Vector(vector) => lower_vector(lowerer, insts, vector)?,
+        Inst::Floating(operation) => lower_floating(lowerer, insts, operation)?,
         Inst::BitOperation {
             result,
             operand,
@@ -2377,16 +2710,68 @@ fn lower_inst(
             });
             lowerer.bind(result, dst);
         }
-        // Section 5: `lifetime.end` lowers to nothing, and `pointer_valid` and
-        // `access_in_bounds` are "the guards the front end already lowered into
-        // ub.assume obligations; the instruction itself has no machine effect".
-        Inst::LifetimeEnd { .. } | Inst::PointerValid { .. } => {}
+        // A dynamic object can release the native stack allocation. Fixed
+        // frame slots keep their reserved frame positions; access guards
+        // themselves still have no machine effect.
+        Inst::LifetimeEnd { pointer, .. } => {
+            if lowerer.dynamic_addresses.contains(&pointer.id) {
+                insts.push(MInst::StackRelease {
+                    address: lowerer.reg(pointer)?,
+                });
+            }
+        }
+        Inst::PointerValid { .. } => {}
         Inst::AccessInBounds {
             mem_out, layout, ..
         } => {
             lowerer
                 .access_alignments
                 .insert(mem_out.id, layout.align_bytes);
+        }
+        Inst::Atomic(access) => {
+            if let evocc_evoir::AtomicOp::Rmw {
+                result,
+                operation,
+                value,
+                expected,
+            } = &access.op
+            {
+                let dst = lowerer.fresh(class_of(&result.ty).map_err(|(code, _)| code.to_owned())?);
+                insts.push(MInst::AtomicRmw {
+                    dst,
+                    base: lowerer.reg(&access.address)?,
+                    value: lowerer.reg(value)?,
+                    expected: expected
+                        .as_ref()
+                        .map(|value| lowerer.reg(value))
+                        .transpose()?,
+                    operation: *operation,
+                    kind: load_kind(&result.ty)?,
+                    order: access.order,
+                    volatile: access.volatile,
+                });
+                lowerer.bind(result, dst);
+                return Ok(());
+            }
+            let load = access.is_load();
+            let kind = load_kind(&access.value().ty)?;
+            let base = lowerer.reg(&access.address)?;
+            let value = if load {
+                lowerer.fresh(class_of(&access.value().ty).map_err(|(code, _)| code.to_owned())?)
+            } else {
+                lowerer.reg(access.value())?
+            };
+            insts.push(MInst::Atomic {
+                load,
+                value,
+                base,
+                kind,
+                order: access.order,
+                volatile: access.volatile,
+            });
+            if load {
+                lowerer.bind(access.value(), value);
+            }
         }
         Inst::Load {
             result,
@@ -2491,6 +2876,11 @@ fn lower_inst(
                     slot += placed.fillers;
                     match placed.passing {
                         Passing::Chunks(ref chunks) => slot += chunks.len(),
+                        Passing::Vectors {
+                            shape,
+                            skipped,
+                            stack,
+                        } => slot += simd_argument_pieces(shape, stack).len() + skipped,
                         Passing::Pointer => slot += 1,
                         Passing::Destination(_) => {}
                         Passing::Value => {
@@ -2857,6 +3247,16 @@ fn address_of(
 
 fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {
     Ok(match ty {
+        EvoIRType::F32 => LoadKind::S,
+        EvoIRType::F64 => LoadKind::D,
+        EvoIRType::Vec { .. } => match vector_bytes(ty) {
+            Some(1) => LoadKind::B,
+            Some(2) => LoadKind::H,
+            Some(4) => LoadKind::W,
+            Some(8) => LoadKind::D,
+            Some(16) => LoadKind::Q,
+            _ => return Err("unsupported vector load width".into()),
+        },
         EvoIRType::Ptr(_) => LoadKind::P,
         EvoIRType::FnPtr { .. } => LoadKind::Pf,
         EvoIRType::Bits(width) => match width.div_ceil(8) {
@@ -2872,6 +3272,16 @@ fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {
 
 fn store_kind(ty: &EvoIRType) -> Result<StoreKind, String> {
     Ok(match ty {
+        EvoIRType::F32 => StoreKind::S,
+        EvoIRType::F64 => StoreKind::D,
+        EvoIRType::Vec { .. } => match vector_bytes(ty) {
+            Some(1) => StoreKind::B,
+            Some(2) => StoreKind::H,
+            Some(4) => StoreKind::W,
+            Some(8) => StoreKind::D,
+            Some(16) => StoreKind::Q,
+            _ => return Err("unsupported vector store width".into()),
+        },
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => StoreKind::P,
         EvoIRType::Bits(width) => match width.div_ceil(8) {
             1 => StoreKind::B,
@@ -2882,6 +3292,368 @@ fn store_kind(ty: &EvoIRType) -> Result<StoreKind, String> {
         },
         other => return Err(format!("a store of {other:?}")),
     })
+}
+
+/// Floating helpers remain ordinary calls, with visible ABI/clobbers. Raw
+/// FP-to-integer operations are total; C lowering supplies the UB obligation.
+fn lower_floating(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    operation: &evocc_evoir::FloatingInst,
+) -> Result<(), String> {
+    use evocc_evoir::FloatingOp::*;
+    use evocc_types::FloatKind;
+    let result = &operation.result;
+    let op = operation.op;
+    let kind = operation
+        .arguments
+        .first()
+        .and_then(|value| evocc_evoir::floating_kind(&value.ty))
+        .or_else(|| evocc_evoir::floating_kind(&result.ty))
+        .ok_or("no floating format")?;
+    if let Constant(bits) = op {
+        let raw = lowerer.fresh(if kind == FloatKind::F32 {
+            RegClass::Gpr32
+        } else {
+            RegClass::Gpr64
+        });
+        insts.push(MInst::MovImm {
+            dst: raw,
+            imm: bits,
+        });
+        let dst = lowerer.fresh(crate::floating::class(kind));
+        insts.push(MInst::Floating {
+            dst,
+            op: FromBits,
+            kind,
+            args: vec![raw],
+        });
+        lowerer.bind(result, dst);
+        return Ok(());
+    }
+    let from_pair = matches!(op, FromSigned | FromUnsigned) && is_pair(&operation.arguments[0].ty);
+    let to_pair = matches!(op, ToSigned | ToUnsigned) && is_pair(&result.ty);
+    if from_pair || to_pair {
+        insts.push(MInst::FpEnvCheck);
+        let mut args = call_args(lowerer, insts, &operation.arguments)?;
+        if to_pair {
+            // Do not call a C runtime helper outside its defined conversion
+            // domain. Invalid raw IR converts a selected +0 instead.
+            let input = args[0];
+            let defined = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::Floating {
+                dst: defined,
+                op: ToIntDefined {
+                    width: 128,
+                    signed: op == ToSigned,
+                },
+                kind,
+                args: vec![input],
+            });
+            let raw = lowerer.fresh(if kind == FloatKind::F32 {
+                RegClass::Gpr32
+            } else {
+                RegClass::Gpr64
+            });
+            insts.push(MInst::Floating {
+                dst: raw,
+                op: ToBits,
+                kind,
+                args: vec![input],
+            });
+            let selected = floating_select_zero(lowerer, insts, raw, defined);
+            let input = lowerer.fresh(crate::floating::class(kind));
+            insts.push(MInst::Floating {
+                dst: input,
+                op: FromBits,
+                kind,
+                args: vec![selected],
+            });
+            args = vec![input];
+        }
+        let suffix = if kind == FloatKind::F32 { "sf" } else { "df" };
+        let symbol = match op {
+            FromSigned => format!("__floatti{suffix}"),
+            FromUnsigned => format!("__floatunti{suffix}"),
+            ToSigned => format!("__fix{suffix}ti"),
+            ToUnsigned => format!("__fixuns{suffix}ti"),
+            _ => unreachable!(),
+        };
+        let results = call_results(lowerer, std::slice::from_ref(result))?;
+        insts.push(MInst::Bl {
+            symbol,
+            args,
+            results,
+        });
+        return Ok(());
+    }
+    let mut args = operation
+        .arguments
+        .iter()
+        .map(|value| lowerer.reg(value))
+        .collect::<Result<Vec<_>, _>>()?;
+    if matches!(op, FromSigned | FromUnsigned) {
+        let width = width_of(args[0].class);
+        let bits = significant_bits(&operation.arguments[0].ty);
+        args[0] = if op == FromSigned {
+            lowerer.sign_extend(insts, args[0], bits, width)
+        } else {
+            lowerer.zero_extend(insts, args[0], bits, width)
+        };
+    }
+    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+    let mut dst = lowerer.fresh(class);
+    insts.push(MInst::Floating {
+        dst,
+        op,
+        kind,
+        args: args.clone(),
+    });
+    if matches!(op, ToSigned | ToUnsigned) {
+        let bits = significant_bits(&result.ty);
+        if bits < class.bit_width().unwrap() {
+            let defined = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::Floating {
+                dst: defined,
+                op: ToIntDefined {
+                    width: bits,
+                    signed: op == ToSigned,
+                },
+                kind,
+                args,
+            });
+            dst = floating_select_zero(lowerer, insts, dst, defined);
+            dst = lowerer.zero_extend(insts, dst, bits, width_of(class));
+        }
+    }
+    lowerer.bind(result, dst);
+    Ok(())
+}
+
+fn floating_select_zero(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: VReg,
+    predicate: VReg,
+) -> VReg {
+    let zero = lowerer.fresh(value.class);
+    insts.push(MInst::MovImm { dst: zero, imm: 0 });
+    let flags = lowerer.fresh(RegClass::Flags);
+    insts.push(MInst::CmpImm {
+        dst: flags,
+        lhs: predicate,
+        imm: 0,
+        width: Width::W,
+    });
+    let dst = lowerer.fresh(value.class);
+    insts.push(MInst::Csel {
+        dst,
+        flags,
+        lhs: value,
+        rhs: zero,
+        cond: Cond::Ne,
+        width: width_of(value.class),
+    });
+    dst
+}
+
+fn lower_vector(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    vector: &evocc_evoir::VectorInst,
+) -> Result<(), String> {
+    use evocc_evoir::VectorOp;
+    vector.validate()?;
+    let result = &vector.result;
+    let args = &vector.arguments;
+    let bytes = vector_bytes(&result.ty)
+        .or_else(|| vector_bytes(&args[0].ty))
+        .ok_or("invalid vector representation size")? as u8;
+    match vector.op {
+        VectorOp::Aes(op) => {
+            let dst = lowerer.fresh(RegClass::Simd128);
+            insts.push(MInst::Aes {
+                dst,
+                op,
+                args: args
+                    .iter()
+                    .map(|v| lowerer.reg(v))
+                    .collect::<Result<_, _>>()?,
+            });
+            lowerer.bind(result, dst);
+        }
+        VectorOp::Pack => {
+            let (_, lane_bits) =
+                evocc_evoir::integer_vector_shape(&result.ty).ok_or("invalid vector shape")?;
+            let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
+            let (lane_bits, arguments) = if lane_bits == 128 {
+                (
+                    64,
+                    args.iter()
+                        .map(|v| lowerer.registers(v))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .flatten()
+                        .collect(),
+                )
+            } else {
+                (
+                    lane_bits,
+                    args.iter()
+                        .map(|v| lowerer.reg(v))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            };
+            insts.push(MInst::Vector {
+                dst,
+                extract: false,
+                lane_bits,
+                bytes,
+                args: arguments,
+            });
+            lowerer.bind(result, dst);
+        }
+        VectorOp::Extract => {
+            let (_, lane_bits) =
+                evocc_evoir::integer_vector_shape(&args[0].ty).ok_or("invalid vector shape")?;
+            let source = lowerer.reg(&args[0])?;
+            let index = vector_index(
+                lowerer,
+                insts,
+                &args[1],
+                u64::from(bytes) * 8 / u64::from(lane_bits),
+            )?;
+            if lane_bits == 128 {
+                // There is one 128-bit lane in a short vector. Keep the
+                // original index check by extracting its first 64-bit half.
+                let twice = lowerer.word_binary_imm(insts, BinOp::Lsl, index, 1);
+                let second = lowerer.word_binary_imm(insts, BinOp::Add, twice, 1);
+                let (low, high) = lowerer.fresh_pair();
+                insts.push(MInst::Vector {
+                    dst: low,
+                    extract: true,
+                    lane_bits: 64,
+                    bytes,
+                    args: vec![source, twice],
+                });
+                insts.push(MInst::Vector {
+                    dst: high,
+                    extract: true,
+                    lane_bits: 64,
+                    bytes,
+                    args: vec![source, second],
+                });
+                lowerer.bind_pair(result, low, high);
+            } else {
+                let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
+                insts.push(MInst::Vector {
+                    dst,
+                    extract: true,
+                    lane_bits,
+                    bytes,
+                    args: vec![source, index],
+                });
+                lowerer.bind(result, dst);
+            }
+        }
+        VectorOp::Bitcast => {
+            if vector_bytes(&result.ty).is_some() && vector_bytes(&args[0].ty).is_some() {
+                lowerer.bind(result, lowerer.reg(&args[0])?);
+            } else if vector_bytes(&result.ty).is_some() {
+                let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
+                insts.push(MInst::Vector {
+                    dst,
+                    extract: false,
+                    lane_bits: u16::from(bytes).min(8) * 8,
+                    bytes,
+                    args: lowerer.registers(&args[0])?,
+                });
+                lowerer.bind(result, dst);
+            } else {
+                let source = lowerer.reg(&args[0])?;
+                let low = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
+                let zero = lowerer.word(insts, 0);
+                insts.push(MInst::Vector {
+                    dst: low,
+                    extract: true,
+                    lane_bits: u16::from(bytes).min(8) * 8,
+                    bytes,
+                    args: vec![source, zero],
+                });
+                if is_pair(&result.ty) {
+                    let high = lowerer.fresh(RegClass::Gpr64);
+                    let one = lowerer.word(insts, 1);
+                    insts.push(MInst::Vector {
+                        dst: high,
+                        extract: true,
+                        lane_bits: 64,
+                        bytes,
+                        args: vec![source, one],
+                    });
+                    lowerer.bind_pair(result, low, high);
+                } else {
+                    lowerer.bind(result, low);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Preserve an invalid full-width index as an out-of-range sentinel before
+/// selecting machine-width lanes. In particular, do not truncate bits<128>
+/// or multiply a large index before checking it.
+fn vector_index(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: &Value,
+    lanes: u64,
+) -> Result<VReg, String> {
+    let parts = lowerer.registers(value)?;
+    let low = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::Mov {
+        dst: low,
+        src: parts[0],
+    });
+    let limit = lowerer.word(insts, lanes);
+    let flags = lowerer.fresh(RegClass::Flags);
+    insts.push(MInst::Cmp {
+        dst: flags,
+        lhs: low,
+        rhs: limit,
+        width: Width::X,
+    });
+    let bounded = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::Csel {
+        dst: bounded,
+        flags,
+        lhs: low,
+        rhs: limit,
+        cond: Cond::Lo,
+        width: Width::X,
+    });
+    if let Some(high) = parts.get(1) {
+        let zero = lowerer.word(insts, 0);
+        let flags = lowerer.fresh(RegClass::Flags);
+        insts.push(MInst::Cmp {
+            dst: flags,
+            lhs: *high,
+            rhs: zero,
+            width: Width::X,
+        });
+        let result = lowerer.fresh(RegClass::Gpr64);
+        insts.push(MInst::Csel {
+            dst: result,
+            flags,
+            lhs: bounded,
+            rhs: limit,
+            cond: Cond::Eq,
+            width: Width::X,
+        });
+        Ok(result)
+    } else {
+        Ok(bounded)
+    }
 }
 
 /// Section 3's first row: "none: the low `N` bits of the result depend only on
@@ -3288,7 +4060,7 @@ fn lower_assembly(
 
 /// The same placement determines both saved registers and the first
 /// anonymous stack slot, including pair/record alignment padding.
-fn named_argument_extent(target: Target, function: &Function) -> (u8, u64) {
+fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
     // Revision 0.18: a record spends the registers its chunks take, so the
     // count is the convention's, which is what the plan already answers.
     let declared: Vec<EvoIRType> = function
@@ -3301,9 +4073,36 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u64) {
         &marked_types(&declared, &function.param_marks),
         true,
     );
-    let registers = u8::try_from(plan.positions.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8);
-    let stack_bytes = (plan.positions.saturating_sub(MAX_REGISTER_ARGUMENTS) as u64) * 8;
-    (registers, stack_bytes)
+    let marked = marked_types(&declared, &function.param_marks);
+    let mut cursor = crate::linscan::ArgumentCursor::default();
+    for ((ty, _), placed) in marked.iter().zip(&plan.items) {
+        let mut classes = vec![RegClass::Gpr64; placed.fillers];
+        match &placed.passing {
+            Passing::Value if is_pair(ty) => classes.extend([RegClass::Gpr64; 2]),
+            Passing::Value => classes.push(class_of(ty).expect("validated argument class")),
+            Passing::Pointer => classes.push(RegClass::Gpr64),
+            Passing::Chunks(chunks) => {
+                classes.extend(std::iter::repeat_n(RegClass::Gpr64, chunks.len()))
+            }
+            Passing::Vectors {
+                shape,
+                skipped,
+                stack,
+            } => {
+                classes.extend(std::iter::repeat_n(RegClass::Simd64, *skipped));
+                classes.extend(
+                    simd_argument_pieces(*shape, *stack)
+                        .into_iter()
+                        .map(|(_, bytes)| simd_class(bytes)),
+                );
+            }
+            Passing::Destination(_) => {}
+        }
+        for class in classes {
+            let _ = cursor.place(class);
+        }
+    }
+    cursor.extent()
 }
 
 /// The size rounded up to eight (`S8`) and the alignment (`A`) of one
@@ -3311,18 +4110,31 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u64) {
 fn variadic_access_slot(op: &VariadicOp) -> Option<(u64, u64)> {
     match op {
         VariadicOp::Arg(result) => variadic_slot(&result.ty),
-        VariadicOp::ArgRecord { shape, .. } if shape.size > 16 => Some((8, 8)),
+        VariadicOp::ArgRecord { shape, .. }
+            if shape.size > 16 && shape.simd_members().is_none() =>
+        {
+            Some((8, 8))
+        }
         VariadicOp::ArgRecord { shape, .. } => Some((
             shape.size.div_ceil(8) * 8,
-            u64::from(shape.align).clamp(8, 16),
+            shape
+                .floating
+                .map_or(u64::from(shape.align).clamp(8, 16), |f| {
+                    u64::from(f.abi_align)
+                }),
         )),
         VariadicOp::Start | VariadicOp::End => None,
     }
 }
 
 fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
+    if let Some(bytes) = vector_bytes(ty) {
+        return Some((bytes.max(8), bytes));
+    }
     match ty {
-        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Some((8, 8)),
+        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::F32 | EvoIRType::F64 => {
+            Some((8, 8))
+        }
         EvoIRType::Bits(128) => Some((16, 16)),
         EvoIRType::Bits(width) if *width <= 64 => Some((8, 8)),
         _ => None,
@@ -3344,7 +4156,7 @@ fn lower_va_start(
     insts: &mut Vec<MInst>,
     list: &Value,
 ) -> Result<(), String> {
-    let (named, stack_bytes) = lowerer
+    let (named, named_vectors, stack_bytes) = lowerer
         .named_arguments
         .ok_or_else(|| "a va_start outside a variadic function".to_owned())?;
     let ap = lowerer.reg(list)?;
@@ -3402,7 +4214,7 @@ fn lower_va_start(
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
     insts.push(MInst::MovImm {
         dst: vr_offs,
-        imm: u64::from((-128_i32) as u32),
+        imm: u64::from((-16 * (8 - i32::from(named_vectors))) as u32),
     });
     insts.push(MInst::Store {
         align: 0,
@@ -4152,6 +4964,11 @@ enum Passing {
     /// The eight-byte chunks a `byval` record of at most sixteen bytes travels
     /// in, each entry that chunk's own byte count.
     Chunks(Vec<u64>),
+    Vectors {
+        shape: RecordShape,
+        skipped: usize,
+        stack: bool,
+    },
     /// A `byval` record above sixteen bytes: a pointer to the copy.
     Pointer,
     /// The destination of a record result. It takes no argument position: at
@@ -4181,15 +4998,6 @@ struct RecordPlan {
     indirect_result: bool,
 }
 
-impl RecordPlan {
-    /// Whether any argument needs the record convention at all.
-    fn plain(&self) -> bool {
-        self.items
-            .iter()
-            .all(|item| matches!(item.passing, Passing::Value))
-    }
-}
-
 /// Where each ordinary argument of a signature goes.
 ///
 /// `pair_rounding` is the `bits<128>` rule as the two call sites already apply
@@ -4202,16 +5010,46 @@ fn record_plan(
 ) -> RecordPlan {
     let mut items = Vec::new();
     let mut next = 0_usize;
+    let mut next_vector = 0_usize;
+    let mut cursor = crate::linscan::ArgumentCursor::default();
     let mut indirect_result = false;
     for (ty, mark) in arguments {
         match mark {
             ParamMark::Sret(shape) => {
-                if shape.size > RECORD_REGISTER_LIMIT {
+                if shape.size > RECORD_REGISTER_LIMIT && shape.simd_members().is_none() {
                     indirect_result = true;
                 }
                 items.push(Placed {
                     fillers: 0,
                     passing: Passing::Destination(*shape),
+                });
+            }
+            ParamMark::ByVal(shape) if shape.simd_members().is_some() => {
+                let count = usize::from(shape.simd_members().unwrap().0);
+                let stack = next_vector + count > 8;
+                let mut skipped = if next_vector < 8 && next_vector + count > 8 {
+                    8 - next_vector
+                } else {
+                    0
+                };
+                // Once SIMD registers are exhausted, one additional private
+                // filler aligns the shared stack cursor for an HFA whose
+                // members require 16-byte alignment. Object over-alignment
+                // alone must not request this padding.
+                if stack
+                    && shape.floating.is_some_and(|f| f.abi_align == 16)
+                    && cursor.extent().2 % 16 != 0
+                {
+                    skipped += 1;
+                }
+                next_vector += skipped + count;
+                items.push(Placed {
+                    fillers: 0,
+                    passing: Passing::Vectors {
+                        shape: *shape,
+                        skipped,
+                        stack,
+                    },
                 });
             }
             ParamMark::ByVal(shape) if shape.size <= RECORD_REGISTER_LIMIT => {
@@ -4225,7 +5063,7 @@ fn record_plan(
                 if shape.size != 0
                     && matches!(target, Target::Linux)
                     && shape.align == 16
-                    && next % 2 == 1
+                    && cursor.general_pair_padding() != 0
                 {
                     fillers += 1;
                 }
@@ -4259,14 +5097,53 @@ fn record_plan(
                 next += 1;
             }
             ParamMark::None => {
-                let count = usize::from(is_pair(ty)) + 1;
-                let fillers = usize::from(count == 2 && pair_rounding && next % 2 == 1);
-                next += fillers + count;
-                items.push(Placed {
-                    fillers,
-                    passing: Passing::Value,
-                });
+                if simd_argument_bytes(ty).is_some() {
+                    next_vector += 1;
+                    items.push(Placed {
+                        fillers: 0,
+                        passing: Passing::Value,
+                    });
+                } else {
+                    let count = usize::from(is_pair(ty)) + 1;
+                    let fillers = if count == 2 && pair_rounding {
+                        cursor.general_pair_padding()
+                    } else {
+                        0
+                    };
+                    next += fillers + count;
+                    items.push(Placed {
+                        fillers,
+                        passing: Passing::Value,
+                    });
+                }
             }
+        }
+        let placed = items.last().expect("each source argument has a placement");
+        for _ in 0..placed.fillers {
+            let _ = cursor.place(RegClass::Gpr64);
+        }
+        let (class, count) = match &placed.passing {
+            Passing::Chunks(chunks) => (RegClass::Gpr64, chunks.len()),
+            Passing::Vectors {
+                shape,
+                skipped,
+                stack,
+            } => {
+                for _ in 0..*skipped {
+                    let _ = cursor.place(RegClass::Simd64);
+                }
+                for (_, size) in simd_argument_pieces(*shape, *stack) {
+                    let _ = cursor.place(simd_class(size));
+                }
+                continue;
+            }
+            Passing::Pointer => (RegClass::Gpr64, 1),
+            Passing::Value if is_pair(ty) => (RegClass::Gpr64, 2),
+            Passing::Value => (class_of(ty).unwrap_or(RegClass::Gpr64), 1),
+            Passing::Destination(_) => (RegClass::Gpr64, 0),
+        };
+        for _ in 0..count {
+            let _ = cursor.place(class);
         }
     }
     RecordPlan {
@@ -4393,9 +5270,6 @@ fn call_arguments(
     plan: &RecordPlan,
 ) -> Result<CallArguments, String> {
     let _ = marks;
-    if plan.plain() {
-        return Ok((call_args(lowerer, insts, args)?, None));
-    }
     let mut registers: Vec<VReg> = Vec::new();
     let mut returned = None;
     let mut indirect_destination = None;
@@ -4419,11 +5293,38 @@ fn call_arguments(
                     offset += size;
                 }
             }
+            Passing::Vectors {
+                shape,
+                skipped,
+                stack,
+            } => {
+                for _ in 0..*skipped {
+                    let filler = lowerer.fresh(RegClass::Simd64);
+                    insts.push(MInst::MovImm {
+                        dst: filler,
+                        imm: 0,
+                    });
+                    registers.push(filler);
+                }
+                let base = lowerer.reg(value)?;
+                for (offset, size) in simd_argument_pieces(*shape, *stack) {
+                    let chunk = lowerer.fresh(simd_class(size));
+                    insts.push(MInst::Load {
+                        align: shape.align.min(size as u32),
+                        dst: chunk,
+                        base,
+                        offset: offset as i64,
+                        kind: simd_load(size),
+                        volatile: false,
+                    });
+                    registers.push(chunk);
+                }
+            }
             // Above sixteen bytes the pointer to the caller's copy is the
             // argument, "which is what AAPCS64 does too".
             Passing::Pointer => registers.push(lowerer.reg(value)?),
             Passing::Destination(shape) => {
-                if shape.size > RECORD_REGISTER_LIMIT {
+                if shape.size > RECORD_REGISTER_LIMIT && shape.simd_members().is_none() {
                     // The IR's fixed sret slot can precede anonymous
                     // arguments. Keep it out of their ordinary placement;
                     // the machine call's final slot always names x8.
@@ -4452,6 +5353,21 @@ fn call_record_result(
         return Vec::new();
     };
     let mut after = Vec::new();
+    if let Some((count, size)) = shape.simd_members() {
+        for member in 0..count {
+            let chunk = lowerer.fresh(simd_class(size));
+            outputs.push(chunk);
+            after.push(MInst::Store {
+                align: shape.align.min(size as u32),
+                src: chunk,
+                base: destination,
+                offset: i64::from(member) * size as i64,
+                kind: simd_store(size),
+                volatile: false,
+            });
+        }
+        return after;
+    }
     let mut offset = 0;
     for size in record_chunks(shape.size) {
         let chunk = lowerer.fresh(RegClass::Gpr64);

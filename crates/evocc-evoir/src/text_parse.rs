@@ -24,6 +24,8 @@ struct Signature {
 }
 
 struct Header {
+    section: Option<String>,
+    patchable_entry: Option<(u16, u16)>,
     stack_protect: bool,
     alignment: u32,
     name: String,
@@ -210,24 +212,73 @@ impl ModuleParser<'_> {
                 }
                 self.position += 1;
             }
-            if self
-                .lines
-                .get(self.position)
-                .is_some_and(|line| line.starts_with("asm "))
-            {
+            if self.lines.get(self.position).is_some_and(|line| {
+                line.starts_with("asm ")
+                    || line.starts_with("init @")
+                    || line.starts_with("fini @")
+                    || line.starts_with("tls @")
+            }) {
                 break;
             }
             functions.push(self.function()?);
         }
         let mut assembly = Vec::new();
         while let Some(line) = self.lines.get(self.position) {
+            if !line.starts_with("asm ") {
+                break;
+            }
             let mut cursor = Cursor::new(line);
             cursor.expect("asm ")?;
             assembly.push(cursor.quoted()?);
             cursor.finish()?;
             self.position += 1;
         }
+        if self.lines.get(self.position) == Some(&"") {
+            self.position += 1;
+        }
+        let mut tls = Vec::new();
+        while let Some(line) = self
+            .lines
+            .get(self.position)
+            .filter(|line| line.starts_with("tls @"))
+        {
+            let mut cursor = Cursor::new(line);
+            cursor.expect("tls @")?;
+            let symbol = cursor.ident()?.to_owned();
+            cursor.expect(" model=")?;
+            let model = crate::TlsModel::parse(cursor.ident()?).ok_or("unknown TLS model")?;
+            cursor.finish()?;
+            tls.push(crate::TlsSymbol { symbol, model });
+            self.position += 1;
+        }
+        if self.lines.get(self.position) == Some(&"") {
+            self.position += 1;
+        }
+        let mut lifecycle = Vec::new();
+        while let Some(line) = self.lines.get(self.position) {
+            let mut cursor = Cursor::new(line);
+            let phase = if cursor.at("init @") {
+                cursor.expect("init @")?;
+                crate::LifecyclePhase::Constructor
+            } else {
+                cursor.expect("fini @")?;
+                crate::LifecyclePhase::Destructor
+            };
+            let function = cursor.ident()?.to_owned();
+            cursor.expect(" priority=")?;
+            let priority =
+                u16::try_from(cursor.index()?).map_err(|_| "invalid registration priority")?;
+            cursor.finish()?;
+            lifecycle.push(crate::LifecycleRegistration {
+                phase,
+                function,
+                priority,
+            });
+            self.position += 1;
+        }
         Ok(Module {
+            tls,
+            lifecycle,
             aliases,
             assembly,
             globals,
@@ -277,6 +328,8 @@ impl ModuleParser<'_> {
         self.position += 1;
 
         Ok(Function {
+            section: header.section,
+            patchable_entry: header.patchable_entry,
             stack_protect: header.stack_protect,
             alignment: header.alignment,
             variadic: header.signature.variadic,
@@ -388,6 +441,9 @@ fn parse_visibility(cursor: &mut Cursor<'_>) -> Result<GlobalVisibility, String>
     } else if cursor.at(" visibility=hidden") {
         cursor.expect(" visibility=hidden")?;
         Ok(GlobalVisibility::Hidden)
+    } else if cursor.at(" visibility=protected") {
+        cursor.expect(" visibility=protected")?;
+        Ok(GlobalVisibility::Protected)
     } else {
         Ok(GlobalVisibility::External)
     }
@@ -437,7 +493,10 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
             .ok_or("malformed relocation list")?;
         for entry in text.split("), (") {
             let fields = entry.split(", ").collect::<Vec<_>>();
-            if fields.len() != 3 && !(fields.len() == 4 && fields[3] == "exposed") {
+            if fields.len() != 3
+                && !(fields.len() == 4 && fields[3] == "exposed")
+                && fields.len() != 5
+            {
                 return Err("malformed relocation".to_owned());
             }
             let offset = fields[0]
@@ -459,15 +518,44 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
             if offset.to_string() != fields[0] || addend.to_string() != fields[2] {
                 return Err("noncanonical relocation integer".to_owned());
             }
+            let difference = if fields.len() == 5 {
+                let base = fields[3]
+                    .strip_prefix("diff=@")
+                    .ok_or("invalid block difference base")?;
+                let (function, block) = base
+                    .split_once('^')
+                    .ok_or("block difference requires a label")?;
+                parse_symbol(&format!("@{function}"))?;
+                parse_block_label(&format!("^{block}"))?;
+                let bits = fields[4]
+                    .strip_prefix("bits=")
+                    .ok_or("missing block difference width")?
+                    .parse::<u16>()
+                    .map_err(|_| "invalid block difference width")?;
+                if !matches!(bits, 8 | 16 | 32 | 64) || fields[4] != format!("bits={bits}") {
+                    return Err("invalid block difference width".into());
+                }
+                Some(crate::BlockDifference {
+                    base: base.to_owned(),
+                    bits,
+                })
+            } else {
+                None
+            };
             relocs.push(crate::Relocation {
                 offset,
                 symbol,
                 addend,
                 exposed: fields.len() == 4,
+                difference,
             });
         }
     }
     let mut fields = line.split(' ').collect::<Vec<_>>();
+    let read_only = fields.last() == Some(&"readonly=true");
+    if read_only {
+        fields.pop();
+    }
     let linkage = if fields.get(5) == Some(&"linkage=weak") {
         fields.remove(5);
         Linkage::Weak
@@ -490,6 +578,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         "external" => GlobalVisibility::External,
         "internal" => GlobalVisibility::Internal,
         "hidden" => GlobalVisibility::Hidden,
+        "protected" => GlobalVisibility::Protected,
         _ => return Err("unknown module-global visibility".to_owned()),
     };
     let size = parse_named_u64(fields[5], "size")?;
@@ -513,6 +602,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(GlobalObject {
+        read_only,
         section,
         linkage,
         relocs,
@@ -542,6 +632,8 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage,
@@ -608,11 +700,31 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     if stack_protect {
         cursor.expect(" stack_protect")?;
     }
+    let patchable_entry = if cursor.at(" patchable_entry=") {
+        cursor.expect(" patchable_entry=")?;
+        let total = u16::try_from(cursor.index()?).map_err(|_| "patchable entry exceeds u16")?;
+        cursor.expect(",")?;
+        let before = u16::try_from(cursor.index()?).map_err(|_| "patchable entry exceeds u16")?;
+        if before > total {
+            return Err("patchable entry offset exceeds its size".into());
+        }
+        Some((total, before))
+    } else {
+        None
+    };
+    let section = if cursor.at(" section=") {
+        cursor.expect(" section=")?;
+        Some(cursor.quoted()?)
+    } else {
+        None
+    };
     cursor.finish()?;
     Ok(Header {
+        section,
         name,
         convention,
         stack_protect,
+        patchable_entry,
         alignment,
         visibility,
         linkage,
@@ -648,7 +760,7 @@ fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> 
                 "parameter {index} carries a record mark but is not ptr<generic>"
             ));
         }
-        if shape.align == 0 || !shape.align.is_power_of_two() {
+        if !shape.valid() {
             return Err(format!(
                 "parameter {index} marks a record whose alignment {} is not a power of two",
                 shape.align
@@ -746,10 +858,59 @@ fn parse_instruction(
         .ok_or_else(|| "unknown Section 9 instruction form".to_owned())?;
     let result_id = parse_value_name(result_text)?;
 
+    if let Some(rest) = rhs.strip_prefix("fp.") {
+        let (name, rest) = rest.split_once(' ').ok_or("missing floating operands")?;
+        let (operands, ty) = rest
+            .rsplit_once(" : ")
+            .ok_or("missing floating result type")?;
+        let operation = crate::FloatingInst {
+            result: Value {
+                id: result_id,
+                ty: parse_type(ty)?,
+            },
+            op: crate::FloatingOp::parse(name).ok_or("unknown floating operation")?,
+            arguments: parse_values(operands, values, false)?,
+        };
+        operation.validate()?;
+        return Ok(Inst::Floating(operation));
+    }
+
+    if let Some(rest) = rhs.strip_prefix("vec.") {
+        let (name, rest) = rest.split_once(' ').ok_or("missing vector operands")?;
+        let op = crate::VectorOp::parse(name).ok_or("unknown vector operation")?;
+        let (operands, ty) = rest
+            .rsplit_once(" : ")
+            .ok_or("missing vector result type")?;
+        let instruction = crate::VectorInst {
+            result: Value {
+                id: result_id,
+                ty: parse_type(ty)?,
+            },
+            op,
+            arguments: parse_values(operands, values, false)?,
+        };
+        instruction.validate()?;
+        return Ok(Inst::Vector(instruction));
+    }
+
     if let Some(rest) = rhs.strip_prefix("const.") {
         let mut cursor = Cursor::new(rest);
         let ty = cursor.ty()?;
         cursor.expect(" ")?;
+        if crate::floating_kind(&ty).is_some() {
+            let (_, bits) = rest
+                .split_once(" 0x")
+                .ok_or("floating constant requires exact hexadecimal bits")?;
+            let operation = crate::FloatingInst {
+                result: Value { id: result_id, ty },
+                op: crate::FloatingOp::Constant(
+                    u64::from_str_radix(bits, 16).map_err(|_| "invalid floating constant bits")?,
+                ),
+                arguments: vec![],
+            };
+            operation.validate()?;
+            return Ok(Inst::Floating(operation));
+        }
         let immediate = cursor.index()?;
         cursor.finish()?;
         return Ok(Inst::Const(Value { id: result_id, ty }, immediate));
@@ -1052,14 +1213,24 @@ fn parse_tuple_instruction(
         let (operands, attributes) = split_attributes(rest)?;
         let operands = parse_values(operands, values, false)?;
         require_count(&operands, 4, "record variadic access operands")?;
-        let layout = parse_layout(attributes)?;
+        let mut fields = attributes.splitn(3, ", ");
+        let size = parse_named_u64(fields.next().ok_or("missing record size")?, "size")?;
+        let align = parse_named_u64(fields.next().ok_or("missing record alignment")?, "align")?;
+        let extra = fields
+            .next()
+            .map(|rest| format!(", {rest}"))
+            .unwrap_or_default();
+        let spelling = format!(" byval({size}, {align}{extra})");
+        let mut cursor = Cursor::new(&spelling);
+        let shape = cursor
+            .record_mark()?
+            .shape()
+            .ok_or("missing record shape")?;
+        cursor.finish()?;
         return Ok(Inst::VaAccess(crate::VariadicAccess {
             op: crate::VariadicOp::ArgRecord {
                 destination: operands[3].clone(),
-                shape: RecordShape {
-                    size: layout.size_bytes,
-                    align: layout.align_bytes,
-                },
+                shape,
             },
             list: operands[0].clone(),
             mem_in: operands[1].clone(),
@@ -1176,6 +1347,99 @@ fn parse_tuple_instruction(
                 ty: EvoIRType::World,
             },
         });
+    }
+    if let Some(rest) = rhs.strip_prefix("tls_addr @") {
+        require_count(&result_ids, 3, "TLS address results")?;
+        let (symbol, args) = rest.split_once(", ").ok_or("missing TLS effects")?;
+        let (memory, world) = parse_two_values(args, values)?;
+        return Ok(Inst::TlsAddr(crate::TlsAddress {
+            result: Value {
+                id: result_ids[0],
+                ty: EvoIRType::Ptr(AddressSpace::Generic),
+            },
+            symbol: symbol.to_owned(),
+            mem_in: memory.clone(),
+            world_in: world,
+            mem_out: Value {
+                id: result_ids[1],
+                ty: memory.ty,
+            },
+            world_out: Value {
+                id: result_ids[2],
+                ty: EvoIRType::World,
+            },
+        }));
+    }
+    if let Some(rest) = rhs.strip_prefix("atomic.") {
+        let (operation, rest) = rest.split_once(' ').ok_or("malformed atomic operation")?;
+        let rmw = operation
+            .strip_prefix("rmw.")
+            .and_then(crate::AtomicRmwOp::from_mnemonic);
+        let load = match operation {
+            "load" => true,
+            "store" => false,
+            _ if rmw.is_some() => false,
+            _ => return Err("unknown atomic operation".into()),
+        };
+        let (order, rest) = rest.split_once(' ').ok_or("missing atomic order")?;
+        let order = crate::AtomicOrder::from_mnemonic(order).ok_or("unknown atomic order")?;
+        let (volatile, rest) = rest
+            .strip_prefix("volatile ")
+            .map_or((false, rest), |rest| (true, rest));
+        let produces = load || rmw.is_some();
+        require_count(&result_ids, if produces { 3 } else { 2 }, "atomic results")?;
+        let (operands, ty) = if produces {
+            let (operands, ty) = rest.rsplit_once(" : ").ok_or("missing atomic load type")?;
+            (operands, Some(parse_type(ty)?))
+        } else {
+            (rest, None)
+        };
+        let operands = parse_values(operands, values, false)?;
+        require_count(
+            &operands,
+            if rmw == Some(crate::AtomicRmwOp::CompareExchange) {
+                5
+            } else if load {
+                3
+            } else {
+                4
+            },
+            "atomic operands",
+        )?;
+        let op = if let Some(operation) = rmw {
+            crate::AtomicOp::Rmw {
+                result: Value {
+                    id: result_ids[0],
+                    ty: ty.ok_or("missing RMW result type")?,
+                },
+                operation,
+                value: operands[3].clone(),
+                expected: operands.get(4).cloned(),
+            }
+        } else if let Some(ty) = ty {
+            crate::AtomicOp::Load(Value {
+                id: result_ids[0],
+                ty,
+            })
+        } else {
+            crate::AtomicOp::Store(operands[3].clone())
+        };
+        return Ok(Inst::Atomic(crate::AtomicAccess {
+            op,
+            order,
+            volatile,
+            mem_in: operands[0].clone(),
+            world_in: operands[1].clone(),
+            address: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[usize::from(produces)],
+                ty: operands[0].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[usize::from(produces) + 1],
+                ty: EvoIRType::World,
+            },
+        }));
     }
     for (prefix, volatile) in [("load volatile ", true), ("load ", false)] {
         if let Some(rest) = rhs.strip_prefix(prefix) {
@@ -1675,6 +1939,7 @@ fn parse_ub_reason(text: &str) -> Result<UbReason, String> {
         "bit_builtin_zero_operand" => Ok(UbReason::BitBuiltinZeroOperand),
         "invalid_shift_count" => Ok(UbReason::InvalidShiftCount),
         "invalid_signed_left_shift" => Ok(UbReason::InvalidSignedLeftShift),
+        "floating_to_integer" => Ok(UbReason::FloatingToInteger),
         _ => Err("unknown UB reason".to_owned()),
     }
 }
@@ -2094,8 +2359,53 @@ impl<'a> Cursor<'a> {
             self.expect(", ")?;
             let align = u32::try_from(self.index()?)
                 .map_err(|_| "record alignment exceeds u32".to_owned())?;
+            if !align.is_power_of_two() {
+                return Err("record alignment is not a power of two".into());
+            }
+            let vector = if self.at(", hva=") {
+                self.expect(", hva=")?;
+                let count =
+                    u8::try_from(self.index()?).map_err(|_| "invalid homogeneous vector count")?;
+                self.expect("x")?;
+                let ty = self.ty()?;
+                let (lanes, bits) =
+                    crate::integer_vector_shape(&ty).ok_or("invalid homogeneous vector element")?;
+                Some(evocc_types::VectorAggregate { lanes, bits, count })
+            } else {
+                None
+            };
+            let floating = if self.at(", hfa=") {
+                self.expect(", hfa=")?;
+                let count =
+                    u8::try_from(self.index()?).map_err(|_| "invalid homogeneous float count")?;
+                self.expect("x")?;
+                let kind =
+                    crate::floating_kind(&self.ty()?).ok_or("invalid homogeneous float element")?;
+                let abi_align = if self.at(", abi_align=") {
+                    self.expect(", abi_align=")?;
+                    u8::try_from(self.index()?).map_err(|_| "invalid HFA ABI alignment")?
+                } else {
+                    8
+                };
+                Some(evocc_types::FloatAggregate {
+                    kind,
+                    count,
+                    abi_align,
+                })
+            } else {
+                None
+            };
             self.expect(")")?;
-            return Ok(wrap(RecordShape { size, align }));
+            let shape = RecordShape {
+                size,
+                align,
+                vector,
+                floating,
+            };
+            if !shape.valid() {
+                return Err("invalid record ABI shape".into());
+            }
+            return Ok(wrap(shape));
         }
         Ok(ParamMark::None)
     }

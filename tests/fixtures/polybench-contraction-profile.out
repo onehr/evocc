@@ -1,0 +1,15 @@
+2026-09-20: exact-profile PolyBench diagnosis, not a tolerance adjustment.
+Original complete run: .evidence/ladder/polybench/20260919T213113Z/
+Subject compiler 86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4
+PolyBench/C 4.2.1-beta, unchanged MINI_DATASET and DUMP_ARRAYS sources.
+Sealed ARM64 image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC14 14.2.0-19, Clang19 19.1.7, -std=gnu99 -O2 -ffp-contract=off.
+
+mvt gesummv symm syr2k trmm cholesky gramschmidt lu:
+both fixed compilers exit zero and their original stderr array dumps match the
+existing EvoCC dumps byte-for-byte: 16/16. No epsilon or ULP filter is applied.
+The earlier reference commands omitted the approved noncontraction flag;
+their FMA-capable results were not the same numerical contract as EvoCC.
+The flag now reaches both reference commands and the subject's actual argv.
+The two declared Python assertion REDs are GREEN (7/7 PolyBench adapter tests).
+The unchanged complete 30-program lane must still be rerun after this repair.

@@ -57,6 +57,7 @@ impl Macro {
 #[derive(Debug, Default)]
 pub struct MacroMap {
     macros: HashMap<String, Macro>,
+    legacy_literal_prefixes: bool,
 }
 
 #[derive(Debug)]
@@ -71,6 +72,7 @@ impl MacroMap {
     pub fn new() -> Self {
         Self {
             macros: HashMap::new(),
+            legacy_literal_prefixes: false,
         }
     }
 
@@ -184,12 +186,12 @@ impl MacroMap {
     /// Expand any identifier token that refers to an object-like macro.
     /// Used to macro-expand argument tokens before `##` pasting.
     fn expand_arg_token(&self, tok: &Token) -> Vec<Token> {
-        if tok.kind != TokenKind::Identifier || tok.macro_expansion_inhibited {
+        if !preprocessing_identifier(tok) || tok.macro_expansion_inhibited {
             return vec![tok.clone()];
         }
         let text = match &tok.text {
             TokenText::Decoded(s) => s.as_str(),
-            TokenText::Borrowed => return vec![tok.clone()],
+            TokenText::Borrowed | TokenText::RawBytes { .. } => return vec![tok.clone()],
         };
         if let Some(m) = self.macros.get(text) {
             if !m.is_function && !m.body.is_empty() {
@@ -279,13 +281,25 @@ impl MacroMap {
                 if i + 1 < body.len() {
                     let next = &body[i + 1];
                     if let Some(arg) = self.resolve_arg(next, m, args) {
+                        if let Some(raw) = arg.iter().find(|t| t.text.has_raw_bytes()) {
+                            let mut error = raw.clone();
+                            error.kind = TokenKind::EncodingError;
+                            result.push(error);
+                            i += 2;
+                            continue;
+                        }
                         let text = tokens_to_string(&arg);
                         let mut str_tok = make_string_token(&text);
                         str_tok.spelling_span = tok.spelling_span;
                         str_tok.preceded_by_whitespace = tok.preceded_by_whitespace;
                         if let Some(pt) = pending_paste.take() {
                             if let Some(left) = pt.left {
-                                result.push(paste_tokens(&left, &str_tok, pt.operator_span));
+                                result.push(paste_tokens(
+                                    &left,
+                                    &str_tok,
+                                    pt.operator_span,
+                                    self.legacy_literal_prefixes,
+                                ));
                             } else {
                                 result.push(str_tok);
                             }
@@ -353,7 +367,12 @@ impl MacroMap {
                     } else {
                         if let Some(pt) = pending_paste.take() {
                             if let Some(left) = pt.left {
-                                result.push(paste_tokens(&left, &arg[0], pt.operator_span));
+                                result.push(paste_tokens(
+                                    &left,
+                                    &arg[0],
+                                    pt.operator_span,
+                                    self.legacy_literal_prefixes,
+                                ));
                             } else {
                                 result.push(arg[0].clone());
                             }
@@ -370,7 +389,12 @@ impl MacroMap {
             // General fallthrough: emit literally, with token pasting.
             if let Some(pt) = pending_paste.take() {
                 if let Some(left) = pt.left {
-                    result.push(paste_tokens(&left, tok, pt.operator_span));
+                    result.push(paste_tokens(
+                        &left,
+                        tok,
+                        pt.operator_span,
+                        self.legacy_literal_prefixes,
+                    ));
                 } else {
                     result.push(tok.clone());
                 }
@@ -398,7 +422,7 @@ impl MacroMap {
         }
         let text = match &tok.text {
             TokenText::Decoded(s) => s.as_str(),
-            TokenText::Borrowed => return None,
+            TokenText::Borrowed | TokenText::RawBytes { .. } => return None,
         };
         // Check if it's a named parameter
         for (idx, p) in m.params.iter().enumerate() {
@@ -423,10 +447,12 @@ impl MacroMap {
 }
 
 fn preprocessing_identifier(token: &Token) -> bool {
+    // The shared lexer already classifies C keywords. They are nevertheless
+    // identifiers throughout preprocessing, including macro names and rescan.
     token.kind == TokenKind::Identifier
         || match &token.text {
             TokenText::Decoded(spelling) => evocc_lex::try_keyword(spelling).is_some(),
-            TokenText::Borrowed => false,
+            TokenText::Borrowed | TokenText::RawBytes { .. } => false,
         }
 }
 
@@ -585,11 +611,18 @@ pub enum PragmaPackAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PragmaVisibilityAction {
-    Push { hidden: bool },
+    Push { visibility: &'static str },
     Pop,
 }
 
 const PRAGMA_VISIBILITY_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-visibility:";
+const PRAGMA_ARM_NEON_MARKER: &str = "\u{1e}evocc-pragma-arm-neon";
+
+/// GCC's target-header pragma injects declarations and is not ignored-safe.
+pub fn is_arm_neon_header_marker(token: &Token) -> bool {
+    token.kind == TokenKind::Identifier
+        && matches!(&token.text, TokenText::Decoded(text) if text == PRAGMA_ARM_NEON_MARKER)
+}
 
 /// Visibility changes must reach the declaration consumer in source order,
 /// including changes introduced by an include or expanded `_Pragma`.
@@ -601,8 +634,18 @@ pub fn pragma_visibility_action(token: &Token) -> Option<PragmaVisibilityAction>
         return None;
     }
     match text.strip_prefix(PRAGMA_VISIBILITY_MARKER_PREFIX)? {
-        "hidden" => Some(PragmaVisibilityAction::Push { hidden: true }),
-        "default" => Some(PragmaVisibilityAction::Push { hidden: false }),
+        "hidden" => Some(PragmaVisibilityAction::Push {
+            visibility: "hidden",
+        }),
+        "default" => Some(PragmaVisibilityAction::Push {
+            visibility: "default",
+        }),
+        "protected" => Some(PragmaVisibilityAction::Push {
+            visibility: "protected",
+        }),
+        "internal" => Some(PragmaVisibilityAction::Push {
+            visibility: "internal",
+        }),
         "pop" => Some(PragmaVisibilityAction::Pop),
         _ => None,
     }
@@ -664,6 +707,7 @@ pub struct Preprocessor {
     cond_stack: Vec<CondState>,
     errors: Vec<PreprocessError>,
     standard_includes: bool,
+    signed_char: bool,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
     line_controls: HashMap<FileId, Vec<LineControl>>,
@@ -702,6 +746,7 @@ impl Preprocessor {
             cond_stack: Vec::new(),
             errors: Vec::new(),
             standard_includes: true,
+            signed_char: false,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
             line_controls: HashMap::new(),
@@ -715,14 +760,7 @@ impl Preprocessor {
             empty_macro_pop_count: 0,
             current_file: String::new(),
         };
-        preprocessor.install_predefined_profile(profile)?;
-        // Target capability, separate from the immutable oracle macro snapshot.
-        // Command-line -D/-U still run after construction.
-        preprocessor.macros.define(
-            "__STDC_NO_VLA__".into(),
-            vec![make_int_token(1)],
-            Vec::new(),
-        );
+        preprocessor.install_predefined_profile(profile.as_bytes())?;
         preprocessor.install_feature_query_macros();
         preprocessor
             .macros
@@ -743,8 +781,8 @@ impl Preprocessor {
         }
     }
 
-    fn install_predefined_profile(&mut self, source: &str) -> Result<(), String> {
-        let mut lexer = Lexer::new(FileId::DUMMY, source);
+    fn install_predefined_profile(&mut self, source: &[u8]) -> Result<(), String> {
+        let mut lexer = Lexer::from_bytes(FileId::DUMMY, source);
         let mut tokens = Vec::new();
         while let Some(token) = lexer.next() {
             if token.kind == TokenKind::Error {
@@ -813,6 +851,14 @@ impl Preprocessor {
         self.standard_includes = enabled;
     }
 
+    pub fn set_signed_char(&mut self, enabled: bool) {
+        self.signed_char = enabled;
+    }
+
+    pub fn set_legacy_literal_prefixes(&mut self, enabled: bool) {
+        self.macros.legacy_literal_prefixes = enabled;
+    }
+
     pub fn errors(&self) -> &[PreprocessError] {
         &self.errors
     }
@@ -872,6 +918,10 @@ impl Preprocessor {
     /// from source spans rather than from the `TokenText` field, because the
     /// lexer uses `Borrowed` tokens whose text is identified by byte range.
     pub fn process(&mut self, tokens: TokenStream, source: &str) -> TokenStream {
+        self.process_bytes(tokens, source.as_bytes())
+    }
+
+    pub fn process_bytes(&mut self, tokens: TokenStream, source: &[u8]) -> TokenStream {
         self.reset_source_table();
         self.line_controls.clear();
         self.cond_stack.clear();
@@ -929,7 +979,7 @@ impl Preprocessor {
     /// Diagnose incomplete operators left after replacement-list boundaries
     /// have been joined. Complete operators execute during rescanning, before
     /// subsequent uses of any macro whose definition they restore.
-    fn consume_pragma_operators(&mut self, tokens: Vec<Token>, source: &str) -> Vec<Token> {
+    fn consume_pragma_operators(&mut self, tokens: Vec<Token>, source: &[u8]) -> Vec<Token> {
         let mut output = Vec::with_capacity(tokens.len());
         let mut index = 0;
         while index < tokens.len() {
@@ -940,9 +990,22 @@ impl Preprocessor {
                 continue;
             }
 
-            if let Some((pragma_text, next_index)) = parse_pragma_operator(&tokens, index, source) {
-                let pragma_tokens = lex_decoded_tokens(token.span.file, &pragma_text);
-                if let Some(marker) = self.process_pragma(&pragma_tokens, &pragma_text, token.span)
+            if let Some(parsed) = parse_pragma_operator(&tokens, index, source) {
+                let (pragma_text, next_index) = match parsed {
+                    Ok(parsed) => parsed,
+                    Err(error) => {
+                        self.errors.push(error);
+                        index = pragma_operator_end(&tokens, index);
+                        continue;
+                    }
+                };
+                let pragma_tokens = lex_decoded_tokens(
+                    token.span.file,
+                    &pragma_text,
+                    self.macros.legacy_literal_prefixes,
+                );
+                if let Some(marker) =
+                    self.process_pragma(&pragma_tokens, pragma_text.as_bytes(), token.span)
                 {
                     output.push(marker);
                 }
@@ -965,17 +1028,22 @@ impl Preprocessor {
         resolved: &str,
         expanding: &mut HashSet<String>,
     ) -> Result<TokenStream, std::io::Error> {
-        let content = std::fs::read_to_string(resolved)?;
+        let content = std::fs::read(resolved)?;
         let file = self.intern_source(resolved);
-        let mut lexer = evocc_lex::Lexer::new(file, &content);
+        let mut lexer = evocc_lex::Lexer::from_bytes(file, &content);
+        lexer.set_legacy_literal_prefixes(self.macros.legacy_literal_prefixes);
         let mut tokens = Vec::new();
         while let Some(token) = lexer.next() {
-            if token.kind != TokenKind::Eof {
-                let text = token_lexeme(&token, &content).to_owned();
-                tokens.push(Token {
-                    text: TokenText::Decoded(text),
-                    ..token
+            if token.kind == TokenKind::EncodingError {
+                self.errors.push(PreprocessError {
+                    code: "E0002",
+                    message: "invalid encoding at this source position".into(),
+                    span: token.span,
                 });
+                return Ok(TokenStream::new(Vec::new()));
+            }
+            if token.kind != TokenKind::Eof {
+                tokens.push(token);
             }
         }
         let previous_file = std::mem::replace(&mut self.current_file, resolved.to_owned());
@@ -989,6 +1057,18 @@ impl Preprocessor {
         );
         self.current_file = previous_file;
         Ok(processed)
+    }
+
+    fn header_name(&mut self, tokens: &[Token], source: &[u8]) -> Option<(String, IncludeKind)> {
+        if let Some(token) = tokens.iter().find(|t| t.text.has_raw_bytes()) {
+            self.errors.push(PreprocessError {
+                code: "E0002",
+                message: "invalid encoding in include filename".to_owned(),
+                span: token.span,
+            });
+            return None;
+        }
+        parse_header_name(tokens, source)
     }
 
     fn reset_source_table(&mut self) {
@@ -1068,7 +1148,7 @@ impl Preprocessor {
         }
     }
 
-    fn install_define_directive(&mut self, tokens: &[Token], i: &mut usize, source: &str) {
+    fn install_define_directive(&mut self, tokens: &[Token], i: &mut usize, source: &[u8]) {
         let (name, body, is_function_like) = parse_define(tokens, i, source);
         if name.is_empty() {
             return;
@@ -1102,6 +1182,9 @@ impl Preprocessor {
         let body_tokens = body_tokens
             .into_iter()
             .map(|token| {
+                if !matches!(token.text, TokenText::Borrowed) {
+                    return token;
+                }
                 let lexeme = token_lexeme(&token, source);
                 let text = if lexeme.is_empty() {
                     format_placeholder(token.kind)
@@ -1132,7 +1215,7 @@ impl Preprocessor {
         &mut self,
         tokens: &[Token],
         i: &mut usize,
-        source: &str,
+        source: &[u8],
         expanding: &mut HashSet<String>,
         conditional_floor: usize,
     ) {
@@ -1234,7 +1317,7 @@ impl Preprocessor {
         &mut self,
         tokens: &[Token],
         start: usize,
-        source: &str,
+        source: &[u8],
         expanding: &mut HashSet<String>,
         conditional_floor: usize,
     ) -> (Vec<Vec<Token>>, Vec<Token>, usize) {
@@ -1266,7 +1349,11 @@ impl Preprocessor {
                 lexeme.to_owned()
             };
             let decoded = Token {
-                text: TokenText::Decoded(text),
+                text: if matches!(tokens[index].text, TokenText::Borrowed) {
+                    TokenText::Decoded(text)
+                } else {
+                    tokens[index].text.clone()
+                },
                 ..tokens[index].clone()
             };
             match tokens[index].kind {
@@ -1294,7 +1381,7 @@ impl Preprocessor {
     fn process_impl(
         &mut self,
         tokens: TokenStream,
-        source: &str,
+        source: &[u8],
         expanding: &mut HashSet<String>,
         directives_enabled: bool,
         conditional_floor: usize,
@@ -1343,8 +1430,7 @@ impl Preprocessor {
                         if self.cond_active() {
                             let directive_span = tok.span;
                             let argument = collect_line_tokens(&raw, &mut i, source);
-                            let header = if let Some(header) = parse_header_name(&argument, source)
-                            {
+                            let header = if let Some(header) = self.header_name(&argument, source) {
                                 Some(header)
                             } else {
                                 let expanded = self
@@ -1356,7 +1442,7 @@ impl Preprocessor {
                                         0,
                                     )
                                     .into_vec();
-                                parse_header_name(&expanded, source)
+                                self.header_name(&expanded, source)
                             };
                             if let Some((include_text, include_kind)) = header {
                                 let path = resolve_include_with_origin(
@@ -1499,14 +1585,12 @@ impl Preprocessor {
                         if self.cond_active() {
                             let last = operands.last().unwrap_or(tok);
                             let start = last.spelling_span.byte_end as usize;
-                            let gap = source.as_bytes().get(start..).unwrap_or_default();
+                            let gap = source.get(start..).unwrap_or_default();
                             let boundary =
                                 logical_newline_offset(gap).map(|offset| start + offset + 1);
                             let next_line = boundary
                                 .and_then(|end| {
-                                    source
-                                        .as_bytes()
-                                        .get(tok.spelling_span.byte_start as usize..end)
+                                    source.get(tok.spelling_span.byte_start as usize..end)
                                 })
                                 .map_or(tok.span.line_start + 1, |text| {
                                     tok.span.line_start
@@ -1541,8 +1625,10 @@ impl Preprocessor {
                     }
                 }
             } else if self.cond_active() {
-                if tok.kind == TokenKind::Error {
-                    let (code, message) = if invalid_paste_spelling(tok).is_some() {
+                if matches!(tok.kind, TokenKind::Error | TokenKind::EncodingError) {
+                    let (code, message) = if tok.kind == TokenKind::EncodingError {
+                        ("E0002", "invalid encoding at this source position")
+                    } else if invalid_paste_spelling(tok).is_some() {
                         ("E0110", "invalid-token-paste")
                     } else {
                         ("E0001", "invalid token")
@@ -1558,7 +1644,7 @@ impl Preprocessor {
                 // Predefined context-dependent macros are expanded inline
                 // rather than through the macro table because their values
                 // change at each use.
-                if tok.kind == TokenKind::Identifier {
+                if preprocessing_identifier(tok) {
                     let name = token_lexeme(tok, source).to_string();
                     if self.poisoned_identifiers.contains(&name) {
                         self.errors.push(PreprocessError {
@@ -1591,11 +1677,19 @@ impl Preprocessor {
                                 invocation.push(raw[next_index - 1].clone());
                                 parse_pragma_operator(&invocation, 0, source)
                             });
-                            if let Some((pragma_text, _)) = parsed {
-                                let pragma_tokens = lex_decoded_tokens(tok.span.file, &pragma_text);
-                                if let Some(marker) =
-                                    self.process_pragma(&pragma_tokens, &pragma_text, tok.span)
-                                {
+                            if let Some(Err(error)) = parsed {
+                                self.errors.push(error);
+                            } else if let Some(Ok((pragma_text, _))) = parsed {
+                                let pragma_tokens = lex_decoded_tokens(
+                                    tok.span.file,
+                                    &pragma_text,
+                                    self.macros.legacy_literal_prefixes,
+                                );
+                                if let Some(marker) = self.process_pragma(
+                                    &pragma_tokens,
+                                    pragma_text.as_bytes(),
+                                    tok.span,
+                                ) {
                                     output.push(marker);
                                 }
                             } else {
@@ -1817,7 +1911,7 @@ impl Preprocessor {
         &mut self,
         mut replacement: Vec<Token>,
         following: &[Token],
-        source: &str,
+        source: &[u8],
         expanding: &mut HashSet<String>,
         replacement_owner: &str,
     ) -> (Vec<Token>, usize) {
@@ -1828,7 +1922,7 @@ impl Preprocessor {
         invocation_scope.remove(replacement_owner);
         let mut consumed = 0;
         while let Some(last) = replacement.last() {
-            if last.kind != TokenKind::Identifier || last.macro_expansion_inhibited {
+            if !preprocessing_identifier(last) || last.macro_expansion_inhibited {
                 break;
             }
             let name = token_lexeme(last, source).to_owned();
@@ -1865,7 +1959,7 @@ impl Preprocessor {
         &mut self,
         tokens: &[Token],
         index: usize,
-        source: &str,
+        source: &[u8],
     ) -> Option<(i64, usize)> {
         let query = token_lexeme(tokens.get(index)?, source);
         if !self.builtin_feature_queries.contains(query)
@@ -1929,9 +2023,12 @@ impl Preprocessor {
     fn process_pragma(
         &mut self,
         tokens: &[Token],
-        source: &str,
+        source: &[u8],
         span: SourceSpan,
     ) -> Option<Token> {
+        if self.reject_raw_metadata(tokens) {
+            return None;
+        }
         let first = tokens
             .first()
             .map(|token| token_lexeme(token, source))
@@ -1940,6 +2037,34 @@ impl Preprocessor {
             .get(1)
             .map(|token| token_lexeme(token, source))
             .unwrap_or_default();
+
+        if first == "STDC" && second == "FENV_ACCESS" {
+            if tokens.len() == 3 && token_lexeme(&tokens[2], source) == "OFF" {
+                return None;
+            }
+            self.errors.push(PreprocessError {
+                code: "E3065",
+                span,
+                message: "unsupported-floating-environment-request".into(),
+            });
+            return None;
+        }
+
+        if first == "GCC" && second == "aarch64" {
+            if tokens.len() == 3 && token_lexeme(&tokens[2], source) == "\"arm_neon.h\"" {
+                return Some(Token::new(
+                    TokenKind::Identifier,
+                    span,
+                    TokenText::Decoded(PRAGMA_ARM_NEON_MARKER.to_owned()),
+                ));
+            }
+            self.errors.push(PreprocessError {
+                code: "E0112",
+                span,
+                message: "unsupported-target-header-pragma".into(),
+            });
+            return None;
+        }
 
         if first == "pack" {
             if let Some(action) = parse_pragma_pack_action(tokens, source) {
@@ -1961,7 +2086,9 @@ impl Preprocessor {
                 .collect();
             let action = match words.as_slice() {
                 ["pop"] => Some("pop"),
-                ["push", "(", name @ ("hidden" | "default"), ")"] => Some(*name),
+                ["push", "(", name @ ("hidden" | "default" | "protected" | "internal"), ")"] => {
+                    Some(*name)
+                }
                 _ => None,
             };
             if let Some(action) = action {
@@ -2008,7 +2135,7 @@ impl Preprocessor {
             ("once", _) => self.pragma_once(),
             ("GCC", "poison") => {
                 for token in tokens.iter().skip(2) {
-                    if token.kind == TokenKind::Identifier {
+                    if preprocessing_identifier(token) {
                         let name = token_lexeme(token, source);
                         if !name.is_empty() {
                             self.poisoned_identifiers.insert(name.to_owned());
@@ -2033,7 +2160,7 @@ impl Preprocessor {
     fn evaluate_conditional_expression(
         &mut self,
         tokens: &[Token],
-        source: &str,
+        source: &[u8],
         expanding: &mut HashSet<String>,
     ) -> bool {
         let defined_replaced = replace_defined_operators(tokens, &self.macros, source);
@@ -2069,7 +2196,9 @@ impl Preprocessor {
             });
             return false;
         }
-        evaluate_if_expr(&expanded, source)
+        IfExpression::new(&expanded, source, self.signed_char)
+            .conditional()
+            .is_true()
     }
 
     fn presumed_location(&self, span: SourceSpan) -> Option<&LineControl> {
@@ -2083,7 +2212,7 @@ impl Preprocessor {
     fn process_line_directive(
         &mut self,
         operands: &[Token],
-        source: &str,
+        source: &[u8],
         span: SourceSpan,
         physical_line: u32,
         expanding: &mut HashSet<String>,
@@ -2100,6 +2229,9 @@ impl Preprocessor {
             .into_iter()
             .filter(|token| token.kind != TokenKind::Eof)
             .collect::<Vec<_>>();
+        if self.reject_raw_metadata(&expanded) {
+            return;
+        }
         let number = expanded.first().and_then(|token| {
             let text = token_lexeme(token, source);
             (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
@@ -2134,6 +2266,19 @@ impl Preprocessor {
                 presumed_line,
                 filename,
             });
+    }
+
+    fn reject_raw_metadata(&mut self, tokens: &[Token]) -> bool {
+        if let Some(token) = tokens.iter().find(|token| token.text.has_raw_bytes()) {
+            self.errors.push(PreprocessError {
+                code: "E0002",
+                span: token.span,
+                message: "invalid encoding in preprocessor metadata".into(),
+            });
+            true
+        } else {
+            false
+        }
     }
 
     fn mapped_file_name(&self, span: SourceSpan) -> String {
@@ -2177,7 +2322,7 @@ impl Default for Preprocessor {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn parse_pragma_pack_action(tokens: &[Token], source: &str) -> Option<PragmaPackAction> {
+fn parse_pragma_pack_action(tokens: &[Token], source: &[u8]) -> Option<PragmaPackAction> {
     if tokens.first().map(|token| token_lexeme(token, source)) != Some("pack")
         || tokens.get(1).map(|token| token.kind) != Some(TokenKind::LParen)
         || tokens.last().map(|token| token.kind) != Some(TokenKind::RParen)
@@ -2202,7 +2347,7 @@ fn parse_pragma_pack_action(tokens: &[Token], source: &str) -> Option<PragmaPack
     }
 }
 
-fn pragma_pack_alignment(token: &Token, source: &str) -> Option<u32> {
+fn pragma_pack_alignment(token: &Token, source: &[u8]) -> Option<u32> {
     if token.kind != TokenKind::IntLiteral {
         return None;
     }
@@ -2229,8 +2374,8 @@ fn make_pragma_pack_marker(action: PragmaPackAction, span: SourceSpan) -> Token 
 
 /// Extract the source text of a token from the original source buffer using
 /// its span. Returns "" for dummy spans or out-of-bounds.
-fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
-    if let TokenText::Decoded(text) = &tok.text {
+fn token_lexeme<'a>(tok: &'a Token, source: &'a [u8]) -> &'a str {
+    if let Some(text) = tok.text.spelling() {
         return text;
     }
     let start = tok.spelling_span.byte_start as usize;
@@ -2238,7 +2383,7 @@ fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
     if start >= source.len() || end > source.len() || start > end {
         return "";
     }
-    &source[start..end]
+    std::str::from_utf8(&source[start..end]).unwrap_or("")
 }
 
 /// Compose parser-visible expansion locations with the same total rule used
@@ -2314,14 +2459,14 @@ fn is_directive_hash(kind: TokenKind) -> bool {
 /// translation phase 2. Backslash-LF and backslash-CRLF pairs do not end a
 /// preprocessor directive, even though the following token has a different
 /// physical `line_start`.
-fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) -> bool {
+fn has_logical_newline_between(previous: &Token, current: &Token, source: &[u8]) -> bool {
     let start = previous.spelling_span.byte_end as usize;
     let end = current.spelling_span.byte_start as usize;
     if start > end || end > source.len() {
         return previous.spelling_span.line_start != current.spelling_span.line_start;
     }
 
-    logical_newline_offset(&source.as_bytes()[start..end]).is_some()
+    logical_newline_offset(&source[start..end]).is_some()
 }
 
 /// Byte offset of the first newline surviving splicing and comment removal.
@@ -2376,14 +2521,14 @@ fn logical_newline_offset(gap: &[u8]) -> Option<usize> {
 /// tokens. A function-like macro requires its opening parenthesis to be
 /// adjacent to the macro name; ordinary whitespace and comments prevent that,
 /// while a spliced physical newline does not.
-fn tokens_are_logically_adjacent(previous: &Token, current: &Token, source: &str) -> bool {
+fn tokens_are_logically_adjacent(previous: &Token, current: &Token, source: &[u8]) -> bool {
     let start = previous.spelling_span.byte_end as usize;
     let end = current.spelling_span.byte_start as usize;
     if start > end || end > source.len() {
         return false;
     }
 
-    let gap = &source.as_bytes()[start..end];
+    let gap = &source[start..end];
     let mut index = 0;
     while index < gap.len() {
         if gap[index] == b'\\' && gap.get(index + 1) == Some(&b'\n') {
@@ -2402,7 +2547,7 @@ fn tokens_are_logically_adjacent(previous: &Token, current: &Token, source: &str
 
 /// A token starts a logical preprocessing line when it is the first token or
 /// when an unspliced newline separates it from the previous token.
-fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
+fn is_start_of_line(tokens: &[Token], idx: usize, source: &[u8]) -> bool {
     if idx == 0 {
         return true;
     }
@@ -2411,7 +2556,7 @@ fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
 
 /// Skip tokens until the next logical line. If a directive handler already
 /// advanced `i` to that line, this leaves it untouched.
-fn skip_line(tokens: &[Token], i: &mut usize, source: &str) {
+fn skip_line(tokens: &[Token], i: &mut usize, source: &[u8]) {
     if *i >= tokens.len() || *i == 0 {
         return;
     }
@@ -2427,7 +2572,7 @@ fn skip_line(tokens: &[Token], i: &mut usize, source: &str) {
 /// (macro_name, body_tokens, is_function_like).
 /// `*i` points to the first token after the directive keyword.
 /// On return, `*i` points to the first token after the define body.
-fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<Token>, bool) {
+fn parse_define(tokens: &[Token], i: &mut usize, source: &[u8]) -> (String, Vec<Token>, bool) {
     if *i >= tokens.len() {
         return (String::new(), Vec::new(), false);
     }
@@ -2465,7 +2610,7 @@ enum IncludeKind {
 fn read_include_argument(
     tokens: &[Token],
     i: &mut usize,
-    source: &str,
+    source: &[u8],
 ) -> Option<(String, IncludeKind)> {
     if *i < tokens.len() {
         let tok = &tokens[*i];
@@ -2560,7 +2705,7 @@ fn resolved_existing_path(path: &std::path::Path) -> Option<String> {
         .map(|resolved| resolved.to_string_lossy().into_owned())
 }
 
-fn one_query_token<'a>(tokens: &'a [Token], source: &'a str) -> Option<&'a str> {
+fn one_query_token<'a>(tokens: &'a [Token], source: &'a [u8]) -> Option<&'a str> {
     if tokens.len() == 1 {
         let spelling = token_lexeme(&tokens[0], source);
         (!spelling.is_empty()).then_some(spelling)
@@ -2588,7 +2733,7 @@ fn attribute_answer(name: &str) -> i64 {
         .unwrap_or(0)
 }
 
-fn parse_header_name(tokens: &[Token], source: &str) -> Option<(String, IncludeKind)> {
+fn parse_header_name(tokens: &[Token], source: &[u8]) -> Option<(String, IncludeKind)> {
     if tokens.len() == 1 && tokens[0].kind == TokenKind::StringLiteral {
         let spelling = token_lexeme(&tokens[0], source);
         return spelling
@@ -2612,7 +2757,7 @@ fn parse_header_name(tokens: &[Token], source: &str) -> Option<(String, IncludeK
     None
 }
 
-fn macro_pragma_name<'a>(tokens: &'a [Token], source: &'a str) -> Option<&'a str> {
+fn macro_pragma_name<'a>(tokens: &'a [Token], source: &'a [u8]) -> Option<&'a str> {
     let [_, open, name, close] = tokens else {
         return None;
     };
@@ -2627,12 +2772,23 @@ fn macro_pragma_name<'a>(tokens: &'a [Token], source: &'a str) -> Option<&'a str
         .strip_suffix('"')
 }
 
-fn parse_pragma_operator(tokens: &[Token], index: usize, source: &str) -> Option<(String, usize)> {
+fn parse_pragma_operator(
+    tokens: &[Token],
+    index: usize,
+    source: &[u8],
+) -> Option<Result<(String, usize), PreprocessError>> {
     if tokens.get(index + 1).map(|token| token.kind) != Some(TokenKind::LParen)
         || tokens.get(index + 2).map(|token| token.kind) != Some(TokenKind::StringLiteral)
         || tokens.get(index + 3).map(|token| token.kind) != Some(TokenKind::RParen)
     {
         return None;
+    }
+    if tokens[index + 2].text.has_raw_bytes() {
+        return Some(Err(PreprocessError {
+            code: "E0002",
+            span: tokens[index + 2].span,
+            message: "invalid encoding in pragma text".into(),
+        }));
     }
     let spelling = token_lexeme(&tokens[index + 2], source);
     let inner = spelling
@@ -2656,7 +2812,7 @@ fn parse_pragma_operator(tokens: &[Token], index: usize, source: &str) -> Option
             destringized.push(escaped);
         }
     }
-    Some((destringized, index + 4))
+    Some(Ok((destringized, index + 4)))
 }
 
 fn pragma_operator_end(tokens: &[Token], index: usize) -> usize {
@@ -2679,8 +2835,10 @@ fn pragma_operator_end(tokens: &[Token], index: usize) -> usize {
     tokens.len()
 }
 
-fn lex_decoded_tokens(file: FileId, source: &str) -> Vec<Token> {
-    let mut lexer = Lexer::new(file, source);
+fn lex_decoded_tokens(file: FileId, source: &str, legacy_literal_prefixes: bool) -> Vec<Token> {
+    let source = source.as_bytes();
+    let mut lexer = Lexer::from_bytes(file, source);
+    lexer.set_legacy_literal_prefixes(legacy_literal_prefixes);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
         if token.kind == TokenKind::Eof {
@@ -2696,7 +2854,7 @@ fn lex_decoded_tokens(file: FileId, source: &str) -> Vec<Token> {
 }
 
 /// Collect all tokens on the current logical preprocessing line.
-fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Token> {
+fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &[u8]) -> Vec<Token> {
     if *i >= tokens.len() {
         return Vec::new();
     }
@@ -2716,7 +2874,7 @@ fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Tok
     result
 }
 
-fn replace_defined_operators(tokens: &[Token], macros: &MacroMap, source: &str) -> Vec<Token> {
+fn replace_defined_operators(tokens: &[Token], macros: &MacroMap, source: &[u8]) -> Vec<Token> {
     let mut result = Vec::with_capacity(tokens.len());
     let mut index = 0;
     while index < tokens.len() {
@@ -2788,16 +2946,18 @@ impl PpInteger {
 
 struct IfExpression<'a> {
     tokens: &'a [Token],
-    source: &'a str,
+    source: &'a [u8],
     index: usize,
+    signed_char: bool,
 }
 
 impl<'a> IfExpression<'a> {
-    fn new(tokens: &'a [Token], source: &'a str) -> Self {
+    fn new(tokens: &'a [Token], source: &'a [u8], signed_char: bool) -> Self {
         Self {
             tokens,
             source,
             index: 0,
+            signed_char,
         }
     }
 
@@ -3015,7 +3175,9 @@ impl<'a> IfExpression<'a> {
             TokenKind::IntLiteral | TokenKind::PpNumber => {
                 parse_pp_integer(token_lexeme(token, self.source))
             }
-            TokenKind::CharLiteral => parse_pp_character(token_lexeme(token, self.source)),
+            TokenKind::CharLiteral => {
+                parse_pp_character(token_lexeme(token, self.source), self.signed_char)
+            }
             _ => PpInteger::ZERO,
         }
     }
@@ -3105,17 +3267,17 @@ fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
     })
 }
 
-fn parse_pp_character(spelling: &str) -> PpInteger {
-    let (value, _) = evocc_lex::decode_character_literal(spelling)
+fn parse_pp_character(spelling: &str, signed_char: bool) -> PpInteger {
+    let (value, prefix) = evocc_lex::decode_character_literal(spelling)
         .expect("conditional character operands were validated before evaluation");
     PpInteger {
-        bits: u64::from(value),
+        bits: if signed_char && prefix.is_empty() && value <= 255 {
+            (value as u8 as i8 as i64) as u64
+        } else {
+            u64::from(value)
+        },
         unsigned: false,
     }
-}
-
-fn evaluate_if_expr(tokens: &[Token], source: &str) -> bool {
-    IfExpression::new(tokens, source).conditional().is_true()
 }
 
 /// Extract parameter names from a function-like macro body.
@@ -3123,7 +3285,7 @@ fn evaluate_if_expr(tokens: &[Token], source: &str) -> bool {
 /// Returns (params, is_variadic, variadic_param_name).
 /// variadic_param_name is Some for GNU named variadics (e.g. `args...`),
 /// None for C99 `...` (unnamed).
-fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<String>) {
+fn extract_params(body: &[Token], source: &[u8]) -> (Vec<String>, bool, Option<String>) {
     if body.is_empty() || body[0].kind != TokenKind::LParen {
         return (vec![], false, None);
     }
@@ -3169,7 +3331,7 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<St
 }
 
 /// Advance `i` past the current logical line's tokens.
-fn advance_past_line(i: usize, tokens: &[Token], source: &str) -> usize {
+fn advance_past_line(i: usize, tokens: &[Token], source: &[u8]) -> usize {
     if i >= tokens.len() {
         return i;
     }
@@ -3204,17 +3366,11 @@ fn format_placeholder(kind: TokenKind) -> String {
 // argument collection in the process() body.
 
 fn token_text(tok: &Token) -> String {
-    match &tok.text {
-        TokenText::Decoded(s) => s.clone(),
-        TokenText::Borrowed => String::new(),
-    }
+    tok.text.spelling().unwrap_or("").to_owned()
 }
 
 fn str_text(tok: &Token) -> String {
-    match &tok.text {
-        TokenText::Decoded(s) => s.clone(),
-        TokenText::Borrowed => String::new(),
-    }
+    token_text(tok)
 }
 
 /// Spell a macro argument for `#` stringification.
@@ -3250,9 +3406,24 @@ fn tokens_to_string(tokens: &[Token]) -> String {
 /// Re-lex a token-paste result. The production lexer recognizes complete C
 /// tokens; the extra pp-number path preserves preprocessing tokens such as
 /// `1_MODULE` until a later consuming context can classify them.
-fn paste_tokens(left: &Token, right: &Token, operator_span: SourceSpan) -> Token {
+fn paste_tokens(
+    left: &Token,
+    right: &Token,
+    operator_span: SourceSpan,
+    legacy_literal_prefixes: bool,
+) -> Token {
+    if left.text.has_raw_bytes() || right.text.has_raw_bytes() {
+        let mut error = if left.text.has_raw_bytes() {
+            left.clone()
+        } else {
+            right.clone()
+        };
+        error.kind = TokenKind::EncodingError;
+        return error;
+    }
     let combined = format!("{}{}", token_text(left), token_text(right));
     let mut lexer = Lexer::new(FileId::DUMMY, &combined);
+    lexer.set_legacy_literal_prefixes(legacy_literal_prefixes);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
         if token.kind != TokenKind::Eof {

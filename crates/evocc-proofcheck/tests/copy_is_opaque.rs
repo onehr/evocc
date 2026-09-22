@@ -53,6 +53,381 @@ const MODULE: &str = concat!(
 );
 
 #[test]
+fn scalar_proof_cannot_drop_or_relocate_a_patchable_function_entry() {
+    let source = MODULE.replace(
+        "cc = target_default",
+        "cc = target_default patchable_entry=4,2 section=\".init.text\"",
+    );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    let after = render_module(&outcome.module);
+    assert!(after.contains("patchable_entry=4,2"));
+    assert!(after.contains("section=\".init.text\""));
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    fs::write(&files.after, &after).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    assert!(replay().status.success());
+    for (field, replacement) in [
+        (" patchable_entry=4,2", ""),
+        (" patchable_entry=4,2", " patchable_entry=4,1"),
+        (" patchable_entry=4,2", " patchable_entry=0,0"),
+        (" section=\".init.text\"", ""),
+        (" section=\".init.text\"", " section=\".text\""),
+        (" section=\".init.text\"", " section=\".exit.text\""),
+    ] {
+        let forged = after.replace(field, replacement);
+        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+        let mut certificate = outcome.certificate.clone();
+        certificate.output_digest = evocc_proof::sha256_hex(forged.as_bytes());
+        fs::write(&files.after, forged).unwrap();
+        fs::write(&files.proof, render_evp1(&certificate)).unwrap();
+        assert!(!replay().status.success(), "{replacement}");
+    }
+}
+
+#[test]
+fn scalar_proof_cannot_reclassify_a_homogeneous_floating_argument() {
+    let source = MODULE.replace(
+        "%arg1: ptr<generic>,",
+        "%arg1: ptr<generic> byval(8, 8, hfa=1xf64),",
+    );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    for replacement in ["hfa=2xf32", "hva=1xvec<2, bits<32>>"] {
+        let forged = after.replace("hfa=1xf64", replacement);
+        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{replacement}");
+    }
+}
+
+#[test]
+fn scalar_proof_cannot_change_floating_bits_operations_or_predicates() {
+    let source = MODULE.replace(
+        "    %v9 = add.bits<32> %v6, %v5",
+        concat!(
+            "    %v10 = const.f64 0x7ff8000000000011\n",
+            "    %v11 = const.f64 0x3ff0000000000000\n",
+            "    %v12 = fp.add %v10, %v11 : f64\n",
+            "    %v13 = fp.to_int_defined.s32 %v12 : bits<1>\n",
+            "    %v9 = add.bits<32> %v6, %v5"
+        ),
+    );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    fs::write(&files.after, &after).unwrap();
+    assert!(replay().status.success());
+    for forged in [
+        after.replace("0x7ff8000000000011", "0x7ff8000000000012"),
+        after.replace("fp.add", "fp.sub"),
+        after.replace("to_int_defined.s32", "to_int_defined.u32"),
+    ] {
+        assert_ne!(forged, after);
+        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(!replay().status.success());
+    }
+}
+
+#[test]
+fn scalar_proof_cannot_drop_or_change_hfa_transport_alignment() {
+    // The canonical spelling omits the default ABI alignment of eight.
+    for (original, replacement) in [("", ", abi_align=16"), (", abi_align=16", "")] {
+        let mark = format!("byval(32, 32, hfa=4xf64{original})");
+        let source = MODULE.replace(
+            "%arg1: ptr<generic>,",
+            &format!("%arg1: ptr<generic> {mark},"),
+        );
+        let before = parse_section9_module(source.as_bytes()).unwrap();
+        let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+        let files = ProofFiles::new();
+        fs::write(&files.before, render_module(&before)).unwrap();
+        fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+        let after = render_module(&outcome.module);
+        fs::write(&files.after, &after).unwrap();
+        let replay = || {
+            Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+                .args([&files.before, &files.after, &files.proof])
+                .output()
+                .unwrap()
+        };
+        assert!(replay().status.success());
+        let forged = after.replace(&mark, &format!("byval(32, 32, hfa=4xf64{replacement})"));
+        assert_ne!(forged, after);
+        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(!replay().status.success(), "{original} -> {replacement}");
+    }
+}
+
+#[test]
+fn scalar_proof_cannot_change_simd_assembly_constraints_or_clobbers() {
+    let source = MODULE
+        .replace("volatile=false", "volatile=true")
+        .replace("io=false", "io=true")
+        .replace("    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]", "    %v10 = const.bits<64> 0\n    %v11 = vec.pack %v10, %v10 : vec<2, bits<64>>\n    (%v12, %v7, %v8) = asm volatile \"\" %v3, %v4 outputs [(\"+w\", \"\", vec<2, bits<64>>, %v11)] inputs [] clobbers []");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    fs::write(&files.after, &after).unwrap();
+    assert!(replay().status.success());
+    for forged in [
+        after.replace("\"+w\"", "\"+&w\""),
+        after.replace("clobbers []", "clobbers [\"v0\"]"),
+    ] {
+        assert_ne!(forged, after);
+        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(!replay().status.success());
+    }
+}
+
+#[test]
+fn scalar_proof_cannot_replace_an_aes_round_with_its_inverse() {
+    let source = MODULE.replace("    %v9 = add.bits<32> %v6, %v5", &format!(
+        "    %v10 = const.bits<8> 0\n    %v11 = vec.pack {} : vec<16, bits<8>>\n    %v12 = vec.aese %v11, %v11 : vec<16, bits<8>>\n    %v9 = add.bits<32> %v6, %v5",
+        ["%v10"; 16].join(", ")
+    ));
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values > 0);
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    fs::write(&files.after, &after).unwrap();
+    assert!(replay().status.success());
+    let forged = after.replace("vec.aese", "vec.aesd");
+    assert_ne!(forged, after);
+    let module = parse_section9_module(forged.as_bytes()).unwrap();
+    validate_module(&module).unwrap();
+    fs::write(&files.after, forged).unwrap();
+    assert!(
+        !replay().status.success(),
+        "a scalar proof changed AES semantics"
+    );
+}
+
+#[test]
+fn scalar_proofs_preserve_load_instance_and_tls_metadata() {
+    let source=format!("global @local origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\n\ntls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n\nfunc @startup(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    ret %v0, %v1\n}}\n\n{MODULE}");
+    let source=source.replace("tls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n\n", "")
+        + "\ntls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n";
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values > 0);
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    fs::write(&files.after, &after).unwrap();
+    let result = replay();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    for forged in [
+        after.replace("priority=201", "priority=203"),
+        after.replace("init @startup priority=201\n", ""),
+        after.replace("model=global_dynamic", "model=initial_exec"),
+        after.replace("tls @local model=global_dynamic\n\n", ""),
+    ] {
+        assert_ne!(forged, after);
+        parse_section9_module(forged.as_bytes()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(
+            !replay().status.success(),
+            "load-instance metadata escaped independent replay"
+        );
+    }
+}
+
+#[test]
+fn scalar_proofs_cannot_change_atomic_order_or_drop_an_atomic_access() {
+    let source = MODULE.replace("atomic=false", "atomic=true").replace(
+        "    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]",
+        "    %v10 = access_in_bounds %v3, %v1 [size=4, align=4]\n    (%v7, %v8) = atomic.store release %v10, %v4, %v1, %v6",
+    );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values > 0);
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    assert!(replay().status.success());
+    for forged in [
+        after.replace("atomic.store release", "atomic.store relaxed"),
+        after
+            .replace("atomic.store release", "store")
+            .replace("atomic=true", "atomic=false"),
+    ] {
+        parse_section9_module(forged.as_bytes()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(
+            !replay().status.success(),
+            "atomic semantics escaped the checker"
+        );
+    }
+}
+
+#[test]
+fn vector_lane_selection_is_preserved_outside_scalar_rewrites() {
+    let source=MODULE.replace("    %v9 = add.bits<32> %v6, %v5", "    %v10 = vec.pack %v0, %v5, %v0, %v5 : vec<4, bits<32>>\n    %v11 = const.bits<32> 0\n    %v12 = const.bits<32> 1\n    %v13 = vec.extract %v10, %v11 : bits<32>\n    %v9 = add.bits<32> %v13, %v5");
+    let source = format!("declare @vector_argument(ptr<generic> byval(24, 8, hva=3xvec<2, bits<32>>), mem<all>, world) -> (mem<all>, world) cc = target_default\n\n{source}");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values > 0);
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    fs::write(&files.after, render_module(&outcome.module)).unwrap();
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    assert!(replay().status.success());
+    let mut forged = outcome.module.clone();
+    let block = &mut forged.functions[0].blocks[0];
+    let replacement = block
+        .insts
+        .iter()
+        .find_map(|inst| match inst {
+            evocc_evoir::Inst::Const(value, 1) => Some(value.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let extract = block
+        .insts
+        .iter_mut()
+        .find_map(|inst| match inst {
+            evocc_evoir::Inst::Vector(op) if op.op == evocc_evoir::VectorOp::Extract => Some(op),
+            _ => None,
+        })
+        .unwrap();
+    extract.arguments[1] = replacement;
+    validate_module(&forged).unwrap();
+    fs::write(&files.after, render_module(&forged)).unwrap();
+    assert!(
+        !replay().status.success(),
+        "a scalar proof changed the vector lane"
+    );
+    let after = render_module(&outcome.module);
+    for forged in [
+        after.replace(", hva=3xvec<2, bits<32>>", ""),
+        after.replace("hva=3xvec<2, bits<32>>", "hva=3xvec<4, bits<16>>"),
+    ] {
+        let module = parse_section9_module(forged.as_bytes()).unwrap();
+        validate_module(&module).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(
+            !replay().status.success(),
+            "a scalar proof changed the external vector ABI"
+        );
+    }
+}
+
+#[test]
+fn scalar_proofs_cannot_change_visibility_of_any_symbol_record() {
+    let source = format!(
+        "global @value origin=0 kind=file visibility=protected size=4 align=4 bytes=00000000 initialized=1111\n\nextern @outside size=4 align=4 visibility=protected\n\ndeclare @missing(mem<all>, world) -> (mem<all>, world) cc = target_default visibility=protected\n\nalias @other = @value visibility=protected\n\n{}",
+        MODULE.replace("cc = target_default\n", "cc = target_default visibility=protected\n")
+    );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.report.optimized_values > 0);
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    let replay = || {
+        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&files.before, &files.after, &files.proof])
+            .output()
+            .unwrap()
+    };
+    assert!(replay().status.success());
+    for prefix in ["global @", "extern @", "declare @", "alias @", "func @"] {
+        let forged = after
+            .lines()
+            .map(|line| {
+                if line.starts_with(prefix) {
+                    line.replace("visibility=protected", "visibility=hidden")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        assert_ne!(forged, after, "{prefix}");
+        parse_section9_module(forged.as_bytes()).unwrap();
+        fs::write(&files.after, forged).unwrap();
+        assert!(
+            !replay().status.success(),
+            "changed {prefix} visibility escaped the checker"
+        );
+    }
+}
+
+#[test]
 fn copy_is_excluded_reassembled_verbatim_and_replayed_independently() {
     let before = parse_section9_module(MODULE.as_bytes()).expect("copy module parses");
     validate_module(&before).expect("copy module validates");

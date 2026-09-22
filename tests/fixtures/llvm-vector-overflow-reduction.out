@@ -1,0 +1,41 @@
+2026-09-20 source-bound diagnostic; not a replacement benchmark.
+Original: LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e,
+SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c.
+Original SHA-256: 55b64d3f85e48564b7275634e277d9c3a86bb9ba9181ebb9aed0e64f64295693.
+At line 131 the first overflowing lane-zero operation is 75840000 * 156,
+whose mathematical result is 11831040000, greater than INT_MAX (2147483647).
+The preceding factors are 160 * 1500 * 2 * 158, all representable in int.
+
+Base image: evo-flight-lab:sealed, linux/arm64, network none,
+SHA-256 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+For CC=gcc-14 (14.2.0-19), clang-19 (19.1.7), and O=0,2:
+  CC -std=gnu11 -O{O} -fsanitize=undefined -fno-sanitize-recover=all
+    [-DPROBE_OVERFLOW] -c llvm-vector-overflow-reduction.c -o lane.o
+  gcc-14 -fsanitize=undefined lane.o -o lane
+All eight compile/link combinations exit zero.
+Default defined widened companion: four executions exit zero.
+PROBE_OVERFLOW scalar companion: all four exit 1 with:
+  llvm-vector-overflow-reduction.c:12:17: runtime error:
+  signed integer overflow: 75840000 * 156 cannot be represented in type 'int'
+
+The unchanged original was also rerun at O0/O2 with the same instrumentation.
+GCC reports signed multiplication overflow at 131:25 and exits 1 in both runs.
+Clang's independently instrumented objects (linked with available libubsan)
+exit zero without a diagnostic. Direct Clang links initially failed because
+the image lacks libclang_rt.ubsan_standalone.a; no execution credit is given
+to those failed links. The older O0/O1 attempts remain recorded separately
+in .build/vector-targeted/llvm-vector-ubsan.jsonl.
+
+Clang 19.1.7 implementation explains the missing check:
+https://github.com/llvm/llvm-project/blob/llvmorg-19.1.7/clang/lib/CodeGen/CGExprScalar.cpp#L677
+EmitMul tests isSignedIntegerOrEnumerationType before its overflow-checked
+path; the vector operation reaches ordinary CreateMul instead (line 720).
+Therefore scalar sanitizer agreement does not become a claim that Clang's
+original vector program diagnosed UB. The original expected output, flags,
+source and active disposition stay unchanged; the stricter original-program
+dual-instrumentation acceptance criterion remains unmet.
+
+Subject ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882:
+unchanged original --interpret-c-hir and --interpret-evoir both report E3004.
+This is consistent with EvoIR 10.1.14's per-lane signed arithmetic obligation,
+not evidence authorizing removal of that obligation or automatic -fwrapv.

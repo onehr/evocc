@@ -1,0 +1,12 @@
+2026-09-19 22:16 UTC: explicit fast-math scope, not blanket scalar-FP deferral.
+Sealed linux/arm64 image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2; network none.
+GCC 14.2.0 and Debian Clang 19.1.7; target libc is the image's glibc 2.41.
+Original torture pr39501.c SHA256 12ef655565b9df299b5e2a23cea6b5a8e248ac30c37e502aeab9f0c70e0ff112.
+Original LLVM pr39501.c SHA256 cc0553393a1e61170dfcd73001a6e386f005dd7963426ee5147b44e1737ce9f4.
+For each unchanged source and each compiler: CC -std=gnu11 -O{0,2} -ffast-math SOURCE -o /tmp/probe; /tmp/probe.
+All eight compile/run controls exit 0, with empty program stdout/stderr.
+Torture explicitly declares dg-options -ffast-math; the original LLVM compile_commands entry likewise includes -ffast-math.
+EvoCC debug SHA256 0914226f02236a269dedaaf0cb1d9163b0b4efd4c87f3048c54ee1d7fc335489.
+EvoCC --target=aarch64-unknown-linux-gnu -ffast-math --emit=asm ORIGINAL_TORTURE_SOURCE exits 1: unsupported floating-point profile option `-ffast-math`.
+The approved first scalar-FP release admits only the noncontracting RNE profile; this requested semantic option remains unsupported.
+Disposition: source-bound not-applicable for this profile, never PASS or evidence of a scalar f32/f64 arithmetic failure. Fresh campaign outcomes remain separate.

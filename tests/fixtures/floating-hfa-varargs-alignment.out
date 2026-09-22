@@ -1,0 +1,41 @@
+2026-09-20: HFA ABI stack-alignment RED, reduced from GCC torture pr92904.
+Original capture: .evidence/ladder/e0/20260919T212324Z/results.jsonl
+Subject: 86633b8b6c552ac638f0da70a2e73929ccc95e8c8570eb38a2699417eab0e6c4
+Fixed linux/arm64 image:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC14 14.2.0-19, Clang19 19.1.7.
+
+Source: floating-hfa-varargs-alignment.c, object aligned(32), four doubles.
+Default member alignment=8:
+GCC/Clang O0/O2 original-language controls all exit0.
+EvoIR interpreter exit0; EvoCC native exit10 (9 prior double arguments).
+Each oracle caller -> EvoCC callee: exit10.
+EvoCC caller -> each oracle callee: exit0.
+Member alignment=16, otherwise identical layout and values:
+Both oracle controls exit0.
+Each oracle caller -> EvoCC callee: exit0.
+EvoCC caller -> each oracle callee: exit10.
+This distinguishes transport alignment from object alignment and proves that
+changing every HFA va_arg to align8 would not close the complete ABI defect.
+
+Reference: AAPCS64 2025Q4 sections 5.10, 6.8.2 B.6/C.4, 14.4:
+https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs64/aapcs64.rst
+The source's top-level member layouts, before the whole-record adjustment,
+determine natural transport alignment; the ABI copy uses 8 or16.
+CLI metadata RED: one failed assertion, zero compile errors. Native closure
+and original-program rerun remain pending at this checkpoint.
+
+Subsequent GREEN, 2026-09-20:
+Natural alignment is now carried separately from complete-object alignment.
+Member alignments 8 and 16 each pass a subject-only native run and GCC14/Clang19
+O0/O2 controls plus both cross-compiler call directions: 26/26 exit zero.
+The original, unchanged pr92904 also compiles, links statically and exits zero.
+Original source SHA256 bce28f06aa69e28c01ce5e66aefddfce0273244d17aa59cc4036b463a8bc0795
+Original subject assembly d1a9913e1a4ee5f66f93e98485d8efdafb85f89c5434a8ebc852dab034889289
+Mixed-call worker align8 0676b6e68a5fe91c79e86b147fa9d0345af61a478e793c8dc43704851b2d22d9
+Mixed-call caller align8 e5adc3fed3660cf7abcb34e17c8c0530e3015ed14141834d88aba32baa8c1f91
+Mixed-call worker align16 df64d195b88fc8857d2232661f9fef5a06bdc559db44ba6ed3d5bc8ba9d17693
+Mixed-call caller align16 1f389a1d2db69cfa1dbe6a7a5bbd1713fa5150bd25cc8b39fc34091dbc53a678
+IR metadata tests 3/3 and independent opaque-proof tests 12/12 pass, including
+canonical alignment changes in both directions; the unmodified proof passes.
+This is targeted closure; the old 1,692-program result remains immutable.

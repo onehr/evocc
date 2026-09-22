@@ -1,5 +1,40 @@
 //! C declarator, expression, and statement parser producing C-HIR
 
+mod complex;
+mod floating;
+mod neon;
+mod vector;
+
+fn legacy_atomic(
+    name: &str,
+) -> Option<(
+    Option<evocc_chir::AtomicRmwOp>,
+    evocc_chir::AtomicRmwReturn,
+    evocc_chir::AtomicOrder,
+)> {
+    use evocc_chir::{AtomicOrder as O, AtomicRmwOp as R, AtomicRmwReturn as V};
+    let name = name.strip_prefix("__sync_")?;
+    let result = match name {
+        "bool_compare_and_swap" => (Some(R::CompareExchange), V::Success, O::SeqCst),
+        "val_compare_and_swap" => (Some(R::CompareExchange), V::Old, O::SeqCst),
+        "lock_test_and_set" => (Some(R::Exchange), V::Old, O::Acquire),
+        "lock_release" => (None, V::Old, O::Release),
+        _ => {
+            let (operation, result) = if let Some(op) = name.strip_prefix("fetch_and_") {
+                (op, V::Old)
+            } else {
+                (name.strip_suffix("_and_fetch")?, V::New)
+            };
+            let operation = R::from_mnemonic(operation)?;
+            if matches!(operation, R::Exchange | R::CompareExchange) {
+                return None;
+            }
+            (Some(operation), result, O::SeqCst)
+        }
+    };
+    Some(result)
+}
+
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 
@@ -222,6 +257,7 @@ struct EntityState {
     linkage: EntityLinkage,
     thread_local: bool,
     has_definition: bool,
+    gnu_inline_body: bool,
     assembly_named: bool,
 }
 
@@ -234,6 +270,7 @@ struct DeclarationTransaction {
     inherited_function_parameter_undo: usize,
     entity_attribute_undo: usize,
     member_attribute_undo: usize,
+    initialized_const_undo: usize,
     side_declarations: usize,
     builtin_declarations: usize,
 }
@@ -284,6 +321,7 @@ pub struct Parser<'src, 'arena> {
     target_layout: TargetDataLayout,
     standard_builtins: bool,
     legacy_declarations: bool,
+    gnu_inline: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     standard_allocation_calls: Vec<(SymbolId, SourceSpan)>,
     tokens: Vec<Token>,
@@ -323,9 +361,14 @@ pub struct Parser<'src, 'arena> {
     inherited_function_parameter_undo: Vec<(SymbolId, Option<ParameterSyntax>)>,
     entity_attribute_undo: Vec<(SymbolId, Option<AttributeNames>)>,
     member_attribute_undo: Vec<MemberAttributeUndo>,
+    /// Preceding explicitly initialized const integer objects. Only GNU
+    /// static initialization consults this index; it never grants ICE status.
+    initialized_const_integers: HashMap<SymbolId, CInteger>,
+    initialized_const_undo: Vec<(SymbolId, Option<CInteger>)>,
     declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     builtin_declarations: Vec<&'arena CHirDecl<'arena>>,
+    neon_tuple_types: HashMap<String, TypeId>,
     loop_depth: usize,
     current_function_parameters: Option<ParameterSyntax>,
     // The optional expression identity lets a surrounding, precision-invariant
@@ -346,7 +389,7 @@ pub struct Parser<'src, 'arena> {
     next_local_label: u64,
     pack_alignment: Option<u32>,
     pack_stack: Vec<Option<u32>>,
-    visibility_stack: Vec<(bool, SourceSpan)>,
+    visibility_stack: Vec<(&'static str, SourceSpan)>,
     /// True only while normalizing an initializer attached to a file-scope
     /// object.  It admits the final flexible member without changing the
     /// record type itself.
@@ -357,17 +400,31 @@ pub struct Parser<'src, 'arena> {
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
-    pub fn new(mut tokens: Vec<Token>, file: FileId, _source: &'src str) -> Self {
+    pub fn new(tokens: Vec<Token>, file: FileId, _source: &'src str) -> Self {
+        Self::from_tokens(tokens, file)
+    }
+
+    /// Token spellings, not source buffers, are the parser's text authority.
+    pub fn from_tokens(mut tokens: Vec<Token>, file: FileId) -> Self {
         // Preprocessing numbers and `other` characters remain available to
         // macro expansion through translation phase 4. If either survives to
         // this phase-7 boundary, it has no C-token form and is diagnosed at
         // the exact preserved token rather than leaking into syntax errors.
         let lexical_diagnostic = tokens
             .iter()
-            .find(|token| matches!(token.kind, TokenKind::PpNumber | TokenKind::PpOther))
+            .find(|token| {
+                matches!(
+                    token.kind,
+                    TokenKind::PpNumber | TokenKind::PpOther | TokenKind::EncodingError
+                )
+            })
             .map(|token| ParseDiagnostic {
                 span: token.span,
-                code: "E0112",
+                code: if token.kind == TokenKind::EncodingError {
+                    "E0002"
+                } else {
+                    "E0112"
+                },
                 message: "stray-token".to_owned(),
             });
         // GNU contextual spellings must remain identifiers through
@@ -377,7 +434,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         for token in &mut tokens {
             let spelling = match &token.text {
                 TokenText::Decoded(text) => Some(text.as_str()),
-                TokenText::Borrowed => None,
+                TokenText::Borrowed | TokenText::RawBytes { .. } => None,
             };
             if token.kind == TokenKind::Identifier {
                 token.kind = match spelling {
@@ -387,12 +444,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__restrict" | "__restrict__") => TokenKind::Restrict,
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
-                    Some(name) if TargetBuiltinType::from_spelling(name).is_some() => {
+                    Some(name)
+                        if TargetBuiltinType::from_spelling(name).is_some()
+                            || evocc_types::neon::BuiltinType::from_spelling(name).is_some() =>
+                    {
                         TokenKind::TargetBuiltinType
                     }
                     Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
                     Some("__alignof" | "__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
+                    Some("__atomic_load_n" | "__atomic_store_n") => TokenKind::BuiltinAtomic,
+                    Some(name) if legacy_atomic(name).is_some() => TokenKind::BuiltinAtomic,
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
                     Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
@@ -403,8 +465,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
                     Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
+                    Some(name) if floating::is_builtin(name) => TokenKind::BuiltinLibrary,
                     Some(
                         "__builtin_memset"
+                        | "__builtin_nan"
+                        | "__builtin_nanf"
+                        | "__builtin_nanl"
                         | "__builtin_memcpy"
                         | "__builtin_memcmp"
                         | "__builtin_strcmp"
@@ -425,11 +491,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_abs"
                         | "__builtin_labs"
                         | "__builtin_llabs"
+                        | "__builtin_fabs"
+                        | "__builtin_fabsf"
+                        | "__builtin_fabsl"
                         | "__builtin_strcpy"
                         | "__builtin_abort"
                         | "__builtin_exit"
                         | "__builtin__Exit"
                         | "__builtin_prefetch"
+                        | "__sync_synchronize"
                         | "__builtin_extract_return_addr",
                     ) => TokenKind::BuiltinLibrary,
                     Some(
@@ -490,6 +560,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             error_limit: None,
             standard_builtins: true,
             legacy_declarations: false,
+            gnu_inline: false,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
@@ -508,9 +579,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             inherited_function_parameter_undo: Vec::new(),
             entity_attribute_undo: Vec::new(),
             member_attribute_undo: Vec::new(),
+            initialized_const_integers: HashMap::new(),
+            initialized_const_undo: Vec::new(),
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             builtin_declarations: Vec::new(),
+            neon_tuple_types: HashMap::new(),
             unprototyped_calls: Vec::new(),
             standard_allocation_calls: Vec::new(),
             loop_depth: 0,
@@ -542,6 +616,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     /// Select target-dependent literal types before parsing the unit.
     pub fn set_target_layout(&mut self, layout: TargetDataLayout) {
+        self.types.set_signed_char(layout.plain_char_is_signed());
         self.target_layout = layout;
     }
 
@@ -551,10 +626,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.standard_builtins = enabled;
     }
 
-    /// Admit the omitted integer declarations of explicitly selected GNU89.
+    /// Admit the omitted integer declarations of explicitly selected C89/GNU89.
     /// The default language keeps unknown calls and missing types diagnosed.
     pub fn set_legacy_declarations(&mut self, enabled: bool) {
         self.legacy_declarations = enabled;
+    }
+
+    pub fn set_gnu_inline(&mut self, enabled: bool) {
+        self.gnu_inline = enabled;
+    }
+
+    /// In ISO modes, bare GNU spellings remain ordinary identifiers. Apply
+    /// this only after preprocessing so macro replacement is unchanged;
+    /// reserved spellings such as __asm__ and __typeof__ stay available.
+    pub fn use_language_keywords(&mut self, iso: bool, pre_c99: bool) {
+        for token in &mut self.tokens {
+            let spelling = token.text.spelling();
+            if (iso && matches!(spelling, Some("asm" | "typeof")))
+                || (pre_c99
+                    && (spelling == Some("restrict") || (iso && spelling == Some("inline"))))
+            {
+                token.kind = TokenKind::Identifier;
+            }
+        }
     }
 
     pub fn parse_translation_unit_in(&mut self, arena: &'arena Arena) -> CHirUnit<'arena> {
@@ -562,6 +656,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.arena = Some(arena);
         let mut decls = Vec::new();
         while !self.is_done() && !self.reached_error_limit() {
+            if self.consume_neon_header_marker() {
+                decls.append(&mut self.builtin_declarations);
+                continue;
+            }
             if self.consume_pragma_pack_marker() || self.consume_visibility_marker() {
                 continue;
             }
@@ -631,6 +729,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             std::mem::take(&mut self.types),
             std::mem::take(&mut self.symbols),
         );
+        unit.set_gnu_inline(self.gnu_inline);
+        if let Err(error) = evocc_chir::function_definitions::FunctionDefinitions::derive(&unit) {
+            self.report("E2002", "incompatible-redeclaration", error.duplicate);
+        }
+        if let Err(span) = evocc_chir::function_definitions::patchable_entries(&unit) {
+            self.report("E2943", "invalid-or-conflicting-symbol-attribute", span);
+        }
         unit.set_detached_attributes(std::mem::take(&mut self.detached_attributes));
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
@@ -713,7 +818,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         let span = self.advance().expect("peeked visibility marker").span;
         match action {
-            PragmaVisibilityAction::Push { hidden } => self.visibility_stack.push((hidden, span)),
+            PragmaVisibilityAction::Push { visibility } => {
+                self.visibility_stack.push((visibility, span))
+            }
             PragmaVisibilityAction::Pop => {
                 if self.visibility_stack.pop().is_none() {
                     self.report("E2943", "invalid-or-conflicting-symbol-attribute", span);
@@ -727,9 +834,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &self,
         symbol: SymbolId,
         attributes: &mut Vec<Attribute>,
-        visibility: Option<(bool, SourceSpan)>,
+        visibility: Option<(&'static str, SourceSpan)>,
     ) {
-        let Some((hidden, span)) = visibility else {
+        let Some((visibility, span)) = visibility else {
             return;
         };
         if self
@@ -747,7 +854,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             written: "#pragma GCC visibility".into(),
             syntax: AttributeSyntax::Pragma,
             arguments: vec![AttributeArgument {
-                text: format!("\"{}\"", if hidden { "hidden" } else { "default" }),
+                text: format!("\"{visibility}\""),
                 span,
                 integer: None,
             }],
@@ -853,10 +960,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn token_text<'a>(&'a self, tok: &'a Token) -> &'a str {
-        if let evocc_lex::TokenText::Decoded(text) = &tok.text {
-            return text;
-        }
-        ""
+        tok.text.spelling().unwrap_or("")
     }
 
     fn span(&self) -> SourceSpan {
@@ -907,6 +1011,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn intern(&mut self, kind: TypeKind, qualifiers: Qualifiers) -> TypeId {
+        if let TypeKind::Complex(ComplexBase::Integer(rank)) = kind {
+            self.types.intern(CanonicalType {
+                kind: TypeKind::Int(rank),
+                qualifiers: Qualifiers::default(),
+            });
+        }
         self.types.intern(CanonicalType { kind, qualifiers })
     }
 
@@ -1065,6 +1175,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             inherited_function_parameter_undo: self.inherited_function_parameter_undo.len(),
             entity_attribute_undo: self.entity_attribute_undo.len(),
             member_attribute_undo: self.member_attribute_undo.len(),
+            initialized_const_undo: self.initialized_const_undo.len(),
             side_declarations: self.side_declarations.len(),
             builtin_declarations: self.builtin_declarations.len(),
         }
@@ -1087,10 +1198,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.inherited_function_parameter_undo.clear();
             self.entity_attribute_undo.clear();
             self.member_attribute_undo.clear();
+            self.initialized_const_undo.clear();
         }
     }
 
     fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
+        while self.initialized_const_undo.len() > transaction.initialized_const_undo {
+            let (symbol, previous) = self
+                .initialized_const_undo
+                .pop()
+                .expect("undo marker is bounded");
+            if let Some(previous) = previous {
+                self.initialized_const_integers.insert(symbol, previous);
+            } else {
+                self.initialized_const_integers.remove(&symbol);
+            }
+        }
         self.unprototyped_calls
             .truncate(transaction.unprototyped_calls);
         self.standard_allocation_calls
@@ -1175,6 +1298,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.inherited_function_parameter_undo.clear();
             self.entity_attribute_undo.clear();
             self.member_attribute_undo.clear();
+            self.initialized_const_undo.clear();
         }
     }
 
@@ -1203,6 +1327,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn add_entity_attributes(&mut self, symbol: SymbolId, attributes: &[Attribute]) {
+        for attribute in attributes {
+            if attribute.semantic_name() == Some("patchable_function_entry")
+                && (!self
+                    .symbols
+                    .symbol(symbol)
+                    .is_ok_and(|entry| entry.kind() == SymbolKind::Function)
+                    || evocc_chir::function_definitions::patchable_entry(attribute).is_err())
+            {
+                self.report("E2903", "malformed-attribute", attribute.span);
+            }
+        }
         if self.symbols.symbol(symbol).is_ok_and(|entry| {
             matches!(
                 entry.kind(),
@@ -1295,8 +1430,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     symbol,
                     EntityState {
                         linkage,
-                        thread_local: data.storage_class() == Some(StorageClass::ThreadLocal),
+                        thread_local: data
+                            .storage_class()
+                            .is_some_and(StorageClass::is_thread_local),
                         has_definition: false,
+                        gnu_inline_body: false,
                         assembly_named: false,
                     },
                 );
@@ -1329,10 +1467,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } if file_scope => EntityLinkage::Internal,
             SymbolData::Function { .. } => EntityLinkage::External,
             SymbolData::Object {
-                storage: StorageClass::Static,
+                storage: StorageClass::Static | StorageClass::StaticThreadLocal,
             } if file_scope => EntityLinkage::Internal,
             SymbolData::Object {
-                storage: StorageClass::Extern,
+                storage: StorageClass::Extern | StorageClass::ExternThreadLocal,
             } => EntityLinkage::External,
             SymbolData::Object { .. } if file_scope => EntityLinkage::External,
             SymbolData::Object { .. }
@@ -1364,13 +1502,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(mut state) = self.entities.get(&symbol).copied() else {
             return false;
         };
-        let new_thread_local = data.storage_class() == Some(StorageClass::ThreadLocal);
+        let new_thread_local = data
+            .storage_class()
+            .is_some_and(StorageClass::is_thread_local);
         if state.thread_local != new_thread_local {
             return false;
         }
 
         let new_linkage = self.declaration_linkage(data);
-        let storage = data.storage_class().unwrap_or(StorageClass::None);
+        let storage = data.storage_class().unwrap_or(StorageClass::None).base();
         state.linkage = match (state.linkage, new_linkage) {
             (EntityLinkage::Internal, EntityLinkage::External)
                 if storage == StorageClass::Extern
@@ -1865,7 +2005,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             if has_body {
-                self.mark_definition(symbol, &declarator.name);
+                // Reject a second ordinary body inside the declaration
+                // transaction, preserving rollback and diagnostic encounter
+                // order. Final emission still depends on the complete chain.
+                if let Some(mut state) = self.entities.get(&symbol).copied() {
+                    let gnu_inline_body = storage == StorageClass::Extern
+                        && !inline_spans.is_empty()
+                        && (self.gnu_inline
+                            || attributes
+                                .iter()
+                                .any(|a| a.semantic_name() == Some("gnu_inline")));
+                    if state.has_definition && (!state.gnu_inline_body || gnu_inline_body) {
+                        self.report_redefinition(&declarator.name);
+                    } else {
+                        state.has_definition = true;
+                        state.gnu_inline_body = gnu_inline_body;
+                        self.set_entity_state(symbol, state);
+                    }
+                }
                 if context == DeclarationContext::File {
                     self.symbols
                         .bind_function_scope(parameter_scope, symbol)
@@ -2000,7 +2157,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         }
                     )
                 })
-                && !self.initialized_array_contains_vla(full_type)
+                && (!self.initialized_array_contains_vla(full_type)
+                    || (storage != StorageClass::Static && !has_initializer))
                 && !matches!(
                     self.types.get(full_type).map(|ty| &ty.kind),
                     Some(TypeKind::Function { .. })
@@ -2024,6 +2182,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.validate_variable_array_bounds(&declarator.derived, false);
                 if storage != StorageClass::Typedef
                     && self.initialized_array_contains_vla(full_type)
+                    && (context == DeclarationContext::File
+                        || !matches!(
+                            storage,
+                            StorageClass::None | StorageClass::Auto | StorageClass::Register
+                        ))
                 {
                     self.report("E2203", "variable-length-object", declarator.span);
                 }
@@ -2139,14 +2302,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.symbols
                     .update_symbol_type(symbol, full_type)
                     .expect("declared symbols belong to the parser symbol table");
-                let plan = self.normalize_initializer_plan(
+                let mut plan = self.normalize_initializer_plan(
                     full_type,
                     &written_initializer,
                     context == DeclarationContext::File,
                 )?;
                 if self.initializer_has_static_storage(context, storage) {
+                    plan = self.resolve_static_integer_initializers(plan);
                     self.validate_static_initializer_plan(&plan)?;
                 }
+                self.remember_initialized_const_integer(symbol, full_type, &plan);
                 Some(ObjectInitializer::new(written_initializer, plan))
             } else {
                 None
@@ -2725,7 +2890,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         storage: StorageClass,
     ) -> bool {
         context == DeclarationContext::File
-            || matches!(storage, StorageClass::Static | StorageClass::ThreadLocal)
+            || storage.base() == StorageClass::Static
+            || storage.is_thread_local()
     }
 
     fn validate_static_initializer_plan(&mut self, plan: &InitPlan<'arena>) -> Option<()> {
@@ -2750,8 +2916,121 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(())
     }
 
+    fn static_integer_value(&self, expression: &CHirExpr<'_>) -> Option<CInteger> {
+        evocc_chir::constant::eval_static_integer_constant(
+            expression,
+            &self.types,
+            &self.symbols,
+            &self.target_layout,
+            &self.initialized_const_integers,
+        )
+    }
+
+    fn remember_initialized_const_integer(
+        &mut self,
+        symbol: SymbolId,
+        ty: TypeId,
+        plan: &InitPlan<'arena>,
+    ) {
+        let Some(canonical) = self.types.get(ty) else {
+            return;
+        };
+        if !canonical.qualifiers.is_const
+            || canonical.qualifiers.is_volatile
+            || canonical.qualifiers.is_atomic
+        {
+            return;
+        }
+        let Ok(integer) = self.canonical_integer_type(ty) else {
+            return;
+        };
+        let [InitAction::StoreScalar { path, value, .. }] = plan.actions() else {
+            return;
+        };
+        if !path.is_root() {
+            return;
+        }
+        let Some(value) = self.static_integer_value(value) else {
+            return;
+        };
+        let previous = self
+            .initialized_const_integers
+            .insert(symbol, value.cast(integer));
+        if self.declaration_transaction_depth > 0 {
+            self.initialized_const_undo.push((symbol, previous));
+        }
+    }
+
+    /// Resolve only the initialization plan. The written expression and all
+    /// other occurrences of the object retain their original source meaning.
+    fn resolve_static_integer_initializers(&mut self, plan: InitPlan<'arena>) -> InitPlan<'arena> {
+        if self.initialized_const_integers.is_empty() {
+            return plan;
+        }
+        let mut actions = plan.actions().to_vec();
+        for action in &mut actions {
+            match action {
+                InitAction::StoreScalar { value, .. } => {
+                    if self.eval_integer_constant_expression(value).is_err() {
+                        if let Some(constant) = self.static_integer_value(value) {
+                            *value = self.resolved_integer_expression(constant, value.span());
+                        }
+                    }
+                }
+                InitAction::CopyAggregate { value, .. } => {
+                    if let CHirExpr::CompoundLit(ty, initializer, span) = value {
+                        let inner =
+                            self.resolve_static_integer_initializers(initializer.plan().clone());
+                        *value = self.alloc_node(CHirExpr::CompoundLit(
+                            *ty,
+                            ObjectInitializer::new(initializer.written().clone(), inner),
+                            *span,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut resolved = InitPlan::new(plan.target_type(), actions)
+            .with_flexible_array_elements(plan.flexible_array_elements());
+        if plan.zero_fills_unwritten() {
+            resolved = resolved.with_zero_fill_unwritten();
+        }
+        resolved
+    }
+
+    fn resolved_integer_expression(
+        &mut self,
+        value: CInteger,
+        span: SourceSpan,
+    ) -> &'arena CHirExpr<'arena> {
+        let ty = self.intern_c_integer_type(value.ty());
+        let literal = |bits| {
+            self.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: bits,
+                    suffix: IntSuffix::ULL,
+                    base: IntBase::Hex,
+                },
+                span,
+            ))
+        };
+        let low = self.alloc_node(CHirExpr::Cast(ty, literal(value.raw_bits() as u64), span));
+        if value.raw_bits() >> 64 == 0 {
+            return low;
+        }
+        let high = self.alloc_node(CHirExpr::Cast(
+            ty,
+            literal((value.raw_bits() >> 64) as u64),
+            span,
+        ));
+        let high = self.alloc_node(CHirExpr::Binary(BinaryOp::Shl, high, literal(64), span));
+        self.alloc_node(CHirExpr::Binary(BinaryOp::BitOr, high, low, span))
+    }
+
     fn static_initializer_expression_is_constant(&self, expression: &CHirExpr<'_>) -> bool {
         self.is_arithmetic_constant_expression(expression)
+            || evocc_chir::constant::label_address_difference(expression, &self.types).is_some()
             || self.is_static_address_constant(expression)
             || evocc_chir::constant::eval_absolute_address_constant(
                 expression,
@@ -2786,6 +3065,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.eval_integer_constant_expression(expression).is_ok()
             }
             CHirExpr::MemoryRead { .. } => false,
+            CHirExpr::Floating(operation) => {
+                evocc_chir::constant::floating_constant_representation(
+                    expression,
+                    operation.facts.ty(),
+                    &self.types,
+                    &self.symbols,
+                    &self.target_layout,
+                )
+                .is_some()
+            }
+            CHirExpr::BuiltinExpect(..) | CHirExpr::Atomic(_) | CHirExpr::Vector(_) => false,
+            CHirExpr::Complex(_) => evocc_chir::complex::constant_components(
+                expression,
+                &self.types,
+                &self.symbols,
+                &self.target_layout,
+            )
+            .is_some(),
             CHirExpr::Ident { symbol, .. } => self
                 .symbols
                 .symbol(*symbol)
@@ -2874,132 +3171,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Ok(value) = self.eval_integer_constant_expression(expression) {
             return Some(value.truth());
         }
-        self.eval_real_constant_expression(expression)
-            .map(|value| value != 0.0)
-    }
-
-    fn eval_real_constant_expression(&self, expression: &CHirExpr<'_>) -> Option<f64> {
-        match expression {
-            CHirExpr::FloatLit(literal, _) => Some(literal.value),
-            CHirExpr::MemoryRead { .. } => None,
-            CHirExpr::Lit(_, _)
-            | CHirExpr::CharLit(_, _)
-            | CHirExpr::Ident { .. }
-            | CHirExpr::BitBuiltin { .. }
-            | CHirExpr::BuiltinConstantP { .. }
-            | CHirExpr::BuiltinObjectSize { .. } => self
-                .eval_integer_constant_expression(expression)
-                .ok()
-                .map(|value| value.mathematical_value() as f64),
-            CHirExpr::Unary(op, operand, _) => {
-                let operand = self.eval_real_constant_expression(operand)?;
-                match op {
-                    UnaryOp::Plus => Some(operand),
-                    UnaryOp::Neg => Some(-operand),
-                    UnaryOp::Not => Some(f64::from(operand == 0.0)),
-                    UnaryOp::Abs | UnaryOp::BitNot | UnaryOp::AddrOf | UnaryOp::Deref => None,
-                }
-            }
-            CHirExpr::EvaluateOnce(operand, _) => self.eval_real_constant_expression(operand),
-            CHirExpr::Binary(op, left, right, _) => {
-                let left = self.eval_real_constant_expression(left)?;
-                if *op == BinaryOp::And && left == 0.0 {
-                    return Some(0.0);
-                }
-                if *op == BinaryOp::Or && left != 0.0 {
-                    return Some(1.0);
-                }
-                let right = self.eval_real_constant_expression(right)?;
-                match op {
-                    BinaryOp::Add => Some(left + right),
-                    BinaryOp::Sub => Some(left - right),
-                    BinaryOp::Mul => Some(left * right),
-                    BinaryOp::Div => Some(left / right),
-                    BinaryOp::Lt => Some(f64::from(left < right)),
-                    BinaryOp::Le => Some(f64::from(left <= right)),
-                    BinaryOp::Gt => Some(f64::from(left > right)),
-                    BinaryOp::Ge => Some(f64::from(left >= right)),
-                    BinaryOp::Eq => Some(f64::from(left == right)),
-                    BinaryOp::Ne => Some(f64::from(left != right)),
-                    BinaryOp::And => Some(f64::from(left != 0.0 && right != 0.0)),
-                    BinaryOp::Or => Some(f64::from(left != 0.0 || right != 0.0)),
-                    BinaryOp::Mod
-                    | BinaryOp::Shl
-                    | BinaryOp::Shr
-                    | BinaryOp::BitAnd
-                    | BinaryOp::BitOr
-                    | BinaryOp::BitXor
-                    | BinaryOp::Comma
-                    | BinaryOp::Assign
-                    | BinaryOp::AddAssign
-                    | BinaryOp::SubAssign
-                    | BinaryOp::MulAssign
-                    | BinaryOp::DivAssign
-                    | BinaryOp::ModAssign
-                    | BinaryOp::ShlAssign
-                    | BinaryOp::ShrAssign
-                    | BinaryOp::BitAndAssign
-                    | BinaryOp::BitOrAssign
-                    | BinaryOp::BitXorAssign => None,
-                }
-            }
-            CHirExpr::Ternary(condition, when_true, when_false, _) => {
-                let selected = if self.constant_arithmetic_truth(condition)? {
-                    when_true
-                } else {
-                    when_false
-                };
-                self.eval_real_constant_expression(selected)
-            }
-            CHirExpr::Elvis(operand, fallback, _) => {
-                let operand_value = self.eval_real_constant_expression(operand)?;
-                if operand_value != 0.0 {
-                    Some(operand_value)
-                } else {
-                    self.eval_real_constant_expression(fallback)
-                }
-            }
-            CHirExpr::Cast(target, operand, _) => {
-                match self.operand_type_class(InferredType::Canonical(*target)) {
-                    OperandTypeClass::Integer(_) => self
-                        .eval_integer_constant_expression(expression)
-                        .ok()
-                        .map(|value| value.mathematical_value() as f64),
-                    OperandTypeClass::Real(_) => self.eval_real_constant_expression(operand),
-                    OperandTypeClass::WideInteger { .. }
-                    | OperandTypeClass::Complex(_)
-                    | OperandTypeClass::Pointer(_)
-                    | OperandTypeClass::StringPointer(_)
-                    | OperandTypeClass::Aggregate(_)
-                    | OperandTypeClass::Void
-                    | OperandTypeClass::Other => None,
-                }
-            }
-            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
-                self.eval_integer_constant_expression(expression)
-                    .ok()
-                    .map(|value| value.mathematical_value() as f64)
-            }
-            CHirExpr::StringLit(_, _)
-            | CHirExpr::LabelAddress { .. }
-            | CHirExpr::Call(_, _, _)
-            | CHirExpr::CheckedArithmetic { .. }
-            | CHirExpr::BuiltinTrap { .. }
-            | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { .. }
-            | CHirExpr::BuiltinVarArgs { .. }
-            | CHirExpr::Assign { .. }
-            | CHirExpr::MemoryAssign { .. }
-            | CHirExpr::Update { .. }
-            | CHirExpr::MemoryUpdate { .. }
-            | CHirExpr::StatementExpr { .. }
-            | CHirExpr::CompoundLit(_, _, _)
-            | CHirExpr::Comma(_, _, _)
-            | CHirExpr::Member(_, _, _)
-            | CHirExpr::PtrMember(_, _, _)
-            | CHirExpr::Index(_, _, _) => None,
-        }
+        evocc_chir::constant::floating_constant_truth(
+            expression,
+            &self.types,
+            &self.symbols,
+            &self.target_layout,
+        )
     }
 
     fn is_static_address_constant(&self, expression: &CHirExpr<'_>) -> bool {
@@ -3146,7 +3323,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Ok(symbol) = self.symbols.symbol(symbol) else {
             return false;
         };
-        if symbol.storage_class() == Some(StorageClass::ThreadLocal) {
+        if symbol
+            .storage_class()
+            .is_some_and(StorageClass::is_thread_local)
+        {
             return false;
         }
         symbol.kind() == SymbolKind::Function
@@ -3307,7 +3487,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .with_flexible_array_elements(flexible_array_elements);
         if matches!(
             self.types.get(target).map(|canonical| &canonical.kind),
-            Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+            Some(
+                TypeKind::Array { .. }
+                    | TypeKind::Struct(_)
+                    | TypeKind::Union(_)
+                    | TypeKind::Vector { .. }
+            )
         ) {
             plan = plan.with_zero_fill_unwritten();
         }
@@ -3336,7 +3521,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Pointer(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_) => Ok(()),
-            TypeKind::Array { element, .. } => {
+            TypeKind::TargetBuiltin(kind) => kind
+                .layout()
+                .map(|_| ())
+                .ok_or(InitializerPreflightError::InvalidObject),
+            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. } => {
                 self.validate_initializer_object_graph(element, visiting)
             }
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
@@ -3361,10 +3550,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(())
             }
-            TypeKind::Void
-            | TypeKind::BuiltinVaList
-            | TypeKind::TargetBuiltin(_)
-            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -3409,6 +3597,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::GnuInt128(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(1),
+            (TypeKind::TargetBuiltin(_), WrittenInitializer::Expression(_)) => Ok(1),
+            (TypeKind::TargetBuiltin(_), WrittenInitializer::List { elements, .. }) => elements
+                .first()
+                .map_or(Ok(1), |first| self.initializer_action_count(target, first)),
             (
                 TypeKind::Int(_)
                 | TypeKind::Float(_)
@@ -3434,22 +3626,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 })
             }
             (
-                TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
+                TypeKind::Array { .. }
+                | TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::Vector { .. },
                 WrittenInitializer::List { elements, .. },
             ) => self
                 .initializer_aggregate_action_count(target, elements, 0)
                 .map(|(_, count)| count),
             (
-                TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
+                TypeKind::Array { .. }
+                | TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::Vector { .. },
                 WrittenInitializer::Expression(_),
             ) => Ok(0),
-            (
-                TypeKind::Void
-                | TypeKind::BuiltinVaList
-                | TypeKind::TargetBuiltin(_)
-                | TypeKind::Function { .. },
-                _,
-            ) => Err(InitializerPreflightError::InvalidObject),
+            (TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. }, _) => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -3467,6 +3661,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .clone();
         let mut count = 0_u64;
         match kind {
+            TypeKind::Vector { element, lanes, .. } => {
+                for _ in 0..lanes {
+                    if cursor < elements.len() {
+                        let (next, n) =
+                            self.initializer_stream_action_count(element, elements, cursor)?;
+                        cursor = next;
+                        count = checked_initializer_action_add(count, n)?;
+                    } else {
+                        count = checked_initializer_action_add(count, 1)?;
+                    }
+                }
+            }
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(bound),
@@ -3594,6 +3800,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Pointer(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_) => Ok(1),
+            TypeKind::TargetBuiltin(kind) => kind
+                .layout()
+                .map(|_| 1)
+                .ok_or(InitializerPreflightError::InvalidObject),
+            TypeKind::Vector { lanes, .. } => Ok(u64::from(lanes)),
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(bound),
@@ -3654,10 +3865,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(count)
             }
-            TypeKind::Void
-            | TypeKind::BuiltinVaList
-            | TypeKind::TargetBuiltin(_)
-            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -3745,7 +3955,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 actions,
             ),
             (
-                TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
+                TypeKind::Array { .. }
+                | TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::Vector { .. },
                 WrittenInitializer::List {
                     elements,
                     designations,
@@ -3760,7 +3973,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 true,
             ),
             (
-                TypeKind::Struct(_) | TypeKind::Union(_),
+                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Vector { .. },
                 WrittenInitializer::Expression(expression),
             ) => {
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
@@ -3799,7 +4012,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
-                | TypeKind::GnuInt128(_),
+                | TypeKind::GnuInt128(_)
+                | TypeKind::TargetBuiltin(_),
                 WrittenInitializer::Expression(expression),
             ) => {
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
@@ -3823,7 +4037,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
-                | TypeKind::GnuInt128(_),
+                | TypeKind::GnuInt128(_)
+                | TypeKind::TargetBuiltin(_),
                 WrittenInitializer::List {
                     elements,
                     designations,
@@ -4070,7 +4285,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         for &step in &initialized.steps()[base_path.steps().len()..] {
             parents.push((ty, path.clone(), step));
             ty = match (&self.types.get(ty)?.kind, step) {
-                (TypeKind::Array { element, .. }, SubobjectStep::Index { .. }) => *element,
+                (
+                    TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
+                    SubobjectStep::Index { .. },
+                ) => *element,
                 (
                     TypeKind::Struct(tag) | TypeKind::Union(tag),
                     SubobjectStep::Field { field_index },
@@ -4365,16 +4583,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
                 | TypeKind::GnuInt128(_)
-        ) {
+        ) || matches!(kind, TypeKind::TargetBuiltin(kind) if kind.layout().is_some())
+        {
             return true;
         }
         if matches!(expression, CHirExpr::StringLit(_, _)) && matches!(kind, TypeKind::Array { .. })
         {
             return true;
         }
-        matches!(kind, TypeKind::Struct(_) | TypeKind::Union(_))
-            && self.assignment_constraint(AssignmentOp::Simple, target, expression)
-                == UpdateConstraint::AggregateBoundary
+        matches!(
+            kind,
+            TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Vector { .. }
+        ) && self.assignment_constraint(AssignmentOp::Simple, target, expression)
+            == UpdateConstraint::AggregateBoundary
     }
 
     fn aggregate_initializer_children(
@@ -4382,6 +4603,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: TypeId,
     ) -> Option<Vec<(SubobjectStep, TypeId)>> {
         match self.types.get(target)?.kind.clone() {
+            TypeKind::Vector { element, lanes, .. } => Some(
+                (0..u64::from(lanes))
+                    .map(|index| (SubobjectStep::Index { index }, element))
+                    .collect(),
+            ),
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(bound),
@@ -4451,7 +4677,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             !canonical.qualifiers.is_atomic
                 && matches!(
                     canonical.kind,
-                    TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                    TypeKind::Int(
+                        IntRank::Char | IntRank::SignedPlainChar | IntRank::SChar | IntRank::UChar
+                    )
                 )
         })
     }
@@ -5059,10 +5287,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 if self.peek_kind() == Some(TokenKind::LParen) {
                     let open = self.advance().expect("peeked argument list");
                     let parsed = if gnu_name
-                        && name == "aligned"
+                        && matches!(
+                            name.as_str(),
+                            "aligned"
+                                | "vector_size"
+                                | "constructor"
+                                | "destructor"
+                                | "patchable_function_entry"
+                        )
                         && self.peek_kind() != Some(TokenKind::RParen)
                     {
-                        self.parse_integer_constant_argument(open.span)
+                        self.parse_integer_constant_arguments(
+                            open.span,
+                            if name == "patchable_function_entry" {
+                                2
+                            } else {
+                                1
+                            },
+                        )
                     } else {
                         self.parse_attribute_arguments(open.span)
                     };
@@ -5165,6 +5407,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => {
                     let token_index = self.pos;
                     let token = self.advance().expect("peeked argument token");
+                    if token.text.has_raw_bytes() {
+                        self.report(
+                            "E0002",
+                            "invalid encoding in attribute argument",
+                            token.span,
+                        );
+                        return None;
+                    }
                     match token.kind {
                         TokenKind::LParen => depth += 1,
                         TokenKind::RParen => depth -= 1,
@@ -5176,37 +5426,46 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    /// Read one argument as an integer constant expression in place, so type
+    /// Read a bounded list of integer constant expressions in place, so type
     /// names and `sizeof` resolve in the surrounding scope; the source text is
     /// kept alongside the value.
-    fn parse_integer_constant_argument(
+    fn parse_integer_constant_arguments(
         &mut self,
         open: SourceSpan,
+        maximum: usize,
     ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
-        if matches!(self.peek_kind(), Some(TokenKind::Comma) | None) {
-            // `aligned(,)`: an argument slot with nothing in it is a malformed
-            // attribute, reported as such rather than as a missing expression.
-            self.report("E2903", "malformed-attribute", self.span());
-            return None;
+        let mut arguments = Vec::new();
+        loop {
+            if matches!(self.peek_kind(), Some(TokenKind::Comma) | None) {
+                // `aligned(,)`: an argument slot with nothing in it is a malformed
+                // attribute, reported as such rather than as a missing expression.
+                self.report("E2903", "malformed-attribute", self.span());
+                return None;
+            }
+            let argument_start = self.pos;
+            let expression = self.parse_required_constant_conditional()?;
+            let mut argument = self.attribute_argument(&self.tokens[argument_start..self.pos]);
+            argument.integer = self
+                .eval_integer_constant_expression(expression)
+                .ok()
+                .and_then(CInteger::try_mathematical_value)
+                .and_then(|value| u64::try_from(value).ok());
+            if argument.integer.is_none() {
+                self.report("E2903", "malformed-attribute", argument.span);
+                return None;
+            }
+            arguments.push(argument);
+            if self.peek_kind() == Some(TokenKind::Comma) && arguments.len() < maximum {
+                self.advance();
+                continue;
+            }
+            if self.peek_kind() != Some(TokenKind::RParen) {
+                self.report("E2903", "malformed-attribute", open);
+                return None;
+            }
+            let close = self.advance().expect("peeked close").span;
+            return Some((arguments, close));
         }
-        let argument_start = self.pos;
-        let expression = self.parse_required_constant_conditional()?;
-        let mut argument = self.attribute_argument(&self.tokens[argument_start..self.pos]);
-        argument.integer = self
-            .eval_integer_constant_expression(expression)
-            .ok()
-            .and_then(CInteger::try_mathematical_value)
-            .and_then(|value| u64::try_from(value).ok());
-        if argument.integer.is_none() {
-            self.report("E2903", "malformed-attribute", argument.span);
-            return None;
-        }
-        if self.peek_kind() != Some(TokenKind::RParen) {
-            self.report("E2903", "malformed-attribute", open);
-            return None;
-        }
-        let close = self.advance().expect("peeked close").span;
-        Some((vec![argument], close))
     }
 
     fn attribute_argument(&self, tokens: &[Token]) -> AttributeArgument {
@@ -5292,6 +5551,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut ty = ty;
         for attribute in attributes.iter_mut() {
             match attribute.semantic_name().unwrap_or("") {
+                "vector_size" => {
+                    let vector = attribute
+                        .arguments
+                        .first()
+                        .and_then(|argument| argument.integer)
+                        .filter(|_| attribute.arguments.len() == 1)
+                        .and_then(|bytes| {
+                            self.apply_vector_size(
+                                ty,
+                                bytes,
+                                attribute.applied == Some(AppliedAttribute::VectorSize),
+                            )
+                        });
+                    let Some(vector) = vector else {
+                        self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    };
+                    ty = vector;
+                    attribute.applied = Some(AppliedAttribute::VectorSize);
+                }
                 "mode" => ty = self.apply_integer_mode(ty, attribute),
                 "transparent_union" => {
                     if let Some(TypeKind::Union(tag)) = self.types.get(ty).map(|ty| ty.kind.clone())
@@ -5677,6 +5956,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.install_temporary_parameter_shadows();
                 let transaction = self.symbols.begin_transaction();
                 let declaration_transaction = self.begin_declaration_transaction();
+                let enclosing_scope = self.current_scope;
+                self.current_scope = self.create_scope(ScopeKind::Block, Some(keyword.span));
                 let expression = self.parse_expression();
                 let inferred = expression.and_then(|expression| {
                     let inherited = match expression {
@@ -5688,23 +5969,68 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.expression_type(expression)
                         .map(|inferred| (expression, inferred.ty, inherited))
                 });
-                self.symbols
-                    .rollback_transaction(&transaction)
-                    .expect("temporary typeof bindings are table-local and LIFO");
-                self.rollback_declaration_transaction(&declaration_transaction);
-                let Some((expression, inferred, inherited)) = inferred else {
-                    if self.diagnostics.is_empty() {
-                        self.report("E1003", "expected-expression", self.span());
-                    }
-                    return None;
-                };
-                let ty = self.materialize_inferred_type(inferred, Some(expression))?;
-                if self.type_is_variably_modified(ty) {
+                let resolved = inferred.and_then(|(expression, inferred, inherited)| {
+                    self.materialize_inferred_type(inferred, Some(expression))
+                        .map(|ty| (expression, ty, inherited))
+                });
+                self.current_scope = enclosing_scope;
+                let evaluated = resolved
+                    .as_ref()
+                    .is_some_and(|(_, ty, _)| self.type_is_variably_modified(*ty));
+                if evaluated
+                    && resolved.as_ref().is_some_and(|(_, ty, _)| {
+                        !matches!(
+                            self.types.get(*ty).map(|ty| &ty.kind),
+                            Some(TypeKind::Array { .. })
+                        )
+                    })
+                {
+                    // The frozen compilers disagree about evaluating an
+                    // expression of pointer-to-VLA type. Array operands and
+                    // newly written type-name bounds have a shared contract.
+                    self.symbols
+                        .rollback_transaction(&transaction)
+                        .expect("temporary typeof bindings are table-local and LIFO");
+                    self.rollback_declaration_transaction(&declaration_transaction);
                     self.report(
                         "E2904",
                         "not-covered: variably-modified-typeof",
                         keyword.span,
                     );
+                    return None;
+                }
+                if evaluated {
+                    self.symbols
+                        .commit_transaction(&transaction)
+                        .expect("typeof transaction is table-local and LIFO");
+                } else {
+                    self.symbols
+                        .rollback_transaction(&transaction)
+                        .expect("temporary typeof bindings are table-local and LIFO");
+                    self.rollback_declaration_transaction(&declaration_transaction);
+                }
+                let Some((expression, ty, inherited)) = resolved else {
+                    if self.diagnostics.is_empty() {
+                        self.report("E1003", "expected-expression", self.span());
+                    }
+                    return None;
+                };
+                if evaluated {
+                    // A VM expression operand executes once. Reuse a hidden
+                    // bound capture to sequence it before the declaration;
+                    // its operand-local declarations remain in their own scope.
+                    let one = self.size_literal(1, keyword.span);
+                    let value = self.alloc_node(CHirExpr::Comma(expression, one, keyword.span));
+                    let mut layer = [DerivedDeclarator::Array {
+                        bound: ArrayBound::Variable,
+                        expression: Some(value),
+                        prototype_star: false,
+                        parameter_qualifiers: Qualifiers::default(),
+                        static_bound: false,
+                        span: keyword.span,
+                    }];
+                    let captures = self.capture_array_bounds(&mut layer)?;
+                    self.side_declarations.extend(captures);
                 }
                 (ty, TypeofOperand::Expression, None, inherited)
             };
@@ -5787,6 +6113,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     kind,
                     forced_int128_signedness,
                     target_builtin: TargetBuiltinType::from_spelling(self.token_text(&token)),
+                    target_vector: evocc_types::neon::BuiltinType::from_spelling(
+                        self.token_text(&token),
+                    ),
                 });
                 end = Some(token.span);
                 continue;
@@ -5822,7 +6151,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let end = end.expect("a builtin type word established an end span");
-        let Some(kind) = resolve_builtin_type(&words) else {
+        let resolved = if let [BuiltinTypeWord {
+            target_vector: Some(target),
+            ..
+        }] = words.as_slice()
+        {
+            Some(target.kind(&mut self.types))
+        } else {
+            resolve_builtin_type(&words)
+        };
+        let Some(kind) = resolved else {
             self.report(
                 "E1007",
                 "invalid-type-specifier-combination",
@@ -5848,22 +6186,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(slot) = storage.as_deref_mut() else {
             return false;
         };
-        if slot.is_some()
-            || !matches!(
-                self.peek_kind(),
-                Some(
-                    TokenKind::Typedef
-                        | TokenKind::Extern
-                        | TokenKind::Static
-                        | TokenKind::Auto
-                        | TokenKind::Register
-                        | TokenKind::ThreadLocal
-                )
+        if !matches!(
+            self.peek_kind(),
+            Some(
+                TokenKind::Typedef
+                    | TokenKind::Extern
+                    | TokenKind::Static
+                    | TokenKind::Auto
+                    | TokenKind::Register
+                    | TokenKind::ThreadLocal
             )
-        {
+        ) {
             return false;
         }
-        *slot = Some(self.parse_storage_class());
+        let next_kind = self.peek_kind();
+        if let Some(prior) = *slot {
+            let combined = if next_kind == Some(TokenKind::ThreadLocal) {
+                prior.with_thread_local()
+            } else if prior == StorageClass::ThreadLocal {
+                match next_kind {
+                    Some(TokenKind::Static) => Some(StorageClass::StaticThreadLocal),
+                    Some(TokenKind::Extern) => Some(StorageClass::ExternThreadLocal),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let Some(combined) = combined else {
+                return false;
+            };
+            self.advance();
+            *slot = Some(combined);
+        } else {
+            *slot = Some(self.parse_storage_class());
+        }
         true
     }
 
@@ -6364,8 +6720,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // on the member, never on its canonical type identity.
                 let mut ty = ty;
                 for attribute in &mut member_attributes {
-                    if attribute.semantic_name() == Some("mode") {
-                        ty = self.apply_integer_mode(ty, attribute);
+                    if matches!(attribute.semantic_name(), Some("mode" | "vector_size")) {
+                        ty = self.apply_attributes_to_type(ty, std::slice::from_mut(attribute));
                     }
                 }
                 let member_layout = self.member_layout_attributes(&mut member_attributes);
@@ -6491,7 +6847,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_) => true,
-            TypeKind::Array { element, .. } => {
+            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. } => {
                 self.record_member_type_is_complete(element, containing_tag, visiting)
             }
             TypeKind::Struct(tag) | TypeKind::Union(tag) => {
@@ -6584,7 +6940,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let canonical = self.types.get(ty)?;
         match &canonical.kind {
             TypeKind::Int(IntRank::Bool) => Some(1),
-            TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar) => Some(8),
+            TypeKind::Int(
+                IntRank::Char | IntRank::SignedPlainChar | IntRank::SChar | IntRank::UChar,
+            ) => Some(8),
             TypeKind::Int(IntRank::Short | IntRank::UShort) => Some(16),
             TypeKind::Int(IntRank::Int | IntRank::UInt) => Some(32),
             TypeKind::Enum(_) => TargetDataLayout::aarch64_unknown_linux_gnu()
@@ -6600,6 +6958,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_)
             | TypeKind::Float(_)
+            | TypeKind::Vector { .. }
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
             | TypeKind::Array { .. }
@@ -6612,6 +6971,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn canonical_integer_type(&self, ty: TypeId) -> Result<CIntegerType, ()> {
         let canonical = self.types.get(ty).ok_or(())?;
         match canonical.kind {
+            TypeKind::TargetBuiltin(kind) => {
+                evocc_chir::integer::integer_type_for_target(kind).ok_or(())
+            }
             TypeKind::Int(rank) => Ok(integer_type_for_rank(rank)),
             TypeKind::GnuInt128(GnuInt128Signedness::Signed) => Ok(CIntegerType::INT128),
             TypeKind::GnuInt128(GnuInt128Signedness::Unsigned) => Ok(CIntegerType::UINT128),
@@ -6638,8 +7000,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
-            | TypeKind::TargetBuiltin(_)
             | TypeKind::Float(_)
+            | TypeKind::Vector { .. }
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
             | TypeKind::Array { .. }
@@ -6685,7 +7047,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ))))
             }
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
-            CHirExpr::MemoryRead { .. } => Err(()),
+            CHirExpr::MemoryRead { .. }
+            | CHirExpr::BuiltinExpect(..)
+            | CHirExpr::Atomic(_)
+            | CHirExpr::Vector(_)
+            | CHirExpr::Floating(_) => Err(()),
+            CHirExpr::Complex(operation) => {
+                self.canonical_integer_type(operation.facts.ty())?;
+                evocc_chir::complex::constant_components(
+                    expression,
+                    &self.types,
+                    &self.symbols,
+                    &self.target_layout,
+                )
+                .map(|pair| pair[0])
+                .ok_or(())
+            }
             CHirExpr::CharLit(literal, _) => Ok(literal.integer_value()),
             CHirExpr::Ident { symbol, .. } => {
                 let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
@@ -6799,6 +7176,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// while preserving C's unevaluated/dead operand rules.
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
+            CHirExpr::Floating(operation) => self.canonical_integer_type(operation.facts.ty()),
+            CHirExpr::Vector(operation) => self.canonical_integer_type(operation.facts.ty()),
+            CHirExpr::Complex(operation) => self.canonical_integer_type(operation.facts.ty()),
+            CHirExpr::Atomic(access) => self.canonical_integer_type(access.facts.ty()),
+            CHirExpr::BuiltinExpect(..) => Ok(CIntegerType::LONG),
             CHirExpr::BuiltinConstantP { .. } => Ok(CIntegerType::INT),
             CHirExpr::BuiltinObjectSize { .. } => Ok(CIntegerType::ULONG),
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
@@ -7014,20 +7396,46 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         vla_error_span: Option<SourceSpan>,
     ) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
+        self.parse_type_name_details(vla_error_span, false, false)
+            .map(|(ty, tag, _)| (ty, tag))
+    }
+
+    fn parse_type_name_details(
+        &mut self,
+        vla_error_span: Option<SourceSpan>,
+        size_query: bool,
+        capture_cast: bool,
+    ) -> Option<(
+        TypeId,
+        Option<PendingTag<'arena>>,
+        Option<&'arena CHirExpr<'arena>>,
+    )> {
         let mut type_attributes = Vec::new();
         let specifier = self.parse_type_specifier_with_attributes(&mut type_attributes)?;
-        let derived = if matches!(
+        let capture_typeof = vla_error_span.is_some()
+            && self.in_function_scope()
+            && self
+                .symbols
+                .scope(self.current_scope)
+                .is_ok_and(|scope| scope.kind() != ScopeKind::FunctionPrototype);
+        let mut derived = if matches!(
             self.peek_kind(),
             Some(TokenKind::Star | TokenKind::LBracket | TokenKind::LParen)
         ) {
-            let declarator =
-                self.parse_abstract_declarator_with_vla_error(vla_error_span, false)?;
+            let declarator = self.parse_abstract_declarator_with_vla_error(
+                vla_error_span,
+                size_query || capture_typeof || capture_cast,
+            )?;
             type_attributes.extend(declarator.attributes);
             declarator.derived
         } else {
             Vec::new()
         };
         self.validate_array_parameter_modifiers(&derived, false);
+        if capture_typeof || capture_cast {
+            let captures = self.capture_array_bounds(&mut derived)?;
+            self.side_declarations.extend(captures);
+        }
         type_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::TypeName));
         for attribute in &mut type_attributes {
             attribute.placement = AttributePlacement::TypeName;
@@ -7043,7 +7451,97 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         self.detached_attributes.extend(type_attributes);
-        Some((ty, specifier.tag_event))
+        let dynamic_size = if size_query
+            && TargetDataLayout::aarch64_unknown_linux_gnu()
+                .sizeof_type(&self.types, ty)
+                .is_err()
+        {
+            let span = specifier.surface.span();
+            let mut size = self.captured_size_expression(specifier.surface.type_id(), span);
+            for layer in derived.iter().rev() {
+                size = match layer {
+                    DerivedDeclarator::Pointer { .. } => Some(self.size_literal(8, span)),
+                    DerivedDeclarator::Function { .. } => Some(self.size_literal(1, span)),
+                    DerivedDeclarator::Array {
+                        expression: Some(count),
+                        bound,
+                        ..
+                    } => {
+                        if matches!(bound, ArrayBound::Variable)
+                            && !self
+                                .converted_expression_type(count)
+                                .is_some_and(|inferred| {
+                                    is_integer_class(self.operand_type_class(inferred.ty))
+                                })
+                        {
+                            self.report("E2923", "invalid-array-bound", count.span());
+                            return None;
+                        }
+                        let integer =
+                            self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
+                        let count = self.alloc_node(CHirExpr::Cast(integer, count, count.span()));
+                        size.map(|size| {
+                            self.alloc_node(CHirExpr::Binary(BinaryOp::Mul, size, count, span))
+                        })
+                    }
+                    _ => None,
+                };
+            }
+            size
+        } else {
+            None
+        };
+        Some((ty, specifier.tag_event, dynamic_size))
+    }
+
+    /// A cast's bounds execute with the cast, not when the surrounding
+    /// statement is entered. Declare the ordinary capture objects in that
+    /// scope, but sequence their assignments on the actual expression path.
+    fn parse_cast_type_name(
+        &mut self,
+    ) -> Option<(
+        TypeId,
+        Option<PendingTag<'arena>>,
+        Vec<&'arena CHirExpr<'arena>>,
+    )> {
+        let side_start = self.side_declarations.len();
+        let (ty, tag, _) = self.parse_type_name_details(None, false, self.in_function_scope())?;
+        let mut evaluations = Vec::new();
+        for declaration in self.side_declarations.split_off(side_start) {
+            if let CHirDecl::Object(object) = declaration {
+                if object.name.spelling.starts_with("__evocc.extent.") {
+                    if let Some(value) = object
+                        .initializer
+                        .as_ref()
+                        .and_then(|i| i.written.expression())
+                    {
+                        let target = self.alloc_node(CHirExpr::Ident {
+                            symbol: object.symbol,
+                            spelling: object.name.spelling.clone(),
+                            facts: self.facts_for_symbol(object.symbol),
+                            span: object.span,
+                        });
+                        let place = ScalarPlace::bind(&self.symbols, &self.types, object.symbol)
+                            .expect("a bound capture is an automatic unsigned integer");
+                        evaluations.push(self.alloc_node(CHirExpr::Assign {
+                            op: AssignmentOp::Simple,
+                            place,
+                            target,
+                            value,
+                            facts: ExprFacts::value(object.ty),
+                            span: object.span,
+                        }));
+                        let mut uninitialized = object.clone();
+                        uninitialized.initializer = None;
+                        let declaration = self.alloc_node(CHirDecl::Object(uninitialized));
+                        self.side_declarations.push(declaration);
+                        continue;
+                    }
+                }
+            }
+            self.side_declarations.push(declaration);
+        }
+        Some((ty, tag, evaluations))
     }
 
     // ── declarators ────────────────────────────────────────────────────
@@ -7415,13 +7913,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let qualifiers = self.parse_qualifiers();
             let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
             self.validate_pointer_attributes(&attributes);
-            // Linkage marks describe the declared symbol, never its pointer
+            // Linkage and placement marks describe the declared symbol, never its pointer
             // type. Keep their written position/span, but put them in the
             // declaration inventory shared by linkage and attribute queries.
             // Other pointer attributes remain on the written pointer layer.
-            let (linkage, attributes): (Vec<_>, Vec<_>) = attributes
-                .into_iter()
-                .partition(|attribute| matches!(attribute.semantic_name(), Some("weak" | "alias")));
+            let (linkage, attributes): (Vec<_>, Vec<_>) =
+                attributes.into_iter().partition(|attribute| {
+                    matches!(
+                        attribute.semantic_name(),
+                        Some("weak" | "alias" | "section")
+                    )
+                });
             symbol_attributes.extend(linkage);
             let end = self
                 .tokens
@@ -7995,9 +8497,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         static_bound: *static_bound,
                         span: *span,
                     },
-                    DerivedDeclarator::Function { span, .. } => {
-                        WrittenDeclaratorLayer::Function { span: *span }
-                    }
+                    DerivedDeclarator::Function {
+                        parameters, span, ..
+                    } => WrittenDeclaratorLayer::Function {
+                        parameters: Some(parameters.clone()),
+                        span: *span,
+                    },
                 })
                 .collect(),
             span,
@@ -8174,6 +8679,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_asm_string(&mut self) -> Option<(String, SourceSpan)> {
         let first = self.expect(TokenKind::StringLiteral)?;
+        if first.text.has_raw_bytes() {
+            self.report("E0002", "invalid encoding in assembly text", first.span);
+            return None;
+        }
         let Some(mut literal) = parse_string_literal(self.token_text(&first)) else {
             self.report("E1006", "invalid-string-literal", first.span);
             return None;
@@ -8181,6 +8690,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut end = first.span;
         while self.peek_kind() == Some(TokenKind::StringLiteral) {
             let next = self.advance().expect("peeked adjacent asm string literal");
+            if next.text.has_raw_bytes() {
+                self.report("E0002", "invalid encoding in assembly text", next.span);
+                return None;
+            }
             let Some(fragment) = parse_string_literal(self.token_text(&next)) else {
                 self.report("E1006", "invalid-string-literal", next.span);
                 return None;
@@ -8442,6 +8955,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let initializer = if self.match_kind(TokenKind::Semicolon) {
             CHirForInit::Empty
         } else if self.peek_kind() != Some(TokenKind::GnuExtension) && self.is_declaration_start() {
+            if self.legacy_declarations {
+                self.report(
+                    "E1001",
+                    "expected-expression-in-legacy-for-initializer",
+                    self.span(),
+                );
+                return None;
+            }
             let declarations = self.parse_declaration(DeclarationContext::ForInitializer)?;
             CHirForInit::Declaration(declarations)
         } else {
@@ -8634,13 +9155,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E1003", "expected-expression", self.span());
                 self.advance();
             }
-            // An implicit external call declares a function in this block,
-            // even when no later file-scope declaration names that function.
-            // Keep that declaration next to the statement which introduced
-            // it instead of leaking it into the enclosing unit's side list.
+            // Keep statement-local implicit declarations in their block.
+            // Extent objects are declared here without an initializer: the
+            // corresponding cast performs the bound assignment when reached.
             for declaration in self.side_declarations.split_off(side_start) {
                 if matches!(declaration, CHirDecl::Function(function)
                     if !self.symbols.is_builtin_function(function.symbol))
+                    || matches!(declaration, CHirDecl::Object(object)
+                        if object.name.spelling.starts_with("__evocc.extent."))
                 {
                     items.insert(item_start, CHirBlockItem::Declaration(declaration));
                     item_start += 1;
@@ -8870,6 +9392,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: TypeId,
         expression: &'arena CHirExpr<'arena>,
     ) -> &'arena CHirExpr<'arena> {
+        if evocc_chir::complex::rank(&self.types, target).is_some()
+            || (self.complex_expression_type(expression).is_some()
+                && self.canonical_integer_type(target).is_ok())
+        {
+            return self.complex_conversion(target, expression, expression.span());
+        }
         if self.canonical_integer_type(target).is_ok()
             && self.expression_type(expression).is_some_and(|inferred| {
                 matches!(
@@ -8893,11 +9421,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // Diagnose the target first, but still consume the complete
         // right-associative RHS so recovery resumes at the statement boundary.
         let typed_target = self.typed_update_target(target);
-        let value = self.parse_assignment()?;
+        let mut value = self.parse_assignment()?;
+        if op == AssignmentOp::Divide
+            && (self.complex_expression_type(target).is_some()
+                || self.complex_expression_type(value).is_some())
+        {
+            self.report(
+                "E2948",
+                "integer-complex-division-oracle-conflict",
+                target.span(),
+            );
+            return None;
+        }
         self.require_supported_assignment_promotion(op, target, value)?;
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
-        let constraint = self.assignment_constraint(op, typed_target.ty(), value);
+        let vector_update =
+            op != AssignmentOp::Simple && self.vector_expression_type(target).is_some();
+        let constraint = if vector_update {
+            let binary = evocc_chir::vector::assignment_binary(op).expect("compound operation");
+            let operation = self.make_vector_binary(binary, target, value, span)?;
+            let CHirExpr::Vector(operation) = operation else {
+                unreachable!("typed vector operation")
+            };
+            value = operation.operands[1];
+            UpdateConstraint::Scalar
+        } else {
+            self.assignment_constraint(op, typed_target.ty(), value)
+        };
         match constraint {
             UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
             UpdateConstraint::AggregateBoundary => {}
@@ -8966,12 +9517,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             return Some(TypedUpdateTarget::Memory(place.clone()));
         }
-        let aggregate_target =
-            self.expression_type(target)
+        let aggregate_target = self.complex_expression_type(target).is_some()
+            || self
+                .expression_type(target)
                 .is_some_and(|inferred| match inferred.ty {
                     InferredType::Canonical(ty) => matches!(
                         self.types.get(ty).map(|canonical| &canonical.kind),
-                        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Vector { .. })
                     ),
                     _ => false,
                 });
@@ -9030,6 +9582,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         left: &'e CHirExpr<'arena>,
         right: &'e CHirExpr<'arena>,
     ) -> Option<(&'e CHirExpr<'arena>, &'e CHirExpr<'arena>)> {
+        if self.vector_expression_type(left).is_some() {
+            return Some((left, right));
+        }
         let left_class = self.operand_type_class(self.converted_expression_type(left)?.ty);
         if matches!(
             left_class,
@@ -9049,6 +9604,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     /// The element type a subscript of this base designates.
     fn subscript_element_type(&mut self, base: &CHirExpr<'arena>) -> Option<TypeId> {
+        if let Some((_, element, _)) = self.vector_expression_type(base) {
+            return Some(element);
+        }
         match self.operand_type_class(self.converted_expression_type(base)?.ty) {
             OperandTypeClass::Pointer(pointer) => Some(pointer.pointee),
             OperandTypeClass::StringPointer(prefix) => Some(self.string_element_type(prefix)),
@@ -9079,6 +9637,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// false here.
     fn place_roots_register_object(&self, expression: &CHirExpr<'arena>) -> bool {
         let symbol = match expression {
+            CHirExpr::Vector(_) | CHirExpr::Complex(_) | CHirExpr::Floating(_) => None,
+            CHirExpr::Atomic(_) => None,
             CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => None,
             CHirExpr::Ident { symbol, .. } => Some(*symbol),
             CHirExpr::MemoryRead { place, .. } => match place.root() {
@@ -9099,6 +9659,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Binary(_, _, _, _)
             | CHirExpr::Ternary(_, _, _, _)
             | CHirExpr::Elvis(_, _, _)
+            | CHirExpr::BuiltinExpect(_, _, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BitBuiltin { .. }
@@ -9217,29 +9778,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return Some((root, projections, field_ty));
                 }
                 if self.designates_array_object(pointer) {
-                    let (root, mut projections, array_ty) = self.resolve_place_chain(pointer)?;
-                    let element_ty = match self.types.get(array_ty).map(|ty| &ty.kind) {
-                        Some(TypeKind::Array { element, .. }) => *element,
-                        _ => return None,
-                    };
-                    let zero = self.alloc_node(CHirExpr::Lit(
-                        IntLit {
-                            value: 0,
-                            suffix: IntSuffix::None,
-                            base: IntBase::Dec,
-                        },
-                        pointer.span(),
-                    ));
-                    projections.push(PlaceProjection::Index(IndexProjection::new(
-                        zero,
-                        element_ty,
-                        CIntegerType::INT,
-                    )));
-                    let fields = self.record_member_path(element_ty, name)?;
-                    let field_ty = fields.last()?.field_ty();
-                    projections.extend(fields.into_iter().map(PlaceProjection::Field));
-                    return Some((root, projections, field_ty));
+                    if let Some((root, mut projections, array_ty)) =
+                        self.resolve_place_chain(pointer)
+                    {
+                        let element_ty = match self.types.get(array_ty).map(|ty| &ty.kind) {
+                            Some(TypeKind::Array { element, .. }) => *element,
+                            _ => return None,
+                        };
+                        let zero = self.alloc_node(CHirExpr::Lit(
+                            IntLit {
+                                value: 0,
+                                suffix: IntSuffix::None,
+                                base: IntBase::Dec,
+                            },
+                            pointer.span(),
+                        ));
+                        projections.push(PlaceProjection::Index(IndexProjection::new(
+                            zero,
+                            element_ty,
+                            CIntegerType::INT,
+                        )));
+                        let fields = self.record_member_path(element_ty, name)?;
+                        let field_ty = fields.last()?.field_ty();
+                        projections.extend(fields.into_iter().map(PlaceProjection::Field));
+                        return Some((root, projections, field_ty));
+                    }
                 }
+                // As with [], an array reached through a record value decays
+                // to a pointer even when there is no source object root.
                 let pointer_type = self.pointer_root_descriptor(pointer)?;
                 let fields = self.record_member_path(pointer_type.pointee(), name)?;
                 let field_ty = fields.last()?.field_ty();
@@ -9260,21 +9826,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     PlaceProjection::Index(IndexProjection::new(index, element_ty, promoted));
                 // An array lvalue is subscripted in place; anything else has
                 // already decayed to a pointer value and becomes the root.
-                if self.designates_array_object(base) {
-                    let (root, mut projections, _) = self.resolve_place_chain(base)?;
-                    projections.push(projection);
-                    Some((root, projections, element_ty))
-                } else {
-                    let pointer_type = self.pointer_root_descriptor(base)?;
-                    Some((
-                        PlaceRoot::PointerExpression {
-                            pointer: base,
-                            pointer_type,
-                        },
-                        vec![projection],
-                        element_ty,
-                    ))
+                if self.designates_array_object(base) || self.vector_expression_type(base).is_some()
+                {
+                    if let Some((root, mut projections, _)) = self.resolve_place_chain(base) {
+                        projections.push(projection);
+                        return Some((root, projections, element_ty));
+                    }
                 }
+                // A returned record's array member has no source lvalue root,
+                // but its array-to-pointer conversion still yields a pointer.
+                // Keep the value expression attached so it executes once.
+                let pointer_type = self.pointer_root_descriptor(base)?;
+                Some((
+                    PlaceRoot::PointerExpression {
+                        pointer: base,
+                        pointer_type,
+                    },
+                    vec![projection],
+                    element_ty,
+                ))
             }
             _ => None,
         }
@@ -9321,6 +9891,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn promoted_subscript_type(&self, index: &CHirExpr<'arena>) -> Option<CIntegerType> {
         match self.operand_type_class(self.converted_expression_type(index)?.ty) {
             OperandTypeClass::Integer(integer) => Some(CInteger::new(0, integer).promoted().ty()),
+            OperandTypeClass::WideInteger { ty, .. } => self.canonical_integer_type(ty).ok(),
             _ => None,
         }
     }
@@ -9372,6 +9943,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.types.get(value_ty).map(|ty| &ty.kind),
                 Some(
                     TypeKind::Array { .. }
+                        | TypeKind::Vector { .. }
+                        | TypeKind::Complex(ComplexBase::Integer(_))
                         | TypeKind::Struct(_)
                         | TypeKind::Union(_)
                         | TypeKind::BuiltinVaList
@@ -9402,6 +9975,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     | TypeKind::GnuInt128(_)
                     | TypeKind::Pointer(_)
                     | TypeKind::Float(_)
+                    | TypeKind::TargetBuiltin(_)
             )
         )
     }
@@ -9494,6 +10068,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         match op {
             AssignmentOp::Simple => match (left, right_class) {
+                (OperandTypeClass::Other, OperandTypeClass::Other)
+                    if matches!(right_type, InferredType::Canonical(source)
+                        if self.types.compatible_ignoring_top_qualifiers(target_ty, source)
+                        && matches!(self.types.get(target_ty).map(|ty| &ty.kind), Some(TypeKind::TargetBuiltin(_)))) =>
+                {
+                    UpdateConstraint::Scalar
+                }
                 (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
                     UpdateConstraint::Scalar
                 }
@@ -9529,7 +10110,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UpdateConstraint::Scalar
                 }
                 (OperandTypeClass::Aggregate(left), OperandTypeClass::Aggregate(right)) => {
-                    if self.same_unqualified_type(left, right) {
+                    if self.same_unqualified_type(left, right)
+                        || evocc_chir::vector::assignment_compatible(&self.types, left, right)
+                    {
                         UpdateConstraint::AggregateBoundary
                     } else {
                         UpdateConstraint::Invalid
@@ -9618,6 +10201,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Array { .. }
             | TypeKind::Function { .. }
             | TypeKind::Enum(_)
+            | TypeKind::Vector { .. }
             | TypeKind::BuiltinVaList
             | TypeKind::TargetBuiltin(_)
             | TypeKind::GnuInt128(_) => false,
@@ -9725,6 +10309,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// validating an expression never changes later declaration identities.
     fn expression_type(&self, expression: &CHirExpr<'_>) -> Option<InferredExpressionType> {
         let (ty, category) = match expression {
+            CHirExpr::Complex(operation) => (
+                InferredType::Canonical(operation.facts.ty()),
+                ExprCategory::Value,
+            ),
+            CHirExpr::Floating(operation) => (
+                InferredType::Canonical(operation.facts.ty()),
+                ExprCategory::Value,
+            ),
+            CHirExpr::Vector(operation) => (
+                InferredType::Canonical(operation.facts.ty()),
+                ExprCategory::Value,
+            ),
+            CHirExpr::Atomic(access) => (
+                InferredType::Canonical(access.facts.ty()),
+                ExprCategory::Value,
+            ),
             CHirExpr::Lit(literal, _) => (
                 InferredType::Integer(integer_literal_value(*literal).ok()?.ty()),
                 ExprCategory::Value,
@@ -9814,6 +10414,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let inner = self.expression_type(operand)?;
                 (inner.ty, inner.category)
             }
+            CHirExpr::BuiltinExpect(..) => (
+                InferredType::Integer(CIntegerType::LONG),
+                ExprCategory::Value,
+            ),
             CHirExpr::Binary(op, left, right, _) => {
                 let left = self.arithmetic_operand_type(left)?;
                 let right = self.arithmetic_operand_type(right)?;
@@ -9893,14 +10497,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // here: `MemoryPlace` accumulates it along the whole chain, which
             // is the authority every consumer already consults.
             CHirExpr::Member(base, name, _) => {
-                let InferredType::Canonical(base_ty) = self.expression_type(base)?.ty else {
+                let inferred = self.expression_type(base)?;
+                let InferredType::Canonical(base_ty) = inferred.ty else {
                     return None;
                 };
                 (
                     InferredType::Canonical(
                         self.record_member_path(base_ty, name)?.last()?.field_ty(),
                     ),
-                    ExprCategory::LValue,
+                    if matches!(base, CHirExpr::MemoryRead { .. }) {
+                        ExprCategory::LValue
+                    } else {
+                        inferred.category
+                    },
                 )
             }
             CHirExpr::PtrMember(pointer, name, _) => {
@@ -9926,14 +10535,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ) {
                     return None;
                 }
-                let element = match self
-                    .operand_type_class(self.converted_expression_type(base)?.ty)
-                {
-                    OperandTypeClass::Pointer(pointer) => InferredType::Canonical(pointer.pointee),
-                    OperandTypeClass::StringPointer(prefix) => {
-                        InferredType::Integer(integer_type_for_rank(prefix.element_rank()))
+                let element = if let Some((_, element, _)) = self.vector_expression_type(base) {
+                    InferredType::Canonical(element)
+                } else {
+                    match self.operand_type_class(self.converted_expression_type(base)?.ty) {
+                        OperandTypeClass::Pointer(pointer) => {
+                            InferredType::Canonical(pointer.pointee)
+                        }
+                        OperandTypeClass::StringPointer(prefix) => {
+                            InferredType::Integer(integer_type_for_rank(prefix.element_rank()))
+                        }
+                        _ => return None,
                     }
-                    _ => return None,
                 };
                 (element, ExprCategory::LValue)
             }
@@ -10587,6 +11200,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let left = self.operand_type_class(left);
         let right = self.operand_type_class(right);
         match (left, right) {
+            (
+                OperandTypeClass::Complex(ComplexBase::Integer(left)),
+                OperandTypeClass::Complex(ComplexBase::Integer(right)),
+            ) => {
+                let rank = rank_for_integer_type(usual_arithmetic_type(
+                    integer_type_for_rank(left),
+                    integer_type_for_rank(right),
+                ))?;
+                Some(InferredType::Complex(ComplexBase::Integer(rank)))
+            }
+            (
+                OperandTypeClass::Complex(ComplexBase::Integer(complex)),
+                OperandTypeClass::Integer(integer),
+            )
+            | (
+                OperandTypeClass::Integer(integer),
+                OperandTypeClass::Complex(ComplexBase::Integer(complex)),
+            ) => {
+                let rank = rank_for_integer_type(usual_arithmetic_type(
+                    integer_type_for_rank(complex),
+                    CInteger::new(0, integer).promoted().ty(),
+                ))?;
+                Some(InferredType::Complex(ComplexBase::Integer(rank)))
+            }
             (OperandTypeClass::Integer(left), OperandTypeClass::Integer(right)) => {
                 Some(InferredType::Integer(usual_arithmetic_type(
                     CInteger::new(0, left).promoted().ty(),
@@ -10642,6 +11279,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return OperandTypeClass::Other;
                 };
                 match canonical.kind {
+                    TypeKind::TargetBuiltin(kind) => {
+                        evocc_chir::integer::integer_type_for_target(kind)
+                            .map(OperandTypeClass::Integer)
+                            .unwrap_or_else(|| match kind {
+                                TargetBuiltinType::ArmFp16 | TargetBuiltinType::ArmBf16 => {
+                                    OperandTypeClass::Real(FloatKind::F16)
+                                }
+                                _ => OperandTypeClass::Other,
+                            })
+                    }
                     TypeKind::Int(rank) => OperandTypeClass::Integer(integer_type_for_rank(rank)),
                     TypeKind::Enum(_) => self
                         .canonical_integer_type(ty)
@@ -10653,14 +11300,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .inferred_pointer_type(pointee)
                         .map(OperandTypeClass::Pointer)
                         .unwrap_or(OperandTypeClass::Other),
-                    TypeKind::Struct(_) | TypeKind::Union(_) => OperandTypeClass::Aggregate(ty),
+                    TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Vector { .. } => {
+                        OperandTypeClass::Aggregate(ty)
+                    }
                     TypeKind::Void => OperandTypeClass::Void,
                     TypeKind::GnuInt128(signedness) => {
                         OperandTypeClass::WideInteger { ty, signedness }
                     }
                     TypeKind::Array { .. }
                     | TypeKind::Function { .. }
-                    | TypeKind::TargetBuiltin(_)
                     | TypeKind::BuiltinVaList => OperandTypeClass::Other,
                 }
             }
@@ -10693,7 +11341,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     (prefix, &pointee.kind),
                     (
                         StringPrefix::None | StringPrefix::U8,
-                        TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                        TypeKind::Int(
+                            IntRank::Char
+                                | IntRank::SignedPlainChar
+                                | IntRank::SChar
+                                | IntRank::UChar
+                        )
                     )
                 )
                 || pointee.kind == TypeKind::Int(prefix.element_rank())
@@ -10705,21 +11358,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: InferredPointerType,
         source: InferredPointerType,
     ) -> bool {
-        // GNU character-pointer conversions may discard immediate const or
+        // GNU compatible-pointer conversions may discard immediate const or
         // volatile qualification. This does not change a const place, an
         // atomic pointee, or qualifiers nested inside another pointer type.
-        let character = |pointer: InferredPointerType| {
-            !pointer.qualifiers.is_atomic
-                && self.types.get(pointer.pointee).is_some_and(|ty| {
-                    matches!(
-                        ty.kind,
-                        TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
-                    )
-                })
-        };
         self.function_and_void_pointer_pair(target, source)
             || (self.pointer_conversion_types_compatible(target, source)
-                && ((character(target) && character(source))
+                && ((!target.qualifiers.is_atomic && !source.qualifiers.is_atomic)
                     || qualifiers_include(
                         target.qualifiers.compatibility(),
                         source.qualifiers.compatibility(),
@@ -10748,7 +11392,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         left: InferredPointerType,
         right: InferredPointerType,
     ) -> bool {
-        if self.pointer_types_compatible(left, right) {
+        if self.pointer_types_compatible(left, right)
+            || self
+                .types
+                .compatible_array_pointer_targets(left.pointee, right.pointee)
+        {
             return true;
         }
         let (Some(left), Some(right)) =
@@ -10800,8 +11448,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if matches!(
             (&left.kind, &right.kind),
             (
-                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar),
-                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                TypeKind::Int(
+                    IntRank::Char | IntRank::SignedPlainChar | IntRank::SChar | IntRank::UChar
+                ),
+                TypeKind::Int(
+                    IntRank::Char | IntRank::SignedPlainChar | IntRank::SChar | IntRank::UChar
+                )
             )
         ) {
             return true;
@@ -10875,6 +11527,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let fallback = self.parse_conditional()?;
             self.require_supported_conditional_promotion(condition, fallback)?;
             let span = self.merge_span(condition.span(), fallback.span());
+            let (condition, fallback) = self.convert_conditional_arms(condition, fallback)?;
             return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
         }
         let when_true = self.parse_expression()?;
@@ -10882,7 +11535,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let when_false = self.parse_conditional()?;
         self.require_supported_conditional_promotion(when_true, when_false)?;
         let span = self.merge_span(condition.span(), when_false.span());
+        let (when_true, when_false) = self.convert_conditional_arms(when_true, when_false)?;
         Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
+    }
+
+    fn convert_conditional_arms(
+        &mut self,
+        mut when_true: &'arena CHirExpr<'arena>,
+        mut when_false: &'arena CHirExpr<'arena>,
+    ) -> Option<(&'arena CHirExpr<'arena>, &'arena CHirExpr<'arena>)> {
+        if self.complex_expression_type(when_true).is_some()
+            || self.complex_expression_type(when_false).is_some()
+        {
+            let common = self.conditional_expression_type(
+                self.converted_expression_type(when_true)?,
+                self.converted_expression_type(when_false)?,
+            )?;
+            let ty = self.materialize_inferred_type(common, None)?;
+            when_true = self.complex_conversion(ty, when_true, when_true.span());
+            when_false = self.complex_conversion(ty, when_false, when_false.span());
+        }
+        Some((when_true, when_false))
     }
 
     fn parse_binary(&mut self, min_prec: u8) -> Option<&'arena CHirExpr<'arena>> {
@@ -10900,6 +11573,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.advance();
             let rhs = self.parse_binary(op_prec + 1)?;
             let span = self.merge_span(lhs.span(), rhs.span());
+            if self.complex_expression_type(lhs).is_some()
+                || self.complex_expression_type(rhs).is_some()
+            {
+                lhs = self.complex_binary(op, lhs, rhs, span)?;
+                continue;
+            }
+            if self.vector_expression_type(lhs).is_some()
+                || self.vector_expression_type(rhs).is_some()
+            {
+                lhs = self.make_vector_binary(op, lhs, rhs, span)?;
+                continue;
+            }
             let expression = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
             self.discharge_unsigned_sign_comparison(op, lhs, rhs);
             self.require_supported_binary_promotion(op, lhs, rhs, expression)?;
@@ -10910,6 +11595,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_extension_prefix();
+        if let Some(token) = self
+            .tokens
+            .get(self.pos)
+            .filter(|token| token.kind == TokenKind::Identifier)
+        {
+            let spelling = self.token_text(token);
+            if matches!(spelling, "__real" | "__real__" | "__imag" | "__imag__") {
+                let imaginary = spelling.starts_with("__imag");
+                let start = self.advance()?.span;
+                let operand = self.parse_unary()?;
+                return self.complex_component(
+                    operand,
+                    imaginary,
+                    self.merge_span(start, operand.span()),
+                );
+            }
+        }
         if self.peek_kind() == Some(TokenKind::AmpAmp) {
             let operator = self.advance().expect("peeked label-address operator");
             let token = self.expect(TokenKind::Identifier)?;
@@ -10989,11 +11691,46 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(op) = unary {
             let token = self.advance().unwrap();
             let operand = self.parse_unary()?;
+            if let Some(ty) = self.complex_expression_type(operand) {
+                if matches!(
+                    op,
+                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot | UnaryOp::Not
+                ) {
+                    let ty = if op == UnaryOp::Not {
+                        self.intern_c_integer_type(CIntegerType::INT)
+                    } else {
+                        ty
+                    };
+                    return Some(self.complex_node(
+                        evocc_chir::complex::ComplexOp::Unary(op),
+                        vec![operand],
+                        ty,
+                        self.merge_span(token.span, operand.span()),
+                    ));
+                }
+            }
+            if self.vector_expression_type(operand).is_some()
+                && matches!(
+                    op,
+                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Not | UnaryOp::BitNot
+                )
+            {
+                let span = self.merge_span(token.span, operand.span());
+                return self.make_vector_unary(op, operand, span);
+            }
             if matches!(op, UnaryOp::Neg | UnaryOp::BitNot) {
                 self.require_supported_integer_promotion(operand)?;
             }
             if op == UnaryOp::AddrOf && self.place_roots_register_object(operand) {
                 self.report("E2928", "address-of-register-object", token.span);
+                return None;
+            }
+            if op == UnaryOp::AddrOf
+                && self
+                    .resolve_memory_place(operand)
+                    .is_some_and(|place| !place.is_addressable())
+            {
+                self.report("E2102", "invalid-address-operand", token.span);
                 return None;
             }
             if op == UnaryOp::AddrOf && self.function_has_incomplete_enum_return(operand) {
@@ -11032,13 +11769,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let token = self.advance().unwrap();
             if self.looks_like_parenthesized_type() {
                 self.advance();
-                let (ty, tag_event) = self.parse_type_name()?;
+                let (ty, tag_event, dynamic_size) =
+                    self.parse_type_name_details(None, true, false)?;
                 let end = self.peek().map(|token| token.span).unwrap_or(token.span);
                 self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(token.span, end);
                 if let Some(event) = tag_event {
                     let declaration = self.finish_tag_event(event, span, Vec::new());
                     self.side_declarations.push(declaration);
+                }
+                if let Some(size) = dynamic_size {
+                    return Some(size);
                 }
                 if self.initialized_array_contains_vla(ty) {
                     if let Some(size) = self.captured_size_expression(ty, span) {
@@ -11056,7 +11797,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let operand_ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
             if self.initialized_array_contains_vla(operand_ty) {
                 if let Some(size) = self.captured_size_expression(operand_ty, span) {
-                    return Some(size);
+                    // Unlike a fixed-size operand, a VLA expression executes.
+                    // Its array value decays without reading the elements;
+                    // cast captures and pointer updates must still happen.
+                    return Some(self.alloc_node(CHirExpr::Comma(operand, size, span)));
                 }
             }
             return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, operand_ty, span)));
@@ -11132,7 +11876,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         if self.looks_like_parenthesized_type() {
             let open = self.advance().unwrap();
-            let (ty, tag_event) = self.parse_type_name()?;
+            let (ty, tag_event, evaluations) = self.parse_cast_type_name()?;
             let close = self.expect(TokenKind::RParen)?;
             if self.peek_kind() == Some(TokenKind::LBrace) {
                 if let Some(event) = tag_event {
@@ -11145,8 +11889,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 let written = self.parse_written_initializer()?;
                 let ty = self.infer_initializer_target_type(ty, &written)?;
-                let plan = self.normalize_initializer_plan(ty, &written, false)?;
+                let mut plan = self.normalize_initializer_plan(ty, &written, false)?;
                 if self.current_scope == self.symbols.file_scope() {
+                    plan = self.resolve_static_integer_initializers(plan);
                     self.validate_static_initializer_plan(&plan)?;
                 }
                 let span = self.merge_span(open.span, written.span());
@@ -11168,8 +11913,36 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let operand = self.resolve_union_cast_operand(ty, operand, span)?;
+            if matches!(
+                self.types.get(ty).map(|ty| &ty.kind),
+                Some(TypeKind::Vector { .. })
+            ) || self.vector_expression_type(operand).is_some()
+            {
+                return self.make_vector_cast(ty, operand, span);
+            }
+            if evocc_chir::complex::rank(&self.types, ty).is_some()
+                || self.complex_expression_type(operand).is_some()
+            {
+                let target = self.operand_type_class(InferredType::Canonical(ty));
+                if matches!(target, OperandTypeClass::Void) {
+                    return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
+                }
+                if !is_arithmetic_class(target)
+                    || !is_arithmetic_class(
+                        self.operand_type_class(self.converted_expression_type(operand)?.ty),
+                    )
+                {
+                    self.report("E2102", "invalid-complex-conversion", span);
+                    return None;
+                }
+                return Some(self.complex_conversion(ty, operand, span));
+            }
             self.discharge_narrowed_unsigned_mask(ty, operand);
-            return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
+            let mut expression = self.alloc_node(CHirExpr::Cast(ty, operand, span));
+            for evaluation in evaluations.into_iter().rev() {
+                expression = self.alloc_node(CHirExpr::Comma(evaluation, expression, span));
+            }
+            return Some(expression);
         }
 
         self.parse_postfix()
@@ -11378,6 +12151,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2937", "invalid-call-target", expression.span());
                         return None;
                     };
+                    self.validate_neon_call(expression, &arguments, &parameters)?;
                     if let FunctionParameters::Prototype { types, .. } = &parameters {
                         for (argument, parameter) in arguments.iter_mut().zip(types) {
                             *argument = self.resolve_union_argument(*parameter, argument)?;
@@ -11413,6 +12187,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     expression = if let Some(ty) = self.standard_absolute_type(expression) {
                         self.resolve_absolute_builtin(ty, &arguments, span)?
+                    } else if let Some(name) = self.standard_floating_builtin(expression) {
+                        self.resolve_floating_builtin(name, arguments, span)?
                     } else {
                         self.alloc_node(CHirExpr::Call(expression, arguments, span))
                     };
@@ -11426,6 +12202,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RBracket)?;
                     let span = self.merge_span(expression.span(), end);
+                    if let Some((_, element, _)) = self.vector_expression_type(expression) {
+                        let source_is_lvalue = matches!(expression, CHirExpr::MemoryRead { .. })
+                            || self
+                                .expression_type(expression)
+                                .is_some_and(|ty| ty.category == ExprCategory::LValue);
+                        if !source_is_lvalue {
+                            if self.promoted_subscript_type(index).is_none() {
+                                self.report("E2102", "invalid-vector-subscript", index.span());
+                                return None;
+                            }
+                            expression = self.vector_node(
+                                evocc_chir::vector::VectorOp::Extract,
+                                vec![expression, index],
+                                element,
+                                span,
+                            );
+                            continue;
+                        }
+                    }
                     let subscript = self.alloc_node(CHirExpr::Index(expression, index, span));
                     expression = self.convert_projected_lvalue(subscript);
                 }
@@ -11503,6 +12298,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         };
         let expression = match tok.kind {
+            TokenKind::ImaginaryIntLiteral => {
+                let text = self.token_text(&tok);
+                let literal = parse_int_literal(&text[..text.len() - 1])?;
+                let rank = rank_for_integer_type(integer_literal_value(literal).ok()?.ty())?;
+                let ty = self.intern(
+                    TypeKind::Complex(ComplexBase::Integer(rank)),
+                    Qualifiers::default(),
+                );
+                let value = self.alloc_node(CHirExpr::Lit(literal, tok.span));
+                return Some(self.complex_node(
+                    evocc_chir::complex::ComplexOp::Imaginary,
+                    vec![value],
+                    ty,
+                    tok.span,
+                ));
+            }
             TokenKind::IntLiteral => {
                 let text = self.token_text(&tok);
                 let Some(literal) = parse_int_literal(text) else {
@@ -11513,16 +12324,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Identifier => {
                 let spelling = self.token_text(&tok).to_owned();
+                if matches!(
+                    spelling.as_str(),
+                    "__builtin_shuffle" | "__builtin_shufflevector" | "__builtin_convertvector"
+                ) {
+                    return self.parse_vector_builtin(&spelling, tok);
+                }
                 let resolved_spelling = implicit_function_name(&spelling).unwrap_or(&spelling);
-                let Some(symbol) =
-                    self.resolve_expression_symbol(resolved_spelling)
-                        .or_else(|| {
-                            (self.legacy_declarations
-                                && self.peek_kind() == Some(TokenKind::LParen))
+                let Some(symbol) = self
+                    .resolve_expression_symbol(resolved_spelling)
+                    .or_else(|| self.resolve_neon_builtin(resolved_spelling, tok.span))
+                    .or_else(|| {
+                        (self.legacy_declarations && self.peek_kind() == Some(TokenKind::LParen))
                             .then(|| {
                                 self.declare_implicit_called_function(resolved_spelling, tok.span)
                             })
-                        })
+                    })
                 else {
                     self.report(
                         "E2001",
@@ -11574,8 +12391,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 };
                 let mut end = tok.span;
+                let mut raw_bytes = tok.text.has_raw_bytes();
                 while self.peek_kind() == Some(TokenKind::StringLiteral) {
                     let next = self.advance().expect("peeked adjacent string literal");
+                    raw_bytes |= next.text.has_raw_bytes();
                     let Some(fragment) = parse_string_literal(self.token_text(&next)) else {
                         self.report("E1006", "invalid-string-literal", next.span);
                         return None;
@@ -11586,6 +12405,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         return None;
                     };
                     literal.prefix = prefix;
+                    if raw_bytes && prefix != StringPrefix::None {
+                        self.report(
+                            "E0002",
+                            "invalid encoding in prefixed string literal",
+                            next.span,
+                        );
+                        return None;
+                    }
                     literal.value.push_str(&fragment.value);
                     literal.fragments.extend(fragment.fragments);
                     end = next.span;
@@ -11653,6 +12480,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Generic => return self.parse_generic_selection(tok),
             TokenKind::BuiltinExpect => return self.parse_builtin_expect(tok),
+            TokenKind::BuiltinAtomic => return self.parse_builtin_atomic(tok),
             TokenKind::BuiltinConstantP => return self.parse_builtin_constant_p(tok),
             TokenKind::BuiltinChooseExpr => return self.parse_builtin_choose_expr(tok),
             TokenKind::BuiltinTypesCompatibleP => {
@@ -11699,6 +12527,172 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(self.alloc_node(expression))
     }
 
+    fn parse_builtin_atomic(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        let name = self.token_text(&keyword);
+        let load = name == "__atomic_load_n";
+        let legacy = legacy_atomic(name);
+        if !self.match_kind(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        let mut operands = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            loop {
+                operands.push(self.parse_argument_expression()?);
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        let arity = match legacy {
+            Some((None, _, _)) => 1,
+            Some((Some(evocc_chir::AtomicRmwOp::CompareExchange), _, _)) => 3,
+            Some(_) => 2,
+            None => {
+                if load {
+                    2
+                } else {
+                    3
+                }
+            }
+        };
+        if operands.len() != arity || self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance()?;
+        let address = operands[0];
+        let inferred = self.converted_expression_type(address)?;
+        let OperandTypeClass::Pointer(pointer) = self.operand_type_class(inferred.ty) else {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        };
+        let canonical = self.types.get(pointer.pointee)?.clone();
+        let valid_type = self
+            .canonical_integer_type(pointer.pointee)
+            .is_ok_and(|integer| integer.bits() <= 64)
+            || matches!(canonical.kind, TypeKind::Pointer(_));
+        if !valid_type
+            || canonical.qualifiers.is_atomic
+            || (!load && canonical.qualifiers.is_const)
+            || (legacy.is_some() && matches!(canonical.kind, TypeKind::Int(IntRank::Bool)))
+        {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        }
+        let volatile = canonical.qualifiers.is_volatile;
+        let access_ty = self.intern(canonical.kind, Qualifiers::default());
+        let zero = self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: 0,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            keyword.span,
+        ));
+        let rmw = legacy
+            .and_then(|(operation, result, _)| operation.map(|operation| (operation, result)));
+        let expected = if rmw.is_some_and(|(op, _)| op == evocc_chir::AtomicRmwOp::CompareExchange)
+        {
+            let expected = operands[1];
+            if !matches!(
+                self.assignment_constraint(AssignmentOp::Simple, access_ty, expected),
+                UpdateConstraint::Scalar
+            ) {
+                self.report("E2913", "builtin-operand-not-convertible", expected.span());
+                return None;
+            }
+            Some(self.alloc_node(CHirExpr::Cast(access_ty, expected, expected.span())))
+        } else {
+            None
+        };
+        if rmw.is_some_and(|(op, _)| {
+            !matches!(
+                op,
+                evocc_chir::AtomicRmwOp::Exchange | evocc_chir::AtomicRmwOp::CompareExchange
+            )
+        }) && matches!(self.types.get(access_ty)?.kind, TypeKind::Pointer(_))
+        {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        }
+        let value = if load {
+            None
+        } else {
+            let value = if legacy.is_some_and(|(op, _, _)| op.is_none()) {
+                zero
+            } else {
+                operands[if expected.is_some() { 2 } else { 1 }]
+            };
+            if !matches!(
+                self.assignment_constraint(AssignmentOp::Simple, access_ty, value),
+                UpdateConstraint::Scalar
+            ) {
+                self.report("E2913", "builtin-operand-not-convertible", value.span());
+                return None;
+            }
+            Some(self.alloc_node(CHirExpr::Cast(access_ty, value, value.span())))
+        };
+        let order = if let Some((_, _, order)) = legacy {
+            let raw = match order {
+                evocc_chir::AtomicOrder::Acquire => 2,
+                evocc_chir::AtomicOrder::Release => 3,
+                _ => 5,
+            };
+            self.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: raw,
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                keyword.span,
+            ))
+        } else {
+            *operands.last()?
+        };
+        let inferred = self.converted_expression_type(order)?;
+        if !is_integer_class(self.operand_type_class(inferred.ty)) {
+            self.report("E2913", "builtin-operand-not-convertible", order.span());
+            return None;
+        }
+        let constant_order = if let Ok(value) = self.eval_integer_constant_expression(order) {
+            let chosen = value
+                .try_mathematical_value()
+                .and_then(evocc_chir::AtomicOrder::from_c);
+            let Some(chosen) = chosen.filter(|order| rmw.is_some() || order.valid_for(load)) else {
+                self.report("E2947", "invalid-atomic-memory-order", order.span());
+                return None;
+            };
+            Some(chosen)
+        } else {
+            None
+        };
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let order = self.alloc_node(CHirExpr::Cast(int_ty, order, order.span()));
+        let result_ty =
+            if rmw.is_some_and(|(_, result)| result == evocc_chir::AtomicRmwReturn::Success) {
+                self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default())
+            } else if load || rmw.is_some() {
+                access_ty
+            } else {
+                self.intern(TypeKind::Void, Qualifiers::default())
+            };
+        Some(
+            self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                address,
+                value,
+                expected,
+                rmw,
+                order,
+                constant_order,
+                access_ty,
+                volatile,
+                facts: ExprFacts::value(result_ty),
+                span: self.merge_span(keyword.span, close.span),
+            })),
+        )
+    }
+
     fn parse_builtin_expect(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         if self.peek_kind() != Some(TokenKind::LParen) {
             self.report("E2910", "builtin-not-called", keyword.span);
@@ -11727,7 +12721,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             };
             if !is_arithmetic_class(self.operand_type_class(inferred.ty)) {
-                self.report("E1003", "expected-expression", operand.span());
+                self.report("E2913", "builtin-operand-not-convertible", operand.span());
                 return None;
             }
         }
@@ -11742,7 +12736,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             value: converted_value,
             expected: converted_expected,
         });
-        Some(self.alloc_node(CHirExpr::Cast(long_ty, value, span)))
+        if self.eval_integer_constant_expression(value).is_ok() {
+            Some(self.alloc_node(CHirExpr::Cast(long_ty, value, span)))
+        } else {
+            Some(self.alloc_node(CHirExpr::BuiltinExpect(
+                converted_value,
+                converted_expected,
+                span,
+            )))
+        }
     }
 
     fn parse_builtin_constant_p(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -11879,7 +12881,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let close = self.advance().expect("peeked builtin closing parenthesis");
         let ty = self.generic_controlling_type(operand)?;
         let value = match &self.types.get(ty)?.kind {
-            TypeKind::Int(IntRank::Bool) | TypeKind::TargetBuiltin(_) => {
+            TypeKind::Int(IntRank::Bool) | TypeKind::TargetBuiltin(_) | TypeKind::Vector { .. } => {
                 // GCC and Clang disagree on _Bool; opaque target header types
                 // have no agreed classification in this execution profile.
                 self.report("E2941", "unsupported-type-classification", operand.span());
@@ -12127,6 +13129,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
         designator_span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
+        if floating::is_builtin(builtin) {
+            return self.resolve_floating_builtin(builtin, arguments, span);
+        }
         let literal_arity = match builtin {
             "__builtin_strlen" => 1,
             "__builtin_strcmp" => 2,
@@ -12218,19 +13223,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             parameter_types.as_slice()
         };
-        if let Some(invalid) =
-            arguments
-                .iter()
-                .zip(validation_types)
-                .find_map(|(argument, parameter)| {
-                    (self.assignment_constraint(AssignmentOp::Simple, *parameter, argument)
-                        == UpdateConstraint::Invalid)
-                        .then_some(*argument)
-                })
-        {
-            self.report("E2913", "builtin-operand-not-convertible", invalid.span());
-            return None;
-        }
+        self.validate_builtin_argument_types(&arguments, validation_types)?;
         if variable_prefetch_arity {
             self.promote_call_arguments(&mut arguments[1..])?;
         } else if variadic_library {
@@ -12250,6 +13243,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             Qualifiers::default(),
         );
+        if let Some(suffix) = nan_builtin_suffix(builtin) {
+            self.validate_builtin_library_declaration(
+                &external_name,
+                function_ty,
+                designator_span,
+            )?;
+            if let CHirExpr::StringLit(literal, _) = arguments[0] {
+                if let Some(payload) = nan_literal_payload(literal) {
+                    return Some(self.alloc_node(CHirExpr::FloatLit(
+                        FloatLit {
+                            value: evocc_chir::FloatConstant::QuietNaN(payload),
+                            suffix,
+                        },
+                        span,
+                    )));
+                }
+            }
+        }
         if builtin == "__builtin_isdigit" {
             self.validate_builtin_library_declaration(
                 &external_name,
@@ -12522,6 +13533,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 vec![const_char_pointer, const_char_pointer, size_ty],
             ),
             "__builtin_strlen" => ("strlen", size_ty, vec![const_char_pointer]),
+            "__builtin_fabs" | "__builtin_fabsf" | "__builtin_fabsl" => {
+                let kind = match builtin {
+                    "__builtin_fabsf" => FloatKind::F32,
+                    "__builtin_fabsl" => FloatKind::F128,
+                    _ => FloatKind::F64,
+                };
+                let ty = self.intern(TypeKind::Float(kind), Qualifiers::default());
+                (builtin.strip_prefix("__builtin_")?, ty, vec![ty])
+            }
+            "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => {
+                let kind = match nan_builtin_suffix(builtin)? {
+                    FloatSuffix::F => FloatKind::F32,
+                    FloatSuffix::None => FloatKind::F64,
+                    FloatSuffix::L => FloatKind::F128,
+                };
+                let ty = self.intern(TypeKind::Float(kind), Qualifiers::default());
+                (
+                    builtin.strip_prefix("__builtin_")?,
+                    ty,
+                    vec![const_char_pointer],
+                )
+            }
+            "__sync_synchronize" => ("__sync_synchronize", void_ty, Vec::new()),
             "__builtin_prefetch" => (
                 "__builtin_prefetch",
                 void_ty,
@@ -12621,7 +13655,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span,
                 },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: Some(parameters.clone()),
+                        span,
+                    }],
                     span,
                 },
                 parameters,
@@ -12690,7 +13727,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span,
                 },
                 written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span }],
+                    layers: vec![WrittenDeclaratorLayer::Function {
+                        parameters: Some(parameters.clone()),
+                        span,
+                    }],
                     span,
                 },
                 parameters,
@@ -13461,6 +14501,7 @@ fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
     match class {
         OperandTypeClass::Real(kind) => Some(kind),
         OperandTypeClass::Complex(base) => Some(match base {
+            ComplexBase::Integer(_) => return None,
             ComplexBase::CF16 => FloatKind::F16,
             ComplexBase::CF32 => FloatKind::F32,
             ComplexBase::CF64 => FloatKind::F64,
@@ -13631,6 +14672,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::Alignof
             | TokenKind::GnuAlignof
             | TokenKind::BuiltinExpect
+            | TokenKind::BuiltinAtomic
             | TokenKind::BuiltinConstantP
             | TokenKind::BuiltinChooseExpr
             | TokenKind::BuiltinTypesCompatibleP
@@ -13930,6 +14972,26 @@ fn collect_jump_regions_expr(
     gotos: &mut Vec<JumpRegionReference>,
 ) {
     match expression {
+        CHirExpr::Complex(operation) => {
+            for operand in &operation.operands {
+                collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::Floating(operation) => {
+            for operand in &operation.operands {
+                collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::Vector(operation) => {
+            for operand in &operation.operands {
+                collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+            }
+        }
         CHirExpr::BuiltinConstantP { operand, .. }
         | CHirExpr::BuiltinObjectSize { operand, .. } => {
             collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
@@ -13952,7 +15014,8 @@ fn collect_jump_regions_expr(
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             collect_jump_regions_expr(left, regions, next_region, labels, gotos);
             collect_jump_regions_expr(right, regions, next_region, labels, gotos);
         }
@@ -14172,6 +15235,21 @@ fn place_references_symbol(place: &MemoryPlace<'_>, symbol: SymbolId) -> bool {
 
 fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> bool {
     match expression {
+        CHirExpr::Complex(operation) => operation
+            .operands
+            .iter()
+            .any(|operand| expression_references_symbol(operand, symbol)),
+        CHirExpr::Floating(operation) => operation
+            .operands
+            .iter()
+            .any(|operand| expression_references_symbol(operand, symbol)),
+        CHirExpr::Vector(operation) => operation
+            .operands
+            .iter()
+            .any(|operand| expression_references_symbol(operand, symbol)),
+        CHirExpr::Atomic(access) => access
+            .operands()
+            .any(|operand| expression_references_symbol(operand, symbol)),
         CHirExpr::BuiltinConstantP { operand, .. }
         | CHirExpr::BuiltinObjectSize { operand, .. } => {
             expression_references_symbol(operand, symbol)
@@ -14189,7 +15267,8 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             expression_references_symbol(left, symbol)
                 || expression_references_symbol(right, symbol)
         }
@@ -14269,6 +15348,7 @@ struct BuiltinTypeWord {
     kind: TokenKind,
     forced_int128_signedness: Option<GnuInt128Signedness>,
     target_builtin: Option<TargetBuiltinType>,
+    target_vector: Option<evocc_types::neon::BuiltinType>,
 }
 
 /// Resolve the order-independent builtin declaration-specifier multiset.
@@ -14342,6 +15422,27 @@ fn resolve_builtin_type(words: &[BuiltinTypeWord]) -> Option<TypeKind> {
     }
 
     if complex == 1 {
+        if float == 0 && double == 0 {
+            let mut component = words
+                .iter()
+                .filter(|word| word.kind != TokenKind::Complex)
+                .copied()
+                .collect::<Vec<_>>();
+            if component.is_empty() {
+                component.push(BuiltinTypeWord {
+                    kind: TokenKind::Int,
+                    target_builtin: None,
+                    target_vector: None,
+                    forced_int128_signedness: None,
+                });
+            }
+            return match resolve_builtin_type(&component)? {
+                TypeKind::Int(rank) if rank != IntRank::Bool => {
+                    Some(TypeKind::Complex(ComplexBase::Integer(rank)))
+                }
+                _ => None,
+            };
+        }
         if signed != 0
             || unsigned != 0
             || short != 0
@@ -14472,8 +15573,61 @@ fn parse_float_literal(text: &str) -> Option<FloatLit> {
         _ => (text, FloatSuffix::None),
     };
     Some(FloatLit {
-        value: number.parse().ok()?,
+        value: evocc_chir::FloatConstant::Real(evocc_types::floating::FloatBits::parse(
+            match suffix {
+                FloatSuffix::F => FloatKind::F32,
+                FloatSuffix::None => FloatKind::F64,
+                FloatSuffix::L => FloatKind::F128,
+            },
+            number,
+        )?),
         suffix,
+    })
+}
+
+fn nan_builtin_suffix(name: &str) -> Option<FloatSuffix> {
+    match name {
+        "__builtin_nan" => Some(FloatSuffix::None),
+        "__builtin_nanf" => Some(FloatSuffix::F),
+        "__builtin_nanl" => Some(FloatSuffix::L),
+        _ => None,
+    }
+}
+
+fn nan_literal_payload(literal: &StringLit) -> Option<u128> {
+    if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
+        return None;
+    }
+    let bytes = literal
+        .decoded_units()?
+        .into_iter()
+        .map(u8::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let text = std::str::from_utf8(&bytes).ok()?;
+    if text.is_empty() {
+        return Some(0);
+    }
+    let (digits, radix) =
+        if let Some(digits) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            (digits, 16)
+        } else if text.starts_with('0') {
+            (text, 8)
+        } else {
+            (text, 10)
+        };
+    if digits.is_empty() {
+        return None;
+    }
+    // Only the low significand bits survive. Wrapping here supports arbitrary
+    // payload lengths without overflow or a host floating conversion.
+    digits.bytes().try_fold(0u128, |value, digit| {
+        let digit = (digit as char).to_digit(radix)?;
+        Some(
+            value
+                .wrapping_mul(u128::from(radix))
+                .wrapping_add(u128::from(digit)),
+        )
     })
 }
 
@@ -14513,6 +15667,11 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
         "" => CharPrefix::None,
         _ => return None,
     };
+    let value = if prefix == CharPrefix::None && target.plain_char_is_signed() && value <= 255 {
+        (value as u8 as i8 as i32) as u32
+    } else {
+        value
+    };
     let literal = CharLit { value, prefix };
     (literal.integer_value().raw_bits() == u128::from(value)).then_some(literal)
 }
@@ -14520,6 +15679,26 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
 /// When a parenthesized expression appears, preserve its original span.
 fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHirExpr<'arena> {
     match inner {
+        CHirExpr::Complex(operation) => {
+            let mut operation = operation.clone();
+            operation.span = paren_span;
+            CHirExpr::Complex(operation)
+        }
+        CHirExpr::Floating(operation) => {
+            let mut operation = operation.clone();
+            operation.span = paren_span;
+            CHirExpr::Floating(operation)
+        }
+        CHirExpr::Vector(operation) => {
+            let mut operation = operation.clone();
+            operation.span = paren_span;
+            CHirExpr::Vector(operation)
+        }
+        CHirExpr::Atomic(access) => {
+            let mut access = access.clone();
+            access.span = paren_span;
+            CHirExpr::Atomic(access)
+        }
         CHirExpr::BuiltinObjectSize {
             operand,
             mode,
@@ -14571,6 +15750,9 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             CHirExpr::Ternary(condition, when_true, when_false, paren_span)
         }
         CHirExpr::Elvis(operand, fallback, _) => CHirExpr::Elvis(operand, fallback, paren_span),
+        CHirExpr::BuiltinExpect(value, expected, _) => {
+            CHirExpr::BuiltinExpect(value, expected, paren_span)
+        }
         CHirExpr::Call(callee, arguments, _) => {
             CHirExpr::Call(callee, arguments.clone(), paren_span)
         }
@@ -15050,6 +16232,26 @@ mod tests {
                 .unwrap()
                 .is_some());
         }
+    }
+
+    #[test]
+    fn failed_declaration_cannot_leak_a_const_initializer_into_reused_symbols() {
+        let arena = Arena::default();
+        let (unit, _) = parse_rejected(
+            "const int leaked = 7, broken = ; extern const int replacement; \
+             int bad = replacement; int after;",
+            &arena,
+        );
+        let scope = unit.symbols().file_scope();
+        for name in ["leaked", "broken", "bad"] {
+            assert_eq!(unit.symbols().resolve(scope, name), Ok(None), "{name}");
+        }
+        assert!(unit
+            .symbols()
+            .resolve(scope, "replacement")
+            .unwrap()
+            .is_some());
+        assert!(unit.symbols().resolve(scope, "after").unwrap().is_some());
     }
 
     #[test]

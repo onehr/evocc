@@ -53,6 +53,38 @@ fn assert_execution_with_optimization(source: &str, optimize: bool) -> evocc_evo
 }
 
 #[test]
+fn inline_returns_do_not_collide_with_source_end_labels() {
+    for optimize in [false, true] {
+        assert_execution_with_optimization(
+            include_str!("../../../tests/fixtures/inline-source-end-label.c"),
+            optimize,
+        );
+    }
+}
+
+#[test]
+fn default_entry_retains_its_environment_regardless_of_source_order() {
+    for body in [
+        "default: value += *ptr; break; case 1: return 1; case 2: return 2;",
+        "case 1: return 1; default: value += *ptr; break; case 2: return 2;",
+        "case 1: return 1; case 2: return 2; default: value += *ptr; break;",
+        "default: value += *ptr; case 1: value += 3; break; case 2: return 2;",
+    ] {
+        let expected = if body.contains("value += 3") { 15 } else { 12 };
+        let source = format!(
+            "int pick(int op,int value,int *ptr){{switch(op){{{body}}}return value;}}
+             int main(void){{int data=7;return pick(3,5,&data)!={expected} || pick(2,5,&data)!=2;}}"
+        );
+        for optimize in [false, true] {
+            assert_execution_with_optimization(&source, optimize);
+        }
+    }
+    assert_execution(include_str!(
+        "../../../tests/fixtures/switch-default-pointer-environment.c"
+    ));
+}
+
+#[test]
 fn expression_gotos_keep_otherwise_unselected_label_destinations() {
     assert_execution(include_str!(
         "../../../tests/fixtures/expression-goto-targets.c"
@@ -539,6 +571,41 @@ fn private_state_guards_are_invalidated_by_writes_escapes_and_volatile_reads() {
 }
 
 #[test]
+fn private_constant_stores_survive_calls_without_exposing_the_object() {
+    let source =
+        "extern void impossible_private(void); int effects; void called(void){++effects;}\n\
+        int main(void){int a[2];a[0]=0;called();if(a[0])impossible_private();\n\
+        a[1]=0;called();if(a[1])impossible_private();return effects!=2;}";
+    let module = assert_execution_with_optimization(source, true);
+    assert!(!module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(
+            |i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_private")
+        ));
+    for (qualifier, action, expected) in [
+        ("", "a[0]=1;", 1),
+        ("", "change(a);", 1),
+        ("volatile", "called();", 0),
+        ("", "a[index]=1;", 1),
+    ] {
+        let source = format!("int effects,hits;void called(void){{++effects;}}void change(int*p){{*p=1;}}void possible(void){{++hits;}}int f(int index){{{qualifier} int a[2];a[0]=0;{action}if(a[0])possible();return hits;}}int main(void){{return f(0)!={expected};}}");
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(
+            module
+                .functions
+                .iter()
+                .flat_map(|f| &f.blocks)
+                .flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "possible")),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn mask_facts_keep_operand_effects_and_poison_consumption() {
     assert_execution_with_optimization(
         "int n; int tick(void){return ++n;} int main(void){if(tick() & 0)return 1;return n!=1;}",
@@ -572,6 +639,111 @@ fn mask_facts_keep_operand_effects_and_poison_consumption() {
         )
         .unwrap_err();
         assert_eq!(error.code(), "E3001", "{source}: {error}");
+    }
+}
+
+#[test]
+fn shift_identities_prune_only_the_impossible_edges() {
+    let module = assert_execution_with_optimization(
+        include_str!("../../../tests/fixtures/shift-identity-edges.c"),
+        true,
+    );
+    assert!(!module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(
+            |i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_shift")
+        ));
+    for (expression, expected) in [
+        ("0 << n", "E3001"),
+        ("0 << 32", "E3005"),
+        ("-1 >> -1", "E3005"),
+        ("n >> 0", "E3001"),
+        ("(n<n)&&(n>=n)", "E3001"),
+        ("n<=0||(unsigned)(n-1)<4294967295U", "E3001"),
+    ] {
+        let source = format!("int main(void){{int n;return {expression};}}");
+        let arena = Arena::default();
+        let file = FileId::new(45032);
+        let mut lexer = Lexer::new(file, &source);
+        let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, &source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error());
+        let module = evocc_lower::lower_unit_with_optimization(
+            &unit,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            true,
+        )
+        .unwrap();
+        let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+        let args = main
+            .params
+            .iter()
+            .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+            .collect::<Vec<_>>();
+        let error = evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &args,
+            evocc_evoir::InterpreterLimits::new(10000),
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), expected, "{source}: {error}");
+    }
+}
+
+#[test]
+fn comparison_partitions_keep_the_original_evaluation_contract() {
+    let module = assert_execution_with_optimization(
+        include_str!("../../../tests/fixtures/comparison-partitions.c"),
+        true,
+    );
+    assert!(!module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+        .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_comparison")));
+    for source in [
+        "int hits;void possible(void){++hits;}int f(int x,int y){if((x<y)&&((x=3)>y))possible();return hits;}int main(void){return f(1,2)!=1;}",
+        "int hits;void possible(void){++hits;}int f(int x,int y){if((x<y)&&((unsigned)x<(unsigned)y))possible();return hits;}int main(void){return f(1,2)!=1;}",
+        "int hits;void possible(void){++hits;}int f(volatile int x,int y){if((x==y)&&(x!=y))possible();return hits;}int main(void){return f(1,2);}",
+    ] {
+        let module = assert_execution_with_optimization(source, true);
+        assert!(module.functions.iter().flat_map(|f| &f.blocks).flat_map(|b| &b.insts)
+            .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "possible")), "{source}");
+    }
+}
+
+#[test]
+fn short_circuit_ranges_use_the_guarded_source_width() {
+    let module = assert_execution_with_optimization(
+        include_str!("../../../tests/fixtures/guarded-integer-range.c"),
+        true,
+    );
+    assert!(!module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(
+            |i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "impossible_range")
+        ));
+    for expression in [
+        "x<=0 || (unsigned)(x-1)<7U",
+        "x<=0 || (unsigned)(x-1)<(unsigned)(x-2)",
+        "x<=0 || (unsigned char)(x-1)==0",
+        "x<=0 || (unsigned)((x=0)-1)<4294967295U",
+    ] {
+        let source = format!("int hits;void possible(void){{++hits;}}int f(int x){{if(!({expression}))possible();return hits;}}int main(void){{f(0);return 0;}}");
+        let module = assert_execution_with_optimization(&source, true);
+        assert!(
+            module
+                .functions
+                .iter()
+                .flat_map(|f| &f.blocks)
+                .flat_map(|b| &b.insts)
+                .any(|i| matches!(i, evocc_evoir::Inst::Call {callee, ..} if callee == "possible")),
+            "{source}"
+        );
     }
 }
 

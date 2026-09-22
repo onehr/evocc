@@ -1,0 +1,21 @@
+GNU99 original-build option probe, 2026-09-15
+Target: linux/arm64, image evo-flight-lab:sealed, network none.
+Source: tests/fixtures/gnu99-language-mode.c
+Source SHA-256: 12bb44c7b88b27f306def295b6229b764d7cf1140633b9f6c6714ae63ebda0b0
+
+For cc in gcc-14 and clang-19, opt in -O0 and -O2:
+  $cc -std=gnu99 $opt /work/gnu99-language-mode.c -o /tmp/gnu99
+  /tmp/gnu99
+All four compile exits = 0; all four execution exits = 0.
+The source checks __STDC_VERSION__=199901L, absence of __STRICT_ANSI__,
+ISO-inline macros, a for-declaration, typeof, _Bool and accepted GNU extensions.
+
+Subject debug SHA-256: 0d2e02f7b80361abbf400bbafc1129e48cb1fb3fdc0365845d540786ebf3f811
+  evocc --target=aarch64-unknown-linux-gnu --emit=asm -std=gnu99 SOURCE > subject.s
+For cc in gcc-14 and clang-19:
+  $cc -no-pie subject.s -o /tmp/subject
+  /tmp/subject
+Both link exits = 0; both execution exits = 0.
+Both subject interpreters return 0. The focused test also verifies ISO-inline
+definition/address roles, rejection of undeclared calls, and final-option order.
+This is a tailored measurement, not a completed original Lua benchmark.

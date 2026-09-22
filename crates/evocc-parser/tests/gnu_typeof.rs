@@ -326,8 +326,12 @@ fn parameter_bounds_adjust_after_name_resolution() {
 }
 
 #[test]
-fn typeof_of_a_variably_modified_type_is_refused() {
-    rejects("void f(int n) { typeof(int[n]) a; }\n", "E2904");
+fn typeof_captures_a_variable_type_name_but_refuses_conflicting_pointer_evaluation() {
+    accepts("void f(int n) { typeof(int[n]) a; }\n");
+    rejects(
+        "void f(int n) { int a[n]; int calls=0; typeof((calls++, &a)) p=&a; }\n",
+        "E2904",
+    );
 }
 
 #[test]

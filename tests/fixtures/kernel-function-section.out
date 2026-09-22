@@ -1,0 +1,108 @@
+2026-09-20 UTC: ELF placement RED; execution control PASS.
+
+Source SHA256 f71fcbd4e9fe68a71a04ffe276f56a364874a84a413c208fed7c2bc071749006
+EvoCC debug SHA256 8960370ee128a2afaf4864624f23a1b7d7103942df16452cbfb9dd2f8611c849
+Assembly SHA256 361f97ea9b2676414124c0a64c14dc8389239a9b81e67e20fe4ea643468e87c7
+Target aarch64-unknown-linux-gnu, -std=gnu11 -O2 --emit=asm.
+Sealed offline ARM64; GCC 14.2.0-19 and Clang 19.1.7, each O0/O2:
+  cc -std=gnu11 -O{0,2} -c probe.c -o probe.o
+  readelf -SW probe.o; readelf -sW probe.o
+  gcc-14 -no-pie probe.o -o probe; ./probe
+EvoCC assembly is assembled/linked by the same gcc-14.
+
+                 boot_function    boot_data     execution
+GCC14 O0/O2      .init.text       .init.data    0 / 0
+Clang19 O0/O2    .init.text       .init.data    0 / 0
+EvoCC            .text            .init.data    0
+
+The function's section appears on a preceding declaration, so the expected
+placement requires merged symbol attributes, not an emitter-only heuristic.
+All five object compilations succeed. A returning-zero control does not
+validate section placement or post-init lifetime behavior.
+
+The active kernel's modpost.log has 2515 section-mismatch records and
+372 distinct referring function names. These are relocation-warning counts,
+not 2515 failed units, nor proof that every warning has this same cause.
+Capture .evidence/k1/20260920T103126Z/modpost.log
+SHA256 3eafbc872afd15516e1f8d309c490fd8dc255a6c407a270af5b14080cd6335d9
+Representative original __init definitions: ip_auto_config_setup,
+vendor_class_identifier_setup, decompress_method, hash_pointers_finalize.
+
+Current EvoIR 10.1.9 explicitly preserves unapplied section attributes;
+Appendix D only authorizes explicit OBJECT sections. Function has no section
+field, and native emission selects ordinary text. Full function-section
+semantics have been requested for approval; no warning suppression, validator
+relaxation, specification change, or active-kernel replacement was made.
+
+2026-09-21 local time: original-object confirmation after final link failed.
+Run 20260920T103126Z has CALL26 overflows from head.o .idmap.text to:
+
+symbol                    reference section/size    subject section/size
+__pi_create_init_idmap     .init.text / 212 bytes    .text / 2124 bytes
+__pi_early_map_kernel      .init.text / 1164 bytes   .text / 1588 bytes
+
+Both are GLOBAL FUNC. Source map_range.c:91 and map_kernel.c:241 declare
+them __init; include/linux/init.h:45 maps it to section(".init.text").
+The unchanged linker script separately places ordinary text, identity-map
+code and init text. This is an observed section violation at the two actual
+overflow targets, not proof that applying sections alone closes all linking.
+
+Read-only sealed check: readelf -SW and readelf -sW on original
+arch/arm64/kernel/pi/{map_range,map_kernel}.pi.o under both
+.build/k7-coverage/case/bpf/pristine and bpf/out. Mount pristine directly:
+it is a symlink to ../bpf-config; mounting only bpf makes that target absent.
+The first read-only attempt failed for that mount reason, not an ELF verdict.
+
+Subject object SHA256 in table order:
+bf123096358a621d5132180d6cd9b2633c6fe3cebbd958a4fdeadeadcd4aea3c
+8a8edb0bdf120f5ed63e2cf561b334ff8b6dd3e50d7fd4259b852e9720b301df
+Reference object SHA256 in table order:
+64ca7b0cb3b109295d143fcffe829b0e001d3e0cf002963ed7426a59b5e6d115
+fff771d709f87206c4752d7420f6a927863066cd4bd77e7b7b6ec1011814a685
+relink.log SHA256:
+09e859d27259f5c45786226b67215fbc80b7119b5f21f7da5f5c7b4a4c54ef4e
+
+2026-09-21: approved semantics implemented; targeted GREEN.
+EvoIR 1.9.104 / EvoMIR 0.34. Release compiler SHA256:
+4ec65ed2395fafc7c4b8f0728d3489ae29340a5cd1e3c98d649a5020ae2d866f
+The same source now places boot_function in .init.text and boot_data in
+.init.data. Both GCC-14 and Clang-19 assemble/link EvoCC output and run it
+with exit 0; C-HIR and EvoIR interpreters each return 0.
+function-section-boundaries.out records declaration-order, alias, static
+label, always-inline, alignment and patchable-entry controls.
+
+Six ORIGINAL .o.cmd records replayed with the existing actual generated
+headers, not pristine headers; no object was installed by this targeted run.
+All six assemble and have no missing/extra reference global symbols:
+  arch/arm64/kernel/pi/map_range.o     4.850 s
+  arch/arm64/kernel/pi/map_kernel.o    2.268 s
+  security/landlock/syscalls.o        10.321 s
+  security/landlock/ruleset.o          9.289 s
+  net/ipv6/icmp.o                     8.690 s
+  init/main.o                       10.353 s
+Sealed readelf observes create_init_idmap and early_map_kernel in .init.text,
+sizes 2124 and 1588 bytes, respectively (before Kbuild's __pi symbol prefix).
+start_kernel is in .init.text; .ref.text is separate. Both code sections have
+the required alignment. The three Landlock/ICMP objects have zero undefined
+__compiletime_assert_* references. This establishes defined-name parity, not
+identical nm storage categories: the later audit found late_time_init in BSS
+instead of its requested .init.data; see pointer-declarator-section.out.
+Object SHA256 values, in the order above:
+36151e7c7630ab98de0b5646e1844e467a784758cdad26e4bfa6bef323522b6b
+2a3cc6233f1cf1164efdbba08e3ee942ad98ef7d3b64c7da19ad08dae1a3355e
+802c3cc10d0980796e57c0f434b92fa0b22b7cbb7616acf28f098ea3be07a55f
+747f9d660da4a26bebfca872ab76ad6dbd2d9869b7af39b64a26a32e27fb9a22
+9d59935abe6f4149808e6f078757d6e5a66f873eda977924359e3db152b057e2
+c75a87acb6315b33f9082ca450f058a785575a70e08282df773b12b3afd968aa
+Artifacts: .build/floating-targeted/section-kernel-replay (six objects only).
+Full composition/link/boot remains a separate required verdict.
+
+Final release 73eff5c4835db643339c865da49698440202d4e40c75816e2951436c02e4a46b
+recompiled the same six records after the UTF-8/source-spelling corrections:
+3.851, 2.245, 10.141, 9.459, 7.902 and 12.486 seconds. All six assembly
+digests are unchanged, so the verified object cache reused the exact six
+objects listed above; fresh defined-name comparisons still have zero differences.
+The new full composition uses .build/floating-targeted/evocc-section-20260921,
+an independent 7.9 MiB copy with that digest, not the mutable Cargo output.
+That full attempt was interrupted after the pointer-declarator placement
+omission was found; its partial compilation is not a link/boot PASS.

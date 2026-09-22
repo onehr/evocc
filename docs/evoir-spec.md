@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.97** | **Authoritative reference** | **2026-09-14**
+**Revision 1.9.104** | **Authoritative reference** | **2026-09-21**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -194,6 +194,28 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 ## 2. Block-Argument SSA Semantics
 
 ### 2.1 Module and Function Structure
+
+**Reviewed ELF load-instance metadata (revision 1.9.101).** After assembly,
+the module carries a TLS-symbol table and an ordered lifecycle-registration
+table. TLS metadata names a global template, external TLS object, or an alias
+of another TLS symbol, and one of `global_dynamic`, `local_dynamic`,
+`initial_exec`, `local_exec`; duplicate/missing/non-object entries are invalid.
+A TLS template is not an ordinary process-global allocation. Static relocations
+may not target TLS, including through an alias. Source TLS-model conflicts
+remain E2943. Thread storage is independent of linkage and ELF visibility.
+
+Lifecycle entries contain phase (`init`/`fini`), a defined zero-argument void
+function, and priority 101..65535 (default 65535). Redeclarations contribute
+one registration per phase; a declaration without a definition registers
+nothing. Registration order is deterministic first-registration order, not
+a cross-TU source-order guarantee. Entries are retention roots. Program mode
+initializes objects/relocations, runs constructors by ascending priority,
+invokes main, then runs finalizers in reverse registration/priority order,
+sharing memory, effects and one execution budget. Normal return and `exit`
+finalize; `_Exit`, `quick_exit` and `abort` do not run these registrations.
+Ordinary function-call APIs do not initialize/finalize a load instance.
+Native CRT/loader owns executable/DSO lifetime: this does not prescribe that
+musl `dlclose` unloads, or simulate pthread/dlopen in a single-module interpreter.
 
 An EvoIR module contains an ordered global-object table, an ordered
 **external-object table**, an ordered **external-function table** and an
@@ -768,6 +790,32 @@ integers is thereby PNVI-style: address arithmetic on integers is ordinary
 
 ### 3.8 Memory Operations
 
+**TLS address acquisition (revision 1.9.101).**
+`(%p, %m1, %w1) = tls_addr @symbol, %m0, %w0` returns `ptr<generic>`.
+The symbol must have TLS metadata. Current mem/world tokens are required,
+fresh tokens are returned, and normal local SSA applies. The immutable memory
+state maps `(origin, logical ThreadId)` to one ordinary Object instance,
+initialized from the template/relocations only on first acquisition. Aliases
+use that same origin. The returned pointer retains the owner's identity when
+passed to another thread; dereference never rebinds to the accessing thread.
+Ending a thread ends its instances; logical thread IDs are not recycled.
+Acquisition does not inspect stored bytes or append a volatile event. It may
+allocate/fail, reads/writes memory state, and is excluded from P0. Unresolved
+external TLS remains an external-object execution error, not a fabricated zero.
+
+**Integer vector representations (revision 1.9.101).** `vec<L, bits<N>>`
+has positive power-of-two L and N in 8/16/32/64/128. `vec.pack` takes L
+bits<N> operands and preserves each lane's initializedness. `vec.extract`
+takes a vector and integer index and returns bits<N>; check the entire index
+before narrowing (E3011 when out of range), and consume only the selected
+lane's initializedness. `vec.bitcast` changes equal-sized integer/vector
+representations without initializing bytes or numerically converting lanes.
+These have one result and no effects; extract may trap. Vector arithmetic
+is expanded lane by lane through the existing checked scalar rules. No vector
+operation is added to the P0 allowlist; proof reconstruction retains all fields.
+Vector loads/stores preserve lane representation, rather than zero-filling
+uninitialized lanes. A scalar lane use still observes existing poison rules.
+
 ```text
 (%v, %m1, %w1) = load %m0, %w0, %ptr : Type
 (%m1, %w1) = store %m0, %w0, %ptr, %val
@@ -839,7 +887,45 @@ fresh SSA identity. A successful volatile access appends exactly one ordered
 load or store event, including pointer, width, and accessed value, to the world
 trace represented by `%w1`. A failing volatile access appends no event. A
 volatile load does not alter the memory snapshot, and volatile state is never
-stored inside a memory token. Atomic accesses are outside Day 7.
+stored inside a memory token.
+
+**Scalar atomic accesses (reviewed revision 1.9.100).**
+
+```text
+(%v, %m1, %w1) = atomic.load acquire volatile %m0, %w0, %ptr : Type
+(%m1, %w1) = atomic.store release %m0, %w0, %ptr, %val
+```
+
+The order is required; `volatile` is optional and independent. `Type` is
+`bits<1|8|16|32|64>` or an object/function pointer; size is respectively
+1/1/2/4/8 or 8 bytes. Each access requires the immediately applicable
+`access_in_bounds` guard with that exact size and natural alignment, the
+current memory/world tokens, and produces fresh memory/world tokens. Loads
+permit `relaxed`, `consume`, `acquire`, `seq_cst`; stores permit `relaxed`,
+`release`, `seq_cst`. Invalid type/order/guard layout is `E3062`
+`invalid-atomic-access`; existing local-SSA/effect-token checks also apply.
+Memory faults and pointer initializedness/provenance use the ordinary access
+rules: an atomic operation does not create provenance from untracked bytes.
+
+In concurrent native execution each atomic object has a total modification
+order consistent with happens-before; a load reads a write allowed by the
+C11 atomic coherence rules. A release store synchronizes with an acquire
+load that reads it (consume is implemented as acquire). Sequentially
+consistent operations additionally participate in the C11 SC total order.
+This initial scope has load/store only, on naturally aligned ordinary shared
+Normal memory; no RMW, generic aggregate, 128-bit, MMIO or complete `_Atomic`
+type-system support is implied.
+
+`world` orders execution/scheduling within one thread; it does not establish
+cross-thread sequential consistency. The three interpreters implement only
+single-thread values and ordered events, not a concurrent memory-model
+checker. Each successful access appends one immutable event containing
+direction, object origin/offset, access layout, order, volatile flag and
+observed bits/provenance; atomic and volatile events share one sequence and
+resource budget. A volatile atomic has one atomic event, not a second access.
+These operations remain outside P0; ordinary forwarding, merging, splitting
+or speculative-store rewrites may not erase or change their atomic/order
+metadata. Independent proof reconstruction preserves that metadata.
 
 ### 3.9 Control Flow (Terminators)
 
@@ -974,9 +1060,11 @@ promotions, so `bits<8>` and `bits<16>` never appear here. There may be any
 number of them, including none. Their types are not part of the signature and
 are not checked against a declaration; they are recorded at the call and read
 back by `va_arg`. A non-variadic signature admits no argument beyond its
-list, as before. Anonymous arguments carry no `mem<_>`, `world`, `tuple` or
-`vec` type; a C aggregate passed anonymously stays `E3030`
-(`not-lowered: varargs`, message `anonymous aggregate argument`).
+list, as before. Anonymous arguments carry no `mem<_>`, `world` or `tuple`.
+Revision 1.9.101 also admits integer `vec<L, bits<N>>` without lane promotion
+and integer homogeneous-vector records with explicit byval/HVA shape. Other
+records follow the separately admitted integer-record rules; unsupported
+aggregate shapes retain E3030 rather than becoming ordinary pointer arguments.
 
 Revision 1.8 admits only `cc = target_default` for every function. Module
 validation rejects another calling-convention identifier. Under that single-CC
@@ -1260,6 +1348,65 @@ Appendix B procedure in `p34-varargs.c` agrees with each compiler's own
 transition to stack arguments. The procedure itself is EvoMIR's to state
 (EvoMIR Section 6); EvoIR only promises the sequence.
 
+### 3.13 Scalar Floating Operations (revision 1.9.103)
+
+The approved initial execution profile admits binary32/binary64 only: RNE,
+gradual underflow, source-format evaluation, no implicit contraction, and IEEE
+exceptional arithmetic results rather than integer-style division/overflow UB.
+An arithmetic NaN selects the first signaling operand (left before right),
+otherwise the first quiet operand, preserving its sign/payload and setting its
+quiet bit; invalid arithmetic without a NaN operand yields positive default NaN.
+Format conversion quiets NaNs and transfers the highest payload bits and sign.
+Same-format transport, constants, copies and loads/stores preserve every bit;
+NaN is not poison, and numerical equality does not identify object representations.
+
+```text
+%v = const.f32 0x3f800000
+%v = const.f64 0x3ff0000000000000
+%v = fp.OP %a, %b : T
+%v = fp.OP %a : T
+```
+
+Constants have exactly 8/16 lowercase hexadecimal digits. Binary `add/sub/mul/div`
+require matching FP operands/results; `oeq/une/olt/ole/ogt/oge` require matching FP
+operands and return `bits<1>` (only `une` is true for unordered operands).
+Unary `neg` preserves the format; `convert` changes f32/f64 format; `from_signed`
+and `from_unsigned` convert full-width `bits<1..128>` to FP, rounding once.
+`to_signed/to_unsigned` truncate toward zero into `bits<1..128>`; the raw IR
+operation is total with zero for nonrepresentable input, but C lowering must
+first emit `fp.to_int_defined.sN/uN %a : bits<1>` and
+`ub.assume.floating_to_integer`, reporting **E3063** on false, including NaN
+and infinity. `to_bits/from_bits` are exact representation conversions between
+f32/bits<32> or f64/bits<64>, not numerical casts.
+
+These baseline operations are pure and excluded from P0 roots/witnesses; all
+operands still obey local SSA, initializedness, text/proof reconstruction and
+existing call/edge rules. Native **E3064** denotes an incompatible FP environment,
+not C UB; no hidden FPCR reset is permitted. `STDC FENV_ACCESS ON` is refused
+with **E3065**; unsupported strict/fast/contraction options are not ignored.
+Executable binary128, FP complex/vectors and strict fenv remain deferred.
+
+The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
+does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
+the corresponding `__STDC_IEC_*` and `__FP_FAST_FMA*` macros are absent and
+`__GCC_IEC_559{,_COMPLEX}` is zero, overriding the historical GCC macro census.
+For f32/f64, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
+the exact representation; truth results are 0/1 except `isinf_sign`, which
+returns -1/0/1. `fabs/fabsf` clear the sign bit, and `copysign/copysignf` copy it
+after their prototype conversions, preserving payloads and signaling bits.
+These builtin operands are evaluated once in source order; infinity/huge-value
+builtins are exact constants. Ordinary library calls retain their external
+effects and are not replaced by these builtins merely because names resemble.
+
+HFA records of one to four equal f32/f64 members carry `hfa=Cxf32/f64` in
+byval/sret marks, distinct from `hva`; the same shape survives `va_arg.byval`
+attributes. Classification follows completed layout: size must equal member
+count times the base size; alignment-induced padding uses the composite ABI.
+Scalar FP and HFA arguments share AAPCS64's SIMD argument cursor,
+independent of GPRs, with one shared stack cursor and packed HFA stack objects;
+float anonymous arguments promote to double. No object-layout substitution or
+private scalarized external ABI is authorized.
+
 ## 4. Effect Model
 
 ### 4.1 Effect Summary
@@ -1284,6 +1431,7 @@ EffectSummary {
 | Instruction | reads | writes | volatile | atomic | io | may_trap | may_unwind |
 |---|---|---|---|---|---|---|---|
 | `const` | `{}` | `{}` | false | false | false | false | false |
+| baseline `fp.*` (3.13) | `{}` | `{}` | false | false | false | false | false |
 | `uninitialized.bits<N>`, `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | `{}` | `{}` | false | false | false | false | false |
 | `add`, `sub`, `mul` | `{}` | `{}` | false | false | false | false | false |
 | `sdiv`, `udiv`, `srem`, `urem` | `{}` | `{}` | false | false | false | true | false |
@@ -1295,6 +1443,9 @@ EffectSummary {
 | `icmp.*` | `{}` | `{}` | false | false | false | false | false |
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
+| `tls_addr` | `{All}` | `{All}` | false | false | false | true | false |
+| `vec.pack`, `vec.bitcast` | `{}` | `{}` | false | false | false | false | false |
+| `vec.extract` | `{}` | `{}` | false | false | false | true | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
 | `block_addr` | `{}` | `{}` | false | false | false | false | false |
@@ -1310,6 +1461,8 @@ EffectSummary {
 | `copy.volatile.read/write/readwrite` | `{All}` | `{All}` | true | false | false | true | false |
 | `load volatile` | `{All}` | `{}` | true | false | false | true | false |
 | `store volatile` | `{}` | `{All}` | true | false | false | true | false |
+| `atomic.load` | `{All}` | `{}` | marker | true | false | true | false |
+| `atomic.store` | `{}` | `{All}` | marker | true | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
 | `trap.<reason>` | `{}` | `{}` | false | false | false | true | false |
 
@@ -1602,14 +1755,43 @@ type answers 4. Both oracles agree on every point of the probe
 (`.evidence/builtin-probes/20260909-nonobject-alignment/attributed.c`:
 designator 256, type 4, real address a multiple of 256).
 
+**Function placement (revision 1.9.104).** A definition may carry optional
+` section="name"`, last in its canonical header after any `patchable_entry`.
+It names the ELF executable PROGBITS section containing the complete function,
+including entry padding, local labels and its unwind range; omission selects
+ordinary text. The decoded UTF-8 name must be nonempty and contain no control
+characters. This is placement metadata, not part of the callable type, linkage,
+alignment, abstract effects or pointer identity; interpreters do not invent an
+address ordering or reclaim code based on a section name.
+
+C lowering merges function `section` across the complete declaration chain
+and assembler-name identities. A `section` written inside a named pointer
+declarator still describes the declared function or object, not its pointer
+type; it enters the same symbol-attribute merging path. Identical requests agree, including later
+repetitions; malformed or conflicting requests are E2943. A first placement
+request after its function definition is also E2943: GCC applies it and Clang
+ignores it, so this profile does not silently choose either layout. Numeric
+escapes in a source function-section attribute are E2943 because Clang rejects
+them as unevaluated-string escapes; raw UTF-8, ordinary escaping and adjacent
+string tokens retain their decoded bytes. This source boundary does not change
+the canonical IR quoted-string encoding. An alias
+shares its target's placement and cannot request a different section. Declarations
+without a definition produce no code or section allocation; GNU inline-only and
+ordinary inlining/retention rules are unchanged, and an inlined body does not
+change its caller's placement. The field survives canonical text, optimization
+and independent proof reconstruction: adding, deleting or changing it is not a
+scalar equality rewrite. Native emission must consume the validated metadata,
+preserve alignment and link-ordered patch registrations, and select each following
+function's own section; unsupported object formats fail closed (E4009).
+
 ```text
 func @name(...) -> (...) cc = target_default visibility=internal
 ```
 
 `visibility=internal` is written for a function whose C definition has
-storage class `static` (including `static inline`); the field is omitted
-for every other function, and its absence means external, so every module
-text written before this revision is unchanged. The machine emits no
+storage class `static` (including `static inline`); absent an ELF visibility
+attribute the field is omitted for every other function, and its absence
+means external. The machine emits no
 global symbol for an internal function or an internal global, and it omits
 an internal function that nothing in the module references by `call`,
 `func_addr` or a relocation, repeating until nothing more can be omitted,
@@ -1626,6 +1808,31 @@ contains no dot. These are validation rules, not renderer conventions. This is
 a property of the object rather than of the name that reached it, so it is
 recorded here rather than left to the front end: a linker and a checker both
 need it, and neither can recover it from the symbol text.
+
+**ELF visibility (revision 1.9.99).** C linkage, weak/strong binding and ELF
+visibility are independent. The compact encoding remains: `internal` means
+C internal linkage, `external` means C external linkage with ELF default,
+`hidden` means C external linkage with ELF hidden, and `protected` means C
+external linkage with ELF protected. These marks apply equally to functions,
+global objects, declarations and aliases; declarations cannot be C internal.
+Only C internal linkage permits removal as an unused private definition.
+
+A protected symbol remains exported. References from its final executable
+or shared object bind to that component's definition; the boundary is not a
+translation unit or an EvoIR module. A default-visible definition in the
+current module is not a local-binding promise: PIC address materialization
+must remain interposable. The assembler/linker implements the component
+boundary, including refusing an invalid protected-data copy relocation.
+The two single-module interpreters do not model ELF dynamic loading.
+
+In this AArch64 ELF profile, source `visibility("internal")` is normalized
+to effective `hidden`, retaining the written attribute in C-HIR and leaving
+C linkage and strength unchanged. This deliberately follows Clang's ELF
+encoding, not GCC's `STV_INTERNAL` or its additional optimization assumptions.
+Redeclarations compare effective visibility, so internal/hidden agree;
+conflicting effective values or malformed attributes remain E2943.
+`tests/fixtures/symbol-component-*.c` records cross-TU definitions/references,
+executable interposition, aliases and escaped function/data addresses.
 
 The dots are part of the generated symbol. Section 9.2 permits dots after the
 first character of an identifier; source C identifiers in this profile cannot
@@ -1909,6 +2116,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2930` | `use-with-incomplete-enumeration` | front end |
 | `E2931` | `unprototyped-call-mismatch` | front end |
 | `E2932` | `always-inline-cycle` | front end |
+| `E2947` | `invalid-atomic-memory-order` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1945,6 +2153,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3041` | `symbol-declared-and-defined` | module validation |
 | `E3060` | `weak-internal-symbol` | module validation |
 | `E3061` | `alias-target-not-defined` | module validation |
+| `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
 | `E3029` | `not-lowered: computed-goto` | legacy lowering refusal, superseded for the 3.9 indirect-edge form at 1.9.92; not a runtime target error |
 | `E3048` | `invalid-indirect-branch-target` | runtime |
 | `E3045` | `not-lowered: ordered-pointer-comparison` | lowering — executor-allocated, **withdrawn at 1.9.68** |
@@ -2511,9 +2720,11 @@ The state is created for exactly one translation unit and target layout. The
 translation-unit identity is the lowercase SHA-256 of the canonical Section 9
 bytes first accepted by `ingest_module`; it remains the identity after legal
 extraction changes those bytes. The target-layout identity is the SHA-256 of
-the ASCII string `aarch64-unknown-linux-gnu/evoir-layout-v1` followed by one LF
+the ASCII string `aarch64-unknown-linux-gnu/evoir-layout-v4-hfa-natural-alignment` followed by one LF
 byte, namely
-`4f12297e5b4b84815a07e990a1e67102e2a33e87efd72a25d5efca3b4dde07e8`.
+`9460b084c6b110935328ced6acded2c869d6718a6fdbfa69516b989cc1d59798`.
+Revision 1.9.103 introduced v3 for scalar FP; the HFA natural-transport-alignment
+correction advances it to v4, without changing source object layout.
 Changing any layout rule requires a new version string before a state can be
 reused. Reuse with another identity is rejected before mutation. `EClassId` is an append-only
 arena handle and is never recycled; union chooses the numerically smaller
@@ -2764,6 +2975,8 @@ positive_int  := nonzero_digit digit*
 index         := "0" | nonzero_digit digit*
 hex_byte      := hex_digit hex_digit
 hex_digit     := "0".."9" | "a".."f"
+hex8          := hex_byte hex_byte hex_byte hex_byte
+hex16         := hex8 hex8
 bit           := "0" | "1"
 newline       := the single byte "\n"
 ```
@@ -2791,20 +3004,25 @@ digested.
 ```text
 module          := ε | segment (newline segment)*
                    -- at most one of each, in this order:
-                   -- global_seq, extern_seq, declare_seq, alias_seq, function_seq, module_asm_seq
+                   -- global_seq, extern_seq, declare_seq, alias_seq, function_seq, module_asm_seq, tls_seq, lifecycle_seq
 global_seq      := global+
 extern_seq      := extern_object+
 extern_object   := "extern " symbol " size=" (integer | "unknown")
-                   " align=" integer [" linkage=weak"] newline
+                   " align=" integer [declaration_visibility] [" linkage=weak"] newline
 declare_seq     := declare+
 declare         := "declare " symbol "(" sig_param_list [", ..."] ")"
-                   " -> (" type_list ")" " cc = " ident [" linkage=weak"] newline
+                   " -> (" type_list ")" " cc = " ident [declaration_visibility] [" linkage=weak"] newline
 alias_seq       := alias+
-alias           := "alias " symbol " = " symbol [" visibility=internal"]
+alias           := "alias " symbol " = " symbol [visibility_mark]
                    [" linkage=weak"] newline
 function_seq    := function (newline function)*
 module_asm_seq  := module_asm+
 module_asm      := "asm " quoted_string newline
+tls_seq         := tls_symbol+
+tls_symbol      := "tls " symbol " model=" tls_model newline
+tls_model       := "global_dynamic" | "local_dynamic" | "initial_exec" | "local_exec"
+lifecycle_seq   := lifecycle+
+lifecycle       := ("init " | "fini ") symbol " priority=" integer newline
 
 global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
@@ -2814,7 +3032,9 @@ global          := "global " symbol " origin=" integer
 reloc           := "(" integer ", " reloc_target ", " integer ")"
 reloc_target    := symbol | symbol block_label
 global_kind     := "file" | "function_static" | "string_literal"
-visibility      := "external" | "internal"
+visibility      := "external" | "internal" | "hidden" | "protected"
+visibility_mark := " visibility=" ("internal" | "hidden" | "protected")
+declaration_visibility := " visibility=" ("hidden" | "protected")
 
 type            := "bits<" positive_int ">"
                  | "f32" | "f64"
@@ -2827,13 +3047,18 @@ type            := "bits<" positive_int ">"
                  | "void"
 signature       := "(" sig_param_list [", ..."] ")->(" type_list ")"
 sig_param_list  := ε | sig_param ("," " " sig_param)*
-sig_param       := type [" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]
+sig_param       := type [record_mark]
+record_mark     := (" byval(" | " sret(") integer ", " integer [hva_mark | hfa_mark] ")"
+hfa_mark        := ", hfa=" integer "x" ("f32" | "f64") [", abi_align=16"]
+hva_mark        := ", hva=" positive_int "xvec<" positive_int ", bits<" positive_int ">>"
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list [", ..."] ")"
                    " -> (" type_list ")"
-                   " cc = " ident [" visibility=internal"] [" linkage=weak"]
-                   [" align=" integer] newline
+                   " cc = " ident [visibility_mark] [" linkage=weak"]
+                   [" align=" integer] [" stack_protect"]
+                   [" patchable_entry=" integer "," integer]
+                   [" section=" quoted_string] newline
                    indent effects_clause newline
                    "{" newline
                    block_seq
@@ -2846,7 +3071,7 @@ region_set      := "{}" | "{" region ("," " " region)* "}"
 region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
 bool            := "true" | "false"
 param_list      := ε | param ("," " " param)*
-param           := param_name ": " type [" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]
+param           := param_name ": " type [record_mark]
 type_list       := ε | type ("," " " type)*
 
 block           := block_label "(" block_arg_list "):" newline
@@ -2865,7 +3090,10 @@ positive scale, `O` an origin ordinal.
 
 ```text
 inst_body :=
-    value_name " = const." type " " integer
+    value_name " = const.f32 0x" hex8
+  | value_name " = const.f64 0x" hex16
+  | value_name " = fp." fp_op " " value_list " : " type
+  | value_name " = const." type " " integer
   | value_name " = uninitialized." type
   | value_name " = " arith_op "." type " " value_name ", " value_name
   | value_name " = icmp." cmp_op " " value_name ", " value_name
@@ -2878,6 +3106,8 @@ inst_body :=
   | "ub.assume." ub_reason " " value_name
   | value_name " = ptr.null : " type
   | value_name " = global_addr " symbol " : " type
+  | "(" value_name ", " value_name ", " value_name ") = tls_addr " symbol ", " value_name ", " value_name
+  | value_name " = vec." ("pack" | "extract" | "bitcast") " " value_list " : " type
   | value_name " = func_addr " symbol " : " type
   | "(" value_name ", " value_name ", " value_name ") = alloca "
         value_name ", " value_name
@@ -2890,6 +3120,10 @@ inst_body :=
   | "(" value_name ", " value_name ", " value_name ") = load" volatile_marker
         " " value_name ", " value_name ", " value_name " : " type
   | "(" value_name ", " value_name ") = store" volatile_marker
+        " " value_name ", " value_name ", " value_name ", " value_name
+  | "(" value_name ", " value_name ", " value_name ") = atomic.load " atomic_order volatile_marker
+        " " value_name ", " value_name ", " value_name " : " type
+  | "(" value_name ", " value_name ") = atomic.store " atomic_order volatile_marker
         " " value_name ", " value_name ", " value_name ", " value_name
   | "(" value_name ", " value_name ") = copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " "
         value_name ", " value_name ", " value_name ", " value_name
@@ -2924,6 +3158,11 @@ arith_op         := "add" | "sub" | "mul" | "sdiv" | "udiv" | "srem" | "urem"
                   | "shl" | "ashr" | "lshr" | "and" | "or" | "xor"
 cmp_op           := "eq" | "ne" | "slt" | "sle" | "ult" | "ule"
 cast_op          := "sext" | "zext" | "trunc"
+fp_op            := "add" | "sub" | "mul" | "div" | "neg"
+                  | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
+                  | "convert" | "from_signed" | "from_unsigned"
+                  | "to_signed" | "to_unsigned" | "to_bits" | "from_bits"
+                  | "to_int_defined." ("s" | "u") positive_integer
 bit_op           := "ctlz" | "cttz" | "ctpop" | "bswap"
 binary_predicate := "signed_add_defined" | "signed_sub_defined"
                   | "signed_mul_defined" | "signed_div_rem_no_overflow"
@@ -2933,6 +3172,7 @@ ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "bit_builtin_zero_operand"
 trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached"
 volatile_marker  := ε | " volatile"
+atomic_order     := "relaxed" | "consume" | "acquire" | "release" | "seq_cst"
 direction        := "add" | "sub"
 index_signedness := "signed" | "unsigned"
 result_list      := value_name ("," " " value_name)*
@@ -3003,6 +3243,8 @@ while a unary predicate was written with two operands. Names are not shapes.
 
 ```text
 <> = const.<> <>
+<> = const.<> 0x<>
+<> = fp.<> <> : <>
 <> = uninitialized.<>
 <> = <>.<> <>, <>
 <> = <>.<> <>
@@ -3014,6 +3256,8 @@ while a unary predicate was written with two operands. Names are not shapes.
 ub.assume.<> <>
 <> = ptr.null : <>
 <> = global_addr @<> : <>
+(<>, <>, <>) = tls_addr @<>, <>, <>
+<> = vec.<> <> : <>
 <> = func_addr @<> : <>
 (<>, <>, <>) = alloca <>, <> [origin=<>, size=<>, align=<>]
 (<>, <>) = lifetime.end <>, <>, <>
@@ -3021,6 +3265,8 @@ ub.assume.<> <>
 <> = access_in_bounds <>, <> [size=<>, align=<>]
 (<>, <>, <>) = load<> <>, <>, <> : <>
 (<>, <>) = store<> <>, <>, <>, <>
+(<>, <>, <>) = atomic.load <><> <>, <>, <> : <>
+(<>, <>) = atomic.store <><> <>, <>, <>, <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 <> = ptr.to_int <>
 <> = block_addr <> : <>
@@ -3084,7 +3330,7 @@ of one module disagree on their digest.
 | Position | Rule |
 |---|---|
 | Line ending | `\n`. Never `\r\n`. |
-| Final byte | `\n`. The last function's closing brace is followed by exactly one newline and nothing else. |
+| Final byte | `\n`. The last module item's line is followed by exactly one newline and nothing else. |
 | Global order | Source-site origin ordinal, ascending. |
 | Function order | Module definition order, which lowering fixes from source order. |
 | Between globals | Exactly one newline; globals form one block with no blank lines inside it. |
@@ -3092,6 +3338,7 @@ of one module disagree on their digest.
 | Globals-only module | The final global's line ends the file. No trailing blank line. |
 | Empty module | The empty byte string. Not a single newline, which would be a module with one blank line and is therefore malformed. |
 | Between functions | Exactly one blank line. |
+| TLS/lifecycle tables | Follow assembly, separated from preceding nonempty tables by one blank line. TLS retains table order; lifecycle retains registration order. |
 | Instruction indent | Exactly four spaces. Never a tab. |
 | Block label indent | None. Column zero. |
 | Effects clause | Present on every function, indented four spaces on its own line between the calling convention and the opening brace. An absent clause is malformed, never an empty default. |
@@ -3287,7 +3534,7 @@ not hard-code target widths, pointer size, or pointer alignment.
 | `const` | No IR effect. Purely a C-HIR check. |
 | `volatile` | Exact `load volatile` / `store volatile` syntax and ordered world-trace events. |
 | `restrict` | Preserved in C-HIR only; `NoAlias` facts are outside Day 7. |
-| `_Atomic` | Typed unsupported in Day 7; atomic operations remain reserved. |
+| `_Atomic` | Typed unsupported; the separately admitted scalar `__atomic_load_n` / `__atomic_store_n` do not imply a complete `_Atomic` type system. |
 
 #### 10.1.3 Lvalue Lowering
 
@@ -3743,6 +3990,10 @@ in the source, so a reviewer can confirm nothing was dropped on the way in.
 **Applied semantics.** `aligned` and `packed` act on layout; integer `mode`
 selects the canonical integer type as specified below. The separately stated
 inlining and linkage attributes also have their explicitly defined effects.
+Revision 1.9.101 also applies `constructor`/`destructor` through the load-instance
+registrations of Section 2.1, `vector_size` through the real integer type of
+Section 10.1.14, and `tls_model` through the thread-object model below; these
+are not included in the preserve-only catch-all.
 
 - `aligned(N)` raises alignment. `N` is an integer constant expression that is
   a power of two representable by the target layout; otherwise `E2903`. On a
@@ -3791,16 +4042,29 @@ Evidence: `.evidence/builtin-probes/20260908-integer-modes/probe.c` and
 `results.txt`, both sealed compilers at O0/O2; `sizeof(unsigned int
 __attribute__((mode(QI))))` is the explicit 1-versus-4 conflict.
 
-**Everything else** is preserved and not applied. The receipt lists, by name,
+**Thread storage (revision 1.9.101).** `__thread` and `_Thread_local` give an
+object thread storage duration; file-scope definitions/references and block
+static objects retain their normal linkage, qualifiers and template initializer.
+Redeclarations must agree on thread storage. A block definition without static
+or extern storage is refused, as is a static initializer containing a TLS
+address. `tls_model("global-dynamic"|"local-dynamic"|"initial-exec"|"local-exec")`
+and the corresponding command option select the explicit model; conflicting
+attributes, unknown models and a model on a non-TLS object are E2943. Instance
+identity, escaped addresses and lifetimes obey Section 3.8, not process-global
+substitution.
+
+**Everything else not explicitly applied in this profile** is preserved and not applied. The receipt lists, by name,
 every attribute the cohort presented that this profile did not apply, so the
-size of that set is measured rather than assumed. In particular `section`,
-`noreturn`, `unused`, `gnu_inline`, `no_instrument_function`,
+size of that set is measured rather than assumed. In particular
+`noreturn`, `unused`, `no_instrument_function`,
 `cold`, `pure` and `const` are preserved without effect here; they carry
 effect or backend semantics that belong to later stages, and applying
 a partial reading now would create a second source of truth for each.
 `always_inline` has an effect since revision 1.9.74, stated next; `weak` and
 `alias` are linkage marks since revision 1.9.79 (Section 5.2); `aligned` on a
 function is code alignment since revision 1.9.88 (Section 5.2).
+`section` applies to function definitions since revision 1.9.104 (Section 5.2)
+and to objects under Appendix D's explicit-object-section rule.
 `cleanup` on an automatic object has the scope-exit effect stated below.
 `alloc_size(1)` / `alloc_size(1,2)` and other valid parameter indices may
 describe a returned allocation's byte extent for the object-size queries below
@@ -3828,6 +4092,24 @@ edge/lifetime handling, not a new instruction or an optimizer hint.
 Evidence: `tests/fixtures/cleanup-scope-exits.{c,txt}`, both sealed oracles at
 O0/O2; authorization follows the measured IRQ scoped-lock boot deadlock.
 
+**GNU inline definition roles (revision 1.9.102, reviewed authorization).**
+The complete declaration chain distinguishes an inline body from this unit's
+linkable definition. GNU89, `-fgnu89-inline`, or a function's `gnu_inline`
+attribute selects GNU inline semantics; a per-function attribute does not
+change the unit's language mode or predefined inline-mode macros. A pure
+GNU `extern inline` body supplies no independent definition, including when
+its address is taken. A non-extern inline declaration in the chain can request
+the independent definition; an inline-only GNU body may precede a distinct
+ordinary definition, but not follow it or replace duplicate-definition checks.
+When that real definition is present, its body supersedes the earlier inline
+body for direct substitution too, including call sites preceding the real
+definition (`tests/fixtures/gnu-inline-definition-chain.{c,out}`).
+Default GNU11 ISO inline and `static inline` retain their separate rules.
+Remaining calls, addresses and relocations name the actual external symbol,
+never a fabricated local, weak or COMDAT copy. Interpreters may execute a
+substituted body, but an unexpanded external call uses the existing external
+execution boundary and top effect summary, not the saved inline body.
+
 **`always_inline` (revision 1.9.74).** A call whose callee is a function
 defined in this unit with the `always_inline` attribute is replaced, in
 C-HIR before lowering, by the callee's body: each parameter becomes a fresh
@@ -3840,9 +4122,10 @@ function-scope `static` object of the callee stays the one object of that
 function, shared by every substitution and by the out-of-line body;
 `__func__` keeps the callee's name; the effect ordering of the body is the
 call's. Substitution proceeds callee-first, so an `always_inline` callee
-inside an inlined body is substituted too. A variadic callee, a callee whose
-address the unit also takes, and a cycle of `always_inline` calls are not
-substituted: the first two are lowered as ordinary calls, the cycle is
+inside an inlined body is substituted too. Taking the function's address does
+not prohibit direct-call substitution or give an inline-only body an address.
+A variadic callee and a cycle of `always_inline` calls are not
+substituted: the former is lowered as an ordinary call, the cycle is
 `E2932` (`always-inline-cycle`; GCC and Clang both refuse it as "inlining
 failed"). After substitution the front end folds constants again, so an
 `asm` operand under an immediate constraint (`i`, `n`, `I`, `J`, `K`, `L`)
@@ -4079,12 +4362,23 @@ disagree the profile records `ORACLE_CONFLICT` and takes the rule both
 compilers document as permitted, never a vote.
 
 - `__builtin_expect(e, c)`: both operands are converted to `long`; the result
-  is the converted `e` with type `long`. `e` is evaluated; `c` is parsed and
-  converted but not evaluated (both oracles: a side effect in `c` does not
-  happen). `c` need not be a constant (both oracles accept a non-constant `c`
-  without diagnostic). The result is an integer constant expression exactly
-  when `e` is. The expectation is dropped by the front end; no hint reaches
-  EvoIR in this revision.
+  is the converted `e` with type `long`. Parsing, type checking and conversion
+  legality apply to both operands. At source resolution, if `e` is itself an
+  integer constant expression under this profile, the result is its constant
+  projection and `c` is not executed; this result is an integer constant
+  expression. Otherwise this is a runtime expression: evaluate and save the
+  converted `e`, then evaluate converted `c` once, then return the saved value.
+  This `e`-then-`c` order is a project choice, not a GNU-wide ordering claim.
+  `c` need not be constant. Unevaluated contexts and control transfers retain
+  their ordinary semantics; a second operand that does not return does not
+  produce a builtin result. Substitution, inlining and later constant discovery
+  must not change the source-selected evaluation contract. No expectation
+  instruction reaches EvoIR: only the selected computation and effects remain.
+  Revision 1.9.98 corrects the earlier unconditional non-evaluation claim. This
+  bounded source-ICE policy deliberately differs from GCC's nested-expect fold
+  and from Clang's non-ICE const-local projection, not a claim of matching all
+  oracle folds. Fixed GCC-14/Clang-19 O0/O2 evidence and the differing rows are
+  in `.evidence/builtin-probes/20260915-benchmark-frontier/expect-boundaries.out`.
 - `__builtin_constant_p(e)`: `e` is parsed and type-checked but never
   evaluated. The result has type `int` and is an integer constant expression.
   It is `1` when `e` is an integer constant expression or a string literal,
@@ -4159,6 +4453,27 @@ keyword. `__builtin_constant_p` and `__builtin_types_compatible_p` are integer
 constant expressions in that position; `__builtin_*_overflow` is not (both
 oracles reject it in a static assertion).
 
+**Scalar atomic builtins.** `__atomic_load_n(p, order)` returns the unqualified
+pointee type; `__atomic_store_n(p, value, order)` converts `value` to that type
+and returns `void`. The pointee is an integer of 1/2/4/8-byte size or a
+target-width pointer. A store requires a modifiable pointee; const loads and
+volatile pointers preserve their ordinary meaning. Unsupported types report
+`E2913`, wrong arity `E2909`, and a builtin not called `E2910`. These accesses
+are never ICEs. This admission does not include `_Atomic`-qualified objects,
+generic aggregate atomics, RMW/CAS/exchange, 128-bit accesses or MMIO.
+
+Source constant order values map 0/1/2/3/4/5 to
+relaxed/consume/acquire/release/acq_rel/seq_cst. Loads admit 0/1/2/5 and stores
+0/3/5; an invalid constant is `E2947` at that operand. For a non-ICE order,
+on the defined domain of legal source orders the implementation strengthens
+to seq_cst, evaluating the actual order expression exactly once. Operand
+evaluation uses the project's deterministic left-to-right policy: address,
+then store value if any, then order, then the access. This preserves earlier
+values across later effects and does not evaluate operands in an unevaluated
+or unreached context. The source constant/dynamic distinction is fixed before
+optimization or inlining. Lowering uses Section 3.8's atomic operations,
+never ordinary memory access or an undeclared external helper.
+
 **Library builtins.** `__builtin_memset`, `__builtin_memcpy`,
 `__builtin_memcmp`, `__builtin_strcmp`, `__builtin_strncmp` and
 `__builtin_strlen`, and `__builtin_memmove` (`void *(void *, const void *, size_t)`), have the prototypes of the library functions they name; `__builtin_prefetch(addr[, rw[, locality]])` is `void` with one to three arguments; `__builtin_extract_return_addr(p)` returns `void *` (evidence `p29-residue.c`, `lib`, `ra`, `tys`)
@@ -4198,6 +4513,37 @@ boundary. This does not admit floating-point or vector execution.
 The sealed `20260908-header-types/types.c` and `results.txt` record both
 compilers: Clang-19 lacks seven GCC spellings, whose admission is the
 explicitly requested GCC target-header profile, not claimed oracle consensus.
+
+**Reviewed integer-vector profile (revision 1.9.101, S01).**
+`vector_size(B)` creates a canonical vector of B / sizeof(element) lanes,
+not a layout annotation on a scalar. Integer lane count is a positive power
+of two; layout is B bytes with alignment min(B,16). Qualifiers and vector
+identity survive typedefs, arrays, records and signatures. GNU vectors and
+GCC's nominal `__Int8x8_t`/`__Uint32x4_t` family are distinct source types
+even when their representations match; the latter admits all 64/128-bit
+integer combinations of 8/16/32/64-bit lanes, with long/unsigned long for
+64-bit lanes. Floating, polynomial and architecture-intrinsic types/builtins
+remain separate capabilities, not implied by these integer names.
+
+Arithmetic has no scalar integer promotion of lanes. Integer-vector assignment
+can preserve equal-width lane representations across signedness; this does
+not make their declaration types compatible. Comparisons yield
+same-width integer masks (all ones/zero); scalar broadcast requires a legal
+element conversion. Compound assignments evaluate the place and RHS once.
+Signed shifts retain the approved GNU truncating rule and full-width count
+check; other integer obligations and wrapping options apply per lane.
+An element can be assigned but its address is refused; vector increment/
+decrement is also outside the consensus extension set. GNU dynamic
+`__builtin_shuffle` uses lane indices modulo the input lane count, while
+`__builtin_shufflevector` has constant indices (-1 produces an unspecified
+lane); conversion and equal-size reinterpretation are distinct operations.
+Integer vectors participate in fixed/variadic calls and homogeneous vector
+aggregates through EvoMIR's real ABI, not scalar-parameter substitution.
+General-register-only mode still forbids executed SIMD values.
+The sealed measurements and non-consensus boundaries are recorded in
+`tests/fixtures/elf-vector-tls.out`; sub-8-byte vector external ABI is E4002,
+and element address/increment forms remain refused. This does not claim
+Clang admits the GCC-only `__builtin_shuffle` or nominal target spellings.
 
 #### 10.1.15 Checked arithmetic builtins
 
@@ -4424,9 +4770,9 @@ additionally executes `ptr<generic>`, globals, automatic object allocation and
 lifetime, pointer offset/equality, memory guards, and ordinary/volatile
 load/store through the shared object model. It returns immutable memory/world
 snapshots and the exact volatile trace; every invalid access reports the typed
-diagnostic in Section 6.1. Floating, vector, tuple, atomic, heap-library, and
-pointer/integer-conversion execution remain typed unsupported and must never
-produce a placeholder value.
+diagnostic in Section 6.1. Later admitted instruction families, including
+scalar FP in 3.13, use that same object/state model; forms still outside their
+specified boundaries remain typed unsupported and never produce placeholders.
 
 ---
 
@@ -4773,6 +5119,21 @@ emitted without a definition, is withdrawn at revision 1.9.53.
 
 #### 10.1.20 Source locations
 
+**Restricted raw source bytes (revision 1.9.102, reviewed authorization).**
+Main input, stdin and included contents share a byte-preserving lexer.
+Invalid UTF-8 data bytes in unprefixed ordinary narrow literals retain their
+byte values; comments containing them follow the usual whitespace and line
+splicing rules. Ordinary macro transport retains the token's raw spelling.
+Original byte offsets and source digests are not based on lossy decoding,
+Latin-1 transcoding or replacement characters. Character constants retain
+the target's single-byte interpretation; this rule does not select signed char.
+Invalid encoding in identifiers, other tokens, prefixed literals, include
+names, stringization/prefix-changing paste, narrow/wide concatenation or
+UTF-8-only assembly/attribute consumers remains E0002. Legal UTF-8 and existing
+escapes are unchanged; arbitrary charset conversion is not admitted.
+Lossless C escape serialization of narrow literal data is permitted, while
+the original token spelling and physical locations remain available.
+
 Every token the preprocessor hands to the parser carries two spans. Its
 spelling span is the range of the characters that spell it, in the file where
 they were written; for a token produced by macro expansion that is the
@@ -4987,8 +5348,13 @@ defined verbatim before any source token, in that order. `__STDC_VERSION__`
 is `201112L` as in the list. `__OPTIMIZE__` is absent, as in the list. The
 driver's `-D`/`-U` apply after the list. The list is the authority; the
 implementation carries a copy and a test compares the copy to the sealed
-digest. `__CHAR_UNSIGNED__ 1` is in the list and agrees with the type profile
-(plain `char` is unsigned on this target).
+digest. `__CHAR_UNSIGNED__ 1` is in the default list and agrees with the type
+profile (plain `char` is unsigned on this target by default). `-fsigned-char`
+and `-funsigned-char` (including their inverse spellings) select plain-char
+representation in written order, without making its C type identical to
+either explicitly signed character type. Ordinary single-byte character
+constants and preprocessor character operands use that representation;
+signed-char mode removes `__CHAR_UNSIGNED__` before the user's `-D`/`-U` actions.
 
 **Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
 `__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
@@ -5063,7 +5429,8 @@ else is `E0106` (`feature-query-malformed`).
 **Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
 visibility ...`, `#pragma GCC poison`, `#pragma pack(...)` are accepted:
-`diagnostic` is ignored-safe; `visibility push(hidden)` / `push(default)`
+`diagnostic` is ignored-safe; `visibility push(hidden)` / `push(default)` /
+`push(protected)` / `push(internal)`
 and `visibility pop` maintain a translation-unit stack, including across
 includes and `_Pragma` expansion. The current visibility supplies a default
 for externally linked object/function declarations, not for types or automatic
@@ -5073,7 +5440,8 @@ pragma-origin metadata and uses the existing hidden-symbol linkage path:
 strong hidden addresses are direct, weak hidden addresses retain the GOT.
 Malformed/unsupported values and unmatched `pop` are E2943; so is a conflicting
 later explicit visibility (the latter two are GCC-warning/Clang-error oracle
-conflicts, refused by this profile). Only hidden/default are admitted, as for
+conflicts, refused by this profile). The effective visibility follows the same
+hidden/default/protected and internal-to-hidden rules as for
 the explicit attribute. `-E` preserves these semantic directives for re-parsing.
 This correction was authorized on 2026-09-13 after the first complete EvoCC
 kernel link faulted before MMU setup; paired sealed probes are recorded beside
@@ -6030,6 +6398,7 @@ the stated coverage, with the stated axioms"; it is not a verified compiler.
 | | `trunc.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W >= N) | no |
 | Pointer | `ptr.null` | `ptr<AS>` or `fnptr<Sig>` | — | no |
 | | `global_addr` | `ptr<generic>` | global symbol | no |
+| | `tls_addr` | `ptr<generic>`, `mem<all>`, `world` | TLS symbol, current memory and world | yes; instance initialization/access |
 | | `ptr.offset.<direction>.<signedness>` | `ptr<AS>` | `%base` : `ptr<AS>`, `%index` : `bits<N>`, positive scale | yes |
 | Memory | `alloca` | `ptr<generic>`, `mem<all>`, `world` | `%m`, `%w`, size, align | yes |
 | | `lifetime.end` | `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
@@ -6037,6 +6406,8 @@ the stated coverage, with the stated axioms"; it is not a verified compiler.
 | | `access_in_bounds` | `mem<all>` | `%m`, `%ptr`, size, align | yes |
 | | `load [volatile]` | Type, `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
 | | `store [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` : Type | yes |
+| | `atomic.load order [volatile]` | Type, `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
+| | `atomic.store order [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` | yes |
 | Control | `br ^target(args...)` | — | block label, values | n/a |
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `br.indirect %p [^b(args), ...]` | — | code pointer, complete ordered edges and values | yes; E3048 for an invalid target |
@@ -6050,6 +6421,9 @@ the stated coverage, with the stated axioms"; it is not a verified compiler.
 | | `return_address : ptr<generic>`, `frame_address : ptr<generic>` | `ptr<generic>` | none | on dereference (`E3013`) |
 | | `ptr.from_int.ptr<AS> %i` | `ptr<AS>` | `bits<64>` | on dereference (`E3013`) |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
+| Integer vectors | `vec.pack` | `vec<N, bits<B>>` | N lane values of `bits<B>` | no; transports lane initializedness |
+| | `vec.extract` | `bits<B>` | vector, full-width integer index | yes; E3011 for an invalid index |
+| | `vec.bitcast` | same-size integer/vector representation | source value | no; preserves initializedness |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | Varargs | `va_start %ap, %m, %w` | `mem<all>`, `world` | list object, memory, world | E3037 at validation |
 | | `va_arg.Type %ap, %m, %w` | Type, `mem<all>`, `world` | list object, memory, world | yes; E3038 |
@@ -6092,6 +6466,13 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.104 | 2026-09-21 | Apply approved function-section placement through declaration merging, canonical IR/proof metadata and ELF emission, preserving linkage, alignment, aliases, labels and patchable entries. |
+| 1.9.103 | 2026-09-20 | Apply approved scalar binary32/binary64 numerical/environment contract, explicit operations and conversion obligation, HFA metadata and profile identity; implementation acceptance remains separately measured. |
+| 1.9.100 | 2026-09-15 | Apply the reviewed bounded scalar atomic load/store contract, explicit order/volatile/events and AArch64 mapping; register E2947/E3062. Single-thread interpreter traces do not claim a concurrent memory model. |
+| 1.9.102 | 2026-09-15 | Record the reviewed complete-declaration-chain GNU inline definition roles and restricted raw narrow-literal/comment bytes, without weakening external symbol or unsupported-encoding boundaries. |
+| 1.9.101 | 2026-09-15 | Apply reviewed load-instance registrations, thread-local objects and integer-vector execution/ABI metadata; preserve independent mutation checks and advance the layout identity. |
+| 1.9.99 | 2026-09-15 | Apply the reviewed ELF visibility contract uniformly to definitions, declarations, extern objects and aliases: protected component binding, source internal normalized to hidden, and default-visible PIC definitions kept interposable. C static linkage, weak strength and source spelling remain distinct. |
+| 1.9.98 | 2026-09-15 | Reviewed expectation contract: source-ICE projection keeps the second operand unevaluated; runtime forms evaluate e then c once, preserving that choice through optimization. Records the fixed-oracle boundary disagreements rather than declaring either compiler universally authoritative. |
 | 1.9.97 | 2026-09-14 | User authorizes alloc_size for proved allocation extents and dynamic object-size queries, retaining allocation-time evaluation, unknown fallback and the source-ICE boundary. |
 | 1.9.96 | 2026-09-13 | User-authorized cleanup exception: resolved ordinary callbacks run in reverse order on actual scope exit, after return evaluation/copy and before object lifetime end. |
 | 1.9.95 | 2026-09-13 | User-authorized correction: visibility pragmas are semantic declaration defaults, not ignored-safe. Reuse hidden symbol binding and retain weak GOT/null behavior; preserve directives in preprocessed output. |
@@ -6572,6 +6953,7 @@ instruction-shape metadata.
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 (<>, <>, <>) = alloca.dynamic <>, <>, <> [origin=<>, align=<>]
 (<>) = va_arg.byval <>, <>, <>, <> [size=<>, align=<>]
+(<>, <>, <>) = atomic.rmw.<> <> <>, <>, <>, <> : <>
 ```
 
 ### Negative checked results stored into an unsigned type
@@ -6864,7 +7246,7 @@ The mixed-link adapters previously erased this spelling before measurement, so o
 
 The 2026-09-10 implementation authorization admits `visibility("hidden")` as linked-image binding, independent of C internal linkage and weak strength: global definitions spell `visibility=hidden`, and functions, declarations, extern objects and aliases optionally spell it before `linkage`; an external declaration cannot have C internal linkage.
 ELF emission marks the symbol `.hidden` and addresses strong hidden references directly, but keeps the GOT for weak hidden references so unresolved weak addresses remain null; a hidden definition is still externally callable and is not discarded as an unused static function.
-The paired `tests/fixtures/symbol-sections.c` / `symbol-sections-caller.c` probe passes both sealed compilers at O0/O2, with exact symbol/relocation observations and the `symbol-attribute-errors.c` edge cases recorded in `symbol-sections.out`; conflicting explicit default/hidden redeclarations are E2943 `invalid-or-conflicting-symbol-attribute`, and this implementation admits only those two attribute values rather than guessing another visibility's semantics.
+The paired `tests/fixtures/symbol-sections.c` / `symbol-sections-caller.c` probe passes both sealed compilers at O0/O2, with exact symbol/relocation observations and the `symbol-attribute-errors.c` edge cases recorded in `symbol-sections.out`; conflicting explicit default/hidden redeclarations are E2943 `invalid-or-conflicting-symbol-attribute`. Revision 1.9.99 extends this bounded rule to protected and the explicitly reviewed internal-to-hidden normalization, rather than treating either as C static linkage.
 This replaces the earlier pending-authority entry without changing Section 10.1.9's body; the two measured vDSO units in K1 `measure-20260909T133504Z` motivate the change, and their new campaign outcomes remain unmeasured.
 
 ### Explicit object sections
@@ -6880,6 +7262,33 @@ Per S07 and the 2026-09-10 implementation authorization, `m`/`=m`/`+m` select th
 Memory operands require addressable objects, and memory outputs may name arrays but cannot write const subobjects; violations use E2914, while unrepresentable register inputs and unlisted constraint combinations retain E3021.
 Both sealed compilers at O0/O2 pass `tests/fixtures/assembly-memory-operands.c` and the earlier probes under `.evidence/builtin-probes/20260910-memory-constraints/` (`results.txt`); both reject `assembly-memory-object-errors.c` cases 1–3 and accept 4–5, and the old register-only `operands.c` is not consensus evidence because Clang may select memory for `g`.
 Register selection is the reviewed profile choice, not a universal oracle-selection claim; no original-program gain is measured here, and affected benchmark counts remain those of the last full campaign.
+
+### Same-function relative label tables
+
+The S05 label-table contract admits a difference of two labels in the same function as a static integer initializer, not an ICE: the canonical relocation extends its tuple with `, diff=@function^bN, bits=W`, with W in 8/16/32/64, storing the low W bits of target-minus-base plus addend and no pointer-provenance marker.
+Both labels must name retained blocks in the same defined function, both contribute to the conservative address-taken successor set, the initialized zero-byte range is W/8 bytes with the existing nonoverlap checks, and this form cannot also carry `exposed`; both interpreters use their code-address mapping and native emission uses the corresponding width's assembler label-difference expression.
+`tests/fixtures/relative-label-table.c` returns zero under sealed GCC-14/Clang-19 O0/O2 (`language-semantics.out`); the original first-error program is torture `pr70460`, whose full campaign result remains unmeasured.
+GNU void-pointer byte arithmetic transports exposed object/code addresses without treating a label as a dereferenceable object, while actual object access and indirect-jump target checks retain their existing validity rules; no runtime instruction or diagnostic is added.
+
+### Mixed-record variadic representations
+
+A non-homogeneous record containing floating members can pass through the general-register composite ABI as an object representation: copying unused floating or padding bytes is not floating arithmetic, does not initialize those bytes, and does not consume them as scalar values.
+The deferred HFA class is still recognized recursively as one to four equal floating base members (array multiplicity and union maximum included), and is not silently assigned the integer/composite ABI; supported HVA handling is unchanged.
+Both sealed compilers at O0/O2 execute `tests/fixtures/mixed-record-varargs.c` with exit zero (`language-semantics.out`), reducing c-testsuite `00140`; this does not approve floating execution or claim that all aggregate varargs programs pass.
+
+### General assembly outputs and narrowing ties
+
+The S07 general-operand register choice also applies to `=g`, `+g`, `=&g`, and `+&g`, preserving output, read/write and early-clobber roles; a matching input wider than its register output supplies the output-width low bits through an explicit truncation, with an object/function pointer first exposed as the existing 64-bit address integer.
+The reverse width mismatch remains refused unless separately represented, and the equal-type EvoIR tie invariant is unchanged.
+Both sealed compilers at O0/O2 execute `tests/fixtures/assembly-general-update.c`, `assembly-tied-width.c` and `assembly-tied-pointer-width.c` with exit zero (`language-semantics.out`); the unchanged examples include `pr65053-1`, `pr65053-2`, `pr65956`, `pr88904`, `20030222-1`, and LLVM's `stkalign.c`.
+No instruction or diagnostic is introduced, and the next benchmark replay, not these reductions, determines their program results.
+
+### Automatic variable arrays and immediate pointer qualifiers
+
+Per S02/S03, actual automatic variable arrays allocate at their declaration after evaluating each captured bound once; leaving the declaration scope, including a backward jump before it, ends that allocation, and `sizeof(type-name)` evaluates only bounds needed for the queried extent.
+The existing `alloca.dynamic`/`lifetime.end` pair represents this lifetime; its machine lowering uses `stack.release %address` to restore the private previous-SP header only for a still-top dynamic allocation, never releasing an intervening function-lifetime `alloca`, while fixed frame slots remain reserved.
+GNU conversions between otherwise compatible non-atomic pointer types may discard immediate const/volatile qualification in initialization, assignment, arguments and returns (as warnings in the references), without changing nested type compatibility, a const object's mutability or atomic access semantics.
+`tests/fixtures/language-semantics.out` records four agreeing sealed runs for `variable-array-objects.c`, `variable-array-alloca-lifetime.c` and `immediate-pointer-qualifiers.c`, and their native subject executions; actual reads after a VLA lifetime retain E3010, and original-program counts remain unmeasured.
 
 ### Ancestor frame addresses and the return-address disagreement
 
@@ -7073,6 +7482,7 @@ Both sealed compilers at O0/O2 execute `tests/fixtures/automatic-zero.{c,out}` w
 ### Automatic constructor padding
 
 With `-ftrivial-auto-var-init=zero`, an automatic brace initializer also zeroes representation gaps between and after its members and beyond the selected union member, recursively through arrays and records; explicit member expressions still execute exactly once without implicit initialization of their own destinations.
+This includes block-scope compound literals on each evaluation, before any subsequent representation copy; `automatic-compound-padding.c` reproduces Poly1305's whole-context reset, with zero exits for EvoCC and sealed GCC-14/Clang-19 at O2 in `.build/floating-targeted/kunit-regressions-20260922/native.json`.
 The declaration's `uninitialized` exemption and final `uninitialized` option retain the ordinary behavior, and whole-aggregate copy initializers retain the source representation, including padding and provenance, rather than clearing it.
 Sealed GCC-14 and Clang-19 both return zero at O0/O2 for `tests/fixtures/automatic-initializer-padding.c`; `.evidence/builtin-probes/20260914-constructor-padding/oracles.out` records the results (SHA-256 `dc452fbe6e4815d273b8330f3cbbe3f3fba09db4ec0a270b5a55bfec97393082`).
 This clarifies the earlier explicit-initializer statement without changing member values or aggregate-copy semantics; the first full subject KUnit run exposed 28 failures in one `stackinit_kunit.o` unit, and no diagnostic is allocated.
@@ -7159,3 +7569,295 @@ A static integer initializer may compare pure numeric address constants using th
 This does not admit pointer comparisons as source integer constant expressions, nor reads of pointer objects or function calls as static constants.
 Both sealed GCC-14 and Clang-19 execute `tests/fixtures/static-numeric-pointer-comparisons.c` at O0/O2 with exit zero, including all six comparisons, an incomplete pointee type and a narrowed unsigned source cast; evidence is `.evidence/builtin-probes/20260914-static-pointer-order/oracles.out`.
 The two measured supplemental-configuration refusals are `arch/arm64/kvm/arm.o` and `arch/arm64/kvm/handle_exit.o`; no diagnostic is added and original-unit replays remain required.
+
+### Legacy full memory barrier
+
+Per F07, `__sync_synchronize()` has type `void`, takes no arguments, and performs a full memory barrier on the fixed AArch64 target; it is not a constant expression and introduces no external function declaration.
+Lowering uses the existing ordered volatile assembly representation with template `dmb ish`, a `memory` clobber, no input/output values, and the current explicit `mem`/`world` tokens; both interpreters retain reached-assembly E3021 rather than pretending to model concurrent execution.
+Both sealed GCC-14 and Clang-19 at O0/O2 execute `tests/fixtures/full-memory-barrier.c` with exit zero and emit `dmb ish` between the two stores, as the adjacent `.out` records; unevaluated operands do not execute the barrier and ordinary E2909 arity checks remain.
+One measured SQLite core-amalgamation unit first refuses at this builtin; no diagnostic or IR instruction is added, and its original suite replay remains a separate coverage measurement.
+
+### Small integer-vector calling convention boundary
+
+The reviewed integer-vector profile supports local sub-8-byte vector operations, but its native external argument/result ABI remains E4002 where GCC-14 uses GPRs and Clang-19 uses SIMD registers.
+Both sealed self-controls pass and both crossed controls fail for `tests/fixtures/integer-vector-small.c` and `integer-vector-small-driver.c`, recorded in `tests/fixtures/elf-vector-tls.out`; the supported 8/16-byte ABI is independently exercised in nine passing combinations.
+No new diagnostic is allocated, and no original benchmark count is inferred from this two-file ABI probe.
+
+### Integer-complex values and division boundary
+
+Per F05, GNU integer `_Complex` uses two adjacent real/imaginary components of its declared integer type, with component-width arithmetic, per-component conversions, lvalue real/imaginary projections, conjugation, and ordinary composite AAPCS64 passing rather than vector or floating ABI classification.
+`tests/fixtures/integer-complex-{values,operations,initialization,profile,abi-worker,abi-driver}.c` and `language-semantics.out` record sealed GCC-14/Clang-19 O0/O2 agreement for the positive values, layouts and six ABI self/crossed controls; no new original-program coverage count is claimed.
+Integer-complex division and compound division report E2948 `integer-complex-division-oracle-conflict`: the retained profile probe gives 4+3i under GCC and 5+1i under Clang for `(9+7i)/(2+1i)` at both optimization levels, so this non-floating boundary is not assigned either answer silently.
+Component overflow, uninitializedness, qualification and ordinary object/provenance checks remain in force, and floating-complex execution remains deferred.
+
+### Legacy scalar atomic read-modify-write
+
+Per F07, the naturally aligned 1/2/4/8-byte `__sync_*` fetch/new-result add, sub, bitwise and/or/xor/nand, compare-exchange and lock operations evaluate operands once and use explicit `atomic.rmw.<op> <order> [volatile] %mem, %world, %address, %value [, %expected] : T`, producing the old value and the new mem/world pair; compare-exchange compares with the optional expected operand and failed comparison does not store.
+Arithmetic is width-truncated; pointer exchange/compare-exchange preserve the complete pointer representation, seq_cst is retained except acquire lock-test-and-set and release lock-release, and existing type/order/alignment diagnostics apply.
+`tests/fixtures/atomic-{read-modify-write,rmw-widths,rmw-worker,rmw-driver}.c` and `language-semantics.out` record sealed values and both native mixed-link threaded checks; these checks do not claim a weak-memory-model proof or a full benchmark result.
+The AArch64 implementation uses the width-correct exclusive load/store loop, preserves the compare-exchange failure path and branch target/input registers, and keeps these operations outside the equality-optimization allowlist.
+
+### Variable-array type queries and zero initialization
+
+Following S02's variable-object authorization, `typeof` type-name bounds capture once when the declaration executes, and an array-typed variable-length expression operand evaluates once while preserving its operand-local declaration scope; these cases supersede the old blanket E2904 refusal based on absence of variable objects.
+Expression operands of other variably modified types retain E2904: `tests/fixtures/variable-array-typeof-profile.c` shows GCC leaving the counter zero and Clang incrementing it for pointer-to-VLA operands, while both increment it for array operands at O0/O2 (`language-semantics.out`).
+The existing automatic-zero option applies to dynamic array extents too, including representation padding and typed Null pointer subobjects, without initializing declarations when the option is absent.
+The sealed type-name and array-expression probes agree; the scalar-only and final expanded zero probes return one under GCC O2 and zero in the other three modes (an intermediate integer/record expansion returned zero in all four), a retained discrepancy that does not override the existing explicit option rule, and no new diagnostic or campaign gain is claimed.
+
+### Constant floating object representations without floating execution
+
+A pure finite binary32/binary64 constant can supply an object's initialized representation or a discarded simple memory assignment: round to the destination format and store its bits using the existing width, alignment, volatility and object checks, without manufacturing an integer-valued C expression.
+Implicit zero initialization also supplies those formats' positive-zero representation, while runtime floating reads, conversions, used assignment results, floating ABI and atomic floating stores remain outside this slice; integer literal arithmetic follows the existing executed source-constant rule, while runtime-variable overflow and invalid division retain their obligations.
+Both sealed compilers at O0/O2 and the subject under both native assemblers pass `tests/fixtures/constant-floating-representation.c`, including negative zero, binary32 rounding, projected stores, VLA storage, an unselected floating member and a volatile union (`language-semantics.out`).
+This reduces torture `20020225-2`, `930930-2` and `20031214-1` without claiming their original-program results or a full floating-point implementation, and allocates no diagnostic.
+
+### Quiet NaN constant object representations
+
+Literal `__builtin_nanf`, `__builtin_nan` and `__builtin_nanl` payloads are represented exactly in binary32/64/128, with the low significand bits retained and the quiet bit set; the empty string means zero payload, and complete unsigned decimal/octal/hexadecimal strings follow their written base, including arbitrarily long inputs.
+Same-format object initialization and discarded memory assignments use those bytes (unary minus changes the sign bit), without routing payloads through host floating arithmetic; dynamic floating values and cross-format NaN conversions retain the existing execution boundary.
+The fixed ARM64 GCC-14/Clang-19 O0/O2 and additional edge measurements in `tests/fixtures/nan-constant-representation.out` agree on these representations; signed/space-prefixed strings, empty hexadecimal digits and embedded NUL differ and are not constant-projected, while malformed strings and dynamic operands follow the ordinary typed `nanf`/`nan`/`nanl` call boundary (E2208 where a static constant is required, E3049/E3050 for deferred floating execution).
+This closes the representation-only construct in LLVM `ieee/builtin-nan-1.c`, not floating arithmetic, a full benchmark result or a newly allocated diagnostic.
+
+### Variable-array capability declaration
+
+With S02 automatic variable-array storage implemented, the target overlay no longer defines `__STDC_NO_VLA__=1`; the immutable oracle macro snapshot and explicit user `-D`/`-U` precedence are unchanged.
+The small `tests/fixtures/variable-array-capability.c` checks the absent refusal macro and two runtime extents; sealed GCC-14 and Clang-19 at O0/O2 all exit zero (`language-semantics.out`).
+This supersedes the earlier capability declaration made while variable objects were unavailable, without admitting variable record members or the separately refused GNU typeof evaluation conflict.
+No diagnostic or original-program result is changed by this record.
+
+### Integer scalar broadcast into unsigned vector lanes
+
+Under the reviewed integer-vector profile, an integer scalar no wider than an unsigned lane converts to that lane's unsigned representation before broadcast, including a negative signed value; signed lanes accept the whole source range only when it fits.
+A wider constant may broadcast if its value fits the destination range, additionally admitting a negative value at least the signed minimum of an unsigned destination's width, with the same unsigned conversion.
+`tests/fixtures/vector-scalar-conversions.out` records the sealed GCC-14/Clang-19 matrix and the original `pr94412` O0/O2 values; unsigned-to-equal-width-signed variables, out-of-range positive signed-lane constants and below-signed-minimum negative unsigned-lane constants remain E2102 at the measured disagreements or joint refusals.
+This repairs one original torture first-error construct without permitting arbitrary truncating broadcasts, changing lane arithmetic obligations, or claiming a full campaign gain.
+
+### Inline-mode option conflict
+
+The final effective combination `-std=gnu89 -fno-gnu89-inline` is refused at the driver option boundary; a later `-std=gnu11` changes that combination and remains accepted.
+Sealed GCC-14 rejects the former even for an empty input while Clang-19 accepts it (`tests/fixtures/gnu-inline-definition-chain.out`), so the existing conflict rule selects refusal rather than implicitly changing GNU89 inline semantics.
+
+### Explicit GNU99 build mode
+
+`-std=gnu99` selects the existing non-legacy GNU expression/declaration profile with `__STDC_VERSION__=199901L`, no `__STRICT_ANSI__`, and ISO inline semantics unless the explicit GNU-inline override applies; normal undeclared-call rejection remains, and the last language option wins before user macro overrides.
+The shared parser already implements the admitted C99 constructs and agreed later-standard GNU extensions; this option does not enable the GNU89 implicit-declaration policy or alias strict ISO C89/C99 options.
+Both fixed ARM64 compilers at O0/O2 and both subject interpreters/native assembler combinations pass `tests/fixtures/gnu99-language-mode.{c,out}`; this addresses the 34 original Lua mode refusals in run `20260915T152156Z`, without predicting how many complete objects pass afterward and without allocating a new diagnostic.
+
+### Original-build ISO keyword modes and GNU17
+
+The admitted project profile also consumes `-std=c99`, `-std=c11` and `-std=gnu17`: their version macros are respectively `199901L`, `201112L` and `201710L`, and only the ISO modes define `__STRICT_ANSI__=1` and treat bare `asm`/`typeof` as identifiers while retaining reserved `__asm__`/`__typeof__` spellings.
+All three retain normal undeclared-call rejection, ISO inline defaults subject to the explicit GNU-inline override, the existing admitted type/execution boundaries, final-language-option precedence and later user macro overrides; this is not an admission of C89, C23 or previously deferred types and operations.
+Both fixed ARM64 compilers at O0/O2 agree on the macro/keyword matrix and execute the sources in `tests/fixtures/language-mode-versions.out`, with ten subject-native mode/assembler passes; affected first errors are musl's 1,339 C99 records, Mbed TLS's 176 C99 and 206 C11 records, and seven LLVM records in the completed `20260915T151427.374334Z` campaign, not predicted new passes.
+No diagnostic code is allocated; this is an option error, and no affected benchmark count is inferred from the probe.
+
+### Language-mode lexical boundaries
+
+Before C11, `u`, `U` and `u8` are identifier tokens, not literal prefixes: this classification precedes macro expansion and applies equally to main/stdin/include inputs, command-line replacements and token-paste validation, while `L` remains a wide prefix.
+The fixed ARM64 matrix in `tests/fixtures/language-mode-lexical-boundaries.out` records GCC's GNU99 UTF-prefix extension versus Clang's refusal, and Clang's GNU89 declaration-for extension versus GCC's refusal; neither extension is admitted, so GNU89 for initializers remain expressions or empty and existing E1001/E0110 token/context diagnostics apply.
+Ordinary identifier macro replacement still applies to those pre-C11 tokens; the change does not reinterpret raw bytes, admit new wide encodings, or disable the separately admitted underscore-prefixed type extensions.
+
+### Original-build ISO C89 mode
+
+`-std=c89`, `-std=c90` and `-ansi` select the legacy declaration and GNU-inline policies, define `__STRICT_ANSI__=1`, leave `__STDC_VERSION__` undefined, and treat bare `inline`, `restrict`, `asm` and `typeof` as identifiers; GNU89 likewise treats bare `restrict` as an identifier but keeps its other GNU keywords.
+Reserved extension spellings remain available, preprocessing still treats every keyword spelling as an identifier, pre-C11 literal tokenization applies, and declaration-for initializers remain refused under the existing legacy-mode rule; the last language option wins before user macro overrides.
+Both sealed ARM64 oracles agree on this keyword/macro matrix and execute `tests/fixtures/iso-c89-language-mode.c` at O0/O2; this addresses the original two cJSON mode refusals without admitting floating execution or predicting object/test results.
+The final `-fno-gnu89-inline` conflict boundary applies to both C89 and GNU89; no new diagnostic code is allocated.
+
+### Initialized const integers in static initializers
+
+In a static object's integer initializer, a preceding explicitly initialized non-volatile, non-atomic const integer object may supply its declared-type-converted constant value, including an automatic or thread-local const object's explicit constant initializer; unknown values and declarations without a written initializer remain E2208.
+This GNU initializer extension uses the existing width-typed constant operators, affects only the initialization plan, and does not turn object reads into source ICEs or change the separately fixed `__builtin_expect` evaluation contract; scope and failed-declaration rollback include these bindings.
+The fixed ARM64 GCC-14/Clang-19 O0/O2 matrix in `tests/fixtures/static-const-initializers.{c,out}` records agreement on initializer cases and refusals, the retained E2912 ICE conflict, and the existing expect profile difference; no diagnostic is allocated.
+One observed supplemental-kernel unit, `drivers/net/netkit.o`, reaches this rule and its repaired original replay assembles with exact reference symbol parity, without changing the ongoing survey's frozen results.
+
+### Named residual lowering classes
+
+The existing refusal of a floating scalar, floating complex or homogeneous floating aggregate call interface is E3049 (`not-lowered: floating-call-interface`), and a required floating scalar value or conversion in an integer-only lowering path is E3050 (`not-lowered: floating-value`).
+A call whose actual arity differs from its resolved canonical interface retains F01's refusal as E3051 (`call-arity-mismatch`), rather than the generic E3101 wrapper; these names change neither acceptance nor execution semantics.
+The source cases in `crates/evocc-lower/tests/fail_closed_forms.rs` and the source-bound original LLVM audit in `docs/notebook/benchmark-evaluation-20260915.md` distinguish the 98 observed call-interface stops from scalar value stops and `20051012-1.c`'s non-floating arity failure.
+No diagnostic alone proves whole-program FP necessity or not-applicability, and other unsupported types, malformed C-HIR and generated-IR validation failures are not relabeled as floating point.
+
+### Raw-byte escape serialization
+
+Within an admitted ordinary narrow literal, a written backslash immediately followed by a raw non-UTF-8 byte is a GNU unknown escape producing that byte; pairs of written backslashes still produce literal backslashes, and the original token bytes and spans remain unchanged.
+The UTF-8-safe equivalent spelling consumed by existing literal decoders must preserve escape boundaries rather than turn an introduced numeric escape into literal digits; this adds no permission to invalid-encoding metadata, prefixed literals or macro stringization.
+The fixed ARM64 GCC-14/Clang-19 O0/O2 byte and signed/unsigned-char measurements in `tests/fixtures/raw-byte-escape.out` agree, with oracle warnings retained and no new diagnostic allocated.
+No original benchmark incidence is claimed: this is a boundary regression discovered during the approved raw-source-byte review.
+
+### Qualification in pointers to arrays
+
+The immediate non-atomic cv-qualification conversion rule also applies to the element type through consecutive array layers in initialization, assignment, arguments and returns; compatible bounds may combine a known extent with an incomplete extent, but different known extents remain incompatible.
+The conversion stops at an intervening pointer, preserves atomic distinctions and does not change `__builtin_types_compatible_p`, object mutability or layout.
+The fixed ARM64 GCC-14/Clang-19 O0/O2 matrix in `tests/fixtures/array-pointer-qualification.out` agrees on six executed forms; GCC rejects the three incompatible-bound/nested-pointer/atomic forms that Clang only warns about, so those retain E2202 (E2102 in assignment).
+This addresses the two observed supplemental-kernel `security/landlock` units; no new diagnostic or whole-configuration result is implied.
+
+### Read-only static object storage
+
+A global may carry optional `readonly=true` immediately after its `initialized` bitmap and before `section`/`relocs` in the shared EvoIR/EvoMIR global syntax; omission preserves old semantics (string-literal storage remains implicitly read-only), while C lowering sets the property for const-qualified static objects, following array elements but not pointees or individual record members.
+Initialize its bytes and relocations before freezing the existing object against stores with E3014, including each TLS instance without changing its thread owner, and preserve this property in text, module identity, proof reconstruction and machine lowering; this does not license folding volatile reads.
+Automatic native placement is read-only data even for all-zero objects, except that PIC objects with relocations use writable-during-relocation read-only-after-relocation data (`.data.rel.ro` on Linux); TLS sections and explicit user section placement retain their existing rules, with no permission inferred from section names.
+`tests/fixtures/static-readonly-storage.out` records fixed ARM64 GCC-14/Clang-19 O0/O2 agreement for automatic placement and the disagreement for an explicit `.data.explicit` section (existing placement retained); the observed impact is two const pointer tables in one supplemental-kernel `mm/page_alloc.o`, not a new boot result or new diagnostic.
+
+### GCC AArch64 header interface
+
+The GCC14 target-header profile includes nominal 64/128-bit half, bfloat, floating and polynomial vector types, polynomial scalars with 1/2/8/16-byte layouts, and the 90 `val`-array tuple typedefs introduced by `#pragma GCC aarch64 "arm_neon.h"`; these are real canonical types and records, not header substitutions or size-only aliases.
+Builtin prototypes are the exact versioned interface in `crates/evocc-types/src/neon-signatures.tsv`, reproducible by `tools/extract-aarch64-builtins.py`, including pragma-injected reinterpret declarations; declaration-only floating bodies are type-checked without admitting floating execution, and scalar broadcast retains the measured non-truncating conversion boundary.
+`tests/fixtures/arm-neon-target.out` records fixed-image interface extraction and the public header layout/runtime controls, without claiming Clang exposes GCC's private names or polynomial nominal identity.
+This addresses the header construct seen in six supplemental-kernel units, one LLVM program, 37 zstd objects and 291 Mbed TLS objects; these are observed first-error populations, not promised successful-program counts.
+
+### Executed integer target intrinsics
+
+The registered integer `ld1`/`st1`, immediate left/right shifts, single-table byte lookup, equal-representation reinterpretation and byte polynomial multiply lower to the existing vector, integer and memory instructions, evaluating operands once with declared-parameter conversions; loads/stores require element alignment, table indices outside the table return zero, and polynomial multiplication is the low eight bits of the carryless product.
+Immediate operands must be source integer constant expressions after their declared parameter conversion (left shift 0..N-1, right shift 1..N); neither optimizer-discovered constants nor GCC-only comma folding relax that requirement, and a full-width right shift still consumes its source lane's initializedness.
+Registered but unimplemented target operations and unsupported immediate operands report E3052 (`target-builtin-not-executable`, with the builtin named) rather than becoming external library calls; wrong arity/type retains E2909/E2913 and floating execution retains its existing boundary.
+The fixed-image byte-table, memory, shift and exhaustive polynomial probes in `tests/fixtures/arm-neon-target.out` define this bounded extension, not an admission of every registered intrinsic; five original RAID6 objects have targeted assembly/symbol evidence, not a new configuration boot result.
+
+### SIMD assembly constraint remains pending
+
+The reduced `tests/fixtures/arm-neon-assembly.c` builds and returns zero with both fixed ARM64 compilers at O0/O2, matching the `=w`/`w` requirement newly exposed in `arch/arm64/lib/xor-neon.c:188`.
+Section 3.11 still explicitly refuses constraints outside its table, so this measurement does not authorize a validator-only relaxation or silently selecting a general register for a SIMD operand; E3021 remains pending a SIMD operand/register/modifier and machine-binding contract.
+The affected original replay and the four oracle results are recorded in `tests/fixtures/arm-neon-target.out`; one supplemental-kernel unit remains refused, and this is not an FP deferral.
+
+### Integer target narrowing, insertion and interleaving
+
+Registered integer vector `shrn_n` operations logically shift the source lane and keep the low half-width result (signedness does not change those bits); the converted source-ICE count is 1 through the destination lane width, while left/right insertion preserves the unshifted low/high part of the first lane and inserts shifted bits from the second, with counts 0..N-1 / 1..N respectively and each operand evaluated once.
+Registered integer/polynomial `ld2`/`ld3`/`ld4` operations read element-aligned ordinary memory into the existing canonical tuple: `result.val[j][i] = source[i*count+j]`; they preserve normal access faults and initializedness, do not assert atomicity or vector alignment, and introduce no new IR instruction.
+`tests/fixtures/arm-neon-interleave-shifts.{c,out}` records fixed ARM64 GCC-14/Clang-19 O0/O2 value agreement and the 24 rejected immediate-boundary builds; unsupported operations/counts retain E3052, with no new code allocated.
+One original zstd `zstd_lazy.c` unit in `20260919T125112Z` reaches these constructs after header admission; targeted and whole-program retests, not this rule, determine its closure.
+
+### Array members of record values
+
+An array selected from a record value decays in value contexts as specified by C11 6.3.2.1p3; the record-producing expression is evaluated once, whether it is a call, comma, conditional or assignment, without treating the record itself as an addressable lvalue.
+Nested member selection preserves the base expression's value category, and conditional record values retain their record type in both consumers rather than entering integer conversion.
+`tests/fixtures/returned-array-members.{c,out}` records fixed ARM64 GCC-14/Clang-19 O0/O2 agreement for reads within the containing full expression; this does not extend temporary lifetimes or authorize modifying a temporary (C11 6.2.4p8).
+The observed trigger is the chained array/vector selection on an interleaved NEON result in a targeted negative test, not a newly counted application unit; no diagnostic code changes.
+
+### Integer target vector combination
+
+Registered integer and polynomial `combine` operations concatenate the low 64-bit operand and the high 64-bit operand into the corresponding 128-bit vector, preserving lane bits and evaluating both operands once.
+The scalar `di` interface has the same representation rule; floating variants are not admitted by this extension.
+`tests/fixtures/arm-neon-combine.{c,out}` records fixed ARM64 GCC-14/Clang-19 O0/O2 agreement and subject native executions; the original Mbed TLS `chacha20_neon.c` now emits but is not yet counted in a new passing-build numerator.
+No diagnostic is allocated and unsupported target operations retain E3052.
+
+### Variable array type names in casts
+
+An executed cast with newly written variable array bounds captures them once on that expression path, using the existing ordinary size objects and captured-stride rules; an unselected expression does not evaluate them.
+A `sizeof` operand of variable array type executes its operand before reading the captured extent, whereas an operand of fixed pointer size remains unevaluated.
+`tests/fixtures/variable-array-cast.{c,out}` records eight agreeing fixed ARM64 oracle executions with and without the original memory-assembly idiom, plus subject interpreter and native checks; it covers Mbed TLS `platform_util.c` without source changes.
+This extends S02/S03, preserves the variably modified `typeof` disagreement boundary, and allocates no diagnostic.
+
+### AES integer target round operations
+
+The four registered AArch64 AES interfaces lower to `vec.aese`, `vec.aesd`, `vec.aesmc`, `vec.aesimc` with result and inputs `vec<16, bits<8>>`: the first two take data and key, XOR before forward/inverse byte substitution and row permutation, while the latter take one value and perform the AES forward/inverse column matrix in GF(2^8).
+These pure operations evaluate operands once, preserve indeterminate bytes through their actual byte dependencies, have no memory/world effect or pointer provenance result, remain outside the P0 allowlist, and retain their exact opcode and operands in text and independent proof reconstruction.
+EvoMIR carries the corresponding typed `crypto.<opcode> (%inputs)` form with one `simd128` result and one/two `simd128` inputs; emission uses the AES extension, preserves live inputs and the destructive round's key through the reserved SIMD scratch register, and retains the `-mgeneral-regs-only` refusal rather than claiming generic CPU availability.
+`tests/fixtures/arm-neon-aes.{c,out}` records four agreeing fixed ARM64 GCC-14/Clang-19 O0/O2 executions with `-march=armv8-a+crypto`, including all byte substitutions and inverse checks; one Mbed TLS `aesce.c` object reaches this family, no diagnostic is allocated, and unimplemented intrinsics still report E3052.
+
+### Quiet floating comparison builtins (2026-09-20)
+
+The f32/f64 `__builtin_isgreater/isgreaterequal/isless/islessequal/islessgreater/isunordered` forms require two real arithmetic operands with at least one floating operand, apply the usual arithmetic conversions, evaluate each once in source order and return an `int` predicate; only `isunordered` is true for unordered inputs.
+They lower to the existing FP comparison and representation operations, without new IR nodes, strict-fenv support or P0 eligibility.
+Both sealed GCC-14 and Clang-19 execute `tests/fixtures/floating-comparison-builtins.c` at O0/O2 with exit zero; `benchmark-small-frontier.out` identifies four original LLVM first errors, not four completed-program passes.
+Existing E2909/E2911 diagnose arity/type errors and deferred formats retain their existing refusal.
+
+### Full-width polynomial target products
+
+The registered `crypto_pmulldi_ppp` and `crypto_pmullv2di_ppp` interfaces multiply two 64-bit polynomial operands without carries, returning the complete 128-bit polynomial representation; the latter consumes lane 1 of each vector, not lane 0.
+Operands are evaluated once and the selected coefficients retain their initializedness checks; lowering widens before the shifts and XORs using existing integer instructions, rather than using ordinary integer multiplication or an external call.
+Nominal polynomial scalars retain their source type identity while sharing ordinary scalar object storage and unsigned bit representation.
+`tests/fixtures/arm-neon-polynomial-long.{c,out}` records the fixed GCC-14/Clang-19 ARM64 O0/O2 controls for the `aesce.c` family; no diagnostic is allocated and unsupported intrinsics still report E3052.
+
+### Target byte-bit reversal
+
+The registered `rbitv8qi` and `rbitv16qi` interfaces reverse the eight bits within each byte lane, without changing lane order or interpreting a signed byte arithmetically.
+They evaluate their operand once and retain the normal initializedness check for each consumed lane; the implementation may use the existing integer shift/mask operations and does not require a new external symbol or EvoIR instruction.
+`tests/fixtures/arm-neon-byte-reverse.{c,out}` records exhaustive byte-value agreement with fixed ARM64 GCC-14/Clang-19 O0/O2 for this next operation reached in Mbed TLS `aesce.c`.
+No diagnostic is allocated and other unimplemented target intrinsics retain E3052.
+
+### Integer target vector halves
+
+Registered integer `get_low`/`get_high` interfaces select the lower/upper 64 bits in lane order, with the `v2di` interface returning its declared scalar `long` representation and the narrower-lane interfaces returning their declared 64-bit vector types.
+Selection and combination evaluate each operand once and transport the selected vector representation without initializing unread lanes; polynomial wrappers preserve the same lane bits without making polynomial and ordinary integer source types compatible.
+`tests/fixtures/arm-neon-halves.{c,out}` records fixed ARM64 GCC-14/Clang-19 O0/O2 agreement for the half-selection operation reached by the original Mbed TLS `aesce.c` replay.
+Lowering reuses existing extraction/packing operations, no diagnostic is allocated, and the unrelated floating interfaces remain unimplemented.
+
+### Exact finite floating constant evaluation
+
+Floating literals retain the bits rounded directly to their source format (binary32 for `f`, binary64 without a suffix, and the Linux profile's binary128 for `L`), including hexadecimal spellings; a later conversion must not recover digits lost by that first rounding.
+The admitted finite binary32/binary64 constant arithmetic, constant path selection, integer projection and object-representation stores share host-independent round-to-nearest-ties-to-even evaluation at the operation's semantic width, with no multiply-add contraction and no saturating invalid integer conversion.
+`tests/fixtures/floating-literal-rounding.c`, `floating-hex-representation.c`, `floating-constant-arithmetic.c` and `floating-constants.out` record agreeing fixed ARM64 GCC-14/Clang-19 O0/O2 values and subject interpreter/native checks; these are three focused cases, not a new original-program or kernel numerator.
+This corrects the existing constant-representation slice without admitting runtime floating instructions, changing the current nonfinite-arithmetic or long-double execution boundary, defining native FPCR handling, or allocating a diagnostic.
+
+### Approved integer SIMD assembly bindings
+
+The 2026-09-20 approval extends §3.11 with `w`, `=w`, `+w`, `=&w`, `+&w` and existing matching operands for 64/128-bit integer or polynomial vectors, using the existing typed opaque asm, local SSA, effects and per-edge result binding; scalar, floating, tiny/wide-vector and SVE operands remain E3021, and `r` does not acquire a SIMD alternative.
+Default references print `vN`, `%b/%h/%s/%d/%q` select views of that same physical register, and accepted `vN/dN/sN` clobber names alias that identity; `qN/hN/bN` clobbers remain E3021 because fixed Clang-19 rejects them while GCC-14 accepts them, and modifiers cannot change register bank.
+Tied inputs share their output's location, while early-clobber outputs cannot overlap independent inputs or another output; allocation, spills, selected-edge output writeback, text identity and independent proof/allocation checks must preserve that contract, and reached asm still reports interpreter E3021.
+`tests/fixtures/simd-assembly-bindings.c` and the existing `arm-neon-assembly*.c` are the reduced acceptance inputs for the kernel xor and Mbed TLS consumers, not a full campaign count; the general-register-only restriction remains, and this approval is not a passing execution result.
+
+### Approved first-release floating environment boundary
+
+The 2026-09-20 approval selects round-to-nearest-ties-to-even with gradual underflow and target NaN propagation for initial executable binary32/binary64, with exact-bit transport, no implicit contraction and no source UB obligation for IEEE exceptional arithmetic results.
+Native execution must verify compatible FPCR state before admitted operations, including after opaque or external execution that may change it; an incompatible environment is an unsupported execution environment, not C UB, and the compiler must not silently reset its caller's FPCR.
+Dynamic strict-fenv, executable binary128, floating complex and floating vectors remain deferred, and the software arithmetic adapter must match measured target NaN handling rather than blindly inherit its dependency's policy.
+`floating-target-environment.c` and `floating-constants.out` are the existing environment counterexamples; runtime IR, native checks and ABI acceptance remain implementation work, not results implied by this approval.
+
+### Finite literal narrowing in target headers
+
+A pure cast of a finite floating literal into binary32/binary64 converts the already-rounded source representation directly with RNE, including a binary128 source literal; this admits no binary128 arithmetic, object read or call interface.
+The constant evaluator, static initialization, C-HIR execution and EvoIR lowering share that conversion, rather than changing system-header macros or reparsing the spelling as binary64.
+`tests/fixtures/floating-header-constants.c` passes fixed ARM64 GCC-14/Clang-19 O0/O2 and reduces both cJSON `DBL_EPSILON` first errors; original-program acceptance remains separate, and no diagnostic is allocated.
+
+### HFA transport alignment
+
+Under the approved AAPCS64 contract, HFA transport uses natural member alignment clamped to 8/16, independently of the complete object's explicit alignment; the optional `, abi_align=16` after `hfa=Nxf32/f64` records the nondefault 16-byte case, and omission means 8.
+Calls, entries and `va_arg` consume the same recorded alignment; packed stack copies must not claim the destination object's stronger alignment for their source, while original object layout is unchanged.
+`tests/fixtures/floating-hfa-varargs-alignment.c` and `floating-hfa-varargs-alignment.out` record the fixed GCC-14/Clang-19 controls and native RED for original torture `pr92904`, including the opposite-direction failure when a member is explicitly aligned; this affects one measured original failure, not a predicted campaign count.
+The field participates in text, validation and independent proof identity, advancing the frozen layout identity to v4 without expanding EqSat eligibility; no diagnostic is allocated.
+
+### Reusing floating environment admission checks
+
+Native FPCR admission may be reused only when every reachable predecessor path has checked it and no intervening call, opaque asm or asm-goto can change it; function entry carries no assumption about its caller.
+The complete existing CFG supplies the must-analysis, including indirect successors; no check writes FPCR or changes FP operation, token or proof identity.
+`tests/fixtures/floating-environment-dominance.c` and its driver compare both sealed oracles' O0/O2 values, then test native rejection after a foreign call and on both branch entries while transport leaves FPCR unchanged.
+`benchmark-small-frontier.out` records the targeted instruction-count improvement, not an inferred whole-benchmark speedup; no diagnostic is allocated.
+
+### Floating comparison partitions after evaluation
+
+Repeated comparisons of the same stable f32/f64 values may use the four LT/EQ/GT/unordered partitions to determine a conditional result only after retaining the original evaluations and their poison/FP-environment obligations.
+The bounded source-lowering analysis excludes object/volatile reads, calls, updates and changed formats, and combines only identical operand pairs; it does not add an EqSat rule.
+`tests/fixtures/floating-comparison-partitions.c` and its controls cover NaNs, signed zeros, reverse operands, narrowing, writes and uninitialized values; both sealed oracles run the positive reduction at O0/O2, and `benchmark-small-frontier.out` records the one original compare-fp-3 link failure this fixes.
+No diagnostic is allocated and no full-suite improvement is inferred before replay.
+
+### Standard floating absolute calls
+
+With standard builtins enabled, a direct call to the external, non-asm-renamed function symbol `fabs` or `fabsf` with its exact single-argument floating prototype uses the existing corresponding builtin; static functions, function-pointer variables, incompatible prototypes, `-fno-builtin` and `-ffreestanding` retain ordinary external/call semantics.
+This is symbol-and-prototype recognition, not spelling-only replacement or a weaker effect summary for an unresolved external call, following the existing integer `abs` profile and [GCC 14.2's builtin contract](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Other-Builtins.html).
+After the original comparison has executed, a sign-cleared f32/f64 representation cannot compare less than either zero, including NaNs; this permits only conditional-result reasoning and does not admit `>= 0` as a tautology or remove operand consumption/FPCR admission.
+`tests/fixtures/floating-absolute-calls.c` passes both sealed oracles at O0/O2 and reduces the one original 20020720-1 link failure, with symbol/option and NaN controls recorded in `benchmark-small-frontier.out`; no diagnostic or EqSat rule is added.
+
+### Patchable native function entries
+
+The final `-fpatchable-function-entry=N[,M]` supplies a default, with `0 <= M <= N <= 65535` and omitted M zero; a function's `patchable_function_entry` ICE arguments override it, including `(0,0)`, and `__has_attribute` reports support.
+The effective optional ` patchable_entry=N,M` follows `stack_protect` in the canonical function header, participates in validation/text/proof identity without changing its callable signature or abstract effects, and requests N AArch64 NOPs with M before the callable symbol plus an ELF link-ordered patch-table relocation to the first NOP when N is nonzero.
+`tests/fixtures/kernel-function-entry.{c,out}` and the sealed O0/O2 probe record the two oracles' native contract; earlier declarations merge up to the definition, but their differing treatment of a conflicting later declaration is rejected as E2943, while malformed arguments/placement remain E2903.
+Those same controls align the patch start rather than an explicitly aligned callable symbol, which conflicts with Section 5.2: that body rule takes precedence, so additional padding is placed outside the patch region to align the callable symbol; no source-unit count or tracing-enabled boot is inferred from these probes, and nonzero patching is Linux ELF-only.
+
+### Minimum native function alignment
+
+The final `-fmin-function-alignment=N` accepts zero (the target's four-byte default) or powers of two through 65536 and raises each definition's existing `align` to at least `max(4,N)`, including cold functions, without changing source declarations or `__alignof__`.
+Both interpreters retain this machine minimum when assigning virtual function addresses; native emission and patchable entries use the same callable-symbol alignment contract from Section 5.2.
+`tests/fixtures/kernel-minimum-function-alignment.c` and `kernel-function-entry.out` record the real Kbuild `=8` input, source-query controls and target checks; GCC14 accepts the option while Clang19 does not recognize its spelling, so Clang's rejection is not counted as an oracle pass.
+Non-power-of-two values and larger values are explicitly unsupported rather than adopting an unmeasured rounding rule; no diagnostic is allocated and no kernel runtime result is inferred.
+
+### Function section declaration-order boundary
+
+The approved function placement rule applies a request present before or on the definition and verifies the complete declaration chain; a first request only after the definition is E2943 rather than a silent layout choice.
+`tests/fixtures/function-section-boundaries.c` with `LATE_SECTION_ONLY` gives `.exit.text` for `late` under sealed GCC-14 and `.text` plus an ignored-attribute warning under Clang-19 at O0/O2, while the ordinary preceding-declaration control agrees on placement.
+The code is recorded in the adjacent output; no original kernel unit requiring the conflicting late-only form is currently identified, and this boundary does not waive any section-mismatch or link result.
+
+### Function section UTF-8 and numeric-escape boundary
+
+Source function-section names preserve decoded UTF-8 bytes, rather than encoding each byte as a separate Unicode character; invalid UTF-8 and control bytes are E2943.
+`tests/fixtures/function-section-utf8.c` agrees under sealed GCC-14/Clang-19 at O0/O2 for raw and adjacent UTF-8 literals, whereas `NUMERIC_SECTION_ESCAPE` is accepted by GCC and rejected by Clang as an invalid escape in an unevaluated string literal, so that numeric-escape spelling is E2943.
+`tests/fixtures/function-section-boundaries.out` retains both observations; no original kernel unit requiring the rejected numeric-escape spelling is currently identified, and existing object-section rules are unchanged.

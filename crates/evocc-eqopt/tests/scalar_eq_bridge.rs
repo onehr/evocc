@@ -22,12 +22,16 @@ fn bit(id: u32) -> Value {
 
 fn module(insts: Vec<Inst>, returns: Vec<Value>, return_types: Vec<EvoIRType>) -> Module {
     Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: evocc_evoir::Linkage::Strong,
@@ -234,12 +238,16 @@ fn operator_table_is_explicit_for_every_day7_p0_instruction() {
 #[test]
 fn a_trapping_successor_never_licenses_predecessor_edge_strengthening() {
     let input = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: evocc_evoir::Linkage::Strong,

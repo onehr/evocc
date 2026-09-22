@@ -441,7 +441,11 @@ fn packed_type(ty: &EvoIRType) -> String {
 #[allow(clippy::too_many_lines)]
 fn inst_operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::Vector(operation) => operation.arguments.iter().collect(),
+        Inst::Floating(operation) => operation.arguments.iter().collect(),
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
+        Inst::Atomic(access) => access.operands(),
+        Inst::TlsAddr(access) => access.operands(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)
             .chain(edges.iter().flat_map(|edge| &edge.arguments))
             .collect(),
@@ -576,6 +580,8 @@ mod tests {
 
     fn function(blocks: Vec<Block>) -> Function {
         Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             linkage: evocc_evoir::Linkage::Strong,
@@ -596,6 +602,8 @@ mod tests {
     #[test]
     fn derives_witness_and_seed_order_without_producer_help() {
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -630,6 +638,8 @@ mod tests {
     #[test]
     fn poison_is_not_laundered_through_a_block_argument() {
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),
@@ -677,6 +687,8 @@ mod tests {
         };
         let quotient = bits(2);
         let module = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
             aliases: Vec::new(),
             assembly: Vec::new(),
             extern_objects: Vec::new(),

@@ -1,0 +1,396 @@
+LLVM original floating-value path audit, 2026-09-16.
+This is a source audit, not a new native campaign. Every listed original has
+a PASS Clang-19 ARM64 control in the existing 20260915T152557Z lit-baseline.
+The ledger preserves each original command and source SHA256; raw outcomes
+and the full 1735-program denominator are unchanged. No diagnostic-code
+mapping or unused floating declaration alone establishes applicability.
+
+SingleSource/UnitTests/byval-alignment.c
+a887d98554fb29a6f2768f4053c7d8a63b6e5a7b412a99c4698133bda59ed9ad
+main calls f0 with a long-double record; f0 increments both long-double fields, and main converts them to double for printf.
+
+SingleSource/Regression/C/2003-05-21-UnionBitfields.c
+f6fdc7ecd26344a6b336cfcbc7da5d0249623c542bf7a9ed650c689c779bf4de
+main calls target_isinf(double) twice, including a floating division; target_isinf stores the floating parameter before inspecting its representation.
+
+SingleSource/Regression/C/2003-05-21-UnionTest.c
+7e1318fb26e19099b6953928aa80895a0f34e0063712ce2c914f29cf7c2822e0
+main calls __signbit(double) with two floating arguments; the function stores that executed floating parameter in a union. This is not solely static byte construction.
+
+SingleSource/Regression/C/bigstack.c
+195ca3f7514e8a3114f1763d0477ab71fa4d1cfe2eb64c138603131eb45d9d29
+main calls InitializeMixed and AddMixed; the former converts integers into floating fields and the latter sums double/float fields before floating printf.
+
+SingleSource/Benchmarks/BenchmarkGame/puzzle.c
+23d1288055bad36c2ed111d1d21cd33ef6f922c0c417c361794b4ec8446fd3b1
+main calls createRandomArray and shuffle; both use floating division by RAND_MAX + 1.0, multiplication and conversion back to integer. Integer puzzle data does not remove executed FP.
+
+SingleSource/Regression/C/gcc-c-torture/execute/20010605-2.c
+df3dc58b017a8d9746a1590a9c836ec26a19fa0839b9838ecaf5cb7adf4a28ca
+main passes complex float/double/long-double values to foo/bar/baz, which compare their floating real and imaginary components.
+
+SingleSource/Regression/C/gcc-c-torture/execute/20030910-1.c
+505b9dbae373e976c0e62036bdfd539cc0faa9d5a8b8b1124703d4d612ca897e
+main stores 3.14 through the address of a complex-double real component, then performs a floating comparison. This is separate from integer _Complex support.
+
+SingleSource/Regression/C/gcc-c-torture/execute/pr38969.c
+7cbdb87a5c6b3dcc931de62be1b2eaf7bca8d7d16c29cbba3b160e693d4173be
+main calls bar then foo with a complex-float value, returns that value and compares complex floating values.
+
+SingleSource/Regression/C/gcc-c-torture/execute/20040208-1.c
+c7eced506f5daffe8f776629d2007efafec9fce015ad62217c45383347e500e9
+main multiplies long-double hexadecimal constants and compares the resulting long-double value.
+
+SingleSource/Regression/C/gcc-c-torture/execute/991030-1.c
+2bbbabfdaf87557c04cc758b60adfeb403ee50f256affb41ef4d5732932907b0
+main loads the double global x and compares it to 3.875; constant static bytes alone cannot execute the original test.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/20010226-1.c
+9b18c96bba71ce4f5c20446baa7e26744bde2f91ef472bd1f4234cfe5c6ad3b5
+On the fixed binary128 long-double target the epsilon guard does not return early; main divides and multiplies long doubles then converts the result to unsigned long.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr28634.c
+53ac7e35278970183df75a4353c8173e7350fba3e3054e95900bdd296e8f25fa
+main loops on a floating comparison, updates global double y by addition and compares it with x + 1.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr30704.c
+fe6e597652431519aa7a71234fb927b42b974eb2227ee8c05f647c210808a475
+Although f1 constructs bytes with memcpy, main also compares u.d as double and consumes the double result of f2. The original is not representation-only.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr67218.c
+78c362717c450d7294f2a03566ea1bcb63b85211226c17f379073f34f5944bc8
+main calls foo, which converts unsigned int to float then double, and compares the returned double value with a hexadecimal FP constant.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/unsafe-fp-assoc-1.c
+8fdfc2212969f35c8100a1d92f899e0cc6123f82d1f3ffab3fd3d216d145e5ff
+main calls func(double); the fixed little-endian input selects floating subtraction and comparison tests inside func.
+
+Additional individually inspected original value paths:
+
+SingleSource/Regression/C/2008-01-07-LongDouble.c
+b9deadd47c593c588e52f133f53a531aca5969de388c8ac7f41ff245e3bb57cc
+main loads long double x twice and passes both values to variadic printf.
+
+SingleSource/UnitTests/2006-12-01-float_varg.c
+6a6759ebc4ea3ebd4b97397643e61a642d987f0d1ea4a3d75825e6f56a679046
+main passes four executed double arguments through printf varargs.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr29302-1.c
+39ed78acd11a718d6f18daf6cedf1354cd63f115a636a52677d49201cbbe8af0
+main divides by floating zero, converts to long double and compares the floating infinities.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr84235.c
+421a563a928fc7c143ee3243664957de029caf04995fa02c3769acae34c8ed9d
+main produces infinity, subtracts infinities and performs floating self-equality and NaN inequality comparisons.
+
+SingleSource/UnitTests/FloatPrecision.c
+474a6a1bff63d5ed96747956825c909236fdb3374fa208e0fd058cd65ca78a70
+main calls print(float), which multiplies its parameter, converts its result to integer and prints the floating product.
+
+SingleSource/UnitTests/2002-10-12-StructureArgsSimple.c
+5e7dea7c86f07cddab32b1bae49a92c45c9e5fe072b60e94b114d70284c2fd1a
+main calls print with a double record; print reads both floating fields into printf.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/20041213-1.c
+9ca05a4519c72c23687e66035d778a6109c5badd623ad89a349cd482602ef1bd
+main calls foo returning a floating NaN and passes that value to sqrt; the double result is stored.
+
+SingleSource/UnitTests/2004-02-02-NegativeZero.c
+d57aa584ad87f4db9252c7038ec184f7261ead1de41fc109734c256549968495
+main calls test with positive and negative floating zero; test performs floating negation/subtraction and prints those values.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/unsafe-fp-assoc.c
+55131524c12b3d97729efcc15a17f9651670bcc51d63d0c7c0dfccce6e38b40f
+main calls foo(double), which performs repeated floating multiplication by DBL_MAX, then compares the double result.
+
+SingleSource/UnitTests/2005-05-12-Int64ToFP.c
+e153264cba6fb429bd79c0a5e26a5e524cffa05910cbd9656db783df3bdc9487
+main repeatedly converts signed and unsigned 64-bit integers to double and passes those values to printf.
+
+SingleSource/Regression/C/2003-10-12-GlobalVarInitializers.c
+7c4483d5ce60e587a8e3fc324deb7a5a3fcc0ff32fa9778604886fb64e78e4fe
+main reads float union members initialized through integer representations, promotes them and passes them to printf.
+
+SingleSource/UnitTests/2002-10-12-StructureArgs.c
+1ead83892bedc1a82c4ff74510e4ae2a17ff9d837895356078d23074bae25de9
+main constructs and passes two double records, including a floating division; print reads all four floating fields.
+
+SingleSource/UnitTests/2002-05-02-ArgumentTest.c
+70c4211251247eb185cdcf141d10130baef5b10b32bcd07637b7e678d3ccb6c9
+main passes mixed arguments including float and double to testfunc, which forwards their floating values to printf.
+
+SingleSource/UnitTests/Vector/build.c
+7ac8963f7663d15783e0d8d9c2225fc92503f4eadc0dda5e697406e7bd038f2b
+main initializes a floating vector, multiplies and adds its lanes, and calls printFV for floating output.
+
+SingleSource/Regression/C/gcc-c-torture/execute/complex-5.c
+0b911a5a02342e6f8e9f7df0d6d6f9218a3013524479e5d99c09ee40ed9427a7
+main invokes complex-float addition and reciprocal division, stores results and compares complex floating values.
+
+SingleSource/UnitTests/Vector/sumarray.c
+c31e4003002d0e4e3ff56acc74e3167bd1d196e818f8da0b7fd0606fee5dbd54
+main initializes float elements by multiplication, sums floating vectors and prints their floating lanes.
+
+SingleSource/UnitTests/Vector/sumarray-dbl.c
+9f7ec4bb7dd59f66f7c32e84f120de7ab73e54eb9ffe5a96eb43c9ece9cc3e62
+main initializes double elements by multiplication, sums floating vectors and prints their floating lanes.
+
+SingleSource/Regression/C/gcc-c-torture/execute/pr36343.c
+742dfbecb17fea98a2c4423962191cadc33da1183e4b46168b91e470e1033085
+main calls foo(0), whose selected path stores and returns float f, then compares that floating result.
+
+SingleSource/Regression/C/gcc-c-torture/execute/pr68390.c
+28dfd3bec0dc9b264b13bbbfe796fcc469a2838850c18ed9953737bd214aff03
+main performs an indirect variadic call returning double; direct converts its integer product to double, and main compares the returned value.
+
+SingleSource/UnitTests/2002-05-02-ManyArguments.c
+0a3cb96e5ce905af1c7fda6a75c9321f1b939101a7a90d4b6c22d6c3bba9a534
+main passes float and double arguments to printfn, which consumes them in variadic printf output.
+
+SingleSource/Regression/C/gcc-c-torture/execute/complex-2.c
+3b62a04c7d652fa9e859f320c0f7d626c4237a33add5800a7abc10339f97547a
+main calls f for complex-double addition and compares the original and returned complex values.
+
+SingleSource/Regression/C/gcc-c-torture/execute/complex-1.c
+88c2cd39b054f6ca5cde1c06e673aa13f3d2c4fa83a5793e72eb07871ec81f75
+main calls xcexp, which passes floating components to g0/g1/g2, multiplies them, returns complex double and checks its components.
+
+SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c
+4520a96e5b9f279852f32f22c4551a1eff4cbdbb934275af62079f4de3cd4bf8
+main calls foo(double), which calls fabs and performs a floating comparison. Its link_error reference is intentionally unreachable, not the criterion for this disposition.
+
+SingleSource/UnitTests/StructModifyTest.c
+1f13d452199814482d651a8546b82350856b612c1f6ab1fc2340dbcbff30ee80
+main populates two mixed records and printS1 reads their float/double fields into printf.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-2.c
+794bb5f276511025c73cfdfe75636608489160534aa092b356cb821f5c475459
+main calls foo(double,double), which compares floating operands and converts them to int for a second comparison.
+
+SingleSource/Benchmarks/Misc/mandel-2.c
+78f100b72c4f1f22d8cd85e41731b206dc19699e6fc12371425f1ea160eb0078
+main constructs complex-double coordinates; loop/cnorm2/sqr execute floating multiplication, addition and comparisons.
+
+SingleSource/Benchmarks/Shootout/random.c
+d09ecdc438edb58f54204fd6bcd77a2c8ca50598107d4cf2e1e7fa78ed48f86a
+main calls gen_random(double); it scales the integer PRNG state using floating multiplication/division and returns a double for printf.
+
+SingleSource/UnitTests/Vector/multiplies.c
+a754d4ce288dff1142e8b7c25a0e3f68281e5c4e351495158657e27db5a86531
+The measured vector multiply loops are integer, but main first initializes TheArray with i * 12.345 in double. The original setup executes FP.
+
+SingleSource/Regression/C/test_indvars.c
+a4254eae4e1b2589a5c9659aca4df72ec634c34af880c3ac51802049f38fb774
+After its integer loops main accumulates array values in double sum and passes that floating checksum to printf.
+
+Further individually inspected executed floating paths:
+
+SingleSource/Benchmarks/BenchmarkGame/partialsums.c
+9893c2d05a38e9c91ed0abb491127c28ff7cc7f5c4b97864451186026a56c3d0
+main performs scalar pow/sqrt/sin/cos calculations and floating-vector divisions and accumulations; sum_vec returns double results for output.
+
+SingleSource/Benchmarks/BenchmarkGame/recursive.c
+9ab29794be3a8bd487de1d77166b8ae90be67a981c86791e0df68b3a65b088b8
+main invokes fibFP and takFP with double parameters and prints their floating results, in addition to its integer recursion tests.
+
+SingleSource/Benchmarks/BenchmarkGame/spectral-norm.c
+cc96d83a968503f2f2f7506756bb513e2ce499832e7432c1d13951caff8f6106
+main calls matrix/vector helpers with double values, sums double products, divides and calls sqrt for the result.
+
+SingleSource/Benchmarks/Misc/dt.c
+7f94e935eea565a3dfcb9a4d76f7731bc111b5d42becad159111cea2a0f1c614
+main initializes double vectors with floating cosf/sinf calculations and performs repeated double division before output.
+
+SingleSource/Benchmarks/Misc/fp-convert.c
+7f679bf3f70e455b9143fce99a584a611e248acbc59dfd26bad13145bb59629c
+main initializes float arrays by arithmetic; loop converts each element to double and computes a floating dot product, accumulated and printed by main.
+
+SingleSource/Benchmarks/Misc/mandel.c
+f95775f23915e8106d13d9ddb51133709189552ee1ae343dfeb83136db75b90e
+main calls mandel, which iterates complex-double multiplication/addition and hypot comparisons, then consumes volatile complex accumulation.
+
+SingleSource/Benchmarks/Misc/pi.c
+975fdc97f90539192c823642d43e7f73890552ee363b09005e1df119ea04cfc5
+main scales PRNG values using float multiplication/division, accumulates squared coordinates through myadd and computes a floating estimate.
+
+SingleSource/Benchmarks/Shootout/heapsort.c
+ab2810d9868668a4d652eb380da68cb15d78c4c5b7325c99963e18b336959490
+main fills an array through gen_random(double); the sort compares double elements and main prints a double result.
+
+SingleSource/Regression/C/float16-smoke.c
+baad753ee9de59d618a1a7a31f9f85c11d2d8d37eb268eec1b80db6d15a224df
+The fixed AArch64 __FLT16_DIG__ branch constructs and adds _Float16 values, passes them to printArg and converts them to double. The alternate literal-output fallback is not the selected original.
+
+SingleSource/Regression/C/matrixTranspose.c
+22e4923abe7010401bfced31b9fd3d69bd774606c4f9d0ec5d8da59b21ca749f
+main converts integer indices into float array values, computes float checksums before and after transposition, and prints them.
+
+SingleSource/Regression/C/gcc-c-torture/execute/20040709-3.c
+8dc1a60b8c4a99d14dfbce5006e6b9a08d7be54c08ae28287a02dc9e6baf7b46
+Includes 20040709-2.c; main invokes testW/testX/testY/testZ, whose packed records have a long-double l field initialized to 5.25 and compared after bit-field operations.
+
+Included source: SingleSource/Regression/C/gcc-c-torture/execute/20040709-2.c
+e7053c30dcf6effda4a98f7060d3587aea9a6433289236a4c1d661620331c849
+
+SingleSource/Regression/C/gcc-c-torture/execute/complex-6.c
+b733b186f2539140ddc2c0251007ae0f6401f3f7478dce7290bb3f13f36efb14
+main runs float/double/long-double complex conjugation and comparisons as well as integer-complex tests. The integer-only subset is not substituted for this original.
+
+SingleSource/Regression/C/gcc-c-torture/execute/pr36034-1.c
+6f224e784c3005f6edb35e43e0390d720073448f8b15b40f79bba065577db039
+test copies double array values, and main reads and compares each resulting double element with -1.
+
+SingleSource/Regression/C/gcc-c-torture/execute/ieee/mzero4.c
+faf9341a94d3e295627303ac9ca978f725b21f75548b894ba0ce15e0f2be7311
+main calls floating sin/tan/atan families and passes results through floating-value comparisons in expectd/expectf as well as memcmp.
+
+SingleSource/UnitTests/2003-08-05-CastFPToUint.c
+8afaa6785a211585eb52aa91f764d498255e6ba7ff392878d53da8f997186356
+main calls double-returning getters, converts those values to unsigned integer types and passes the doubles to printf.
+
+SingleSource/UnitTests/2005-07-17-INT-To-FP.c
+a93a80dbcb53068cc81ee6f76472c2426cce6646f5b6a6dfef8c901c6ec3f72e
+main converts signed/unsigned integers of several widths into float/double and passes those values to printf.
+
+SingleSource/UnitTests/2009-12-07-StructReturn.c
+a30e5bd2b7b023e1f0198b2de03da5c06a03dcf3a5cf4054a6138601b63bb1a6
+Although the regression targets a 96-bit struct copy, main also reads and compares the live float guard *pf with 142.0; the original is not representation-only.
+
+SingleSource/UnitTests/Vector/build2.c
+c470b4079b397ee88ce6b98ded7d0c4294f8836ad1a6df435fd68687a78ad3ea
+main calls float-argument vector constructors, repeatedly adds floating vectors and prints the final floating lanes.
+
+SingleSource/UnitTests/Vector/constpool.c
+0d798d553f93b97459d1781562b95ea2e86f116f84b2bc17f091ede1e949fafb
+main calls f ten times; f performs many floating-vector and scalar-lane additions, and main prints the resulting float lanes.
+
+SingleSource/UnitTests/Vector/simple.c
+3fc2d44b750b72e6acf5dbdb8ee8944c67a21a70ed413e0d03117ea5c4f7e738
+main performs repeated float/double vector multiplication and addition, then prints the resulting lanes.
+
+Remaining original floating value paths (source audit, no new execution):
+
+SingleSource/Benchmarks/BenchmarkGame/n-body.c
+b11855531832c67ab915b848ce4e56ee51cc82f6fd7fe2266d7d79ae4426116b
+main calls offset_momentum, energy and advance; the simulation updates double velocities and positions with double time steps and prints double energies.
+
+SingleSource/Benchmarks/BenchmarkGame/Large/fasta.c
+969dc85b535a62c112fc05812e9acfd816863f9de746a2971c4ffb2dedd54d96
+main calls accumulate_probabilities on double probability fields and random_fasta uses those probabilities to select output characters; integer character output does not eliminate FP.
+
+SingleSource/Benchmarks/CoyoteBench/almabench.c
+baf63ca7130d8712a82174a72e31771f3513d4f84ef390c7d541c2006bc45a4a
+main invokes planetpv and radecdist with double time and position arrays and prints the resulting floating coordinates.
+
+SingleSource/Benchmarks/CoyoteBench/huffbench.c
+6feb3520b047dce1f947043c7d98225f0b9fab1105e4800fd110d1589ae8c6e8
+The compression algorithm is integer and its timers are commented out, but main still passes the initialized double run_time to fprintf on both normal output branches. This disposition concerns the executed floating call ABI, not the compression algorithm.
+
+SingleSource/Benchmarks/CoyoteBench/lpbench.c
+b38808f17b3190c39019991a0862e9e4404bf19610f3f6e7152de745d444beac
+main generates a floating matrix and invokes dgefa/dgesl for floating Gaussian elimination; its normal report also passes a double value.
+
+SingleSource/Benchmarks/Linpack/linpack-pc.c
+9153e5affa1b73277a5c45c17184addfe0f5e2d2f258b17570e55d561c15b326
+main invokes matgen, dgefa and dgesl on REAL matrices and computes floating residuals, fabs and machine epsilon; REAL is a floating type in either supported precision mode.
+
+SingleSource/Benchmarks/McGill/misr.c
+a006b81b202dcf18468d674a460f18ef361d3aff1ed4f5f5f11d36008fce8ea1
+main passes double prob to simulate, which divides the random value by 1000.0 and compares it with prob; output also computes floating fractions.
+
+SingleSource/Benchmarks/Misc/ffbench.c
+885ca8a6037859f3b59c25b33ca4da84a038cf8773932594a393bf5c0f8e8473
+main executes forward and inverse fourn transforms, accumulates floating extrema, then scales floating pixel results back to integers for validation. The raw non-UTF8 comment byte is independent of this executed FP requirement.
+
+SingleSource/Benchmarks/Misc/himenobmtxpa.c
+8149c3e946c2a2fe810b31f232adbc9b84c1fa5307fe8fb5f5229178694ee4cb
+main initializes floating matrix coefficients, invokes jacobi and consumes its float residual gosa in printf.
+
+SingleSource/Benchmarks/Misc/matmul_f64_4x4.c
+2c756e5374d5ff2a5762400d7fac4011ba607722bde2d89bff40aa73b438388b
+main repeatedly calls wrap_mul4 on double matrices and prints every double result; this is executed matrix multiplication, not representation-only storage.
+
+SingleSource/Benchmarks/Misc/oourafft.c
+844916f8f62321785f6735d28285255a988a1fa46134824003526c7bc0873cdb
+main invokes cdft, checks the double error with fabs, multiplies complex floating components during correlation and prints floating results.
+
+SingleSource/Benchmarks/Misc/whetstone.c
+88a683e49ab624be5538c965418ea556dda2f6884b714ac66e78021d64dd13db
+main runs the nonzero Module 2 loop over double E1 elements using floating additions and multiplication, followed by other FP modules; the disabled Module 1 loop is not the evidence.
+
+SingleSource/Benchmarks/Stanford/FloatMM.c
+30b6b4970c2c81cae9c76d4ca73c4f32d99a77222424d8d179ef03d1b893ca96
+main calls Mm, whose rInitmatrix converts random integers to float and whose rInnerproduct performs floating multiply/add before printing the result.
+
+SingleSource/Benchmarks/Stanford/RealMM.c
+f216a8819d15211f5945da1e5264ff9a532c48c5877431cbbf6cecc8f0444220
+main calls Mm and rInnerproduct for floating matrix multiplication; this file defines float as double and prints resulting elements.
+
+SingleSource/Benchmarks/Stanford/Oscar.c
+39fa706ff28eb5e0f0be353edda8515fee5875f9e0d598e89ac03dc822641053
+main calls Oscar, which constructs floating complex inputs and invokes Fft; Fft performs floating complex multiply/add and scaling.
+
+SingleSource/Regression/C/callargs.c
+8da9472eeec03d85c6558e03a80a55a2c9730a62605b5da03b26629c63dbb942
+main unconditionally calls printArgsNoRet with float/double arguments; optional struct and varargs paths are not needed to establish the executed FP call interface.
+
+SingleSource/Regression/C/casts.c
+dbe8dd3b0ae5f0cb032a65dbaccfe77cff768fa40648633da3858791a9d26fd8
+After its integer conversion checks, main executes float/double-to-integer conversions and passes floating values to printf.
+
+SingleSource/Regression/C/uint64_to_float.c
+d01961be7ed3e19e6f355f3079ae4a963cf04965b797a4d9c0a2c29a1aa5b730
+main calls test across unsigned integer inputs; test compares the representation of a runtime uint64-to-float conversion with floatundisf's floating return. It is not only integer construction of static bytes.
+
+SingleSource/Regression/C/gcc-c-torture/execute/pr39501.c
+cc0553393a1e61170dfcd73001a6e386f005dd7963426ee5147b44e1737ce9f4
+main invokes float/double min/max functions and compares their floating return values across positive, zero and negative inputs.
+
+SingleSource/UnitTests/2003-05-07-VarArgs.c
+dc3f8cd6a7317192528176adacb50077d9ef82420257ef93e8f9869dd376410a
+main invokes the double and mixed-record argument paths; the callee uses va_arg(double), reads floating record members and prints those values.
+
+SingleSource/UnitTests/2003-08-11-VaListArg.c
+792cacf3d4e6f3fae2034af992b58a132f02840ad7dc90bf45e24b16f79744c3
+main invokes testVaListArg/testVaCopyArg paths that retrieve double arguments and floating members from mixed records; this is separate from integer/representation-only aggregate varargs.
+
+SingleSource/UnitTests/2009-04-16-BitfieldInitialization.c
+c630cd36d1241398413cb16eb093eda28fe45a581b83e01f853087589d44290d
+main reads t2.info and floating fields of the t4/t6 records, converts some to double and prints them. Integer bit-field initialization alone is not the complete original.
+
+SingleSource/UnitTests/Vector/AArch64/aarch64_neon_intrinsics.c
+cac20420df6eaec2d8fb5ff33e4246d6781cc8fd54feba6656965df61270998c
+main calls dotests_14, which executes vaddq_f32 then divides/subtracts floating lane values to check its result. This mixed integer/FP original requires FP; the distinct integer-only Vector/NEON/simple.c remains an unwaived compiler failure.
+
+SingleSource/Benchmarks/Misc/flops-1.c
+111d4621ff9bba0c40d19230411dc1c07d4e39402dfb003e6863dee9676b551e
+main executes double rational-polynomial accumulation in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-2.c
+cb1ae77adf0bf9cc1a6a915f22fb86b8d3acca59da88aa9550ef49fa2e373659
+main executes double alternating sums, products and divisions in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-3.c
+7dd48c06037e6fb25ec5f5f3d571311c018558359d01a18c11a2df0401f0bbf6
+main executes double sine-polynomial accumulation in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-4.c
+36ccd49b526ea7440bda1ad547f5e2f0a8a7c328e71daa5251d7f6a04e5fd79c
+main executes double cosine-polynomial accumulation in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-5.c
+19a9e08000b98f39bb7a18176882edde2ed593f16eda58da5f378ba4e4786ad5
+main executes double polynomial quotient accumulation in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-6.c
+2e7dc01487a44027e844f32fdfedcc9741669f4cc161b0ee10bef929416a0034
+main executes double polynomial product accumulation in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-7.c
+49f352cc593ca7b95f743f2dbcf5e116e7dd7a6ac44aa8e079251adeb0483a6d
+main executes double rational fractions in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+
+SingleSource/Benchmarks/Misc/flops-8.c
+4ce9e5f2c72b5c54dc97bdc9bde54d1c27800e3484d5b08b4b5e48754429a358
+main executes double polynomial products in its nonzero benchmark loop and prints double results; the evidence is the active calculation, not unused declarations.
+

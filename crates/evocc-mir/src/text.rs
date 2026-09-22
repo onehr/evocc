@@ -222,6 +222,25 @@ pub fn escape_template(template: &str) -> String {
 #[must_use]
 pub fn render_inst(inst: &MInst) -> String {
     match inst {
+        MInst::Floating {
+            dst,
+            op,
+            kind,
+            args,
+        } => format!(
+            "{}fp.{}.{} ({})",
+            defined(*dst),
+            op.mnemonic(),
+            if *kind == evocc_types::FloatKind::F32 {
+                "f32"
+            } else {
+                "f64"
+            },
+            args.iter()
+                .map(|reg| use_of(*reg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         MInst::Asm(body) => {
             let results = body
                 .defined()
@@ -237,6 +256,30 @@ pub fn render_inst(inst: &MInst) -> String {
             format!("{prefix}asm{}", render_asm_body(body))
         }
         MInst::Mov { dst, src } => format!("{}mov {}", defined(*dst), use_of(*src)),
+        MInst::Aes { dst, op, args } => format!(
+            "{}crypto.{} ({})",
+            defined(*dst),
+            op.mnemonic(),
+            args.iter()
+                .map(|reg| use_of(*reg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        MInst::Vector {
+            dst,
+            extract,
+            lane_bits,
+            bytes,
+            args,
+        } => format!(
+            "{}vec.{}.{lane_bits}.{bytes} ({})",
+            defined(*dst),
+            if *extract { "extract" } else { "pack" },
+            args.iter()
+                .map(|reg| use_of(*reg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         MInst::MovImm { dst, imm } => format!("{}mov #{imm}", defined(*dst)),
         MInst::Adrp { dst, symbol, kind } => {
             format!("{}adrp @{symbol}@{}PAGE", defined(*dst), page_prefix(*kind))
@@ -256,6 +299,47 @@ pub fn render_inst(inst: &MInst) -> String {
             use_of(*src),
             page_prefix(*kind)
         ),
+        MInst::AtomicRmw {
+            dst,
+            base,
+            value,
+            expected,
+            operation,
+            kind,
+            order,
+            volatile,
+        } => format!(
+            "{}atomic.rmw.{}.{} {}{} {}, [{}]{}",
+            defined(*dst),
+            operation.mnemonic(),
+            kind.atomic_suffix(),
+            order.mnemonic(),
+            volatile_marker(*volatile),
+            use_of(*value),
+            use_of(*base),
+            expected.map_or(String::new(), |expected| format!(", {}", use_of(expected)))
+        ),
+        MInst::Atomic {
+            load,
+            value,
+            base,
+            kind,
+            order,
+            volatile,
+        } => {
+            let instruction = format!(
+                "atomic.{}.{} {}{}",
+                if *load { "load" } else { "store" },
+                kind.atomic_suffix(),
+                order.mnemonic(),
+                volatile_marker(*volatile)
+            );
+            if *load {
+                format!("{}{instruction} [{}]", defined(*value), use_of(*base))
+            } else {
+                format!("{instruction} {}, [{}]", use_of(*value), use_of(*base))
+            }
+        }
         MInst::Load {
             align,
             dst,
@@ -573,6 +657,7 @@ pub fn render_inst(inst: &MInst) -> String {
         // is the destination a record result above sixteen bytes is written
         // through, and therefore travels in `x8`.
         MInst::IndirectResult => "indirect.result".to_owned(),
+        MInst::FpEnvCheck => "fp.env.check".to_owned(),
         MInst::IncomingArg { dst, slot } => {
             format!("{}arg.incoming [slot #{slot}]", defined(*dst))
         }
@@ -588,6 +673,7 @@ pub fn render_inst(inst: &MInst) -> String {
             "{}frame.slot [origin={origin}, size={size}, align={align}]",
             defined(*dst)
         ),
+        MInst::StackRelease { address } => format!("stack.release {}", use_of(*address)),
         MInst::StackAlloc {
             dst,
             size,

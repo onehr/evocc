@@ -1,0 +1,19 @@
+2026-09-20: four original LLVM files, unchanged source and fixed ARM64 oracles.
+Source pin: llvm-test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
+Authority: reviewed F01, output/compiler-review/20260909/decisions.md.
+Image evo-flight-lab:sealed, linux/arm64, network none; SHA-256
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+GCC 14.2.0-19 and Clang 19.1.7; for each compiler at O0 and O2:
+  CC -std=gnu11 -OO -c ORIGINAL.c -o probe.o
+
+SingleSource/Regression/C/gcc-c-torture/execute/:
+  20040208-1.c: abort at line 8, all four compilations exit 1.
+  991030-1.c: abort at line 5, all four compilations exit 1.
+  ieee/20010226-1.c: implicit library declaration, all four exit 1.
+  ieee/pr28634.c: implicit library declaration, all four exit 1.
+The exact source hashes and original full benchmark argv remain attached to
+each ledger row. Original diagnostic suppressions are deliberately absent
+from this profile probe, as in the preceding llvm-declaration-profile.out.
+The original reference PASS is retained; none becomes oracle-unusable.
+These are not-applicable under F01, not blanket floating-point exclusions.
+Short raw diagnostics: .build/floating-targeted/declaration-frontier.txt.

@@ -53,9 +53,27 @@ fn floating_constant_arithmetic_produces_only_integer_values() {
 }
 
 #[test]
-fn nonconstant_floating_execution_stays_outside_the_profile() {
-    let output = run("int f(double x) { return (int)(x * 2.0); }", "--emit=evoir");
-    assert!(!output.status.success());
+fn scalar_floating_execution_keeps_the_conversion_obligation() {
+    let source = "int f(double x) { return (int)(x * 2.0); } int main(void) { return f(2.75); }";
+    agrees(source, 5);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    assert!(module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(|inst| matches!(
+            inst,
+            evocc_evoir::Inst::UbAssume(_, evocc_evoir::UbReason::FloatingToInteger)
+        )));
+    let deferred = run(
+        "int f(long double x) { return (int)(x * 2.0L); }",
+        "--emit=evoir",
+    );
+    assert!(!deferred.status.success());
+    assert!(String::from_utf8_lossy(&deferred.stderr).contains("E3049"));
 }
 
 #[test]
@@ -68,16 +86,39 @@ fn integer_argument_and_assignment_apply_the_same_constant_conversion() {
 }
 
 #[test]
-fn floating_constant_conversion_does_not_saturate_or_read_objects() {
+fn floating_integer_conversion_does_not_saturate_or_initialize_objects() {
     for source in [
         "int main(void) { return (int)(2147483648.0); }",
         "int main(void) { return (unsigned int)(-1.0); }",
-        "double x; int main(void) { return (int)(x + 1.0); }",
         "int main(void) { return (int)(1.0 / 0.0); }",
     ] {
-        for mode in ["--interpret-c-hir", "--emit=evoir"] {
-            assert!(!run(source, mode).status.success(), "{mode}: {source}");
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(!output.status.success(), "{mode}: {source}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E3063"),
+                "{mode}: {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
+        let output = run(source, "--emit=evoir");
+        assert!(output.status.success());
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        assert!(module
+            .functions
+            .iter()
+            .flat_map(|f| &f.blocks)
+            .flat_map(|b| &b.insts)
+            .any(|inst| matches!(
+                inst,
+                evocc_evoir::Inst::UbAssume(_, evocc_evoir::UbReason::FloatingToInteger)
+            )));
+    }
+    agrees("double x; int main(void) { return (int)(x + 1.0); }", 1);
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run("int main(void) { double x; return (int)(x + 1.0); }", mode);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
     }
     agrees(
         "int main(void) { return (int)(1 ? 5.5 * 10 : 1.0 / 0.0); }",

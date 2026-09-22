@@ -1,0 +1,112 @@
+2026-09-20: reductions from the frozen 15-lane application replay.
+Subject: .build/floating-targeted/evocc-20260920-closure
+SHA-256 ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882
+Image: evo-flight-lab:sealed, linux/arm64, network none
+Digest: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Oracles: GCC 14.2.0-19 and Clang 19.1.7.
+
+For CC in gcc-14, clang-19 and O in 0, 2:
+  CC -std=gnu11 -OO -ffp-contract=off SOURCE.c -o probe
+  ./probe
+
+floating-comparison-builtins.c:
+  All four oracle compile/run pairs exit 0.
+  Subject --interpret-c-hir: E2001, undeclared __builtin_isless, line 8.
+  Covers the six comparison builtins, mixed arithmetic operands, NaN, signed
+  zero, and exactly-once operand evaluation. No strict-fenv claim.
+  Original affected LLVM files: ieee/compare-fp-{1,3,4}.c and ieee/pr50310.c.
+
+polynomial-scalar-place.c (actual target arm_neon.h):
+  All four oracle compile/run pairs exit 0.
+  Subject --interpret-c-hir with all three shared sysroot include directories:
+  E2101, expected-modifiable-lvalue at got = bytes[0], line 15.
+  Final controls include all four polynomial scalar widths, including 128.
+  Original: UnitTests/Vector/AArch64/aarch64_neon_intrinsics.c:72230.
+  This is a polynomial scalar place defect, not a floating-vector deferral.
+
+static-narrow-member-offset.c:
+  Same four oracle compile/run pairs (without -ffp-contract=off) exit 0.
+  Subject C-HIR: E3009 null-pointer-access, line 7.
+  Subject EvoIR lowering: E3101 global initializer is not an admitted integer
+  constant at that initializer. No object is read by this address calculation.
+  Final controls also retain the intermediate unsigned-char truncation of
+  a 264-byte field offset; both oracles still compile/run 0 at O0/O2.
+  Original: TinyCC libtcc.c:1709, options_W's unsigned-short offset field.
+  This does not authorize runtime null dereferences or symbolic address guesses.
+
+These are RED observations against the frozen binary, not repaired results.
+
+floating-environment-dominance.c and its reference-built driver:
+  Both oracles at O0/O2 with -ffp-contract=off compile/run 0 on the value tests.
+  The frozen subject also passes those values and the driver's CHECK_ADMISSION
+  mode: post-call FPCR mutation and each branch of one() still produce SIGTRAP;
+  transport preserves foreign FPCR. This is a semantic control, not a RED.
+  The performance RED is the emitted admission count per function:
+    chain=3, loop=3, both=3; required after dominance reuse: 1, 1, 2.
+    one=2, after_call=2, after_asm=2, after_asm_goto=2, transport=0 must stay so.
+  No full benchmark runtime improvement is inferred from these counts.
+
+2026-09-20 targeted repair, release compiler SHA-256:
+3d4dac628a655ccd1eacfd50ad200272e403151f2dfcd6295c3f03afdcc3b5e3
+Four automated frontier tests GREEN, including arity/type and deferred-format
+negatives. All 60 existing language_semantics tests pass on this repair batch.
+Each of the first three fixtures passes both interpreters and emits assembly;
+GCC-14 links each emitted assembly and all three native programs exit 0.
+FPCR counts are chain=1, loop=1, both=2; all barrier/control counts unchanged.
+The same CHECK_ADMISSION native driver exits 0 after the change: post-call and
+both branch entries reject foreign FPCR with SIGTRAP, transport leaves it alone.
+
+Original argv projected by the existing LLVM adapter, unchanged sources:
+  compare-fp-1, compare-fp-4, pr50310: emitted, linked, native exit 0.
+  compare-fp-3: emitted, link FAIL on link_error0/link_error1; not closed.
+  aarch64_neon_intrinsics: polynomial place error removed; new E3050 at
+    arm_neon.h:2571 is the real float32x2_t vcreate_f32 representation cast.
+    Original calls appear at lines 245/246, before further FP-vector operations.
+    The original source hash/argv remain in its reviewed floating-vector row;
+    this new refusal, not the repaired E2101, supports that deferral.
+TinyCC 20260920T000937Z: 9/11 original objects assembled and installed,
+baseline and actual subject tests both tests-passed. The remaining E3049 and
+E3050 are one deferred FP object each; E3101 no longer occurs.
+Full changed gate: 2580 PASS, zero failures, four historical ignored;
+Clippy -D warnings and fmt pass. Gate capture is
+.build/floating-targeted/gate-20260920-frontier.txt.
+
+Second reduction floating-comparison-partitions.c: seven impossible external
+calls remain in this compiler's O2 assembly (RED). It covers LT/EQ/GT/UNORDERED,
+reversed operands, nested short-circuit forms, signed zero and NaN values.
+Repair release b625baf1bd343d18e06e63a9515cb29ff5401ca39fe90998b69162447f221a9b:
+  Automated partition test GREEN; full language suite 61 PASS.
+  Both interpreters execute the positive and control fixtures with exit 0;
+  uninitialized execution still gives E3001, volatile reads retain the call.
+  Both GCC-14 and Clang-19 O0/O2 -std=gnu11 -ffp-contract=off compile/run the
+  positive and control fixtures, all exit 0. Subject native both exit 0.
+  Original compare-fp-3, unchanged source and existing argv projection,
+  emitted assembly SHA-256
+  6df6d814d465ea9cc62bb696f2c4c99d9f4d95d391110d60bddba8f03a674ed4;
+  GCC-14 links with -lm and native exit 0, with no link_error definitions.
+  The historical LLVM campaign has not yet been rerun.
+
+Scalar-local and standard-absolute repair, release SHA-256:
+b5428a5cb93999e324d3ea5956c8db643995f7ea88cce2f9b00fbd4959b1fc32
+floating-local-values.c declared RED on needless alloca, then passes both
+interpreters, zero-init/uninitialized controls, and native execution; address
+escape and volatile controls retain object storage. Deferred formats unchanged.
+floating-absolute-calls.c declared RED on E3039, then passes both interpreters,
+native execution, exact-symbol/prototype and disabled-builtin controls. Both
+signed zeros and NaNs retain their comparison behavior; original comparisons
+remain in IR even when their result is known after evaluation.
+Both final fixtures compile/run with GCC-14/Clang-19 at O0/O2,
+-std=gnu11 -ffp-contract=off -lm, all exit zero in the fixed ARM64 image.
+Language suite 63 PASS and external-symbol suite 91 PASS.
+Original 20020720-1, unchanged source and existing argv projection:
+  assembly SHA-256 c92618fe78dcdbd78e0db64a7ecb7543b28f17eca3d25dff4050898142faa506
+  GCC-14 link -lm and native exit zero; no link_error stub or source change.
+Original LARGE_DATASET lu/ludcmp/floyd-warshall all re-emit successfully;
+all three retain TIMEOUT at the unchanged 60-second limit (exit 137):
+  lu: real 59.7155, user 59.9825; ludcmp: real 60.0047, user 59.9878;
+  floyd-warshall: real 60.0052, user 60.0029.
+The upstream timeit-target wrapper exits zero while recording child exit 137;
+this is not PASS. Original HashProgramOutput/fpcmp comparisons all fail.
+The 30/30 MINI_DATASET result does not close these LARGE_DATASET failures.
+Targeted Clippy for evocc-parser, evocc-lower and evocc, all targets,
+offline/locked, -D warnings: PASS after this batch.

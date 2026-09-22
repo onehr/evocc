@@ -1,0 +1,29 @@
+Original LLVM optimization-required link failures, 2026-09-16.
+Subject debug SHA-256: 6df6c9498411b0d6999c92b4cb258a2e7a1a4db82f1d21f3e43aa254d7af0068
+Original tree: llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e
+Directory: SingleSource/Regression/C/gcc-c-torture/execute/
+Sources and SHA-256:
+  20041114-1.c dfa3780e14755d019bc4228577783e9cf323fcd10de7a2cbccc4dceeb595960d
+  compare-3.c 56a711abe51c97372c7ed7a7a257829cc7c183ddf3dd6148ae903f0f7dd37c22
+  pure-1.c abf51160df63f0ee8af3a8d427777a4e8dedae1c39f76dbb1b226a77aab64ce2
+  shiftopt-1.c 15013863e6df2c084f556c9498db0130841c6c79c41a3dc72c797c5449cc7d4a
+
+Commands derive from compile-commands.json in completed run 20260915T152557Z:
+-DNDEBUG -O3 -DNDEBUG and the existing exported header paths. Only recorded
+diagnostic options are omitted; sources, optimization flags and link stubs
+are not modified. All four original sources emit successfully.
+
+Each original .test is RUN-only: execute the program successfully, with no
+reference-output comparison. With each of GCC-14 and Clang-19 in sealed ARM64,
+assemble/link using -no-pie then run through the original timeit-target with
+the lane's 60-second limit: 8/8 exit 0. An earlier replay command incorrectly
+requested nonexistent .reference_output files; that runner error is not PASS.
+Successful log: .build/vector-targeted/llvm-link-originals-run.txt.
+
+Declared REDs precede repairs in switch_labels.rs. The small C fixtures are
+shift-identity-edges.c, comparison-partitions.c, guarded-integer-range.c;
+private-store tests include a call with real global side effects. The 30-test
+CFG suite passes. Original evaluations, guards, poison and effects remain;
+volatile/escaping/changing objects and unsafe narrowing refuse deductions.
+No absent external function is stubbed and no validator is weakened.
+These targeted original-program passes do not rewrite the old full run.

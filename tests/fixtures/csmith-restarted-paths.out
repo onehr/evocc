@@ -1,0 +1,147 @@
+2026-09-20: finite reached-path controls, not original benchmark PASS.
+
+Latest extension (base/87, base/120, bitfields/242):
+source 265cd31c8e470248483ac8b4529cde7abffcb0f1e8c583a7bc34dad84e3a8b48
+assembly dd01c83eed97a8e236a32611e226dd4812b6298262d3694659bb97b036416e11
+compiler 8960370ee128a2afaf4864624f23a1b7d7103942df16452cbfb9dd2f8611c849
+Both interpreters return 0. Sealed offline ARM64, GCC14/Clang19 O0/O2
+and EvoCC assembly linked with gcc-14 -no-pie all exit 0. The existing
+Clang tautological-comparison warning is retained. Emission uses the same
+three sysroot include directories as below, -std=gnu11 -O2 --emit=asm.
+Generated assembly: .build/floating-targeted/csmith-restarted-guards.s.
+
+Unchanged originals, matching the existing two-oracle localization capture:
+base/87 66b0aba397f98fbc557ff5b2b64b41b84e4d69f03e0474389bf9a02695991272
+  func_1 lines 120-152 resets l_7=0 and g_14=1, then jumps backward
+  before either update. Other assignments cannot change that reset predicate.
+base/120 c412f3c883bcb59f544ba1cbd165849b16b2feba7522842088c5d2cc9e3c7150
+  func_4 lines 119-153: l_658.f0 starts at -1. Its address never escapes;
+  neither arm modifies it. The tail branch repeats while separate unsigned
+  counters and global-object assignments do not change the local union.
+bitfields/242 88600e240950fe9d68a69e6ee956768e7dce810dfa92a33264c7f82b35ba8b8a
+  func_1 lines 115-143: g_169.f3 is u16, so -8 becomes 65528 and
+  skips <49. g_161.f1 starts at 1 and can only change inside that skipped
+  body; the preceding func_2 returns a record without side effects.
+The finite fixture covers those transitions and zero-guard controls, not
+the entire original computation. The original 1000-input campaign remains
+932 agreements / 68 oracle-unusable / 0 mismatches; diagnosis is now
+32 identified repeating paths / 36 undetermined. Earlier records follow.
+
+Source SHA256 32c4f610dce61aef529e67b8d5a2cc4babf6060a72802920de7a4417d5fde335
+Assembly SHA256 62c6af6386bff7da41f0c7589e2bd52d59ba61e7aa9e3c32f362e42c7c04818c
+EvoCC SHA256 07a8e66e3da4f282a4e5108547940d020ae4409e91201012c48480fc6442c237
+Target aarch64-unknown-linux-gnu, -std=gnu11; existing ladder sysroot's GCC
+private, architecture and generic system include directories, in that order.
+  --interpret-c-hir: 0; --interpret-evoir: 0.
+  -O2 --emit=asm; gcc-14 -no-pie link; native exit 0.
+Sealed offline linux/arm64, one CPU, evo-flight-lab:sealed:
+  GCC 14.2.0-19, -std=gnu11 -O0 / -O2: exit 0 / 0.
+  Clang 19.1.7, -std=gnu11 -O0 / -O2: exit 0 / 0.
+Clang warns that comparing int8_t against 215 is always true; this is the
+retained type-range premise, not a suppressed diagnostic.
+
+Original source identities match the existing 136-run localization capture:
+.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+base/68: 3cefd2a881fc8daf1c96461a31abf1474ef5846457825b42dc474bfb326b41a5
+bitfields/115: 2d01288492ed57d307eb4930fee2b5d2de969ea334089bef204db5e2e5edafed
+base/122: 4c0f5cbce55fa4d46e336414bf61762382684d2062f44b0aae4710ff9fbb8186
+bitfields/122: a3d046fa17c7dc9f8d25858ae38b62407017c454e740fd9d907b3085e8f068db
+
+base/68 lines 527-532: a const u64 parameter is unchanged and has no escaped
+address. The reached true branch goes back before the for update, resetting
+g_71.f0 to zero each time. The byte, halfword and result assignments change
+only other objects. GCC/Clang samples repeatedly reach lines 527-529.
+bitfields/115 lines 149-155: structure self-assignment preserves g_16.f0;
+when it is nonzero the backward branch restarts the for initializer before
+its increment. GCC/Clang both sample this reset/self-assignment/branch path.
+Both /122 sources, lines 337-348: l_757 is a nonnull global-object address;
+the comparison against the assigned null l_759 remains false. The else arm
+initializes a local pointer array, sets l_698 to its null [1][8] member, and
+goes back when g_37 is nonzero. It does not change g_37 or l_757. Both oracles
+sample this branch/array-initialization cycle. The finite control preserves
+that null selected pointer without dereferencing it.
+Finite fuel bounds these reductions only. Zero predicates are terminating
+controls; nonzero and sign-boundary values test the repeating transition.
+This identifies reached cycles, not whole-program definedness or a common
+terminating checksum. Original inputs, ten-second limits and verdicts remain.
+
+The initial pointer-array reduction used 256 diagnostic visits and hit the
+EvoIR interpreter's E3008 instruction budget (C-HIR returned zero). Its early
+native invocation still used the previous assembly and is not evidence for
+that revised source. The final reduction uses eight visits for this path,
+keeps 256 for the scalar/reset paths, and was re-emitted before the native
+run; source/assembly hashes were printed and checked inside the container.
+This bounds the new transition test, not either original Csmith workload.
+
+Extension: base/241 and base/246, same frozen compiler and sealed toolchains.
+Initial extension source SHA256 ecc2d7da1c117671dd1d193e8f30c2a5f90476abbb39300d60d7b0ea80e9e465
+Initial extension assembly SHA256 53c2f13078fc2c736956975320be9949252364d980a5c0368c0bafd8d58d7438
+Both interpreters return 0; GCC14/Clang19 O0/O2 and EvoCC native all exit 0.
+An initial host invocation omitted the system headers and incorrectly used
+unsupported -o; those setup rejections are not semantic REDs or run results.
+Correct emission uses stdout and the three explicit system include paths above.
+The container prints the final source/assembly hashes before compiling/running.
+
+base/241 source 8f0fb48a9eb1409b67a79e53d3f6d32cbd4bd351ef24d9ee77d29097447d43fd:
+func_30 lines 340-352 calls the finite func_47, then unconditionally resets
+g_10=2 and g_25.f0=1. The true g_10 branch goes back before either update.
+func_47's p_50 refers to func_30's distinct local l_34, not g_10; its own
+bounded loops finish, then the caller resets the counter. The unrelated
+g_40 increment is u32 and wraps without affecting the branch. The finite
+control includes the preceding call, the reset, and an unsigned wrap.
+
+base/246 source f89807016443393f324f80dd1ee16b87455004c73e75d11ed87f58713e19a2ef:
+At that checkpoint, undetermined. func_9 resets g_306=29, skipping its < -16 loop, but
+g_31 may alias g_99. In particular, func_55's l_309 is UNSIGNED; setting
+it to -12 does not skip its > 32 loop, which can assign g_31=&g_99.
+The initial independent-guard argument was therefore discarded, not used
+to classify the original. New controls must include aliasing: XOR 3 gives
+a repeating 1/2 pair but terminates from 0 or 3. The original reaching
+object/value still needs evidence. Both source hashes match the localization
+capture; original inputs, checksums and oracle-unusable verdicts stay intact.
+
+Final alias-sensitive extension, re-emitted and rerun after the correction:
+Source SHA256 6ed797cd3ca905cb7d0b1557cac61947ca472c647820193cfd56ec1e8b232ec3
+Assembly SHA256 917c5e26d737ea43f5eb6057def8206445240f94971feca1b5e87a17db20c314
+Both interpreters return 0; sealed GCC14/Clang19 O0/O2 and EvoCC native
+all exit 0. The native invocation verifies these source/assembly identities.
+The XOR control covers both distinct objects and a guard aliased by its
+update pointer: 1/2 and -1 remain nonzero, while 0/3 terminate. This does
+not establish which object/value the original base/246 program reaches.
+
+Subsequent original-process observation, still diagnostic-only:
+.build/floating-targeted/csmith-base246-state-20260920.json
+SHA256 10f2e290822301656483484943ecbb166dff9960a33e6193cca7eb5edd7cfe4e
+The unchanged source was compiled independently by GCC-14 and Clang-19 at
+-O0 -g -static -no-pie with the original Csmith macros/runtime include path.
+No sampling TU, source edit, injected store or breakpoint was added. The
+owning parent stopped each child three times, read its own child's memory
+at nm-resolved global addresses, and resumed it. Each child was killed and
+reaped after the observations; termination -9 is not a benchmark result.
+Both compilers: g_31 points to g_32 at 0x4a005c, not g_99 at 0x4a0064;
+g_99 is always 1724242073 (0x66c5d899). Pointed values are GCC 0/3/0 and
+Clang 0/3/3. Combined with the earlier func_9 PC samples and its unchanged
+body, the nonaliasing nonzero-guard cycle is identified. The exact guard
+already appears in the passing finite fixture. Analysis becomes 27 reached
+cycles identified / 41 undetermined; all 68 oracle-unusable original labels
+remain unchanged. A preceding diagnostic attempt found no GDB installed and
+did not execute either program; no package was installed to obtain this result.
+
+Further finite extension: base/83 and bitfields/83.
+Original source hashes, matching the existing PC-sampling capture:
+base c7058f9b68561c614a9d0ef74d08cfdf867802505f1907c1945c5fefc84a2bb8
+bitfields ac1ada9b150b92e6ef13aea202668408cbb34e39c82d9130064da210fab065f0
+func_17 has a nonzero static const i64 g_671, with no escaped address;
+both source branches reach its backward goto without changing the guard.
+The u16 increment and u32 decrement wrap, and the pointer assignments in
+either branch concern other objects. Both oracle PC samples reach this body.
+The finite reduction covers the true arm and the false-arm pointer rebind,
+then seven true arms, with explicit final object/value and wrap checks.
+Current fixture SHA256 f7027d1d94d81da2cb91eac466b8f08680a9af61baaddbf54b7ca583820c3947
+Current assembly SHA256 c08079704f8a1e8b54494300022b650840723259b90d03d32401f02fc209beb1
+Debug compiler SHA256 8960370ee128a2afaf4864624f23a1b7d7103942df16452cbfb9dd2f8611c849
+Both interpreters return 0. Sealed GCC14/Clang19 -std=gnu11 -O0/-O2 and
+EvoCC native all exit 0; the source/assembly hashes were checked in-container.
+Clang's existing narrow-range warning is retained. Analysis is now
+29 identified / 39 undetermined; all original campaign outcomes remain.

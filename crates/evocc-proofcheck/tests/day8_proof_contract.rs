@@ -25,12 +25,16 @@ fn main() {
     let paths = env::args_os().skip(1).collect::<Vec<_>>();
     assert_eq!(paths.len(), 3);
     let before = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             variadic: false,
@@ -138,6 +142,8 @@ evocc-types = {{ path = {:?} }}
     .expect("write producer manifest");
     fs::write(client.join("src/main.rs"), PRODUCER_CLIENT).expect("write producer client");
     let output = Command::new(env!("CARGO"))
+        .arg("--config")
+        .arg(proofcheck.join("../../.cargo/config.toml"))
         .args(["run", "--quiet", "--offline", "--"])
         .args([&inputs.before, &inputs.after, &inputs.proof])
         .current_dir(&client)
@@ -149,6 +155,23 @@ evocc-types = {{ path = {:?} }}
 
 fn certificate(input: &str, output: &str) -> String {
     format!("evp1\nregistry p0.scalar.v1 {REGISTRY_SHA256}\ninput {input}\noutput {output}\n")
+}
+
+#[test]
+fn proof_reconstruction_preserves_global_readonly_permissions() {
+    let before = b"global @g origin=0 kind=file visibility=external size=4 align=4 bytes=01000000 initialized=1111 readonly=true\n";
+    let after = b"global @g origin=0 kind=file visibility=external size=4 align=4 bytes=01000000 initialized=1111\n";
+    let inputs = Inputs::new();
+    let digest = sha256_hex(before);
+    inputs.write(before, before, &certificate(&digest, &digest));
+    assert_status(&inputs.run(), 0, "unchanged readonly global");
+    inputs.write(before, after, &certificate(&digest, &sha256_hex(after)));
+    assert_status(
+        &inputs.run(),
+        3,
+        "permission change with recomputed output digest",
+    );
+    fs::remove_dir_all(&inputs.dir).unwrap();
 }
 
 fn add_zero_certificate(input: &str, output: &str) -> String {

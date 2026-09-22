@@ -20,7 +20,17 @@ pub(super) fn allocation_sizes(unit: &CHirUnit<'_>) -> BTreeMap<SymbolId, Vec<us
         let CHirDecl::Function(function) = declaration else {
             return;
         };
-        for attribute in &function.attributes {
+        // GNU declarations also place function allocation attributes between
+        // the return pointer and the function name (devm_kmalloc's spelling).
+        // They remain in the written declarator, not the declaration's list.
+        // Do not import attributes from a nested returned function type.
+        let return_pointer_attributes = match function.written.layers.as_slice() {
+            [WrittenDeclaratorLayer::Function { .. }, WrittenDeclaratorLayer::Pointer { attributes, .. }, ..] => {
+                attributes.as_slice()
+            }
+            _ => &[],
+        };
+        for attribute in function.attributes.iter().chain(return_pointer_attributes) {
             if attribute.semantic_name() != Some("alloc_size") {
                 continue;
             }
@@ -43,6 +53,142 @@ pub(super) fn allocation_sizes(unit: &CHirUnit<'_>) -> BTreeMap<SymbolId, Vec<us
 }
 
 impl<'a> Substitution<'a, '_> {
+    /// Analyze the already evaluated body of a statement expression. The
+    /// returned facts reference allocation-time captures, never a replay of
+    /// the allocation or its argument effects. Unknown control flow drops
+    /// facts for its writes; a goto cannot establish a dominating assignment.
+    pub(super) fn statement_result_bounds(
+        &mut self,
+        body: &'a CHirStmt<'a>,
+        value: Expr<'a>,
+        outer: &Context<'a>,
+    ) -> Option<Bounds<'a>> {
+        let mut flow = Context::new(outer.scope);
+        flow.object_bounds = outer.object_bounds.clone();
+        flow.exposed_objects = inspect([Node::Stmt(body)]).exposed_objects;
+        self.extent_statement(body, &mut flow, 0)?;
+        self.pointer_bounds(value, &flow, 0)
+    }
+
+    fn extent_statement(
+        &mut self,
+        statement: &'a CHirStmt<'a>,
+        flow: &mut Context<'a>,
+        depth: usize,
+    ) -> Option<()> {
+        if depth >= 64 {
+            return None;
+        }
+        match statement {
+            CHirStmt::Compound(items, _) => {
+                for item in items {
+                    match item {
+                        CHirBlockItem::Declaration(CHirDecl::Object(object)) => {
+                            let uses = inspect([Node::Decl(match item {
+                                CHirBlockItem::Declaration(declaration) => declaration,
+                                _ => unreachable!(),
+                            })]);
+                            if uses.jumps {
+                                return None;
+                            }
+                            flow.object_bounds
+                                .retain(|symbol, _| !uses.mutable.contains(symbol));
+                            flow.object_bounds.remove(&object.symbol);
+                            let qualifiers = self.unit.types.get(object.ty)?.qualifiers;
+                            if !flow.exposed_objects.contains(&object.symbol)
+                                && !qualifiers.is_volatile
+                                && !qualifiers.is_atomic
+                            {
+                                if let Some(initializer) = &object.initializer {
+                                    if let [InitAction::StoreScalar { value, .. }] =
+                                        initializer.plan().actions()
+                                    {
+                                        if let Some(bounds) = self.pointer_bounds(value, flow, 0) {
+                                            flow.object_bounds.insert(object.symbol, bounds);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        CHirBlockItem::Declaration(_) => {}
+                        CHirBlockItem::Statement(child) => {
+                            self.extent_statement(child, flow, depth + 1)?
+                        }
+                    }
+                }
+            }
+            CHirStmt::Expr(expression, _) => {
+                let uses = inspect([Node::Expr(expression, false)]);
+                flow.object_bounds
+                    .retain(|symbol, _| !uses.mutable.contains(symbol));
+                if let CHirExpr::Assign {
+                    op: AssignmentOp::Simple,
+                    place,
+                    value,
+                    ..
+                } = expression
+                {
+                    let symbol = place.symbol();
+                    let ty = self.unit.types.get(place.ty())?;
+                    let entry = self.unit.symbols.symbol(symbol).ok()?;
+                    if !flow.exposed_objects.contains(&symbol)
+                        && !ty.qualifiers.is_volatile
+                        && !ty.qualifiers.is_atomic
+                        && entry.scope() != self.unit.symbols.file_scope()
+                        && matches!(
+                            entry.storage_class(),
+                            Some(StorageClass::None | StorageClass::Auto)
+                        )
+                    {
+                        if let Some(bounds) = self.pointer_bounds(value, flow, 0) {
+                            flow.object_bounds.insert(symbol, bounds);
+                        }
+                    }
+                }
+            }
+            CHirStmt::If(test, yes, no, _) => {
+                let uses = inspect([Node::Expr(test, false)]);
+                if uses.jumps {
+                    return None;
+                }
+                flow.object_bounds
+                    .retain(|symbol, _| !uses.mutable.contains(symbol));
+                if let Some(value) = crate::constant::eval_executable_integer_constant(
+                    test,
+                    &self.unit.types,
+                    &self.unit.symbols,
+                    self.target,
+                ) {
+                    if value.truth() {
+                        self.extent_statement(yes, flow, depth + 1)?;
+                    } else if let Some(no) = no {
+                        self.extent_statement(no, flow, depth + 1)?;
+                    }
+                } else {
+                    let uses = inspect([Node::Stmt(statement)]);
+                    if uses.jumps {
+                        return None;
+                    }
+                    flow.object_bounds
+                        .retain(|symbol, _| !uses.mutable.contains(symbol));
+                }
+            }
+            CHirStmt::Label(..)
+            | CHirStmt::Goto(..)
+            | CHirStmt::ComputedGoto(..)
+            | CHirStmt::Return(..) => return None,
+            _ => {
+                let uses = inspect([Node::Stmt(statement)]);
+                if uses.jumps {
+                    return None;
+                }
+                flow.object_bounds
+                    .retain(|symbol, _| !uses.mutable.contains(symbol));
+            }
+        }
+        Some(())
+    }
+
     fn size_value(&self, value: u64, span: SourceSpan) -> Expr<'a> {
         self.alloc(CHirExpr::Lit(
             IntLit {

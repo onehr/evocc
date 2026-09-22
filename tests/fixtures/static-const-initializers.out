@@ -1,0 +1,38 @@
+GNU static integer initializer projection, 2026-09-16.
+Fixture SHA-256: b84ecab5750438dedb1cfa31a976f73c54cffafe8d5edb3332aa95b4306b3a7b
+Subject debug SHA-256: 5c16c25a11393410f976ad8b03f9120d49c50273d363c9658fdce6d03f789839
+Sealed linux/arm64 image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC-14 14.2.0-19 and Clang-19 19.1.7, network none.
+
+RED: the test compiled and reported E2208 for a preceding initialized const
+integer used in a static initializer. No build error was counted as RED.
+The shared integer evaluator now accepts explicitly recorded, converted const
+integer values only in this initializer context; ordinary ICE and executable
+expression classification are unchanged. Failed declarations and typeof probes
+roll back the recording along with their symbols.
+
+Matrix: CC -std=gnu11 -O0/-O2 -DCASE=N SOURCE -o probe, N=1..17.
+68 oracle compile/run rows retained in
+.build/vector-targeted/static-const-final-native.jsonl.
+Cases 1,2,3,7,11,12,13,14,17: all 36 oracle runs exit 0.
+Cases 4,5,6,9,10,16: all 24 oracle compilations reject.
+Case 8 (const object in _Static_assert): GCC rejects; Clang accepts.
+The existing source ICE rule retains E2912, not a new consensus claim.
+Case 15 (runtime expect of non-ICE const): GCC O0 exits 0; GCC O2 and Clang
+O0/O2 exit 1. The existing reviewed expect rule preserves the second operand's
+side effect, so the subject's expected exit remains 0. This difference is not
+attributed to the new static-initializer extension.
+
+Subject cases 1,2,3,7,11,12,13,14,15,17: both interpreters return 0; both native
+assembler/linkers execute successfully (20 native passes). Seven refusal
+cases retain their expected E2208/E2912. The full language fixture group is
+32 passed, zero failed; a separate parser recovery test also passes.
+
+Original supplemental-kernel drivers/net/netkit.o: original .o.cmd projection
+emits, assembles, and matches all four reference global symbols and kinds,
+zero missing or extra. Assembly SHA-256:
+3d6754568b456774d9b96429dc606d3bc43521f6990a7acf88118c916c4dcc63
+Object SHA-256: c2505e916cddcd3601b9a057640e315a6f87f92fc70a93475a969ae1534b45c8
+Full original argv and symbol tables are in
+.build/vector-targeted/netkit-targeted.json and netkit-replay/result.json.
+The object was not installed; the ongoing frozen survey is not rewritten.

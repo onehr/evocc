@@ -2351,6 +2351,10 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         Inst::BitOperation {
             result, operand, ..
         } => vec![result, operand],
+        Inst::Vector(operation) => operation.values_mut(),
+        Inst::Floating(operation) => operation.values_mut(),
+        Inst::Atomic(access) => access.values_mut(),
+        Inst::TlsAddr(access) => access.values_mut(),
         Inst::VaAccess(access) => {
             let mut values = vec![
                 &mut access.list,

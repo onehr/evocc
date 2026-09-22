@@ -1,0 +1,42 @@
+Independent numeric qualification, 2026-09-20, baseline scalar FP only.
+Official Berkeley 3e archives (unmodified source, BSD-3-Clause):
+https://www.jhauser.us/arithmetic/SoftFloat-3e.zip
+SHA256 21130ce885d35c1fe73fc1e1bf2244178167e05c6747cad5f450cc991714c746
+https://www.jhauser.us/arithmetic/TestFloat-3e.zip
+SHA256 6d4bdf0096b48a653aa59fc203a9e5fe18b5a58d7a1b715107c7146776a0aad6
+Sealed ARM64 image, network none, GCC 14.2.0-19:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Built upstream Linux-x86_64-GCC makefiles with the ARM64 compiler: their
+platform headers use only little-endian layout and generic GCC integer
+builtins, not x86 instructions. SoftFloat SPECIALIZE_TYPE=ARM-VFPv2;
+TestFloat TESTFLOAT_OPTS=-DFLOAT64; no LONG_DOUBLE_IS_EXTFLOAT80 assumption.
+
+Each stream is testfloat_gen -seed 1 -level 1 -rnear_even OP, except FP-to-int
+uses -rminMag. The entire stream passes through the production engine adapter
+crates/evocc-types/examples/testfloat_values.rs; upstream and adapter exit 0.
+No generated corpus is stored, sampled, prefiltered or rounded for comparison.
+NaN payloads and signed zero compare exactly. Invalid integer conversions
+must return no C value, not SoftFloat's saturated/fallback integer result.
+
+Operation(s)                       Cases each   Invalid integer cases each
+f32_add/sub/mul/div/eq/lt/le         46,464       0
+f64_add/sub/mul/div/eq/lt/le         46,464       0
+f32_to_f64                         600          0
+f64_to_f32                         768          0
+i32/ui32_to_f32/f64                372          0
+i64/ui64_to_f32/f64                756          0
+f32_to_i32/ui32/i64/ui64            600          177 / 276 / 97 / 237
+f64_to_i32/ui32/i64/ui64            768          272 / 357 / 170 / 312
+Total: 32 operations, 661,848 cases, zero differences;
+1,898 invalid integer conversions explicitly rejected, not skipped.
+
+The freshly built SoftFloat reference also passes upstream testsoftfloat
+against its independent slowfloat implementation for these operation families
+at level 1, seed 1 and the corresponding rounding modes.
+Adapter negative checks detect a one-bit changed result, a changed conversion
+domain flag, malformed fields and empty input (which cannot yield PASS).
+
+This checks baseline numerical values and the C FP-to-int domain, not strict
+exception flags, all rounding modes, decimal parsing, 128-bit integer APIs,
+binary128 execution, libm accuracy or native public ABI. Those have distinct
+existing tests and boundaries; no IEEE-completeness claim follows.

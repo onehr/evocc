@@ -1,0 +1,13 @@
+2026-09-19; linux/arm64; network none; evo-flight-lab:sealed.
+Image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+GCC-14 14.2.0-19 and Clang-19 19.1.7, each at O0 and O2:
+  CC -std=gnu11 -O{0,2} arm-neon-assembly-update.c -o probe
+All four compile/run controls exit 0; the program writes no output.
+This preserves both lanes across the original empty read/write SIMD barrier
+in Mbed TLS tf-psa-crypto/drivers/builtin/src/aesce.c:579.
+
+Subject SHA-256 09346f2a6072f8b60f03e64b9b4b4a3307b44c4bfe9195ea948653031b13499c:
+  evocc --target=aarch64-unknown-linux-gnu --emit=asm arm-neon-assembly-update.c
+Exit 1: line 5:5 E3021, not-lowered: asm: +w; no assembly emitted.
+This is a declared unsupported case, not a compiler-build error or a PASS.
+Section 3.11 explicitly excludes w; its full semantic admission is pending.

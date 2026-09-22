@@ -156,8 +156,8 @@ fn record_parameter_and_return_destination_have_the_frozen_signature() {
     assert_eq!(
         identity.param_marks,
         vec![
-            ParamMark::ByVal(RecordShape { size: 16, align: 8 }),
-            ParamMark::Sret(RecordShape { size: 16, align: 8 }),
+            ParamMark::ByVal(RecordShape::new(16, 8)),
+            ParamMark::Sret(RecordShape::new(16, 8)),
             ParamMark::None,
             ParamMark::None,
         ]

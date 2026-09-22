@@ -156,6 +156,26 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         "expression escaped caller Arena"
     );
     match expression {
+        CHirExpr::Floating(operation) => {
+            for operand in &operation.operands {
+                assert_expression_owned(arena, operand);
+            }
+        }
+        CHirExpr::Complex(operation) => {
+            for operand in &operation.operands {
+                assert_expression_owned(arena, operand);
+            }
+        }
+        CHirExpr::Vector(access) => {
+            for operand in &access.operands {
+                assert_expression_owned(arena, operand);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                assert_expression_owned(arena, operand);
+            }
+        }
         CHirExpr::Lit(..)
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
@@ -194,7 +214,8 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             assert_expression_owned(arena, left);
             assert_expression_owned(arena, right);
         }

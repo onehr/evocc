@@ -1,0 +1,17 @@
+2026-09-19, evo-flight-lab:sealed, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 / clang-19 19.1.7:
+  CC -std=gnu11 -O{0,2} arm-neon-byte-reverse.c -o probe
+  All four builds and executions exit 0, no program output.
+The fixture checks every byte, both vector widths, lane order and operand
+evaluation count, against an independent scalar loop.
+RED: target_byte_bit_reverse_covers_every_byte_without_reordering_lanes,
+one declared failure E3052, zero build errors.
+Original aesce.c replay with release
+38ee3e4c9519c4ce5d0746ee4bb2c95548be5c83b8d1c91ab1d6a2c0e39548d1
+independently stops at this builtin after AES and polynomial-long admission.
+Subject C-HIR, EvoIR and assembly tests pass. The EvoIR CLI's unchanged
+100,000-instruction budget requires four disjoint 64-byte test batches for
+the exhaustive scalar reference loop; all 256 values remain checked.
+Both fixed compilers link the subject assembly and both full-domain native
+executions exit 0. No benchmark execution limit is changed.

@@ -17,7 +17,7 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
 
 fn spelling(token: &Token, source: &str) -> String {
     match &token.text {
-        TokenText::Decoded(text) => text.clone(),
+        TokenText::Decoded(text) | TokenText::RawBytes { escaped: text, .. } => text.clone(),
         TokenText::Borrowed => source
             .get(token.spelling_span.byte_start as usize..token.spelling_span.byte_end as usize)
             .expect("token spelling span belongs to fixture")
@@ -82,6 +82,29 @@ fn expanded_macro_names_do_not_suppress_expansion_in_their_arguments() {
     assert_expands("#define F() G\n#define G(x) F()\nF()(0)\n", "G");
     assert_expands("#define F(x) x\nF(F(7))\n", "7");
     assert_expands("#define X Y\n#define Y X\nX\n", "X");
+}
+
+#[test]
+fn c_keywords_are_identifiers_during_macro_expansion() {
+    for (source, expansion) in [
+        (
+            "#define inline inline __attribute__((__gnu_inline__))\ninline int f(int x){return x;}\n",
+            "inline __attribute__((__gnu_inline__)) int f(int x){return x;}",
+        ),
+        ("#define const volatile\nconst int x;\n", "volatile int x;"),
+        ("#define int(x) x\nint(7) int keep;\n", "7 int keep;"),
+        (
+            "#define int(x) x\n#define NEXT int\nNEXT\n(7)\n",
+            "7",
+        ),
+        (
+            "#define const 3\n#define ID(x) x\nID(const)\n#if defined(const) && const == 3\nyes\n#endif\n",
+            "3 yes",
+        ),
+        ("#define int long\n#define long int\nint long\n", "int long"),
+    ] {
+        assert_expands(source, expansion);
+    }
 }
 
 #[test]

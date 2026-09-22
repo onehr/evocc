@@ -54,6 +54,8 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -98,6 +100,8 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         param_marks: Vec::new(),
     };
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

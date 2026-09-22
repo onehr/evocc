@@ -1,0 +1,47 @@
+Targeted scalar/vector conversion probes, 2026-09-15; not a campaign.
+Image evo-flight-lab:sealed, linux/arm64, network none.
+GCC-14 Debian 14.2.0-19; Clang-19 Debian 19.1.7.
+
+Compile-only matrix input:
+  typedef TARGET V __attribute__((vector_size(16)));
+  V f(V v, SOURCE x) { return v + (VALUE); }
+Command: CC -std=gnu11 -O0 -x c - -c -o /tmp/vector-range.o
+Each cell is GCC/Clang exit status. VALUE changes the expression, not SOURCE.
+
+TARGET          SOURCE          x    -1   -1L  255  65535
+unsigned int    int             0/0  0/0  0/0  0/0  0/0
+int             unsigned int    0/1  0/0  0/0  0/0  0/0
+unsigned long   int             0/0  0/0  0/0  0/0  0/0
+long            unsigned int    0/0  0/0  0/0  0/0  0/0
+unsigned char   signed char     0/0  0/0  0/0  0/0  1/1
+signed char     unsigned char   0/1  0/0  0/0  1/0  1/1
+unsigned short  int             1/1  0/0  0/0  0/0  0/0
+unsigned int    long            1/1  0/0  0/0  0/0  0/0
+int             unsigned long   1/1  0/0  0/0  0/0  0/0
+
+Negative narrowing boundary, TARGET=unsigned char, same compiler command at
+both -O0 and -O2; input has only parameter V v and adds VALUE:
+VALUE             -256 -129 -128 -1L 255 256
+GCC/Clang status  0/1  0/1  0/0  0/0 0/0 1/1
+The three conflicting forms (unsigned variable to equal-width signed lane,
+255 to signed-char lane, and negatives below signed lane minimum to an
+unsigned lane) remain E2102, not an implicit selection of either oracle.
+
+Unchanged torture pr94412.c:
+  CC -std=gnu11 -OLEVEL pr94412.c -o /tmp/scalar-vector
+  /tmp/scalar-vector
+GCC O0/O2 and Clang O0/O2: compile 0, execution 0 in all four runs.
+
+Initial vector-scalar-conversions.c (before adding the separate -128 control):
+  CC -std=gnu11 -OLEVEL vector-scalar-conversions.c -o /tmp/vector-value
+  /tmp/vector-value
+GCC O0/O2 and Clang O0/O2: compile 0, execution 0 in all four runs.
+Subject RED: two focused tests compiled; one passed (retained refusals), one
+failed with E2102 vector-scalar-conversion-loses-values on int to unsigned lane.
+
+Updated source adds a -128 unsigned-char boundary value assertion. Both
+oracles at O0/O2 compile and execute that updated fixture with status 0.
+Subject focused tests: 2/2 PASS, including five narrowing/conflict refusals.
+Native subject --emit=asm for vector-scalar-conversions.c and unchanged
+pr94412.c (default and -O3) assembled/linked by both gcc-14 and clang-19:
+six executions exit 0. The original source and expected result were unchanged.

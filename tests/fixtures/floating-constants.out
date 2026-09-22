@@ -1,0 +1,90 @@
+Finite floating constants and native-environment audit, 2026-09-20
+Target: aarch64-unknown-linux-gnu, GNU11, LP64 little-endian.
+Image: evo-flight-lab:sealed, network none, linux/arm64.
+Image digest: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC: gcc-14 (Debian 14.2.0-19) 14.2.0
+Clang: Debian clang version 19.1.7 (3+b1)
+HEAD: 9f571cac0e6be6d27915aa82b4c8866ae84eaf9a plus shared dirty tree.
+Pre-edit EvoIR hash: d136cdb15ab19dfdcef5b1d130f28f2daef28ba2222a936873c3311406627c27
+EvoMIR hash: 47249e68f84658aa6b2e37fd4e51e0496e13ec4705f988afeb6433393e29815d
+RED executable: 09346f2a6072f8b60f03e64b9b4b4a3307b44c4bfe9195ea948653031b13499c
+Subject executable: 152b16bb5b205dc55ddaf748ad472b1797eea6238c27ec7aab74aa0672283193
+
+RED: cargo test -p evocc --test language_semantics floating_literals --offline -j2
+Two declared failures, zero compiler build errors: decimal source returned 1
+instead of 0; hexadecimal source produced E1006 invalid-floating-literal.
+
+Final sources: floating-literal-rounding.c, floating-hex-representation.c,
+floating-constant-arithmetic.c, unchanged for subject and oracle controls.
+Command for each: CC -std=gnu11 -O0/-O2 -ffp-contract=off SOURCE -o /tmp/reference
+All twelve reference executables exit 0. GCC warns that 0x1p-150f truncates
+to zero (-Woverflow); Clang warns its magnitude is too small (-Wliteral-range).
+Subject: evocc --target=aarch64-unknown-linux-gnu --emit=asm SOURCE
+Then CC SUBJECT.s -o /tmp/subject; all six executables exit 0.
+Both subject interpreters also return 0 for all three sources.
+47 language regressions and four finite-engine test groups pass.
+Changed gate: .build/vector-targeted/floating-constants/gate-20260920.txt, exit 0.
+2,544 passed, 0 failed, 4 historical ignored; 308 groups, all 17 crates.
+Clippy -D warnings and fmt pass; fresh layout corpora 128/128 and 22/22
+have zero differences. Textual shapes 51/51 and render-status --check pass.
+No full benchmark campaign or kernel/selftest execution was started.
+
+Original-program regression (sources unchanged):
+GCC torture 78d4ac73dd391005b895a6148cd9831e28e1208b:
+  gcc/testsuite/gcc.c-torture/execute/20020225-2.c
+  gcc/testsuite/gcc.c-torture/execute/20031214-1.c
+LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e:
+  SingleSource/Regression/C/gcc-c-torture/execute/ieee/builtin-nan-1.c
+All twelve fixed CC -std=gnu11 -O0/-O2 -ffp-contract=off controls exit 0;
+all six subject assembly/link/execution combinations exit 0 as well.
+These verify the constant-engine replacement did not regress prior admitted
+representation-only programs; they do not increase a historical suite numerator.
+
+Oracle-only source: floating-target-environment.c
+Command: CC -std=gnu11 -O0/-O2 -ffp-contract=off SOURCE -o /tmp/fp-probe
+All four executions exit 0 with identical output. Instruction operand order
+is pinned by inline assembly; this is not a claim about every C optimizer's
+choice of NaN operand order. Fields below are exact binary64 representations.
+Initial FPCR=0; FLT_EVAL_METHOD=0, FLT_RADIX=2; sizeof float/double/long double=4/8/16.
+FPCR=0:
+q1-q2 add=7ff8000000000011 mul=7ff8000000000011 div=7ff8000000000011 neg=fff8000000000011
+q2-q1 add=fff8000000000022 mul=fff8000000000022 div=fff8000000000022 neg=7ff8000000000022
+q1-s2 add=fff8000000000022 mul=fff8000000000022 div=fff8000000000022 neg=fff8000000000011
+s1-q2 add=7ff8000000000011 mul=7ff8000000000011 div=7ff8000000000011 neg=fff0000000000011
+s1-s2 add=7ff8000000000011 mul=7ff8000000000011 div=7ff8000000000011 neg=fff0000000000011
+zero-zero add=0000000000000000 mul=0000000000000000 div=7ff8000000000000 neg=8000000000000000
+smallest-two add=4000000000000000 mul=0000000000000002 div=0000000000000000 neg=8000000000000001
+round-nearest=3ff0000000000000
+FPCR=(1<<22): round-upward=3ff0000000000001
+FPCR=(1<<24): smallest-two mul=0 div=0; sign-only neg retains 8000000000000001
+FPCR=(1<<25): q1-q2 add/mul/div=7ff8000000000000; neg retains fff8000000000011
+Original FPCR is restored before exit; no EvoCC FPCR manipulation is implemented.
+
+Candidate-engine qualification: floating-engine-nan.rs, compiled with rustc
+--edition 2021 --extern rustc_apfloat=<pinned rlib> -L dependency=target/frontend/debug/deps.
+For q1-q2 and s1-q2, add/mul/div retain/quiet q1 as the hardware probe does.
+For q1-s2, all three unwrapped engine operations return 7ff8000000000011,
+NOT the hardware probe's fff8000000000022. Runtime target adaptation is required.
+The production finite_binary API rejects NaN inputs, so it does not expose
+this difference as accepted target arithmetic. This is not an upstream IEEE
+conformance accusation or a passing full-engine qualification.
+
+Target header census: CC -std=gnu11 -dM -E -include float.h -include math.h
+-include fenv.h -x c /dev/null, same fixed container.
+Both: FE_TONEAREST=0, FE_UPWARD=0x400000, FE_DOWNWARD=0x800000,
+FE_TOWARDZERO=0xc00000; FP_NAN/INFINITE/ZERO/SUBNORMAL/NORMAL=0/1/2/3/4.
+GCC FLT_ROUNDS=1; Clang FLT_ROUNDS=(__builtin_flt_rounds()).
+The combined headers define __STDC_IEC_559__=1 and __STDC_IEC_60559_BFP__=201404L.
+Those reference capability macros do not establish EvoCC Annex F support;
+reconciling the capability overlay remains in FP10 before runtime admission.
+
+Exploratory non-ICE file-scope array bound (not the final arithmetic fixture):
+static int selected[(16777216.0f + 1.0f == 16777216.0f) ? 1 : -1];
+All four controls accept with GNU-folding warnings; subject E2203 remains open.
+It has not been discarded from the issue list or relabeled as a passing case.
+
+The engine is rustc_apfloat 0.2.3+llvm-462a31f5a5ab, Cargo.lock pinned.
+Crate checksum: 486c2179b4796f65bfe2ee33679acf0927ac83ecf583ad6c91c3b4570911b9ad
+Only finite constant arithmetic is admitted by this patch. SoftFloat/TestFloat
+qualification, executable scalar FP, NaN arithmetic policy, FPCR guards, HFA,
+variadic FP and application/full-kernel acceptance are not proved by these runs.

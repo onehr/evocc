@@ -52,6 +52,8 @@ fn chain() -> Module {
     let doubled = fresh(bits.clone());
 
     let function = Function {
+        section: None,
+        patchable_entry: None,
         stack_protect: false,
         alignment: 4,
         linkage: evocc_evoir::Linkage::Strong,
@@ -117,6 +119,8 @@ fn chain() -> Module {
     };
 
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),

@@ -1,0 +1,17 @@
+Original-build ISO C89 mode, 2026-09-16.
+Source SHA-256: 79b1d55d1ec9bdb27dc0c9b608be8763e59608523d1fe185a40294dc74eb490b
+Environment: evo-flight-lab:sealed, linux/arm64, network none.
+
+GCC-14 and Clang-19 each compile and execute the fixture at -std=c89
+-O0 and -O2: 4/4 exit 0. For c89 and c90 both accept declarations named
+inline, restrict, asm and typeof. In gnu89 both accept restrict as a name
+and reject the other three name declarations (24 compile observations).
+GCC rejects -std=c89 -fno-gnu89-inline; Clang accepts it. The existing
+legacy-inline conflict policy refuses that final effective combination.
+
+Subject debug SHA-256: 908ce87ea0084c1d811ef2e033157279903645f704e3a665751bb8097f00b128
+C-HIR and EvoIR execute the fixture with -std=c89, -std=c90 and -ansi: 6/6 zero.
+EvoCC C89 assembly linked/run with GCC-14 and Clang-19: 2/2 exit 0.
+The focused test also checks GNU inline definition roles, final-option
+precedence, and the retained declaration-for refusal. Pre-C11 prefix tests
+include C89. This is not a complete cJSON or application replay.

@@ -63,12 +63,16 @@ fn bits(id: u32) -> Value {
 
 fn input_module() -> Module {
     Module {
+        tls: Vec::new(),
+        lifecycle: Vec::new(),
         aliases: Vec::new(),
         assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            section: None,
+            patchable_entry: None,
             stack_protect: false,
             alignment: 4,
             variadic: false,
@@ -177,6 +181,9 @@ fn main() {
 fn day8_persistent_equality_accumulation_and_transaction_contract() {
     let client = ClientProject::new();
     let output = Command::new(env!("CARGO"))
+        // Path dependencies do not inherit their repository's Cargo config.
+        .arg("--config")
+        .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.cargo/config.toml"))
         .args(["run", "--quiet", "--offline"])
         .current_dir(&client.0)
         .env("CARGO_TARGET_DIR", client.0.join("target"))

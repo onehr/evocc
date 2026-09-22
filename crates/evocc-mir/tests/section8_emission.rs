@@ -320,6 +320,59 @@ fn allocated_temporaries(insts: Vec<MInst>) -> Allocated {
 }
 
 #[test]
+fn distant_block_addresses_use_page_relocations_in_both_directions() {
+    let address = VReg::new(0, RegClass::Gpr64);
+    let mut allocated = allocated_temporaries(vec![MInst::MovImm {
+        dst: address,
+        imm: 0,
+    }]);
+    allocated.assignment.insert(address.id, 0);
+    allocated.blocks[0].insts = vec![MInst::Adr {
+        dst: address,
+        block: 2,
+    }];
+    allocated.blocks.push(MBlock {
+        id: 1,
+        args: vec![],
+        insts: vec![
+            MInst::MovImm {
+                dst: address,
+                imm: 0
+            };
+            270_000
+        ],
+        term: MTerm::Ret { values: vec![] },
+    });
+    allocated.blocks.push(MBlock {
+        id: 2,
+        args: vec![],
+        insts: vec![MInst::Adr {
+            dst: address,
+            block: 0,
+        }],
+        term: MTerm::Ret { values: vec![] },
+    });
+    for target in [evocc_mir::Target::Linux, evocc_mir::Target::Darwin] {
+        let text = evocc_mir::emit_module_for(target, &[allocated.clone()], &[]);
+        let prefix = if target == evocc_mir::Target::Linux {
+            ".L"
+        } else {
+            "L"
+        };
+        for block in [0, 2] {
+            assert!(
+                text.contains(&format!("adrp x0, {prefix}temporaries.{block}")),
+                "a label more than one MiB away needs a page-relative address"
+            );
+        }
+        assert!(!text.contains("    adr x0,"));
+        if target == evocc_mir::Target::Darwin {
+            assemble(&text).expect("the actual assembler must accept the long address");
+        }
+    }
+}
+
+#[test]
 fn nonescaping_block_local_objects_reuse_frame_bytes_after_their_last_access() {
     let allocated = allocated_temporaries((0..256).flat_map(temporary_object).collect());
     let frame = frame_of(&allocated);

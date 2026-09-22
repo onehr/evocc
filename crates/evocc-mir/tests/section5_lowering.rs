@@ -52,6 +52,24 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
         for block in &function.blocks {
             for inst in &block.insts {
                 names.push(match inst {
+                    MInst::AtomicRmw { operation, .. } => {
+                        format!("atomic.rmw.{}", operation.mnemonic())
+                    }
+                    MInst::StackRelease { .. } => "stack.release".to_owned(),
+                    MInst::Vector { extract, .. } => {
+                        if *extract {
+                            "vec.extract".into()
+                        } else {
+                            "vec.pack".into()
+                        }
+                    }
+                    MInst::Atomic { load, .. } => {
+                        if *load {
+                            "atomic.load".to_owned()
+                        } else {
+                            "atomic.store".to_owned()
+                        }
+                    }
                     MInst::Asm(_) => "asm".to_owned(),
                     MInst::Mov { .. } => "mov".to_owned(),
                     MInst::MovImm { .. } => "mov#".to_owned(),
@@ -94,6 +112,9 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     }
                     MInst::VaSaveArea { .. } => "va.save".to_owned(),
                     MInst::IndirectResult => "indirect.result".to_owned(),
+                    MInst::Aes { op, .. } => format!("crypto.{}", op.mnemonic()),
+                    MInst::Floating { op, .. } => format!("fp.{}", op.mnemonic()),
+                    MInst::FpEnvCheck => "fp.env.check".to_owned(),
                 });
             }
         }
@@ -115,6 +136,21 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 #[test]
 fn a_constant_lowers_to_a_move_immediate_and_add_to_add() {
     assert_eq!(mnemonics(&lower(ADD)), vec!["mov#", "add"]);
+}
+
+#[test]
+fn vector_representation_and_lane_size_survive_machine_text() {
+    let source=ADD.replace("may_trap=false","may_trap=true")
+        .replace("    ret %v4, %v1, %v2", "    %v5 = vec.pack %v0, %v3, %v4, %v0 : vec<4, bits<32>>\n    %v6 = const.bits<32> 2\n    %v7 = vec.extract %v5, %v6 : bits<32>\n    ret %v7, %v1, %v2");
+    let module = lower(&source);
+    let text = render_module(&module);
+    let parsed = evocc_mir::parse_module(&text).unwrap();
+    assert_eq!(parsed, module);
+    let changed = text.replace("vec.pack.32.16", "vec.pack.32.8");
+    assert_ne!(changed, text);
+    assert!(evocc_mir::parse_module(&changed)
+        .and_then(|m| validate_module(&m))
+        .is_err());
 }
 
 #[test]

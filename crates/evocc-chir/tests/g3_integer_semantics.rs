@@ -206,7 +206,7 @@ fn unary_and_float_cast_edges_are_checked_by_the_same_kernel() {
     assert_eq!(
         floating_literal_to_integer(
             FloatLit {
-                value: -0.25,
+                value: (-0.25).into(),
                 suffix: FloatSuffix::None,
             },
             CIntegerType::BOOL,
@@ -218,7 +218,7 @@ fn unary_and_float_cast_edges_are_checked_by_the_same_kernel() {
     assert_eq!(
         floating_literal_to_integer(
             FloatLit {
-                value: f64::INFINITY,
+                value: f64::INFINITY.into(),
                 suffix: FloatSuffix::None,
             },
             CIntegerType::INT,

@@ -246,7 +246,11 @@ fn cross(
 /// here too, because a value passed on an edge is used at the terminator.
 fn operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::Vector(operation) => operation.arguments.iter().collect(),
+        Inst::Floating(operation) => operation.arguments.iter().collect(),
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
+        Inst::Atomic(access) => access.operands(),
+        Inst::TlsAddr(access) => access.operands(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)
             .chain(edges.iter().flat_map(|edge| &edge.arguments))
             .collect(),

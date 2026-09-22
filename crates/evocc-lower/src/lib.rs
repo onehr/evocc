@@ -8,7 +8,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 mod allocation;
+mod complex;
+mod conditions;
 mod constants;
+mod floating;
+mod neon;
+mod tls;
+mod vector;
 
 use evocc_chir::integer::{
     eval_binary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
@@ -89,6 +95,10 @@ fn source_assembly_template(source: &AsmStmt<'_>) -> Result<String, LowerError> 
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LowerError {
+    TargetBuiltin {
+        name: String,
+        span: SourceSpan,
+    },
     Profile(evocc_chir::ProfileRefusal),
     Linkage(evocc_chir::linkage::LinkageError),
     Inline {
@@ -116,6 +126,16 @@ pub enum LowerError {
     UnsupportedStatement {
         span: SourceSpan,
         feature: &'static str,
+    },
+    FloatingCallInterface {
+        span: SourceSpan,
+    },
+    FloatingValue {
+        span: SourceSpan,
+    },
+    CallArity {
+        function: String,
+        span: SourceSpan,
     },
     ReturnAddress {
         span: SourceSpan,
@@ -170,6 +190,9 @@ pub enum LowerError {
 impl fmt::Display for LowerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::TargetBuiltin { name, .. } => {
+                write!(formatter, "not-lowered: target-builtin: {name}")
+            }
             Self::Profile(error) => formatter.write_str(error.message),
             Self::Linkage(error) => formatter.write_str(error.message),
             Self::Inline { reason, .. } => formatter.write_str(reason),
@@ -180,6 +203,14 @@ impl fmt::Display for LowerError {
             Self::UnsupportedType { feature, .. }
             | Self::UnsupportedExpression { feature, .. }
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
+            Self::FloatingCallInterface { .. } => {
+                formatter.write_str("not-lowered: floating-call-interface")
+            }
+            Self::FloatingValue { .. } => formatter.write_str("not-lowered: floating-value"),
+            Self::CallArity { function, .. } => write!(
+                formatter,
+                "malformed function {function}: call arity disagrees with the canonical prototype"
+            ),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
             Self::FunctionPointerArithmetic { .. } => {
@@ -215,6 +246,7 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::TargetBuiltin { .. } => "E3052",
             Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
             Self::Inline { cycle: true, .. } => "E2932",
@@ -228,6 +260,9 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::VolatileAggregate { .. } => "E2922",
+            Self::FloatingCallInterface { .. } => "E3049",
+            Self::FloatingValue { .. } => "E3050",
+            Self::CallArity { .. } => "E3051",
             _ => "E3101",
         }
     }
@@ -239,6 +274,7 @@ impl LowerError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::TargetBuiltin { span, .. } => Some(*span),
             Self::Profile(error) => Some(error.span),
             Self::Linkage(error) => Some(error.span),
             Self::Inline { span, .. }
@@ -247,6 +283,9 @@ impl LowerError {
             | Self::UnsupportedType { span, .. }
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
+            | Self::FloatingCallInterface { span }
+            | Self::FloatingValue { span }
+            | Self::CallArity { span, .. }
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
             | Self::FunctionPointerArithmetic { span }
@@ -273,6 +312,8 @@ impl LowerError {
 
 #[derive(Debug, Clone)]
 struct FunctionInfo {
+    section: Option<String>,
+    patchable_entry: Option<(u16, u16)>,
     name: String,
     variadic: bool,
     ordinal: u32,
@@ -475,6 +516,12 @@ fn lower_resolved_unit(
     optimize: bool,
 ) -> Result<Module, LowerError> {
     let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
+    let lifecycle = evocc_chir::lifecycle::registrations(unit).map_err(|span| {
+        LowerError::UnsupportedExpression {
+            span,
+            feature: "invalid lifecycle registration",
+        }
+    })?;
     let global_register_symbols = collect_global_register_symbols(unit);
     let global_registers = unit
         .iter()
@@ -574,7 +621,7 @@ fn lower_resolved_unit(
                     })
             })
         });
-    let functions = index_functions(unit, target, memory_profile)?;
+    let functions = index_functions(unit, target, memory_profile, &lifecycle)?;
     let size_symbols = unit
         .types()
         .captured_array_bounds()
@@ -605,6 +652,7 @@ fn lower_resolved_unit(
         let origin = origin_of(site);
         string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
         globals.push(GlobalObject {
+            read_only: false, // String storage is implicitly read-only in old and new IR.
             section: None,
             relocs: Vec::new(),
             symbol: format!("__evocc.string.{origin}"),
@@ -655,7 +703,7 @@ fn lower_resolved_unit(
                 }
             }
             if !immutable
-                || object.storage != StorageClass::Static
+                || object.storage.base() != StorageClass::Static
                 || object.initializer.is_none()
                 || object.asm_label.is_some()
             {
@@ -744,6 +792,7 @@ fn lower_resolved_unit(
         globals.push(GlobalObject {
             section: None,
             symbol: format!("__evocc.compound.{}", origin_of(site)),
+            read_only: unit.types().is_const_qualified_object(*ty),
             origin: origin_of(site),
             kind: GlobalKind::CompoundLiteral,
             linkage: evocc_evoir::Linkage::Strong,
@@ -775,17 +824,18 @@ fn lower_resolved_unit(
         if unit.symbols().is_builtin_function(*symbol)
             && matches!(
                 info.name.as_str(),
-                "__builtin_extract_return_addr" | "__builtin_prefetch" | "alloca"
+                "__builtin_extract_return_addr"
+                    | "__builtin_prefetch"
+                    | "__sync_synchronize"
+                    | "alloca"
             )
         {
             continue;
         }
-        let aggregate_return = info.return_type.as_ref().is_some_and(|value| {
-            matches!(
-                unit.types().get(value.source).map(|ty| &ty.kind),
-                Some(TypeKind::Struct(_) | TypeKind::Union(_))
-            )
-        });
+        let aggregate_return = info
+            .return_type
+            .as_ref()
+            .is_some_and(|value| is_aggregate_type(unit.types(), value.source));
         let mut params = info
             .parameter_types
             .iter()
@@ -883,6 +933,26 @@ fn lower_resolved_unit(
         );
     }
     let mut module = Module {
+        tls: Vec::new(),
+        lifecycle: lifecycle
+            .into_iter()
+            .map(|r| evocc_evoir::LifecycleRegistration {
+                phase: match r.phase {
+                    evocc_chir::lifecycle::Phase::Constructor => {
+                        evocc_evoir::LifecyclePhase::Constructor
+                    }
+                    evocc_chir::lifecycle::Phase::Destructor => {
+                        evocc_evoir::LifecyclePhase::Destructor
+                    }
+                },
+                function: functions
+                    .get(&r.function)
+                    .expect("registered function")
+                    .name
+                    .clone(),
+                priority: r.priority,
+            })
+            .collect(),
         aliases: Vec::new(),
         assembly: unit
             .iter()
@@ -907,7 +977,9 @@ fn lower_resolved_unit(
             target: linkage
                 .function_name(*target_id, target.spelling())
                 .to_owned(),
-            visibility: if alias.storage_class() == Some(StorageClass::Static) {
+            visibility: if alias.storage_class().map(StorageClass::base)
+                == Some(StorageClass::Static)
+            {
                 GlobalVisibility::Internal
             } else {
                 GlobalVisibility::External
@@ -961,18 +1033,22 @@ fn lower_resolved_unit(
             g.linkage = evocc_evoir::Linkage::Weak;
         }
     }
-    let hidden_names = linkage
-        .hidden
+    let symbol_visibility = linkage
+        .visibility
         .iter()
-        .filter(|(_, hidden)| **hidden)
-        .map(|(symbol, _)| {
+        .map(|(symbol, visibility)| {
             let entry = unit
                 .symbols()
                 .symbol(*symbol)
                 .expect("resolved attributed symbol");
-            linkage.function_name(*symbol, entry.spelling())
+            let visibility = match visibility {
+                evocc_chir::linkage::SymbolVisibility::Default => GlobalVisibility::External,
+                evocc_chir::linkage::SymbolVisibility::Hidden => GlobalVisibility::Hidden,
+                evocc_chir::linkage::SymbolVisibility::Protected => GlobalVisibility::Protected,
+            };
+            (linkage.function_name(*symbol, entry.spelling()), visibility)
         })
-        .collect::<BTreeSet<_>>();
+        .collect::<BTreeMap<_, _>>();
     for (name, visibility) in module
         .functions
         .iter_mut()
@@ -1002,8 +1078,10 @@ fn lower_resolved_unit(
                 .map(|a| (&a.name, &mut a.visibility)),
         )
     {
-        if *visibility == GlobalVisibility::External && hidden_names.contains(name.as_str()) {
-            *visibility = GlobalVisibility::Hidden;
+        if *visibility == GlobalVisibility::External {
+            if let Some(effective) = symbol_visibility.get(name.as_str()) {
+                *visibility = *effective;
+            }
         }
     }
     let mut preserved: BTreeSet<String> = unit
@@ -1045,8 +1123,10 @@ fn lower_resolved_unit(
             .map(|g| g.symbol.clone()),
     );
     if optimize {
+        preserved.extend(module.lifecycle.iter().map(|r| r.function.clone()));
         constants::remove_unreferenced_functions(&mut module, preserved);
     }
+    tls::resolve(unit, &allocation_origins, &mut module)?;
     module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
@@ -1068,7 +1148,7 @@ fn collect_global_register_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
 fn has_linked_object_storage(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
     unit.symbols().symbol(symbol).is_ok_and(|entry| {
         entry.kind() == SymbolKind::Object
-            && (entry.storage_class() == Some(StorageClass::Extern)
+            && (entry.storage_class().map(StorageClass::base) == Some(StorageClass::Extern)
                 || unit
                     .symbols()
                     .is_bound_in_scope(symbol, unit.symbols().file_scope())
@@ -1082,20 +1162,21 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             if let Some(cleanup) = object.cleanup {
                 expression(unit, cleanup, out);
             }
-            // Storage does not execute a scalar value. In particular an
-            // uninitialized floating object may be used only by sizeof or
-            // address-of while floating arithmetic remains unsupported.
-            let needs_object_storage = matches!(
-                unit.types().get(object.ty).map(|ty| &ty.kind),
+            // Deferred formats retain storage-only use (sizeof/address-of).
+            // Executable scalar FP can use the ordinary local SSA environment;
+            // address-taking and qualified/linked storage are collected below.
+            let needs_object_storage = match unit.types().get(object.ty).map(|ty| &ty.kind) {
+                Some(TypeKind::Float(kind)) => floating::ir_type(*kind).is_none(),
                 Some(
                     TypeKind::Array { .. }
-                        | TypeKind::Struct(_)
-                        | TypeKind::Union(_)
-                        | TypeKind::BuiltinVaList
-                        | TypeKind::Float(_)
-                        | TypeKind::Complex(_)
-                )
-            );
+                    | TypeKind::Vector { .. }
+                    | TypeKind::Struct(_)
+                    | TypeKind::Union(_)
+                    | TypeKind::BuiltinVaList
+                    | TypeKind::Complex(_),
+                ) => true,
+                _ => false,
+            };
             let is_qualified_memory = unit
                 .types()
                 .get(object.ty)
@@ -1104,7 +1185,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 || object.cleanup.is_some()
                 || has_linked_object_storage(unit, object.symbol)
                 || is_qualified_memory
-                || object.storage == StorageClass::Static
+                || object.storage.base() == StorageClass::Static
             {
                 out.insert(object.symbol);
             }
@@ -1125,10 +1206,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                     if unit.types().get(parameter.ty).is_some_and(|ty| {
                         ty.qualifiers.is_volatile
                             || ty.qualifiers.is_atomic
-                            || matches!(
-                                ty.kind,
-                                TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
-                            )
+                            || is_aggregate_type(unit.types(), parameter.ty)
                     }) {
                         if let Some(symbol) = parameter.symbol {
                             out.insert(symbol);
@@ -1150,6 +1228,26 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
 
     fn expression(unit: &CHirUnit<'_>, expr: &CHirExpr<'_>, out: &mut BTreeSet<SymbolId>) {
         match expr {
+            CHirExpr::Complex(operation) => {
+                for operand in &operation.operands {
+                    expression(unit, operand, out);
+                }
+            }
+            CHirExpr::Floating(operation) => {
+                for operand in &operation.operands {
+                    expression(unit, operand, out);
+                }
+            }
+            CHirExpr::Vector(operation) => {
+                for operand in &operation.operands {
+                    expression(unit, operand, out);
+                }
+            }
+            CHirExpr::Atomic(access) => {
+                for operand in access.operands() {
+                    expression(unit, operand, out);
+                }
+            }
             CHirExpr::Ident { symbol, .. } => {
                 if has_linked_object_storage(unit, *symbol) {
                     out.insert(*symbol);
@@ -1170,7 +1268,8 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
             | CHirExpr::Comma(left, right, _)
-            | CHirExpr::Elvis(left, right, _) => {
+            | CHirExpr::Elvis(left, right, _)
+            | CHirExpr::BuiltinExpect(left, right, _) => {
                 expression(unit, left, out);
                 expression(unit, right, out);
             }
@@ -1498,6 +1597,7 @@ fn lower_global_object(
         }));
     }
     Ok(GlobalObject {
+        read_only: unit.types().is_const_qualified_object(object.ty),
         section,
         relocs,
         symbol: if file_scope {
@@ -1512,7 +1612,7 @@ fn lower_global_object(
             GlobalKind::FunctionStatic
         },
         linkage: evocc_evoir::Linkage::Strong,
-        visibility: if file_scope && object.storage != StorageClass::Static {
+        visibility: if file_scope && object.storage.base() != StorageClass::Static {
             GlobalVisibility::External
         } else {
             GlobalVisibility::Internal
@@ -1551,7 +1651,7 @@ fn symbolic_address(
             ))
         } else if has_linked_object_storage(unit, id) {
             Ok((symbol.spelling().to_owned(), 0, false))
-        } else if symbol.storage_class() == Some(StorageClass::Static) {
+        } else if symbol.storage_class().map(StorageClass::base) == Some(StorageClass::Static) {
             Ok((
                 format!("__evocc.static.{}", origins.get(&id).ok_or_else(error)?),
                 0,
@@ -2039,6 +2139,74 @@ fn apply_static_initializer(
             }
         }
         InitAction::StoreScalar { value, .. } => {
+            if let Some(bits) = evocc_chir::constant::floating_constant_representation(
+                value,
+                destination,
+                unit.types(),
+                unit.symbols(),
+                target,
+            ) {
+                write_static_integer_bytes(bits.raw_bits(), target, target_bytes);
+                return Ok(());
+            }
+            if let Some(element) = evocc_chir::complex::element(unit.types(), destination) {
+                let pair = evocc_chir::complex::constant_components(
+                    value,
+                    unit.types(),
+                    unit.symbols(),
+                    target,
+                )
+                .ok_or(LowerError::StaticRelocation { span })?;
+                let integer = canonical_integer(unit.types(), target, element, span)?;
+                let width = target_bytes.len() / 2;
+                for (bytes, value) in target_bytes.chunks_mut(width).zip(pair) {
+                    write_static_integer_bytes(value.cast(integer).raw_bits(), target, bytes);
+                }
+                return Ok(());
+            }
+            if let Some((left, right)) =
+                evocc_chir::constant::label_address_difference(value, unit.types())
+            {
+                if !matches!(target_bytes.len(), 1 | 2 | 4 | 8) {
+                    return Err(LowerError::StaticRelocation { span });
+                }
+                // A difference relocation truncates only at its destination.
+                // A narrower intermediate conversion followed by extension
+                // cannot be replaced by a wider raw label difference.
+                let mut converted = *value;
+                while let CHirExpr::Cast(ty, operand, _) = converted {
+                    let integer = canonical_integer(unit.types(), target, *ty, span)?;
+                    if usize::from(integer.bits()) < target_bytes.len() * 8 {
+                        return Err(LowerError::StaticRelocation { span });
+                    }
+                    converted = operand;
+                }
+                let label = |expression: &CHirExpr<'_>| {
+                    label_addresses
+                        .get(&(expression as *const CHirExpr<'_> as usize))
+                        .cloned()
+                        .ok_or(LowerError::StaticRelocation { span })
+                };
+                let symbol = label(left)?;
+                let base = label(right)?;
+                if symbol.split_once('^').map(|(owner, _)| owner)
+                    != base.split_once('^').map(|(owner, _)| owner)
+                {
+                    return Err(LowerError::StaticRelocation { span });
+                }
+                target_bytes.fill(0);
+                relocs.push(evocc_evoir::Relocation {
+                    offset: offset as u64,
+                    symbol,
+                    addend: 0,
+                    exposed: false,
+                    difference: Some(evocc_evoir::BlockDifference {
+                        base,
+                        bits: (target_bytes.len() * 8) as u16,
+                    }),
+                });
+                return Ok(());
+            }
             // Absolute integer addresses have target bits but no symbol or
             // allocation provenance. Symbolic addresses still require relocs.
             if matches!(
@@ -2078,6 +2246,7 @@ fn apply_static_initializer(
                     symbol,
                     addend,
                     exposed,
+                    difference: None,
                 });
                 return Ok(());
             }
@@ -2104,6 +2273,7 @@ fn apply_static_initializer(
                         symbol,
                         addend,
                         exposed: true,
+                        difference: None,
                     });
                     return Ok(());
                 }
@@ -2244,7 +2414,9 @@ fn subobject_offset(
             }
             SubobjectStep::Index { index } => {
                 let element = match unit.types().get(current).map(|ty| &ty.kind) {
-                    Some(TypeKind::Array { element, .. }) => *element,
+                    Some(TypeKind::Array { element, .. } | TypeKind::Vector { element, .. }) => {
+                        *element
+                    }
                     _ => {
                         return Err(LowerError::UnsupportedType {
                             ty: current,
@@ -2301,6 +2473,7 @@ fn prevalidate_unit_for_lowering(
                     let mut labels = BTreeMap::new();
                     prevalidate_stmt_for_lowering(
                         unit,
+                        target,
                         body,
                         &mut labels,
                         global_register_symbols,
@@ -2316,7 +2489,7 @@ fn prevalidate_unit_for_lowering(
                 }
             }
             CHirDecl::Object(object) => {
-                validate_object_declaration_for_lowering(unit, object)?;
+                validate_object_declaration_for_lowering(unit, target, object)?;
             }
             CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
         }
@@ -2326,6 +2499,7 @@ fn prevalidate_unit_for_lowering(
 
 fn prevalidate_decl_for_lowering(
     unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
     declaration: &CHirDecl<'_>,
     global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
@@ -2334,16 +2508,21 @@ fn prevalidate_decl_for_lowering(
             span: assembly.span,
         }),
         CHirDecl::Object(object) => {
-            validate_object_declaration_for_lowering(unit, object)?;
+            validate_object_declaration_for_lowering(unit, target, object)?;
             if let Some(cleanup) = object.cleanup {
-                prevalidate_expr_for_lowering(unit, cleanup, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, cleanup, global_register_symbols)?;
             }
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
                     if let InitAction::StoreScalar { value, .. }
                     | InitAction::CopyAggregate { value, .. } = action
                     {
-                        prevalidate_expr_for_lowering(unit, value, global_register_symbols)?;
+                        prevalidate_expr_for_lowering(
+                            unit,
+                            target,
+                            value,
+                            global_register_symbols,
+                        )?;
                     }
                 }
             }
@@ -2360,6 +2539,7 @@ fn prevalidate_decl_for_lowering(
 
 fn prevalidate_stmt_for_lowering(
     unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
     statement: &CHirStmt<'_>,
     labels: &mut BTreeMap<String, SourceSpan>,
     global_register_symbols: &BTreeSet<SymbolId>,
@@ -2367,65 +2547,98 @@ fn prevalidate_stmt_for_lowering(
     match statement {
         CHirStmt::Asm(assembly) => {
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
-                prevalidate_expr_for_lowering(unit, operand.expression, global_register_symbols)?;
+                prevalidate_expr_for_lowering(
+                    unit,
+                    target,
+                    operand.expression,
+                    global_register_symbols,
+                )?;
             }
             Ok(())
         }
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
-            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, expression, global_register_symbols)
         }
         CHirStmt::If(condition, then_branch, else_branch, _) => {
-            prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
-            prevalidate_stmt_for_lowering(unit, then_branch, labels, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, condition, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(
+                unit,
+                target,
+                then_branch,
+                labels,
+                global_register_symbols,
+            )?;
             if let Some(else_branch) = else_branch {
-                prevalidate_stmt_for_lowering(unit, else_branch, labels, global_register_symbols)?;
+                prevalidate_stmt_for_lowering(
+                    unit,
+                    target,
+                    else_branch,
+                    labels,
+                    global_register_symbols,
+                )?;
             }
             Ok(())
         }
         CHirStmt::Switch(expression, body, _)
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
-            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)?;
-            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, expression, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(unit, target, body, labels, global_register_symbols)
         }
         CHirStmt::CaseRange(first, last, body, _) => {
-            prevalidate_expr_for_lowering(unit, first, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, last, global_register_symbols)?;
-            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, first, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, last, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(unit, target, body, labels, global_register_symbols)
         }
         CHirStmt::DoWhile(body, expression, _) => {
-            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
+            prevalidate_stmt_for_lowering(unit, target, body, labels, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, expression, global_register_symbols)
         }
         CHirStmt::For(initializer, condition, step, body, _) => {
             match initializer {
                 CHirForInit::Empty => {}
                 CHirForInit::Expression(expression) => {
-                    prevalidate_expr_for_lowering(unit, expression, global_register_symbols)?;
+                    prevalidate_expr_for_lowering(
+                        unit,
+                        target,
+                        expression,
+                        global_register_symbols,
+                    )?;
                 }
                 CHirForInit::Declaration(declarations) => {
                     for declaration in declarations {
-                        prevalidate_decl_for_lowering(unit, declaration, global_register_symbols)?;
+                        prevalidate_decl_for_lowering(
+                            unit,
+                            target,
+                            declaration,
+                            global_register_symbols,
+                        )?;
                     }
                 }
             }
             if let Some(condition) = condition {
-                prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, condition, global_register_symbols)?;
             }
             if let Some(step) = step {
-                prevalidate_expr_for_lowering(unit, step, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, step, global_register_symbols)?;
             }
-            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
+            prevalidate_stmt_for_lowering(unit, target, body, labels, global_register_symbols)
         }
         CHirStmt::Compound(items, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
-                        prevalidate_decl_for_lowering(unit, declaration, global_register_symbols)?;
+                        prevalidate_decl_for_lowering(
+                            unit,
+                            target,
+                            declaration,
+                            global_register_symbols,
+                        )?;
                     }
                     CHirBlockItem::Statement(statement) => {
                         prevalidate_stmt_for_lowering(
                             unit,
+                            target,
                             statement,
                             labels,
                             global_register_symbols,
@@ -2442,10 +2655,10 @@ fn prevalidate_stmt_for_lowering(
                     reason: "duplicate label in function",
                 });
             }
-            prevalidate_stmt_for_lowering(unit, nested, labels, global_register_symbols)
+            prevalidate_stmt_for_lowering(unit, target, nested, labels, global_register_symbols)
         }
         CHirStmt::Default(nested, _) => {
-            prevalidate_stmt_for_lowering(unit, nested, labels, global_register_symbols)
+            prevalidate_stmt_for_lowering(unit, target, nested, labels, global_register_symbols)
         }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
@@ -2454,17 +2667,42 @@ fn prevalidate_stmt_for_lowering(
         | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => Ok(()),
         CHirStmt::ComputedGoto(expression, _) => {
-            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, expression, global_register_symbols)
         }
     }
 }
 
 fn prevalidate_expr_for_lowering(
     unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
     global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match expression {
+        CHirExpr::Complex(operation) => {
+            for operand in &operation.operands {
+                prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)?;
+            }
+            Ok(())
+        }
+        CHirExpr::Floating(operation) => {
+            for operand in &operation.operands {
+                prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)?;
+            }
+            Ok(())
+        }
+        CHirExpr::Vector(operation) => {
+            for operand in &operation.operands {
+                prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)?;
+            }
+            Ok(())
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)?;
+            }
+            Ok(())
+        }
         CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => Ok(()),
         CHirExpr::Ident {
             symbol,
@@ -2504,37 +2742,37 @@ fn prevalidate_expr_for_lowering(
         }
         CHirExpr::Assign {
             place,
-            target,
+            target: destination,
             value,
             facts,
             span,
             ..
         } => {
-            validate_place_identity(unit, *place, target, *span)?;
+            validate_place_identity(unit, *place, destination, *span)?;
             if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                 return Err(LowerError::UnsupportedExpression {
                     span: *span,
                     feature: "assignment result facts disagree with its scalar place",
                 });
             }
-            prevalidate_expr_for_lowering(unit, target, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, value, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, destination, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, value, global_register_symbols)
         }
         CHirExpr::Update {
             place,
-            target,
+            target: destination,
             facts,
             span,
             ..
         } => {
-            validate_place_identity(unit, *place, target, *span)?;
+            validate_place_identity(unit, *place, destination, *span)?;
             if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                 return Err(LowerError::UnsupportedExpression {
                     span: *span,
                     feature: "update result facts disagree with its scalar place",
                 });
             }
-            prevalidate_expr_for_lowering(unit, target, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, destination, global_register_symbols)
         }
         CHirExpr::MemoryRead { place, span, .. } => {
             place
@@ -2544,7 +2782,7 @@ fn prevalidate_expr_for_lowering(
                     feature: "memory read place is not authoritative in this C-HIR unit",
                 })?;
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, source, global_register_symbols)?;
             }
             Ok(())
         }
@@ -2568,9 +2806,9 @@ fn prevalidate_expr_for_lowering(
                 });
             }
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, source, global_register_symbols)?;
             }
-            prevalidate_expr_for_lowering(unit, value, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, value, global_register_symbols)
         }
         CHirExpr::MemoryUpdate {
             place, facts, span, ..
@@ -2588,7 +2826,7 @@ fn prevalidate_expr_for_lowering(
                 });
             }
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, source, global_register_symbols)?;
             }
             Ok(())
         }
@@ -2599,47 +2837,51 @@ fn prevalidate_expr_for_lowering(
                     span: *span,
                 });
             }
-            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => {
-            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
-            prevalidate_expr_for_lowering(unit, left, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, right, global_register_symbols)
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
+            prevalidate_expr_for_lowering(unit, target, left, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, right, global_register_symbols)
         }
         CHirExpr::Ternary(condition, then_value, else_value, _) => {
-            prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, then_value, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, else_value, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, condition, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, then_value, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, else_value, global_register_symbols)
         }
         CHirExpr::Call(callee, arguments, _) => {
-            prevalidate_expr_for_lowering(unit, callee, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, callee, global_register_symbols)?;
             for argument in arguments {
-                prevalidate_expr_for_lowering(unit, argument, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, argument, global_register_symbols)?;
             }
             Ok(())
         }
         CHirExpr::CheckedArithmetic {
-            lhs, rhs, target, ..
+            lhs,
+            rhs,
+            target: destination,
+            ..
         } => {
-            prevalidate_expr_for_lowering(unit, lhs, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, rhs, global_register_symbols)?;
-            prevalidate_expr_for_lowering(unit, target, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, lhs, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, rhs, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, destination, global_register_symbols)
         }
         CHirExpr::BitBuiltin { operand, .. } => {
-            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
+            prevalidate_expr_for_lowering(unit, target, operand, global_register_symbols)
         }
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
-            prevalidate_expr_for_lowering(unit, first, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, first, global_register_symbols)?;
             if let Some(second) = second {
-                prevalidate_expr_for_lowering(unit, second, global_register_symbols)?;
+                prevalidate_expr_for_lowering(unit, target, second, global_register_symbols)?;
             }
             Ok(())
         }
@@ -2653,14 +2895,14 @@ fn prevalidate_expr_for_lowering(
                 if let InitAction::StoreScalar { value, .. }
                 | InitAction::CopyAggregate { value, .. } = action
                 {
-                    prevalidate_expr_for_lowering(unit, value, global_register_symbols)?;
+                    prevalidate_expr_for_lowering(unit, target, value, global_register_symbols)?;
                 }
             }
             Ok(())
         }
         CHirExpr::StatementExpr { body, .. } => {
             let mut labels = BTreeMap::new();
-            prevalidate_stmt_for_lowering(unit, body, &mut labels, global_register_symbols)
+            prevalidate_stmt_for_lowering(unit, target, body, &mut labels, global_register_symbols)
         }
         CHirExpr::SizeOf(ty, span)
         | CHirExpr::SizeOfExpr(_, ty, span)
@@ -2729,6 +2971,7 @@ fn index_functions(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
     memory_participant: bool,
+    lifecycle: &[evocc_chir::lifecycle::Registration],
 ) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
     let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let mut required = BTreeSet::new();
@@ -2744,6 +2987,13 @@ fn index_functions(
         required.extend(references.direct);
     }
     let mut definitions = BTreeMap::new();
+    required.retain(|symbol| {
+        !unit.symbols().is_builtin_function(*symbol)
+            || unit
+                .symbols()
+                .symbol(*symbol)
+                .is_ok_and(|entry| evocc_types::neon::signature(entry.spelling()).is_none())
+    });
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
             continue;
@@ -2813,6 +3063,8 @@ fn index_functions(
         definitions.insert(
             symbol,
             FunctionInfo {
+                section: None,
+                patchable_entry: None,
                 name: entry.spelling().into(),
                 variadic,
                 ordinal: 0,
@@ -2829,6 +3081,10 @@ fn index_functions(
         );
     }
     let mut participants = BTreeSet::new();
+    // Load-instance callbacks are calls too, even if their bodies are empty
+    // and contain no source call expression. Their interface transports the
+    // current program state rather than inventing an effect-free entry ABI.
+    participants.extend(lifecycle.iter().map(|registration| registration.function));
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
             continue;
@@ -2850,6 +3106,14 @@ fn index_functions(
             .collect::<Vec<_>>(),
     );
     for symbol in participants {
+        if unit.symbols().is_builtin_function(symbol)
+            && unit
+                .symbols()
+                .symbol(symbol)
+                .is_ok_and(|entry| evocc_types::neon::signature(entry.spelling()).is_some())
+        {
+            continue;
+        }
         let Some(info) = definitions.get_mut(&symbol) else {
             let span = unit
                 .symbols()
@@ -2866,6 +3130,8 @@ fn index_functions(
         }
     }
     for (ordinal, (symbol, info)) in definitions.iter_mut().enumerate() {
+        info.section = linkage.function_sections.get(symbol).cloned();
+        info.patchable_entry = linkage.patchable_entries.get(symbol).copied();
         info.name = linkage.function_name(*symbol, &info.name).to_owned();
         info.ordinal = u32::try_from(ordinal).map_err(|_| LowerError::InvalidGeneratedSsa {
             message: "function count exceeds the aggregate temporary origin namespace".to_owned(),
@@ -2900,6 +3166,7 @@ fn function_info(
             Some(function),
             false,
             false,
+            (target, &function.attributes),
         )
     {
         return Err(LowerError::MalformedFunction {
@@ -2990,6 +3257,7 @@ fn function_info(
                         None,
                         false,
                         true,
+                        (target, &parameter.attributes),
                     ) || !matches!(
                         parameter.storage,
                         StorageClass::None | StorageClass::Register
@@ -3067,6 +3335,8 @@ fn function_info(
         }
     };
     Ok(FunctionInfo {
+        section: None,
+        patchable_entry: None,
         name: function.name.spelling.clone(),
         variadic: matches!(
             parameters,
@@ -3092,7 +3362,42 @@ fn function_value_type(
     ty: TypeId,
     span: SourceSpan,
 ) -> Result<FunctionValueType, LowerError> {
+    if let Ok(integer) = canonical_integer(types, target, ty, span) {
+        return Ok(FunctionValueType {
+            source: ty,
+            ir: bits(integer),
+            integer,
+        });
+    }
+    if let Some(TypeKind::Float(kind)) = types.get(ty).map(|ty| &ty.kind) {
+        return Ok(FunctionValueType {
+            source: ty,
+            ir: floating::ir_type(*kind).ok_or(LowerError::FloatingCallInterface { span })?,
+            integer: CIntegerType::ULONG,
+        });
+    }
+    if evocc_chir::homogeneous_floating_aggregate(types, ty).is_some_and(|f| {
+        !matches!(
+            f.kind,
+            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+        )
+    }) {
+        return Err(LowerError::FloatingCallInterface { span });
+    }
     match types.get(ty).map(|canonical| &canonical.kind) {
+        Some(TypeKind::Vector { element, lanes, .. }) => {
+            let integer = canonical_integer(types, target, *element, span)?;
+            let ir = if is_wide_vector(types, ty) {
+                EvoIRType::Ptr(AddressSpace::Generic)
+            } else {
+                EvoIRType::Vec(*lanes, Box::new(bits(integer)))
+            };
+            Ok(FunctionValueType {
+                source: ty,
+                ir,
+                integer,
+            })
+        }
         Some(TypeKind::Pointer(pointee))
             if matches!(
                 types.get(*pointee).map(|ty| &ty.kind),
@@ -3125,13 +3430,17 @@ fn function_value_type(
                 integer,
             })
         }
-        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList) => {
-            Ok(FunctionValueType {
-                source: ty,
-                ir: EvoIRType::Ptr(AddressSpace::Generic),
-                integer: CIntegerType::ULONG,
-            })
-        }
+        Some(
+            TypeKind::Struct(_)
+            | TypeKind::Union(_)
+            | TypeKind::BuiltinVaList
+            | TypeKind::Complex(evocc_types::ComplexBase::Integer(_)),
+        ) => Ok(FunctionValueType {
+            source: ty,
+            ir: EvoIRType::Ptr(AddressSpace::Generic),
+            integer: CIntegerType::ULONG,
+        }),
+        Some(TypeKind::Complex(_)) => Err(LowerError::FloatingCallInterface { span }),
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,
@@ -3234,6 +3543,92 @@ fn function_pointer_interface(
     })
 }
 
+fn homogeneous_vector_aggregate(
+    types: &TypeInterner,
+    ty: TypeId,
+) -> Option<evocc_types::VectorAggregate> {
+    fn visit(
+        types: &TypeInterner,
+        ty: TypeId,
+        visiting: &mut BTreeSet<TypeId>,
+    ) -> Option<evocc_types::VectorAggregate> {
+        if !visiting.insert(ty) {
+            return None;
+        }
+        let result = (|| match &types.get(ty)?.kind {
+            TypeKind::Vector { element, lanes, .. } => {
+                let bits: u16 = match types.get(*element)?.kind {
+                    TypeKind::Int(rank) => match rank {
+                        evocc_types::IntRank::Char
+                        | evocc_types::IntRank::SignedPlainChar
+                        | evocc_types::IntRank::SChar
+                        | evocc_types::IntRank::UChar => 8,
+                        evocc_types::IntRank::Short | evocc_types::IntRank::UShort => 16,
+                        evocc_types::IntRank::Int | evocc_types::IntRank::UInt => 32,
+                        evocc_types::IntRank::Long
+                        | evocc_types::IntRank::ULong
+                        | evocc_types::IntRank::LongLong
+                        | evocc_types::IntRank::ULongLong => 64,
+                        _ => return None,
+                    },
+                    TypeKind::GnuInt128(_) => 128,
+                    _ => return None,
+                };
+                matches!(u64::from(*lanes) * u64::from(bits) / 8, 8 | 16).then_some(
+                    evocc_types::VectorAggregate {
+                        lanes: *lanes,
+                        bits,
+                        count: 1,
+                    },
+                )
+            }
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } => {
+                let mut member = visit(types, *element, visiting)?;
+                member.count = u8::try_from(u64::from(member.count).checked_mul(*count)?).ok()?;
+                (1..=4).contains(&member.count).then_some(member)
+            }
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                let TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                ) = &types.tag(*tag)?.state
+                else {
+                    return None;
+                };
+                let mut shape: Option<evocc_types::VectorAggregate> = None;
+                for field in fields {
+                    if field.bit_field.is_some() {
+                        return None;
+                    }
+                    let member = visit(types, field.ty, visiting)?;
+                    if let Some(old) = &mut shape {
+                        if old.lanes != member.lanes || old.bits != member.bits {
+                            return None;
+                        }
+                        old.count = if matches!(types.get(ty)?.kind, TypeKind::Union(_)) {
+                            old.count.max(member.count)
+                        } else {
+                            old.count.checked_add(member.count)?
+                        };
+                        if old.count > 4 {
+                            return None;
+                        }
+                    } else {
+                        shape = Some(member);
+                    }
+                }
+                shape
+            }
+            _ => None,
+        })();
+        visiting.remove(&ty);
+        result
+    }
+    visit(types, ty, &mut BTreeSet::new())
+}
+
 fn record_signature_marks(
     types: &TypeInterner,
     target: &TargetDataLayout,
@@ -3249,6 +3644,8 @@ fn record_signature_marks(
         Ok(RecordShape {
             size: layout.size_bytes,
             align: layout.align_bytes,
+            vector: homogeneous_vector_aggregate(types, ty),
+            floating: evocc_chir::homogeneous_floating_aggregate(types, ty),
         })
     };
     let mut marks = parameters
@@ -3268,10 +3665,24 @@ fn record_signature_marks(
 }
 
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
-    matches!(
-        types.get(ty).map(|canonical| &canonical.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
-    )
+    is_wide_vector(types, ty)
+        || evocc_chir::complex::rank(types, ty).is_some()
+        || matches!(
+            types.get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
+        )
+}
+
+fn is_wide_vector(types: &TypeInterner, ty: TypeId) -> bool {
+    let Some(TypeKind::Vector { element, lanes, .. }) = types.get(ty).map(|ty| &ty.kind) else {
+        return false;
+    };
+    let bits = match types.get(*element).map(|ty| &ty.kind) {
+        Some(TypeKind::Int(rank)) => u32::from(integer_type_for_rank(*rank).bits()),
+        Some(TypeKind::GnuInt128(_)) => 128,
+        _ => return false,
+    };
+    u32::from(*lanes) * bits > 128
 }
 
 fn canonical_integer(
@@ -3282,6 +3693,15 @@ fn canonical_integer(
 ) -> Result<CIntegerType, LowerError> {
     let canonical = types.get(ty).ok_or(LowerError::UnknownType { ty, span })?;
     let integer = match &canonical.kind {
+        TypeKind::TargetBuiltin(kind) => evocc_chir::integer::integer_type_for_target(*kind)
+            .ok_or(LowerError::FloatingValue { span })?,
+        TypeKind::Float(_)
+        | TypeKind::Complex(
+            evocc_types::ComplexBase::CF16
+            | evocc_types::ComplexBase::CF32
+            | evocc_types::ComplexBase::CF64
+            | evocc_types::ComplexBase::CF128,
+        ) => return Err(LowerError::FloatingValue { span }),
         TypeKind::Int(rank) => integer_type_for_rank(*rank),
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => CIntegerType::INT128,
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => CIntegerType::UINT128,
@@ -3352,7 +3772,9 @@ fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> b
         StorageClass::Typedef
         | StorageClass::Auto
         | StorageClass::Register
-        | StorageClass::ThreadLocal => false,
+        | StorageClass::ThreadLocal
+        | StorageClass::StaticThreadLocal
+        | StorageClass::ExternThreadLocal => false,
     }
 }
 
@@ -3387,6 +3809,7 @@ fn function_parameters_match(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn written_declarator_matches(
     types: &TypeInterner,
     written: &WrittenDeclarator,
@@ -3395,6 +3818,7 @@ fn written_declarator_matches(
     function_declaration: Option<&FunctionDecl<'_>>,
     initialized_object: bool,
     adjusted_parameter: bool,
+    representation: (&TargetDataLayout, &[evocc_chir::Attribute]),
 ) -> bool {
     // Undo only the outer function-to-pointer parameter adjustment.
     if adjusted_parameter
@@ -3491,6 +3915,13 @@ fn written_declarator_matches(
         };
     }
     current == terminal
+        || evocc_chir::vector::attribute_matches_base(
+            types,
+            representation.0,
+            representation.1,
+            current,
+            terminal,
+        )
         || (initialized_object
             && written.layers.is_empty()
             && evocc_chir::type_at_use_matches_binding(types, terminal, current))
@@ -3504,6 +3935,7 @@ fn written_declarator_matches(
 
 fn validate_object_declaration_for_lowering(
     unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
     object: &ObjectDecl<'_>,
 ) -> Result<(), LowerError> {
     let symbol = unit
@@ -3514,7 +3946,7 @@ fn validate_object_declaration_for_lowering(
             span: object.span,
         })?;
     if !matches!(
-        object.storage,
+        object.storage.base(),
         StorageClass::None
             | StorageClass::Auto
             | StorageClass::Register
@@ -3539,6 +3971,7 @@ fn validate_object_declaration_for_lowering(
             None,
             object.initializer.is_some(),
             false,
+            (target, &object.attributes),
         )
     {
         return Err(LowerError::UnsupportedStatement {
@@ -3981,6 +4414,8 @@ impl<'a> FunctionLowerer<'a> {
             self.info.span,
         )?;
         let mut function = Function {
+            section: self.info.section.clone(),
+            patchable_entry: self.info.patchable_entry,
             stack_protect,
             alignment: self
                 .unit
@@ -3991,7 +4426,7 @@ impl<'a> FunctionLowerer<'a> {
                     span: declaration.span,
                 })?
                 .declared_alignment()
-                .max(4),
+                .max(self.unit.minimum_function_alignment()),
             name: self.info.name.clone(),
             variadic: self.info.variadic,
             params,
@@ -4590,15 +5025,20 @@ impl<'a> FunctionLowerer<'a> {
             return Ok(constraint.to_owned());
         };
         // Memory/immediate constraints do not request the object's register.
-        if !(matches!(constraint, "r" | "rZ" | "=r" | "+r" | "=&r" | "+&r")
-            || (constraint.len() == 1 && constraint.as_bytes()[0].is_ascii_digit()))
+        if !(matches!(
+            constraint,
+            "r" | "rZ" | "=r" | "+r" | "=&r" | "+&r" | "w" | "=w" | "+w" | "=&w" | "+&w"
+        ) || (constraint.len() == 1 && constraint.as_bytes()[0].is_ascii_digit()))
         {
             return Ok(constraint.to_owned());
         }
-        let register = register
-            .strip_prefix('w')
-            .or_else(|| register.strip_prefix('r'))
-            .map_or_else(|| register.clone(), |n| format!("x{n}"));
+        let register = if let Some(n) = register.strip_prefix(['d', 's']) {
+            format!("v{n}")
+        } else {
+            register
+                .strip_prefix(['w', 'r'])
+                .map_or_else(|| register.clone(), |n| format!("x{n}"))
+        };
         let base = if constraint == "rZ" { "r" } else { constraint };
         let bound = format!("{base}@{register}");
         evocc_evoir::assembly_register_binding(&bound)
@@ -4753,15 +5193,18 @@ impl<'a> FunctionLowerer<'a> {
             // Select the register alternative before binding the place. The
             // source keeps its written constraint; IR has no alternatives.
             let constraint = match operand.constraint.as_str() {
-                "=rm" | "=mr" => "=r",
-                "+rm" | "+mr" => "+r",
-                "=&rm" | "=&mr" => "=&r",
-                "+&rm" | "+&mr" => "+&r",
+                "=rm" | "=mr" | "=g" => "=r",
+                "+rm" | "+mr" | "+g" => "+r",
+                "=&rm" | "=&mr" | "=&g" => "=&r",
+                "+&rm" | "+&mr" | "+&g" => "+&r",
                 "=m" => "=Q",
                 "+m" => "+Q",
                 constraint => constraint,
             };
-            if !matches!(constraint, "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q") {
+            if !matches!(
+                constraint,
+                "=r" | "+r" | "=&r" | "+&r" | "=w" | "+w" | "=&w" | "+&w" | "=Q" | "+Q"
+            ) {
                 return Err(refuse(operand.constraint.clone()));
             }
             let address = self
@@ -4885,11 +5328,38 @@ impl<'a> FunctionLowerer<'a> {
             };
             // A tie names a physical location, not a C arithmetic conversion.
             // RELOC_HIDE ties a pointer to an unsigned long output. Make that
-            // shared 64-bit representation explicit without weakening the IR
-            // validator's equal-type requirement or guessing wider high bits
-            // for narrow integer inputs.
+            // shared address representation explicit before any truncation,
+            // without weakening the IR validator's equal-type requirement.
+            // A wider input supplies the low part of a narrower output
+            // location; never guess high bits for the reverse case.
             if let [digit @ b'0'..=b'9'] = operand.constraint.as_bytes() {
                 if let Some(output) = outputs.get(usize::from(*digit - b'0')) {
+                    if matches!(output.ty, EvoIRType::Bits(_))
+                        && value.ty != EvoIRType::Bits(64)
+                        && evocc_evoir::assembly_address_type(&value.ty)
+                    {
+                        let result = self.fresh_value(EvoIRType::Bits(64));
+                        self.emit(
+                            &state,
+                            Inst::PointerCast {
+                                result: result.clone(),
+                                operand: value,
+                            },
+                        )?;
+                        value = result;
+                    }
+                    if let (EvoIRType::Bits(destination), EvoIRType::Bits(source)) =
+                        (&output.ty, &value.ty)
+                    {
+                        if destination < source {
+                            let result = self.fresh_value(output.ty.clone());
+                            self.emit(
+                                &state,
+                                Inst::Trunc(result.clone(), value, output.ty.clone()),
+                            )?;
+                            value = result;
+                        }
+                    }
                     if !evocc_evoir::assembly_memory_constraint(&output.constraint)
                         && output.ty != value.ty
                         && evocc_evoir::assembly_address_type(&output.ty)
@@ -5174,7 +5644,11 @@ impl<'a> FunctionLowerer<'a> {
                             let lowered = self.lower_expr(expression, &mut state)?;
                             let lowered = if matches!(
                                 expected.ir,
-                                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                                EvoIRType::Ptr(_)
+                                    | EvoIRType::FnPtr { .. }
+                                    | EvoIRType::Vec(..)
+                                    | EvoIRType::F32
+                                    | EvoIRType::F64
                             ) {
                                 self.coerce_to_object_type(
                                     lowered,
@@ -5370,10 +5844,19 @@ impl<'a> FunctionLowerer<'a> {
         let mut declared = Vec::new();
         for item in items.clone() {
             if let SwitchSegmentItem::Declaration(CHirDecl::Object(object)) = item {
-                initial.locals.insert(object.symbol);
+                let dynamic = self
+                    .target
+                    .array_size_factors(self.unit.types(), object.ty)
+                    .is_ok_and(|(_, captures)| !captures.is_empty());
+                // A VLA's declaration is its allocation point: evaluating
+                // its captured bounds cannot be hoisted to compound entry.
+                if !dynamic {
+                    initial.locals.insert(object.symbol);
+                }
                 declared.push(object.symbol);
                 self.object_declarations.insert(object.symbol, object);
                 if self.memory_symbols.contains(&object.symbol)
+                    && !dynamic
                     && !matches!(object.storage, StorageClass::Static | StorageClass::Extern)
                     && !initial.env.contains_key(&EnvKey::Address(object.symbol))
                 {
@@ -5467,11 +5950,10 @@ impl<'a> FunctionLowerer<'a> {
                 for symbol in declared.iter().rev() {
                     if self.memory_symbols.contains(symbol)
                         && state.env.contains_key(&EnvKey::Address(*symbol))
-                        && self
-                            .unit
-                            .symbols()
-                            .symbol(*symbol)
-                            .is_ok_and(|entry| entry.storage_class() != Some(StorageClass::Static))
+                        && self.unit.symbols().symbol(*symbol).is_ok_and(|entry| {
+                            entry.storage_class().map(StorageClass::base)
+                                != Some(StorageClass::Static)
+                        })
                     {
                         self.end_object_lifetime(*symbol, state)?;
                     }
@@ -5577,8 +6059,8 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
         };
-        validate_object_declaration_for_lowering(self.unit, object)?;
-        if object.storage == StorageClass::Extern {
+        validate_object_declaration_for_lowering(self.unit, self.target, object)?;
+        if object.storage.base() == StorageClass::Extern {
             // A block declaration introduces a binding, not a new object or
             // an allocation with the external object's existing origin.
             return Ok(());
@@ -5599,7 +6081,9 @@ impl<'a> FunctionLowerer<'a> {
                     self.emit(state, Inst::PtrNull(pointer.clone()))?;
                     pointer
                 } else {
-                    self.constant(state, integer, 0)?.value
+                    let zero = self.constant(state, integer, 0)?;
+                    self.coerce_to_object_type(zero, None, object.ty, object.span, state)?
+                        .value
                 };
                 state.env.insert(
                     EnvKey::Local(object.symbol),
@@ -5628,7 +6112,8 @@ impl<'a> FunctionLowerer<'a> {
                         integer,
                     }
                 } else {
-                    self.constant(state, integer, 0)?
+                    let zero = self.constant(state, integer, 0)?;
+                    self.coerce_to_object_type(zero, None, object.ty, object.span, state)?
                 }
             }
             _ => {
@@ -5653,7 +6138,18 @@ impl<'a> FunctionLowerer<'a> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Result<(EvoIRType, CIntegerType), LowerError> {
+        if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
+            return Ok((bits(integer), integer));
+        }
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Float(kind)) => Ok((
+                floating::ir_type(*kind).ok_or(LowerError::FloatingValue { span })?,
+                CIntegerType::ULONG,
+            )),
+            Some(TypeKind::Vector { .. }) => {
+                let value = function_value_type(self.unit.types(), self.target, ty, span)?;
+                Ok((value.ir, value.integer))
+            }
             Some(TypeKind::Pointer(pointee))
                 if matches!(
                     self.unit.types().get(*pointee).map(|ty| &ty.kind),
@@ -5943,9 +6439,15 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Value, LowerError> {
-        if matches!(base.ty, EvoIRType::FnPtr { .. }) {
-            // GNU function addresses use byte arithmetic. Do not attach a
-            // nonzero offset to Function provenance: expose and reconstruct.
+        if matches!(base.ty, EvoIRType::FnPtr { .. })
+            || matches!(
+                self.unit.types().get(pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Void)
+            )
+        {
+            // GNU function/void addresses use byte arithmetic. A void pointer
+            // may hold a label, not an object; expose and reconstruct instead
+            // of attaching a nonzero offset to exact Function provenance.
             let ty = base.ty.clone();
             let base = self.cast(
                 ExprValue {
@@ -6046,8 +6548,10 @@ impl<'a> FunctionLowerer<'a> {
 
     fn record_value_type(&self, expression: &CHirExpr<'_>) -> Option<TypeId> {
         let ty = match expression {
+            CHirExpr::Complex(operation) => operation.facts.ty(),
             CHirExpr::Ident { facts, .. }
             | CHirExpr::StatementExpr { facts, .. }
+            | CHirExpr::BuiltinVarArgs { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. } => facts.ty(),
             CHirExpr::MemoryRead { place, .. } => place.value_ty(),
             CHirExpr::CompoundLit(ty, ..) | CHirExpr::Cast(ty, ..) => *ty,
@@ -6459,7 +6963,7 @@ impl<'a> FunctionLowerer<'a> {
 
     fn lower_place_address(
         &mut self,
-        place: &'a MemoryPlace<'a>,
+        place: &MemoryPlace<'a>,
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Value, LowerError> {
@@ -6923,6 +7427,140 @@ impl<'a> FunctionLowerer<'a> {
         Ok(value)
     }
 
+    fn lower_atomic(
+        &mut self,
+        access: &evocc_chir::CHirAtomicAccess<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        // Arguments can contain calls and joins. Keep evaluated operands in
+        // the same explicit edge environment used by ordinary calls.
+        let mut keys = Vec::new();
+        for operand in access.operands() {
+            let value = self.lower_expr(operand, state)?;
+            let key = EnvKey::Temporary(self.next_temporary);
+            self.next_temporary += 1;
+            state.env.insert(
+                key,
+                BoundValue {
+                    value: value.value,
+                    integer: Some(value.integer),
+                },
+            );
+            keys.push(key);
+        }
+        let mut values = keys
+            .into_iter()
+            .map(|key| {
+                state
+                    .env
+                    .remove(&key)
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span: access.span,
+                        reason: "atomic operand lost across control flow",
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let _evaluated_order = values.pop();
+        let stored = if access.value.is_some() {
+            values.pop().map(|bound| bound.value)
+        } else {
+            None
+        };
+        let expected = if access.expected.is_some() {
+            values.pop().map(|bound| bound.value)
+        } else {
+            None
+        };
+        let address = values.remove(0).value;
+        let (ty, integer) = self.c_value_type(access.access_ty, access.span)?;
+        let result = (stored.is_none() || access.rmw.is_some()).then(|| self.fresh_value(ty));
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
+        let layout = self.access_layout(access.access_ty, access.span)?;
+        self.emit(
+            state,
+            Inst::AccessInBounds {
+                mem_in,
+                pointer: address.clone(),
+                mem_out: guarded.clone(),
+                layout,
+            },
+        )?;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        let op = if let Some((operation, _)) = access.rmw {
+            evocc_evoir::AtomicOp::Rmw {
+                result: result.clone().expect("RMW result"),
+                operation,
+                value: stored.clone().expect("RMW value"),
+                expected: expected.clone(),
+            }
+        } else if let Some(value) = &stored {
+            evocc_evoir::AtomicOp::Store(value.clone())
+        } else {
+            evocc_evoir::AtomicOp::Load(result.clone().expect("atomic load result"))
+        };
+        self.emit(
+            state,
+            Inst::Atomic(evocc_evoir::AtomicAccess {
+                op,
+                address,
+                order: access
+                    .constant_order
+                    .unwrap_or(evocc_evoir::AtomicOrder::SeqCst),
+                volatile: access.volatile,
+                mem_in: guarded,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            }),
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        if let Some(value) = result {
+            use evocc_chir::{AtomicRmwOp as R, AtomicRmwReturn as K};
+            let (value, integer) = match access.rmw {
+                Some((_, K::Success)) => {
+                    let old =
+                        self.cast(ExprValue { value, integer }, CIntegerType::ULONG, state)?;
+                    let expected = self.cast(
+                        ExprValue {
+                            value: expected.expect("CAS expected"),
+                            integer,
+                        },
+                        CIntegerType::ULONG,
+                        state,
+                    )?;
+                    (
+                        self.checked_compare(state, CmpOp::Eq, &old.value, &expected.value)?,
+                        CIntegerType::BOOL,
+                    )
+                }
+                Some((operation, K::New)) => {
+                    let operand = stored.expect("RMW value");
+                    let inst = match operation {
+                        R::Add => Inst::Add,
+                        R::Sub => Inst::Sub,
+                        R::And | R::Nand => Inst::And,
+                        R::Or => Inst::Or,
+                        R::Xor => Inst::Xor,
+                        _ => unreachable!("new-result arithmetic operation"),
+                    };
+                    let mut result = self.emit_raw_binary(state, inst, &value, &operand)?;
+                    if operation == R::Nand {
+                        let ones = self.wide_constant(state, integer, u128::MAX)?.value;
+                        result = self.emit_raw_binary(state, Inst::Xor, &result, &ones)?;
+                    }
+                    (result, integer)
+                }
+                _ => (value, integer),
+            };
+            Ok(ExprValue { value, integer })
+        } else {
+            self.constant(state, CIntegerType::INT, 0)
+        }
+    }
+
     fn emit_memory_load(
         &mut self,
         address: Value,
@@ -7053,7 +7691,20 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &State,
     ) -> Result<ExprValue, LowerError> {
+        if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
+            return self.cast(value, integer, state);
+        }
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Float(kind)) => self.cast_floating(value, *kind, state),
+            Some(TypeKind::Vector { .. }) => {
+                if value.value.ty != self.c_value_type(ty, span)?.0 {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature: "incompatible vector assignment",
+                    });
+                }
+                Ok(value)
+            }
             Some(TypeKind::Pointer(_)) => {
                 let expected = self.c_value_type(ty, span)?.0;
                 if value.value.ty == expected {
@@ -7104,6 +7755,91 @@ impl<'a> FunctionLowerer<'a> {
         }
     }
 
+    /// One loop over the leaf objects, preserving their typed pointer zeros
+    /// and representation padding without unrolling a runtime array extent.
+    fn emit_zero_dynamic_array(
+        &mut self,
+        address: Value,
+        ty: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let mut element = ty;
+        while let Some(TypeKind::Array { element: inner, .. }) =
+            self.unit.types().get(element).map(|ty| &ty.kind)
+        {
+            element = *inner;
+        }
+        let layout = self.access_layout(element, span)?;
+        if layout.size_bytes == 0 {
+            return Ok(());
+        }
+        let size = self.pointer_arithmetic_scale(ty, span, state)?;
+        let cursor = self.retain_temporary(address, state);
+        let remaining = self.retain_temporary(size.value, state);
+        let live = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) | EnvKey::Address(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect();
+        let keys = self.keys_for(state, &live, &[]);
+        let header = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        self.branch(state, header.block, &keys)?;
+        let zero = self.constant(&header, CIntegerType::ULONG, 0)?;
+        let count = header.env[&remaining].value.clone();
+        let predicate = self.checked_compare(&header, CmpOp::Ne, &count, &zero.value)?;
+        let mut body = self.new_block_from(&header, &keys, BlockRole::Ordinary)?;
+        let mut exit = self.new_block_from(&header, &keys, BlockRole::Ordinary)?;
+        let arguments = self.edge_values(&header, &keys)?;
+        self.terminate(
+            &header,
+            Inst::CondBr(
+                predicate,
+                body.block,
+                arguments.clone(),
+                exit.block,
+                arguments,
+            ),
+        )?;
+        let address = body.env[&cursor].value.clone();
+        // Padding is part of the option's promise. Typed stores below attach
+        // Null provenance where bytes alone would not represent a pointer.
+        for offset in 0..layout.size_bytes {
+            let at = self.constant_offset_address(address.clone(), offset, &mut body)?;
+            let zero = self.constant(&body, CIntegerType::UCHAR, 0)?;
+            self.emit_memory_store_with_layout(
+                at,
+                zero,
+                AccessLayout::new(1, 1),
+                false,
+                &mut body,
+            )?;
+        }
+        self.emit_zero_initializer_at(
+            address.clone(),
+            element,
+            SubobjectPath::root(),
+            &[],
+            span,
+            &mut body,
+            layout.align_bytes,
+        )?;
+        let next = self.constant_offset_address(address, layout.size_bytes, &mut body)?;
+        body.env.get_mut(&cursor).unwrap().value = next;
+        let step = self.constant(&body, CIntegerType::ULONG, layout.size_bytes)?;
+        let count = body.env[&remaining].value.clone();
+        let next = self.emit_raw_binary(&body, Inst::Sub, &count, &step.value)?;
+        body.env.get_mut(&remaining).unwrap().value = next;
+        self.branch(&body, header.block, &keys)?;
+        exit.env.remove(&cursor);
+        exit.env.remove(&remaining);
+        *state = exit;
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn emit_zero_initializer_at(
         &mut self,
@@ -7129,11 +7865,54 @@ impl<'a> FunctionLowerer<'a> {
             .kind
             .clone();
         match kind {
+            TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64) => {
+                let mut layout = self.access_layout(ty, span)?;
+                layout.align_bytes = layout.align_bytes.min(alignment);
+                let integer = if layout.size_bytes == 4 {
+                    CIntegerType::UINT
+                } else {
+                    CIntegerType::ULONG
+                };
+                let zero = self.constant(state, integer, 0)?;
+                self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
+                Ok(())
+            }
+            TypeKind::TargetBuiltin(kind) if kind.polynomial_bits().is_some() => {
+                let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+                let zero = self.constant(state, integer, 0)?;
+                let mut layout = self.access_layout(ty, span)?;
+                layout.align_bytes = layout.align_bytes.min(alignment);
+                self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
+                Ok(())
+            }
             TypeKind::TargetBuiltin(_) => Err(LowerError::UnsupportedType {
                 ty,
                 span,
                 feature: "target header type has no admitted value execution",
             }),
+            TypeKind::Complex(evocc_types::ComplexBase::Integer(_)) => {
+                self.emit_zero_complex(address, ty, span, state)
+            }
+            TypeKind::Vector { element, lanes, .. } => {
+                let layout = self.access_layout(element, span)?;
+                for index in 0..u64::from(lanes) {
+                    let at = self.constant_offset_address(
+                        address.clone(),
+                        index * layout.size_bytes,
+                        state,
+                    )?;
+                    self.emit_zero_initializer_at(
+                        at,
+                        element,
+                        path.clone().with_index(index),
+                        actions,
+                        span,
+                        state,
+                        alignment.min(layout.align_bytes),
+                    )?;
+                }
+                Ok(())
+            }
             TypeKind::Int(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_)
@@ -7302,7 +8081,7 @@ impl<'a> FunctionLowerer<'a> {
         if !state.env.contains_key(&EnvKey::Address(object.symbol)) {
             self.allocate_object_storage(object, state)?;
         }
-        if object.storage == StorageClass::Static {
+        if object.storage.base() == StorageClass::Static {
             return Ok(());
         }
         if object.cleanup.is_some() && !state.cleanups.contains(&object.symbol) {
@@ -7311,6 +8090,13 @@ impl<'a> FunctionLowerer<'a> {
         let Some(initializer) = &object.initializer else {
             if self.unit.zero_initialize_automatic(object) {
                 let address = self.token(state, EnvKey::Address(object.symbol))?.value;
+                if self
+                    .target
+                    .array_size_factors(self.unit.types(), object.ty)
+                    .is_ok_and(|(_, captures)| !captures.is_empty())
+                {
+                    return self.emit_zero_dynamic_array(address, object.ty, object.span, state);
+                }
                 let layout = self.access_layout(object.ty, object.span)?;
                 // The implicit initializer includes padding. Typed stores then
                 // attach Null provenance to pointer subobjects without changing
@@ -7352,39 +8138,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         let address = self.token(state, EnvKey::Address(object.symbol))?.value;
         if self.unit.zero_initialize_automatic_padding(object) {
-            let ranges = initializer
-                .plan()
-                .padding_ranges(self.unit.types(), *self.target)
-                .map_err(|_| LowerError::UnsupportedType {
-                    ty: object.ty,
-                    span: object.span,
-                    feature: "constructor padding has no finite layout",
-                })?;
-            for range in ranges {
-                let mut offset = range.start;
-                while offset < range.end {
-                    let size = [8, 4, 2, 1]
-                        .into_iter()
-                        .find(|size| *size <= range.end - offset)
-                        .unwrap();
-                    let integer = match size {
-                        8 => CIntegerType::ULONG,
-                        4 => CIntegerType::UINT,
-                        2 => CIntegerType::USHORT,
-                        _ => CIntegerType::UCHAR,
-                    };
-                    let at = self.constant_offset_address(address.clone(), offset, state)?;
-                    let zero = self.constant(state, integer, 0)?;
-                    self.emit_memory_store_with_layout(
-                        at,
-                        zero,
-                        AccessLayout::new(size, 1),
-                        false,
-                        state,
-                    )?;
-                    offset += size;
-                }
-            }
+            self.lower_constructor_padding(address.clone(), initializer, object.span, state)?;
         }
         self.lower_initializer_at(address, object.ty, initializer, object.span, state)
             .map(|_| ())
@@ -7397,7 +8151,24 @@ impl<'a> FunctionLowerer<'a> {
         object: &'a ObjectDecl<'a>,
         state: &mut State,
     ) -> Result<(), LowerError> {
-        let mut layout = self.access_layout(object.ty, object.span)?;
+        let dynamic = self
+            .target
+            .array_size_factors(self.unit.types(), object.ty)
+            .is_ok_and(|(_, captures)| !captures.is_empty());
+        let mut layout = if dynamic {
+            AccessLayout::new(
+                0,
+                self.target
+                    .alignof_type(self.unit.types(), object.ty)
+                    .map_err(|source| LowerError::Layout {
+                        ty: object.ty,
+                        span: object.span,
+                        source,
+                    })?,
+            )
+        } else {
+            self.access_layout(object.ty, object.span)?
+        };
         layout.align_bytes = layout.align_bytes.max(
             self.unit
                 .symbols()
@@ -7416,7 +8187,7 @@ impl<'a> FunctionLowerer<'a> {
                 ),
             },
         )?;
-        if object.storage == StorageClass::Static {
+        if object.storage.base() == StorageClass::Static {
             let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
             self.emit(
                 state,
@@ -7435,6 +8206,14 @@ impl<'a> FunctionLowerer<'a> {
             state.locals.insert(object.symbol);
             return Ok(());
         }
+        let size = if dynamic {
+            Some(
+                self.pointer_arithmetic_scale(object.ty, object.span, state)?
+                    .value,
+            )
+        } else {
+            None
+        };
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
@@ -7442,14 +8221,27 @@ impl<'a> FunctionLowerer<'a> {
         let world_out = self.fresh_value(EvoIRType::World);
         self.emit(
             state,
-            Inst::Alloca {
-                result: address.clone(),
-                mem_in,
-                world_in,
-                mem_out: mem_out.clone(),
-                world_out: world_out.clone(),
-                origin,
-                layout,
+            if let Some(size) = size {
+                Inst::DynamicAlloca {
+                    result: address.clone(),
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    origin,
+                    size,
+                    align: layout.align_bytes,
+                }
+            } else {
+                Inst::Alloca {
+                    result: address.clone(),
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    origin,
+                    layout,
+                }
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
@@ -7524,6 +8316,28 @@ impl<'a> FunctionLowerer<'a> {
                     value,
                     ..
                 } => {
+                    if let Some(bits) = evocc_chir::constant::floating_constant_representation(
+                        value,
+                        *destination_type,
+                        self.unit.types(),
+                        self.unit.symbols(),
+                        self.target,
+                    ) {
+                        let value = self.wide_constant(state, bits.ty(), bits.raw_bits())?;
+                        let volatile = self
+                            .unit
+                            .types()
+                            .get(*destination_type)
+                            .is_some_and(|ty| ty.qualifiers.is_volatile);
+                        self.emit_memory_store_with_layout(
+                            action_address,
+                            value,
+                            action_layout,
+                            volatile,
+                            state,
+                        )?;
+                        continue;
+                    }
                     let action_key = self.retain_temporary(action_address, state);
                     let lowered = self.lower_expr(value, state)?;
                     let action_address = state
@@ -7531,6 +8345,17 @@ impl<'a> FunctionLowerer<'a> {
                         .remove(&action_key)
                         .expect("retained initializer destination")
                         .value;
+                    if evocc_chir::complex::rank(self.unit.types(), *destination_type).is_some() {
+                        self.emit_representation_copy(
+                            action_address,
+                            lowered.value,
+                            *destination_type,
+                            CopyVolatility::new(false, false),
+                            action_span,
+                            state,
+                        )?;
+                        continue;
+                    }
                     let lowered = self.coerce_to_object_type(
                         lowered,
                         Some(value),
@@ -7558,6 +8383,32 @@ impl<'a> FunctionLowerer<'a> {
                 InitAction::ZeroScalar {
                     destination_type, ..
                 } => {
+                    if matches!(
+                        self.unit.types().get(*destination_type).map(|ty| &ty.kind),
+                        Some(TypeKind::Float(
+                            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                        ))
+                    ) {
+                        self.emit_zero_initializer_at(
+                            action_address,
+                            *destination_type,
+                            SubobjectPath::root(),
+                            &[],
+                            action_span,
+                            state,
+                            action_layout.align_bytes,
+                        )?;
+                        continue;
+                    }
+                    if evocc_chir::complex::rank(self.unit.types(), *destination_type).is_some() {
+                        self.emit_zero_complex(
+                            action_address,
+                            *destination_type,
+                            action_span,
+                            state,
+                        )?;
+                        continue;
+                    }
                     let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
                         Some(TypeKind::Pointer(_)) => {
                             let pointer = self
@@ -7664,6 +8515,29 @@ impl<'a> FunctionLowerer<'a> {
                         .types()
                         .get(*destination_type)
                         .is_some_and(|ty| ty.qualifiers.is_volatile);
+                    if !self.is_aggregate_type(*destination_type)
+                        && matches!(
+                            self.unit.types().get(*destination_type).map(|ty| &ty.kind),
+                            Some(TypeKind::Vector { .. })
+                        )
+                    {
+                        let source = self.coerce_to_object_type(
+                            source,
+                            Some(value),
+                            *destination_type,
+                            *span,
+                            state,
+                        )?;
+                        self.emit_memory_store(
+                            action_address,
+                            source,
+                            *destination_type,
+                            volatile_destination,
+                            *span,
+                            state,
+                        )?;
+                        continue;
+                    }
                     self.emit_aggregate_transfer(
                         action_address,
                         source.value,
@@ -7683,6 +8557,49 @@ impl<'a> FunctionLowerer<'a> {
             .remove(&address_key)
             .expect("retained initializer root")
             .value)
+    }
+
+    fn lower_constructor_padding(
+        &mut self,
+        address: Value,
+        initializer: &ObjectInitializer<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let ranges = initializer
+            .plan()
+            .padding_ranges(self.unit.types(), *self.target)
+            .map_err(|_| LowerError::UnsupportedType {
+                ty: initializer.plan().target_type(),
+                span,
+                feature: "constructor padding has no finite layout",
+            })?;
+        for range in ranges {
+            let mut offset = range.start;
+            while offset < range.end {
+                let size = [8, 4, 2, 1]
+                    .into_iter()
+                    .find(|size| *size <= range.end - offset)
+                    .unwrap();
+                let integer = match size {
+                    8 => CIntegerType::ULONG,
+                    4 => CIntegerType::UINT,
+                    2 => CIntegerType::USHORT,
+                    _ => CIntegerType::UCHAR,
+                };
+                let at = self.constant_offset_address(address.clone(), offset, state)?;
+                let zero = self.constant(state, integer, 0)?;
+                self.emit_memory_store_with_layout(
+                    at,
+                    zero,
+                    AccessLayout::new(size, 1),
+                    false,
+                    state,
+                )?;
+                offset += size;
+            }
+        }
+        Ok(())
     }
 
     fn lower_compound_literal_address(
@@ -7722,6 +8639,9 @@ impl<'a> FunctionLowerer<'a> {
             return Ok(address);
         }
         let address = self.token(state, EnvKey::Compound(identity))?.value;
+        if self.unit.zero_initialize_compound_padding(initializer) {
+            self.lower_constructor_padding(address.clone(), initializer, *span, state)?;
+        }
         self.lower_initializer_at(address, *ty, initializer, *span, state)
     }
 
@@ -8621,6 +9541,20 @@ impl<'a> FunctionLowerer<'a> {
             segments.iter().filter_map(|segment| segment.case),
         );
         let last_case = segments.iter().rposition(|segment| segment.case.is_some());
+        let default_index = segments.iter().position(|segment| segment.case.is_none());
+        // Every failed case comparison may ultimately enter default, even
+        // when its label was written before that case. Source-order suffix
+        // liveness alone loses values used only by this dynamic successor.
+        // Include its fallthrough suffix, but keep the values on explicit
+        // edges rather than making entry definitions visible across blocks.
+        let mut default_symbols = BTreeSet::new();
+        if let Some(default) = default_index {
+            for segment in &segments[default..] {
+                for item in &segment.items {
+                    collect_symbols_switch_item(item, &mut default_symbols);
+                }
+            }
+        }
         let mut switch_locals = state.locals.clone();
         for item in prefix {
             if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
@@ -8709,6 +9643,7 @@ impl<'a> FunctionLowerer<'a> {
                     .map(|offset| index + 1 + offset);
                 if next_case.is_some() {
                     let mut remaining = live_after.clone();
+                    remaining.extend(&default_symbols);
                     collect_symbols_expr(expression, &mut remaining);
                     for later in &segments[index + 1..] {
                         if let Some(case) = later.case {
@@ -8742,7 +9677,6 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
 
-        let default_index = segments.iter().position(|segment| segment.case.is_none());
         if dispatch_states.is_empty() {
             let default = default_index.ok_or(LowerError::InvalidControlFlow {
                 span: body.span(),
@@ -8891,6 +9825,14 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if let Some(value) = evocc_chir::constant::floating_constant_cast(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        ) {
+            return self.floating_constant(value, state);
+        }
         if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
             expression,
             self.unit.types(),
@@ -8908,6 +9850,9 @@ impl<'a> FunctionLowerer<'a> {
             return self.wide_constant(state, value.ty(), value.raw_bits());
         }
         match expression {
+            CHirExpr::Floating(operation) => self.lower_floating_builtin(operation, state),
+            CHirExpr::Vector(operation) => self.lower_vector(operation, state),
+            CHirExpr::Complex(operation) => self.lower_complex(operation, state),
             CHirExpr::Lit(literal, _) => {
                 let integer = integer_literal_value(*literal).map_err(|_| {
                     LowerError::UnsupportedExpression {
@@ -9001,17 +9946,19 @@ impl<'a> FunctionLowerer<'a> {
                         feature: "object identifier disagrees with its semantic identity",
                     });
                 }
-                if self.memory_symbols.contains(symbol) {
+                if self.memory_symbols.contains(symbol) || self.is_aggregate_type(facts.ty()) {
                     let address = self.object_address(*symbol, *span, state)?;
-                    if matches!(
-                        self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
-                        Some(
-                            TypeKind::Array { .. }
-                                | TypeKind::Struct(_)
-                                | TypeKind::Union(_)
-                                | TypeKind::BuiltinVaList
+                    if self.is_aggregate_type(facts.ty())
+                        || matches!(
+                            self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
+                            Some(
+                                TypeKind::Array { .. }
+                                    | TypeKind::Struct(_)
+                                    | TypeKind::Union(_)
+                                    | TypeKind::BuiltinVaList
+                            )
                         )
-                    ) {
+                    {
                         return Ok(ExprValue {
                             value: address,
                             integer: CIntegerType::ULONG,
@@ -9030,6 +9977,42 @@ impl<'a> FunctionLowerer<'a> {
                 self.lower_unary(*operator, operand, *span, state)
             }
             CHirExpr::EvaluateOnce(operand, _) => self.lower_expr(operand, state),
+            CHirExpr::Atomic(access) => self.lower_atomic(access, state),
+            CHirExpr::BuiltinExpect(value, expected, span) => {
+                let value = self.lower_expr(value, state)?;
+                let key = EnvKey::Temporary(self.next_temporary);
+                self.next_temporary += 1;
+                state.env.insert(
+                    key,
+                    BoundValue {
+                        value: value.value,
+                        integer: Some(value.integer),
+                    },
+                );
+                // Keep the first result in the ordinary edge environment if
+                // the hint contains control flow, just like a binary operand.
+                if evocc_chir::constant::eval_executable_integer_constant(
+                    expected,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                    self.target,
+                )
+                .is_none()
+                {
+                    self.lower_expr(expected, state)?;
+                }
+                let saved = state
+                    .env
+                    .remove(&key)
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span: *span,
+                        reason: "expectation hint lost its evaluated value",
+                    })?;
+                Ok(ExprValue {
+                    value: saved.value,
+                    integer: value.integer,
+                })
+            }
             CHirExpr::Binary(operator, left, right, span) => {
                 self.lower_binary(*operator, left, right, *span, state)
             }
@@ -9128,15 +10111,17 @@ impl<'a> FunctionLowerer<'a> {
                 }),
             CHirExpr::CompoundLit(ty, _, span) => {
                 let address = self.lower_compound_literal_address(expression, state)?;
-                if matches!(
-                    self.unit.types().get(*ty).map(|canonical| &canonical.kind),
-                    Some(
-                        TypeKind::Array { .. }
-                            | TypeKind::Struct(_)
-                            | TypeKind::Union(_)
-                            | TypeKind::BuiltinVaList
+                if self.is_aggregate_type(*ty)
+                    || matches!(
+                        self.unit.types().get(*ty).map(|canonical| &canonical.kind),
+                        Some(
+                            TypeKind::Array { .. }
+                                | TypeKind::Struct(_)
+                                | TypeKind::Union(_)
+                                | TypeKind::BuiltinVaList
+                        )
                     )
-                ) {
+                {
                     Ok(ExprValue {
                         value: address,
                         integer: CIntegerType::ULONG,
@@ -9151,10 +10136,10 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
             CHirExpr::Cast(target, operand, span) => {
-                if matches!(
-                    self.unit.types().get(*target).map(|ty| &ty.kind),
-                    Some(TypeKind::Struct(_) | TypeKind::Union(_))
-                ) {
+                // Default argument conversions preserve complete composite
+                // values, including integer complex and wide vectors. Their
+                // numeric conversions have explicit Complex/Vector nodes.
+                if self.is_aggregate_type(*target) {
                     let source = self
                         .record_value_type(operand)
                         .and_then(|ty| self.unit.types().get(ty));
@@ -9171,7 +10156,7 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
-                    Some(TypeKind::Pointer(_))
+                    Some(TypeKind::Pointer(_) | TypeKind::Vector { .. } | TypeKind::Float(_))
                 ) {
                     let value = self.lower_expr(operand, state)?;
                     return self.coerce_to_object_type(value, Some(operand), *target, *span, state);
@@ -9330,12 +10315,13 @@ impl<'a> FunctionLowerer<'a> {
                     self.emit_memory_load(address, field_type, false, *span, state)
                 }
             }
-            CHirExpr::FloatLit(_, span)
-            | CHirExpr::PtrMember(_, _, span)
-            | CHirExpr::Index(_, _, span) => Err(LowerError::UnsupportedExpression {
-                span: *span,
-                feature: "expression requires the Day-7 object or non-integer model",
-            }),
+            CHirExpr::FloatLit(literal, span) => self.floating_literal(literal, *span, state),
+            CHirExpr::PtrMember(_, _, span) | CHirExpr::Index(_, _, span) => {
+                Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "expression requires the Day-7 object or non-integer model",
+                })
+            }
             CHirExpr::MemoryRead {
                 place, target_span, ..
             } => {
@@ -9535,7 +10521,7 @@ impl<'a> FunctionLowerer<'a> {
             };
             if self.memory_symbols.contains(&object.symbol)
                 && continued.env.contains_key(&EnvKey::Address(object.symbol))
-                && object.storage != StorageClass::Static
+                && object.storage.base() != StorageClass::Static
             {
                 self.end_object_lifetime(object.symbol, &mut continued)?;
             }
@@ -9666,6 +10652,11 @@ impl<'a> FunctionLowerer<'a> {
             return self.emit_memory_load(pointer.value, pointee, volatile, span, state);
         }
         let operand = self.lower_expr(operand, state)?;
+        if evocc_evoir::floating_kind(&operand.value.ty).is_some()
+            && matches!(operator, UnaryOp::Plus | UnaryOp::Neg)
+        {
+            return self.floating_unary(operator, operand, state);
+        }
         match operator {
             UnaryOp::Plus => {
                 let promoted = integer_promotion(operand.integer);
@@ -9831,6 +10822,11 @@ impl<'a> FunctionLowerer<'a> {
             let left = self.cast(left, shifted_type, state)?;
             let right = self.cast(right, amount_type, state)?;
             return self.emit_shift(state, operator, left, right, shifted_type);
+        }
+        if evocc_evoir::floating_kind(&left.value.ty).is_some()
+            || evocc_evoir::floating_kind(&right.value.ty).is_some()
+        {
+            return self.floating_binary(operator, left, right, state);
         }
         let common = arithmetic_common_type(left.integer, right.integer);
         let left = self.cast(left, common, state)?;
@@ -10492,16 +11488,36 @@ impl<'a> FunctionLowerer<'a> {
         let zero = self.constant(state, CIntegerType::UINT128, 0)?.value;
         let truth = self.constant(state, CIntegerType::BOOL, 1)?.value;
         let (magnitude, negative, overflow) = if op == evocc_chir::CheckedArithmeticOp::Mul {
-            let one = self.constant(state, CIntegerType::UINT128, 1)?.value;
-            let maximum = self
-                .wide_constant(state, CIntegerType::UINT128, u128::MAX)?
+            let mask = self
+                .wide_constant(state, CIntegerType::UINT128, u128::from(u64::MAX))?
                 .value;
-            let right_nonzero = self.checked_compare(state, CmpOp::Ne, &right, &zero)?;
-            // a*b exceeds UMAX iff a > UMAX/b. Use denominator 1 when b=0:
-            // the comparison is then false and the division is always defined.
-            let divisor = self.select_bits(state, &right_nonzero, &right, &one)?;
-            let limit = self.emit_raw_binary(state, Inst::UDiv, &maximum, &divisor)?;
-            let overflow = self.checked_compare(state, CmpOp::ULt, &limit, &left)?;
+            let shift = self.constant(state, CIntegerType::UINT128, 64)?.value;
+            let left_low = self.emit_raw_binary(state, Inst::And, &left, &mask)?;
+            let left_high = self.emit_raw_binary(state, Inst::LShr, &left, &shift)?;
+            let right_low = self.emit_raw_binary(state, Inst::And, &right, &mask)?;
+            let right_high = self.emit_raw_binary(state, Inst::LShr, &right, &shift)?;
+            let low = self.emit_raw_binary(state, Inst::Mul, &left_low, &right_low)?;
+            let cross_left = self.emit_raw_binary(state, Inst::Mul, &left_low, &right_high)?;
+            let cross_right = self.emit_raw_binary(state, Inst::Mul, &left_high, &right_low)?;
+            // Detect every contribution above bit 127 in the 64-bit limb
+            // product. This needs no division helper in freestanding code.
+            // The middle sum has at most 66 bits, so no carry is lost here.
+            let carry = self.emit_raw_binary(state, Inst::LShr, &low, &shift)?;
+            let cross_left_low = self.emit_raw_binary(state, Inst::And, &cross_left, &mask)?;
+            let cross_right_low = self.emit_raw_binary(state, Inst::And, &cross_right, &mask)?;
+            let middle = self.emit_raw_binary(state, Inst::Add, &carry, &cross_left_low)?;
+            let middle = self.emit_raw_binary(state, Inst::Add, &middle, &cross_right_low)?;
+            let middle_high = self.emit_raw_binary(state, Inst::LShr, &middle, &shift)?;
+            let cross_left_high = self.emit_raw_binary(state, Inst::LShr, &cross_left, &shift)?;
+            let cross_right_high = self.emit_raw_binary(state, Inst::LShr, &cross_right, &shift)?;
+            let high = self.emit_raw_binary(state, Inst::Or, &middle_high, &cross_left_high)?;
+            let high = self.emit_raw_binary(state, Inst::Or, &high, &cross_right_high)?;
+            let overflow = self.checked_compare(state, CmpOp::Ne, &high, &zero)?;
+            let left_high_nonzero = self.checked_compare(state, CmpOp::Ne, &left_high, &zero)?;
+            let right_high_nonzero = self.checked_compare(state, CmpOp::Ne, &right_high, &zero)?;
+            let high_product =
+                self.emit_raw_binary(state, Inst::And, &left_high_nonzero, &right_high_nonzero)?;
+            let overflow = self.emit_raw_binary(state, Inst::Or, &overflow, &high_product)?;
             let magnitude = self.emit_raw_binary(state, Inst::Mul, &left, &right)?;
             let negative =
                 self.emit_raw_binary(state, Inst::Xor, &left_negative, &right_negative)?;
@@ -10762,6 +11778,20 @@ impl<'a> FunctionLowerer<'a> {
         left_state: &State,
         right_state: &State,
     ) -> Result<(ExprValue, ExprValue, CIntegerType), LowerError> {
+        if evocc_evoir::floating_kind(&left.value.ty).is_some()
+            || evocc_evoir::floating_kind(&right.value.ty).is_some()
+        {
+            let kind = if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
+                evocc_types::FloatKind::F64
+            } else {
+                evocc_types::FloatKind::F32
+            };
+            return Ok((
+                self.cast_floating(left, kind, left_state)?,
+                self.cast_floating(right, kind, right_state)?,
+                CIntegerType::ULONG,
+            ));
+        }
         if left.value.ty == right.value.ty
             && matches!(left.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
         {
@@ -10819,10 +11849,48 @@ impl<'a> FunctionLowerer<'a> {
         }
     }
 
+    // Boolean knowledge is not a numeric pointer representation. An address
+    // of an ordinary declared object/function is nonnull, but an unresolved
+    // weak symbol or an arbitrary pointer expression is not such a proof.
+    // The caller still lowers the original expression and its effects.
+    fn known_pointer_truth(&self, expression: &CHirExpr<'_>) -> Option<bool> {
+        if null_pointer_constant(self.unit, self.target, expression) {
+            return Some(false);
+        }
+        let symbol = match expression {
+            CHirExpr::Cast(ty, operand, _)
+                if matches!(self.unit.types().get(*ty)?.kind, TypeKind::Pointer(_)) =>
+            {
+                return self.known_pointer_truth(operand);
+            }
+            CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::Ident { symbol, .. }, _) => *symbol,
+            CHirExpr::Ident { symbol, facts, .. }
+                if matches!(
+                    self.unit.types().get(facts.ty())?.kind,
+                    TypeKind::Function { .. } | TypeKind::Array { .. }
+                ) =>
+            {
+                *symbol
+            }
+            CHirExpr::StringLit(..) | CHirExpr::LabelAddress { .. } => return Some(true),
+            _ => return None,
+        };
+        let linkage = self.unit.symbol_linkage().ok()?;
+        (!linkage.weak.contains(&symbol) && !linkage.weak.contains(&linkage.target(symbol)))
+            .then_some(true)
+    }
+
     fn possible_results_after_evaluation(
         &self,
         expression: &CHirExpr<'_>,
     ) -> Option<Vec<CInteger>> {
+        if let Some(value) = self
+            .comparison_partition_result(expression)
+            .or_else(|| self.floating_partition_result(expression))
+            .or_else(|| self.short_circuit_range_result(expression))
+        {
+            return Some(vec![CInteger::int(i32::from(value))]);
+        }
         if let Some(value) = evocc_chir::constant::eval_absolute_address_constant(
             expression,
             self.unit.types(),
@@ -10867,6 +11935,13 @@ impl<'a> FunctionLowerer<'a> {
                     .map(|value| value.cast(integer))
                     .collect()
             }
+            CHirExpr::Unary(UnaryOp::Not, operand, _)
+                if self.known_pointer_truth(operand).is_some() =>
+            {
+                vec![CInteger::int(i32::from(
+                    !self.known_pointer_truth(operand)?,
+                ))]
+            }
             CHirExpr::Unary(operator, operand, _) => results(operand)?
                 .into_iter()
                 .map(|value| evocc_chir::integer::eval_unary_integer(*operator, value).ok())
@@ -10889,6 +11964,20 @@ impl<'a> FunctionLowerer<'a> {
                 values
             }
             CHirExpr::Binary(operator, left, right, _) => {
+                if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
+                    let other = if null_pointer_constant(self.unit, self.target, left) {
+                        Some(*right)
+                    } else if null_pointer_constant(self.unit, self.target, right) {
+                        Some(*left)
+                    } else {
+                        None
+                    };
+                    if let Some(truth) = other.and_then(|e| self.known_pointer_truth(e)) {
+                        return Some(vec![CInteger::int(i32::from(
+                            truth == (*operator == BinaryOp::Ne),
+                        ))]);
+                    }
+                }
                 if matches!(
                     operator,
                     BinaryOp::Eq
@@ -10963,6 +12052,74 @@ impl<'a> FunctionLowerer<'a> {
         values.dedup();
         // Finite alternatives, not path enumeration or an unbounded evaluator.
         (values.len() <= 8).then_some(values)
+    }
+
+    // A pair of comparisons partitions the SAME stable integer operands into
+    // less/equal/greater. This proves only the result after evaluation: normal
+    // short-circuit execution and poison consumption are still lowered above.
+    fn comparison_partition_result(&self, expression: &CHirExpr<'_>) -> Option<bool> {
+        let CHirExpr::Binary(logical @ (BinaryOp::And | BinaryOp::Or), left, right, _) = expression
+        else {
+            return None;
+        };
+        let operand = |expression: &CHirExpr<'_>| {
+            let CHirExpr::Ident { symbol, .. } = expression else {
+                return None;
+            };
+            if self.memory_symbols.contains(symbol) || self.global_registers.contains_key(symbol) {
+                return None;
+            }
+            let place = ScalarPlace::bind(self.unit.symbols(), self.unit.types(), *symbol).ok()?;
+            let ty = self.unit.types().get(place.ty())?;
+            if ty.qualifiers.is_volatile || ty.qualifiers.is_atomic {
+                return None;
+            }
+            Some((
+                *symbol,
+                canonical_integer(
+                    self.unit.types(),
+                    self.target,
+                    place.ty(),
+                    expression.span(),
+                )
+                .ok()?,
+            ))
+        };
+        let predicate = |expression: &CHirExpr<'_>| {
+            let CHirExpr::Binary(op, left, right, _) = expression else {
+                return None;
+            };
+            let mut mask = match op {
+                BinaryOp::Lt => 1u8,
+                BinaryOp::Eq => 2,
+                BinaryOp::Gt => 4,
+                BinaryOp::Le => 3,
+                BinaryOp::Ne => 5,
+                BinaryOp::Ge => 6,
+                _ => return None,
+            };
+            let (mut a, at) = operand(left)?;
+            let (mut b, bt) = operand(right)?;
+            if a > b {
+                std::mem::swap(&mut a, &mut b);
+                mask = (mask & 2) | ((mask & 1) << 2) | ((mask & 4) >> 2);
+            }
+            Some((a, b, usual_arithmetic_type(at, bt), mask))
+        };
+        let (a, b, ty, x) = predicate(left)?;
+        let (c, d, other, y) = predicate(right)?;
+        if (a, b, ty) != (c, d, other) {
+            return None;
+        }
+        match if *logical == BinaryOp::And {
+            x & y
+        } else {
+            x | y
+        } {
+            0 => Some(false),
+            7 => Some(true),
+            _ => None,
+        }
     }
 
     // Prove a fresh literal or a private immutable object's initialized
@@ -11165,9 +12322,12 @@ impl<'a> FunctionLowerer<'a> {
                     )
                     .ok()?;
                 }
-                // Optional proof only: unsupported representations retain
-                // their ordinary runtime initialization and read.
-                _ => return None,
+                // Optional byte proof, not a second initializer. Leave
+                // unsupported subobjects (and a flexible array's nonexistent
+                // elements) unknown in the two complementary buffers. They
+                // cannot invalidate knowledge of a separately initialized
+                // member, or become fabricated zero/pointer representations.
+                _ => {}
             }
         }
         Some(())
@@ -11261,7 +12421,7 @@ impl<'a> FunctionLowerer<'a> {
                 integer: Some(operand_value.integer),
             },
         );
-        let predicate = self.lower_condition_value(operand_value, state)?;
+        let predicate = self.lower_evaluated_condition(operand, operand_value, state)?;
         let mut keys = self.expression_join_keys(state, &[else_expression]);
         // Normalize the retained value exactly where an explicit scalar local
         // initialized from the same SSA value would appear. `keys_for`
@@ -11406,72 +12566,108 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             }));
         }
-        let direct =
-            match callee {
-                CHirExpr::Ident {
-                    symbol,
-                    spelling,
-                    facts,
-                    span: designator_span,
-                } if facts.category() == ExprCategory::FunctionDesignator => {
-                    let designator = self.unit.symbols().symbol(*symbol).map_err(|_| {
-                        LowerError::UnknownSymbol {
+        let direct = match callee {
+            CHirExpr::Ident {
+                symbol,
+                spelling,
+                facts,
+                span: designator_span,
+            } if facts.category() == ExprCategory::FunctionDesignator => {
+                let designator =
+                    self.unit
+                        .symbols()
+                        .symbol(*symbol)
+                        .map_err(|_| LowerError::UnknownSymbol {
                             symbol: *symbol,
                             span: *designator_span,
-                        }
-                    })?;
-                    if designator.kind() != SymbolKind::Function
-                        || designator.spelling() != spelling
-                        || !evocc_chir::type_at_use_matches_binding(
-                            self.unit.types(),
-                            facts.ty(),
-                            designator.ty(),
-                        )
-                    {
-                        return Err(LowerError::UnsupportedExpression {
-                            span: *designator_span,
-                            feature: "function designator disagrees with its semantic identity",
-                        });
+                        })?;
+                if designator.kind() != SymbolKind::Function
+                    || designator.spelling() != spelling
+                    || !evocc_chir::type_at_use_matches_binding(
+                        self.unit.types(),
+                        facts.ty(),
+                        designator.ty(),
+                    )
+                {
+                    return Err(LowerError::UnsupportedExpression {
+                        span: *designator_span,
+                        feature: "function designator disagrees with its semantic identity",
+                    });
+                }
+                if self.unit.symbols().is_builtin_function(*symbol) {
+                    if evocc_types::neon::signature(spelling).is_some() {
+                        return self.lower_neon_call(spelling, facts.ty(), arguments, span, state);
                     }
-                    if self.unit.symbols().is_builtin_function(*symbol) {
-                        match spelling.as_str() {
-                            "__builtin_extract_return_addr" => {
-                                let [argument] = arguments.as_slice() else {
-                                    return Err(LowerError::UnsupportedExpression {
-                                        span,
-                                        feature: "return-address extraction arity",
-                                    });
-                                };
-                                return self.lower_expr(argument, state).map(Some);
-                            }
-                            "__builtin_prefetch" => {
-                                // A target hint is optional; evaluating its
-                                // operands is not. Keep their effects once.
-                                for argument in arguments {
-                                    self.lower_discarded_expr(argument, state)?;
-                                }
-                                return Ok(None);
-                            }
-                            "alloca" => {
+                    match spelling.as_str() {
+                        "__sync_synchronize" => {
+                            if !arguments.is_empty() {
                                 return Err(LowerError::UnsupportedExpression {
                                     span,
-                                    feature: "malformed dynamic allocation call",
+                                    feature: "full memory barrier arity",
                                 });
                             }
-                            _ => {}
+                            // Use the existing opaque, ordered assembly
+                            // path: this is a hardware fence, not a call.
+                            let assembly = InlineAssembly {
+                                template: "dmb ish".into(),
+                                volatile: true,
+                                outputs: vec![],
+                                inputs: vec![],
+                                results: vec![],
+                                clobbers: vec!["memory".into()],
+                                mem_in: self.token(state, EnvKey::Memory)?.value,
+                                world_in: self.token(state, EnvKey::World)?.value,
+                                mem_out: self.fresh_value(EvoIRType::Mem(Region::All)),
+                                world_out: self.fresh_value(EvoIRType::World),
+                            };
+                            assembly
+                                .validate(&[])
+                                .map_err(|reason| LowerError::AsmOperand { span, reason })?;
+                            self.replace_effect_tokens(
+                                state,
+                                assembly.mem_out.clone(),
+                                Some(assembly.world_out.clone()),
+                            );
+                            self.emit(state, Inst::Asm(assembly))?;
+                            return Ok(None);
                         }
-                    }
-                    Some(
-                        self.functions
-                            .get(symbol)
-                            .ok_or(LowerError::UnknownSymbol {
-                                symbol: *symbol,
+                        "__builtin_extract_return_addr" => {
+                            let [argument] = arguments.as_slice() else {
+                                return Err(LowerError::UnsupportedExpression {
+                                    span,
+                                    feature: "return-address extraction arity",
+                                });
+                            };
+                            return self.lower_expr(argument, state).map(Some);
+                        }
+                        "__builtin_prefetch" => {
+                            // A target hint is optional; evaluating its
+                            // operands is not. Keep their effects once.
+                            for argument in arguments {
+                                self.lower_discarded_expr(argument, state)?;
+                            }
+                            return Ok(None);
+                        }
+                        "alloca" => {
+                            return Err(LowerError::UnsupportedExpression {
                                 span,
-                            })?,
-                    )
+                                feature: "malformed dynamic allocation call",
+                            });
+                        }
+                        _ => {}
+                    }
                 }
-                _ => None,
-            };
+                Some(
+                    self.functions
+                        .get(symbol)
+                        .ok_or(LowerError::UnknownSymbol {
+                            symbol: *symbol,
+                            span,
+                        })?,
+                )
+            }
+            _ => None,
+        };
         let function_ty = self.call_designator_function_type(callee).ok_or(
             LowerError::UnsupportedExpression {
                 span: callee.span(),
@@ -11521,12 +12717,11 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         if arguments.len() != parameter_types.len() {
-            return Err(LowerError::MalformedFunction {
+            return Err(LowerError::CallArity {
                 function: direct_name
                     .clone()
                     .unwrap_or_else(|| "<indirect>".to_owned()),
                 span,
-                reason: "call arity disagrees with the canonical prototype",
             });
         }
         let callee_key = if direct_name.is_none() {
@@ -11597,6 +12792,11 @@ impl<'a> FunctionLowerer<'a> {
                 ParamMark::ByVal(RecordShape {
                     size: layout.size_bytes,
                     align: layout.align_bytes,
+                    vector: homogeneous_vector_aggregate(self.unit.types(), expected.source),
+                    floating: evocc_chir::homogeneous_floating_aggregate(
+                        self.unit.types(),
+                        expected.source,
+                    ),
                 })
             } else {
                 ParamMark::None
@@ -11624,7 +12824,14 @@ impl<'a> FunctionLowerer<'a> {
                 }
             } else {
                 let value = self.lower_expr(argument, state)?;
-                if matches!(expected.ir, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+                if matches!(
+                    expected.ir,
+                    EvoIRType::Ptr(_)
+                        | EvoIRType::FnPtr { .. }
+                        | EvoIRType::Vec(..)
+                        | EvoIRType::F32
+                        | EvoIRType::F64
+                ) {
                     self.coerce_to_object_type(
                         value,
                         Some(argument),
@@ -11815,6 +13022,46 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         mut state: State,
     ) -> Result<Flow, LowerError> {
+        if let Some((place, bits, target_span)) =
+            evocc_chir::constant::floating_representation_store(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                self.target,
+            )
+        {
+            if let PlaceRoot::Object { symbol } = place.root() {
+                if !self.memory_symbols.contains(symbol) && place.projections().is_empty() {
+                    let TypeKind::Float(kind) =
+                        self.unit.types().get(place.value_ty()).unwrap().kind
+                    else {
+                        unreachable!("floating representation store has a floating destination");
+                    };
+                    let value = self.floating_constant(
+                        evocc_types::floating::FloatBits::from_bits(kind, bits.raw_bits())
+                            .expect("canonical floating object representation"),
+                        &state,
+                    )?;
+                    self.store_local(*symbol, value, target_span, &mut state)?;
+                    return Ok(Flow {
+                        normal: vec![state],
+                    });
+                }
+            }
+            let address = self.lower_place_address(&place, target_span, &mut state)?;
+            let value = self.wide_constant(&state, bits.ty(), bits.raw_bits())?;
+            let layout = self.place_access_layout(&place, target_span)?;
+            self.emit_memory_store_with_layout(
+                address,
+                value,
+                layout,
+                place.access_qualifiers().is_volatile,
+                &mut state,
+            )?;
+            return Ok(Flow {
+                normal: vec![state],
+            });
+        }
         match expression {
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
                 let known_truth =
@@ -11954,6 +13201,8 @@ impl<'a> FunctionLowerer<'a> {
                 record_shape = Some(RecordShape {
                     size: layout.size_bytes,
                     align: layout.align_bytes,
+                    vector: homogeneous_vector_aggregate(self.unit.types(), ty),
+                    floating: evocc_chir::homogeneous_floating_aggregate(self.unit.types(), ty),
                 });
                 let origin = self.synthetic_origin()?;
                 Some(ExprValue {
@@ -12030,7 +13279,18 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 let original =
                     self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?;
-                if matches!(
+                if evocc_evoir::floating_kind(&original.value.ty).is_some()
+                    || evocc_evoir::floating_kind(&right.value.ty).is_some()
+                {
+                    let op = evocc_chir::vector::assignment_binary(operator).ok_or(
+                        LowerError::UnsupportedExpression {
+                            span,
+                            feature: "invalid floating assignment",
+                        },
+                    )?;
+                    let result = self.floating_binary(op, original, right, state)?;
+                    self.coerce_to_object_type(result, None, place.ty(), span, state)?
+                } else if matches!(
                     original.value.ty,
                     EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
                 ) {
@@ -12059,14 +13319,32 @@ impl<'a> FunctionLowerer<'a> {
         }
         if matches!(
             self.unit.types().get(place.ty()).map(|ty| &ty.kind),
-            Some(TypeKind::Pointer(_))
+            Some(TypeKind::Pointer(_) | TypeKind::Float(_))
         ) {
             let right = self.lower_expr(assigned, state)?;
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
             } else {
                 let original = self.local(state, place.symbol(), span)?;
-                self.compute_pointer_assignment(operator, original, right, place.ty(), span, state)?
+                if evocc_evoir::floating_kind(&original.value.ty).is_some() {
+                    let op = evocc_chir::vector::assignment_binary(operator).ok_or(
+                        LowerError::UnsupportedExpression {
+                            span,
+                            feature: "invalid floating assignment",
+                        },
+                    )?;
+                    let result = self.floating_binary(op, original, right, state)?;
+                    self.coerce_to_object_type(result, None, place.ty(), span, state)?
+                } else {
+                    self.compute_pointer_assignment(
+                        operator,
+                        original,
+                        right,
+                        place.ty(),
+                        span,
+                        state,
+                    )?
+                }
             };
             self.store_local(place.symbol(), result.clone(), span, state)?;
             return Ok(result);
@@ -12075,6 +13353,16 @@ impl<'a> FunctionLowerer<'a> {
         let right = self.lower_expr(assigned, state)?;
         let result = if operator == AssignmentOp::Simple {
             self.cast(right, destination, state)?
+        } else if evocc_evoir::floating_kind(&right.value.ty).is_some() {
+            let left = self.local(state, place.symbol(), span)?;
+            let op = evocc_chir::vector::assignment_binary(operator).ok_or(
+                LowerError::UnsupportedExpression {
+                    span,
+                    feature: "invalid floating assignment",
+                },
+            )?;
+            let value = self.floating_binary(op, left, right, state)?;
+            self.cast(value, destination, state)?
         } else {
             let left = self.local(state, place.symbol(), span)?;
             let computed = if matches!(operator, AssignmentOp::ShiftLeft | AssignmentOp::ShiftRight)
@@ -12170,6 +13458,17 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
         let original = self.local(state, place.symbol(), span)?;
+        if evocc_evoir::floating_kind(&original.value.ty).is_some() {
+            let updated = self.floating_increment(original.clone(), operator, state)?;
+            self.store_local(place.symbol(), updated.clone(), span, state)?;
+            return Ok(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                    updated
+                } else {
+                    original
+                },
+            );
+        }
         if matches!(
             original.value.ty,
             EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
@@ -12352,6 +13651,98 @@ impl<'a> FunctionLowerer<'a> {
         let address_key = self.retain_temporary(address.clone(), state);
         let volatile = place.access_qualifiers().is_volatile;
         let access_layout = self.place_access_layout(place, target_span)?;
+        if operator != AssignmentOp::Simple
+            && evocc_chir::complex::rank(self.unit.types(), place.value_ty()).is_some()
+        {
+            let right = self.lower_expr(assigned, state)?;
+            let address = state.env[&address_key].value.clone();
+            let left = ExprValue {
+                value: address,
+                integer: CIntegerType::ULONG,
+            };
+            let op = evocc_chir::vector::assignment_binary(operator)
+                .expect("compound complex operation");
+            let result = self.lower_complex_values(
+                evocc_chir::complex::ComplexOp::Binary(op),
+                &[
+                    Some(place.value_ty()),
+                    evocc_chir::vector::expression_type(self.unit.types(), assigned),
+                ],
+                place.value_ty(),
+                vec![left, right],
+                span,
+                state,
+            )?;
+            let address = state.env.remove(&address_key).unwrap().value;
+            self.emit_representation_copy(
+                address.clone(),
+                result.value,
+                place.value_ty(),
+                CopyVolatility::new(false, volatile),
+                span,
+                state,
+            )?;
+            return Ok(ExprValue {
+                value: address,
+                integer: CIntegerType::ULONG,
+            });
+        }
+        if operator != AssignmentOp::Simple
+            && evocc_chir::vector::shape(self.unit.types(), place.value_ty()).is_some()
+        {
+            let right = self.lower_expr(assigned, state)?;
+            let address = state.env[&address_key].value.clone();
+            let left = if is_wide_vector(self.unit.types(), place.value_ty()) {
+                ExprValue {
+                    value: address.clone(),
+                    integer: CIntegerType::ULONG,
+                }
+            } else {
+                self.emit_memory_load_with_layout(
+                    address,
+                    place.value_ty(),
+                    volatile,
+                    target_span,
+                    state,
+                    access_layout,
+                )?
+            };
+            let op =
+                evocc_chir::vector::assignment_binary(operator).expect("compound vector operation");
+            let result = self.lower_vector_values(
+                &evocc_chir::vector::VectorOp::Binary(op),
+                &[
+                    Some(place.value_ty()),
+                    evocc_chir::vector::expression_type(self.unit.types(), assigned),
+                ],
+                place.value_ty(),
+                vec![left, right],
+                span,
+                state,
+            )?;
+            let address = state.env.remove(&address_key).unwrap().value;
+            if is_wide_vector(self.unit.types(), place.value_ty()) {
+                self.emit_aggregate_transfer(
+                    address.clone(),
+                    result.value,
+                    place.value_ty(),
+                    CopyVolatility::new(false, volatile),
+                    span,
+                    state,
+                )?;
+                return Ok(ExprValue {
+                    value: address,
+                    integer: CIntegerType::ULONG,
+                });
+            }
+            return self.emit_memory_store_with_layout(
+                address,
+                result,
+                access_layout,
+                volatile,
+                state,
+            );
+        }
         if self.is_aggregate_type(place.value_ty()) {
             if operator != AssignmentOp::Simple {
                 return Err(LowerError::UnsupportedExpression {
@@ -12412,7 +13803,18 @@ impl<'a> FunctionLowerer<'a> {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
             let original = original.expect("memory compound assignment loaded its left value");
-            if matches!(
+            if evocc_evoir::floating_kind(&original.value.ty).is_some()
+                || evocc_evoir::floating_kind(&right.value.ty).is_some()
+            {
+                let op = evocc_chir::vector::assignment_binary(operator).ok_or(
+                    LowerError::UnsupportedExpression {
+                        span,
+                        feature: "invalid floating assignment",
+                    },
+                )?;
+                let result = self.floating_binary(op, original, right, state)?;
+                self.coerce_to_object_type(result, None, place.value_ty(), span, state)?
+            } else if matches!(
                 original.value.ty,
                 EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
             ) {
@@ -12473,6 +13875,23 @@ impl<'a> FunctionLowerer<'a> {
                 access_layout,
             )?
         };
+        if evocc_evoir::floating_kind(&original.value.ty).is_some() {
+            let updated = self.floating_increment(original.clone(), operator, state)?;
+            self.emit_memory_store_with_layout(
+                address,
+                updated.clone(),
+                access_layout,
+                place.access_qualifiers().is_volatile,
+                state,
+            )?;
+            return Ok(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                    updated
+                } else {
+                    original
+                },
+            );
+        }
         if matches!(
             original.value.ty,
             EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
@@ -12554,6 +13973,15 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<Value, LowerError> {
         let value = self.lower_expr(expression, state)?;
+        self.lower_evaluated_condition(expression, value, state)
+    }
+
+    fn lower_evaluated_condition(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        value: ExprValue,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
         // Materialize a proven truth only after performing the expression.
         // Its loads, calls and obligations still run; the truth can now cross
         // a short-circuit join just like any other constant SSA value.
@@ -12564,6 +13992,11 @@ impl<'a> FunctionLowerer<'a> {
                     .value);
             }
         }
+        if let Some(ty) = evocc_chir::vector::expression_type(self.unit.types(), expression)
+            .filter(|ty| evocc_chir::complex::rank(self.unit.types(), *ty).is_some())
+        {
+            return self.complex_truth(value, ty, expression.span(), state);
+        }
         self.lower_condition_value(value, state)
     }
 
@@ -12572,6 +14005,9 @@ impl<'a> FunctionLowerer<'a> {
         value: ExprValue,
         state: &State,
     ) -> Result<Value, LowerError> {
+        if evocc_evoir::floating_kind(&value.value.ty).is_some() {
+            return self.floating_truth(value, state);
+        }
         if value.value.ty == EvoIRType::Bits(1) {
             return Ok(value.value);
         }
@@ -12606,6 +14042,9 @@ impl<'a> FunctionLowerer<'a> {
                 value: condition,
                 integer: target,
             });
+        }
+        if evocc_evoir::floating_kind(&value.value.ty).is_some() {
+            return self.floating_to_integer(value, target, state);
         }
         if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
             let result = self.fresh_value(EvoIRType::Bits(64));
@@ -13576,6 +15015,27 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         calls.addressed_compound |= matches!(root, CHirExpr::CompoundLit(..));
     }
     match expression {
+        CHirExpr::Floating(operation) => {
+            for operand in &operation.operands {
+                collect_references_expr(operand, calls);
+            }
+        }
+        CHirExpr::Vector(operation) => {
+            for operand in &operation.operands {
+                collect_references_expr(operand, calls);
+            }
+        }
+        CHirExpr::Complex(operation) => {
+            for operand in &operation.operands {
+                collect_references_expr(operand, calls);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                collect_symbols_expr(operand, &mut calls.unstable_objects);
+                collect_references_expr(operand, calls);
+            }
+        }
         CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::LabelAddress { label, .. } => {
             calls.labels.insert(
@@ -13621,7 +15081,8 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             collect_references_expr(left, calls);
             collect_references_expr(right, calls);
         }
@@ -13842,6 +15303,26 @@ fn live_before_stmt(
 
 fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
     match expression {
+        CHirExpr::Complex(operation) => {
+            for operand in operation.operands.iter().rev() {
+                live_before_expr(operand, live);
+            }
+        }
+        CHirExpr::Floating(operation) => {
+            for operand in operation.operands.iter().rev() {
+                live_before_expr(operand, live);
+            }
+        }
+        CHirExpr::Vector(operation) => {
+            for operand in operation.operands.iter().rev() {
+                live_before_expr(operand, live);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands().rev() {
+                live_before_expr(operand, live);
+            }
+        }
         CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             live.insert(*symbol);
@@ -13899,7 +15380,8 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             live_before_expr(right, live);
             live_before_expr(left, live);
         }
@@ -14049,6 +15531,26 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
 
 fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<SymbolId>) {
     match expression {
+        CHirExpr::Complex(operation) => {
+            for operand in &operation.operands {
+                collect_symbols_expr(operand, symbols);
+            }
+        }
+        CHirExpr::Floating(operation) => {
+            for operand in &operation.operands {
+                collect_symbols_expr(operand, symbols);
+            }
+        }
+        CHirExpr::Vector(operation) => {
+            for operand in &operation.operands {
+                collect_symbols_expr(operand, symbols);
+            }
+        }
+        CHirExpr::Atomic(access) => {
+            for operand in access.operands() {
+                collect_symbols_expr(operand, symbols);
+            }
+        }
         CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
         CHirExpr::Ident { symbol, .. } => {
             symbols.insert(*symbol);
@@ -14101,7 +15603,8 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
-        | CHirExpr::Elvis(left, right, _) => {
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::BuiltinExpect(left, right, _) => {
             collect_symbols_expr(left, symbols);
             collect_symbols_expr(right, symbols);
         }
@@ -14435,6 +15938,10 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::Vector(operation) => operation.values_mut(),
+        Inst::Floating(operation) => operation.values_mut(),
+        Inst::Atomic(access) => access.values_mut(),
+        Inst::TlsAddr(access) => access.values_mut(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)
             .chain(edges.iter_mut().flat_map(|edge| &mut edge.arguments))
             .collect(),
@@ -14639,6 +16146,70 @@ mod tests {
     use super::*;
 
     #[test]
+    fn vector_declarator_checks_the_attribute_value_and_base_type() {
+        use evocc_chir::{
+            AppliedAttribute, Attribute, AttributeArgument, AttributePlacement, AttributeSyntax,
+        };
+        use evocc_types::{CanonicalType, IntRank, Qualifiers, VectorFamily};
+
+        let mut types = TypeInterner::new();
+        let scalar = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let other = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::UInt),
+            qualifiers: Qualifiers::default(),
+        });
+        let vector = types.intern(CanonicalType {
+            kind: TypeKind::Vector {
+                element: scalar,
+                lanes: 4,
+                family: VectorFamily::Gnu,
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let span = SourceSpan::new(evocc_common::FileId::new(0), 0, 1, 1, 1);
+        let mut attribute = Attribute {
+            name: "vector_size".into(),
+            written: "vector_size".into(),
+            syntax: AttributeSyntax::Gnu,
+            placement: AttributePlacement::DeclarationSpecifiers,
+            arguments: vec![AttributeArgument {
+                text: "16".into(),
+                span,
+                integer: Some(16),
+            }],
+            applied: Some(AppliedAttribute::VectorSize),
+            span,
+        };
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let matches = |attribute: &Attribute, base| {
+            evocc_chir::vector::attribute_matches_base(
+                &types,
+                &target,
+                std::slice::from_ref(attribute),
+                vector,
+                base,
+            )
+        };
+        assert!(matches(&attribute, scalar));
+        assert!(!matches(&attribute, other));
+        assert!(!evocc_chir::vector::attribute_matches_base(
+            &types,
+            &target,
+            &[],
+            vector,
+            scalar
+        ));
+        attribute.arguments[0].integer = Some(32);
+        assert!(!matches(&attribute, scalar));
+        attribute.arguments[0].integer = Some(16);
+        attribute.applied = None;
+        assert!(!matches(&attribute, scalar));
+    }
+
+    #[test]
     fn array_completion_only_relaxes_the_initialized_outermost_bound() {
         use evocc_types::{CanonicalType, IntRank, Qualifiers};
 
@@ -14665,15 +16236,37 @@ mod tests {
             layers: vec![layer(ArrayBound::Unbounded)],
             span,
         };
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
         assert!(written_declarator_matches(
-            &types, &written, array, int, None, true, false
+            &types,
+            &written,
+            array,
+            int,
+            None,
+            true,
+            false,
+            (&target, &[])
         ));
         assert!(!written_declarator_matches(
-            &types, &written, array, int, None, false, false
+            &types,
+            &written,
+            array,
+            int,
+            None,
+            false,
+            false,
+            (&target, &[])
         ));
         written.layers[0] = layer(ArrayBound::Fixed(3));
         assert!(!written_declarator_matches(
-            &types, &written, array, int, None, true, false
+            &types,
+            &written,
+            array,
+            int,
+            None,
+            true,
+            false,
+            (&target, &[])
         ));
         let nested = types.intern(CanonicalType {
             kind: TypeKind::Array {
@@ -14684,7 +16277,14 @@ mod tests {
         });
         written.layers = vec![layer(ArrayBound::Fixed(2)), layer(ArrayBound::Unbounded)];
         assert!(!written_declarator_matches(
-            &types, &written, nested, int, None, true, false
+            &types,
+            &written,
+            nested,
+            int,
+            None,
+            true,
+            false,
+            (&target, &[])
         ));
     }
 

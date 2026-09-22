@@ -1,0 +1,60 @@
+LLVM floating-builtin original-source audit, 2026-09-16
+Image: evo-flight-lab:sealed; linux/arm64; GCC 14.2.0-19 / Clang 19.1.7
+Image SHA256: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Unchanged sources from LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
+For each: cc -std=gnu11 -O0/-O2 SOURCE -lm -o program; execute program.
+compare-fp-3.c also retains its original -fno-trapping-math.
+Every listed source compiles and exits 0 in all four fixed-oracle configurations.
+Full commands, diagnostics and outputs: .build/vector-targeted/llvm-floating-builtins-audit.jsonl.
+Each disposition additionally binds the original LLVM compile arguments in the ledger.
+This is not an EvoCC execution PASS or a newly measured full-campaign count.
+builtin-nan-1.c is deliberately excluded: it only compares constant representations with memcmp.
+Float/classify.c is also excluded: GCC lacks one of its builtin spellings.
+
+Paths below are relative to SingleSource/Regression/C/gcc-c-torture/execute/.
+
+pr44683.c 53a119ac02d6158753b6d384c8ec7bb3a1b21ee6c370de0df9bab071bfa710d7
+main calls copysign_bug with double; the result depends on floating comparisons, multiplication and copysign
+
+ieee/20010114-2.c fd68df76efbbfff1cbaa3a7caf79291147e240e961aedb326dfc8e4a8a2f5094
+main calls rintf; its result depends on floating fabs, comparisons, addition and subtraction
+
+ieee/20030331-1.c 67e1f29381019213d3fbb4a87ee47493996e7ca74b94aa3d201bc89fd81b0d09
+main calls rintf; it reads the floating x object and performs fabs, comparisons and arithmetic
+
+ieee/compare-fp-1.c f15591956c78506d4d768fc2f5d549fc9351cbd6903821097af2f9cb9ffbf7cc
+main exercises floating unordered and ordered comparisons with infinities and NaNs
+
+ieee/compare-fp-3.c 6524414fd13d4e0c721a321c70c206abf328d61a3d8943366b6cf248143f0446
+main calls all_tests with floating parameters and ordered/unordered comparisons
+
+ieee/compare-fp-4.c 09a3e2b5941e9e845fae2022d0fb11524dde87f29296540d94e49db11f56d191
+main exercises floating unordered and ordered comparisons with infinities and NaNs
+
+ieee/copysign1.c 619e1de9c972cb7f5e775346d100fc0edbead41e65192f2695787baf9f3be4e0
+main calls float, double and long-double copysign routines and checks their returned representations
+
+ieee/copysign2.c 1b6ba517c494e7404b04a7a9f736764b29287b2e765da950269c167ffc59ed14
+main computes float, double and long-double copysign from floating array reads
+
+ieee/inf-1.c 0f95b0367637df8cef3bfc5622b221f31af434e0ac75f0d2af4f86a900ed9374
+main adds and compares float, double and long-double infinity values
+
+ieee/inf-2.c e58879789ff22482ced9757cd13235c55de8e5305c96558a34811447cd8af966
+main calls float, double and long-double comparison functions
+
+ieee/inf-3.c fd7bba839c6ac50df9cce9c05cd7cc423c119b6b98c93730bcb256e6752511e9
+main calls float, double and long-double comparison functions using huge-value constants
+
+ieee/pr36332.c 21abe2e90b757a8b4a9dc61ed2db5de2ebe48e26a2642a3b6fb4e9c9be295bf0
+main calls foo with long double; foo compares it to infinity
+
+ieee/pr50310.c 117f18a1e521590e26ff961595ac2b0d7bfaa0aa9df30dc5dc02497634247b3e
+main calls foo which compares floating array elements, then checks floating results
+
+ieee/pr72824-2.c ddcdc1a14132eeadd43636a81da1f86863e0051a11c7655b14f88bd358ff002f
+main reads a floating vector lane through copysignf and compares the floating result
+
+ieee/pr72824.c ae77d2495c6b51077d27296f52dd76b75143923fa6b16f8fa11bc93282d8a922
+main reads a floating array element through copysignf and compares the floating result
+

@@ -5,6 +5,29 @@ fn function(name: &str, marks: &str) -> String {
 }
 
 #[test]
+fn function_section_is_canonical_validated_metadata() {
+    let text = function(
+        "boot",
+        " align=64 patchable_entry=4,2 section=\".init.text\"",
+    );
+    let module =
+        parse_section9_module(text.as_bytes()).expect("function placement must survive IR");
+    assert_eq!(render_module(&module), text);
+    for section in [
+        "\"\"",
+        "\"bad\\x00name\"",
+        ".init.text",
+        "\".init.text\" section=\".text\"",
+    ] {
+        let malformed = text.replace("\".init.text\"", section);
+        assert!(
+            parse_section9_module(malformed.as_bytes()).is_err(),
+            "{malformed}"
+        );
+    }
+}
+
+#[test]
 fn weak_marks_round_trip_on_each_module_record() {
     let text = format!("global @value origin=0 kind=file visibility=external linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @outside size=unknown align=4 linkage=weak\n\ndeclare @missing(mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default linkage=weak\n\n{}", function("fallback", " linkage=weak"));
     let module =
@@ -17,6 +40,18 @@ fn hidden_symbol_metadata_round_trips_without_changing_linkage_strength() {
     let text = format!("global @value origin=0 kind=file visibility=hidden linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @outside size=unknown align=4 visibility=hidden\n\ndeclare @missing(mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default visibility=hidden\n\nalias @other = @value visibility=hidden\n\n{}", function("implementation", " visibility=hidden"));
     let module = parse_section9_module(text.as_bytes()).expect("hidden is not internal linkage");
     assert_eq!(render_module(&module), text);
+}
+
+#[test]
+fn protected_visibility_is_preserved_on_every_symbol_record() {
+    let text = format!("global @value origin=0 kind=file visibility=protected linkage=weak size=4 align=4 bytes=07000000 initialized=1111\n\nextern @outside size=unknown align=4 visibility=protected\n\ndeclare @missing(mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default visibility=protected\n\nalias @other = @value visibility=protected\n\n{}", function("implementation", " visibility=protected"));
+    let module = parse_section9_module(text.as_bytes())
+        .expect("protected is external linkage with component-local binding");
+    assert_eq!(render_module(&module), text);
+    for other in ["hidden", "external", "internal"] {
+        let changed = text.replacen("visibility=protected", &format!("visibility={other}"), 1);
+        assert_ne!(render_module(&module), changed);
+    }
 }
 
 #[test]

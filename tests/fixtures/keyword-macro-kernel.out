@@ -1,0 +1,86 @@
+Keyword macro expansion and original kernel replay, 2026-09-16.
+
+Minimal source:
+  #define inline inline __attribute__((__gnu_inline__))
+  inline int f(int x) { return x; }
+Before repair, preprocessing lost the attribute and the ISO-inline classifier
+omitted f. The RED asserts token expansion and linkable definition role;
+all keywords now use the existing preprocessing-identifier predicate during
+macro lookup, argument expansion and rescan. Unexpanded tokens retain their
+C keyword kind; self references still carry the expansion-inhibition flag.
+Controls cover extern, static, nested attribute macros, function-like keyword
+names across replacement boundaries, #if, and mutually recursive names.
+
+Subject debug SHA-256: cfda0a0cd8f28356a70f0697184d0d5f63439908bad40a254a08c11dd1a36e75
+Original record: .build/k7-coverage/case/pristine/arch/arm64/kvm/vgic/.vgic-its.o.cmd
+The unchanged projected command emits in 68.797 seconds (debug, concurrent
+survey). The sealed assembler succeeds. All 11 global symbol names and kinds
+match GCC, including vgic_its_get_abi; missing=[], extra=[].
+Assembly SHA-256: 233858189632c3b5b58eb4742f972ea9a02d60dff76ec4e0deb05265538ec7ad
+Object SHA-256: fee4f571dff89e5630a6a563f153cd709601557d4e02441bdebc3d8835bda1e8
+No object was installed and the running frozen survey was not modified.
+
+The frozen survey subsequently exposed the same keyword-inline defect in
+three original SCSI units. Separate replay uses release subject SHA-256
+4eba8ceeaddd6f03b148cfb97fbfec190f49404c5a8dd4ef95de9c37c1c0a98a.
+Original .o.cmd projection and the fixed assembler are reused, without
+editing source, installing objects or rewriting the live survey results.
+Full argv and name/kind lists: .build/vector-targeted/scsi-inline-replay/result.json.
+
+drivers/scsi/megaraid/megaraid_sas_base.o: 30/30 symbols, missing=[], extra=[]
+Restored dcmd_timeout_ocr_possible, megasas_dump, megasas_dump_reg_set.
+Assembly SHA-256: 25109dd018b0e91def87e3eaa23447a8eff727e38371e12d89e9c3872f5c957e
+Object SHA-256: 89111aeb979970670592b336936bf805ded269503556621031f1ff0db946380a
+drivers/scsi/megaraid/megaraid_sas_fusion.o: 25/25 symbols, missing=[], extra=[]
+Restored megasas_get_cmd_fusion.
+Assembly SHA-256: 2cf500047c11c69e0c67c6ccf29e9e80cbd9b5d60ec09ccbe08777b62da62de9
+Object SHA-256: b9a8dcc9bbca63c79fd0327b6fd73fc1eebfe053ceca0e30241abf65e2493ea1
+drivers/scsi/mpt3sas/mpt3sas_scsih.o: 30/30 symbols, missing=[], extra=[]
+Restored _scsih_allow_scmd_to_device.
+Assembly SHA-256: 3a78af19d42a8918dd6cfe9ce21023eb7825ed7d94bd0c488096a4eda8677ffa
+Object SHA-256: dc587ed1eba12c326e68a453ad67364d1c76eeada4e714b9067887776d037cca
+These are targeted compile/assembly/symbol checks, not device runtime tests.
+After K1 begins forwarding the written -funsigned-char explicitly, each of
+these three original commands is replayed once more: all succeed and emit
+byte-identical assembly to the hashes above. Commands/deltas are preserved in
+.build/vector-targeted/scsi-inline-replay/explicit-options.json. This verifies
+that particular default-equivalence; it does not justify dropping signedness
+options in general or rewriting old measurement provenance.
+
+Separate measurement-path repair: explicit /usr/ include options can name
+the existing exported toolchain root; the order and option spelling remain,
+and its bytes participate in input/cache identity. K1 harness: 158 PASS.
+The 44 files in GCC-14's compiler include directory match the sealed image
+byte for byte. xor-neon.o now reaches arm_neon.h:44 (__Float16x4_t), E1001;
+that is a remaining nominal target-type/intrinsic capability, not an FP
+execution classification. E0105 was a path projection failure.
+The wider 3,492-file export check found eight case-colliding UAPI names with
+different bytes on the host (xt_CONNMARK, xt_DSCP, xt_MARK, xt_RATEEST,
+xt_TCPMSS, ipt_ECN, ipt_TTL, ip6t_HL). Do not claim that entire export is
+byte-identical; the affected compiler include directory is identical.
+Follow-up original replay, 2026-09-16:
+lib/decompress_unlzo.o also lost parse_header in the frozen survey.
+Its source is STATIC inline long INIT parse_header(...); the same repaired
+inline keyword macro path restores the GNU external definition.
+Subject: 4eba8ceeaddd6f03b148cfb97fbfec190f49404c5a8dd4ef95de9c37c1c0a98a.
+Original .cmd projected with the now-explicit -funsigned-char; fixed assembler.
+PASS: global names/kinds 2/2 (parse_header T, unlzo T), no missing/extra.
+Assembly: 74922b1f40a9719d82381d6dd592317e41b00871bab99f534a5536a349b51f3e.
+Object: 60f29a8c13545c57938fc6e731bab51a6fea45e017954238f9e9ce1a149defc8.
+No installation, boot or decompression-runtime claim; original failed survey
+row remains intact.
+
+mm/page_alloc.o, subject bbeac066b71954fb239d5876f7ee0fda5bf2218fff9f4ebba76a6a40a33a99eb:
+the __always_inline expansion now restores __free_pages_prepare.
+Original-command emission and sealed assembly succeed; symbol names 81/81,
+missing=[], extra=[]. Assembly SHA256:
+fc5f1b53a293327abff2fd8f5d99d59c08169b164aa2b6df89d7af37627c5496.
+Object SHA256:
+a400032474a3ed6099b5f8abd09a887aaac83d958bb1e2db35a49d609f4e109c.
+The additional exact nm-kind comparison FAILS for two data objects:
+zone_names and migratetype_names are D in the subject and R in GCC.
+Both are arrays of const pointer elements. Existing EvoIR GlobalObject has
+no independent read-only field; native emission uses rodata only for string
+literals. This separate placement/metadata difference is not fixed by GNU
+inline, not counted as exact kind parity, and not silently added to the
+current names-only K1 acceptance rule. No boot or runtime claim follows.

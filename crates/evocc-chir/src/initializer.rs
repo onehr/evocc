@@ -601,7 +601,10 @@ impl<'arena> InitPlan<'arena> {
                 InitAction::CopyAggregate { .. }
                     if !matches!(
                         destination_kind,
-                        TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
+                        TypeKind::Struct(_)
+                            | TypeKind::Union(_)
+                            | TypeKind::BuiltinVaList
+                            | TypeKind::Vector { .. }
                     ) =>
                 {
                     return Err(InitPlanError::AggregateDestinationIsNotRecord {
@@ -680,7 +683,10 @@ fn paths_overlap(
 
 fn shared_step_type(types: &TypeInterner, current: TypeId, step: SubobjectStep) -> Option<TypeId> {
     match (step, &types.get(current)?.kind) {
-        (SubobjectStep::Index { .. }, TypeKind::Array { element, .. }) => Some(*element),
+        (
+            SubobjectStep::Index { .. },
+            TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
+        ) => Some(*element),
         (SubobjectStep::Field { field_index }, TypeKind::Struct(tag) | TypeKind::Union(tag)) => {
             let TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) =
                 &types.tag(*tag)?.state
@@ -735,6 +741,17 @@ fn resolve_path(
                             bound,
                         });
                     }
+                }
+                element
+            }
+            (SubobjectStep::Index { index }, TypeKind::Vector { element, lanes, .. }) => {
+                if index >= u64::from(lanes) {
+                    return Err(InitPlanError::ArrayIndexOutOfBounds {
+                        action,
+                        path: path.clone(),
+                        index,
+                        bound: u64::from(lanes),
+                    });
                 }
                 element
             }
@@ -810,6 +827,9 @@ fn resolve_field(
 }
 
 fn is_scalar(kind: &TypeKind) -> bool {
+    if let TypeKind::TargetBuiltin(kind) = kind {
+        return kind.layout().is_some();
+    }
     matches!(
         kind,
         TypeKind::Int(_)
@@ -851,7 +871,9 @@ fn validate_string_destination(
             && match literal.prefix {
                 StringPrefix::None | StringPrefix::U8 => matches!(
                     element_type.kind,
-                    TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                    TypeKind::Int(
+                        IntRank::Char | IntRank::SignedPlainChar | IntRank::SChar | IntRank::UChar
+                    )
                 ),
                 StringPrefix::L | StringPrefix::L16 => {
                     element_type.kind == TypeKind::Int(literal.prefix.element_rank())

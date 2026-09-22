@@ -415,12 +415,26 @@ pub enum IntegerError {
     UnsupportedOperator,
 }
 
+/// Unsigned representation of a nominal polynomial scalar. This does not
+/// make it source-type compatible with an ordinary unsigned integer.
+#[must_use]
+pub fn integer_type_for_target(kind: evocc_types::TargetBuiltinType) -> Option<CIntegerType> {
+    Some(match kind.polynomial_bits()? {
+        8 => integer_type_for_rank(IntRank::UChar),
+        16 => integer_type_for_rank(IntRank::UShort),
+        64 => CIntegerType::ULONG,
+        128 => CIntegerType::UINT128,
+        _ => return None,
+    })
+}
+
 /// Convert a canonical C integer rank into the pinned target representation.
 #[must_use]
 pub const fn integer_type_for_rank(rank: IntRank) -> CIntegerType {
     match rank {
         IntRank::Bool => CIntegerType::BOOL,
         IntRank::Char => CIntegerType::CHAR,
+        IntRank::SignedPlainChar => CIntegerType::SCHAR,
         IntRank::SChar => CIntegerType::SCHAR,
         IntRank::UChar => CIntegerType::UCHAR,
         IntRank::Short => CIntegerType::SHORT,
@@ -469,27 +483,20 @@ pub fn floating_literal_to_integer(
     literal: FloatLit,
     target: CIntegerType,
 ) -> Result<CInteger, IntegerError> {
-    let value = literal.value;
+    let value = literal
+        .value
+        .real()
+        .ok_or(IntegerError::ConversionOutOfRange)?;
     if !value.is_finite() {
         return Err(IntegerError::ConversionOutOfRange);
     }
     if target == CIntegerType::BOOL {
-        return Ok(CInteger::new(u64::from(value != 0.0), target));
+        return Ok(CInteger::new(u64::from(!value.is_zero()), target));
     }
-    let truncated = value.trunc();
-    if target.signed {
-        let bound = 2_f64.powi(i32::from(target.bits) - 1);
-        if truncated < -bound || truncated >= bound {
-            return Err(IntegerError::ConversionOutOfRange);
-        }
-        Ok(CInteger::from_raw((truncated as i128) as u128, target))
-    } else {
-        let upper_bound = 2_f64.powi(i32::from(target.bits));
-        if truncated < 0.0 || truncated >= upper_bound {
-            return Err(IntegerError::ConversionOutOfRange);
-        }
-        Ok(CInteger::from_raw(truncated as u128, target))
-    }
+    value
+        .to_integer(u16::from(target.bits), target.signed)
+        .map(|bits| CInteger::from_raw(bits, target))
+        .ok_or(IntegerError::ConversionOutOfRange)
 }
 
 /// Select a literal type using the C11 candidate lists and the pinned ABI.
@@ -586,11 +593,16 @@ pub fn integer_from_mathematical(value: i128, ty: CIntegerType) -> Result<CInteg
 /// Evaluate a C integer unary operator after integer promotion.
 pub fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, IntegerError> {
     let operand = operand.promoted();
+    eval_unary_at_type(op, operand)
+}
+
+/// Evaluate at an already selected operand width (including a vector lane).
+pub fn eval_unary_at_type(op: UnaryOp, operand: CInteger) -> Result<CInteger, IntegerError> {
     match op {
         UnaryOp::Plus => Ok(operand),
         UnaryOp::Abs => {
             if operand.ty.is_signed() && operand.mathematical_value() < 0 {
-                eval_unary_integer(UnaryOp::Neg, operand)
+                eval_unary_at_type(UnaryOp::Neg, operand)
             } else {
                 Ok(operand)
             }
@@ -652,6 +664,21 @@ pub fn eval_binary_integer(
         })));
     }
     let (left, right, ty) = converted_pair(left, right);
+    eval_binary_at_type(op, left, right, ty)
+}
+
+/// Integer arithmetic after the caller has selected the operation width.
+/// Unlike C scalar arithmetic, vector lanes are never promoted to `int`.
+pub fn eval_binary_at_type(
+    op: BinaryOp,
+    left: CInteger,
+    right: CInteger,
+    ty: CIntegerType,
+) -> Result<CInteger, IntegerError> {
+    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+        return eval_integer_shift(op, left.cast(ty), right);
+    }
+    let (left, right) = (left.cast(ty), right.cast(ty));
     if matches!(
         op,
         BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::Eq | BinaryOp::Ne

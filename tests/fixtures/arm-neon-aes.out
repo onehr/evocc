@@ -1,0 +1,18 @@
+2026-09-19, evo-flight-lab:sealed, linux/arm64, network none.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+gcc-14 14.2.0-19 / clang-19 19.1.7:
+  CC -std=gnu11 -march=armv8-a+crypto -O{0,2} arm-neon-aes.c -o probe
+  All four builds and executions exit 0, no program output.
+Independent byte-table and GF column checks, forward/inverse row permutation,
+round-key XOR before substitution, and operand evaluation counts agree.
+Reference: https://arm-software.github.io/acle/neon_intrinsics/advsimd.html
+RED: target_aes_rounds_preserve_byte_order_and_operand_evaluation compiles,
+  fails E3052 at __builtin_aarch64_crypto_aesev16qi_uuu; no build errors.
+Subject C-HIR, EvoIR and MIR interpreters: main returns 0.
+EvoIR and EvoMIR render/parse round trips pass; wrong arity and equal-size
+non-vector arguments are rejected, and indeterminate byte dependency checks
+retain E3001 only when an unknown byte is consumed.
+The emitted assembly, linked independently by both fixed compilers, returns 0.
+Independent proof check accepts the scalar rewrite but rejects substitution
+of AES decryption for encryption outside that rewrite.
+Original aesce.c and full Mbed TLS replay remain separate acceptance gates.

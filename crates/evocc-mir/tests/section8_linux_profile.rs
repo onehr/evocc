@@ -407,13 +407,31 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
     // The symbol prefix.
     assert!(darwin.contains("\n.globl _main\n"), "{darwin}");
     assert!(linux.contains("\n.globl main\n"), "{linux}");
-    // The page-relative pair.
+    // The page-relative pair. Default-visible ELF definitions remain
+    // interposable under PIC; defining counter in this module does not make
+    // the final executable/DSO binding local.
     assert!(darwin.contains("_counter@PAGE"), "{darwin}");
     assert!(darwin.contains("_counter@PAGEOFF"), "{darwin}");
     assert!(linux.contains("adrp x"), "{linux}");
-    assert!(linux.contains(":pg_hi21:counter"), "{linux}");
-    assert!(linux.contains(":lo12:counter"), "{linux}");
+    assert!(linux.contains(":got:counter"), "{linux}");
+    assert!(linux.contains("#:got_lo12:counter"), "{linux}");
     assert!(!linux.contains("@PAGE"), "{linux}");
+    let hidden = parse_section9_module(
+        source
+            .replace("visibility=external", "visibility=hidden")
+            .as_bytes(),
+    )
+    .expect("hidden EvoIR");
+    let hidden = compile_module_for(Target::Linux, &hidden, &|_| true).expect("hidden Linux");
+    assert!(
+        hidden
+            .lines()
+            .any(|line| line.trim_start().starts_with("adrp ") && line.ends_with(", counter")),
+        "{hidden}"
+    );
+    assert!(!hidden.contains(":pg_hi21:"), "{hidden}");
+    assert!(hidden.contains(":lo12:counter"), "{hidden}");
+    assert!(!hidden.contains(":got:counter"), "{hidden}");
     // The section names.
     assert!(darwin.starts_with(".section __TEXT,__text"), "{darwin}");
     assert!(linux.starts_with(".text\n"), "{linux}");

@@ -1,0 +1,22 @@
+2026-09-14 UTC; evo-flight-lab:sealed, linux/arm64, --network none.
+Source: full-memory-barrier.c, unchanged for both compilers.
+For cc in gcc-14 clang-19 and opt in 0 2:
+  $cc -std=gnu11 -O$opt full-memory-barrier.c -o /tmp/barrier
+  /tmp/barrier
+  $cc -std=gnu11 -O$opt -S full-memory-barrier.c -o /tmp/barrier.s
+
+gcc-14 O0: compile 0; native exit 0; publish: store data, dmb ish, store ready.
+gcc-14 O2: compile 0; native exit 0; publish: store data, dmb ish, store ready.
+clang-19 O0: compile 0; native exit 0; publish: store data, dmb ish, store ready.
+clang-19 O2: compile 0; native exit 0; publish: store data, dmb ish, store ready.
+
+Subject SHA-256 3962928d6d8238f8c521b06e5d4f6dfa4e4b4f26aef2ce72d7ce96674a0a4393:
+  target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm full-memory-barrier.c
+  gcc-14 -no-pie full-memory-barrier.s -o /tmp/barrier
+  /tmp/barrier
+Native exit 0; publish: str w0 (data), dmb ish, str w1 (ready).
+C-HIR and EvoIR interpreters reach E3021, as the ordered-assembly boundary requires.
+
+The native exits check values and the void/unevaluated type query. They do not
+by themselves establish inter-thread ordering: that requirement is checked by
+the emitted full-barrier instruction and ordered memory-clobber representation.
