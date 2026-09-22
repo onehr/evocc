@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-15",
+  "base": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
+  "dirty": true,
+  "releaseBinary": "target/frontend/release/evocc",
+  "releaseSha256": "eedbfb5fde307999b45856eb264536b5a6f12a4d3665a30eb5ca8b164bcd784e",
+  "status": "TARGETED_PASS",
+  "scope": ["ELF lifecycle", "integer vectors", "thread-local storage"],
+  "authority": "User-supplied Q2/Q3/Q6 review; EvoIR 1.9.101 and EvoMIR 0.32",
+  "execution": "Tailored interpreter, native and original-source replays; no complete benchmark campaign or clone",
+  "fixtureRecord": "tests/fixtures/elf-vector-tls.out",
+  "target": "aarch64-unknown-linux-gnu",
+  "oracleImage": "evo-flight-lab:sealed",
+  "runtime": "glibc 2.41 (Debian 2.41-12+deb13u3)",
+  "referenceCompilers": ["GCC-14 14.2.0-19", "Clang-19 19.1.7"],
+  "focused": {
+    "lifecycleAndTlsTests": 11,
+    "integerVectorTests": 10,
+    "threadObjectTests": 3,
+    "loadInstanceMetadataTest": 1,
+    "representationAndProofChecks": "Independent non-default field sentinels, HVA signature mutation, vector lane mutation, constructor priority and TLS model mutation all pass",
+    "nativeFixedVectorAbi": {"passed": 9, "failed": 0},
+    "nativeTlsCrossCompilerLateLoad": {"passed": 8, "failed": 0},
+    "nativeTlsExecutableModels": {"passed": 4, "failed": 0},
+    "nativeTlsLateLoadModels": {"passed": 2, "failed": 0},
+    "nativeVectorVarargs": {"passed": 8, "oracleUnusable": 1, "compilerFailures": 0},
+    "lifecycle": "Priority, retention under gc-sections, return/exit versus immediate termination, and refcounted DSO unload/reload PASS"
+  },
+  "originalReplays": [
+    {"source": "LLVM SingleSource/UnitTests/Vector/divides.c", "status": "PASS", "output": "U3.V = <1 1 1 1>\nS3.V = <1 1 1 1>\n"},
+    {"source": "LLVM SingleSource/Regression/C/ConstructorDestructorAttributes.c", "status": "PASS", "output": "Create!\nCreate!\n"},
+    {"source": "GCC torture pr105613.c", "status": "PASS", "exitCode": 0},
+    {"source": "GCC torture 20050607-1.c", "status": "PASS", "exitCode": 0},
+    {"source": "GCC torture pr94591.c", "status": "PASS", "exitCode": 0, "note": "Explicitly admitted GCC-only __builtin_shuffle"},
+    {"source": "GCC torture pr108292.c", "status": "not-applicable", "reason": "Takes a vector-element address; Clang-19 rejects and the consensus profile refuses it", "evidence": "tests/fixtures/elf-vector-tls.out"},
+    {"source": "jq src/jv_aux.c", "status": "REFUSED", "formerTlsErrorRemoved": true, "next": "77:7 E2001 __builtin_isnan", "installed": false}
+  ],
+  "boundaries": [
+    "Sub-8-byte vector ABI: both reference self-controls pass and both crossed controls fail; native ABI refused E4002, local operations supported.",
+    "GCC-14 O2 HVA varargs self-control fails too; never counted as subject PASS.",
+    "Clang-19 folds a direct source TLS-alias address comparison unequal; EvoCC/GCC native and both subject interpreters preserve the shared object.",
+    "Floating/polynomial NEON types and architecture intrinsics are separate populations, not included in integer vector implementation closure.",
+    "Program interpreters do not emulate pthread/dlopen; native TLS lifetime tests use the recorded loader/runtime."
+  ],
+  "layout": {"basePassed": 128, "attributedPassed": 22, "mismatches": 0, "comparison": "Fresh subject observations against frozen oracle manifests; shared target directory"},
+  "gate": {
+    "status": "PASS",
+    "crates": 16,
+    "testsPassed": 2409,
+    "testsFailed": 0,
+    "historicalIgnored": 4,
+    "ignoredReason": "Existing standing native/randomized campaign tests; no new ignored test",
+    "clippyWarnings": 0,
+    "fmt": "PASS",
+    "ruff": "PASS",
+    "pythonTestsPassed": 148,
+    "textualShapeDisagreements": 0,
+    "offlineReplay": "Not run: user explicitly replaced clone replay with in-place targeted acceptance"
+  },
+  "commands": [
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true cargo build -p evocc --release --offline -j 2",
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9f571ca --offline -j 2",
+    "python3 -m unittest discover -s tools/ladder/tests",
+    "ruff check tools/bench.py tools/ladder",
+    "python3 tools/check-textual-grammar.py",
+    "python3 tests/acceptance/day5-layout-subject.py tests/contracts/day5-layout-cases.json target/frontend/debug/examples/day5_layout_probe > .build/vector-targeted/layout-base.tsv",
+    "python3 tests/acceptance/day5-layout-corpus.py compare-subject tests/contracts/day5-layout-cases.json .build/vector-targeted/layout-base.tsv",
+    "python3 tests/acceptance/day5-layout-subject.py tests/contracts/layout-attributed-cases.json target/frontend/debug/examples/day5_layout_probe > .build/vector-targeted/layout-attributed.tsv",
+    "C30_LAYOUT_CASE_SET=attributed python3 tests/acceptance/day5-layout-corpus.py compare-subject tests/contracts/layout-attributed-cases.json .build/vector-targeted/layout-attributed.tsv"
+  ]
+}

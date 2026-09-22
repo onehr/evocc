@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260914T154648Z",
-  "subject": "4289802",
-  "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+  "run": "20260919T222317Z",
+  "subject": "9f571ca",
+  "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -67,43 +67,42 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1331,
-     "refused": 265,
-     "not-applicable": 89,
-     "fail": 7
+     "pass": 1505,
+     "not-applicable": 61,
+     "refused": 120,
+     "fail": 6
     },
     "dispositionCounts": {
-     "PASS": 1330,
-     "compiler-failure": 189,
-     "FP-deferred": 11,
-     "not-applicable": 162,
-     "oracle-unusable": 0
+     "PASS": 1504,
+     "compiler-failure": 0,
+     "FP-deferred": 39,
+     "not-applicable": 146,
+     "oracle-unusable": 3
     },
     "refusalsByCode": {
-     "E3101": 114,
-     "E2201": 22,
-     "E1205": 19,
-     "E2001": 19,
-     "E2102": 17,
-     "E2203": 16,
-     "E0112": 10,
+     "E1205": 20,
+     "E3050": 15,
+     "E3049": 12,
+     "E2001": 11,
+     "E2203": 8,
+     "E0112": 8,
      "E2920": 7,
-     "E1001": 6,
-     "E3021": 5,
      "E2940": 5,
+     "E1003": 4,
+     "E3051": 4,
      "E2933": 3,
      "E2903": 3,
+     "E1001": 3,
      "E2913": 2,
-     "E3026": 2,
-     "E1006": 2,
-     "E3030": 2,
+     "E2101": 2,
+     "E3101": 2,
      "E2939": 2,
-     "E1007": 2,
-     "E0002": 1,
+     "E2102": 2,
      "E2935": 1,
+     "E2948": 1,
      "E2202": 1,
-     "E2101": 1,
-     "E2208": 1,
+     "other": 1,
+     "E4002": 1,
      "E2204": 1,
      "E2929": 1
     },
@@ -111,17 +110,25 @@
      "E3008 interpreter-fuel-exhausted": 2,
      "E3039 external-call-not-executable": 2,
      "E3004 signed-integer-overflow": 1,
-     "E3001 read-of-uninitialized-object": 1,
-     "E3021 not-lowered": 1
+     "E3001 read-of-uninitialized-object": 1
     },
     "appliedOptions": {
      "-std=gnu89": 75,
+     "-fgnu89-inline": 12,
+     "-std=gnu17": 13,
+     "-std=c99": 1,
      "-fwrapv": 12,
-     "-fno-strict-overflow": 1
+     "-ffast-math": 1,
+     "-fno-strict-overflow": 1,
+     "-O": 1,
+     "-O2": 2,
+     "-fpic": 1,
+     "-std=c89": 1,
+     "-Og": 1
     },
-    "programsWithUnhandledRequirements": 88
+    "programsWithUnhandledRequirements": 60
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260914T154648Z"
+ "evidence": ".evidence/ladder/e0/20260919T222317Z"
 }

@@ -1,0 +1,116 @@
+{
+ "schemaVersion": 1,
+ "rung": "E11",
+ "subject": "lua",
+ "authority": "docs/roadmap.md, milestone ladder",
+ "run": "20260919T231634Z",
+ "pin": "5.5.1",
+ "url": "https://www.lua.org/ftp/lua-5.5.1.tar.gz",
+ "tarballSha256": "1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce",
+ "tarball": "lua-5.5.1.tar.gz",
+ "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "target": "aarch64-unknown-linux-gnu",
+ "unitsTotal": 34,
+ "unmeasuredBuildUnits": [],
+ "unitsEvoccCompiled": 34,
+ "unitsSubstituted": 34,
+ "unitsRebuiltByMake": [],
+ "substitutedUnits": [
+  "src/lapi.o",
+  "src/lcode.o",
+  "src/lctype.o",
+  "src/ldebug.o",
+  "src/ldo.o",
+  "src/ldump.o",
+  "src/lfunc.o",
+  "src/lgc.o",
+  "src/llex.o",
+  "src/lmem.o",
+  "src/lobject.o",
+  "src/lopcodes.o",
+  "src/lparser.o",
+  "src/lstate.o",
+  "src/lstring.o",
+  "src/ltable.o",
+  "src/ltm.o",
+  "src/lundump.o",
+  "src/lvm.o",
+  "src/lzio.o",
+  "src/lauxlib.o",
+  "src/lbaselib.o",
+  "src/lcorolib.o",
+  "src/ldblib.o",
+  "src/liolib.o",
+  "src/lmathlib.o",
+  "src/loadlib.o",
+  "src/loslib.o",
+  "src/lstrlib.o",
+  "src/ltablib.o",
+  "src/lutf8lib.o",
+  "src/linit.o",
+  "src/lua.o",
+  "src/luac.o"
+ ],
+ "unitsExcluded": 0,
+ "unitsInPassingBuild": 34,
+ "outcomes": {
+  "assembled": 34
+ },
+ "refusalsByCode": {},
+ "refusals": [],
+ "excludedUnits": [],
+ "failingUnits": [],
+ "baselineTest": {
+  "passed": true,
+  "status": 0
+ },
+ "test": {
+  "passed": true,
+  "status": 0,
+  "relinkStatus": 0,
+  "stage": "pass",
+  "signature": "",
+  "regeneratedInputs": [],
+  "command": "(mkdir -p /tmp/lua-readline && ln -sf /lib/aarch64-linux-gnu/libreadline.so.8 /tmp/lua-readline/libreadline.so && export LD_LIBRARY_PATH=/tmp/lua-readline; cd ../lua-5.5.1-tests && : | ../lua-5.5.1/src/lua all.lua > ../lua-tests.out 2>&1; s=$?; cat ../lua-tests.out; test \"$s\" = 0 && grep -q \"final OK\" ../lua-tests.out)",
+  "completedTrial": "attempt-1"
+ },
+ "attempts": [
+  {
+   "passed": true,
+   "stage": "pass",
+   "signature": "",
+   "status": 0,
+   "relinkStatus": 0,
+   "regeneratedInputs": [],
+   "unitCount": 34
+  }
+ ],
+ "adjustments": {
+  "sysroot": {},
+  "portableBuildSymlinks": {},
+  "sysrootAdjustmentMeaning": {},
+  "includeOrder": [
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+  ],
+  "configure": "",
+  "subject": [
+   "Unmodified public all.lua, no _U, _soft or _port overrides; optional internal T module not built.",
+   "Expose the sealed runtime libreadline.so.8 under its development dlopen name libreadline.so; otherwise the upstream -E REPL check fails even with GCC.",
+   "Standard input is an empty pipe, not the container default /dev/null: the public files.lua test requires stdin to reject seeking.",
+   "Matching official tests archive SHA-256 da07b543872dc0bb2ff12aabd0c248578d78df3eb6b67efdc537a46d455c7f31.",
+   "The five dlopen test helper libraries remain reference-built; coverage counts the Lua source tree only."
+  ],
+  "buildCommand": "(make linux CC=\"gcc-14 -std=gnu99\" MYLDFLAGS=-no-pie -j2 && make -C ../lua-5.5.1-tests/libs CC=gcc-14 LUA_DIR=../../lua-5.5.1/src)",
+  "optionsTheDriverRejects": [],
+  "omittedFlags": [
+   "-Wall",
+   "-Wextra"
+  ]
+ },
+ "frontEndGaps": [],
+ "defects": [],
+ "evidence": ".evidence/ladder/lua/20260919T231634Z",
+ "summaryLine": "lua: 34 of 34 units by EvoCC in a passing build; refused by code {}"
+}

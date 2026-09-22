@@ -3,7 +3,7 @@
  "rung": "E5",
  "subject": "tinycc",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260914T162811Z",
+ "run": "20260920T000937Z",
  "pin": {
   "subject": "tinycc",
   "rung": "E5",
@@ -16,14 +16,15 @@
  "tarballSha256": {
   "tcc-0.9.27.tar.bz2": "not-fetched: savannah answered 504 during this run"
  },
- "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+ "driverSha256": "3d4dac628a655ccd1eacfd50ad200272e403151f2dfcd6295c3f03afdcc3b5e3",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": "tests-passed",
  "units": 11,
- "unitsCompiledByEvocc": 8,
- "unitsInPassingBuild": 8,
+ "unitsCompiledByEvocc": 9,
+ "unitsInPassingBuild": 9,
  "refusalsByCode": {
-  "E3101": 3
+  "E3049": 1,
+  "E3050": 1
  },
  "testResult": "tests-passed",
  "failingUnits": [],
@@ -33,31 +34,14 @@
   "sourcePageBreaksStripped": [],
   "noreturnSpecifiersRemoved": [],
   "highBytesReEscaped": [],
-  "sysroot": [
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
-    "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
-    "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
-   },
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
-    "change": "__HAVE_FLOAT128 set to 0",
-    "why": "same, for _Float128"
-   },
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
-    "change": "the AdvSIMD and SVE guards are forced closed",
-    "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
-   }
-  ],
+  "sysroot": [],
   "defines": []
  },
  "unconsumedGccOptions": {
-  "-O2": 11,
   "-Wall": 11,
   "-Wdeclaration-after-statement": 11,
   "-Wno-unused-result": 11,
   "-o": 11
  },
- "evidence": ".evidence/ladder/tinycc/20260914T162811Z"
+ "evidence": ".evidence/ladder/tinycc/20260920T000937Z"
 }

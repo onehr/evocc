@@ -1549,6 +1549,10 @@ Standing rules, replacing the day-indexed abort table:
 3. Any gate red: fix or fall back (baseline extraction, disable the rule family), never skip the gate.
 4. Every gate re-publishes the dashboard; the dashboard is the only place a number may be claimed.
 5. Order inside a stream follows measured first-error telemetry; order between streams follows this table.
+6. Commit each coherent implementation slice locally after its tailored checks, before starting the next slice.
+   Long-running campaigns must not leave stable source and harness changes uncommitted for days. If an
+   unfinished repair needs a checkpoint, its commit must name the pending validation rather than claim PASS.
+   Keep live receipts explicitly RUNNING and separate from completed evidence; pushing requires authorization.
 
 Why S sits after G1 with one executor: baseline boot needs none of S, and D1 makes boot mandatory. With a
 second executor S runs from now in parallel; that is the first thing a second executor should take.
@@ -1961,10 +1965,14 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 ![The evaluation ladder](images/evocc-ladder.png)
 
 Latest application refresh: [2026-09-15 measurements and issue inventory](notebook/benchmark-evaluation-20260915.md).
-The current non-FP frontier includes protected ELF visibility, builtin side
-effects, integer vectors, VLA scope/bounds and asm operands. Floating point
-is not the only remaining blocker. Kernel configurations and runtime tests
-retain their own separate receipts; this application run does not rerun them.
+The September 20 refresh includes implemented protected ELF visibility, builtin
+side effects, integer vectors, VLA scope/bounds, SIMD asm and scalar f32/f64.
+The current unresolved application frontier includes three LLVM large-data
+timeouts and a vector-overflow applicability decision, alongside deferred
+strict fenv, binary128, floating complex/vector execution and baseline-suite
+failures. See the dated ledger for original-program versus targeted results.
+Kernel configurations and runtime tests retain their own separate receipts;
+this application run does not rerun them.
 
 The kernel is the launch target, but "the kernel boots" is a single bit that
 arrives late. The ladder below gives Q1 (correct on real code) a reading at
@@ -1987,7 +1995,10 @@ Rules that hold for every rung:
   release driver, records its digest, checks fresh lane receipts and updates
   `tests/contracts/bench-receipt.json` and `docs/status.md`; exit 0 requires
   all selected benchmark gates to pass, exit 1 reports measured gaps, and
-  exit 2 reports an execution/evidence error. No program watchdog is relaxed.
+  exit 2 reports an execution/evidence error. Compiler and application watchdogs
+  remain frozen. A kernel selftest's whole-program runtime budget or VM lane
+  may change only with an explicit source-based justification and receipt,
+  identically for both kernels; the old result and original assertions remain.
 
 - **Pinned source.** The tarball or tag and its date are recorded here and in
   the milestone's receipt with a SHA-256 of what was actually built.
@@ -1997,9 +2008,11 @@ Rules that hold for every rung:
 - **Mixed link is the ramp, not the goal.** The receipt reports both numbers:
   units compiled by EvoCC in a passing build, and units still supplied by the
   reference compiler with the diagnostic code that kept them out.
-- **Floating point is a backend rung of its own.** EvoMIR refuses `f32`/`f64`
-  (E4001) because the kernel is built with general registers only; subjects
-  marked FP below wait for that rung and are not evidence of anything before it.
+- **Floating point is a separately measured rung.** EvoIR 1.9.103 / EvoMIR 0.33
+  now execute scalar `f32`/`f64` with the approved fixed-environment profile,
+  HFA and variadic ABI. Kernel `-mgeneral-regs-only` remains a separate boundary.
+  Binary128, floating complex/vectors and strict dynamic fenv are still deferred;
+  a passing scalar application does not admit those capabilities.
 
 | Rung | Subject | Pinned release (date, source) | Size | Oracle | Needs |
 |---|---|---|---|---|---|
@@ -2013,7 +2026,7 @@ Rules that hold for every rung:
 | E5 | TinyCC | 0.9.27 (2017-12-17, download.savannah.gnu.org/releases/tinycc) with `mob` `0fb54300b565` for AArch64 fixes | ~30 TU | `make test`; tcc built by EvoCC builds and runs its own tests | a compiler compiling a compiler |
 | E6 | toybox | 0.8.14 (2026-06-22, github.com/landley/toybox) | ~400 TU | `make tests` per applet | `printf` FP paths disabled or after the FP rung |
 | E7 | musl + libc-test | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html); libc-test from git.musl-libc.org/git/libc-test at the HEAD recorded in the first receipt (no releases exist) | ~1,000 TU | libc-test | variadic callees, aggregate ABI, TLS; the bridge to the kernel ABI |
-| F1 | Floating-point backend rung | EvoMIR revision to be written | | E0a FP cases, E3 numbers | `f32`/`f64` registers, calls, comparisons |
+| F1 **scalar slice implemented** | Floating-point backend rung | EvoIR 1.9.103 / EvoMIR 0.33 | f32/f64 | 661,848 exact independent numerical cases; mixed ABI and original applications measured separately | Strict fenv, binary128, complex/vector execution remain deferred; not full floating C conformance |
 | E8 | PolyBench/C | 4.2.1-beta (2016-05-20, sourceforge.net/projects/polybench) | 30 kernels | reference outputs (`-DPOLYBENCH_DUMP_ARRAYS`) | FP; the loop-optimization reading for Q2 |
 | E9 | llvm-test-suite `SingleSource` | tag `llvmorg-23.1.0` (2026-07-14, github.com/llvm/llvm-test-suite) | ~500 programs | reference outputs | mixed integer and FP |
 | E10 | jq | jq-1.8.2 (2026-06-20, github.com/jqlang/jq) | ~40 TU | `make check` | FP (numbers are doubles), external libs |
@@ -2043,11 +2056,16 @@ are measured, including collections with no runnable list under this arm64
 configuration/build environment. These include architecture restrictions and
 missing BTF prerequisites, not measured passes. Runtime counts
 are the upstream outer TAP program verdicts, not a count of every nested test
-assertion. Both kernels reuse the same userspace payload; every collection gets
-a fresh VM snapshot for each program, and a panic or orphaned child cannot
-prevent later programs from running. At most two VMs run concurrently. Upstream
-timeouts are unchanged; an upstream unlimited program has a documented
-300-second VM safety watchdog, plus cleanup and boot allowances.
+assertion. Both kernels use the same userspace tests and dependencies, but each
+Image has its own hash-bound module/header installation and runtime disk when
+testing a module-enabled composition. Every program gets a fresh VM snapshot,
+and a panic or orphaned child cannot prevent later programs from running.
+At most two VMs run concurrently. Collection timeouts are retained except for
+the explicitly justified per-program budgets in the runtime-policy receipt;
+an upstream unlimited program otherwise has a 300-second VM safety watchdog,
+plus cleanup and boot allowances. CPU hotplug tests requiring the fixed TCG
+lane use that same declared lane on both Images. These policies do not change
+test assertions or retroactively turn a timeout into PASS.
 The selected 125-subtest result does not close this expanded population.
 Reproduce with `python3 tools/bench.py kernel-selftest-all --jobs 2 --allow-qemu-drift`;
 add `--reuse-selftest-build` to avoid rebuilding the already installed payload.
@@ -2108,6 +2126,26 @@ namespace test to 2/2 on both Images without changing the kernel test.
 See the dated runtime update in
 [the blocker ledger](notebook/benchmark-closure.md#runtime-prerequisite-and-compiler-repairs-2026-09-14)
 and the [KUnit receipt](../tests/contracts/kernel-kunit-receipt.json).
+
+September 20 checkpoint: the old NEON compiler gap is now repaired. All twenty
+original C inputs of XOR/RAID6's three modules compile/link; explicit native
+checks pass **156/156 values and 8/8 load/unload checks on each kernel**. This
+does not replace the broader module denominator. The separate BPF/tracing
+survey finishes **6,764/6,765 assembled, zero symbol drift**; its one inline-label
+collision has a reduced test, original-unit GREEN and a passing 2,588-test gate.
+That frozen survey remains uninstalled/unlinked. A fresh repaired-compiler
+composition is running, including generated-input convergence, post-modpost
+module descriptors, actual module/BTF links and boot. Matching module payloads
+and full paired kselftests follow, not an inferred all-tests PASS. The shared
+dead-cgroup failure has now reproduced the frozen kernel's stock-retention
+behavior on both compilers; original failures, hardware limits and skips remain
+separate. Module installation now uses the original signing/depmod recipes and
+checks every installed ELF body; a supplemental selftest run also binds the
+module inventory and test-disk hash to its actual Image. The GCC control's
+745-module installation has passed this check; the new EvoCC installation
+and execution still await its active composition. Current evidence and PIDs are in the
+[benchmark notebook](notebook/benchmark-evaluation-20260915.md) and
+[K7 ledger](notebook/kernel-selftest-gaps-20260914.md).
 
 Order of attack: E0a/E0b/E0c first, because they are cheap and they find
 miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong

@@ -5,6 +5,24 @@ raw compilation/execution outcomes remain in the benchmark; a classification
 does not turn a refusal into PASS. The per-program contract binds these
 decisions to the exact source digest and requires the evidence files to exist.
 
+## Scalar floating profile update — 2026-09-20
+
+The earlier floating tables below are dated source analyses, not a blanket
+current exclusion. Scalar binary32/binary64 execution and its ABI are now
+implemented. A fresh emitted program must pass its actual link and execution;
+an old FP label cannot hide either failure or prevent a new PASS.
+Only a source-bound `deferredFeatures` review can retain a current FP refusal:
+binary16/bfloat16/binary128, floating complex/vector, or strict fenv.
+The complete scalar-profile torture run exposed 39 surviving reviewed refusals;
+reinspection of unchanged source hashes classifies 18 binary128, 15 floating
+complex and 6 floating vector. Seventeen LLVM copies with identical verified
+source hashes receive the same feature refinement, retaining their own argv
+bindings. Neither set is counted as PASS. See `torture-floating-frontier.out`.
+The current c-testsuite `00204` still requires binary128 HFA/varargs execution;
+`00174`'s new failure instead exposed missing `-lm` in the harness and was fixed,
+not waived as floating execution. Fresh complete lane results are recorded in
+the [evaluation notebook](benchmark-evaluation-20260915.md).
+
 ## Csmith unavailable-reference accounting
 
 Capture `.evidence/ladder/csmith/20260909T193124Z/results.jsonl`, subject
@@ -15,21 +33,132 @@ is identical to capture `20260909T162714Z`; generator options, defines and
 runtime digests are unchanged. A ten-second timeout alone proves neither
 undefined behavior nor nontermination.
 
+The fresh scalar-FP campaign `20260919T222655Z` again retains these same
+68 unavailable identities (932 agreements, zero mismatches). The diagnostic
+refresh below changes source analysis, not any original execution verdict.
 The reviewed two-way analysis labels account for every unavailable identity:
 
 | Campaign | Repeating source path identified | Undetermined; timeout is not a proof |
 |---|---|---|
-| base | 11, 307 (2) | 14, 33, 42, 64, 68, 83, 87, 88, 93, 112, 120, 122, 128, 161, 204, 223, 237, 239, 241, 246, 287, 315, 322, 327, 340, 345, 362, 442, 466 (29) |
-| bitfields | 307, 457 (2) | 11, 14, 21, 24, 26, 54, 69, 83, 104, 114, 115, 122, 128, 132, 146, 162, 173, 192, 206, 234, 239, 240, 242, 259, 292, 322, 340, 352, 357, 360, 362, 404, 455, 466, 481 (35) |
+| base | 11, 42, 64, 68, 83, 87, 88, 112, 120, 122, 128, 237, 241, 246, 287, 307, 315, 327 (18) | 14, 33, 93, 161, 204, 223, 239, 322, 340, 345, 362, 442, 466 (13) |
+| bitfields | 11, 69, 83, 115, 122, 128, 192, 242, 259, 307, 322, 357, 404, 457 (14) | 14, 21, 24, 26, 54, 104, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 340, 352, 360, 362, 455, 466, 481 (23) |
 
-The source arguments for these four identities are in
+The source arguments for the first four identities are in
 [the closure notebook](benchmark-closure.md); the bounded optimization probes
 for both 307 identities and bitfields/457 are in
 `.evidence/builtin-probes/20260909-csmith-loops/results.txt`.
 Their repeating source paths explain why the reference executions do not
 provide a common terminating checksum; they do not turn an unusable input
 into a passing compiler test. All 68 keep their original benchmark label,
-and individual source classification of the other 64 remains open.
+and individual source classification of the other 36 remains open.
+
+On 2026-09-20, the unchanged 68 sources were independently compiled at O0
+by both sealed oracles with a separate diagnostic sampling translation unit,
+[csmith-timeout-sample.c](../../tests/fixtures/csmith-timeout-sample.c).
+All 136 diagnostic runs reached three sampled PCs and exited **77**, meaning
+sample completion, not benchmark PASS. Source/command/runtime hashes and
+symbolized locations occupy one 154 KiB capture:
+`.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json`, SHA-256
+`6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171`.
+Sampling locates execution; it does not prove nontermination or definedness.
+Inspection of the reached source paths adds these eight identities:
+
+| Original | Source-level repeating transition |
+|---|---|
+| base/42 | Lines 129–156: `p_10` is reset to 9 and decremented to -26; the following loop immediately takes `if (p_10) goto lbl_285` before its update. Each restart repeats the reset. |
+| base/64 | Lines 312–317: unsigned `l_587` increments; `g_83` is reset to 1, then the true `if (g_83)` returns to `lbl_590` before the loop update. |
+| base/88 | Lines 89–121: one loop is skipped after resetting its index to -11; the next resets `g_6` to 9 and takes its backedge before changing it. The intervening array writes do not change the predicate. |
+| base/128, bitfields/128 | Lines 53–102: the unsigned decrement remains defined; resetting `g_3` to 0 makes its `<= -2` loop unreachable, leaving `g_15=5` and its backward branch true. The two C bodies match after excluding generator/header and final statistics comments. |
+| base/237 | Line 35: the signed destination receives an unsigned 8-bit subtraction result, always 0..255, so `> -27` remains true; subtracting 6 modulo 256 has a 128-step cycle. |
+| base/287 | Line 82: unsigned 32-bit `g_8` begins at 29 and subtracts 8 through unsigned 64-bit arithmetic. Its residue stays 5 modulo 8, so it can never reach 0 or 1, the only values that end `> 1`. |
+| bitfields/11 | Its C body matches already-reviewed base/11 after excluding those comments; both oracles again sample the same loop at line 1062. |
+
+The finite reduced transition checks in
+[csmith-loop-invariants.c](../../tests/fixtures/csmith-loop-invariants.c)
+pass both EvoCC interpreters, EvoCC native execution, and GCC-14/Clang-19
+O0/O2. Exact identities and the scope limitation are recorded in
+[csmith-loop-invariants.out](../../tests/fixtures/csmith-loop-invariants.out).
+These controls are not replacement programs, a whole-source UB proof, or
+authorization to discard any of the 68 original seeds.
+
+Seven further reached loops have a narrower, type-range explanation:
+
+| Originals | Counter update and impossible exit |
+|---|---|
+| base/112 (line 1010), bitfields/259 (154), bitfields/357 (341) | A u16 subtraction result is assigned to i32. Its range is 0..65535, so respectively `!= -26`, `> -29`, and `>= -29` stay true. |
+| base/327 (170), bitfields/192 (47), bitfields/322 (428) | A u8 subtraction result is assigned to i16/i32. Its range is 0..255, so respectively `!= -9`, `> -9`, and `>= -11` stay true. |
+| bitfields/404 (379) | The i64 counter starts at -27, then receives a u32 increment result (first 4294967270); no later value can equal -18. Its inner loop changes a different object. |
+
+The inspected bodies do not change their induction counter or escape the
+loop. [csmith-narrow-loop-invariants.c](../../tests/fixtures/csmith-narrow-loop-invariants.c)
+and its [execution record](../../tests/fixtures/csmith-narrow-loop-invariants.out)
+check the conversion boundaries and finite u8 cycles with both interpreters,
+EvoCC native execution, and both sealed oracles at O0/O2. The current source
+analysis at that checkpoint was **19 identified / 49 undetermined**, while the actual campaign
+remains 932 agreements, 68 oracle-unusable, and zero mismatches.
+
+Two subsequent source inspections identify base/315 (line 87) and
+bitfields/69 (line 155): both i32 counters receive u16 subtraction results,
+which cannot satisfy the negative exit thresholds (`<= -7` and `== -25`).
+Their loop bodies neither change those counters nor escape the loops.
+[Finite controls](../../tests/fixtures/csmith-unsigned-update-invariants.c)
+pass both interpreters, EvoCC native, and both sealed oracles at O0/O2;
+[the record](../../tests/fixtures/csmith-unsigned-update-invariants.out)
+binds the unchanged original sources and explains the range argument.
+That checkpoint was **21 identified / 47 undetermined**, with all original
+campaign outcomes and seeds unchanged.
+
+Base/68 (lines 527–532) repeatedly takes the const-parameter branch before
+its for-update; the target resets the counter to zero. Bitfields/115
+(149–155) similarly restarts its initializer after a structure self-copy
+that preserves the nonzero branch predicate. Both oracle samples reach these
+paths. [Finite reset/self-copy controls](../../tests/fixtures/csmith-restarted-paths.c),
+including the terminating zero-predicate cases, pass both interpreters,
+EvoCC native and both sealed oracles at O0/O2. The original source hashes and
+scope are in [their record](../../tests/fixtures/csmith-restarted-paths.out).
+Both /122 sources also repeatedly take the branch at lines 337–348: a
+nonnull saved object pointer stays unequal to null; local pointer-array
+initialization changes neither that pointer nor the nonzero `g_37` guarding
+the backward goto. Its selected array element is null but is not dereferenced
+on this path. The same finite fixture now covers these two identities and
+passes all five execution variants after explicitly bounding the reduction's
+pointer-array iterations; the initial E3008 resource stop is retained in its
+record. That checkpoint was **25 identified / 43 undetermined**.
+
+The same fixture now covers base/241's reset after a bounded function call:
+`g_10=2`, then `g_25.f0=1`, then a true branch before either update; the
+callee writes a distinct local and cannot prevent the caller's reset.
+Base/246 initially remained undetermined because its XOR target can alias
+its own guard. A subsequent read-only stopped-process observation of the
+unchanged GCC-14 and Clang-19 O0 programs resolves the reaching state:
+both have `g_31 == &g_32`, distinct from `&g_99`, while `g_99` remains
+`0x66c5d899` and the XOR target alternates between 0 and 3. The previously
+sampled `func_9` loop changes neither that pointer nor the guard; its inner
+loop is skipped after resetting `g_306=29`. The existing finite control
+already tests this exact nonaliasing guard, as well as aliasing/terminating
+controls. This combines source reasoning, location samples and object/value
+observation; it is not a claim of whole-program definedness or an original
+terminating checksum. Commands, capture identity and execution hashes are
+in the same [record](../../tests/fixtures/csmith-restarted-paths.out).
+Both /83 sources have the same reached `func_17` cycle: a nonzero `static
+const int64_t g_671` guards the tail goto. Its address never escapes and
+neither branch changes it; the other u16/u32 counters wrap without altering
+that control decision. A further finite fixture extension tests both branch
+paths, chained pointer rebinding and the wrap boundaries. Both interpreters,
+EvoCC native and the two sealed oracles at O0/O2 pass. Original identities
+and the distinction between these controls and benchmark results remain in
+the same record.
+Three more localized paths are now resolved: base/87 resets its inner counter
+to one and takes the goto before either nested-loop update; base/120's local
+union guard is initialized to -1, never modified or escaped, and both arms
+return to that guard; bitfields/242 assigns -8 to a u16 loop counter, skipping
+the entire body and preserving the nonzero backward-branch guard. Finite
+controls for the reset, unchanged union member, and unsigned initialization
+pass both interpreters, EvoCC native and both sealed oracles at O0/O2; they
+include zero-guard terminating controls. The same record binds their source
+identities and current fixture/assembly hashes.
+Current analysis is **32 identified / 36 undetermined**; none of the 68
+oracle-unusable benchmark outcomes is converted to PASS or removed.
 
 ## c-testsuite floating execution
 

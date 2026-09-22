@@ -3,265 +3,71 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260914T162626Z",
+ "run": "20260919T233745Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+ "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
- "unitsEvoccCompiled": 6,
- "unitsSubstituted": 6,
+ "unmeasuredBuildUnits": [],
+ "unitsEvoccCompiled": 44,
+ "unitsSubstituted": 44,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
   "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
-  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o"
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 6,
+ "unitsInPassingBuild": 44,
  "outcomes": {
-  "assembled": 6,
-  "refused": 38
+  "assembled": 44
  },
- "refusalsByCode": {
-  "E1001": 37,
-  "E3101": 1
- },
- "refusals": [
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
-   "code": "E3101",
-   "message": "evoir-lowering-failed: non-integer scalar type is outside Day 6",
-   "at": "programs/benchfn.c:142:32"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  },
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
-   "code": "E1001",
-   "message": "expected-declaration",
-   "at": "include/arm_neon.h:40:9"
-  }
- ],
+ "refusalsByCode": {},
+ "refusals": [],
  "excludedUnits": [],
  "failingUnits": [],
  "baselineTest": {
@@ -272,23 +78,31 @@
   "passed": true,
   "status": 0,
   "relinkStatus": 0,
-  "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check"
+  "stage": "pass",
+  "signature": "",
+  "regeneratedInputs": [],
+  "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check",
+  "completedTrial": "attempt-1"
  },
  "attempts": [
   {
    "passed": true,
    "stage": "pass",
    "signature": "",
-   "unitCount": 6
+   "status": 0,
+   "relinkStatus": 0,
+   "regeneratedInputs": [],
+   "unitCount": 44
   }
  ],
  "adjustments": {
   "sysroot": {},
+  "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -304,7 +118,6 @@
    "-MMD",
    "-MP",
    "-MT",
-   "-O3",
    "-Wall",
    "-Wc++-compat",
    "-Wcast-align",
@@ -416,14 +229,7 @@
    "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o"
   ]
  },
- "frontEndGaps": [
-  {
-   "code": "E1001",
-   "construct": "the built-in vector types a GCC 14 front end promises",
-   "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
-   "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver defines __GNUC__ 14, so glibc takes the branches that use GCC 14's own vector types"
-  }
- ],
+ "frontEndGaps": [],
  "defects": [
   {
    "unit": "programs/obj/*/timefn.o",
@@ -433,6 +239,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260914T162626Z",
- "summaryLine": "zstd: 6 of 44 units by EvoCC in a passing build; refused by code {'E1001': 37, 'E3101': 1}"
+ "evidence": ".evidence/ladder/zstd/20260919T233745Z",
+ "summaryLine": "zstd: 44 of 44 units by EvoCC in a passing build; refused by code {}"
 }

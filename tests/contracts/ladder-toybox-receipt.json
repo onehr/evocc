@@ -3,7 +3,7 @@
  "rung": "E6",
  "subject": "toybox",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260914T162859Z",
+ "run": "20260919T231320Z",
  "pin": {
   "subject": "toybox",
   "rung": "E6",
@@ -12,7 +12,7 @@
   "origin": "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
   "sha256": "082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1"
  },
- "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+ "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "tests": 56,
@@ -21,10 +21,11 @@
   ]
  },
  "units": 203,
- "unitsCompiledByEvocc": 195,
- "unitsInPassingBuild": 195,
+ "unitsCompiledByEvocc": 201,
+ "unitsInPassingBuild": 201,
  "refusalsByCode": {
-  "E3101": 8
+  "E3049": 1,
+  "E3050": 1
  },
  "testResult": "no-regression",
  "failingUnits": [],
@@ -33,35 +34,14 @@
  "adjustments": {
   "sourcePageBreaksStripped": [],
   "noreturnSpecifiersRemoved": [],
-  "highBytesReEscaped": [
-   "generated/flags.h",
-   "scripts/prereq/generated/flags.h",
-   "toys/other/pwgen.c"
-  ],
-  "sysroot": [
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
-    "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
-    "why": "the TS 18661 _FloatN types are not in the front end's type system, and their prototypes derail the parse of <stdlib.h>"
-   },
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
-    "change": "__HAVE_FLOAT128 set to 0",
-    "why": "same, for _Float128"
-   },
-   {
-    "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
-    "change": "the AdvSIMD and SVE guards are forced closed",
-    "why": "the SIMD math prototypes are written in GCC's built-in vector types (__Float32x4_t, __SVFloat32_t), which the front end has no syntax for"
-   }
-  ],
+  "highBytesReEscaped": [],
+  "sysroot": [],
   "defines": [],
   "unitsNotSubstitutable": [
    "the object built from main.c"
   ]
  },
  "unconsumedGccOptions": {
-  "-Os": 203,
   "-Wall": 203,
   "-Werror=implicit-function-declaration": 203,
   "-Wno-char-subscripts": 203,
@@ -71,10 +51,8 @@
   "-Wundef": 203,
   "-fdata-sections": 203,
   "-ffunction-sections": 203,
-  "-fno-asynchronous-unwind-tables": 203,
   "-fno-strict-aliasing": 203,
-  "-funsigned-char": 203,
   "-o": 203
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260914T162859Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z"
 }

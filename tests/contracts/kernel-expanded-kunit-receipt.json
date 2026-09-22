@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "status": "FAIL",
+  "executionComplete": true,
+  "scope": "Independent expanded ARM64 KUnit configuration; not the frozen K6 or BPF kselftest configuration",
+  "config": {
+    "sha256": "9e28277bea95477ff8ccd9a88809ef18368ecc9db57552b16fa06f9aa056def0",
+    "targetCRecords": 6916,
+    "kernelModules": 809,
+    "BTF": true,
+    "moduleSignatures": "CONFIG_MODULE_SIG disabled by this unchanged configuration"
+  },
+  "compositionReceipt": "tests/contracts/kernel-expanded-kunit-query-receipt.json",
+  "comparison": {
+    "status": "FAIL",
+    "planned": 1504,
+    "observed": 1504,
+    "referenceCounts": {
+      "PASS": 1438,
+      "FAIL": 7,
+      "SKIP": 59
+    },
+    "subjectCounts": {
+      "PASS": 1432,
+      "FAIL": 12,
+      "SKIP": 60
+    },
+    "differences": [
+      {
+        "path": "KUnit Test Group/fortify/fortify_test_alloc_size_devm_kmalloc_const",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "FAIL"
+      },
+      {
+        "path": "KUnit Test Group/fortify/fortify_test_alloc_size_devm_kmalloc_dynamic",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "FAIL"
+      },
+      {
+        "path": "KUnit Test Group/fortify/fortify_test_alloc_size_kmalloc_const",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "FAIL"
+      },
+      {
+        "path": "KUnit Test Group/fortify/fortify_test_known_sizes",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "FAIL"
+      },
+      {
+        "path": "KUnit Test Group/pm_runtime_test_cases/pm_runtime_error_test",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "FAIL"
+      },
+      {
+        "path": "KUnit Test Group/stackinit/test_switch_1_none",
+        "occurrence": 1,
+        "reference": "PASS",
+        "subject": "SKIP"
+      }
+    ]
+  },
+  "reference": {
+    "status": "FAIL",
+    "boot": ".evidence/kunit/expanded-reference-builtin-20260922/boot.json",
+    "bootSha256": "418dd4bdc3d8a15f31cf8b93f3d8079c5f4e29e09355af9ce3c709c4ff7d55a7",
+    "parsedResults": ".evidence/kunit/expanded-reference-builtin-20260922/kunit-normalized.json",
+    "parsedResultsSha256": "04ed18dba24d2e2b9a2246ed4f42ca33bf801be0ce3a31f0ff6d3564bba53ffe",
+    "tests": 1504,
+    "outcomes": {
+      "PASS": 1438,
+      "FAIL": 7,
+      "SKIP": 59
+    },
+    "modules": {
+      "status": "PASS",
+      "receipt": ".evidence/kunit/expanded-reference-modules-20260922/modules.json",
+      "receiptSha256": "952bbf793deecef8fc95a49b424bb633d547c7fdce5face774fb27771bc42f57",
+      "filesLoaded": 31,
+      "tests": 765,
+      "outcomes": {
+        "PASS": 765,
+        "FAIL": 0,
+        "SKIP": 0
+      }
+    }
+  },
+  "subject": {
+    "status": "FAIL",
+    "boot": ".evidence/kunit/expanded-subject-query-builtin-20260922/boot.json",
+    "bootSha256": "c93d5c6b39700a14f5f989851e08774ca36673c858eea6e759610b6ca87dfbb3",
+    "parsedResults": ".evidence/kunit/expanded-subject-query-builtin-20260922/kunit.json",
+    "parsedResultsSha256": "e65d225a949d757a004b481a66649c4db2e5595e1e0b8f8de98176e923825e0d",
+    "tests": 1504,
+    "outcomes": {
+      "PASS": 1432,
+      "FAIL": 12,
+      "SKIP": 60
+    },
+    "modules": {
+      "status": "PASS",
+      "receipt": ".evidence/kunit/expanded-subject-query-modules-20260922/modules.json",
+      "receiptSha256": "b8eaadac850810c23021b8a797e06ef204a0bfa9a3e79934aedb1cf19ed4f40c",
+      "filesLoaded": 31,
+      "tests": 765,
+      "outcomes": {
+        "PASS": 765,
+        "FAIL": 0,
+        "SKIP": 0
+      }
+    }
+  },
+  "remaining": "All 1,504 built-in cases and all 765 module cases executed. Four FORTIFY query cases and one timing-sensitive PM runtime case differ from reference PASS; one upstream switch-entry XFAIL differs as SKIP. Seven ARM64 per-task EL1 breakpoint failures are common. Retain all raw FAIL/SKIP results; this is not all-tests PASS.",
+  "moduleComparison": {
+    "status": "PASS",
+    "sameMultisetOfModuleSuiteCaseAndOutcome": true,
+    "testsPerKernel": 765,
+    "filesLoadedPerKernel": 31,
+    "note": "Suite registration order differs; repeated case multiplicity is preserved."
+  },
+  "compositionReceiptSha256": "dc1862739ca0b3db5ffc399456c4c59fae670b303c6cf087a64039100c1099c1",
+  "baseCompositionReceipt": "tests/contracts/kernel-expanded-kunit-full-receipt.json",
+  "compositionNote": "Incremental repair, not a single-compiler survey: 6,914 base objects, Poly1305 from the padding repair, and FORTIFY from the final query repair. All 6,916 installed object hashes survived the last relink.",
+  "previousSubjectExecutions": [
+    {
+      "phase": "Initial full composition",
+      "boot": ".evidence/k1/expanded-kunit-link-retry-20260922/boot/boot.json",
+      "parsedResults": ".evidence/k1/expanded-kunit-link-retry-20260922/boot/kunit.json",
+      "outcomes": {
+        "PASS": 1425,
+        "FAIL": 19,
+        "SKIP": 60
+      },
+      "moduleReceipt": ".evidence/kunit/expanded-subject-modules-20260922/modules.json"
+    },
+    {
+      "phase": "Padding and allocation-hook repair",
+      "boot": ".evidence/kunit/expanded-subject-repaired-builtin-20260922/boot.json",
+      "parsedResults": ".evidence/kunit/expanded-subject-repaired-builtin-20260922/kunit.json",
+      "outcomes": {
+        "PASS": 1433,
+        "FAIL": 11,
+        "SKIP": 60
+      },
+      "note": "PM runtime passed this flight without a PM implementation change; its failure remains in the initial and latest flights."
+    }
+  ]
+}

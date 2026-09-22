@@ -3,41 +3,29 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260914T162800Z",
+ "run": "20260919T231532Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+ "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 2,
- "unitsEvoccCompiled": 0,
- "unitsSubstituted": 0,
+ "unmeasuredBuildUnits": [],
+ "unitsEvoccCompiled": 2,
+ "unitsSubstituted": 2,
  "unitsRebuiltByMake": [],
- "substitutedUnits": [],
- "unitsExcluded": 0,
- "unitsInPassingBuild": 0,
- "outcomes": {
-  "refused": 2
- },
- "refusalsByCode": {
-  "E2001": 1,
-  "E3101": 1
- },
- "refusals": [
-  {
-   "unit": "cJSON.o",
-   "code": "E2001",
-   "message": "undeclared-identifier: __builtin_nanf",
-   "at": "cJSON-1.7.19/cJSON.c:113:25"
-  },
-  {
-   "unit": "cJSON_Utils.o",
-   "code": "E3101",
-   "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
-   "at": "bits/mathcalls.h:195:1"
-  }
+ "substitutedUnits": [
+  "cJSON.o",
+  "cJSON_Utils.o"
  ],
+ "unitsExcluded": 0,
+ "unitsInPassingBuild": 2,
+ "outcomes": {
+  "assembled": 2
+ },
+ "refusalsByCode": {},
+ "refusals": [],
  "excludedUnits": [],
  "failingUnits": [],
  "baselineTest": {
@@ -48,7 +36,11 @@
   "passed": true,
   "status": 0,
   "relinkStatus": 0,
+  "stage": "pass",
+  "signature": "",
+  "regeneratedInputs": [],
   "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+  "completedTrial": "attempt-1",
   "objectFiles": [
    "cJSON.o",
    "cJSON_Utils.o"
@@ -59,29 +51,30 @@
    "passed": true,
    "stage": "pass",
    "signature": "",
-   "unitCount": 0
+   "status": 0,
+   "relinkStatus": 0,
+   "regeneratedInputs": [],
+   "unitCount": 2
   }
  ],
  "adjustments": {
   "sysroot": {},
+  "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
   ],
   "configure": "",
   "subject": [
    "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
    "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
    "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
-   "cJSON's numbers are doubles, and the back end refuses floating point, so these units are not expected to pass before the floating-point rung",
-   "both units stop in <math.h> before any of their own code is read: the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in vector types, which the front end does not have. With those types supplied by hand the units refuse on floating point instead (cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a function value that is neither an integer nor an object pointer)"
+   "The release Makefile explicitly selects -std=c89. The subject receives that option unchanged; a language-mode refusal is distinct from an observed floating-point or header-type refusal. Current first errors are recorded in refusals, not inferred from cJSON's use of double or historical adjusted-header runs."
   ],
   "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
-  "optionsTheDriverRejects": [
-   "-std=c89"
-  ],
+  "optionsTheDriverRejects": [],
   "omittedFlags": [
    "-Wall",
    "-Wc++-compat",
@@ -98,21 +91,12 @@
    "-Wswitch-default",
    "-Wundef",
    "-Wwrite-strings",
-   "-fPIC",
    "-fstack-protector",
-   "-pedantic",
-   "-std=c89"
+   "-pedantic"
   ]
  },
- "frontEndGaps": [
-  {
-   "code": "E1001",
-   "construct": "the built-in vector types a GCC 14 front end promises",
-   "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
-   "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver defines __GNUC__ 14, so glibc takes the branches that use GCC 14's own vector types"
-  }
- ],
+ "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260914T162800Z",
- "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E2001': 1, 'E3101': 1}"
+ "evidence": ".evidence/ladder/cjson/20260919T231532Z",
+ "summaryLine": "cjson: 2 of 2 units by EvoCC in a passing build; refused by code {}"
 }

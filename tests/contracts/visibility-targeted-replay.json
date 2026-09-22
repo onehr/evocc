@@ -1,0 +1,531 @@
+{
+  "measuredAt": "2026-09-15",
+  "subjectCommit": "9f571ca",
+  "dirtyCompiler": true,
+  "driverSha256": "59dae2616510eead3fed79285bc8fe0c3831e028efde2156b9e81d43cdca3db1",
+  "scope": "Original E2943 units only; emitted and assembled, not installed or run as a complete library",
+  "sourceRuns": {
+    "musl": "20260914T163005Z",
+    "lua": "20260914T182735Z"
+  },
+  "method": "Existing musl emit_all/assemble and ladder subject emit/assemble helpers, jobs=2, original captured commands",
+  "results": {
+    "musl": [
+      {
+        "unit": "obj/src/internal/intscan.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/internal/shgetc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/misc/getopt.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/misc/getopt_long.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/network/getnameinfo.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/network/lookup_name.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/network/lookup_serv.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/network/resolvconf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/signal/psignal.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__fclose_ca.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__fdopen.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__fopen_rb_ca.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__lockfile.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__overflow.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdio_close.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdio_exit.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdio_read.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdio_seek.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdio_write.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__stdout_write.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__toread.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__towrite.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/__uflow.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/clearerr.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ext.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ext2.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fclose.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/feof.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ferror.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fflush.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgetc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgetln.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgetpos.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgets.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgetwc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fgetws.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fileno.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/flockfile.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fmemopen.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fopen.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fopencookie.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fputc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fputs.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fputwc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fputws.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fread.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/freopen.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fseek.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fsetpos.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ftell.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ftrylockfile.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/funlockfile.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fwide.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/fwrite.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getc_unlocked.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getchar.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getchar_unlocked.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getdelim.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/gets.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getwc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/getwchar.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ofl.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ofl_add.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/open_memstream.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/open_wmemstream.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/pclose.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/perror.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/popen.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putc_unlocked.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putchar.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putchar_unlocked.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/puts.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putwc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/putwchar.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/rewind.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/setvbuf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/stderr.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/stdin.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/stdout.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/tmpfile.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ungetc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/ungetwc.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vdprintf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vfscanf.lo",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer"
+      },
+      {
+        "unit": "obj/src/stdio/vfwprintf.lo",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer"
+      },
+      {
+        "unit": "obj/src/stdio/vfwscanf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vsnprintf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vsscanf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vswprintf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdio/vswscanf.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdlib/strtod.lo",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer"
+      },
+      {
+        "unit": "obj/src/stdlib/strtol.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/stdlib/wcstod.lo",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer"
+      },
+      {
+        "unit": "obj/src/stdlib/wcstol.lo",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "obj/src/thread/pthread_create.lo",
+        "outcome": "assembled"
+      }
+    ],
+    "lua": [
+      {
+        "unit": "src/lapi.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "src/lua.h:171:1"
+      },
+      {
+        "unit": "src/lcode.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "bits/mathcalls.h:119:1"
+      },
+      {
+        "unit": "src/lctype.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/ldebug.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/ldo.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/ldump.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "src/ldump.c:116:1"
+      },
+      {
+        "unit": "src/lfunc.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/lgc.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/llex.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: object subvalue is neither an integer nor pointer",
+        "at": "src/llex.c:270:18"
+      },
+      {
+        "unit": "src/lmem.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/lobject.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "bits/mathcalls.h:173:1"
+      },
+      {
+        "unit": "src/lopcodes.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/lparser.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: object subvalue is neither an integer nor pointer",
+        "at": "src/lparser.c:1263:19"
+      },
+      {
+        "unit": "src/lstate.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/lstring.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/ltable.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "bits/mathcalls.h:116:1"
+      },
+      {
+        "unit": "src/ltm.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: non-integer scalar type is outside Day 6",
+        "at": "src/ltm.c:214:5"
+      },
+      {
+        "unit": "src/lundump.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "src/lundump.c:122:1"
+      },
+      {
+        "unit": "src/lvm.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "bits/mathcalls.h:173:1"
+      },
+      {
+        "unit": "src/lzio.o",
+        "outcome": "assembled"
+      },
+      {
+        "unit": "src/luac.o",
+        "outcome": "refused",
+        "code": "E3101",
+        "message": "evoir-lowering-failed: function value type is neither an integer nor object pointer",
+        "at": "src/luac.c:312:30"
+      }
+    ]
+  }
+}

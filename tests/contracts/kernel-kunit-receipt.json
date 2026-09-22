@@ -398,9 +398,29 @@
     "runtimePayloadSha256": "c4b6987c8feb4b3be66e349e6b0fef07e67537269a0ff145f8db337b6fa28cc6",
     "targetedRuntime": "IPv6, VETH, FUSE and overlay load on both Images. The unchanged VETH test now reaches packet-count/GRO checks instead of EAFNOSUPPORT; both kernels still fail several packet-count assertions.",
     "vethResultsSha256": "3250cbfcbaa0f15fd89fc9b39b83b18fa8392f0df5175ddf068b7d91fc0d7890",
-    "moduleKunit": "33 installed modules contain .kunit_test_suites; their suites still need execution separately from the 1440 built-in KUnit cases",
-    "claimLimit": "Module installation is measured, not universal module runtime coverage. Six NEON translation units remain refused, and no GCC module fills those two subject gaps."
+    "moduleKunit": "Completed separately: 33/33 modules load on both kernels, 781 cases comprise 780 PASS, zero FAIL and one SKIP; see completedModuleKunit.",
+    "claimLimit": "Historical 702-module installation, not universal module runtime coverage. The two then-missing NEON modules now have separate compiled/link/runtime evidence below; this historical runtime disk has not been silently replaced."
   },
-  "unrepairedSurveyClasses": {"system includes and NEON": 6},
-  "claimLimit": "Full EvoCC KUnit now has zero regressions against the GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 SKIPs are not relabeled as PASS. Complete module installation, NEON and BTF coverage remain unfinished. The original K6 Image and receipt remain unchanged. Tailored repairs cover 46 of the 52 refusals, not a new full-survey numerator. The 2,897-object incremental built-in composition links and boots with zero GCC fallback."
+  "completedModuleKunit": {
+    "referenceCapture": ".evidence/kunit/module-suites-20260914/reference-records",
+    "subjectCapture": ".evidence/kunit/module-suites-20260914/subject-complete-records",
+    "loadedModules": {"reference": 33, "subject": 33},
+    "casesPerKernel": {"total": 781, "PASS": 780, "FAIL": 0, "SKIP": 1, "parserErrors": 0},
+    "referenceSerialLogSha256": "5813d602df021cdb3702f3d7ab1415fa0ce060d16f9245b961601d1b0de773b4",
+    "subjectSerialLogSha256": "1d4711cd89973358918fefb6f52d317357213bdd1bba40b1124448b5bd28eded",
+    "subjectCountsSha256": "c288639c33a33574fae89dbd37b255ea2aca8b7a933b7343c86a4f4db8a1285b",
+    "verification": "Existing complete raw captures and Image hashes rechecked on 2026-09-20; not a newly rerun suite."
+  },
+  "neonModuleTargetedClosure": {
+    "status": "TARGETED_PASS",
+    "capture": ".evidence/kunit/neon-modules-20260920/execution.json",
+    "compilerSha256": "77faa6b3479296b0560e55f611254585146f5b0d443dcd72c3d6c82e48f27d8a",
+    "targetCInputs": 20,
+    "modules": ["arch/arm64/lib/xor-neon.ko", "crypto/xor.ko", "lib/raid6/raid6_pq.ko"],
+    "byteChecksPerKernel": {"PASS": 156, "FAIL": 0},
+    "loadUnloadChecksPerKernel": {"PASS": 8, "FAIL": 0, "SKIP": 0},
+    "claimLimit": "All C leaves of these three modules are from EvoCC, while the independent test driver is from GCC. Both preserved kernels run all four NEON RAID6 variants and direct NEON XOR. No replacement full-inventory receipt or BPF-kernel claim."
+  },
+  "unrepairedSurveyClasses": {},
+  "claimLimit": "The preserved EvoCC KUnit configuration has zero regressions against its GCC control; seven source-explained arm64 breakpoint FAIL verdicts and 108 built-in SKIPs are not relabeled as PASS. Module KUnit has 780 PASS, zero FAIL and one SKIP on each kernel. Tailored repairs now cover all 52 historical refusals, including actual NEON module execution, but this is not a new full-survey numerator. The original K6 Image and receipt remain unchanged. The distinct BPF-enabled full composition and paired full selftests remain unfinished."
 }

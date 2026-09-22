@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260914T163005Z",
+ "run": "20260919T231421Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6",
+ "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 17,
@@ -42,17 +42,12 @@
   ]
  },
  "units": 1339,
- "unitsCompiledByEvocc": 925,
- "unitsInPassingBuild": 925,
+ "unitsCompiledByEvocc": 0,
+ "unitsInPassingBuild": 0,
  "refusalsByCode": {
-  "E3101": 211,
-  "E2943": 97,
-  "E1006": 83,
-  "E2001": 14,
-  "E2203": 8,
-  "E1005": 1
+  "other": 1339
  },
- "testResult": "libc-test-clean",
+ "testResult": "not-run",
  "failingUnits": [],
  "excludedForSymbolParity": {},
  "symbolParity": {},
@@ -66,7 +61,6 @@
   "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
  },
  "unconsumedGccOptions": {
-  "-O2": 1339,
   "-Wa,--noexecstack": 1339,
   "-Waddress": 1339,
   "-Warray-bounds": 1339,
@@ -90,7 +84,6 @@
   "-Wunused-variable": 1339,
   "-fdata-sections": 1339,
   "-fexcess-precision=standard": 1339,
-  "-ffreestanding": 1339,
   "-ffunction-sections": 1339,
   "-fira-hoist-pressure": 1339,
   "-fira-region=one": 1339,
@@ -98,21 +91,14 @@
   "-fno-align-jumps": 1339,
   "-fno-align-labels": 1339,
   "-fno-align-loops": 1339,
-  "-fno-asynchronous-unwind-tables": 1339,
   "-fno-prefetch-loop-arrays": 1339,
   "-fno-strict-aliasing": 1339,
   "-fno-tree-ch": 1339,
-  "-fno-unwind-tables": 1339,
   "-fomit-frame-pointer": 1339,
   "-freorder-blocks-algorithm=simple": 1339,
-  "-frounding-math": 1339,
   "-o": 1339,
   "-pipe": 1339,
-  "-std=c99": 1339,
-  "-fPIC": 1338,
-  "-O3": 91,
-  "-fno-stack-protector": 7,
   "-fno-tree-loop-distribute-patterns": 2
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260914T163005Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260919T231421Z"
 }
