@@ -23,12 +23,12 @@ compilers receive identical repaired
 headers; their before/after digests are recorded with the campaign. Old runs
 remain unchanged. A trap elsewhere still needs its own diagnosis.
 
-Csmith's runtime header needs a hosted libc that EvoCC does not yet parse
-(glibc's <math.h> declares vector types EvoCC has no model for), so the
-campaign uses Csmith's own minimal runtime with the ISO C safe-math macros,
-which `--math-notmp` makes Csmith call. The minimal runtime leaves INT_MAX
-undefined, so the campaign defines it on the command line of all three
-compilers alike.
+The established campaign retains Csmith's minimal runtime and ISO C safe-math
+macros, which `--math-notmp` makes Csmith call, to keep its seeds and runtime
+contract comparable. This is not a claim that current target headers remain
+unparsable. A hosted-runtime campaign is a separate measurement. The minimal
+runtime leaves INT_MAX undefined, so the campaign defines it on the command
+line of all three compilers alike.
 
 Usage:
   python3 tools/ladder/csmith.py [--campaign base|bitfields|all] [--programs N]

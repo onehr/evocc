@@ -9,6 +9,7 @@
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -250,9 +251,18 @@ int main(void)
         timeout_override = (unsigned)seconds + 15;
     }
     if (mount("sysfs", "/sys", "sysfs", 0, NULL)
-        || mount("devtmpfs", "/dev", "devtmpfs", 0, NULL)
-        || mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777"))
+        || mount("devtmpfs", "/dev", "devtmpfs", 0, NULL))
         fatal("mount pseudo-filesystems");
+    /* Full-suite filesystem tests require disk-backed files (e.g. fs-verity).
+     * QEMU snapshots isolate this ext4 root for every program. The selected
+     * K7 contract keeps its original tmpfs; shared memory stays tmpfs in both. */
+    if (!full_suite && mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777"))
+        fatal("mount tmp");
+    if (full_suite) {
+        if (chmod("/tmp", 01777))
+            fatal("set temporary directory mode");
+        puts("KSELFTEST_SETUP /tmp ext4 (per-flight snapshot)");
+    }
     if (mkdir("/dev/shm", 01777) && errno != EEXIST)
         fatal("mkdir shm");
     if (mount("tmpfs", "/dev/shm", "tmpfs", 0, "mode=1777"))
@@ -263,6 +273,17 @@ int main(void)
             fatal("mount devpts");
     }
     if (full_suite) {
+        struct utsname kernel;
+        char build[256];
+        if (uname(&kernel))
+            fatal("read running kernel release");
+        snprintf(build, sizeof(build), "/lib/modules/%s/build", kernel.release);
+        struct stat build_stat;
+        if (!stat(build, &build_stat) && S_ISDIR(build_stat.st_mode)) {
+            if (setenv("KBUILD_OUTPUT", build, 1))
+                fatal("set module build directory");
+            dprintf(1, "KSELFTEST_SETUP KBUILD_OUTPUT %s\n", build);
+        }
         load_runtime_modules("/tests/modules", NULL);
         if (system("ip link set lo up"))
             fatal("enable loopback");
@@ -333,7 +354,8 @@ int main(void)
         const char *selected = collection[0] ? collection : id;
         dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, selected);
         int rc = run(selected, timeout_override ? timeout_override : limit);
-        dprintf(1, "KSELFTEST_END %s %s %d\n", nonce, selected, rc);
+        /* A timed-out child may leave an unfinished progress line. */
+        dprintf(1, "\nKSELFTEST_END %s %s %d\n", nonce, selected, rc);
         count++;
     }
     if (!feof(file) || !count)

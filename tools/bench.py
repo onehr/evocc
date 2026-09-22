@@ -33,17 +33,17 @@ CATALOG = {
     "csmith": ("E0c", "csmith", "original seeds; unavailable oracles are not passes"),
     "zlib": ("E1", "subject", "mixed-link program tests"),
     "zstd": ("E2", "subject", "mixed-link program tests; see recorded source/build adjustments"),
-    "cjson": ("E3", "subject", "installed objects judged by public API tests; full private-helper suite and FP deferred"),
+    "cjson": ("E3", "subject", "installed objects judged by public API tests; full private-helper suite is separate"),
     "tinycc": ("E5", "mixed", "mixed-link compiler tests"),
     "toybox": ("E6", "mixed", "mixed-link tests relative to baseline failures"),
     "musl": ("E7", "mixed", "libc-test relative to baseline failures"),
     "kernel": ("K1/K5-K7 ramp", "kernel", "mixed-link boot plus substitution proof; not full EvoCC kernel/kselftest"),
     "mbedtls": ("E4", "subject", "default release selftest and CTest against installed objects; mixed-link ramp"),
-    "polybench": ("E8", None, "no adapter; floating-point rung deferred"),
-    "llvm-test-suite": ("E9", None, "no adapter; mixed integer/FP suite"),
-    "jq": ("E10", None, "no adapter; floating-point rung deferred"),
-    "lua": ("E11", None, "no adapter; floating-point rung deferred"),
-    "sqlite": ("E12", None, "no adapter; floating-point rung deferred"),
+    "polybench": ("E8", "subject", "30 original kernels, MINI_DATASET array-output correctness; reference-built allocation utility, not performance"),
+    "llvm-test-suite": ("E9", "subject", "SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp"),
+    "jq": ("E10", "subject", "original make check with bundled Oniguruma; mixed-object ramp"),
+    "lua": ("E11", "subject", "matching official all.lua without soft skips; mixed-object ramp"),
+    "sqlite": ("E12", "subject", "public Tcl veryquick suite against installed fixture objects; mixed-object ramp"),
     "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
     "kernel-selftest": ("K7", "kernel-selftest", "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate"),
     "kernel-selftest-all": ("K7", "kernel-selftest-all", "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate"),
@@ -64,10 +64,16 @@ def parser():
     p.add_argument("--allow-qemu-drift", action="store_true", help="acknowledge and record the installed QEMU digest")
     p.add_argument("--reuse-kernel-survey", type=Path, help="replay mixed linking from a completed survey of this exact binary")
     p.add_argument("--survey-only", action="store_true", help="kernel compilation/assembly only; no installation, link, bisection or boot")
+    p.add_argument('--kernel-work-root', type=Path, help='existing supplemental kernel root containing pristine/ and out/; survey or kernel-full')
+    p.add_argument('--kernel-source-root', type=Path, help='source tree for that supplemental kernel')
+    p.add_argument('--kernel-full-receipt', type=Path, help='separate complete-composition receipt for a supplemental kernel-full configuration')
+    p.add_argument('--resume-kernel-prepared', type=Path, help='kernel-full: verify an interrupted first pass, then repeat actual-header compilation, link and boot')
+    p.add_argument('--low-disk', action='store_true', help='kernel survey: verify batches of 64 and release successful assembly')
     p.add_argument("--reuse-selftest-build", action="store_true", help="reuse the previously built full kselftest payload; still execute both kernels")
     p.add_argument('--expanded-selftest-kernel', action='store_true', help='use the audited expanded KUnit kernel pair for full selftests')
     p.add_argument('--selftest-runtime', type=Path, help='per-kernel runtime root with matching module payloads')
     p.add_argument('--selftest-kernel-receipt', type=Path, help='audited supplemental kernel-pair receipt; requires --expanded-selftest-kernel')
+    p.add_argument('--selftest-reference-boot', type=Path, help='reference boot receipt when the supplemental subject uses a kernel-full receipt')
     p.add_argument('--selftest-build-root', type=Path, help='separate selftest build/install inventory, for example on a case-sensitive volume')
     p.add_argument('--selftest-source-root', type=Path, help='source tree used by the selftest build')
     p.add_argument('--selftest-headers-root', type=Path, help='exported headers for that selftest source')
@@ -102,6 +108,8 @@ def select(names):
 def command(name, args, binary):
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if args.resume_kernel_prepared and name != 'kernel-full':
+        raise ValueError('--resume-kernel-prepared requires kernel-full')
     if name in ("kernel-selftest", "kernel-selftest-all"):
         if args.reuse_kernel_survey:
             raise ValueError("kernel-selftest consumes the booted Image, not a compilation survey")
@@ -116,6 +124,8 @@ def command(name, args, binary):
                 cmd += ['--runtime-root', str(args.selftest_runtime)]
             if args.selftest_kernel_receipt:
                 cmd += ['--kernel-receipt', str(args.selftest_kernel_receipt)]
+            if args.selftest_reference_boot:
+                cmd += ['--reference-boot', str(args.selftest_reference_boot)]
             if args.selftest_build_root:
                 cmd += ['--work-root', str(args.selftest_build_root)]
             for option in ('source-root', 'headers-root', 'kernel-build-root'):
@@ -133,18 +143,39 @@ def command(name, args, binary):
     if name == "kernel-full":
         if args.reuse_kernel_survey:
             raise ValueError("kernel-full reuses verified object caches, not a mixed-link allowlist")
+        if ((args.kernel_work_root or args.kernel_source_root)
+                and lane_receipt(name, args) == lane_receipt(name)):
+            raise ValueError('supplemental full-kernel roots require a separate receipt')
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
-        return [sys.executable, str(ROOT / "tools/k1/substitute.py"), "--all", "--require-all", "--boot",
-                "--evocc", str(binary), "--jobs", str(args.jobs)], env
+        cmd = [sys.executable, str(ROOT / "tools/k1/substitute.py"), "--all", "--require-all", "--boot",
+               "--evocc", str(binary), "--jobs", str(args.jobs), '--relink-jobs', str(args.jobs),
+               '--receipt', str(lane_receipt(name, args))]
+        for value, option in ((args.kernel_work_root, '--k1-root'),
+                              (args.kernel_source_root, '--src-root')):
+            if value:
+                cmd += [option, str(value.resolve())]
+        if args.low_disk:
+            cmd += ['--low-disk']
+        if args.resume_kernel_prepared:
+            cmd += ['--resume-prepared-run', str(args.resume_kernel_prepared.resolve())]
+        return cmd, env
     if name == "kernel":
         env["K1_EVOCC"] = str(binary)
         if args.survey_only:
             cmd = [sys.executable, str(ROOT / "tools/k1/substitute.py"), "--all", "--no-install",
                    "--evocc", str(binary), "--jobs", str(args.jobs)]
+            for value, option in ((args.kernel_work_root, '--k1-root'),
+                                  (args.kernel_source_root, '--src-root')):
+                if value:
+                    cmd += [option, str(value.resolve())]
+            if args.low_disk:
+                cmd += ['--low-disk']
             if run := getattr(args, "survey_run", None):
                 cmd += ["--run-id", run]
             return cmd, env
+        if args.kernel_work_root or args.kernel_source_root or args.low_disk:
+            raise ValueError('supplemental roots and --low-disk require kernel --survey-only')
         if args.allow_qemu_drift:
             env["K1_ALLOW_QEMU_DRIFT"] = "1"
         cmd = [str(ROOT / "tools/k1/measure.sh"), "--jobs", str(args.jobs)]
@@ -168,16 +199,36 @@ def command(name, args, binary):
     return cmd, env
 
 
-def lane_receipt(name):
+def lane_receipt(name, args=None):
     if name == "kernel-selftest-all":
         return ROOT / "tests/contracts/kernel-selftest-full-receipt.json"
     if name == "kernel-selftest":
         return ROOT / "tests/contracts/kernel-selftest-receipt.json"
     if name == "kernel-full":
+        if args is not None and args.kernel_full_receipt:
+            path = (ROOT / args.kernel_full_receipt).resolve()
+            if not path.is_relative_to(ROOT.resolve()):
+                raise ValueError('kernel-full receipt must remain inside the repository')
+            return path
         return ROOT / "tests/contracts/kernel-full-receipt.json"
     stem = "e0" if name in ("ctest", "torture") else name
     return ROOT / ("tests/contracts/k1-mixed-link-receipt.json" if name == "kernel"
                    else f"tests/contracts/ladder-{stem}-receipt.json")
+
+
+def apply_program_dispositions(row, dispositions):
+    """Keep reviewed accounting beside, never in place of, raw outcomes."""
+    if not dispositions:
+        return
+    labels = {'PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'oracle-unusable'}
+    if (set(dispositions) != labels
+            or any(not isinstance(n, int) or n < 0 for n in dispositions.values())
+            or sum(dispositions.values()) != row['total']
+            or dispositions['PASS'] > row['passed']):
+        raise ValueError('program dispositions disagree with the original denominator or raw passes')
+    row.update(passed=dispositions['PASS'], dispositions=dispositions)
+    if not dispositions['compiler-failure'] and dispositions['PASS'] != row['total']:
+        row['status'] = 'PROFILE_CLEAN'
 
 
 def metrics(name, data):
@@ -228,16 +279,7 @@ def metrics(name, data):
                    outcomes=values["outcomes"], kind="programs",
                    refusals=values.get("refusalsByCode", {}),
                    runtimeDiagnostics=values.get("failuresByInterpreterVerdict", {}))
-        if dispositions := values.get('dispositionCounts'):
-            labels = {'PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'oracle-unusable'}
-            if (set(dispositions) != labels
-                    or any(not isinstance(n, int) or n < 0 for n in dispositions.values())
-                    or sum(dispositions.values()) != row['total']
-                    or dispositions['PASS'] > row['passed']):
-                raise ValueError('program dispositions disagree with the original denominator or raw passes')
-            row.update(passed=dispositions['PASS'], dispositions=dispositions)
-            if not dispositions['compiler-failure'] and dispositions['PASS'] != row['total']:
-                row['status'] = 'PROFILE_CLEAN'
+        apply_program_dispositions(row, values.get('dispositionCounts'))
     elif name == "csmith":
         outcomes = Counter()
         for campaign in data["campaigns"].values():
@@ -270,6 +312,19 @@ def metrics(name, data):
             if verdict not in ("proven", "proven-modulo-relocations", "no-symbols", "not-linked")
         ):
             row["status"] = "FAIL"
+    elif name in ('llvm-test-suite', 'polybench'):
+        outcomes = data['programOutcomes']
+        row.update(total=data['programsTotal'], passed=outcomes.get('PASS', 0),
+                   kind='programs', outcomes=outcomes,
+                   compiled=data['unitsEvoccCompiled'],
+                   baselineFailures=outcomes.get('oracle-unusable', 0),
+                   refusals=data.get('refusalsByCode', {}),
+                   excluded=len(data.get('nonCPrograms', [])),
+                   adjustments=data.get('adjustments', {}))
+        apply_program_dispositions(row, data.get('dispositionCounts'))
+        for key in ('configuration', 'runtimeSupport'):
+            if key in data:
+                row[key] = data[key]
     else:
         total = data.get("unitsTotal", data.get("units"))
         row.update(total=total, passed=data["unitsInPassingBuild"], kind="units",
@@ -310,7 +365,8 @@ def metrics(name, data):
     return row
 
 
-def read_result(name, before, expected, survey_run=None):
+def read_result(name, before, expected, survey_run=None, *, receipt_path=None,
+                kernel_receipt_path=None):
     if survey_run:
         directory = ROOT / ".evidence/k1" / survey_run
         data = json.loads((directory / "substitution.json").read_text())
@@ -318,7 +374,7 @@ def read_result(name, before, expected, survey_run=None):
             raise ValueError("kernel survey compiler or per-unit digest differs")
         data.update(mode="survey-only", evidence=str(directory.relative_to(ROOT)))
         return metrics(name, data)
-    path = lane_receipt(name)
+    path = receipt_path if receipt_path is not None else lane_receipt(name)
     after = path.read_bytes()
     if before == after:
         raise ValueError("receipt unchanged; previous evidence is not a new measurement")
@@ -330,9 +386,13 @@ def read_result(name, before, expected, survey_run=None):
         digest = json.loads(survey.read_text())["evoccSha256"]
     if name in ('kernel-selftest', 'kernel-selftest-all'):
         receipt_name = data.get('kernelReceiptPath', 'tests/contracts/kernel-full-receipt.json')
-        if receipt_name not in ('tests/contracts/kernel-full-receipt.json', 'tests/contracts/kernel-kunit-receipt.json'):
-            raise ValueError('unrecognized kernel acceptance receipt')
         kernel = ROOT / receipt_name
+        if kernel_receipt_path is not None:
+            selected = (ROOT / kernel_receipt_path).resolve()
+            if not selected.is_relative_to(ROOT.resolve()) or kernel.resolve() != selected:
+                raise ValueError('selftest receipt differs from the selected kernel')
+        elif receipt_name not in ('tests/contracts/kernel-full-receipt.json', 'tests/contracts/kernel-kunit-receipt.json'):
+            raise ValueError('unrecognized kernel acceptance receipt')
         if data['kernelReceiptSha256'] != sha256(kernel):
             raise ValueError('kernel selftests name a different complete kernel receipt')
     elif digest != expected:
@@ -439,7 +499,7 @@ def main(argv=None):
                     overall = max(overall, 1)
                     save(summary, directory)
                     continue
-                path = lane_receipt(name)
+                path = lane_receipt(name, args)
                 before = path.read_bytes() if path.exists() else None
                 previous = None
                 if before:
@@ -458,7 +518,8 @@ def main(argv=None):
                     code, tail = execute(cmd, env)
                     if needs_compiler and sha256(binary) != driver:
                         raise ValueError("compiler changed during evaluation")
-                    row = read_result(name, before, driver, args.survey_run)
+                    row = read_result(name, before, driver, args.survey_run, receipt_path=path,
+                                      kernel_receipt_path=args.selftest_kernel_receipt)
                     if code:
                         row.update(status="ERROR", error=f"runner exit {code}", errorTail=tail)
                 except (OSError, KeyError, TypeError, ValueError) as error:
@@ -473,6 +534,9 @@ def main(argv=None):
                     break  # do not mix compiler identities in later lanes
         except KeyboardInterrupt:
             summary["status"] = "INTERRUPTED"
+            for row in summary["benchmarks"].values():
+                if row.get("status") == "RUNNING":
+                    row["status"] = "INTERRUPTED"
             save(summary, directory)
             return 130
         profile_only = any(summary['benchmarks'][name]['status'] == 'PROFILE_CLEAN' for name in selected)

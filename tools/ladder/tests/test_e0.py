@@ -1,6 +1,7 @@
 """Benchmark preparation must not change the program being tested."""
 
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -15,6 +16,54 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_fp_semantic_options_reach_the_driver_in_written_order(self):
+        flags = ['-ffp-contract=fast', '-ffp-contract=off',
+                 '-frounding-math', '-fno-rounding-math', '-ffast-math']
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'probe.c'
+            source.write_text('/* { dg-options "' + ' '.join(flags) + '" } */')
+            options = e0.program_options(source)
+        self.assertEqual(options['applied'], flags)
+        self.assertEqual(options['unhandled'], [])
+        self.assertNotIn('applicability', options)
+
+    def test_static_execution_links_target_libm_after_the_subject_object(self):
+        # sin and other real library calls need libm even when an oracle can
+        # constant-fold the source call. Never require a compiler to fold it.
+        link = next(line for line in e0.RUNNER.splitlines()
+                    if 'gcc -static' in line)
+        self.assertRegex(link, r'bin/\$b\.o\s+-lm(?:\s|$)')
+
+    def test_sysroot_requires_a_case_sensitive_export_before_running_tools(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.dict(os.environ, {'EVOCC_BENCH_SYSROOT': tmp}), \
+                patch.object(e0, 'case_sensitive_directory', return_value=False), \
+                patch.object(e0, 'sh') as run:
+            with self.assertRaisesRegex(SystemExit, 'case-sensitive'):
+                e0.sysroot()
+            run.assert_not_called()
+
+    def test_sysroot_override_and_existing_export_preserve_original_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.dict(os.environ, {'EVOCC_BENCH_SYSROOT': tmp}), \
+                patch.object(e0, 'case_sensitive_directory', return_value=True), \
+                patch.object(e0, 'sh') as run:
+            root = Path(tmp)
+            marker = root / 'usr/include/aarch64-linux-gnu/asm/errno.h'
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b'#include <asm-generic/errno.h>\n')
+            header = root / 'usr/include/stdio.h'
+            raw = b'/*\xff*/\n#define original 1\n'
+            header.write_bytes(raw)
+            self.assertEqual(e0.sysroot(), root)
+            self.assertEqual(header.read_bytes(), raw)
+            run.assert_not_called()
+
+    def test_sysroot_rejects_relative_override(self):
+        with patch.dict(os.environ, {'EVOCC_BENCH_SYSROOT': 'relative'}):
+            with self.assertRaisesRegex(SystemExit, 'absolute'):
+                e0.sysroot()
+
     def test_irrelevant_foreign_predicates_do_not_block_a_selector(self):
         self.assertFalse(e0.target_matches('nvptx-*-* && { ! nvptx_softstack }'))
         self.assertTrue(e0.target_matches('aarch64*-*-* || unknown_foreign_predicate'))
@@ -210,10 +259,16 @@ int main(void){return 0;}
 
     def test_emission_consumes_only_supported_unconditional_options(self):
         for directive, applied, unhandled in [
+            ('/* { dg-options "-std=gnu99" } */', ['-std=gnu99'], []),
+            ('/* { dg-options "-std=c99" } */', ['-std=c99'], []),
+            ('/* { dg-options "-std=c11 -std=gnu17" } */', ['-std=c11', '-std=gnu17'], []),
+            ('/* { dg-options "-O3 -O0 -fPIC -fno-pic -fshort-wchar" } */',
+             ['-O3', '-O0', '-fPIC', '-fno-pic', '-fshort-wchar'], []),
             ('/* { dg-options "-fwrapv" } */', ["-fwrapv"], []),
             ('/* { dg-options "-fno-builtin -fbuiltin" } */', ["-fno-builtin", "-fbuiltin"], []),
             ('/* { dg-options "-fbuiltin -fno-builtin" } */', ["-fbuiltin", "-fno-builtin"], []),
             ('/* { dg-options "-fshort-wchar -fno-short-wchar" } */', ["-fshort-wchar", "-fno-short-wchar"], []),
+            ('/* { dg-options "-fgnu89-inline -fno-gnu89-inline" } */', ["-fgnu89-inline", "-fno-gnu89-inline"], []),
             ('/* { dg-options { "-fwrapv" } } */', ["-fwrapv"], []),
             ('/* { dg-additional-options "-fno-strict-overflow" } */', ["-fno-strict-overflow"], []),
             ('/* { dg-options "-Wno-psabi -fwrapv" } */', ["-fwrapv"], ["-Wno-psabi"]),
@@ -234,7 +289,7 @@ int main(void){return 0;}
                     run.assert_not_called()
                 else:
                     argv = run.call_args.args[0]
-                    self.assertEqual([arg for arg in argv if arg.startswith("-f")], applied)
+                    self.assertEqual([arg for arg in argv if arg in applied], applied)
                 for item in unhandled:
                     self.assertIn(item, str(options.get("unhandled", [])))
                 if not unhandled:

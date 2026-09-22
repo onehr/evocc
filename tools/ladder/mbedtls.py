@@ -42,6 +42,7 @@ MBEDTLS = ladder.Subject(
     relink=BUILD,
     test=(f'(build/programs/test/selftest && {TOOLS}/ctest --test-dir build '
           '--output-on-failure --no-tests=error)'),
+    refresh_generated_inputs=True,
     notes=(
         'official release archive, including TF-PSA-Crypto and framework submodules; no source rewrites',
         'default Release configuration, static libraries and non-PIE test links; '
@@ -50,6 +51,9 @@ MBEDTLS = ladder.Subject(
         'build tool mounted beside source, sealed compiler image unchanged',
         'library, example and generated test translation units are all captured from the verbose build; '
         'a passing mixed build is not a complete EvoCC build',
+        'a library relink regenerates test C sources; replaced test objects are reinstalled '
+        'only after recompiling the current input to identical EvoCC assembly, then relinked and '
+        'checked again before CTest; changed assembly or external assembler inputs stop reuse',
     ),
 )
 

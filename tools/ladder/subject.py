@@ -97,7 +97,7 @@ DIAGNOSTIC = re.compile(
 )
 ENTERING = re.compile(r"^g?make(?:\[\d+\])?: Entering directory '(?P<dir>[^']*)'")
 LEAVING = re.compile(r"^g?make(?:\[\d+\])?: Leaving directory '(?P<dir>[^']*)'")
-COMPILERS = frozenset({"gcc", "gcc-14", "cc", "g++", "clang"})
+COMPILERS = frozenset({"gcc", "gcc-14", "cc", "g++", "clang", "clang-19"})
 
 #: Options whose value is a separate argument.
 SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote")
@@ -106,10 +106,8 @@ SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote
 PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 
 #: Options the front end consumes as written.
-PASSED_THROUGH = (
-    "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
-    "-fbuiltin", "-fno-builtin",
-)
+PASSED_THROUGH = e0.SUPPORTED_OPTIONS | {"-nostdinc", "-undef"}
+PASSED_PREFIXES = e0.SUPPORTED_OPTION_PREFIXES
 
 
 @dataclasses.dataclass(frozen=True)
@@ -149,6 +147,13 @@ class Subject:
     #: Explicit object consumers for adapters whose default test recompiles
     #: the reference source. Their linkage adaptations have mutation tests.
     test_objects: tuple[str, ...] = ()
+    #: Source subtrees constituting the measured subject, not build tools.
+    source_prefixes: tuple[str, ...] = ()
+    #: Extract only these archive members when a suite ships unrelated rungs.
+    archive_members: tuple[str, ...] = ()
+    #: A library relink may regenerate test C sources. Reinstall replaced
+    #: objects only after recompiling them to byte-identical assembly.
+    refresh_generated_inputs: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -210,9 +215,12 @@ def fetch(subject: Subject) -> tuple[Path, str]:
     directory.mkdir(parents=True, exist_ok=True)
     archive = directory / subject.url.rsplit("/", 1)[-1]
     if not archive.is_file():
-        with urllib.request.urlopen(subject.url) as response:
-            payload = response.read()
-        archive.write_bytes(payload)
+        shared = BUILD / 'dl' / archive.name
+        if shared.is_file() and sha256_file(shared) == subject.sha256:
+            shutil.copyfile(shared, archive)
+        else:
+            with urllib.request.urlopen(subject.url) as response, archive.open('wb') as output:
+                shutil.copyfileobj(response, output)
     digest = sha256_file(archive)
     if digest != subject.sha256:
         raise SystemExit(
@@ -234,7 +242,8 @@ def unpack(subject: Subject) -> Path:
     archive, _ = fetch(subject)
     if tree.is_dir():
         shutil.rmtree(tree)
-    completed = run(["tar", "-xzf", str(archive), "-C", str(directory)])
+    completed = run(["tar", "-xf", str(archive), "-C", str(directory),
+                     *[f'{subject.tree}/{part}' for part in subject.archive_members]])
     if completed.returncode != 0 or not tree.is_dir():
         raise SystemExit(f"{subject.name}: cannot unpack {archive}: {completed.stderr}")
     return tree
@@ -247,60 +256,16 @@ def unpack(subject: Subject) -> Path:
 #: Headers are measured as exported, with no source-token substitutions.
 SYSROOT_ADJUSTMENTS = {}
 
-#: Remaining declaration coverage, distinct from floating-point execution.
-FRONT_END_GAPS = [
-    {
-        "code": "E1001",
-        "construct": "the built-in vector types a GCC 14 front end promises",
-        "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
-        "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver"
-        " defines __GNUC__ 14, so glibc takes the branches that use GCC 14's"
-        " own vector types",
-    },
-]
+def front_end_gaps(rows: list[dict]) -> list[dict]:
+    """Receipt facts come from this run, not an obsolete global frontier."""
+    return [{key: row.get(key, '') for key in ('unit', 'code', 'message', 'at')}
+            for row in rows if row['outcome'] == 'refused'
+            and row.get('code', '').startswith(('E0', 'E1', 'E2'))]
 
 
 def exported_sysroot() -> Path:
-    """The container's headers on the host, exported by the E0 lane's helper.
-
-    Two things the export has to get right and did not. Debian's kernel
-    headers under ``asm/`` are symbolic links out of ``/usr/include``, so a
-    copy that does not follow them lands empty files and every ``errno``
-    constant disappears; the export is therefore repeated dereferencing
-    links whenever the marker header is empty. And the archive arrives with
-    the container's modes, which do not always let this user read it back.
-    """
-    root = BUILD / "sysroot"
-    marker = root / "usr" / "include" / "aarch64-linux-gnu" / "asm" / "errno.h"
-    if not marker.is_file():
-        try:
-            e0.sysroot()
-        except subprocess.CalledProcessError:
-            # ``tar`` reports the stripped leading slash as an error; what
-            # matters is whether the tree arrived, which is checked next.
-            pass
-    if not marker.is_file():
-        raise SystemExit("the sysroot export did not produce the container's headers")
-    if marker.stat().st_size == 0:
-        completed = container(
-            root,
-            "sysroot",
-            "G=$(gcc -print-file-name=include);"
-            " tar -chf - /usr/include $G 2>/dev/null | tar -xf - -C /work/sysroot",
-            timeout=900,
-        )
-        if marker.stat().st_size == 0:
-            raise SystemExit(
-                f"the sysroot export left symbolic links unresolved: {completed.stderr[-300:]}"
-            )
-        if (BUILD / "sysroot-adjusted").is_dir():
-            shutil.rmtree(BUILD / "sysroot-adjusted")
-    for path in root.rglob("*"):
-        try:
-            path.chmod(path.stat().st_mode | (0o700 if path.is_dir() else 0o600))
-        except OSError:
-            continue
-    return root
+    """All lanes share the byte-preserving, case-sensitive header export."""
+    return e0.sysroot()
 
 
 def adjust_sysroot(force: bool = False) -> tuple[Path, dict[str, int]]:
@@ -341,6 +306,10 @@ def parse_build_log(text: str, tree: str) -> list[Unit]:
         return value
 
     for line in text.splitlines():
+        # Libtool prints the actual compiler invocation after this prefix;
+        # its wrapper command names a .lo descriptor, not the installed .o.
+        if line.startswith('libtool: compile: '):
+            line = line.removeprefix('libtool: compile: ')
         entering = ENTERING.match(line)
         if entering:
             stack.append(relative(entering.group("dir"), ""))
@@ -425,7 +394,7 @@ def _unit_from_argv(argv: list[str], directory: str, relative) -> Unit | None:
 
 
 def reference_build(subject: Subject, tree: Path, evidence: Path) -> dict:
-    """Build the subject with GCC-14 in the container and keep the log."""
+    """Build with the adapter's reference compiler and keep the original log."""
     script = (
         f"set -o pipefail; cd /work/{subject.name}/{subject.tree} || exit 2\n"
         + (f"{subject.configure} > /work/{subject.name}/configure.log 2>&1 || exit 3\n"
@@ -507,9 +476,9 @@ def unsupported_options(evocc: Path, options: list[str], work: Path) -> list[str
 
     A build's ``-std=`` is a flag the front end would otherwise be handed as
     written. Whether this driver takes it is measured once, on an empty
-    translation unit, rather than assumed from a list kept in this file: an
-    option the driver rejects is then dropped by name like any other flag it
-    does not consume, and the receipt says so.
+    translation unit. This is diagnostic inventory only: a rejected language
+    mode must still reach the driver on the original unit, not silently select
+    a different default dialect.
     """
     work.mkdir(parents=True, exist_ok=True)
     empty = work / "empty.c"
@@ -543,6 +512,9 @@ def evocc_argv(
     def path(value: str) -> str:
         if value.startswith(prefix):
             return str(tree / value[len(prefix) :])
+        mount_prefix = f'/work/{subject.name}/'
+        if value.startswith(mount_prefix):
+            return str(BUILD / subject.name / value[len(mount_prefix):])
         if value.startswith("/"):
             return value
         return str((work / value).resolve())
@@ -572,7 +544,7 @@ def evocc_argv(
             projected.append(value)
         elif value.startswith("-include") and len(value) > len("-include"):
             projected.append("-include" + path(value[len("-include") :]))
-        elif (value in PASSED_THROUGH or value.startswith("-std=")) and value not in unsupported:
+        elif value.startswith("-std=") or ((value in PASSED_THROUGH or value.startswith(PASSED_PREFIXES)) and value not in unsupported):
             projected.append(value)
         else:
             omitted.append(value)
@@ -649,8 +621,27 @@ def emit(
         assembly = asm_root / (unit.obj[:-2] + ".s")
         assembly.parent.mkdir(parents=True, exist_ok=True)
         assembly.write_text(completed.stdout, encoding="utf-8")
-        rows.append({**row, "outcome": "emitted", "assembly": str(assembly)})
+        rows.append({**row, "outcome": "emitted", "assembly": str(assembly),
+                     "assemblySha256": sha256_file(assembly)})
     return rows
+
+
+def emission_digest(argv: list[str], timeout: int = 300) -> str | None:
+    """Recompile regenerated input with the identical command and compiler.
+
+    Do not trust .c identity alone, or a preprocessor printer that may drop
+    semantic pragmas. Compare actual assembly output; refuse reuse for external
+    assembler file inputs, whose bytes are not part of that output.
+    """
+    try:
+        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return None
+    if result.returncode or not result.stdout.strip() or re.search(
+        rb'(?m)^\s*\.(?:incbin|include)\b', result.stdout
+    ):
+        return None
+    return sha256_bytes(result.stdout)
 
 
 def quote(argument: str) -> str:
@@ -831,6 +822,7 @@ def trial(
     pristine: Path,
     evidence: Path,
     tag: str,
+    generated_inputs: dict[str, tuple[list[str], str | None]] | None = None,
 ) -> dict:
     """Substitute exactly ``subset``, relink, and run the suite."""
     restore(tree, candidates, pristine)
@@ -843,14 +835,69 @@ def trial(
             "stage": "relink",
             "multipleDefinitions": multiple_definitions(linked["log"]),
             "signature": _signature(linked["log"]),
+            "relinkStatus": linked["status"],
         }
+    workspace = subject.workspace or f"/work/{subject.name}/{subject.tree}"
+    rebuilt = sorted(set(rebuilt_by_make(tree, subset, asm_root))
+                     | set(recompiled(linked["log"], workspace, subset)))
+    regenerated = []
+    if rebuilt and generated_inputs is not None:
+        changed = []
+        for unit in rebuilt:
+            argv, expected = generated_inputs.get(unit, ([], None))
+            if expected is None or emission_digest(argv) != expected:
+                changed.append(unit)
+        if changed:
+            return {"units": subset, "passed": False, "stage": "inputs-changed",
+                    "rebuiltUnits": rebuilt,
+                    "signature": "regenerated input no longer emits the installed assembly: " + ", ".join(changed)}
+        regenerated = rebuilt
+        # Do not restore or reinstall the library objects again: that would
+        # regenerate the same test sources on every trial. One second relink
+        # must keep these exact subject objects; otherwise fail closed.
+        install(tree, rebuilt, asm_root)
+        linked = relink(subject, evidence, tag + "-generated-inputs")
+        if linked["status"] != 0:
+            return {"units": subset, "passed": False, "stage": "relink",
+                    "relinkStatus": linked["status"],
+                    "signature": _signature(linked["log"])}
+        rebuilt = sorted(set(rebuilt_by_make(tree, subset, asm_root))
+                         | set(recompiled(linked["log"], workspace, subset)))
+    if rebuilt:
+        return {"units": subset, "passed": False, "stage": "rebuilt",
+                "rebuiltUnits": rebuilt,
+                "signature": "relink replaced subject objects: " + ", ".join(rebuilt)}
     tested = run_tests(subject, evidence, tag)
+    rebuilt = rebuilt_by_make(tree, subset, asm_root)
+    if rebuilt:
+        return {
+            "units": subset,
+            "passed": False,
+            "stage": "rebuilt",
+            "rebuiltUnits": rebuilt,
+            "signature": "test target replaced subject objects: " + ", ".join(rebuilt),
+        }
     return {
         "units": subset,
         "passed": tested["passed"],
         "stage": "test" if not tested["passed"] else "pass",
         "signature": "" if tested["passed"] else _signature(tested["tail"]),
+        "status": tested["status"],
+        "relinkStatus": linked["status"],
+        "regeneratedInputs": regenerated,
     }
+
+
+def is_compiler_failure(verdict: dict) -> bool:
+    """A build replacing our input is not a miscompile to delta-debug."""
+    return not verdict["passed"] and verdict["stage"] in {"test", "relink"}
+
+
+def final_trial(previous: dict, subset: list[str], rerun) -> dict:
+    """Reuse only the immediately completed passing trial of this exact build."""
+    if previous['passed'] and previous['units'] == subset:
+        return previous
+    return rerun()
 
 
 def _signature(log: str) -> str:
@@ -895,10 +942,12 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
     build = reference_build(subject, tree, evidence)
     if build["status"] != 0:
         raise SystemExit(f"{subject.name}: the reference build failed; see {evidence}")
+    build_units = parse_build_log(build["log"], f"/work/{subject.name}/{subject.tree}")
     units = [
         unit
-        for unit in parse_build_log(build["log"], f"/work/{subject.name}/{subject.tree}")
+        for unit in build_units
         if unit.obj not in subject.skip_objects
+        and (not subject.source_prefixes or unit.source.startswith(subject.source_prefixes))
     ]
     (evidence / "compile-commands.json").write_text(
         json.dumps([dataclasses.asdict(unit) for unit in units], indent=1) + "\n",
@@ -910,7 +959,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
     build_symlinks = portable_build_symlinks(tree, f"/work/{subject.name}/{subject.tree}")
     baseline = run_tests(subject, evidence, "baseline")
     if not baseline["passed"]:
-        raise SystemExit(f"{subject.name}: the GCC baseline suite failed; see {evidence}")
+        raise SystemExit(f"{subject.name}: the reference baseline suite failed; see {evidence}")
 
     asm_root = BUILD / subject.name / "evocc-objects"
     if asm_root.is_dir():
@@ -956,6 +1005,14 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
 
     candidates = [unit.obj for unit in units]
     substituted, excluded = without_collisions(rows)
+    generated_inputs = None
+    if subject.refresh_generated_inputs:
+        by_name = {row["unit"]: row for row in rows}
+        generated_inputs = {
+            unit.obj: (evocc_argv(unit, evocc, subject, tree, include)[0],
+                       by_name[unit.obj].get("assemblySha256"))
+            for unit in units
+        }
 
     attempts: list[dict] = []
     verdict = {"passed": False, "stage": "not-run", "signature": "", "units": []}
@@ -963,6 +1020,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         verdict = trial(
             subject, tree, candidates, substituted, asm_root, pristine, evidence,
             f"attempt-{attempt}",
+            generated_inputs,
         )
         attempts.append({k: v for k, v in verdict.items() if k != "units"} | {"unitCount": len(substituted)})
         collisions = verdict.get("multipleDefinitions") or []
@@ -976,36 +1034,31 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         substituted = [unit for unit in substituted if unit not in guilty]
 
     failing: list[dict] = []
-    if not verdict["passed"] and substituted:
+    if is_compiler_failure(verdict) and substituted:
         minimal = ddmin(
             substituted,
-            lambda subset: not trial(
+            lambda subset: is_compiler_failure(trial(
                 subject, tree, candidates, list(subset), asm_root, pristine, evidence,
                 f"bisect-{len(subset)}",
-            )["passed"],
+                generated_inputs,
+            )),
         )
         final = trial(
-            subject, tree, candidates, list(minimal), asm_root, pristine, evidence, "minimal"
+            subject, tree, candidates, list(minimal), asm_root, pristine, evidence, "minimal",
+            generated_inputs,
         )
-        failing = [
-            {"unit": unit, "stage": final["stage"], "signature": final["signature"]}
-            for unit in minimal
-        ]
-        substituted = [unit for unit in substituted if unit not in set(minimal)]
-        verdict = trial(
-            subject, tree, candidates, substituted, asm_root, pristine, evidence, "without-failing"
-        )
+        if is_compiler_failure(final):
+            failing = [
+                {"unit": unit, "stage": final["stage"], "signature": final["signature"]}
+                for unit in minimal
+            ]
+            substituted = [unit for unit in substituted if unit not in set(minimal)]
 
-    restore(tree, candidates, pristine)
-    install(tree, substituted, asm_root)
-    final_relink = relink(subject, evidence, "final")
-    workspace = subject.workspace or f"/work/{subject.name}/{subject.tree}"
-    rebuilt = sorted(
-        set(rebuilt_by_make(tree, substituted, asm_root))
-        | set(recompiled(final_relink["log"], workspace, substituted))
-    )
+    final_tests = final_trial(verdict, substituted, lambda: trial(
+        subject, tree, candidates, substituted, asm_root, pristine,
+        evidence, "final", generated_inputs))
+    rebuilt = final_tests.get("rebuiltUnits", [])
     substituted = [unit for unit in substituted if unit not in rebuilt]
-    final_tests = run_tests(subject, evidence, "final")
 
     outcomes = collections.Counter(row["outcome"] for row in rows)
     refusals = collections.Counter(row["code"] for row in rows if row["outcome"] == "refused")
@@ -1022,6 +1075,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         "driverSha256": sha256_file(evocc),
         "target": TARGET,
         "unitsTotal": len(units),
+        "unmeasuredBuildUnits": [dataclasses.asdict(unit) for unit in build_units if unit not in units],
         "unitsEvoccCompiled": outcomes["assembled"] + outcomes["emitted"],
         "unitsSubstituted": len(substituted),
         "unitsRebuiltByMake": rebuilt,
@@ -1045,9 +1099,13 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         "baselineTest": {"passed": baseline["passed"], "status": baseline["status"]},
         "test": {
             "passed": final_tests["passed"],
-            "status": final_tests["status"],
-            "relinkStatus": final_relink["status"],
+            "status": final_tests.get("status"),
+            "relinkStatus": final_tests.get("relinkStatus"),
+            "stage": final_tests["stage"],
+            "signature": final_tests["signature"],
+            "regeneratedInputs": final_tests.get("regeneratedInputs", []),
             "command": subject.test,
+            "completedTrial": f"attempt-{attempt}" if final_tests is verdict else "final",
             **({"objectFiles": list(subject.test_objects)} if subject.test_objects else {}),
         },
         "attempts": attempts,
@@ -1064,7 +1122,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
                 {flag for row in rows for flag in row.get("omittedFlags", [])}
             ),
         },
-        "frontEndGaps": FRONT_END_GAPS,
+        "frontEndGaps": front_end_gaps(rows),
         "defects": list(subject.defects),
         "evidence": str(evidence.relative_to(ROOT)),
     }

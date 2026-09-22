@@ -27,6 +27,20 @@ RECORD = (
 
 
 class DecodeTest(unittest.TestCase):
+    def test_minimum_function_alignment_reaches_codegen_in_written_order(self):
+        options = ['-fmin-function-alignment=128', '-fmin-function-alignment=8']
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
+        argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
+        self.assertEqual([x for x in argv if x in options], options)
+        self.assertFalse(set(options) & set(omitted))
+
+    def test_patchable_entry_options_are_preserved_in_written_order(self):
+        options = ['-fpatchable-function-entry=4,2', '-fpatchable-function-entry=0']
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
+        argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
+        self.assertEqual([x for x in argv if x in options], options)
+        self.assertFalse(set(options) & set(omitted))
+
     def test_boot_option_audit_does_not_label_new_instrumentation_inert(self):
         self.assertEqual(cmdrecord.omitted_option_class("-funknown-hardening"), "UNREVIEWED")
         self.assertEqual(cmdrecord.omitted_option_class("-g"), "source-type-debug-option-must-be-forwarded")
@@ -38,6 +52,19 @@ class DecodeTest(unittest.TestCase):
         argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
         self.assertEqual([x for x in argv if x in options], options)
         self.assertFalse(set(options) & set(omitted))
+
+    def test_inline_dialect_and_character_options_keep_last_option_order(self):
+        options = ['-std=gnu89', '-fno-gnu89-inline', '-std=gnu11',
+                   '-fgnu89-inline', '-fsigned-char', '-funsigned-char',
+                   '-fsigned-char']
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
+        argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
+        self.assertEqual([x for x in argv if x in options], ['-std=gnu11', *options])
+        self.assertFalse(set(options) & set(omitted))
+        for option in options:
+            if not option.startswith('-std='):
+                self.assertEqual(cmdrecord.omitted_option_class(option),
+                                 'source-semantics-option-must-be-forwarded')
 
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -116,6 +143,20 @@ class DecodeTest(unittest.TestCase):
             str((self.out / "arch/arm64/include/generated").resolve()),
         )
         self.assertEqual(cmdrecord.translate_path("/usr/lib", self.src, self.out), "/usr/lib")
+
+    def test_recorded_system_headers_use_the_explicit_export_without_reordering(self):
+        exported = (self.tmp / 'toolchain').resolve()
+        include = '/usr/lib/gcc/aarch64-linux-gnu/14/include'
+        flags = f'-isystem {include} -I/usr/include -I/work/src/include'
+        self.record_file.write_text(RECORD.replace(' -O2 ', f' -O2 {flags} '))
+        argv, omitted = cmdrecord.evocc_argv(
+            self.record(), Path('/evocc'), self.src, self.out, toolchain_root=exported)
+        self.assertIn(str(exported / include.lstrip('/')), argv)
+        self.assertIn(f'-I{exported}/usr/include', argv)
+        self.assertIn(f'-I{self.src}/include', argv)
+        self.assertLess(argv.index('-isystem'), argv.index(f'-I{exported}/usr/include'))
+        self.assertNotIn(include, omitted)
+        self.assertEqual(cmdrecord.translate_path('/usr/lib', self.src, self.out), '/usr/lib')
 
     def test_a_relative_path_escaping_the_output_tree_is_refused(self) -> None:
         with self.assertRaises(cmdrecord.RecordError):

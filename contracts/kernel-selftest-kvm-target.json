@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Supplemental arm64 KVM selftests with guest EL2; not the locked K6 flight configuration.",
+  "baseContract": "contracts/kernel-target.json",
+  "baseContractSha256": "85b11559bb43a516956204f0532f57387e8b44bbcf27985ddcb436f353a547d5",
+  "qemu": {
+    "binaryPath": "/opt/homebrew/bin/qemu-system-aarch64",
+    "binarySha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+    "machine": "virt-11.0,virtualization=on,gic-version=3",
+    "lanes": [
+      {
+        "name": "tcg-cortex-a72-el2",
+        "role": "Fixed CPU with emulated EL2 and GICv3 for original KVM selftests on both kernel Images",
+        "argv": ["-accel", "tcg", "-cpu", "cortex-a72"]
+      },
+      {
+        "name": "tcg-cortex-a72-el2-icount",
+        "role": "Deterministic virtual timer control on both Images; not a physical interrupt-latency measurement",
+        "argv": ["-accel", "tcg,thread=single", "-cpu", "cortex-a72", "-icount", "shift=0"]
+      },
+      {
+        "name": "tcg-neoverse-n2-el2",
+        "role": "Fixed SVE/NV2-capable CPU for original SVE and nested-EL2 assertions on both Images; nested KVM boot mode is separately explicit",
+        "argv": ["-accel", "tcg", "-cpu", "neoverse-n2"]
+      },
+      {
+        "name": "tcg-a64fx-el2",
+        "role": "AArch64-only CPU for the original AArch32 ID-register RAZ/WI assertions on both Images",
+        "argv": ["-accel", "tcg", "-cpu", "a64fx"]
+      }
+    ],
+    "fixedArgv": {"smp": 4, "memoryMiB": 4096}
+  }
+}

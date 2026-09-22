@@ -46,6 +46,8 @@ PASSED_THROUGH = (
     "-mstrict-align", "-mno-strict-align",
     "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",
     "-fshort-wchar", "-fno-short-wchar",
+    "-fgnu89-inline", "-fno-gnu89-inline",
+    "-fsigned-char", "-funsigned-char",
     "-fpic", "-fPIC", "-fpie", "-fPIE", "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",
 )
 
@@ -63,14 +65,18 @@ def omitted_option_class(option: str) -> str:
         return "diagnostic-policy-not-code-generation"
     if option in ("-g", "-g0", "-gdwarf-4"):
         return "source-type-debug-option-must-be-forwarded"
+    if option in ("-fgnu89-inline", "-fno-gnu89-inline", "-fsigned-char", "-funsigned-char"):
+        return "source-semantics-option-must-be-forwarded"
+    if option.startswith(("-fmin-function-alignment=", "-fpatchable-function-entry=")):
+        return "function-entry-option-must-be-forwarded"
     if option.startswith("-femit-struct-debug-") or option == "-fno-var-tracking":
         return "debug-scope-hint-source-types-emitted-without-local-locations"
     if option in ("-fconserve-stack", "-fno-code-hoisting"):
         return "optimization-hint-no-transform-equivalence"
     if option in (
-        "-mlittle-endian", "-mabi=lp64", "-funsigned-char", "-ffixed-x18",
+        "-mlittle-endian", "-mabi=lp64", "-ffixed-x18",
         "-fno-common", "-fno-data-sections", "-fno-function-sections",
-        "-fmin-function-alignment=4", "-fno-omit-frame-pointer",
+        "-fno-omit-frame-pointer",
         "-fno-optimize-sibling-calls", "-fno-strict-aliasing",
         "-fno-delete-null-pointer-checks", "-fno-allow-store-data-races",
         "-fno-stack-check", "-fno-stack-clash-protection",
@@ -157,7 +163,8 @@ def is_target_c_compile(record: Record) -> bool:
     )
 
 
-def translate_path(value: str, src_root: Path, out_root: Path) -> str:
+def translate_path(value: str, src_root: Path, out_root: Path,
+                   toolchain_root: Path | None = None) -> str:
     """Rewrite one container path to its host equivalent.
 
     ``/work/src/...`` is the mounted kernel source; a relative path is
@@ -166,6 +173,12 @@ def translate_path(value: str, src_root: Path, out_root: Path) -> str:
     """
     if value.startswith(CONTAINER_SOURCE_PREFIX):
         return str(src_root / value[len(CONTAINER_SOURCE_PREFIX) :])
+    if value.startswith('/usr/') and toolchain_root is not None:
+        root = toolchain_root.resolve()
+        translated = (root / value.lstrip('/')).resolve()
+        if root not in translated.parents:
+            raise RecordError(f'toolchain path escapes the exported tree: {value}')
+        return str(translated)
     if value.startswith("/"):
         return value
     relative = value[2:] if value.startswith("./") else value
@@ -188,6 +201,7 @@ def evocc_argv(
     out_root: Path,
     mode: str = "--emit=asm",
     target: str = "aarch64-unknown-linux-gnu",
+    toolchain_root: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     """The EvoCC command for this unit, and the flags it does not consume."""
     projected = [str(evocc), mode, "--survey", f"--target={target}"]
@@ -204,15 +218,15 @@ def evocc_argv(
                 raise RecordError(f"missing value after {value} in {record.path}")
             following = argv[index + 1]
             if value in PATH_VALUED:
-                following = translate_path(following, src_root, out_root)
+                following = translate_path(following, src_root, out_root, toolchain_root)
             projected.extend((value, following))
             index += 2
             continue
         if value.startswith("-I") and len(value) > 2:
-            projected.append("-I" + translate_path(value[2:], src_root, out_root))
+            projected.append("-I" + translate_path(value[2:], src_root, out_root, toolchain_root))
         elif value.startswith(("-D", "-U")) and len(value) > 2:
             projected.append(value)
-        elif value in PASSED_THROUGH or value.startswith(("-std=", "-mstack-protector-guard-reg=", "-mstack-protector-guard-offset=")):
+        elif value in PASSED_THROUGH or value.startswith(("-std=", "-mstack-protector-guard-reg=", "-mstack-protector-guard-offset=", "-fpatchable-function-entry=", "-fmin-function-alignment=")):
             projected.append(value)
         elif value.startswith("-fmacro-prefix-map="):
             projected.append(

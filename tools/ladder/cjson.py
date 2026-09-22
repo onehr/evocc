@@ -72,15 +72,11 @@ CJSON = ladder.Subject(
         "this is the public Makefile test plus 54 public-API Unity assertions, "
         "not the full CMake/private-helper Unity suite; CMake is unavailable "
         "and private helpers cannot test an independently compiled object",
-        "cJSON's numbers are doubles, and the back end refuses floating "
-        "point, so these units are not expected to pass before the "
-        "floating-point rung",
-        "both units stop in <math.h> before any of their own code is read: "
-        "the driver defines __GNUC__ 14, so glibc uses GCC 14's built-in "
-        "vector types, which the front end does not have. With those types "
-        "supplied by hand the units refuse on floating point instead "
-        "(cJSON.c: __builtin_nanf undeclared; cJSON_Utils.c: E3101, a "
-        "function value that is neither an integer nor an object pointer)",
+        "The release Makefile explicitly selects -std=c89. The subject "
+        "receives that option unchanged; a language-mode refusal is distinct "
+        "from an observed floating-point or header-type refusal. Current "
+        "first errors are recorded in refusals, not inferred from cJSON's "
+        "use of double or historical adjusted-header runs.",
     ),
 )
 

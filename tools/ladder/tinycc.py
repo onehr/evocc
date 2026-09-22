@@ -77,12 +77,11 @@ def prepare(build: Path, source: Path) -> tuple[Path, dict]:
     pristine = build / "tinycc-pristine"
     if pristine.exists():
         shutil.rmtree(pristine)
-    escaped = mixed.escape_high_bytes(tree)
     mixed.install_recorder(tree)
     return tree, {
         "sourcePageBreaksStripped": [],
         "noreturnSpecifiersRemoved": [],
-        "highBytesReEscaped": escaped,
+        "highBytesReEscaped": [],
     }
 
 

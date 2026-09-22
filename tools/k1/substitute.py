@@ -139,19 +139,26 @@ def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str],
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def input_snapshot(src_root: Path, pristine: Path, *, content_only: bool = False) -> str:
-    """Hash both read-only input trees once, including newly added headers.
+def input_snapshot(src_root: Path, pristine: Path, *, content_only: bool = False,
+                   toolchain_root: Path | None = None) -> str:
+    """Hash all read-only input trees once, including exported system headers.
 
     This deliberately over-invalidates instead of guessing dependencies from
     the reference compiler's .cmd file, which may not match EvoCC's includes.
     No copies or persistent per-file manifests are made.
     """
     digest = hashlib.sha256()
-    # The driver's __DATE__ uses SOURCE_DATE_EPOCH or the current UTC date.
-    # A day boundary conservatively invalidates reuse, including mid-run.
-    digest.update(json.dumps([os.environ.get("SOURCE_DATE_EPOCH"),
-                              dt.datetime.now(dt.timezone.utc).date().isoformat()]).encode())
+    # Match the driver's i64 SOURCE_DATE_EPOCH parse. Only an unfrozen date
+    # changes at midnight; an overnight run with a valid epoch keeps exactly
+    # the same preprocessing input. Malformed values still fall back to UTC.
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    frozen_date = (epoch is not None and re.fullmatch(r'[+-]?[0-9]+', epoch) is not None
+                   and -(1 << 63) <= int(epoch) < (1 << 63))
+    date = None if frozen_date else dt.datetime.now(dt.timezone.utc).date().isoformat()
+    digest.update(json.dumps([epoch, date]).encode())
     roots = (src_root.resolve(), pristine.resolve())
+    if toolchain_root is not None:
+        roots += (toolchain_root.resolve(),)
     def walk_error(error):
         raise error
 
@@ -277,6 +284,45 @@ def read_allowlist(path: Path) -> list[str]:
     return units
 
 
+def resume_prepared_rows(run: Path, records: dict[str, Record], args,
+                         cache: dict, inputs: str) -> tuple[list[dict], dict]:
+    """Recover only a complete first pass; rerun every prepared-input consumer.
+
+    The normal cache binds source, all inputs, command and compiler. Installed
+    object hashes additionally prove that the interrupted pass reached the
+    existing working tree. Partial second-pass outputs are not reused as
+    compilation evidence, and the earlier run is never modified.
+    """
+    inventory = run / 'units.jsonl'
+    rows = [json.loads(line) for line in inventory.read_text().splitlines()]
+    if (len(rows) != len(records) or not records
+            or {row['unit'] for row in rows} != set(records)):
+        raise ValueError('prepared resume requires the complete original denominator')
+    pristine, output = args.k1_root / 'pristine', args.k1_root / 'out'
+    compiler = sha256_file(args.evocc)
+    recovered = []
+    for row in rows:
+        unit = row['unit']
+        record = records[unit]
+        argv, _ = evocc_argv(record, args.evocc, args.src_root, pristine,
+                             toolchain_root=args.toolchain_root)
+        key = cache_key(unit, compiler,
+                        sha256_file(source_path(record, args.src_root, pristine)), argv, inputs)
+        entry = cache.get(key, {})
+        if (row.get('outcome') != 'assembled' or entry.get('outcome') != 'emitted'
+                or entry.get('unit') != unit
+                or row.get('record') != str(record.path)
+                or not row.get('assemblySha256')
+                or entry.get('assemblySha256') != row['assemblySha256']
+                or not (output / unit).is_file()
+                or sha256_file(output / unit) != row.get('objectSha256')):
+            raise ValueError(f'prepared resume input or installed object changed: {unit}')
+        recovered.append(dict(row, outcome='substituted', installedSha256=row['objectSha256']))
+    return recovered, {'run': str(run), 'inventorySha256': sha256_file(inventory),
+                       'firstPassUnits': len(rows), 'preparedCompilationsReused': 0,
+                       'policy': 'recompile every object against actual generated inputs; repeat link and boot'}
+
+
 def emit_assembly(
     unit: str,
     record: Record,
@@ -285,11 +331,13 @@ def emit_assembly(
     out_root: Path,
     asm_root: Path,
     timeout: int,
+    toolchain_root: Path | None = None,
 ) -> dict:
     """Run EvoCC on one unit and record what happened."""
     row: dict = {"unit": unit, "record": str(record.path)}
     try:
-        argv, omitted = evocc_argv(record, evocc, src_root, out_root)
+        argv, omitted = evocc_argv(record, evocc, src_root, out_root,
+                                   toolchain_root=toolchain_root)
     except RecordError as error:
         return {**row, "outcome": "not-a-target-c-compile", "detail": str(error)}
     row["omittedFlagCount"] = len(omitted)
@@ -413,6 +461,26 @@ def _quote(argument: str) -> str:
     return "'" + argument.replace("'", "'\\''") + "'"
 
 
+def release_successful_assembly(rows: list[dict], asm_root: Path) -> None:
+    """Keep verified objects and hashes, not rebuildable successful assembly.
+
+    Failed assembly and symbol mismatches remain available for diagnosis.
+    Missing assembly deliberately invalidates the normal emission cache.
+    """
+    for row in rows:
+        if (row['outcome'] != 'assembled' or row.get('missingSymbols')
+                or row.get('extraSymbols')):
+            continue
+        assembly = assembly_path(asm_root, row['unit'])
+        obj = asm_root / row['unit']
+        if (not obj.is_file() or sha256_file(obj) != row.get('objectSha256')
+                or not assembly.is_file()
+                or sha256_file(assembly) != row.get('assemblySha256')):
+            raise ValueError(f"cannot release unverified assembly: {row['unit']}")
+        assembly.unlink()
+        row['assemblyRetained'] = False
+
+
 def defined_symbols(objects: list[tuple[str, Path]], work: Path) -> dict[str, list[str]]:
     """The global symbols each object defines, read by the container's nm."""
     if not objects:
@@ -489,6 +557,12 @@ def check_symbol_parity(rows: list[dict], asm_root: Path, pristine: Path, work: 
         row["referenceSymbolKinds"] = dict(sorted(their_kinds.items()))
         row["missingSymbols"] = missing
         row["extraSymbols"] = extra
+    # These copies exist solely to mount both object sets for one nm command.
+    # The result above retains the complete symbol tables; no later stage
+    # consumes the copies, and large configurations must not retain two more
+    # object trees just to preserve a comparison that is already recorded.
+    for path in {path for _, path in pairs}:
+        path.unlink()
 
 
 def install(rows: list[dict], asm_root: Path, out_root: Path, allow_drift: bool) -> None:
@@ -643,6 +717,100 @@ def module_link_plan(pristine: Path, out_root: Path, installed: list[dict]) -> d
     return result
 
 
+def relink_modules(src_root: Path, pristine: Path, out_root: Path,
+                   installed: list[dict], run_dir: Path, jobs: int,
+                   *, finalize: bool = True) -> dict:
+    """Replay original module links without allowing Kbuild to compile C.
+
+    Final links alone omit the subsequent BTF recipe from Makefile.modfinal.
+    Evaluate its flags with the original Makefile.btf, then run both pahole
+    and resolve_btfids against this composition's vmlinux. Never copy the
+    reference module's BTF or treat an old .ko as proof of a new link.
+    """
+    plan = module_link_plan(pristine, out_root, installed)
+    if plan['blocked']:
+        raise ValueError(f"module links have unaudited inputs: {sorted(plan['blocked'])}")
+    if jobs < 1:
+        raise ValueError('module link jobs must be positive')
+    if not finalize:
+        # modpost consumes these aggregate .o files, not their individual C
+        # leaves. Refresh them before generating imported-symbol versions.
+        plan = {**plan, 'links': [link for link in plan['links']
+                                 if not link['unit'].endswith('.ko')]}
+    for link in plan['links']:
+        if not (out_root / link['unit']).resolve().is_relative_to(out_root.resolve()):
+            raise ValueError(f"module link output escapes its build: {link['unit']}")
+    protected = {**plan['cInputs'], **plan['assemblyInputs'], **plan['linkInputs'],
+                 '.config': sha256_file(out_root / '.config')}
+    if finalize:
+        protected['vmlinux'] = sha256_file(out_root / 'vmlinux')
+    def unchanged():
+        return all((out_root / name).is_file() and sha256_file(out_root / name) == digest
+                   for name, digest in protected.items())
+    if not unchanged():
+        raise ValueError('module inputs changed before linking')
+    prefix = 'module-link' if finalize else 'module-input-link'
+    path = run_dir / (prefix + '-plan.json')
+    path.write_text(json.dumps({**plan, 'protectedInputs': protected, 'jobs': jobs,
+                               'finalize': finalize}, indent=2) + '\n')
+    image = sealed_image()
+    verify_image(image)
+    worker = r'''
+import hashlib, json, os, shlex, subprocess, sys
+from pathlib import Path
+plan = json.loads(Path(sys.argv[1]).read_text())
+def audit():
+    for name, expected in plan['protectedInputs'].items():
+        digest = hashlib.sha256()
+        with open(name, 'rb') as source:
+            for part in iter(lambda: source.read(1 << 20), b''):
+                digest.update(part)
+        if digest.hexdigest() != expected:
+            raise ValueError('module input changed: ' + name)
+audit()
+btf = plan['finalize'] and 'CONFIG_DEBUG_INFO_BTF_MODULES=y' in Path('.config').read_text().splitlines()
+flags = []
+if btf:
+    flags = shlex.split(subprocess.check_output([
+        'make', '-s', '-j' + str(plan['jobs']), '-f', 'include/config/auto.conf',
+        '-f', '/work/src/scripts/Kbuild.include', '-f', '/work/src/scripts/Makefile.btf',
+        '--eval=print-pahole: ; @echo $(PAHOLE_FLAGS) $(MODULE_PAHOLE_FLAGS)',
+        'print-pahole'], text=True))
+env = {**os.environ, 'LLVM_OBJCOPY': 'objcopy'}
+for number, link in enumerate(plan['links'], 1):
+    subprocess.run(link['argv'], env=env, check=True)
+    if btf and link['unit'].endswith('.ko'):
+        subprocess.run(['pahole', '-J', *flags, '--btf_base', 'vmlinux', link['unit']],
+                       env=env, check=True)
+        subprocess.run(['./tools/bpf/resolve_btfids/resolve_btfids', '-b', 'vmlinux',
+                        link['unit']], check=True)
+    print('module link', number, 'of', len(plan['links']), link['unit'], flush=True)
+audit()
+'''
+    done = subprocess.run([
+        CONTAINER_BIN, 'run', '--rm', '--platform', 'linux/arm64', '--network', 'none',
+        '--cpus', str(jobs), '--memory', f'{max(4, 2 * jobs)}G',
+        '-v', f'{src_root}:/work/src:ro', '-v', f'{out_root}:/work/out',
+        '-v', f'{run_dir}:/work/evidence:ro', '-w', '/work/out',
+        'evo-flight-lab:sealed', 'python3', '-c', worker,
+        '/work/evidence/' + path.name], capture_output=True, text=True, check=False)
+    (run_dir / (prefix + '.log')).write_text(done.stdout + '\n--- stderr ---\n' + done.stderr)
+    verify_image(image)
+    inputs_stable = unchanged()
+    success = done.returncode == 0 and inputs_stable
+    result = {'status': 'PASS' if success else 'INCOMPLETE', 'linkExitCode': done.returncode,
+              'inputHashesUnchanged': inputs_stable, 'assemblerImage': image,
+              'planSha256': sha256_file(path), 'targetCInputs': len(plan['cInputs']),
+              'referenceAssemblyInputs': len(plan['assemblyInputs']),
+              'btfBaseSha256': protected.get('vmlinux'), 'configSha256': protected['.config'],
+              'modules': [{'unit': name, 'sha256': sha256_file(out_root / name)}
+                          for name in plan['modules']] if success and finalize else [],
+              'scope': ('Module link and BTF only; signing, installation and runtime are separate'
+                        if finalize else 'Module aggregate inputs for modpost; no final modules or BTF')}
+    (run_dir / (prefix + '.json')).write_text(json.dumps(result, indent=2) + '\n')
+    return result
+
+
 def load_state(k1_root: Path) -> list[str]:
     path = state_path(k1_root)
     if not path.is_file():
@@ -676,6 +844,9 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
         f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}' "
         f"KBUILD_BUILD_VERSION='{version[1]}'\n"
         f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 "
+        + ('KBUILD_MODULES=1 ' if targets == ('modpost',)
+           and (out_root / 'modules.order').is_file()
+           and (out_root / 'modules.order').read_text().strip() else '')
         + " ".join(_quote(target) for target in targets) + "\n"
     )
     if targets == ("prepare",):
@@ -690,7 +861,7 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
     completed = subprocess.run(
         [
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-            "-c", "10", "-m", "24G",
+            "-c", str(jobs), "-m", f"{max(8, min(24, 4 * jobs))}G",
             "-v", f"{src_root}:/work/src:ro",
             "-v", f"{out_root}:/work/out",
             "-w", "/work/out", image, "sh", "-c", script,
@@ -716,20 +887,27 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
               run_dir / "prepare.log", args.relink_jobs, ("prepare",))}
     if result["prepareExitCode"] != 0:
         return result
-    before = input_snapshot(args.src_root, out_root)
+    toolchain_root = getattr(args, 'toolchain_root', None)
+    before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
     compiler = sha256_file(args.evocc)
     selected = [row for row in rows if row["outcome"] == "substituted"]
     def compile_one(old):
         row = emit_assembly(old["unit"], records[old["unit"]], args.evocc,
-                            args.src_root, out_root, asm_root, args.timeout)
+                            args.src_root, out_root, asm_root, args.timeout, toolchain_root)
         row["compileInputRoot"] = str(out_root)
         row["compileInputSnapshotSha256"] = before
         return row
+    compiled = []
+    size = 64 if getattr(args, 'low_disk', False) else max(1, len(selected))
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        compiled = list(pool.map(compile_one, selected))
-    assemble_batch(compiled, records, asm_root, out_root, use_cache=not args.no_cache)
-    check_symbol_parity(compiled, asm_root, pristine, args.k1_root / "symbols")
-    if before != input_snapshot(args.src_root, out_root) or compiler != sha256_file(args.evocc):
+        for start in range(0, len(selected), size):
+            batch = list(pool.map(compile_one, selected[start:start + size]))
+            assemble_batch(batch, records, asm_root, out_root, use_cache=not args.no_cache)
+            check_symbol_parity(batch, asm_root, pristine, args.k1_root / "symbols")
+            if getattr(args, 'low_disk', False):
+                release_successful_assembly(batch, asm_root)
+            compiled.extend(batch)
+    if before != input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root) or compiler != sha256_file(args.evocc):
         raise ValueError("prepared inputs changed while compiling dependent objects")
     for row in compiled:
         # The vDSO already ran through preparation: leaving identical objects
@@ -750,44 +928,75 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
     # Kbuild's GEN Makefile rewrites identical bytes on every prepare. The
     # fixed point concerns consumed content, not that housekeeping timestamp;
     # normal survey caching remains sensitive to metadata as before.
-    stable = input_snapshot(args.src_root, out_root, content_only=True)
+    stable = input_snapshot(args.src_root, out_root, content_only=True, toolchain_root=toolchain_root)
     result["verifyPrepareExitCode"] = relink(args.src_root, out_root,
         run_dir / "prepare-verify.log", args.relink_jobs, ("prepare",))
-    result["preparedInputsStable"] = stable == input_snapshot(args.src_root, out_root, content_only=True)
+    result["preparedInputsStable"] = stable == input_snapshot(args.src_root, out_root, content_only=True, toolchain_root=toolchain_root)
     return result
 
 
 def recompile_export_table(rows: list[dict], records: dict[str, Record], args,
                            asm_root: Path, out_root: Path, run_dir: Path) -> dict:
-    """modpost derives this target C source from the installed vmlinux.o.
+    """Compile modpost's export table and module descriptors from this link.
 
-    It is an original denominator member, not a host-tool exemption. Compile
-    its actual generated content before final Kbuild can fall back to CC.
+    These are original denominator members, not host-tool exemptions. The
+    historical receipt field is exportTable; sources records its full set.
     """
-    unit = ".vmlinux.export.o"
-    if unit not in records or not any(row["unit"] == unit for row in rows):
+    units = sorted(row['unit'] for row in rows if row['unit'] in records
+                   and (row['unit'] == '.vmlinux.export.o'
+                        or (row['unit'].endswith('.mod.o')
+                            and records[row['unit']].source_token.endswith('.mod.c'))))
+    if not units:
         return {"required": False, "ready": True}
-    result = {"required": True, "ready": False, "producerExitCode":
-              relink(args.src_root, out_root, run_dir / "modpost.log",
-                     args.relink_jobs, ("modpost",))}
+    result = {"required": True, "ready": False}
+    if any(unit.endswith('.mod.o') for unit in units):
+        result['moduleInputs'] = relink_modules(args.src_root, args.k1_root / 'pristine',
+                                                out_root, rows, run_dir, args.relink_jobs,
+                                                finalize=False)
+        if result['moduleInputs']['status'] != 'PASS':
+            return result
+    result['producerExitCode'] = relink(args.src_root, out_root, run_dir / "modpost.log",
+                                       args.relink_jobs, ("modpost",))
     if result["producerExitCode"] != 0:
         return result
-    source = source_path(records[unit], args.src_root, out_root)
-    before = sha256_file(source)
+    sources = {unit: source_path(records[unit], args.src_root, out_root) for unit in units}
+    result['sources'] = {unit: {'path': str(source), 'sha256': sha256_file(source)}
+                         for unit, source in sources.items()}
+    if '.vmlinux.export.o' in sources:
+        export = result['sources']['.vmlinux.export.o']
+        result.update(source=export['path'], sourceSha256=export['sha256'])
     compiler = sha256_file(args.evocc)
-    row = emit_assembly(unit, records[unit], args.evocc, args.src_root,
-                        out_root, asm_root, args.timeout)
-    result.update(source=str(source), sourceSha256=before)
-    if before != sha256_file(source) or compiler != sha256_file(args.evocc):
-        result["inputsChanged"] = True
-        return result
-    assemble_batch([row], records, asm_root, out_root, use_cache=not args.no_cache)
-    row.update(compileInputRoot=str(out_root), compileSourceSha256=before,
-               recompiledAfterPrepare=True, recompiledAfterModpost=True)
-    install([row], asm_root, out_root, args.allow_symbol_drift)
-    rows[:] = [row if old["unit"] == unit else old for old in rows]
-    result["ready"] = row["outcome"] == "substituted"
-    result["outcome"] = row["outcome"]
+    def unchanged():
+        return (compiler == sha256_file(args.evocc)
+                and all(source.is_file() and sha256_file(source) == result['sources'][unit]['sha256']
+                        for unit, source in sources.items()))
+    def compile_one(unit):
+        row = emit_assembly(unit, records[unit], args.evocc, args.src_root,
+                            out_root, asm_root, args.timeout, getattr(args, 'toolchain_root', None))
+        row.update(compileInputRoot=str(out_root),
+                   compileSourceSha256=result['sources'][unit]['sha256'],
+                   recompiledAfterPrepare=True, recompiledAfterModpost=True)
+        return row
+    compiled = {}
+    size = 64 if getattr(args, 'low_disk', False) else len(units)
+    with ThreadPoolExecutor(max_workers=getattr(args, 'jobs', 1)) as pool:
+        for start in range(0, len(units), size):
+            batch = list(pool.map(compile_one, units[start:start + size]))
+            if not unchanged():
+                result['inputsChanged'] = True
+                return result
+            assemble_batch(batch, records, asm_root, out_root, use_cache=not args.no_cache)
+            if not unchanged():
+                result['inputsChanged'] = True
+                return result
+            if getattr(args, 'low_disk', False):
+                release_successful_assembly(batch, asm_root)
+            install(batch, asm_root, out_root, args.allow_symbol_drift)
+            compiled.update((row['unit'], row) for row in batch)
+    rows[:] = [compiled.get(old['unit'], old) for old in rows]
+    result['outcomes'] = {unit: row['outcome'] for unit, row in compiled.items()}
+    result['ready'] = unchanged() and all(row['outcome'] == 'substituted' for row in compiled.values())
+    result['outcome'] = 'substituted' if result['ready'] else 'incomplete'
     return result
 
 
@@ -798,17 +1007,28 @@ def main() -> int:
     parser.add_argument("--all", action="store_true", help="every target C compilation")
     parser.add_argument("--k1-root", type=Path, default=REPO_ROOT / ".build/k1")
     parser.add_argument("--src-root", type=Path, default=REPO_ROOT / ".build/linux-src")
+    parser.add_argument('--toolchain-root', type=Path,
+                        default=Path(os.environ.get('EVOCC_BENCH_SYSROOT',
+                                                    str(REPO_ROOT / '.build/ladder/sysroot'))),
+                        help='unchanged sealed-image header export for recorded /usr/ include paths')
     parser.add_argument("--evocc", type=Path, default=default_evocc())
     parser.add_argument("--evidence-root", type=Path, default=REPO_ROOT / ".evidence/k1")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--relink-jobs", type=int, default=10)
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--low-disk", action="store_true",
+                        help="assemble/verify batches of 64; discard verified successful assembly")
     parser.add_argument("--no-install", action="store_true", help="survey only; change nothing")
     parser.add_argument("--no-relink", action="store_true")
     parser.add_argument("--allow-symbol-drift", action="store_true")
     parser.add_argument("--require-all", action="store_true", help="no reference target-C fallback or exclusions")
     parser.add_argument("--boot", action="store_true", help="boot only a complete, verified composition")
+    parser.add_argument('--receipt', type=Path,
+                        default=REPO_ROOT / 'tests/contracts/kernel-full-receipt.json',
+                        help='complete-composition receipt; keep supplemental configurations separate')
+    parser.add_argument('--resume-prepared-run', type=Path,
+                        help='verify a completed first pass and repeat all prepared-input compilation, link and boot')
     parser.add_argument(
         "--cache",
         type=Path,
@@ -826,6 +1046,8 @@ def main() -> int:
         parser.error("--require-all needs --all and an actual full link")
     if args.boot and not args.require_all:
         parser.error("--boot requires --require-all")
+    if args.resume_prepared_run and (not args.require_all or args.no_cache):
+        parser.error('--resume-prepared-run requires --require-all and the original input cache')
     if args.require_all:
         # Reference optimization may remove symbols; never exclude their
         # translation unit. The full linker decides required symbol closure.
@@ -845,6 +1067,8 @@ def main() -> int:
     run_id = args.run_id or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = args.evidence_root / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    if args.low_disk and (run_dir / 'units.jsonl').exists():
+        raise ValueError('low-disk survey requires a fresh run id')
 
     if args.all:
         wanted = [unit for unit, _ in target_c_records(pristine)]
@@ -872,11 +1096,22 @@ def main() -> int:
         records[unit] = record
         pending.append(unit)
 
+    # Most kernel records use only -nostdinc plus source/generated headers.
+    # Explicit toolchain includes (for example arm_neon.h) must instead name
+    # the unchanged export, not an unrelated or absent host /usr directory.
+    uses_toolchain = any(argument.startswith(('/usr/', '-I/usr/'))
+                         for record in records.values() for argument in record.argv[1:])
+    if not uses_toolchain:
+        args.toolchain_root = None
+    elif not args.toolchain_root.is_dir():
+        raise ValueError(f'missing sealed-image header export: {args.toolchain_root}')
+
     asm_root = args.k1_root / "evocc-out"
     asm_root.mkdir(parents=True, exist_ok=True)
     omitted_options = {}
     for record in records.values():
-        _, omitted = evocc_argv(record, args.evocc, args.src_root, pristine)
+        _, omitted = evocc_argv(record, args.evocc, args.src_root, pristine,
+                               toolchain_root=args.toolchain_root)
         for option in set(omitted):
             if not option.startswith("-"):
                 continue
@@ -891,7 +1126,16 @@ def main() -> int:
     cache = {} if args.no_cache else load_cache(cache_path)
     evocc_sha256 = sha256_file(args.evocc)
     print("k1: snapshotting source and reference inputs", flush=True)
-    inputs_sha256 = input_snapshot(args.src_root, pristine)
+    inputs_sha256 = input_snapshot(args.src_root, pristine, toolchain_root=args.toolchain_root)
+    resumption = None
+    if args.resume_prepared_run:
+        if args.resume_prepared_run.resolve() == run_dir.resolve():
+            raise ValueError('prepared resume requires a fresh run id')
+        rows, resumption = resume_prepared_rows(args.resume_prepared_run, records,
+                                                args, cache, inputs_sha256)
+        pending = []
+        print(f"k1: recovered {len(rows)} verified installed first-pass objects; "
+              "all prepared-input consumers will run again", flush=True)
     snapshot_seconds = time.monotonic() - started
     keys: dict[str, str] = {}
     reused: list[dict] = []
@@ -901,7 +1145,8 @@ def main() -> int:
             fresh.append(unit)
             continue
         try:
-            argv, _ = evocc_argv(records[unit], args.evocc, args.src_root, pristine)
+            argv, _ = evocc_argv(records[unit], args.evocc, args.src_root, pristine,
+                                toolchain_root=args.toolchain_root)
             source_sha256 = sha256_file(source_path(records[unit], args.src_root, pristine))
         except (RecordError, OSError):
             fresh.append(unit)
@@ -923,59 +1168,87 @@ def main() -> int:
     print(f"k1: EvoCC over {len(fresh)} units", flush=True)
     produced: list[dict] = []
     since_checkpoint = 0
-    emission_started = time.monotonic()
+    emission_seconds = assembly_seconds = symbols_seconds = 0.0
+    batch_size = 64 if args.low_disk else max(1, len(fresh))
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for row in pool.map(
-            lambda unit: emit_assembly(
-                unit, records[unit], args.evocc, args.src_root, pristine,
-                asm_root, args.timeout,
-            ),
-            fresh,
-        ):
-            produced.append(row)
-            if args.no_cache:
-                continue
-            key = keys.get(row["unit"])
-            if key is not None and row.get("outcome") in CACHEABLE_OUTCOMES:
-                cache[key] = row
-            since_checkpoint += 1
-            if since_checkpoint >= CACHE_CHECKPOINT:
-                save_cache(cache_path, cache)
-                since_checkpoint = 0
-                print(f"k1: {len(produced)} of {len(fresh)} examined", flush=True)
+        for start in range(0, len(fresh), batch_size):
+            emission_started = time.monotonic()
+            batch = []
+            for row in pool.map(
+                lambda unit: emit_assembly(
+                    unit, records[unit], args.evocc, args.src_root, pristine,
+                    asm_root, args.timeout, args.toolchain_root,
+                ),
+                fresh[start:start + batch_size],
+            ):
+                batch.append(row)
+                produced.append(row)
+                if args.no_cache:
+                    continue
+                key = keys.get(row["unit"])
+                if key is not None and row.get("outcome") in CACHEABLE_OUTCOMES:
+                    cache[key] = dict(row)
+                since_checkpoint += 1
+                if since_checkpoint >= CACHE_CHECKPOINT:
+                    save_cache(cache_path, cache)
+                    since_checkpoint = 0
+                    print(f"k1: {len(produced)} of {len(fresh)} examined", flush=True)
+            emission_seconds += time.monotonic() - emission_started
+            if args.low_disk:
+                stage = time.monotonic()
+                assemble_batch(batch, records, asm_root, pristine, use_cache=not args.no_cache)
+                assembly_seconds += time.monotonic() - stage
+                stage = time.monotonic()
+                check_symbol_parity(batch, asm_root, pristine, args.k1_root / "symbols")
+                symbols_seconds += time.monotonic() - stage
+                release_successful_assembly(batch, asm_root)
+                with (run_dir / 'units.jsonl').open('a', encoding='utf-8') as handle:
+                    for row in batch:
+                        handle.write(json.dumps(row, sort_keys=True) + '\n')
+                print(f"k1: verified {len(produced)} of {len(fresh)}; successful assembly released", flush=True)
     if not args.no_cache:
         save_cache(cache_path, cache)
     rows.extend(produced)
     rows.extend(reused)
 
-    emission_seconds = time.monotonic() - emission_started
+    # Low-disk batches are already assembled and compared; only cache hits
+    # still need those stages. Normal runs keep their single-container path.
+    unfinished = reused if args.low_disk else rows
     assembly_started = time.monotonic()
     print("k1: assembling with the reference GCC in the sealed container", flush=True)
-    assemble_batch(rows, records, asm_root, pristine, use_cache=not args.no_cache)
-    assembly_seconds = time.monotonic() - assembly_started
+    assemble_batch(unfinished, records, asm_root, pristine, use_cache=not args.no_cache)
+    assembly_seconds += time.monotonic() - assembly_started
     symbols_started = time.monotonic()
     print("k1: comparing defined symbols against the reference objects", flush=True)
-    check_symbol_parity(rows, asm_root, pristine, args.k1_root / "symbols")
-    symbols_seconds = time.monotonic() - symbols_started
-    if inputs_sha256 != input_snapshot(args.src_root, pristine) or evocc_sha256 != sha256_file(args.evocc):
+    check_symbol_parity(unfinished, asm_root, pristine, args.k1_root / "symbols")
+    symbols_seconds += time.monotonic() - symbols_started
+    if args.low_disk:
+        release_successful_assembly(unfinished, asm_root)
+    if inputs_sha256 != input_snapshot(args.src_root, pristine, toolchain_root=args.toolchain_root) or evocc_sha256 != sha256_file(args.evocc):
         raise ValueError("compiler or input trees changed during the survey")
 
     previously = load_state(args.k1_root)
     substituted: list[str] = []
-    compilation_complete = complete_coverage(rows, wanted, "assembled")
+    compilation_complete = resumption is not None or complete_coverage(rows, wanted, "assembled")
     install_permitted = not args.no_install and (not args.require_all or compilation_complete)
     if install_permitted:
         retained = {row["unit"] for row in rows if row["outcome"] == "assembled"
                     and (args.allow_symbol_drift or not (row.get("missingSymbols") or row.get("extraSymbols")))}
         restored = [] if args.require_all else restore([unit for unit in previously if unit not in retained], pristine, out_root)
         print(f"k1: restored {len(restored)} previously substituted objects", flush=True)
-        install(rows, asm_root, out_root, args.allow_symbol_drift)
+        if resumption is None:
+            install(rows, asm_root, out_root, args.allow_symbol_drift)
         substituted = [row["unit"] for row in rows if row["outcome"] == "substituted"]
         save_state(args.k1_root, substituted)
         print(f"k1: installed {len(substituted)} EvoCC objects", flush=True)
 
     relink_code = None
     preparation = None
+    module_order = pristine / 'modules.order'
+    modules_required = (args.require_all and module_order.is_file()
+                        and bool(module_order.read_text().strip()))
+    module_link = {'required': modules_required,
+                   'status': 'NOT_RUN' if modules_required else 'NOT_REQUIRED'}
     if install_permitted and not args.no_relink:
         print("k1: preparing generated headers and recompiling their consumers", flush=True)
         preparation = recompile_after_prepare(rows, records, args, asm_root, pristine,
@@ -992,10 +1265,17 @@ def main() -> int:
                        if ready else 1)
         export = preparation.get("exportTable", {})
         if export.get("ready") and export.get("required"):
-            export["unchangedAfterLink"] = sha256_file(Path(export["source"])) == export["sourceSha256"]
+            export["unchangedAfterLink"] = all(
+                Path(item['path']).is_file() and sha256_file(Path(item['path'])) == item['sha256']
+                for item in export['sources'].values())
             if not export["unchangedAfterLink"]:
                 relink_code = 1
         print(f"k1: relink exit {relink_code}", flush=True)
+        if modules_required and relink_code == 0:
+            print('k1: linking audited module inputs and finalizing BTF', flush=True)
+            module_link = {**relink_modules(args.src_root, pristine, out_root,
+                                           rows, run_dir, args.relink_jobs),
+                           'required': True}
         for row in rows:
             if row["outcome"] != "substituted":
                 continue
@@ -1028,10 +1308,18 @@ def main() -> int:
         "cacheHits": len(reused),
         "assemblyCacheHits": sum(bool(row.get("assemblyFromCache")) for row in rows),
         "freshCompilations": len(fresh),
+        "resumption": resumption,
         "inputSnapshotSha256": inputs_sha256,
+        "sourceRoot": str(args.src_root),
+        "referenceRoot": str(pristine),
+        "toolchainRoot": str(args.toolchain_root) if args.toolchain_root else None,
+        "outputRoot": str(out_root),
+        "configSha256": sha256_file(pristine / '.config'),
         "assemblerImage": sealed_image(),
         "omittedOptions": dict(sorted(omitted_options.items())),
         "jobs": args.jobs,
+        "lowDisk": args.low_disk,
+        "assemblyBatchSize": 64 if args.low_disk else None,
         "seconds": {"snapshot": round(snapshot_seconds, 3), "compile": round(emission_seconds, 3),
                     "assemble": round(assembly_seconds, 3), "symbols": round(symbols_seconds, 3),
                     "total": round(time.monotonic() - started, 3)},
@@ -1040,6 +1328,7 @@ def main() -> int:
         "refusalCodeCounts": dict(sorted(refusal_codes.items())),
         "substitutedUnits": sorted(substituted),
         "relinkExitCode": relink_code,
+        "moduleLink": module_link,
         "preparation": preparation,
         "installed": install_permitted,
         "allowSymbolDrift": args.allow_symbol_drift,
@@ -1052,7 +1341,8 @@ def main() -> int:
     }
     summary["unitsSha256"] = sha256_file(run_dir / "units.jsonl")
     if args.require_all:
-        whole = relink_code == 0 and complete_coverage(rows, wanted, "substituted")
+        whole = (relink_code == 0 and complete_coverage(rows, wanted, "substituted")
+                 and module_link['status'] in ('PASS', 'NOT_REQUIRED'))
         boot = {"verdict": "NOT_RUN"}
         if args.boot and whole:
             subprocess.run([str(REPO_ROOT / "tools/k1/boot.sh"),
@@ -1065,7 +1355,7 @@ def main() -> int:
                        driverSha256=evocc_sha256,
                        status="PASS" if whole and boot["verdict"] == "PASS" else "INCOMPLETE",
                        evidence=str(run_dir.relative_to(REPO_ROOT)))
-        (REPO_ROOT / "tests/contracts/kernel-full-receipt.json").write_text(
+        args.receipt.write_text(
             json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (run_dir / "substitution.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"

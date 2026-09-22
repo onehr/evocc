@@ -26,6 +26,13 @@ class KernelSelftest(unittest.TestCase):
         self.assertEqual(rows[0]["outcome"], "PASS")
         self.assertEqual(rows[0]["subtests"], {"PASS": 1, "FAIL": 0, "SKIP": 1})
 
+    def test_zero_exit_with_only_skipped_cases_is_not_a_pass(self):
+        # The upstream runner returns zero even when its sole program skips.
+        rows = lane.parse_transcript(self.transcript(
+            "1..1\nok 1 selftests: kvm: guest_print_test # SKIP\n"), "flight", ["memory"])
+        self.assertEqual(rows[0]['outcome'], 'SKIP')
+        self.assertEqual(rows[0]['exitCode'], 0)
+
     def test_zero_exit_cannot_hide_failing_or_truncated_tap(self):
         for output in ("1..1\nnot ok 1 wrong\n", "1..2\nok 1 only\n",
                        "1..2\nok 1 repeated\nok 1 repeated\n", ""):
@@ -40,6 +47,21 @@ class KernelSelftest(unittest.TestCase):
                                      "flight", ["memory", "signal"])
         self.assertEqual(len(rows), 2)
         self.assertNotEqual(rows[0]["outcome"], "PASS")
+
+    def test_timeout_marker_has_its_own_line_after_partial_child_output(self):
+        source = (PATH.parent / 'selftest-init.c').read_text()
+        self.assertTrue(
+            'dprintf(1, "\\nKSELFTEST_END %s %s %d\\n", nonce, selected, rc);' in source,
+            'the init-owned end marker must begin with a newline')
+        # mmu_stress_test can be killed while printing a progress line without
+        # its final newline. The init marker must still expose the real 124.
+        output = ('EVO_BOOT_NONCE flight\nKSELFTEST_BEGIN flight memory\n'
+                  '1..1\n# 3 vCPUs have not rendezvoused...'
+                  '\nKSELFTEST_END flight memory 124\nEVO_INIT_DONE\n')
+        row = lane.parse_transcript(output, 'flight', ['memory'])[0]
+        self.assertEqual(row['outcome'], 'TIMEOUT')
+        self.assertEqual(row['exitCode'], 124)
+        self.assertFalse(row['valid'])
 
     def test_wrong_nonce_or_duplicate_execution_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -62,6 +84,24 @@ class KernelSelftest(unittest.TestCase):
     def test_skip_exit_cannot_erase_a_recorded_failure(self):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])
         self.assertEqual(rows[0]['outcome'], 'FAIL')
+
+    def test_printk_replay_removes_only_the_identical_interrupted_prefix(self):
+        text = ('[   30.710764]    \n** replaying previous printk message **\n'
+                '[   30.710764]         # Subtest: intlog10_test\n'
+                '[   30.711000]         not ok 1 broken\n')
+        normalized, replays = lane.normalize_printk_replays(text)
+        self.assertEqual(normalized, text.splitlines()[2:])
+        self.assertEqual(replays, [{'line': 2, 'prefix': text.splitlines()[0],
+                                   'complete': text.splitlines()[2]}])
+        self.assertEqual(lane.normalize_printk_replays('not ok 1 broken\n'),
+                         (['not ok 1 broken'], []))
+
+    def test_printk_replay_requires_a_matching_timestamp_and_prefix(self):
+        for text in ('** replaying previous printk message **\n',
+                     '[   1.0] not ok\n** replaying previous printk message **\n[   1.0] ok 1\n',
+                     '[   1.0] ok\n** replaying previous printk message **\n[   2.0] ok 1\n'):
+            with self.assertRaises(ValueError):
+                lane.normalize_printk_replays(text)
 
 
 if __name__ == "__main__":

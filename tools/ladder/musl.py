@@ -133,13 +133,12 @@ def prepare(build: Path, source: Path, test_source: Path) -> tuple[Path, Path, d
     pristine = build / "musl-pristine"
     if pristine.exists():
         shutil.rmtree(pristine)
-    escaped = mixed.escape_high_bytes(tree)
     mixed.install_recorder(tree)
     (tree / "libc-test-config.mak").write_text(CONFIG_MAK, encoding="utf-8")
     return tree, tests, {
         "sourcePageBreaksStripped": [],
         "noreturnSpecifiersRemoved": [],
-        "highBytesReEscaped": escaped,
+        "highBytesReEscaped": [],
     }
 
 

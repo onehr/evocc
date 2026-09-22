@@ -15,7 +15,7 @@ spec.loader.exec_module(e0)
 
 
 class ProgramDispositionTest(unittest.TestCase):
-    def measure(self, rule=None, *, evidence=True, raw='fail'):
+    def measure(self, rule=None, *, evidence=True, raw='fail', emission='emitted'):
         source = 'float declaration_only; int main(void){return 1;}\n'
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -41,7 +41,7 @@ class ProgramDispositionTest(unittest.TestCase):
                 patch.object(e0, 'fetch', return_value=inputs),
                 patch.object(e0, 'sysroot', return_value=Path('/sysroot')),
                 patch.object(e0, 'sh', return_value=SimpleNamespace(stdout='source-commit')),
-                patch.object(e0, 'emit', return_value={'probe': {'emit': 'emitted', 'options': {'applied': [], 'unhandled': []}}}),
+                patch.object(e0, 'emit', return_value={'probe': {'emit': emission, 'code': 'E3050', 'options': {'applied': [], 'unhandled': []}}}),
                 patch.object(e0, 'run_in_container', return_value={'probe': {'run': raw, 'exit': 1 if raw == 'fail' else 0}}),
                 patch.object(e0, 'interpreter_verdict', return_value='diagnostic'),
                 patch('sys.argv', ['e0', '--suite', 'torture', '--evocc', str(subject)]),
@@ -70,10 +70,45 @@ class ProgramDispositionTest(unittest.TestCase):
     def test_floating_point_requires_program_specific_execution_evidence(self):
         row, _ = self.measure()
         self.assertEqual(row['disposition'], 'compiler-failure')
-        row, summary = self.measure({'disposition': 'FP-deferred', 'reason': 'executed arithmetic proved by separate probe'})
-        self.assertEqual(row['outcome'], 'fail')
+        row, summary = self.measure({'disposition': 'FP-deferred', 'reason': 'executed arithmetic proved by separate probe',
+                                     'deferredFeatures': ['binary128']}, emission='refused')
+        self.assertEqual(row['outcome'], 'refused')
         self.assertEqual(row['disposition'], 'FP-deferred')
         self.assertEqual(summary['dispositionCounts']['FP-deferred'], 1)
         row, _ = self.measure(raw='pass')
         self.assertEqual(row['disposition'], 'PASS')
 
+    def test_unusable_reference_control_never_becomes_a_subject_pass(self):
+        row, summary = self.measure({
+            'disposition': 'oracle-unusable',
+            'reason': 'recorded fixed reference compiler cannot compile the original',
+        })
+        self.assertEqual(row['outcome'], 'fail')
+        self.assertEqual(row['disposition'], 'oracle-unusable')
+        self.assertEqual(summary['dispositionCounts']['PASS'], 0)
+        self.assertEqual(summary['dispositionCounts']['oracle-unusable'], 1)
+
+    def test_a_fresh_executed_pass_resolves_only_the_old_fp_deferral(self):
+        row, summary = self.measure({'disposition': 'FP-deferred'}, raw='pass')
+        self.assertEqual(row['outcome'], 'pass')
+        self.assertEqual(row['disposition'], 'PASS')
+        self.assertEqual(summary['dispositionCounts']['FP-deferred'], 0)
+        for disposition in ['not-applicable', 'oracle-unusable']:
+            row, _ = self.measure({'disposition': disposition}, raw='pass')
+            self.assertEqual(row['disposition'], disposition)
+
+    def test_old_fp_deferrals_cannot_hide_new_link_or_runtime_failures(self):
+        for outcome in ['fail', 'asm-fail', 'link-fail', 'timeout', 'not-run']:
+            with self.subTest(outcome=outcome):
+                row, summary = self.measure({'disposition': 'FP-deferred'}, raw=outcome)
+                self.assertEqual(row['outcome'], outcome)
+                self.assertEqual(row['disposition'], 'compiler-failure')
+                self.assertEqual(summary['dispositionCounts']['compiler-failure'], 1)
+
+    def test_pre_scalar_fp_refusal_reviews_must_name_a_still_deferred_feature(self):
+        for features in [None, [], ['binary64'], ['binary128', 'unknown']]:
+            with self.subTest(features=features):
+                row, _ = self.measure({'disposition': 'FP-deferred',
+                                       'deferredFeatures': features}, emission='refused')
+                self.assertEqual(row['disposition'], 'compiler-failure')
+                self.assertIn('dispositionError', row)

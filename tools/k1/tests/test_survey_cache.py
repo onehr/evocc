@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import io
+import json
+from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
 import unittest
@@ -22,6 +25,259 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_prepared_resume_requires_complete_matching_inputs_and_installed_objects(self):
+        resume = getattr(substitute, 'resume_prepared_rows', None)
+        self.assertTrue(callable(resume), 'resume must validate the completed first pass')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, pristine, output, run = [root / name for name in ('src', 'pristine', 'out', 'run')]
+            for path in (source, pristine, output, run):
+                path.mkdir()
+            binary = root / 'evocc'
+            binary.write_bytes(b'compiler')
+            (source / 'a.c').write_text('int a;\n')
+            (pristine / '.a.o.cmd').write_text(
+                'savedcmd_a.o := gcc-14 -c -o a.o /work/src/a.c\nsource_a.o := /work/src/a.c\n')
+            (output / 'a.o').write_bytes(b'compiled object')
+            record = substitute.parse_record(pristine / '.a.o.cmd')
+            args = SimpleNamespace(evocc=binary, src_root=source, k1_root=root, toolchain_root=None)
+            argv, _ = substitute.evocc_argv(record, binary, source, pristine)
+            key = substitute.cache_key('a.o', substitute.sha256_file(binary),
+                                       substitute.sha256_file(source / 'a.c'), argv, 'inputs')
+            row = {'unit': 'a.o', 'record': str(record.path), 'outcome': 'assembled',
+                   'assemblySha256': 'assembly', 'objectSha256': substitute.sha256_file(output / 'a.o')}
+            cache = {key: dict(row, outcome='emitted')}
+            inventory = run / 'units.jsonl'
+            original = json.dumps(row) + '\n'
+            inventory.write_text(original)
+            recovered, detail = resume(run, {'a.o': record}, args, cache, 'inputs')
+            self.assertEqual(recovered[0]['outcome'], 'substituted')
+            self.assertEqual(recovered[0]['installedSha256'], row['objectSha256'])
+            self.assertEqual(detail['firstPassUnits'], 1)
+            self.assertEqual(inventory.read_text(), original)
+            for change in ('input', 'compiler', 'source', 'object', 'assembly', 'partial', 'duplicate', 'timeout'):
+                with self.subTest(change=change):
+                    binary.write_bytes(b'compiler')
+                    (source / 'a.c').write_text('int a;\n')
+                    (output / 'a.o').write_bytes(b'compiled object')
+                    inventory.write_text(original)
+                    altered = dict(cache)
+                    inputs = 'inputs'
+                    if change == 'input':
+                        inputs = 'other'
+                    if change == 'compiler':
+                        binary.write_bytes(b'changed compiler')
+                    if change == 'source':
+                        (source / 'a.c').write_text('int b;\n')
+                    if change == 'object':
+                        (output / 'a.o').write_bytes(b'reference object')
+                    if change == 'assembly':
+                        altered[key] = dict(cache[key], assemblySha256='other')
+                    if change == 'partial':
+                        inventory.write_text('')
+                    if change == 'duplicate':
+                        inventory.write_text(original * 2)
+                    if change == 'timeout':
+                        inventory.write_text(json.dumps(dict(row, outcome='timeout')) + '\n')
+                    with self.assertRaises(ValueError):
+                        resume(run, {'a.o': record}, args, altered, inputs)
+
+    def test_full_composition_checks_module_links_before_accepting_its_object_inventory(self):
+        for status in ('PASS', 'INCOMPLETE'):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                work, source = root / 'work', root / 'src'
+                pristine, output = work / 'pristine', work / 'out'
+                for path in (pristine, output, source):
+                    path.mkdir(parents=True)
+                for path in (pristine, output):
+                    (path / '.config').write_text('CONFIG_MODULES=y\n')
+                    (path / 'modules.order').write_text('a.o\n')
+                    (path / '.a.o.cmd').write_text(
+                        'savedcmd_a.o := gcc-14 -c -o a.o a.c\nsource_a.o := a.c\n')
+                (output / 'a.o').write_bytes(b'EvoCC object')
+                digest = substitute.sha256_file(output / 'a.o')
+                binary = root / 'evocc'
+                binary.write_bytes(b'compiler')
+                receipt = root / 'result.json'
+                argv = ['substitute', '--all', '--require-all', '--no-cache', '--jobs', '1',
+                        '--k1-root', str(work), '--src-root', str(source),
+                        '--evocc', str(binary), '--evidence-root', str(root / 'results'),
+                        '--run-id', 'full', '--receipt', str(receipt)]
+                def install(rows, *args):
+                    rows[0].update(outcome='substituted', installedSha256=digest)
+                with patch.object(substitute.sys, 'argv', argv), \
+                     patch.object(substitute, 'REPO_ROOT', root), \
+                     patch.object(substitute, 'emit_assembly', return_value={
+                         'unit': 'a.o', 'outcome': 'assembled'}), \
+                     patch.object(substitute, 'assemble_batch'), \
+                     patch.object(substitute, 'check_symbol_parity'), \
+                     patch.object(substitute, 'sealed_image', return_value='sealed'), \
+                     patch.object(substitute, 'install', side_effect=install), \
+                     patch.object(substitute, 'recompile_after_prepare', return_value={
+                         'prepareExitCode': 0, 'verifyPrepareExitCode': 0,
+                         'preparedInputsStable': True, 'failedUnits': []}), \
+                     patch.object(substitute, 'recompile_export_table', return_value={
+                         'required': False, 'ready': True}), \
+                     patch.object(substitute, 'relink', return_value=0), \
+                     patch.object(substitute, 'relink_modules', return_value={
+                         'status': status}) as modules, redirect_stdout(io.StringIO()):
+                    substitute.main()
+                modules.assert_called_once()
+                result = json.loads(receipt.read_text())
+                self.assertEqual(result['moduleLink']['status'], status)
+                self.assertEqual(result['completeComposition'], status == 'PASS')
+
+    def test_supplemental_failure_does_not_overwrite_the_accepted_kernel_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            work, source = root / 'work', root / 'src'
+            pristine = work / 'pristine'
+            pristine.mkdir(parents=True)
+            (work / 'out').mkdir()
+            source.mkdir()
+            (pristine / '.config').write_text('CONFIG_TEST=y\n')
+            (pristine / '.x.o.cmd').write_text(
+                'savedcmd_x.o := gcc-14 -c -o x.o x.c\nsource_x.o := x.c\n')
+            binary = root / 'compiler'
+            binary.write_bytes(b'compiler')
+            default = root / 'tests/contracts/kernel-full-receipt.json'
+            default.parent.mkdir(parents=True)
+            default.write_bytes(b'accepted K6 receipt')
+            receipt = default.with_name('kernel-bpf-full-receipt.json')
+            argv = ['substitute', '--all', '--require-all', '--no-cache', '--jobs', '1',
+                    '--k1-root', str(work), '--src-root', str(source),
+                    '--evocc', str(binary), '--evidence-root', str(root / 'results'),
+                    '--run-id', 'supplemental', '--receipt', str(receipt)]
+            with patch.object(substitute.sys, 'argv', argv), \
+                 patch.object(substitute, 'REPO_ROOT', root), \
+                 patch.object(substitute, 'emit_assembly', return_value={
+                     'unit': 'x.o', 'outcome': 'refused', 'diagnosticCodes': ['E3101']}), \
+                 patch.object(substitute, 'assemble_batch'), \
+                 patch.object(substitute, 'check_symbol_parity'), \
+                 patch.object(substitute, 'sealed_image', return_value='sealed'), \
+                 patch.object(substitute, 'relink') as relink, \
+                 redirect_stdout(io.StringIO()):
+                self.assertEqual(substitute.main(), 1)
+            relink.assert_not_called()
+            self.assertEqual(default.read_bytes(), b'accepted K6 receipt')
+            result = json.loads(receipt.read_text())
+            self.assertEqual(result['counts'], {'refused': 1})
+            self.assertFalse(result['installed'])
+            self.assertEqual(result['status'], 'INCOMPLETE')
+            self.assertEqual(result['boot']['verdict'], 'NOT_RUN')
+
+    def test_exported_toolchain_headers_participate_in_input_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output, toolchain = [root / part for part in ('src', 'out', 'toolchain')]
+            for path in (source, output, toolchain):
+                path.mkdir()
+            header = toolchain / 'arm_neon.h'
+            header.write_bytes(b'original header')
+            snapshot = substitute.input_snapshot(source, output, toolchain_root=toolchain)
+            header.write_bytes(b'different header')
+            self.assertNotEqual(snapshot, substitute.input_snapshot(
+                source, output, toolchain_root=toolchain))
+
+    def test_low_disk_survey_verifies_each_batch_before_emitting_the_next(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pristine = root / 'pristine'
+            pristine.mkdir()
+            (pristine / '.config').write_text('CONFIG_TEST=y\n')
+            (root / 'out').mkdir()
+            source = root / 'src'
+            source.mkdir()
+            binary = root / 'compiler'
+            binary.write_bytes(b'compiler')
+            toolchain = root / 'toolchain'
+            toolchain.mkdir()
+            (toolchain / 'header.h').write_bytes(b'original header')
+            for i in range(129):
+                (pristine / f'.x{i}.o.cmd').write_text(
+                    f'savedcmd_x{i}.o := gcc-14 -isystem /usr/include -c -o x{i}.o x{i}.c\n'
+                    f'source_x{i}.o := x{i}.c\n')
+            batches = []
+            def emit(unit, record, compiler, src, inputs, assembly, timeout, toolchain_root):
+                self.assertEqual(toolchain_root, toolchain)
+                path = substitute.assembly_path(assembly, unit)
+                path.write_bytes(b'assembly')
+                # Completed batches must not accumulate while later ones run.
+                self.assertLessEqual(len(list(assembly.glob('*.s'))), 64)
+                return {'unit': unit, 'outcome': 'emitted', 'assembly': str(path),
+                        'assemblySha256': substitute.sha256_file(path)}
+            def assemble(rows, records, assembly, inputs, **kwargs):
+                if rows:
+                    batches.append(len(rows))
+                for row in rows:
+                    obj = assembly / row['unit']
+                    obj.write_bytes(b'object')
+                    row.update(outcome='assembled', objectSha256=substitute.sha256_file(obj))
+            argv = ['substitute', '--all', '--no-install', '--low-disk', '--no-cache',
+                    '--jobs', '1', '--k1-root', str(root), '--src-root', str(source),
+                    '--evocc', str(binary), '--evidence-root', str(root / 'results'),
+                    '--run-id', 'bounded', '--toolchain-root', str(toolchain)]
+            with patch.object(substitute.sys, 'argv', argv), \
+                 patch.object(substitute, 'emit_assembly', side_effect=emit), \
+                 patch.object(substitute, 'assemble_batch', side_effect=assemble), \
+                 patch.object(substitute, 'check_symbol_parity'), \
+                 patch.object(substitute, 'sealed_image', return_value='sealed'), \
+                 redirect_stdout(io.StringIO()):
+                self.assertEqual(substitute.main(), 0)
+            self.assertEqual(batches, [64, 64, 1])
+            summary = json.loads((root / 'results/bounded/substitution.json').read_text())
+            self.assertEqual(summary['counts'], {'assembled': 129})
+            self.assertEqual(summary['toolchainRoot'], str(toolchain))
+            rows = [json.loads(line) for line in
+                    (root / 'results/bounded/units.jsonl').read_text().splitlines()]
+            self.assertEqual(len(rows), 129)
+            self.assertTrue(all(row['assemblyRetained'] is False for row in rows))
+            self.assertEqual(len(list((root / 'evocc-out').glob('*.o'))), 129)
+
+    def test_successful_assembly_can_be_released_only_after_object_verification(self) -> None:
+        release = getattr(substitute, 'release_successful_assembly', None)
+        self.assertTrue(callable(release), 'bounded surveys must release rebuildable assembly')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assembly, obj = root / 'a.s', root / 'a.o'
+            assembly.write_bytes(b'assembly')
+            obj.write_bytes(b'object')
+            row = {'unit': 'a.o', 'outcome': 'assembled', 'assembly': str(assembly),
+                   'assemblySha256': substitute.sha256_file(assembly),
+                   'objectSha256': substitute.sha256_file(obj)}
+            for outcome in ('emitted', 'assembler-refused', 'refused'):
+                release([dict(row, outcome=outcome)], root)
+                self.assertTrue(assembly.exists(), outcome)
+            for field in ('missingSymbols', 'extraSymbols'):
+                release([dict(row, **{field: ['f']})], root)
+                self.assertTrue(assembly.exists(), field)
+            release([row], root)
+            self.assertFalse(assembly.exists())
+            self.assertEqual(obj.read_bytes(), b'object')
+            self.assertFalse(row['assemblyRetained'])
+
+    def test_changed_assembly_or_object_is_never_released_as_verified(self) -> None:
+        release = getattr(substitute, 'release_successful_assembly', None)
+        self.assertTrue(callable(release))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assembly, obj = root / 'a.s', root / 'a.o'
+            assembly.write_bytes(b'assembly')
+            obj.write_bytes(b'object')
+            row = {'unit': 'a.o', 'outcome': 'assembled', 'assembly': str(assembly),
+                   'assemblySha256': substitute.sha256_file(assembly),
+                   'objectSha256': substitute.sha256_file(obj)}
+            obj.write_bytes(b'changed')
+            with self.assertRaises(ValueError):
+                release([row], root)
+            self.assertTrue(assembly.exists())
+            obj.write_bytes(b'object')
+            assembly.write_bytes(b'changed')
+            with self.assertRaises(ValueError):
+                release([row], root)
+            self.assertTrue(assembly.exists())
+
     def test_module_linking_requires_audited_c_leaves_and_original_assembly(self) -> None:
         planner = getattr(substitute, 'module_link_plan', None)
         self.assertTrue(callable(planner), 'module links must not consume stale reference C objects')
@@ -75,6 +331,49 @@ class CacheKeyTest(unittest.TestCase):
         self.assertFalse(check([row, row], ["a.o"], "substituted"))
         self.assertFalse(check([{**row, "objectSha256AfterRelink": "reference"}], ["a.o"], "substituted"))
         self.assertFalse(check([], [], "substituted"))
+
+    def test_module_finalization_keeps_btf_and_rechecks_compilation_leaves(self) -> None:
+        finalize = getattr(substitute, 'relink_modules', None)
+        self.assertTrue(callable(finalize), 'audited module leaves still need real .ko links and BTF')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output, capture = root / 'out', root / 'capture'
+            output.mkdir()
+            capture.mkdir()
+            for name, data in [('a.o', b'EvoCC C'), ('vmlinux', b'composed ELF'),
+                               ('.config', b'CONFIG_DEBUG_INFO_BTF_MODULES=y\n')]:
+                (output / name).write_bytes(data)
+            plan = {'modules': ['a.ko'], 'blocked': {},
+                    'links': [{'unit': 'a.ko', 'argv': ['ld', '-r', '-o', 'a.ko', 'a.o'],
+                               'inputs': ['a.o']}],
+                    'cInputs': {'a.o': substitute.sha256_file(output / 'a.o')},
+                    'assemblyInputs': {}, 'linkInputs': {}}
+
+            def execute(command, **kwargs):
+                self.assertIn('/work/src:ro', ' '.join(command))
+                worker = command[command.index('-c', command.index('python3')) + 1]
+                self.assertIn('scripts/Makefile.btf', worker)
+                self.assertIn('resolve_btfids', worker)
+                self.assertIn('--btf_base', worker)
+                (output / 'a.ko').write_bytes(b'linked module with BTF')
+                return SimpleNamespace(returncode=0, stdout='original links completed', stderr='')
+
+            with patch.object(substitute, 'module_link_plan', return_value=plan), \
+                 patch.object(substitute, 'verify_image'), \
+                 patch.object(substitute.subprocess, 'run', side_effect=execute):
+                result = finalize(root / 'src', root / 'pristine', output, [], capture, 2)
+                self.assertEqual(result['status'], 'PASS')
+                self.assertEqual(result['modules'][0]['sha256'],
+                                 substitute.sha256_file(output / 'a.ko'))
+                (output / 'a.o').write_bytes(b'GCC overwrite')
+                with self.assertRaises(ValueError):
+                    finalize(root / 'src', root / 'pristine', output, [], capture, 2)
+            with patch.object(substitute, 'module_link_plan',
+                              return_value={**plan, 'blocked': {'a.ko': ['unaudited C']}}), \
+                 patch.object(substitute.subprocess, 'run') as run:
+                with self.assertRaises(ValueError):
+                    finalize(root / 'src', root / 'pristine', output, [], capture, 2)
+                run.assert_not_called()
 
     def test_build_preparation_can_run_without_linking_the_kernel(self) -> None:
         import inspect
@@ -140,6 +439,61 @@ class CacheKeyTest(unittest.TestCase):
             self.assertFalse(result["ready"])
             emit_mock.assert_not_called()
 
+    def test_module_descriptors_use_post_modpost_sources_not_reference_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / 'out'
+            output.mkdir()
+            binary = root / 'evocc'
+            binary.write_bytes(b'measured compiler')
+            units = ['a.mod.o', 'b.mod.o']
+            for unit in units:
+                (output / unit.replace('.o', '.c')).write_text('reference descriptor\n')
+            records = {unit: substitute.Record(root / 'record', unit, ('gcc-14',),
+                        unit.replace('.o', '.c')) for unit in units}
+            rows = [{'unit': unit, 'outcome': 'substituted', 'installedSha256': 'old'}
+                    for unit in units]
+            args = SimpleNamespace(src_root=root / 'src', evocc=binary, timeout=180,
+                                   jobs=2, relink_jobs=2, no_cache=False,
+                                   allow_symbol_drift=True, low_disk=True, k1_root=root)
+            compiled = []
+            prelinked = []
+            def prelink(*args, **kwargs):
+                self.assertFalse(kwargs['finalize'])
+                prelinked.append(True)
+                return {'status': 'PASS'}
+            def produce(*args):
+                self.assertEqual(prelinked, [True],
+                                 'modpost must see current module aggregate symbols, not reference links')
+                self.assertEqual(args[-1], ('modpost',))
+                for unit in units:
+                    (output / records[unit].source_token).write_text('actual ' + unit)
+                return 0
+            def emit(unit, record, *args):
+                self.assertEqual(args[2], output)
+                self.assertEqual((output / record.source_token).read_text(), 'actual ' + unit)
+                compiled.append(unit)
+                return {'unit': unit, 'outcome': 'emitted'}
+            def install(batch, *args):
+                for row in batch:
+                    row.update(outcome='substituted', installedSha256='new')
+            with patch.object(substitute, 'relink', side_effect=produce), \
+                 patch.object(substitute, 'relink_modules', side_effect=prelink), \
+                 patch.object(substitute, 'emit_assembly', side_effect=emit), \
+                 patch.object(substitute, 'assemble_batch'), \
+                 patch.object(substitute, 'release_successful_assembly'), \
+                 patch.object(substitute, 'install', side_effect=install):
+                result = substitute.recompile_export_table(
+                    rows, records, args, root / 'asm', output, root)
+            self.assertEqual(sorted(compiled), units,
+                             'each generated module descriptor must consume actual modpost output')
+            self.assertTrue(result['ready'])
+            self.assertEqual(set(result['sources']), set(units))
+            self.assertTrue(all(row['recompiledAfterModpost'] for row in rows))
+            for unit in units:
+                self.assertEqual(result['sources'][unit]['sha256'],
+                                 substitute.sha256_file(output / records[unit].source_token))
+
     def test_relinks_keep_the_reference_build_version_and_prepare_both_headers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -157,6 +511,14 @@ class CacheKeyTest(unittest.TestCase):
             with patch.object(substitute.subprocess, "run", return_value=completed) as run:
                 self.assertEqual(substitute.relink(root / "src", out, root / "link.log", 2), 0)
             self.assertIn("KBUILD_BUILD_VERSION='7'", run.call_args.args[0][-1])
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index('-c') + 1], '2')
+            self.assertEqual(command[command.index('-m') + 1], '8G')
+            (out / 'modules.order').write_text('a.o\n')
+            with patch.object(substitute.subprocess, 'run', return_value=completed) as run:
+                self.assertEqual(substitute.relink(root / 'src', out, root / 'modpost.log', 2, ('modpost',)), 0)
+            self.assertIn('KBUILD_MODULES=1', run.call_args.args[0][-1],
+                          'a vmlinux-only modpost leaves module symbol versions stale')
 
     def test_prepare_fixed_point_ignores_only_metadata_not_changed_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -318,6 +680,43 @@ class CacheFileTest(unittest.TestCase):
 
 
 class AssemblyReuseTest(unittest.TestCase):
+    def test_frozen_source_date_survives_an_overnight_survey(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, build = root / 'src', root / 'build'
+            source.mkdir()
+            build.mkdir()
+            days = [substitute.dt.datetime(2026, 9, day, tzinfo=substitute.dt.timezone.utc)
+                    for day in (20, 21)]
+            for epoch in ('0', '+86400', '-1'):
+                with self.subTest(epoch=epoch), \
+                     patch.dict(substitute.os.environ, {'SOURCE_DATE_EPOCH': epoch}), \
+                     patch.object(substitute.dt, 'datetime') as clock:
+                    clock.now.return_value = days[0]
+                    before = substitute.input_snapshot(source, build)
+                    clock.now.return_value = days[1]
+                    self.assertEqual(before, substitute.input_snapshot(source, build),
+                                     'wall-clock midnight cannot change a frozen __DATE__')
+
+    def test_unfrozen_or_invalid_source_date_still_invalidates_at_midnight(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, build = root / 'src', root / 'build'
+            source.mkdir()
+            build.mkdir()
+            days = [substitute.dt.datetime(2026, 9, day, tzinfo=substitute.dt.timezone.utc)
+                    for day in (20, 21)]
+            # Match the driver's Rust i64 parser, not Python's permissive int().
+            for epoch in (None, '', 'bad', ' 0', '0_0', '9223372036854775808'):
+                environment = {} if epoch is None else {'SOURCE_DATE_EPOCH': epoch}
+                with self.subTest(epoch=epoch), \
+                     patch.dict(substitute.os.environ, environment, clear=True), \
+                     patch.object(substitute.dt, 'datetime') as clock:
+                    clock.now.return_value = days[0]
+                    before = substitute.input_snapshot(source, build)
+                    clock.now.return_value = days[1]
+                    self.assertNotEqual(before, substitute.input_snapshot(source, build))
+
     def test_input_snapshot_changes_for_headers_generated_inputs_and_new_files(self):
         snapshot = getattr(substitute, "input_snapshot", None)
         self.assertTrue(callable(snapshot), "source-only cache ignores included and generated inputs")

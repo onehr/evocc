@@ -109,7 +109,29 @@ class TranslateCommand(unittest.TestCase):
         command, omitted = mixed.evocc_command(unit, Path("/evocc"), "t", Path("/host"))
         self.assertIn("-DX=1", command)
         self.assertEqual(command[command.index("-U") + 1], "Y")
-        self.assertEqual(omitted, ["-O2", "-Wall", "-fPIC"])
+        self.assertEqual(omitted, ["-Wall"])
+        self.assertLess(command.index("-O2"), command.index("-fPIC"))
+
+    def test_supported_language_and_machine_options_keep_written_overrides(self):
+        flags = [
+            '-fPIC', '-fno-pic', '-fwrapv', '-fno-wrapv',
+            '-std=gnu89', '-fno-gnu89-inline', '-fsigned-char', '-funsigned-char',
+            '-fstack-protector-strong', '-fno-stack-protector',
+            '-mbranch-protection=pac-ret', '-mbranch-protection=none',
+            '-ftls-model=global-dynamic', '-mstrict-align',
+            '-mstack-protector-guard-reg=sp_el0', '-mstack-protector-guard-offset=1240',
+            '-fmacro-prefix-map=/build=.',
+        ]
+        command, omitted = mixed.evocc_command(
+            self.unit('-c', 'a.c', *flags), Path('/evocc'), 't', Path('/host'))
+        self.assertEqual([word for word in command if word in flags], flags)
+        self.assertEqual(omitted, [])
+
+    def test_an_unsupported_language_mode_reaches_the_driver_instead_of_changing_dialect(self):
+        command, omitted = mixed.evocc_command(
+            self.unit('-c', 'a.c', '-std=c99'), Path('/evocc'), 't', Path('/host'))
+        self.assertIn('-std=c99', command)
+        self.assertEqual(omitted, [])
 
     def test_the_output_operand_never_reaches_the_front_end(self):
         unit = self.unit("-c", "a.c", "-o", "obj/a.o", "-MF", "dep.d")
@@ -150,18 +172,31 @@ class SymbolParity(unittest.TestCase):
 
 class PreparationPreservesSource(unittest.TestCase):
     def test_exported_headers_keep_include_next_and_whitespace(self):
+        self.assertTrue(callable(getattr(mixed, 'exported_sysroot', None)),
+                        'mixed lanes must reuse the unmodified shared export')
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             wrapper = root / "gccinc/stdint.h"
             header = root / "usr/include/example.h"
+            types = root / 'usr/include/aarch64-linux-gnu/bits/floatn-common.h'
+            vectors = root / 'usr/include/aarch64-linux-gnu/bits/math-vector.h'
             wrapper.parent.mkdir(parents=True)
             header.parent.mkdir(parents=True)
+            types.parent.mkdir(parents=True)
             wrapper.write_bytes(b'#include_next <stdint.h>\n')
             header.write_bytes(b'unsigned\flong number;\n')
-            mixed._adjust_sysroot(root)
+            types.write_bytes(b'#define __HAVE_FLOAT32 1\n#define __HAVE_FLOAT64 1\n')
+            vectors.write_bytes(b'#if __GNUC_PREREQ(9, 0)\n#include <arm_neon.h>\n#endif\n')
+            with patch.object(mixed, 'exported_sysroot', return_value=root):
+                actual, flags = mixed.ladder_sysroot()
+            self.assertEqual(actual, root)
+            self.assertEqual(flags, mixed.include_flags(root))
+            self.assertEqual(mixed.SYSROOT_ADJUSTMENTS, [])
             self.assertTrue(wrapper.is_file())
             self.assertEqual(wrapper.read_bytes(), b'#include_next <stdint.h>\n')
             self.assertEqual(header.read_bytes(), b'unsigned\flong number;\n')
+            self.assertEqual(types.read_bytes(), b'#define __HAVE_FLOAT32 1\n#define __HAVE_FLOAT64 1\n')
+            self.assertEqual(vectors.read_bytes(), b'#if __GNUC_PREREQ(9, 0)\n#include <arm_neon.h>\n#endif\n')
 
     def test_variable_length_profile_macro_comes_from_the_compiler(self):
         self.assertFalse(any('__STDC_NO_VLA__' in flag for flag in mixed.SYSROOT_DEFINES))
@@ -173,6 +208,7 @@ class PreparationPreservesSource(unittest.TestCase):
             b'unsigned\flong number;\n'
             b'const char *spelling = "_Noreturn";\n'
             b'int function(void) {\v return 0; }\n'
+            b'/* raw \xff */ const char *bytes = "\xff\xc0\xaf";\n'
         )
         for adapter in [musl, tinycc, toybox]:
             with self.subTest(adapter=adapter.__name__):

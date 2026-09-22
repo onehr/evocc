@@ -23,6 +23,24 @@ TREE = "/work/zstd/zstd-1.5.7"
 
 
 class ParseBuildLogTest(unittest.TestCase):
+    def test_final_acceptance_does_not_repeat_the_same_completed_passing_trial(self) -> None:
+        passed = {'passed': True, 'units': ['a.o', 'b.o']}
+        rerun = mock.Mock(return_value={'passed': False})
+        self.assertIs(ladder.final_trial(passed, ['a.o', 'b.o'], rerun), passed)
+        rerun.assert_not_called()
+        for previous, subset in [(passed, ['a.o']),
+                                 (passed | {'passed': False}, ['a.o', 'b.o'])]:
+            self.assertIs(ladder.final_trial(previous, subset, rerun), rerun.return_value)
+        self.assertEqual(rerun.call_count, 2)
+
+    def test_receipt_reports_only_current_measured_front_end_gaps(self) -> None:
+        self.assertEqual(ladder.front_end_gaps([{'unit': 'ok.o', 'outcome': 'assembled'}]), [])
+        current = {'unit': 'bad.o', 'outcome': 'refused', 'code': 'E0002',
+                   'message': 'unsupported source byte', 'at': 'bad.h:3:2'}
+        self.assertEqual(ladder.front_end_gaps([
+            current, {'unit': 'fp.o', 'outcome': 'refused', 'code': 'E3050'}]),
+            [{key: current[key] for key in ('unit', 'code', 'message', 'at')}])
+
     def test_cmake_gmake_build_directory_applies_to_unprefixed_recipes(self) -> None:
         log = (
             f"gmake[1]: Entering directory '{TREE}/build'\n"
@@ -141,7 +159,40 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertIn(f"-I{self.tree}/lib/common", argv)
         self.assertIn(f"-I{self.tree}/lib", argv)
         self.assertEqual(argv[-1], f"{self.tree}/a.c")
-        self.assertEqual(omitted, ["-O3", "-Wall"])
+        self.assertIn("-O3", argv)
+        self.assertEqual(omitted, ["-Wall"])
+
+    def test_supported_target_semantics_are_not_lost_in_projection(self) -> None:
+        flags = [
+            "-O3", "-O0", "-Os", "-fshort-wchar", "-fno-short-wchar",
+            "-fPIC", "-fno-pic", "-fPIE", "-ffreestanding", "-fhosted",
+            "-ftls-model=local-exec", "-ftls-model=global-dynamic",
+            "-mgeneral-regs-only", "-mno-general-regs-only",
+            "-mstrict-align", "-mno-strict-align",
+            "-ftrivial-auto-var-init=zero", "-ftrivial-auto-var-init=uninitialized",
+            "-mbranch-protection=pac-ret", "-mbranch-protection=none",
+            "-fstack-protector-strong", "-fno-stack-protector",
+            "-mstack-protector-guard=sysreg", "-mstack-protector-guard-reg=sp_el0",
+            "-mstack-protector-guard-offset=1240",
+        ]
+        for written in (flags, flags[::-1]):
+            argv, omitted = self.command(f"gcc {' '.join(written)} -c -o a.o a.c\n")
+            self.assertEqual([flag for flag in argv if flag in flags], written)
+            self.assertEqual(omitted, [])
+
+    def test_unknown_options_remain_named_not_reinterpreted_as_supported(self) -> None:
+        argv, omitted = self.command(
+            "gcc -Ofast -fno-inline -fpermissive -std=gnu11 -c -o a.o a.c\n"
+        )
+        self.assertIn("-std=gnu11", argv)
+        self.assertEqual(omitted, ["-Ofast", "-fno-inline", "-fpermissive"])
+
+    def test_rejected_standard_is_not_silently_replaced_with_the_default(self) -> None:
+        (unit,) = ladder.parse_build_log('gcc -std=c99 -c -o a.o a.c\n', TREE)
+        argv, omitted = ladder.evocc_argv(
+            unit, Path('/bin/evocc'), self.subject, self.tree, [], frozenset({'-std=c99'}))
+        self.assertIn('-std=c99', argv)
+        self.assertNotIn('-std=c99', omitted)
 
     def test_the_object_and_the_source_do_not_reach_the_front_end_twice(self) -> None:
         argv, _ = self.command("gcc -c -o a.o a.c\n")
@@ -200,6 +251,11 @@ class BuildSymlinkTest(unittest.TestCase):
 
 
 class SysrootSourceTest(unittest.TestCase):
+    def test_every_adapter_uses_the_same_original_sysroot_export(self) -> None:
+        with mock.patch.object(ladder.e0, 'sysroot', return_value=Path('/explicit/headers')) as load:
+            self.assertEqual(ladder.exported_sysroot(), Path('/explicit/headers'))
+            load.assert_called_once_with()
+
     def test_supported_source_tokens_reach_the_compiler_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -286,6 +342,105 @@ class BisectionTest(unittest.TestCase):
             return guilty.issubset(set(subset))
 
         self.assertEqual(set(ladder.ddmin(units, fails)), guilty)
+
+
+class InstalledObjectTest(unittest.TestCase):
+    def test_reuse_recompiles_with_the_identical_command_and_checks_assembly(self):
+        argv = ['evocc', '--emit=asm', '-std=gnu11', '-include', 'generated.h', '-DF=3', 'a.c']
+        for status, output, expected in ((0, b'ret\n', ladder.sha256_bytes(b'ret\n')),
+                                         (1, b'ret\n', None), (0, b'', None),
+                                         (0, b'.incbin "bytes"\n', None),
+                                         (0, b'  .include "assembly.inc"\n', None)):
+            completed = ladder.subprocess.CompletedProcess([], status, output, b'')
+            with mock.patch.object(ladder.subprocess, 'run', return_value=completed) as run:
+                self.assertEqual(ladder.emission_digest(argv), expected)
+                self.assertEqual(run.call_args.args[0], argv)
+
+    def test_regenerated_inputs_must_match_before_reinstalling_subject_objects(self):
+        self.assertTrue(hasattr(ladder, 'emission_digest'), 'regenerated sources must be recompiled')
+        subject = ladder.Subject(name='example', rung='test', pin='1', url='',
+                                 sha256='', tree='source', build='', test='', relink='')
+        for unchanged, rebuild_twice in ((True, False), (False, False), (True, True)):
+            with self.subTest(unchanged=unchanged, rebuild_twice=rebuild_twice), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                tree, assembly, pristine = (root / name for name in ('tree', 'asm', 'pristine'))
+                for path in (tree, assembly, pristine):
+                    path.mkdir()
+                for path in (tree, pristine):
+                    (path / 'a.o').write_bytes(b'reference')
+                (assembly / 'a.o').write_bytes(b'subject')
+                links = []
+
+                def regenerate(*_):
+                    links.append(1)
+                    if len(links) == 1 or rebuild_twice:
+                        (tree / 'a.o').write_bytes(b'reference')
+                    return {'status': 0, 'log': ''}
+
+                with mock.patch.object(ladder, 'relink', side_effect=regenerate), \
+                        mock.patch.object(ladder, 'emission_digest', return_value='same' if unchanged else 'changed'), \
+                        mock.patch.object(ladder, 'run_tests', return_value={'passed': True, 'status': 0, 'tail': ''}) as tests:
+                    result = ladder.trial(
+                        subject, tree, ['a.o'], ['a.o'], assembly, pristine, root, 'check',
+                        generated_inputs={'a.o': (['evocc', '--emit=asm', 'a.c'], 'same')})
+                passed = unchanged and not rebuild_twice
+                self.assertEqual(result['passed'], passed)
+                self.assertEqual(len(links), 2 if unchanged else 1)
+                self.assertEqual(tests.call_count, int(passed))
+                self.assertEqual(result['stage'], 'rebuilt' if rebuild_twice else 'pass' if unchanged else 'inputs-changed')
+                if passed:
+                    self.assertEqual((tree / 'a.o').read_bytes(), b'subject')
+                    self.assertEqual(result['regeneratedInputs'], ['a.o'])
+
+    def test_relink_replacement_is_checked_before_tests_and_not_bisected(self):
+        subject = ladder.Subject(name='example', rung='test', pin='1', url='',
+                                 sha256='', tree='source', build='', test='', relink='')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tree, assembly, pristine = (root / name for name in ('tree', 'asm', 'pristine'))
+            for path in (tree, assembly, pristine):
+                path.mkdir()
+            for path in (tree, pristine):
+                (path / 'a.o').write_bytes(b'reference')
+            (assembly / 'a.o').write_bytes(b'subject')
+
+            def regenerate(*_):
+                (tree / 'a.o').write_bytes(b'reference')
+                return {'status': 0, 'log': ''}
+
+            with mock.patch.object(ladder, 'relink', side_effect=regenerate), \
+                    mock.patch.object(ladder, 'run_tests') as tests:
+                result = ladder.trial(subject, tree, ['a.o'], ['a.o'], assembly,
+                                      pristine, root, 'check')
+            self.assertEqual(result['stage'], 'rebuilt')
+            tests.assert_not_called()
+            self.assertFalse(ladder.is_compiler_failure(result))
+            self.assertFalse(ladder.is_compiler_failure({'passed': False, 'stage': 'inputs-changed'}))
+            self.assertTrue(ladder.is_compiler_failure({'passed': False, 'stage': 'test'}))
+            self.assertTrue(ladder.is_compiler_failure({'passed': False, 'stage': 'relink'}))
+
+    def test_a_test_target_rebuilding_the_subject_is_not_a_subject_pass(self):
+        subject = ladder.Subject(name='example', rung='test', pin='1', url='',
+                                 sha256='', tree='source', build='', test='', relink='')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tree, assembly, pristine = (root / name for name in ('tree', 'asm', 'pristine'))
+            for path in (tree, assembly, pristine):
+                path.mkdir()
+            (tree / 'a.o').write_bytes(b'reference')
+            (pristine / 'a.o').write_bytes(b'reference')
+            (assembly / 'a.o').write_bytes(b'subject')
+
+            def reference_rebuild(*_):
+                (tree / 'a.o').write_bytes(b'reference')
+                return {'passed': True, 'tail': 'all tests pass'}
+
+            with mock.patch.object(ladder, 'relink', return_value={'status': 0, 'log': ''}), \
+                    mock.patch.object(ladder, 'run_tests', side_effect=reference_rebuild):
+                result = ladder.trial(subject, tree, ['a.o'], ['a.o'], assembly,
+                                      pristine, root, 'check')
+            self.assertFalse(result['passed'])
+            self.assertEqual(result['stage'], 'rebuilt')
 
 
 if __name__ == "__main__":

@@ -108,6 +108,16 @@ k1_kunit_cmdline() {
   printf ' kunit.filter_glob=%s' "$filter"
 }
 
+# Nested KVM is opt-in even on a CPU implementing FEAT_NV2. Keep this
+# supplemental selftest mode separate from the unchanged K6 command line.
+k1_kvm_cmdline() {
+  case "$1" in
+    '') ;;
+    nested) printf ' kvm-arm.mode=nested' ;;
+    *) k1_die "unsupported KVM selftest mode" ;;
+  esac
+}
+
 # k1_boot <contract> <image> <initramfs> <nonce> <serial-log> <timeout-seconds>
 #
 # Boots one Image on the hvf-host lane and evaluates the ordered predicate:
@@ -129,6 +139,9 @@ k1_boot() {
   local kunit_cmdline
   kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}" "${K1_KUNIT_AUTORUN:-}")" || return 1
   command_line="$command_line$kunit_cmdline"
+  local kvm_cmdline
+  kvm_cmdline="$(k1_kvm_cmdline "${K1_KVM_MODE:-}")" || return 1
+  command_line="$command_line$kvm_cmdline"
   if [ -n "${K1_CONSOLE_LOGLEVEL:-}" ]; then
     case "$K1_CONSOLE_LOGLEVEL" in
       [1-8]) command_line="$command_line loglevel=$K1_CONSOLE_LOGLEVEL" ;;

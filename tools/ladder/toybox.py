@@ -150,10 +150,6 @@ def main() -> int:
     if verdict != "tests-done":
         print("toybox: the reference build does not relink", file=sys.stderr)
         return 1
-    #: ``generated/flags.h`` exists only after the build, and it is the file
-    #: that carries the option-marker bytes, so the re-spelling happens here
-    #: rather than in ``prepare``.
-    escaped = mixed.escape_high_bytes(tree)
     baseline_outcomes = outcomes(tree / "tests.log")
     shutil.copyfile(tree / "tests.log", evidence / "baseline-tests.log")
 
@@ -249,7 +245,7 @@ def main() -> int:
         "adjustments": {
             "sourcePageBreaksStripped": stripped,
             "noreturnSpecifiersRemoved": specifiers,
-            "highBytesReEscaped": escaped,
+            "highBytesReEscaped": [],
             "sysroot": mixed.SYSROOT_ADJUSTMENTS,
             "defines": mixed.SYSROOT_DEFINES,
             "unitsNotSubstitutable": ["the object built from main.c"],

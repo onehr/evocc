@@ -32,6 +32,27 @@ def sha(path):
     return digest.hexdigest()
 
 
+def normalize_printk_replays(text):
+    """Recover explicitly replayed console records, never inferred TAP results.
+
+    Keep the raw serial capture; callers record these exact removals alongside
+    the upstream KUnit parser's derived output. Unknown/truncated replays fail
+    closed instead of dropping a possibly meaningful record.
+    """
+    lines, output, replays = text.splitlines(), [], []
+    for index, line in enumerate(lines):
+        if line != '** replaying previous printk message **':
+            output.append(line)
+            continue
+        prefix = output[-1] if output else ''
+        complete = lines[index + 1] if index + 1 < len(lines) else ''
+        if not re.match(r'^\[\s*\d+\.\d+\] ', prefix) or not complete.startswith(prefix):
+            raise ValueError(f'unverifiable printk replay at line {index + 1}')
+        output.pop()
+        replays.append({'line': index + 1, 'prefix': prefix, 'complete': complete})
+    return output, replays
+
+
 def parse_tap(output):
     plans = re.findall(r'^1\.\.(\d+)(?:\s+.*)?$', output, re.M)
     results = re.findall(r'^(not ok|ok)\s+(\d+)\b(.*)$', output, re.M)
@@ -47,14 +68,27 @@ def parse_tap(output):
     # Keep its verdict, but never promote it to an all-subtests claim. A nested
     # self-test may intentionally exercise failure, so these require review,
     # not a guessed automatic reclassification of the original program.
-    nested = []
+    nested, skipped = [], []
     for line in output.splitlines():
+        bpf = re.fullmatch(r'\s*(?:#\s*)+Summary: (\d+)/(\d+) PASSED, (\d+) SKIPPED, (\d+) FAILED\s*', line)
+        if bpf:
+            passed_tests, passed_subtests, skipped_count, failed_tests = map(int, bpf.groups())
+            if failed_tests:
+                nested.append({'line': line, 'failed': failed_tests, 'errors': 0})
+            if skipped_count:
+                # test_progs counts successful tests and successful subtests
+                # separately; its skip counter is neither a TAP denominator
+                # nor disjoint from the successful-test count.
+                skipped.append({'line': line, 'passedTests': passed_tests,
+                                'passedSubtests': passed_subtests, 'skipped': skipped_count})
         if re.match(r'^\s*(?:#\s*)+Totals:', line):
-            totals = {key: int(value) for key, value in re.findall(r'\b(fail|error):\s*(\d+)', line)}
+            totals = {key: int(value) for key, value in re.findall(r'\b(pass|fail|skip|error):\s*(\d+)', line)}
             if totals.get('fail', 0) or totals.get('error', 0):
                 nested.append({'line': line, 'failed': totals.get('fail', 0), 'errors': totals.get('error', 0)})
+            if totals.get('skip', 0):
+                skipped.append({'line': line, 'passed': totals.get('pass', 0), 'skipped': totals['skip']})
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
-            'nestedFailureSummaries': nested}
+            'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped}
 
 
 def parse_transcript(text, nonce, programs):
@@ -81,7 +115,7 @@ def parse_transcript(text, nonce, programs):
             rc = int(status)
             outcome = ('TIMEOUT' if rc == 124 else 'FAIL' if rc not in (0, 4) or tap['subtests']['FAIL']
                        else 'INVALID_OUTPUT' if not tap['valid'] or not tap['cases'] and rc != 4
-                       else 'SKIP' if rc == 4 else 'PASS')
+                       else 'SKIP' if rc == 4 or tap['subtests']['PASS'] == 0 else 'PASS')
             rows[name].update(tap, outcome=outcome, exitCode=rc)
             active = None
     return list(rows.values())

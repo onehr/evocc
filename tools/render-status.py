@@ -1,110 +1,45 @@
 #!/usr/bin/env python3
-"""Render docs/status.md from the receipts, the contracts and the specifications.
+"""Render receipt-backed roadmap status without launching tests.
 
-Every number in the tracker comes from a file this script reads, so the picture
-cannot drift from the evidence: the survey fractions come from the newest sealed
-summary of each survey, the stage counts from the contracts' rulings, the
-campaign figures from their receipts, and the revisions from the specifications'
-own headers. The only hand-written parts are the section captions and the four
-questions' reading, which is a judgement and is marked as one.
-
-Usage: python3 tools/render-status.py [--check]
-  (no argument) rewrite docs/status.md
-  --check       print the rendering and exit 1 if the file on disk differs
+Usage: python3 tools/render-status.py           # update docs/status.md
+       python3 tools/render-status.py --ascii   # read-only terminal overview
+       python3 tools/render-status.py --check   # compare with docs/status.md
 """
 
 from __future__ import annotations
 
+import argparse
+from collections import Counter
 import json
-import re
-import subprocess
-import sys
-import unicodedata
-from datetime import date
 from pathlib import Path
+import re
+import sys
+import textwrap
+import unicodedata
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "status.md"
 
-# A reading of the evidence, not a measurement: ten steps, set by hand.
-QUESTIONS = [
-    ("Q0 ", 9, "{revisions} ,"),
-    ("Q1 kernel ", 4, " {parse}, {lower}, 384/384"),
-    ("Q2 e-graph pipeline", 3, ", GCC -O2 "),
-    ("Q3 ", 3, ",(13 3 )"),
-]
+APPLICATIONS = (
+    ("E0a", "torture"), ("E0b", "ctest"), ("E0c", "csmith"),
+    ("E1", "zlib"), ("E2", "zstd"), ("E3", "cjson"),
+    ("E4", "mbedtls"), ("E5", "tinycc"), ("E6", "toybox"),
+    ("E7", "musl"), ("E8", "polybench"), ("E9", "llvm-test-suite"),
+    ("E10", "jq"), ("E11", "lua"), ("E12", "sqlite"),
+)
+RECEIPTS = (
+    "bench-receipt.json", "kernel-full-receipt.json",
+    "kernel-bpf-full-receipt.json", "kernel-selftest-receipt.json",
+    "kernel-selftest-full-receipt.json", "kernel-kunit-receipt.json",
+    "kernel-expanded-kunit-receipt.json", "semantic-gate-contract.json",
+    "lean-p0-receipt.json", "lean-correspondence-receipt.json",
+)
+OUTCOMES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "INVALID_OUTPUT", "INCOMPLETE", "NOT_RUN")
 
 
 def cells(text: str) -> int:
-    """Display width: the wide and fullwidth East Asian classes take two."""
+    """Display width, also used by the existing renderer regression tests."""
     return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
-
-
-def pad(text: str, target: int) -> str:
-    return text + " " * max(0, target - cells(text))
-
-
-def bar(done: float, total: float, width: int = 8) -> str:
-    if total <= 0:
-        return "░" * width
-    filled = round(width * max(0.0, min(1.0, done / total)))
-    return "█" * filled + "░" * (width - filled)
-
-
-def box(title: str, rows: list[str], inner: int | None = None) -> list[str]:
-    body = max(cells(row) for row in rows) if rows else 0
-    inner = max(inner or 0, body + 2, cells(title) + 4)
-    head = "┌─ " + title + " " + "─" * (inner - cells(title) - 3) + "┐"
-    out = [head]
-    out += ["│ " + pad(row, inner - 2) + " │" for row in rows]
-    out.append("└" + "─" * inner + "┘")
-    return out
-
-
-def beside(left: list[str], right: list[str], gap: int = 2) -> list[str]:
-    height = max(len(left), len(right))
-    left = left + [""] * (height - len(left))
-    right = right + [""] * (height - len(right))
-    lw = max(cells(line) for line in left)
-    return [(pad(a, lw) + " " * gap + b).rstrip() for a, b in zip(left, right)]
-
-
-def arrow(width: int, label: str) -> list[str]:
-    stem = " " * ((width - 1) // 2) + "│"
-    head = " " * ((width - 1) // 2) + "▼  " + label
-    return [stem, head]
-
-
-def git(*args: str) -> str:
-    done = subprocess.run(
-        ["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True
-    )
-    return done.stdout.strip()
-
-
-def revision(path: Path) -> str:
-    found = re.search(r"\*\*Revision ([0-9.]+)\*\*", path.read_text())
-    return found.group(1) if found else "?"
-
-
-def newest_survey(name: str) -> dict[str, int]:
-    base = ROOT / ".evidence" / name
-    if not base.is_dir():
-        return {}
-    runs = sorted(p for p in base.iterdir() if (p / "summary.json").exists())
-    if not runs:
-        return {}
-    summary = json.loads((runs[-1] / "summary.json").read_text())
-    return summary.get("classifications", {})
-
-
-def fraction(counts: dict[str, int]) -> tuple[int, int]:
-    return counts.get("clean", 0), sum(counts.values())
-
-
-def contract(name: str) -> dict:
-    path = ROOT / "tests" / "contracts" / name
-    return json.loads(path.read_text()) if path.exists() else {}
 
 
 def record_count(value) -> int:
@@ -112,7 +47,99 @@ def record_count(value) -> int:
     return value if isinstance(value, int) else len(value or [])
 
 
-def kunit_progress(receipt) -> str:
+def revision(path: Path) -> str:
+    found = re.search(r"\*\*Revision ([0-9.]+)\*\*", path.read_text())
+    return found.group(1) if found else "?"
+
+
+def contract(name: str) -> dict:
+    path = ROOT / "tests" / "contracts" / name
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def load_receipts() -> dict[str, dict]:
+    # Read each checkpoint once, especially the live paired outcome summaries.
+    receipts = {name: contract(name) for name in RECEIPTS}
+    for name in ("kernel-selftest-receipt.json", "kernel-selftest-full-receipt.json"):
+        path = receipts[name].get("kernelReceiptPath")
+        if path and path not in receipts:
+            key = Path(path).name
+            if path == f"tests/contracts/{key}" and key in receipts:
+                receipts[path] = receipts[key]
+            else:
+                source = ROOT / path
+                receipts[path] = json.loads(source.read_text()) if source.exists() else {}
+    return receipts
+
+
+def ratio(done, total) -> str:
+    if not isinstance(total, int) or total <= 0 or not isinstance(done, int):
+        return "unmeasured"
+    return f"{done:,}/{total:,}"
+
+
+def validated(row: dict):
+    # Raw executions can include programs later found outside the profile.
+    return (row.get("dispositions") or {}).get("PASS", row.get("passed"))
+
+
+def lane_status(row: dict) -> str:
+    state = row.get("status", "NOT_RUN")
+    if state in ("PASS", "PROFILE_CLEAN"):
+        passed, total = validated(row), row.get("total")
+        if (not isinstance(total, int) or total <= 0 or not isinstance(passed, int)
+                or not 0 <= passed <= total or (state == "PASS" and passed != total)):
+            return "UNVERIFIED"
+        if (row.get("dispositions") or {}).get("compiler-failure", 0):
+            return "UNVERIFIED"
+    return state
+
+
+def measurement(row: dict) -> str:
+    return (row.get("measurement") or {}).get("run") or row.get("run") or "unmeasured"
+
+
+def run_id(receipt: dict) -> str:
+    return receipt.get("runId") or receipt.get("run") or "unmeasured"
+
+
+def kernel_verdict(receipt: dict) -> tuple[str, str, str]:
+    """A boot PASS also needs the complete link and the same Image."""
+    total = receipt.get("requestedUnits")
+    compiled = receipt.get("counts", {}).get("substituted")
+    linked = (isinstance(total, int) and total > 0 and compiled == total
+              and receipt.get("completeComposition") is True
+              and receipt.get("relinkExitCode") == 0)
+    boot = receipt.get("boot", {})
+    booted = (linked and boot.get("verdict") == "PASS"
+              and bool(receipt.get("imageSha256"))
+              and boot.get("imageSha256") == receipt["imageSha256"])
+    state = receipt.get("status", "NOT_RUN")
+    if state == "PASS" and not booted:
+        state = "UNVERIFIED"
+    return state, "PASS" if linked else "NOT_VERIFIED", "PASS" if booted else "NOT_VERIFIED"
+
+
+def kernel_selftest_status(receipt: dict, full_kernel: dict,
+                           named_kernels: dict[str, dict] | None = None) -> str:
+    if not receipt:
+        return "NOT_RUN"
+    kernel = full_kernel
+    if path := receipt.get("kernelReceiptPath"):
+        if named_kernels is not None:
+            key = Path(path).name
+            fallback = named_kernels.get(key, {}) if path == f"tests/contracts/{key}" else {}
+            kernel = named_kernels.get(path, fallback)
+        else:
+            source = ROOT / path
+            kernel = json.loads(source.read_text()) if source.exists() else {}
+    expected = kernel.get("imageSha256") or kernel.get("builtInComposition", {}).get("imageSha256")
+    if not expected or receipt.get("kernelImageSha256") != expected:
+        return "STALE_IMAGE"
+    return receipt.get("status", "NOT_RUN")
+
+
+def kunit_progress(receipt: dict) -> str:
     parts = []
     for name in ("reference", "subject"):
         entry = receipt.get(name, {})
@@ -120,249 +147,228 @@ def kunit_progress(receipt) -> str:
         measured = (f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / "
                     f"{counts.get('SKIP', 0)} SKIP") if counts is not None else entry.get("status", "NOT_RUN")
         parts.append(f"{name} {measured}")
-    return "KUnit: " + "; ".join(parts)
+        modules = entry.get("modules")
+        if modules is not None:
+            counts = modules.get("outcomes")
+            measured = (f"{modules.get('filesLoaded', 0)} files loaded, "
+                        f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / "
+                        f"{counts.get('SKIP', 0)} SKIP") if counts is not None else modules.get("status", "NOT_RUN")
+            parts.append(f"{name} modules {measured}")
+    records = receipt.get("config", {}).get("targetCRecords")
+    label = f"KUnit ({records:,} C records)" if records is not None else "KUnit"
+    return label + ":\n  " + "\n  ".join(parts)
 
 
-def kernel_selftest_status(receipt: dict, full_kernel: dict) -> str:
-    if not receipt:
-        return "NOT_RUN"
-    kernel = full_kernel
-    if receipt.get("kernelReceiptPath"):
-        path = ROOT / receipt["kernelReceiptPath"]
-        kernel = json.loads(path.read_text()) if path.exists() else {}
-    expected = kernel.get("imageSha256") or kernel.get("builtInComposition", {}).get("imageSha256")
-    if not expected or receipt.get("kernelImageSha256") != expected:
-        return "STALE_IMAGE"
-    return receipt.get("status", "NOT_RUN")
-
-
-def main() -> int:
-    gate = contract("semantic-gate-contract.json")
-    front = contract("day9-acceptance-contract.json")
-    receipts = gate.get("receipt", {})
-    closed_mid = sum(
-        1 for key in gate.get("rulings", {})
-        if key.startswith("stageS") and key.endswith("Closed")
-    )
-    closed_front = sum(1 for key in front.get("rulings", {}) if key.endswith("Closed"))
-    closed_scopes = [name for name, state in front.get("scopeClosures", {}).items()
-                     if state.get("status") == "CLOSED"]
-    closure_note = f"; {'/'.join(closed_scopes)}" if closed_scopes else ""
-
-    parse_clean, parse_total = fraction(newest_survey("full-config-parse-survey"))
-    lower_clean, lower_total = fraction(newest_survey("full-config-lowering-survey"))
-
-    evoir = revision(ROOT / "docs" / "evoir-spec.md")
-    evomir = revision(ROOT / "docs" / "evomir-spec.md")
-    revisions = int(evoir.split(".")[-1]) + int(evomir.split(".")[-1])
-
-    spec = (ROOT / "docs" / "evoir-spec.md").read_text()
-    debts = sorted(
-        code
-        for code, rest in re.findall(
-            r"\| `(E30\d\d)` \| `not-(?:lowered|executed)[^\n]*?\| ([^\n]*)", spec
-        )
-        if "withdrawn" not in rest
-    )
-
-    lean = contract("lean-p0-receipt.json")
-    lean_rules = len(lean.get("segments", {}).get("A", {}).get("targets", []))
-    lean_rows = len(lean.get("segments", {}).get("B", {}).get("targets", []))
-    lean_total = lean.get("binding", {}).get("registry_rules", 0) or lean_rules
-    correspondence = contract("lean-correspondence-receipt.json").get("total", {})
-
-    b1 = receipts.get("b1", {}).get("campaign", {})
-    b3 = receipts.get("b3", {}).get("cCorpus", {})
-    b4 = receipts.get("b4", {})
-    b5 = receipts.get("b5", {}).get("linuxCorpus", {})
-
-    left = box(
-        " F",
-        [
-            f" {parse_clean:,}/{parse_total:,} {bar(parse_clean, parse_total)} ",
-            f" {parse_clean:,}/{parse_total:,} {bar(parse_clean, parse_total)} ",
-            f" {lower_clean:,}/{lower_total:,} {bar(lower_clean, lower_total)} ",
-            f"{closed_front} {closure_note}",
-        ],
-    )
-    right = box(
-        f" S ── {closed_mid} ",
-        [
-            f" gate 21,000 0 {bar(1, 1)}",
-            f"evp2 :/epoch/premise {bar(1, 1)}",
-            f", congruence, , {bar(1, 1)}",
-            ":,",
-            f" Lean {lean_rules}/{lean_total} {lean_rows} {bar(lean_rules, lean_total)}",
-            f"Rust Lean {correspondence.get('compared', 0):,} {correspondence.get('differences', 0)} ",
-        ],
-    )
-    top = beside(left, right)
-    span = max(cells(line) for line in top)
-
-    backend = box(
-        " B ── ,C ",
-        [
-            f"EvoMIR, , {bar(1, 1)} {b1.get('lowered', 0):,}/{b1.get('programs', 0):,} lane 0 ",
-            f", , {bar(1, 1)} ",
-            f"C Darwin {b3.get('agreeing', 0)}/{b3.get('programs', 0)} {bar(1, 1)} clang ",
-            f"C Linux {b5.get('agreeing', 0)}/{b5.get('programs', 0)} {bar(1, 1)} GCC-14 ",
-            f" {b4.get('constraintRowsNativelyChecked', 0)} {bar(1, 1)}",
-        ],
-        span,
-    )
-    k1 = contract("k1-mixed-link-receipt.json")
-    k1_boot = k1.get("reference", {}).get("verdict", "?")
-    k1_units = k1.get("unitsCompiledByEvoccInABootingKernel", 0)
-    k1_survey = k1.get("survey", {}).get("outcomeCounts", {})
-    k1_asm = k1_survey.get("assembled", 0)
-    k1_total = k1_asm + k1_survey.get("refused", 0)
-    continuation = contract("day9-acceptance-receipt.json")
-    latest_k1 = continuation.get("completedSerialReplays", {}).get("k1", {})
-    latest_k1_note = (
-        f" {latest_k1.get('run', '?')}: {latest_k1.get('boot', '?')};"
-        f" {latest_k1.get('proofCounts', {}).get('mismatch', 0)};"
-        f" {latest_k1.get('overall', '')}"
-    ) if latest_k1 else ""
-    e0 = contract("ladder-e0-receipt.json").get("latest", {}).get("suites", {})
-    e0c = e0.get("ctest", {}).get("outcomes", {})
-    e0t = e0.get("torture", {}).get("outcomes", {})
-    bench = contract("bench-receipt.json")
-    measured = bench.get("benchmarks", {})
-    full_kernel = contract("kernel-full-receipt.json")
-    full_total = full_kernel.get("requestedUnits", 0)
-    full_compiled = full_kernel.get("counts", {}).get("substituted", 0)
-    full_linked = (
-        full_total > 0 and full_compiled == full_total
-        and full_kernel.get("completeComposition") is True
-        and full_kernel.get("relinkExitCode") == 0
-    )
-    full_boot = full_kernel.get("boot", {})
-    full_passed = (
-        full_linked and full_boot.get("verdict") == "PASS"
-        and bool(full_kernel.get("imageSha256"))
-        and full_boot.get("imageSha256") == full_kernel.get("imageSha256")
-    )
-    selftests = contract("kernel-selftest-receipt.json")
-    selftest_status = kernel_selftest_status(selftests, full_kernel)
-    selftest_cases = selftests.get("subject", {}).get("subtests", {})
-    full_selftests = contract("kernel-selftest-full-receipt.json")
-    full_selftest_status = kernel_selftest_status(full_selftests, full_kernel)
-    full_selftest_execution = full_selftests.get("execution", {})
-    full_selftest_progress = []
+def selftest_progress(receipt: dict) -> list[str]:
+    lines = []
     for name in ("reference", "subject"):
-        execution = full_selftest_execution.get(name, {})
-        summary = execution.get("summary", {})
-        counts = summary.get("outcomes", {})
-        full_selftest_progress.append(
-            f"  {name}: {summary.get('completedCollections', len(execution.get('collections', [])))} collections, "
-            f"{counts.get('PASS', 0)} PASS / {counts.get('FAIL', 0)} FAIL / {counts.get('SKIP', 0)} SKIP (program-level)"
-        )
-    # The native E0 receipt holds one selected suite; the common run retains
-    # both, so running torture must not erase an earlier c-testsuite reading.
-    e0c = e0c or measured.get("ctest", {}).get("outcomes", {})
-    e0t = e0t or measured.get("torture", {}).get("outcomes", {})
-    cs = contract("ladder-csmith-receipt.json").get("latest", {})
-    subjects = [
-        (name, contract(f"ladder-{name}-receipt.json"))
-        for name in ("zlib", "zstd", "cjson", "tinycc", "toybox", "musl")
-        if (ROOT / "tests" / "contracts" / f"ladder-{name}-receipt.json").exists()
-    ]
-    e0c_label = f"{e0c.get('pass', 0)}/{sum(e0c.values())}" if e0c else ""
-    e0t_label = f"{e0t.get('pass', 0)}/{sum(e0t.values())}" if e0t else ""
-    kernel = box(
-        " ── K6 EvoCC PASS" if full_passed else " ── ",
-        [
-            f" {full_compiled:,}/{full_total:,} EvoCC C ; {'PASS' if full_linked else ''}; {full_boot.get('verdict', 'NOT_RUN')}",
-            f"K6 {full_kernel.get('run', full_kernel.get('runId', ''))}",
-            f"K7 kselftest {selftest_status}: {selftest_cases.get('PASS', 0)} PASS / {selftest_cases.get('FAIL', 0)} FAIL / {selftest_cases.get('SKIP', 0)} SKIP",
-            kunit_progress(contract("kernel-kunit-receipt.json")),
-            f"K7 collection {full_selftest_status};// receipt",
-            *full_selftest_progress,
-            ":" + (" + ".join(f"{entry['units']:,} @{entry['subject'][:7]}" for entry in full_kernel.get("compilerComposition", [])) or " receipt"),
-            f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
-            f" K1 receipt: EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
-            latest_k1_note,
-            f"fail-closed {len(debts)} :{' '.join(debts)}",
-            f" E0 (): c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
-            f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {record_count(cs.get('miscompiles'))};"
-            + " ".join(f"{name} {r.get('unitsInPassingBuild', '?')}/{r.get('unitsTotal', r.get('units', 0))}" for name, r in subjects),
-            f"C1 EvoCC {bar(full_compiled, full_total, 4)} C2 vmlinux {bar(int(full_linked), 1, 4)} G1 {bar(int(full_passed), 1, 4)}",
-        ],
-        span,
-    )
+        summary = receipt.get("execution", {}).get(name, {}).get("summary", {})
+        counts = summary.get("outcomes")
+        if not counts:
+            lines.append(f"  {name}: NOT_RUN (no program outcomes)")
+            continue
+        total = summary.get("programs")
+        recorded = sum(n for outcome, n in counts.items() if outcome not in ("NOT_RUN", "RUNNING"))
+        width = 16
+        filled = int(width * min(recorded / total, 1)) if total else 0
+        lines.append(f"  {name:9} [{'#' * filled}{'-' * (width - filled)}] "
+                     f"{ratio(recorded, total)} recorded (not PASS)")
+        keys = [*OUTCOMES, *sorted(set(counts) - set(OUTCOMES))]
+        detail = " / ".join(f"{counts.get(key, 0)} {key}" for key in keys)
+        lines.extend(textwrap.wrap(detail, width=105, initial_indent="    ", subsequent_indent="    "))
+    return lines
 
-    values = {
-        "revisions": revisions,
-        "parse": f"{parse_clean:,}/{parse_total:,}",
-        "lower": f"{lower_clean:,}/{lower_total:,}",
-    }
-    label = max(cells(name) for name, _, _ in QUESTIONS) + 2
-    questions = ["(,)"]
-    questions += [
-        f"{pad(name, label)}{bar(level, 10, 10)}  {note.format(**values)}"
-        for name, level, note in QUESTIONS
-    ]
 
-    head = bench["subject"][:7] if bench else git("rev-parse", "--short", "HEAD")
-    observed = (f"{bench['run'][:4]}-{bench['run'][4:6]}-{bench['run'][6:8]} UTC"
-                if bench else date.today().isoformat())
+def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
+    bench = receipts.get("bench-receipt.json", {})
+    rows = bench.get("benchmarks", {})
+    states = Counter(lane_status(rows.get(name, {})) for _, name in APPLICATIONS)
+    totals = " | ".join(f"{count} {state}" for state, count in sorted(states.items()))
+    rule = "=" * 105
     lines = [
-        f"EvoCC ── ({observed},EvoIR {evoir} / EvoMIR {evomir}, checkout {head})",
-        "═" * span,
-        "",
-        *top,
-        *arrow(span, ""),
-        *backend,
-        *arrow(span, ""),
-        *kernel,
-        "",
-        *questions,
-        "═" * span,
+        f"EvoCC roadmap checkpoint | EvoIR {evoir} | EvoMIR {evomir}", rule,
+        "APPLICATIONS - each lane keeps its own frozen measurement", f"  {totals}",
+        f"  {'Rung':4} {'Benchmark':16} {'Status':15} {'Validated':20} Measurement (UTC run ID)",
+        "  " + "-" * 103,
     ]
-    text = "```text\n" + "\n".join(lines) + "\n```\n"
-    if bench:
-        text += (
-            "\n## Unified benchmark evaluation\n\n"
-            f"Run `{bench['run']}`; checkout `{bench['subject'][:7]}`; "
-            f"selected gates `{bench['status']}`. Run again with `python3 tools/bench.py all`.\n\n"
-            "Program counts and translation-unit counts are different measures; "
-            "an incomplete mixed build is not a closed roadmap milestone. Unselected lanes "
-            "retain their previous reading and compiler identity; they are not remeasured by this run. "
-            "Kernel composition and compiler identities, including whether the build is uniform or incremental, "
-            "are recorded in the [full-kernel receipt](../tests/contracts/kernel-full-receipt.json); "
-            "boot and runtime selftests remain separate measurements.\n\n"
-            "| Benchmark | Rung | Status | Validated / total | Measurement | Main blockers |\n"
-            "|---|---|---|---|---|---|\n"
-        )
-        for name, row in bench["benchmarks"].items():
-            blockers = sorted(row.get("refusals", {}).items(), key=lambda item: -item[1])[:3]
-            detail = ", ".join(f"{code}: {count}" for code, count in blockers)
-            if not detail:
-                detail = row.get("error", row.get("note", ""))
-            number = (f"{row['passed']}/{row['total']} {row['kind']}" if "total" in row
-                      else "unavailable" if row["status"] == "ERROR" else "not measured")
-            if row.get("mode") == "survey-only":
-                number = f"{row['compiled']}/{row['total']} assembled; boot NOT_RUN"
-                detail = "Compilation only; " + detail
-            measurement = row.get("measurement", {"run": bench["run"]})
-            stamp = measurement.get("run", "unknown")
-            if name not in bench.get("selected", bench["benchmarks"]):
-                stamp += " (previous)"
-            text += f"| {name} | {row['rung']} | {row['status']} | {number} | {stamp} | {detail.replace('|', '/')} |\n"
-        text += ("\nDetails and commands: [bench receipt](../tests/contracts/bench-receipt.json). "
-                 "Partial failed runs and source-level blockers: "
-                 "[benchmark review](notebook/benchmark-evaluation.md).\n")
+    for rung, name in APPLICATIONS:
+        row = rows.get(name, {})
+        kind = "TU" if row.get("kind") == "units" else row.get("kind", "")
+        amount = f"{ratio(validated(row), row.get('total'))} {kind}".rstrip()
+        lines.append(f"  {rung:4} {name:16} {lane_status(row):15} {amount:20} {measurement(row)}")
+    lines += [
+        "  PROFILE_CLEAN excludes evidenced deferrals/inapplicability; it is not all-program PASS.",
+        "  TU = translation unit. Mixed-link coverage and whole-program PASS are different claims.",
+        "", "KERNEL - configurations and runtime populations remain separate",
+    ]
+    full = receipts.get("kernel-full-receipt.json", {})
+    bpf = receipts.get("kernel-bpf-full-receipt.json", {})
+    for label, receipt in (("locked", full), ("bpf", bpf)):
+        state, link, boot = kernel_verdict(receipt)
+        amount = ratio(receipt.get("counts", {}).get("substituted"), receipt.get("requestedUnits"))
+        lines.append(f"  K6 {label:6} {state:11} {amount} target-C; link={link}; boot={boot}")
+        lines.append(f"    run={run_id(receipt)}")
+    modules = bpf.get("moduleLink", {})
+    count = record_count(modules.get("modules"))
+    module_state = modules.get("status", "NOT_RUN")
+    if module_state == "PASS" and (count <= 0 or modules.get("linkExitCode") != 0):
+        module_state = "UNVERIFIED"
+    lines.append(f"  BPF module link/BTF: {module_state}; {count} modules (not a load-every-driver claim)")
 
-    if "--check" in sys.argv:
-        print(text, end="")
+    selected = receipts.get("kernel-selftest-receipt.json", {})
+    selected_state = kernel_selftest_status(selected, full, receipts)
+    cases = selected.get("subject", {}).get("subtests")
+    if selected_state == "PASS" and (not cases or cases.get("PASS", 0) <= 0
+                                     or any(value for key, value in cases.items() if key != "PASS")):
+        selected_state = "UNVERIFIED"
+    keys = ["PASS", "FAIL", "SKIP", *sorted(set(cases or {}) - {"PASS", "FAIL", "SKIP"})]
+    result = " / ".join(f"{cases.get(k, 0)} {k}" for k in keys) if cases else "unmeasured"
+    lines.append(f"  K7 selected {selected_state}: {result}; run={run_id(selected)}")
+    live = receipts.get("kernel-selftest-full-receipt.json", {})
+    lines.append(f"  K7 all programs {kernel_selftest_status(live, full, receipts)}; run={run_id(live)}")
+    lines.extend(selftest_progress(live))
+    installation = live.get("moduleInstallations", {}).get("subject", {})
+    if installation:
+        state = installation.get("status", "NOT_RUN")
+        if not live.get("kernelImageSha256") or installation.get("imageSha256") != live["kernelImageSha256"]:
+            state = "STALE_IMAGE"
+        elif state == "PASS" and record_count(installation.get("modules")) <= 0:
+            state = "UNVERIFIED"
+        lines.append(f"  Module installation: {state}; {record_count(installation.get('modules'))} subject modules")
+        lines.append("    Signing/installation is not execution; helper compiler identities remain in the receipt.")
+
+    kunit = receipts.get("kernel-expanded-kunit-receipt.json", {})
+    if kunit:
+        lines.append(f"  Expanded KUnit: {kunit.get('status', 'NOT_RUN')}; "
+                     f"executionComplete={kunit.get('executionComplete', False)}")
+    else:
+        kunit = receipts.get("kernel-kunit-receipt.json", {})
+        lines.append(f"  Earlier KUnit configuration: {kunit.get('status', 'NOT_RUN')}")
+    lines.extend("  " + line for line in kunit_progress(kunit).splitlines())
+
+    gates = receipts.get("semantic-gate-contract.json", {}).get("receipt", {})
+    semantic, machine = gates.get("campaign", {}), gates.get("b1", {}).get("campaign", {})
+    lines += ["", "ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion percentage)"]
+    if semantic:
+        lines.append(f"  Scalar semantic gate: {semantic.get('programs', '?')} random IR programs; "
+                     f"{semantic.get('semanticMismatches', '?')} mismatches")
+    else:
+        lines.append("  Scalar semantic gate: NOT_RUN")
+    if machine:
+        lines.append(f"  MIR three-lane gate: {ratio(machine.get('lowered'), machine.get('programs'))}; "
+                     f"{machine.get('threeLaneMismatches', '?')} mismatches")
+    else:
+        lines.append("  MIR three-lane gate: NOT_RUN")
+    for target, key, field in (("Darwin", "b3", "cCorpus"), ("Linux", "b5", "linuxCorpus")):
+        corpus = gates.get(key, {}).get(field, {})
+        lines.append(f"  AArch64 {target:6} C corpus: {ratio(corpus.get('agreeing'), corpus.get('programs'))}")
+    lean = receipts.get("lean-p0-receipt.json", {})
+    if lean:
+        n = len(lean.get("segments", {}).get("A", {}).get("targets", []))
+        lines.append(f"  Lean scalar rules: {ratio(n, lean.get('binding', {}).get('registry_rules'))}; "
+                     "not a proof of the entire compiler")
+    correspondence = receipts.get("lean-correspondence-receipt.json", {}).get("total", {})
+    if correspondence:
+        lines.append(f"  Rust/Lean model differential: {correspondence.get('compared', '?')} vectors; "
+                     f"{correspondence.get('differences', '?')} differences")
+    lines += [
+        "  FP scope (spec): scalar f32/f64, HFA, varargs; strict fenv/binary128/FP complex/vector deferred",
+        "  G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED",
+        "  Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED",
+        "  Q3 measured self-improvement benefit: NOT_ACCEPTED",
+        "  H/x86 userspace and full release/research payload: NOT_ACCEPTED",
+        "  These open gates have no completion receipt here; baseline K6 does not close them.",
+        rule,
+    ]
+    return "\n".join(lines).encode("ascii", "backslashreplace").decode("ascii") + "\n"
+
+
+def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
+    bench = receipts.get("bench-receipt.json", {})
+    text = (
+        "# EvoCC roadmap status\n\n"
+        "Generated by `python3 tools/render-status.py`; "
+        "read-only terminal view: `python3 tools/render-status.py --ascii`. "
+        "This is a receipt checkpoint, not a live process monitor.\n\n"
+        f"Benchmark orchestrator run: `{bench.get('run', 'unmeasured')}`; "
+        f"checkout `{bench.get('subject', 'unknown')[:12]}`; "
+        f"dirty tree: `{bench.get('dirty', 'unknown')}`. "
+        "Each application row retains its own measurement and compiler identity; "
+        "the current kernel run does not remeasure applications.\n\n"
+        "```text\n" + render_ascii(receipts, evoir=evoir, evomir=evomir) + "```\n"
+    )
+    rows = bench.get("benchmarks", {})
+    text += "\n## Application evidence and limits\n\n"
+    text += "PASS is limited to the lane's recorded configuration, installed objects and original test selection. "
+    text += "It does not mean every upstream configuration or dependency was compiled by EvoCC.\n\n"
+    text += "| Benchmark | Classification / scope | Compiler SHA-256 (prefix) |\n|---|---|---|\n"
+    for _, name in APPLICATIONS:
+        row = rows.get(name, {})
+        disposition = row.get("dispositions") or {}
+        detail = "; ".join(f"{key}: {value}" for key, value in disposition.items())
+        if not detail:
+            outcomes = "; ".join(f"{key}: {value}" for key, value in row.get("outcomes", {}).items())
+            detail = (outcomes + "; " if outcomes else "") + row.get("note", "No measurement receipt.")
+        digest = (row.get("measurement") or {}).get("driverSha256") or "unrecorded"
+        text += f"| {name} | {detail.replace('|', '/')} | `{digest[:12]}` |\n"
+    text += (
+        "\n- Scalar f32/f64 execution, HFA and variadic ABI are implemented under the fixed-environment "
+        "profile. Strict dynamic fenv, binary128, floating complex/vector execution remain separate open work; "
+        "see the [FP scope in the roadmap](roadmap.md#milestone-ladder-for-end-to-end-evaluation-added-2026-09-06).\n"
+        "- PolyBench's current lane is MINI_DATASET correctness, not an optimization-speed result. "
+        "LLVM's full-campaign count is not increased by later tailored repairs; "
+        "see the [dated original-program and performance results](notebook/benchmark-evaluation-20260915.md).\n"
+        "- F3/F4 surveys and the old mixed-kernel `kernel` bench row are historical measurements "
+        "of different populations. They are not the current compiler's lowering ceiling. "
+        "Current full compositions are reported separately above.\n"
+        "- A Rust-built compiler is not C self-hosting. Kernel target-C coverage does not establish "
+        "complete HOSTCC coverage. Doom has no accepted benchmark receipt yet.\n"
+    )
+    expanded = receipts.get("kernel-expanded-kunit-receipt.json", {})
+    text += "\n## Kernel evidence and remaining work\n\n"
+    if expanded.get("compositionNote"):
+        text += f"Expanded KUnit composition: {expanded['compositionNote']}\n\n"
+    if expanded.get("remaining"):
+        text += f"Expanded KUnit remaining: {expanded['remaining']}\n\n"
+    text += (
+        "Full kselftest counts are program-level outer verdicts, not nested assertion counts. "
+        "SKIP, TIMEOUT, INVALID_OUTPUT, INCOMPLETE and NOT_RUN are not PASS. "
+        "Reference failures do not excuse a subject regression. A RUNNING receipt means the last "
+        "recorded campaign state; use its capture/process to confirm liveness.\n\n"
+        "Sources: [benchmark receipt](../tests/contracts/bench-receipt.json), "
+        "[locked K6](../tests/contracts/kernel-full-receipt.json), "
+        "[BPF/module K6](../tests/contracts/kernel-bpf-full-receipt.json), "
+        "[selected K7](../tests/contracts/kernel-selftest-receipt.json), "
+        "[full K7 checkpoint](../tests/contracts/kernel-selftest-full-receipt.json), "
+        "[expanded KUnit](../tests/contracts/kernel-expanded-kunit-receipt.json).\n\n"
+        "Open gate definitions: [launch logic and G2](roadmap.md#launch-logic-re-plan-of-2026-08-25). "
+        "Runtime diagnoses: [K7 issue ledger](notebook/kernel-selftest-gaps-20260914.md). "
+        "Historical failures remain in their original receipts; rendering does not rewrite them.\n"
+    )
+    return text
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--ascii", action="store_true", help="print ASCII only; do not write any file")
+    modes.add_argument("--check", action="store_true", help="compare generated Markdown with docs/status.md")
+    args = parser.parse_args(argv)
+    receipts = load_receipts()
+    versions = {"evoir": revision(ROOT / "docs/evoir-spec.md"), "evomir": revision(ROOT / "docs/evomir-spec.md")}
+    if args.ascii:
+        print(render_ascii(receipts, **versions), end="")
+        return 0
+    text = render_document(receipts, **versions)
+    print(text, end="")
+    if args.check:
         if (OUT.read_text() if OUT.exists() else "") != text:
-            print("docs/status.md differs from the rendering", file=sys.stderr)
+            print("docs/status.md differs from the receipt checkpoint; rerun tools/render-status.py", file=sys.stderr)
             return 1
         return 0
     OUT.write_text(text)
-    print(text, end="")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

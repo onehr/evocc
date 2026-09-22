@@ -53,7 +53,8 @@ ROOT = Path(__file__).resolve().parents[2]
 LADDER = ROOT / "tools" / "ladder"
 sys.path.insert(0, str(LADDER))
 
-from e0 import IMAGE, TARGET, include_flags, sha256, sysroot  # noqa: E402,F401
+from e0 import IMAGE, TARGET, SUPPORTED_OPTIONS, SUPPORTED_OPTION_PREFIXES, include_flags, sha256, sysroot  # noqa: E402,F401
+from subject import exported_sysroot  # noqa: E402
 
 #: ``.build`` and ``.evidence`` are resolved through any symlink, because the
 #: front end looks an include path up as written and a path that reaches the
@@ -106,147 +107,22 @@ def container(mounts: dict[str, Path], script: str, timeout: int = 3600):
 # The exported sysroot
 # --------------------------------------------------------------------------
 
-#: What the exported sysroot has done to it before a hosted subject is
-#: compiled against it, and why. Every entry is a header the front end cannot
-#: parse today; none of them changes the meaning of a program that the front
-#: end *can* compile, and all of them are named in the receipt.
-SYSROOT_ADJUSTMENTS = [
-    {
-        "file": "usr/include/aarch64-linux-gnu/bits/floatn-common.h",
-        "change": "__HAVE_FLOAT32, __HAVE_FLOAT64 and __HAVE_FLOAT32X set to 0",
-        "why": "the TS 18661 _FloatN types are not in the front end's type system,"
-        " and their prototypes derail the parse of <stdlib.h>",
-    },
-    {
-        "file": "usr/include/aarch64-linux-gnu/bits/floatn.h",
-        "change": "__HAVE_FLOAT128 set to 0",
-        "why": "same, for _Float128",
-    },
-    {
-        "file": "usr/include/aarch64-linux-gnu/bits/math-vector.h",
-        "change": "the AdvSIMD and SVE guards are forced closed",
-        "why": "the SIMD math prototypes are written in GCC's built-in vector"
-        " types (__Float32x4_t, __SVFloat32_t), which the front end has no"
-        " syntax for",
-    },
-]
+#: Every adapter sees the original exported headers. Unsupported declarations
+#: are measured refusals, never edits to the reference preprocessor branches.
+SYSROOT_ADJUSTMENTS = []
 
 #: No source-language token is erased through command-line definitions.
 SYSROOT_DEFINES = []
 
-EXPORT = r"""
-set -u
-mkdir -p /work/sysroot/usr /work/sysroot/gccinc
-cp -a /usr/include /work/sysroot/usr/include 2>/dev/null || true
-cp -a /usr/include/. /work/sysroot/usr/include/ 2>/dev/null || true
-mkdir -p /work/sysroot/usr/lib
-cp -a /usr/lib/linux /work/sysroot/usr/lib/ 2>/dev/null || true
-G=$(gcc-14 -print-file-name=include)
-cp -a $G/. /work/sysroot/gccinc/ 2>/dev/null || true
-echo exported
-"""
-
-
-def _adjust_sysroot(root: Path) -> None:
-    """Apply :data:`SYSROOT_ADJUSTMENTS` to a freshly exported sysroot."""
-    bits = root / "usr/include/aarch64-linux-gnu/bits"
-    common = bits / "floatn-common.h"
-    if common.exists():
-        text = common.read_text(errors="replace")
-        for name in ("__HAVE_FLOAT32", "__HAVE_FLOAT64", "__HAVE_FLOAT32X"):
-            text = text.replace(f"#define {name} 1\n", f"#define {name} 0\n")
-        common.write_text(text)
-    floatn = bits / "floatn.h"
-    if floatn.exists():
-        floatn.write_text(
-            floatn.read_text(errors="replace").replace(
-                "# define __HAVE_FLOAT128 1\n", "# define __HAVE_FLOAT128 0\n"
-            )
-        )
-    vector = bits / "math-vector.h"
-    if vector.exists():
-        text = vector.read_text(errors="replace")
-        for guard in (
-            "#if __GNUC_PREREQ(9, 0)\n",
-            "#if __GNUC_PREREQ(10, 0) || __glibc_clang_prereq(11, 0)\n",
-        ):
-            text = text.replace(guard, "#if 0 /* EvoCC ladder */\n")
-        vector.write_text(text)
-
-
-def ladder_sysroot(name: str = "sysroot-supported-tokens") -> tuple[Path, list[str]]:
-    """Export the container's headers once and return the include flags.
-
-    The distinct cache name avoids reusing headers rewritten by older adapters.
-    The export is a plain copy rather than a tar pipe, because a tar pipe
-    silently dropped the ``asm/`` tree in an earlier export and left every
-    ``<linux/...>`` include unresolvable. Two kinds of file do not survive the
-    copy onto a case-insensitive host filesystem -- ``ipt_ECN.h`` beside
-    ``ipt_ecn.h`` and its two siblings under ``linux/netfilter*`` -- and
-    nothing on the ladder includes them.
-    """
-    root = (BUILD / name).resolve()
-    if not (root / "usr/include/aarch64-linux-gnu/asm/errno.h").exists():
-        root.mkdir(parents=True, exist_ok=True)
-        done = container({"sysroot": root}, EXPORT, timeout=1800)
-        if "exported" not in done.stdout:
-            raise RuntimeError(f"sysroot export failed: {done.stdout}\n{done.stderr}")
-        _adjust_sysroot(root)
-    return root, [
-        f"-I{root}/gccinc",
-        f"-I{root}/usr/include/aarch64-linux-gnu",
-        f"-I{root}/usr/include",
-    ]
+def ladder_sysroot() -> tuple[Path, list[str]]:
+    """Reuse the common unmodified export, not a legacy rewritten copy."""
+    root = exported_sysroot()
+    return root, include_flags(root)
 
 
 # --------------------------------------------------------------------------
 # Source adjustments
 # --------------------------------------------------------------------------
-
-def escape_high_bytes(tree: Path, suffixes=(".c", ".h")) -> list[str]:
-    """Re-spell bytes above 0x7F so a file is valid UTF-8 without changing it.
-
-    The front end reads a source as UTF-8. In the primary source file a byte
-    that is not valid UTF-8 is reported (E0002); in an *included* file it is
-    not: the include silently yields nothing, the header's macros are all
-    missing, and the unit fails somewhere else entirely or, worse, compiles
-    to something different. toybox's generated ``flags.h`` holds three such
-    bytes inside ``OPTSTR_ls``, where they are option markers the generator
-    wrote out literally instead of as escapes.
-
-    Each high byte inside a line that contains a string literal is rewritten
-    as a three-digit octal escape, which denotes exactly the same character
-    and cannot run into the following character the way ``\\x`` can; a high
-    byte in a line with no string literal is a comment and becomes ``?``.
-    """
-    touched: list[str] = []
-    for path in sorted(tree.rglob("*")):
-        if path.suffix not in suffixes or not path.is_file():
-            continue
-        raw = path.read_bytes()
-        try:
-            raw.decode("utf-8")
-            continue
-        except UnicodeDecodeError:
-            pass
-        lines = []
-        for line in raw.split(b"\n"):
-            if any(byte > 127 for byte in line):
-                quoted = b'"' in line
-                rewritten = bytearray()
-                for byte in line:
-                    if byte <= 127:
-                        rewritten.append(byte)
-                    elif quoted:
-                        rewritten += b"\\%03o" % byte
-                    else:
-                        rewritten.append(ord("?"))
-                line = bytes(rewritten)
-            lines.append(line)
-        path.write_bytes(b"\n".join(lines))
-        touched.append(str(path.relative_to(tree)))
-    return touched
-
 
 # --------------------------------------------------------------------------
 # Command capture
@@ -380,7 +256,7 @@ SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote
 PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
 
 #: Options the front end takes as written.
-PASSED_THROUGH = ("-nostdinc", "-undef")
+PASSED_THROUGH = SUPPORTED_OPTIONS | {"-nostdinc", "-undef"}
 
 #: Options whose value is the following argument and which the front end has
 #: no use for; both words are dropped together so the value is never mistaken
@@ -446,7 +322,7 @@ def evocc_command(
             command.extend(("-include", to_host(value[8:], mount, host, unit.cwd)))
         elif value in PASSED_THROUGH:
             command.append(value)
-        elif value == "-std=gnu11":
+        elif value.startswith(("-std=", *SUPPORTED_OPTION_PREFIXES)):
             command.append(value)
         elif value != "-c":
             omitted.append(value)

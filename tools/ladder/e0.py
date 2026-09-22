@@ -33,11 +33,13 @@ import fnmatch
 import hashlib
 import json
 import math
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +51,37 @@ TARGET = "aarch64-unknown-linux-gnu"
 TARGET_EVIDENCE = ".evidence/builtin-probes/20260909-torture-requirements/results.txt"
 STACK_BYTES = 8388608
 DISPOSITIONS = ('PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'oracle-unusable')
+# Driver-supported semantics shared with the application command projector.
+# Preserve written order at the call site: several options override earlier
+# options, and optimization/PIC modes also control predefined macros.
+SUPPORTED_OPTIONS = frozenset({
+    "-O", "-O0", "-O1", "-O2", "-O3", "-Og", "-Os",
+    "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
+    "-fbuiltin", "-fno-builtin", "-ffreestanding", "-fhosted",
+    "-fshort-wchar", "-fno-short-wchar", "-std=gnu89", "-std=gnu99", "-std=gnu11",
+    "-std=c89", "-std=c90", "-ansi", "-std=c99", "-std=c11", "-std=gnu17",
+    "-fgnu89-inline", "-fno-gnu89-inline",
+    "-fsigned-char", "-funsigned-char", "-fno-signed-char", "-fno-unsigned-char",
+    "-fpic", "-fPIC", "-fpie", "-fPIE",
+    "-fno-pic", "-fno-PIC", "-fno-pie", "-fno-PIE",
+    "-ftrivial-auto-var-init=zero", "-ftrivial-auto-var-init=uninitialized",
+    "-ftls-model=local-exec", "-ftls-model=initial-exec",
+    "-ftls-model=local-dynamic", "-ftls-model=global-dynamic",
+    "-fstack-protector-strong", "-fno-stack-protector",
+    "-mbranch-protection=pac-ret", "-mbranch-protection=none",
+    "-mgeneral-regs-only", "-mno-general-regs-only",
+    "-mstrict-align", "-mno-strict-align",
+    "-mcmodel=tiny", "-mcmodel=small",
+    "-fasynchronous-unwind-tables", "-funwind-tables",
+    "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
+    "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",
+    "-fno-fast-math", "-ffast-math", "-fno-rounding-math", "-frounding-math",
+    "-ffp-contract=off", "-ffp-contract=on", "-ffp-contract=fast",
+})
+SUPPORTED_OPTION_PREFIXES = (
+    '-mstack-protector-guard-reg=', '-mstack-protector-guard-offset=',
+    '-fmacro-prefix-map=', '-ffp-contract=',
+)
 # gcc/testsuite/lib/target-supports.exp from the pinned torture source:
 # these predicates describe the target, not the subject's implementation.
 # In particular, missing computed-goto lowering cannot make indirect_jumps
@@ -146,10 +179,26 @@ def fetch(suite: str) -> Path:
     return dest / pin["subdir"]
 
 
+def case_sensitive_directory(root: Path) -> bool:
+    # Linux UAPI has distinct xt_CONNMARK.h/xt_connmark.h, among others.
+    # An APFS case-insensitive export silently overwrites one with the other.
+    with tempfile.TemporaryDirectory(prefix='.case-probe-', dir=root) as directory:
+        probe = Path(directory) / 'Header'
+        probe.touch()
+        return not probe.with_name('header').exists()
+
+
 def sysroot() -> Path:
-    root = BUILD / "sysroot"
-    if not (root / "usr" / "include" / "stdio.h").exists():
-        root.mkdir(parents=True, exist_ok=True)
+    configured = os.environ.get('EVOCC_BENCH_SYSROOT')
+    root = Path(configured) if configured else BUILD / "sysroot"
+    if not root.is_absolute():
+        raise SystemExit('EVOCC_BENCH_SYSROOT must name an absolute directory')
+    root.mkdir(parents=True, exist_ok=True)
+    if not case_sensitive_directory(root):
+        raise SystemExit('the Linux header export requires a case-sensitive directory; '
+                         'set EVOCC_BENCH_SYSROOT to one on an existing case-sensitive volume')
+    marker = root / 'usr/include/aarch64-linux-gnu/asm/errno.h'
+    if not (root / "usr/include/stdio.h").is_file() or not marker.is_file() or marker.stat().st_size == 0:
         sh(
             [
                 "container",
@@ -164,10 +213,15 @@ def sysroot() -> Path:
                 IMAGE,
                 "sh",
                 "-c",
-                "G=$(gcc -print-file-name=include); tar -cf - /usr/include $G 2>/dev/null | tar -xf - -C /work/sysroot",
+                'G=$(gcc -print-file-name=include) && '
+                'tar -chf /tmp/header-export.tar /usr/include "$G" && '
+                'tar -xf /tmp/header-export.tar -C /work/sysroot && '
+                'chmod -R u+rwX /work/sysroot/usr',
             ],
             check=True,
         )
+        if not marker.is_file() or marker.stat().st_size == 0:
+            raise SystemExit('the sysroot export left its required header absent or empty')
     return root
 
 
@@ -285,12 +339,7 @@ def conditional_requirement_matches(arguments: list[str], flags: list[str]) -> b
 
 def program_options(source: Path) -> dict:
     """Apply selected options; unknown applicability is never an exclusion."""
-    supported = {
-        "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
-        "-fbuiltin", "-fno-builtin",
-        "-fshort-wchar", "-fno-short-wchar",
-        "-std=gnu89", "-std=gnu11",
-    }
+    supported = SUPPORTED_OPTIONS
     base, additional, unhandled, applicability, skips = [], [], [], [], []
     annotations, expected_failures = [], []
     timeout_factor = 1
@@ -434,7 +483,7 @@ cd /work/run; mkdir -p bin out
 for s in asm/*.s; do b=$(basename $s .s)
   [ -f "$s" ] || continue
   if ! gcc -c $s -o bin/$b.o 2>out/$b.asm.err; then echo "$b asm-fail"; continue; fi
-  if ! gcc -static -o bin/$b bin/$b.o 2>out/$b.link.err; then echo "$b link-fail $(grep -m1 -o 'undefined reference to [^ ]*' out/$b.link.err | cut -d' ' -f4)"; continue; fi
+  if ! gcc -static -o bin/$b bin/$b.o -lm 2>out/$b.link.err; then echo "$b link-fail $(grep -m1 -o 'undefined reference to [^ ]*' out/$b.link.err | cut -d' ' -f4)"; continue; fi
   limit=10
   if [ -f src/$b.timeout ]; then read -r limit < src/$b.timeout; fi
   timeout "$limit" ./bin/$b > out/$b.stdout 2>out/$b.stderr; rc=$?
@@ -511,14 +560,36 @@ def classify_program(row: dict, source: Path, reviewed: dict) -> dict:
         rule = reviewed[key]
         evidence = rule.get('evidence', []) if isinstance(rule, dict) else []
         if (not isinstance(rule, dict)
-                or rule.get('disposition') not in ('not-applicable', 'FP-deferred')
+                or rule.get('disposition') not in ('not-applicable', 'FP-deferred', 'oracle-unusable')
                 or rule.get('sourceSha256') != sha256(source)
                 or not rule.get('reason') or not isinstance(evidence, list) or not evidence
                 or not all(isinstance(path, str) and (ROOT / path).is_file() for path in evidence)):
             return {'disposition': 'compiler-failure',
                     'dispositionError': 'reviewed disposition has missing evidence, changed source or invalid label'}
-        return {'disposition': rule['disposition'], 'dispositionReason': rule['reason'],
-                'dispositionEvidence': evidence, 'sourceSha256': rule['sourceSha256']}
+        result = {'disposition': rule['disposition'], 'dispositionReason': rule['reason'],
+                  'dispositionEvidence': evidence, 'sourceSha256': rule['sourceSha256']}
+        # A reviewed unsupported FP feature can explain a compilation refusal,
+        # not a newly emitted program's failure. Conversely, a fresh native pass
+        # closes that old deferral. Applicability and unusable-oracle decisions
+        # do not have this property: a subject exit code cannot resolve them.
+        if rule['disposition'] == 'FP-deferred' and row['outcome'] != 'refused':
+            result['disposition'] = 'PASS' if row['outcome'] == 'pass' else 'compiler-failure'
+            result['dispositionReason'] = (
+                f"current {row['outcome']} supersedes the former FP deferral: {rule['reason']}")
+        elif rule['disposition'] == 'FP-deferred':
+            # Pre-execution FP reviews also covered f32/f64, now implemented.
+            # A surviving refusal needs a source-bound review of an actually
+            # deferred feature, not just the presence of floating expressions.
+            features = rule.get('deferredFeatures')
+            deferred = {'binary16', 'bfloat16', 'binary128', 'floating-complex',
+                        'floating-vector', 'strict-fenv'}
+            if (not isinstance(features, list) or not features
+                    or any(not isinstance(feature, str) or feature not in deferred
+                           for feature in features)):
+                result['disposition'] = 'compiler-failure'
+                result['dispositionError'] = (
+                    'FP review predates scalar f32/f64 support or lacks a still-deferred feature')
+        return result
     if row['outcome'] == 'not-applicable':
         return {'disposition': 'not-applicable',
                 'dispositionEvidence': [row['applicabilityEvidence']]}
