@@ -178,6 +178,58 @@ fn unrelated_volatile_stores_preserve_unescaped_allocation_size_facts() {
 }
 
 #[test]
+fn assembly_memory_outputs_expose_objects_to_later_indirect_writes() {
+    for (constraint, expected) in [
+        ("=m", 0),
+        ("+m", 0),
+        ("=Q", 0),
+        ("+Q", 0),
+        ("=r", 1),
+        ("+r", 1),
+        ("=&r", 1),
+        ("+&r", 1),
+    ] {
+        let source = format!(
+            "int f(volatile int*p){{int n=0;asm volatile(\"\":\"{constraint}\"(n));\
+             n=11;*p=7;return __builtin_constant_p(n);}}"
+        );
+        let output = run(&source, "--emit=evoir");
+        assert!(
+            output.status.success(),
+            "{constraint}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        // Reached assembly is not interpreter-executable. Inspect the actual
+        // returned SSA constant after independently parsing/validating the IR,
+        // rather than counting an unrelated constant elsewhere in the text.
+        let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+        let [function] = module.functions.as_slice() else {
+            panic!("one source function expected");
+        };
+        let [block] = function.blocks.as_slice() else {
+            panic!("straight-line function expected");
+        };
+        let evocc_evoir::Inst::Ret(values) = &block.terminator else {
+            panic!("return expected");
+        };
+        let value = values.first().expect("integer return value");
+        assert!(
+            block.insts.iter().any(|inst| matches!(inst,
+                evocc_evoir::Inst::Const(result, bits) if result == value && *bits == expected)),
+            "{constraint}: returned query must be {expected}"
+        );
+    }
+    // The exposure fix must not silently admit new early-clobber memory
+    // combinations; those constraints remain outside the current profile.
+    for constraint in ["=&m", "+&m", "=&Q", "+&Q"] {
+        let source = format!("void f(void){{int n=0;asm volatile(\"\":\"{constraint}\"(n));}}");
+        let output = run(&source, "--emit=evoir");
+        assert!(!output.status.success(), "{constraint}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+}
+
+#[test]
 fn extent_queries_do_not_read_unknown_values_or_escape_source_control_flow() {
     for source in [
         "int main(void){char a[16];int i;return __builtin_dynamic_object_size(a+i,0)!=~0ul;}",

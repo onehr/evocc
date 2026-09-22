@@ -304,6 +304,13 @@ fn inspect_ordered<'a>(
                         for o in &a.outputs {
                             if let CHirExpr::Ident { symbol, .. } = o.expression {
                                 uses.mark_mutable(*symbol);
+                                // A memory output passes the object's address
+                                // to opaque assembly, just like a memory input.
+                                // A later assignment cannot make that escaped
+                                // address private again.
+                                if matches!(o.constraint.as_str(), "=m" | "+m" | "=Q" | "+Q") {
+                                    uses.exposed_objects.insert(*symbol);
+                                }
                             }
                         }
                         for o in &a.inputs {
