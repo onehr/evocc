@@ -50,6 +50,8 @@ KERNEL - configurations and runtime populations remain separate
     subject 1432 PASS / 12 FAIL / 60 SKIP
     subject modules 31 files loaded, 765 PASS / 0 FAIL / 0 SKIP
     follow-up fortify (26 tests): 23 PASS / 3 FAIL / 0 SKIP; filtered; not a full KUnit rerun
+    follow-up fortify (26 tests): 24 PASS / 2 FAIL / 0 SKIP; filtered; not a full KUnit rerun
+    follow-up fortify (26 tests): 25 PASS / 1 FAIL / 0 SKIP; filtered; not a full KUnit rerun
 
 ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion percentage)
   Scalar semantic gate: 21000 random IR programs; 0 mismatches
@@ -98,7 +100,7 @@ PASS is limited to the lane's recorded configuration, installed objects and orig
 
 Expanded KUnit composition: Full-suite/module-tested composition, not a single-compiler survey: 6,914 base objects, Poly1305 from the padding repair, and FORTIFY from the query repair. All 6,916 installed object hashes survived that flight's relink. The later one-object filtered composition is recorded separately in targetedFollowups.
 
-Expanded KUnit remaining: Last full-suite/module-tested flight: all 1,504 built-in cases and all 765 module cases executed. Four FORTIFY query cases and one timing-sensitive PM runtime case differ from reference PASS; one upstream switch-entry XFAIL differs as SKIP. Seven ARM64 per-task EL1 breakpoint failures are common. The later filtered FORTIFY follow-up is 23/26 PASS with three failures; it does not recompute the 1,504-case totals. Retain all raw FAIL/SKIP results; this is not all-tests PASS.
+Expanded KUnit remaining: Last full-suite/module-tested flight: all 1,504 built-in cases and all 765 module cases executed. Four FORTIFY query cases and one timing-sensitive PM runtime case differ from reference PASS; one upstream switch-entry XFAIL differs as SKIP. Seven ARM64 per-task EL1 breakpoint failures are common. Subsequent filtered FORTIFY follow-ups reach 25/26 PASS with one failure containing two nonliteral strlen ICE assertions. They do not recompute the 1,504-case totals or update module acceptance. Retain all raw FAIL/SKIP results; this is not all-tests PASS.
 
 Full kselftest counts are program-level outer verdicts, not nested assertion counts. SKIP, TIMEOUT, INVALID_OUTPUT, INCOMPLETE and NOT_RUN are not PASS. Reference failures do not excuse a subject regression. A RUNNING receipt means the last recorded campaign state; use its capture/process to confirm liveness.
 

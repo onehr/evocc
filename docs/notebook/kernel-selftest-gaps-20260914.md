@@ -1,12 +1,12 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-22. This is a diagnosis ledger. The latest pair is
+Updated 2026-09-23. This is a diagnosis ledger. The latest full pair is
 `.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
 and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
-## Current closure queue — 2026-09-22
+## Current closure queue — 2026-09-23
 
 | Required result | Verified state | Remaining action |
 |---|---|---|
@@ -15,7 +15,7 @@ Targeted results and additional configurations use separate denominators.
 | Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Diagnose seven reference-PASS differences, shared failures and four collection build gaps; do not relabel timeouts |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
-| Filtered FORTIFY follow-up | Original 26-case suite on a one-object incremental Image: 23 PASS / 3 FAIL, previously 22 PASS / 4 FAIL; failed assertions 96 → 66. `kmalloc_const` now passes | Not a new 1,504-case run or module acceptance; checked-allocation return joins and remaining declared-object/source-ICE queries are still open |
+| Filtered FORTIFY follow-up | Original 26-case suite on audited one-object incremental Images: 22/23/24/25 PASS, now one FAIL; failed assertions 96 → 66 → 31 → 2. All allocation cases and the local initialized-byte query now pass | Not a new 1,504-case run or module acceptance. Two nonliteral `strlen` ICE assertions conflict with the current literal-only specification; no assertion or rule was bypassed |
 | Expanded KUnit modules | Both 809-module installations verified. The retained full-suite/module-tested Image actually loaded all 31 test modules and passed 765/765 cases; the GCC control also passed 765/765 with equal case/outcome multisets including duplicate multiplicity | That composition's module execution is complete, not the later filtered FORTIFY Image; its signature option is disabled, unlike the separately signed BPF configuration |
 | Function-section placement | CLOSED: EvoIR 1.9.104 / EvoMIR 0.34, tailored interpreter/native/ELF tests, seven original objects, full workspace gate and isolated offline replay pass. Fresh full composition has zero modpost warnings (previously 2,515), complete link and real boot PASS | Preserve regressions; this does not close unrelated KUnit or kselftest failures |
 | Further configuration coverage | Original Kconfig resolves 100 disabled requests in 27 collections in the small existing config-review directory | Build and test that configuration later; do not mutate either active kernel or advertise its proposed options as coverage |
@@ -108,8 +108,63 @@ The non-compiler boundaries remain explicit:
   run yet and this repair is not part of either active kernel Image.
 
 The allocation and BTF paragraphs above/below preserve the earlier pending
-checkpoint. Their tailored verification is now complete as described next;
-neither repair has yet been installed into these kernel Images.
+checkpoints. The September 23 follow-up below records the subsequent original
+object installation, relink and execution; it does not rewrite those captures.
+
+### Selected-return and query-context repair — 2026-09-23
+
+Four shared C-HIR repairs have small RED/GREEN cases: transport allocation
+extents through the actually selected inline return; retain the executed
+checked arithmetic result; prove initialized narrow-array bytes; and preserve
+those facts through nested `unlikely`/`!!` expressions and provably disjoint
+volatile stores. Actual argument evaluations, checked-result stores, unknown
+return arms, aliasing, volatile reads and uninitialized accesses remain intact.
+The final `fortify-query-context.c` passes both interpreters and sealed ARM64
+GCC14/Clang19/EvoCC native execution. Changed gate: **1,786 PASS / zero FAIL /
+three historical ignored**, Clippy `-D warnings` and fmt PASS.
+
+Two unchanged original `fortify_kunit.o` replays have exact symbol parity and
+unchanged source/generated inputs. Their separate diagnostic links audit all
+**6,916 objects**, with **6,915 unchanged**, and preserve all 65 generated inputs.
+The original filtered suite first improves to **24 PASS / two FAIL** (31 failed
+assertions), then **25 PASS / one FAIL** (two failed assertions). The second
+Image is `29090f227ea34a63462bc4289df4264aba783d659102e0c9da0fb08ba07c94a7`;
+the nonce-bound boot/shutdown succeeds. Both executions and hashes are appended
+to `kernel-expanded-kunit-receipt.json`, without recomputing the historical
+1,504-case totals or crediting the old 765-case module result to these Images.
+
+Only `fortify_test_known_sizes` lines 95 and 101 remain: the original test
+requires `__builtin_strlen` of a static const array and a const pointer to a
+literal to be ICE. EvoIR 10.1.18 instead explicitly makes every nonliteral
+operand an external `strlen` call. This is a profile-rule conflict, not an
+unexplained code-generation defect; the existing observable user-defined
+`strlen` regression must also be preserved. No blanket constant folding or
+test exclusion was used to obtain the 25 passes.
+
+### Runtime packaging follow-up — 2026-09-23
+
+The refreshed reference payload restores the real `nc` command. The unchanged
+`bpf:test_tcpnotify_user` now **passes** in
+`.evidence/kselftest-full/runtime-prereqs-reference-20260923`; its earlier
+callback failure was not a kernel-code repair. Installing `snd_timer` also
+lets the original ALSA test create its userspace-driven timer, but exposes a
+second packaging omission: libasound needs `/usr/share/alsa/alsa.conf`. The
+shared runtime copier now retains the package's ALSA configuration directory;
+the new RED is GREEN and all **208 K1 harness tests**, Ruff and diff checks pass.
+
+The unchanged ALSA replay with that configuration remains **FAIL**, not PASS:
+`global.wrong_timers_test` passes, while the helper aborts in libasound
+`snd_async_del_handler` (`async.c:167`) before printing its final tick count.
+Capture `.evidence/kselftest-full/alsa-config-reference-20260923` has serial
+SHA-256 `63e95de25f75ff8c68766d4f7cd6cc9d5fe10e79b6a681c4cd3925265191c0f6`.
+The installed runtime is Debian `libasound2t64 1.2.14-1`, not EvoCC-built code.
+Upstream [1.2.14 timer.c](https://github.com/alsa-project/alsa-lib/blob/v1.2.14/src/timer/timer.c)
+sets `SND_ASYNC_HANDLER_TIMER` and closes its registered handler through
+`snd_async_del_handler`; [the same version's async.c](https://github.com/alsa-project/alsa-lib/blob/v1.2.14/src/async.c)
+handles only PCM and CTL in that switch, with an assertion in the default arm.
+Both exact files were checked locally. This explains the observed abort;
+it does not prove the suppressed tick count or waive the original test. No
+test, library assertion or kernel source has been patched.
 
 ### Isolated compiler follow-up — 2026-09-22
 

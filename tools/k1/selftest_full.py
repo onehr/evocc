@@ -1091,7 +1091,8 @@ def refresh_runtime(work, kernel_build=None):
     # A runtime root, not another kernel tree or complete compiler installation.
     for part in ('usr/bin', 'usr/sbin', 'usr/lib/aarch64-linux-gnu', 'usr/lib/python3',
                  'usr/lib/python3.13', 'usr/lib/locale', 'usr/libexec', 'usr/share/perl5',
-                 'usr/share/perl', 'usr/share/zoneinfo', 'usr/lib/udev', 'usr/lib/systemd', 'etc'):
+                 'usr/share/perl', 'usr/share/zoneinfo', 'usr/share/alsa',
+                 'usr/lib/udev', 'usr/lib/systemd', 'etc'):
         if Path('/' + part).exists():
             dest = rootfs / part
             dest.mkdir(parents=True, exist_ok=True)

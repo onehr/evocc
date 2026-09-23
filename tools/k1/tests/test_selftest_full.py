@@ -929,6 +929,10 @@ class FullSelftest(unittest.TestCase):
         self.assertIn('netcat-openbsd', lane.RUNTIME_PACKAGES,
                       'the original BPF TCP scripts execute nc, not socat')
 
+    def test_runtime_keeps_alsa_configuration_data(self):
+        self.assertIn("'usr/share/alsa'", inspect.getsource(lane.refresh_runtime),
+                      'libasound cannot open the original hw: timer without alsa.conf')
+
     def test_runtime_ethtool_supplement_preserves_pinned_upstream_identity(self):
         install = getattr(lane, 'install_runtime_ethtool', None)
         self.assertTrue(callable(install), 'ethtool 6.14 cannot answer the original JSON channels query')
