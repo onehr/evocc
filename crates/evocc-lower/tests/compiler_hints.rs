@@ -60,6 +60,39 @@ fn interpreter_results(source: &str) -> (u128, u128) {
 }
 
 #[test]
+fn repeated_logical_negation_keeps_one_truth_conversion_and_all_evaluation() {
+    let source = "int normalize(int n){return !!!!n;}";
+    let arena = Arena::default();
+    let file = FileId::new(45025);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module = evocc_lower::lower_unit_with_optimization(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        true,
+    )
+    .unwrap();
+    let compares = module.functions[0]
+        .blocks
+        .iter()
+        .flat_map(|b| &b.insts)
+        .filter(|inst| matches!(inst, evocc_evoir::Inst::ICmp(..)))
+        .count();
+    assert_eq!(
+        compares, 1,
+        "a chain of logical negations needs only one truth conversion"
+    );
+    assert_eq!(
+        interpreter_results(include_str!(
+            "../../../tests/fixtures/logical-normalization.c"
+        )),
+        (0, 0)
+    );
+}
+
+#[test]
 fn guarded_constant_queries_use_dominating_range_facts() {
     for source in [
         "int check(int n){if(n>0){int x=n;return __builtin_constant_p((long long)x>=0)&&((long long)x>=0);}return 1;}

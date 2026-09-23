@@ -9,6 +9,22 @@ fn agrees(source: &str) {
 }
 
 #[test]
+fn boolean_normalization_does_not_initialize_or_skip_its_operand() {
+    for optimize in [false, true] {
+        evaluates_with_optimization(
+            "int main(void){int x;return !!!!x;}",
+            Some("E3001"),
+            optimize,
+        );
+        evaluates_with_optimization(
+            "int main(void){int *p=0;return !!!!*p;}",
+            Some("E3009"),
+            optimize,
+        );
+    }
+}
+
+#[test]
 fn direct_wide_field_shifts_use_declared_precision_not_storage_precision() {
     // This harness consumes C tokens, not preprocessing directives.
     for width in [33, 40, 52, 58, 64] {
@@ -260,6 +276,10 @@ fn volatile_bit_fields_have_equal_traces_and_declared_container_widths() {
 }
 
 fn evaluates(source: &str, diagnostic: Option<&str>) {
+    evaluates_with_optimization(source, diagnostic, false);
+}
+
+fn evaluates_with_optimization(source: &str, diagnostic: Option<&str>, optimize: bool) {
     let arena = Arena::default();
     let file = FileId::new(45023);
     let mut lexer = Lexer::new(file, source);
@@ -277,7 +297,7 @@ fn evaluates(source: &str, diagnostic: Option<&str>) {
         })
         .unwrap();
     let target = TargetDataLayout::aarch64_unknown_linux_gnu();
-    let module = evocc_lower::lower_unit(&unit, &target)
+    let module = evocc_lower::lower_unit_with_optimization(&unit, &target, optimize)
         .unwrap_or_else(|error| panic!("{source}: {error:?}"));
     let function = module.functions.iter().find(|f| f.name == "main").unwrap();
     let arguments = function

@@ -1,0 +1,13 @@
+2026-09-23: repeated logical-negation regression, GNU11 AArch64.
+RED: optimized normalize(int n) { return !!!!n; } emitted five integer
+comparisons instead of one. This was redundant work, not a wrong value.
+GREEN: one comparison; the native function shrank from 28 to 8 instructions.
+C-HIR, optimized and unoptimized EvoIR, GCC14, Clang19 and EvoCC native
+execute logical-normalization.c with result 0. Calls, postincrement,
+short-circuit assignment, pointer, 128-bit and FP truth cases are included.
+Separate optimized/unoptimized negative tests retain E3001 for an
+uninitialized operand and E3009 for a null dereference.
+The changed gate passed 1078 tests, with 3 existing ignored tests, and
+Clippy -D warnings and fmt passed. No kernel timeout or crash is closed
+by this isolated measurement.
+Compiler SHA256: efd52ea8087bdc4fe80106f1e0e1520fd95c6208b82ae45a93be0bed9b157827

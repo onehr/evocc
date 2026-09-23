@@ -10574,6 +10574,18 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if self.optimize && operator == UnaryOp::Not {
+            if let CHirExpr::Unary(UnaryOp::Not, inner, _) = operand {
+                // !!x is its truth conversion, not x itself. Evaluate x once
+                // through the ordinary condition path so volatile reads,
+                // calls, poison checks and full-width/FP truth are retained.
+                // Kernel likely/unlikely wrappers frequently nest these pairs.
+                return Ok(ExprValue {
+                    value: self.lower_condition(inner, state)?,
+                    integer: CIntegerType::INT,
+                });
+            }
+        }
         if operator == UnaryOp::AddrOf {
             let address = match operand {
                 CHirExpr::Ident { symbol, .. }
