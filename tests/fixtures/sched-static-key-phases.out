@@ -1,0 +1,62 @@
+2026-09-23 — K01 phase-bounded static-key diagnostic. K01 remains OPEN.
+
+The four-reader signed module adds publication-phase observations to the
+earlier static-key/RCU reduction. It never frees or dereferences the object.
+The writer publishes, enables, disables, waits for synchronize_rcu, then clears
+the pointer, in 256 rounds. Reader phase observations use READ_ONCE, not a new
+barrier. reader_preempt=1 additionally forbids preemption across the read-side
+critical section; memory_gate=1 uses an acquire/release Boolean instead of
+instruction patching. The same module and payload are used in all six boots.
+
+Actual missing-pointer counts (static / memory / preemption-disabled):
+                        GCC reference            EvoCC subject
+TCG Cortex-A72, MT       753386 / 0 / 1188348       549995 / 0 / 485852
+HVF host                     0 / 0 / 0                 0 / 0 / 0
+TCG Cortex-A72, single        0 / 0 / 0                 0 / 0 / 0
+Every mode completes 256 rounds with four readers and millions of actual
+reads. Both kernels boot and shut down in all three lanes. The TCG MT static
+and preemption-disabled program verdicts are FAIL; the other 14 are PASS.
+
+All but two stable MT reference observations, and all stable MT subject
+observations, occur in phase 7: disable completed, grace period returned and
+pointer cleared. There are also 1 reference / 7 subject changing-phase
+observations across the two failing modes. Initial bad-event snapshots show
+the branch instruction as NOP (d503201f), enabled count zero, RCU nesting one.
+The observations narrow the discrepancy to concurrent branch publication in
+this MT-TCG environment. They do not yet prove a specific emulator defect or
+that it is the cause of the original sched_ext NULL dereference. No production
+kernel code, acceptance contract, watchdog or full-run verdict was changed.
+The earlier single-thread original sched_ext run timed out; these small-case
+passes do not supersede it or close K01.
+
+Build reuses sched-static-key-lifetime-load.c, the matching reference kernel
+headers/signing certificate and the existing initramfs init. The module object
+name stays sched-static-key-lifetime.ko so the same loader is used. Three static
+GCC loaders differ only by MODULE_PARAMETERS: empty, memory_gate=1,
+reader_preempt=1. Each test has 90 seconds, outer boot bound 330 seconds.
+GCC 14.2.0-19 builds this diagnostic infrastructure on both kernel subjects;
+none of this adds EvoCC target-C compilation credit. Commands/environment are
+the same external-module/sign-file/gen_init_cpio path recorded in
+sched-static-key-lifetime.out. Source/kernel mounts are read-only, network off.
+
+Flights use tools/k1/selftest.py flight -> tools/k1/boot.sh, four CPUs, 2048 MiB,
+K1_ALLOW_QEMU_DRIFT=1 and K1_KUNIT_AUTORUN=0. tcg-cortex-a72 and hvf-host are
+existing lanes; the single-thread diagnostic copies the contract under .build
+and changes only acceleration to tcg,thread=single, keeping cortex-a72. It is
+marked diagnostic-only, never the locked acceptance contract. All use the
+existing 64 MiB snapshot scratch disk, not a copied full runtime disk.
+
+SHA-256:
+source 011aadca5fa633ff28df9f1b0a39643a8b0dbad7ed11be4f890c6e1b761a7949
+module 49c55a137ccc334f06ec1ee8ca07c6be75dc24c0ebb2588ca259c602315bf576
+payload 8b025a04cbdfc7ebbc14b7ee61b2f1fa5ffaeab90a8b9a52a966bf70d23533f9
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+QEMU 11.1.1 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+
+Directory: .build/floating-targeted/static-key-phases-20260923/
+result.json e79aa0314327a9953485eaeb16ff262c3b0499902f6d775aa04feec976896f3d
+result-hvf-host.json 664d33901cdb7a64fa072404ada2b0119b3750b0bbad75e16f67bb297b9fcfb0
+result-tcg-single.json a8a54c0534cc0746e984063c53d531caae817073087fb8d4f326d6e50f9c8e09
+Each result records the actual program verdicts and bound serial/Image hashes.
+All six flights have exited. No heavy campaign or kernel rebuild was launched.

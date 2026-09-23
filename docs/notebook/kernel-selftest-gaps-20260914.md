@@ -2697,3 +2697,20 @@ historical receipt; this later PASS is not attributed to a compiler change.
 The 5.4 MiB diagnostic payload uses the existing 64 MiB snapshot scratch disk;
 original-group replays reuse the matched full runtime disks without copying.
 K10 still needs complete execution within 300 seconds, plus K12 configuration.
+
+### Static-key publication phase isolation — 2026-09-23
+
+The [phase-bounded signed module](../../tests/fixtures/sched-static-key-phases.out)
+uses the same payload on GCC/EvoCC and three accelerator modes. Multi-thread
+TCG reports 753,386 / 549,995 missing pointers, and disabling reader preemption
+does not cure it; the release/acquire memory-gate controls pass. Nearly all
+misses have unchanged phase observations after disable, RCU grace period and
+pointer clear. The same static, memory and preemption-disabled tests all pass
+on HVF and single-thread TCG on both kernels. All six boots shut down normally.
+
+This narrows K01's runtime discrepancy without attributing a compiler repair,
+changing production code or promoting the original sched_ext test to PASS.
+The diagnostic payload is about 4 MiB; every flight reuses the 64 MiB snapshot
+disk. The exact source, module, payload, Images, serials and command boundary
+are recorded in the fixture. K01 remains OPEN pending causal linkage and the
+unchanged original replay; there is no live test from this slice.

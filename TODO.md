@@ -87,6 +87,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   and data-barrier variants do not cure the concurrent RCU reduction. Root cause
   and linkage to the original fault remain unproved. The bounded diagnosis slice
   is recorded; next isolate read-side entry/retirement, not a production NULL guard.
+  The [phase observer](tests/fixtures/sched-static-key-phases.out) now sees most
+  misses after disable/grace-period/clear, even with reader preemption disabled.
+  The identical payload passes all three modes on both HVF and single-thread
+  TCG; only multi-thread TCG fails. This is a narrower runtime discrepancy,
+  not a proven emulator cause or an unchanged sched_ext PASS.
 
   - [x] **K01a — Fail closed on truncated sched_ext result summaries**.
     [Minimal fixture](tests/fixtures/kselftest-scheduler-truncated.tap) reproduced
