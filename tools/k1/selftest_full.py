@@ -127,6 +127,17 @@ PROGRAM_BOOT_LANES = {
 }
 
 
+PROGRAM_HUGEPAGES = {
+    'iommu:iommufd': {
+        'pages': 64,
+        'source': 'tools/testing/selftests/iommu/iommufd.c',
+        'reason': 'The unchanged domain_dirty128M_huge fixture maps 128 MiB with MAP_HUGETLB. '
+                  'Reserve 64 target 2 MiB hugepages before the original program on both Images; '
+                  'the ordinary one-page setup cannot satisfy this allocation.',
+    },
+}
+
+
 def program_timeout(build, ident):
     override = PROGRAM_TIMEOUT_OVERRIDES.get(ident)
     return override['seconds'] + 15 if override else build['programTimeoutSeconds']
@@ -138,6 +149,8 @@ def program_environment(ident, expanded):
         environment['K1_KUNIT_AUTORUN'] = '0'
     if override := PROGRAM_TIMEOUT_OVERRIDES.get(ident):
         environment['K1_SELFTEST_TIMEOUT'] = str(override['seconds'])
+    if hugepages := PROGRAM_HUGEPAGES.get(ident):
+        environment['K1_SELFTEST_HUGEPAGES'] = str(hugepages['pages'])
     if profile := (PROGRAM_BOOT_LANES.get(ident)
                    or PROGRAM_BOOT_LANES.get(ident.split(':', 1)[0])):
         environment['K1_BOOT_LANE'] = profile['lane']
@@ -1282,6 +1295,7 @@ def main():
                                 'kunitAutorun': '0' if args.expanded_kernel else 'unchanged'}
     receipt['runtimePolicy']['programTimeoutOverrides'] = PROGRAM_TIMEOUT_OVERRIDES
     receipt['runtimePolicy']['programBootLanes'] = boot_policies()
+    receipt['runtimePolicy']['programHugePages'] = PROGRAM_HUGEPAGES
     if args.select:
         receipt['selection'] = {'selectors': args.select, 'programs': selected,
                                 'unselected': 'NOT_RUN; original inventory retained'}

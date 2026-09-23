@@ -10,8 +10,8 @@ Targeted results and additional configurations use separate denominators.
 
 | Required result | Verified state | Remaining action |
 |---|---|---|
-| BPF/module kernel, 6,765 target-C records | PASS: fresh BTF-repair run `20260921T230431Z` completed both passes, the generated-input fixed point, 746 generated descriptors/export units, 745 module links and nonce-bound boot/shutdown; all 6,765 installed object hashes survived linking unchanged | This configuration's composition/boot goal is closed; runtime selftests remain separate |
-| Matching runtime | PASS: 745 signed EvoCC modules and 17 rebuilt original GCC helpers installed with 970 programs. The new Image actually passes the original BPF module-loading selector: 9 groups / 33 subtests, zero FAIL/SKIP, including the previously failing `kfunc_call` | Signed installation is verified for 745 modules; this selector proves execution of its required modules, not loading every hardware driver |
+| BPF/module kernel, 6,765 target-C records | PASS: `bpf-linkage-isolated-20260923` replaces one audited object and relinks against 6,764 unchanged objects; 812 generated inputs are unchanged, all 745 modules relinked, nonce-bound boot/shutdown PASS | Incremental composition, not a new single-compiler survey. The prior full run and its Image are retained |
+| Matching runtime | PASS: 745 signed EvoCC modules and 17 rebuilt original GCC helpers installed with 970 programs. Three BPF variants each pass the explicit 10-group / 51-subtest module/BTF selector on both kernels, zero FAIL/SKIP | This proves execution of the selected modules, not loading every hardware driver or full BPF acceptance |
 | Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Diagnose seven reference-PASS differences, shared failures and four collection build gaps; do not relabel timeouts |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
@@ -27,6 +27,41 @@ It confirms earlier preflight passes, not a newly repaired compiler defect.
 The unchanged locked K6 boot and selected 9-program K7 acceptance remain
 separate. Neither the older KUnit pair nor a reference-only control closes
 the new rows above.
+
+### Matched runtime repairs — 2026-09-23
+
+`runtime-repair-pair-20260923/results.json` under `.evidence/kselftest-full`
+records 18 fresh serial flights: nine selections on each kernel, the same
+upstream programs and matching signed module payloads. `test_progs`,
+`test_progs-no_alu32` and `test_progs-cpuv4` each pass 10 groups / 51 subtests
+with the explicit module/BTF selector. Unfiltered `test_tcpnotify_user`,
+`drivers/net:xdp.py` and `drivers/net:napi_threaded.py` also pass both sides.
+The new subject Image is `f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280`.
+The canonical composition receipt now names it; the old complete 970-program
+results remain bound to their older Image and are intentionally displayed as
+STALE_IMAGE, not applied to the replacement.
+
+The unchanged IOMMU test requires 128 MiB of hugetlb memory in
+`domain_dirty128M_huge`; its former one-page (2 MiB) setup cannot satisfy it.
+The existing runner now reserves 64 hugepages only for `iommu:iommufd`, on
+both Images, and records the override. Init validates and verifies the pool;
+the original program, arguments, assertions and timeout are unchanged.
+The fresh `iommu-hugepages-20260923/results.json` pair improves **196 PASS /
+28 FAIL / 5 SKIP to 218 PASS / 6 FAIL / 5 SKIP**, each of 229 subtests.
+This removes 22 setup failures without claiming the program PASS. The six
+remaining failures all request IOPF: the frozen configuration has no
+`CONFIG_IOMMU_IOPF`, so `iopf_queue_alloc()` is a NULL-returning stub, and
+`mock_dev_enable_iopf()` returns `-ENODEV`. A separately built configuration
+is still required; neither running Image is modified to conceal that gap.
+
+Two other shared failures now have exact non-compiler causes. ALSA still
+hits the `snd_async_del_handler` missing-TIMER case described below.
+The original ntsync suite passes 10/11 cases on each kernel; `wake_all`
+line 971 incorrectly expects zero from `NTSYNC_IOC_CREATE_EVENT`, although
+`drivers/misc/ntsync.c:ntsync_create_event` returns a newly allocated file
+descriptor (9 in both captures). The adjacent three allocations test for a
+nonnegative descriptor. The frozen test's FAIL is retained; its assertion
+has not been weakened or rewritten to obtain a passing verdict.
 
 The new execution receipt is `tests/contracts/kernel-expanded-kunit-receipt.json`;
 it remains FAIL because completed execution is not all-tests success. The latest

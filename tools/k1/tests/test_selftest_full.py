@@ -24,6 +24,55 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_iommufd_provisions_its_original_128m_hugetlb_fixture_on_both_images(self):
+        for expanded in (False, True):
+            environment = lane.program_environment('iommu:iommufd', expanded)
+            self.assertEqual(environment.get('K1_SELFTEST_HUGEPAGES'), '64')
+        self.assertNotIn('K1_SELFTEST_HUGEPAGES',
+                         lane.program_environment('mm:hugepage-shm', True))
+
+    def test_hugepage_override_is_bounded_and_bound_to_one_program(self):
+        command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "" "" "$3"',
+                   'hugepage-test', str(PATH.parent / 'lib.sh')]
+        done = subprocess.run(command + ['iommu:iommufd', '64'],
+                              text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(),
+                         'evo_selftest=iommu:iommufd kselftest_hugepages=64')
+        for program, value in [('iommu', '64'), ('', '64'), ('iommu:iommufd', '0'),
+                               ('iommu:iommufd', '513'), ('iommu:iommufd', '-1'),
+                               ('iommu:iommufd', '64 init=/bin/sh'),
+                               ('iommu:iommufd', '99999999999999999999')]:
+            with self.subTest(program=program, value=value):
+                self.assertNotEqual(subprocess.run(command + [program, value],
+                                                   capture_output=True).returncode, 0)
+
+    def test_init_hugepage_override_preserves_default_and_rejects_invalid_values(self):
+        source = (PATH.parent / 'selftest-init.c').read_text()
+        self.assertIn('static unsigned huge_page_count(', source)
+        function = source.split('static unsigned huge_page_count(', 1)[1].split('\n}\n', 1)[0]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            program = root / 'probe.c'
+            program.write_text('#include <errno.h>\n#include <stdio.h>\n'
+                               '#include <stdlib.h>\n#include <string.h>\n'
+                               'static void fatal(const char *s) { perror(s); exit(7); }\n'
+                               + 'static unsigned huge_page_count(' + function + '\n}\n'
+                               'int main(int argc, char **argv) {\n'
+                               'if (argc > 1) setenv("kselftest_hugepages", argv[1], 1);\n'
+                               'else unsetenv("kselftest_hugepages");\n'
+                               'printf("%u\\n", huge_page_count(1)); return 0; }\n')
+            subprocess.run(['cc', '-Wall', '-Wextra', '-Werror', str(program),
+                            '-o', str(root / 'probe')], check=True, capture_output=True)
+            for args, expected in [([], '1\n'), (['64'], '64\n'), (['512'], '512\n')]:
+                done = subprocess.run([str(root / 'probe'), *args], text=True, capture_output=True)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertEqual(done.stdout, expected)
+            for value in ('', '0', '-1', '513', '64 ', '64x', '99999999999999999999'):
+                self.assertEqual(subprocess.run([str(root / 'probe'), value],
+                                               capture_output=True).returncode, 7)
+        self.assertIn('pages = huge_page_count(pages);', source)
+
     def test_runtime_preloads_installed_character_device_modules(self):
         with tempfile.TemporaryDirectory() as temp:
             rootfs = Path(temp)

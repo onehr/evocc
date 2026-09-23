@@ -33,10 +33,11 @@ KERNEL - configurations and runtime populations remain separate
   K6 locked PASS        2,799/2,799 target-C; link=PASS; boot=PASS
     run=read-only-storage-20260913
   K6 bpf    PASS        6,765/6,765 target-C; link=PASS; boot=PASS
-    run=20260921T230431Z
+    run=bpf-linkage-isolated-20260923
+    incremental: 1 rebuilt / 6764 unchanged; not a fresh survey
   BPF module link/BTF: PASS; 745 modules (not a load-every-driver claim)
   K7 selected PASS: 125 PASS / 0 FAIL / 0 SKIP; run=20260913T144437Z
-  K7 all programs INCOMPLETE; run=20260922T033617Z
+  K7 all programs STALE_IMAGE; run=20260922T033617Z
   reference [################] 970/970 recorded (not PASS)
     532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE / 0 NOT_RUN
   subject   [################] 970/970 recorded (not PASS)

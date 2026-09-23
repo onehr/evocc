@@ -222,7 +222,7 @@ def flight(name, image, work, run, contract, ids, extra_env=None):
         print(f"  {row['id']}: {row['outcome']} {row['subtests']}", flush=True)
     return {'boot': boot, 'exitCode': done.returncode, 'programs': rows,
             'consoleLoglevel': contract['consoleLoglevel'],
-            'hugePages': contract['hugePages'],
+            'hugePages': int(env.get('K1_SELFTEST_HUGEPAGES', contract['hugePages'])),
             'outcomes': dict(Counter(r['outcome'] for r in rows)),
             'subtests': dict(sum((Counter(r['subtests']) for r in rows), Counter()))}
 

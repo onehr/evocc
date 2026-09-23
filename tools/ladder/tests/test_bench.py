@@ -580,6 +580,14 @@ class StatusAsciiTest(unittest.TestCase):
         self.assertIn("765 PASS / 0 FAIL / 0 SKIP", text)
         self.assertIn("31 files loaded", text)
 
+    def test_incremental_kernel_is_not_described_as_a_fresh_survey(self):
+        receipt = {"requestedUnits": 6765, "counts": {"substituted": 6765},
+                   "notASingleCompilerSurvey": True, "freshCompilations": 1,
+                   "incrementalRepair": {"unchangedObjects": 6764}}
+        text = self.render({"kernel-bpf-full-receipt.json": receipt})
+        self.assertIn("incremental: 1 rebuilt / 6764 unchanged; not a fresh survey", text)
+        self.assertNotIn("incremental:", self.render())
+
     def test_filtered_kunit_success_does_not_replace_full_campaign_failure(self):
         receipt = {
             "status": "FAIL", "executionComplete": True, "config": {"targetCRecords": 6916},

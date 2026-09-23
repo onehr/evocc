@@ -66,16 +66,23 @@ k1_boot_lane_args() {
 # Use Linux's normal init environment and the upstream runner's per-program
 # argument variable. No altered payload or separate diagnostic runner is needed.
 k1_selftest_cmdline() {
-  local program="$1" args="$2" timeout="${3:-}" name
+  local program="$1" args="$2" timeout="${3:-}" hugepages="${4:-}" name
   if [ -z "$program" ]; then
     [ -z "$args" ] || k1_die "selftest arguments require one program"
     [ -z "$timeout" ] || k1_die "selftest timeout requires one program"
+    [ -z "$hugepages" ] || k1_die "huge-page setup requires one program"
     return
   fi
   case "$program" in
     *[!a-zA-Z0-9_/:.+-]*|*..*) k1_die "invalid selftest collection or program" ;;
   esac
   printf ' evo_selftest=%s' "$program"
+  if [ -n "$hugepages" ]; then
+    case "$program" in *:*) ;; *) k1_die "huge-page setup requires one program" ;; esac
+    case "$hugepages" in *[!0-9]*) k1_die "invalid huge-page count" ;; esac
+    [ "${#hugepages}" -le 3 ] && [ "$hugepages" -ge 1 ] && [ "$hugepages" -le 512 ] || k1_die "huge-page count outside 1..512"
+    printf ' kselftest_hugepages=%s' "$hugepages"
+  fi
   if [ -n "$timeout" ]; then
     case "$program" in *:*) ;; *) k1_die "selftest timeout requires one program" ;; esac
     case "$timeout" in *[!0-9]*) k1_die "invalid selftest timeout" ;; esac
@@ -134,7 +141,7 @@ k1_boot() {
   mem="$("$K1_JQ" -r '.qemu.fixedArgv.memoryMiB' "$contract")"
   local command_line="console=ttyAMA0 panic=-1 evo_nonce=$nonce"
   local selftest_cmdline
-  selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}" "${K1_SELFTEST_TIMEOUT:-}")" || return 1
+  selftest_cmdline="$(k1_selftest_cmdline "${K1_SELFTEST_COLLECTION:-}" "${K1_SELFTEST_ARGS:-}" "${K1_SELFTEST_TIMEOUT:-}" "${K1_SELFTEST_HUGEPAGES:-}")" || return 1
   command_line="$command_line$selftest_cmdline"
   local kunit_cmdline
   kunit_cmdline="$(k1_kunit_cmdline "${K1_KUNIT_FILTER:-}" "${K1_KUNIT_AUTORUN:-}")" || return 1

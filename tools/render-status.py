@@ -215,6 +215,10 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         amount = ratio(receipt.get("counts", {}).get("substituted"), receipt.get("requestedUnits"))
         lines.append(f"  K6 {label:6} {state:11} {amount} target-C; link={link}; boot={boot}")
         lines.append(f"    run={run_id(receipt)}")
+        if receipt.get("notASingleCompilerSurvey"):
+            repair = receipt.get("incrementalRepair", {})
+            lines.append(f"    incremental: {receipt.get('freshCompilations', '?')} rebuilt / "
+                         f"{repair.get('unchangedObjects', '?')} unchanged; not a fresh survey")
     modules = bpf.get("moduleLink", {})
     count = record_count(modules.get("modules"))
     module_state = modules.get("status", "NOT_RUN")

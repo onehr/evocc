@@ -45,6 +45,7 @@ LOG_SHA="$(k1_sha256 "$LOG")"
   --arg selftestProgram "${K1_SELFTEST_COLLECTION:-}" \
   --arg selftestArguments "${K1_SELFTEST_ARGS:-}" \
   --arg selftestTimeout "${K1_SELFTEST_TIMEOUT:-}" \
+  --arg selftestHugePages "${K1_SELFTEST_HUGEPAGES:-}" \
   --arg kunitFilter "${K1_KUNIT_FILTER:-}" \
   --arg kunitAutorun "${K1_KUNIT_AUTORUN:-}" \
   --arg kvmMode "${K1_KVM_MODE:-}" \
@@ -55,6 +56,7 @@ LOG_SHA="$(k1_sha256 "$LOG")"
   --arg flownAt "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
   '{verdict:$verdict,image:$image,imageSha256:$imageSha256,nonce:$nonce,bootLane:$bootLane,
     selftestProgram:$selftestProgram,selftestArguments:$selftestArguments,selftestTimeout:$selftestTimeout,
+    selftestHugePages:$selftestHugePages,
     kunitFilter:$kunitFilter,kunitAutorun:$kunitAutorun,kvmMode:$kvmMode,
     serialLog:$serialLog,serialLogSha256:$serialLogSha256,
     timeoutSeconds:$timeoutSeconds,qemu:$qemu,flownAt:$flownAt}' \

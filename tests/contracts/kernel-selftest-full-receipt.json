@@ -57255,5 +57255,192 @@
     "pidfd:pidfd:pidfd_test",
     "sched_ext:sched_ext:runner",
     "ublk:ublk:test_stress_04.sh"
+  ],
+  "targetedFollowups": [
+    {
+      "run": "runtime-repair-pair-20260923",
+      "status": "INCOMPLETE",
+      "scope": "Targeted original programs; BPF selection is explicit, not a complete BPF or 970-program run",
+      "results": {
+        "path": ".evidence/kselftest-full/runtime-repair-pair-20260923/results.json",
+        "sha256": "2cb7cf692292fe85dbc62c3c65369591585c6284915924e9c821f6b5fad76075"
+      },
+      "runtime": {
+        "reference": {
+          "imageSha256": "8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b",
+          "payloadSha256": "87789ab80864609bc9cc4dc497423f3360bcc65a28139d848a9e10fae0886699",
+          "modules": 745
+        },
+        "subject": {
+          "imageSha256": "f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280",
+          "payloadSha256": "72bb0db307e3978fe21fd5f611e9c0e2b6eac2df8326139957c0a38beb7885a5",
+          "modules": 745
+        }
+      },
+      "programs": [
+        {
+          "label": "reference",
+          "id": "bpf:test_progs",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "cb4f55e98ec6f53a91b688585ee84f4ad9446d4ed47636a71f9ca78d51696cef"
+        },
+        {
+          "label": "reference",
+          "id": "bpf:test_progs-no_alu32",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "d57599e35603ab33d2d57e880d6095191fcade32aba4c4c3f7cc5ef451dcd7ff"
+        },
+        {
+          "label": "reference",
+          "id": "bpf:test_progs-cpuv4",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "f19e5648468035bd5d7f8f9e5c77e8eb78199abbbcc8228d8f51eb66f779107b"
+        },
+        {
+          "label": "reference",
+          "id": "bpf:test_tcpnotify_user",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "fc3c16f44a2d3630d55e97d48e0638b02119a64d9f870dccefd161b99884ef43"
+        },
+        {
+          "label": "reference",
+          "id": "alsa:utimer-test",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "659b5620619fe12b153d56e79a8470ae68cc03b6a76f1930f2b689495f466bd9"
+        },
+        {
+          "label": "reference",
+          "id": "drivers/ntsync:ntsync",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "9fd144ff27c96eea03e4790fb14b6e5faa67e44907731d8564256d8068cb0987"
+        },
+        {
+          "label": "reference",
+          "id": "iommu:iommufd",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "d18fd4fc9618aef93861d24277ae04c7f86d52e96648261d35b1c72f041ba394"
+        },
+        {
+          "label": "reference",
+          "id": "drivers/net:xdp.py",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "dca1247334dca364715ab16120e2689f3d66f3f1e17273a3e88e3fd8ce82e333"
+        },
+        {
+          "label": "reference",
+          "id": "drivers/net:napi_threaded.py",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "cc020221c49ffc068d44ae8d377380ae36749f1eb903c21cac8b1f4f0f76e150"
+        },
+        {
+          "label": "subject",
+          "id": "bpf:test_progs",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "7455908104ff943f5102cd11a879f866f7b17bfffa8afac073c0813065c2feac"
+        },
+        {
+          "label": "subject",
+          "id": "bpf:test_progs-no_alu32",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "3961fe882e3ae40a48900aa4b64baf5cd7562a06406551f187e489b16904b2ff"
+        },
+        {
+          "label": "subject",
+          "id": "bpf:test_progs-cpuv4",
+          "arguments": "-t btf_dump,btf_module,module_attach,module_fentry_shadow,ksyms_module,kfunc_module_order,kfunc_call,livepatch_trampoline,verify_pkcs7_sig,struct_ops_module",
+          "outcome": "PASS",
+          "serialLogSha256": "3b137fd2d18ce4dbaacc3db2a6b6b2c890e181b776669030f84dddfb434c5c70"
+        },
+        {
+          "label": "subject",
+          "id": "bpf:test_tcpnotify_user",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "8c8f23bd2796c6bea33d8d488853ed1f94243d45baf19bf200646f94fda67993"
+        },
+        {
+          "label": "subject",
+          "id": "alsa:utimer-test",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "c588122af2eb741c328e303f75a2bcc46e142873d5cddb661f1ef7a72cce3bda"
+        },
+        {
+          "label": "subject",
+          "id": "drivers/ntsync:ntsync",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "0484e2c6cc1bddbecb66102037640d17774f82660b3bde70cbe8799f4e3604ed"
+        },
+        {
+          "label": "subject",
+          "id": "iommu:iommufd",
+          "arguments": "",
+          "outcome": "FAIL",
+          "serialLogSha256": "bbc8e44c8f1572c8f519456c4d5f8e7b0969eafdf358e410e34929294086bdec"
+        },
+        {
+          "label": "subject",
+          "id": "drivers/net:xdp.py",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "1c0c573267b81833b3331dd038275109f21fb571f642d2e82ca77fffcd69c623"
+        },
+        {
+          "label": "subject",
+          "id": "drivers/net:napi_threaded.py",
+          "arguments": "",
+          "outcome": "PASS",
+          "serialLogSha256": "f7d89a46537dcc18fcef0f32b8afa778c69a8078550c9721d733e2b7d0a027b0"
+        }
+      ],
+      "note": "Original full 970-program execution and denominator above are unchanged."
+    },
+    {
+      "run": "iommu-hugepages-20260923",
+      "status": "FAIL",
+      "results": {
+        "path": ".evidence/kselftest-full/iommu-hugepages-20260923/results.json",
+        "sha256": "e75ea5eb8ce5ac5de84cb9acd769e6bfc7e83de34ae9fd1e8b0f19bd713c3f1f"
+      },
+      "scope": "Original iommufd with 64 reserved 2 MiB hugepages, unchanged programs and Images",
+      "initSourceSha256": "85c3623fdb5201ea18bb44e1f69fbe6159c9d3aac8531d4ec054aa7f020ea623",
+      "initramfsSha256": "fbc8791813e137ec477431aaa4b8a9beb3dabdcc2d49ce369e5118c4cab32135",
+      "nestedOutcomes": {
+        "reference": {
+          "PASS": 218,
+          "FAIL": 6,
+          "SKIP": 5
+        },
+        "subject": {
+          "PASS": 218,
+          "FAIL": 6,
+          "SKIP": 5
+        }
+      },
+      "previousNestedOutcomes": {
+        "reference": {
+          "PASS": 196,
+          "FAIL": 28,
+          "SKIP": 5
+        },
+        "subject": {
+          "PASS": 196,
+          "FAIL": 28,
+          "SKIP": 5
+        }
+      }
+    }
   ]
 }

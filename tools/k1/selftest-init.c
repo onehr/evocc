@@ -38,6 +38,24 @@ static double monotonic(void)
     return now.tv_sec + now.tv_nsec / 1e9;
 }
 
+static unsigned huge_page_count(unsigned fallback)
+{
+    const char *text = getenv("kselftest_hugepages");
+    if (!text)
+        return fallback;
+    size_t length = strlen(text);
+    if (!length || length > 3 || strspn(text, "0123456789") != length) {
+        errno = EINVAL;
+        fatal("invalid per-program huge-page count");
+    }
+    unsigned long pages = strtoul(text, NULL, 10);
+    if (!pages || pages > 512) {
+        errno = EINVAL;
+        fatal("per-program huge-page count outside 1..512");
+    }
+    return (unsigned)pages;
+}
+
 static int run(const char *id, unsigned timeout)
 {
     char path[256], cwd[256];
@@ -330,6 +348,11 @@ int main(void)
     if (!file || fscanf(file, "%u", &pages) != 1)
         fatal("read huge-page setup");
     fclose(file);
+    if (getenv("kselftest_hugepages") && (!full_suite || !strchr(collection, ':'))) {
+        errno = EINVAL;
+        fatal("huge-page override requires one full-suite program");
+    }
+    pages = huge_page_count(pages);
     file = fopen("/proc/sys/vm/nr_hugepages", "w");
     if (!file || fprintf(file, "%u\n", pages) < 0 || fclose(file))
         fatal("reserve huge pages");
