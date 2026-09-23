@@ -9825,6 +9825,22 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if self.optimize && matches!(expression, CHirExpr::Binary(..) | CHirExpr::Unary(..)) {
+            if let Some(value) = evocc_chir::constant::eval_executable_integer_constant(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                self.target,
+            ) {
+                // Use executed-expression rules, not ICE rules: invalid
+                // division and shifts must still reach their UB obligations.
+                // A numerically unselected arm can nevertheless contain a
+                // label entered by a goto or switch outside the expression.
+                if !self.expression_has_external_entry(expression) {
+                    return self.wide_constant(state, value.ty(), value.raw_bits());
+                }
+            }
+        }
         if let Some(value) = evocc_chir::constant::floating_constant_cast(
             expression,
             self.unit.types(),

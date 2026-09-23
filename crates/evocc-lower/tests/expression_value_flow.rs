@@ -25,6 +25,34 @@ fn boolean_normalization_does_not_initialize_or_skip_its_operand() {
 }
 
 #[test]
+fn executable_integer_folding_keeps_reached_failures() {
+    for (source, code) in [
+        ("int main(void){return 13/0;}", "E3002"),
+        ("int main(void){return 13%0;}", "E3003"),
+        ("int main(void){return (-2147483647-1)/-1;}", "E3004"),
+        ("int main(void){return (-2147483647-1)%-1;}", "E3004"),
+        ("int main(void){return 1<<32;}", "E3005"),
+        (
+            "int main(void){return 1<<((unsigned __int128)1<<80);}",
+            "E3005",
+        ),
+        (
+            "int main(void){volatile int x=2147483647;return x+1;}",
+            "E3004",
+        ),
+        ("int main(void){int x;return x*0;}", "E3001"),
+        (
+            "int main(void){return __builtin_expect((0,1),1/0)+0;}",
+            "E3002",
+        ),
+    ] {
+        for optimize in [false, true] {
+            evaluates_with_optimization(source, Some(code), optimize);
+        }
+    }
+}
+
+#[test]
 fn direct_wide_field_shifts_use_declared_precision_not_storage_precision() {
     // This harness consumes C tokens, not preprocessing directives.
     for width in [33, 40, 52, 58, 64] {

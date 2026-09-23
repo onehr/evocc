@@ -93,6 +93,40 @@ fn repeated_logical_negation_keeps_one_truth_conversion_and_all_evaluation() {
 }
 
 #[test]
+fn pure_executable_integer_constants_do_not_need_runtime_arithmetic() {
+    let source = "unsigned long word(void){return 13UL/(sizeof(unsigned long)*8);}";
+    let arena = Arena::default();
+    let file = FileId::new(45027);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module = evocc_lower::lower_unit_with_optimization(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        true,
+    )
+    .unwrap();
+    assert!(
+        !module.functions[0]
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .any(|inst| matches!(
+                inst,
+                evocc_evoir::Inst::UDiv(..) | evocc_evoir::Inst::Mul(..)
+            )),
+        "a source-constant bitmap word index must not execute division: {module:?}"
+    );
+    assert_eq!(
+        interpreter_results(include_str!(
+            "../../../tests/fixtures/executable-integer-constants.c"
+        )),
+        (0, 0)
+    );
+}
+
+#[test]
 fn guarded_constant_queries_use_dominating_range_facts() {
     for source in [
         "int check(int n){if(n>0){int x=n;return __builtin_constant_p((long long)x>=0)&&((long long)x>=0);}return 1;}
