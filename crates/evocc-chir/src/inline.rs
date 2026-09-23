@@ -951,6 +951,7 @@ pub(crate) fn substitute_for_execution<'a>(
         active: Vec::new(),
         temporaries: Vec::new(),
         extent_calls: HashMap::new(),
+        inline_values: HashMap::new(),
         extent_captures: HashMap::new(),
         allocation_sizes: object_size::allocation_sizes(unit),
         track_extents: uses.object_queries,
@@ -1222,6 +1223,8 @@ struct Context<'a> {
     result: Option<SymbolId>,
     return_extent: Option<object_size::Bounds<'a>>,
     return_bounds_slots: Option<object_size::ReturnBounds>,
+    return_count: usize,
+    return_value: Option<&'a CHirExpr<'a>>,
     end: Option<SpannedName>,
 }
 
@@ -1249,6 +1252,8 @@ impl Context<'_> {
             result: None,
             return_extent: None,
             return_bounds_slots: None,
+            return_count: 0,
+            return_value: None,
             end: None,
         }
     }
@@ -1266,6 +1271,7 @@ struct Substitution<'a, 't> {
     active: Vec<SymbolId>,
     temporaries: Vec<&'a CHirDecl<'a>>,
     extent_calls: HashMap<usize, object_size::Bounds<'a>>,
+    inline_values: HashMap<usize, &'a CHirExpr<'a>>,
     extent_captures: HashMap<usize, &'a CHirExpr<'a>>,
     allocation_sizes: BTreeMap<SymbolId, Vec<usize>>,
     track_extents: bool,
@@ -1394,6 +1400,13 @@ impl<'a> Substitution<'a, '_> {
         expression: &'a CHirExpr<'a>,
         ty: TypeId,
     ) -> Option<&'a CHirExpr<'a>> {
+        if let Some(value) = self
+            .inline_values
+            .get(&(expression as *const _ as usize))
+            .copied()
+        {
+            return self.repeatable_value(value, ty);
+        }
         if let Some(value) = self.repeatable_value(expression, ty) {
             return Some(value);
         }
@@ -1415,8 +1428,135 @@ impl<'a> Substitution<'a, '_> {
                 self.repeatable_value(converted, ty)
             }
             CHirExpr::Comma(_, value, _) => self.value_after_execution(value, ty),
+            CHirExpr::CheckedArithmetic { .. } => {
+                let (_, overflow) = self.checked_constant_values(expression)?;
+                let value = self.alloc(CHirExpr::Lit(
+                    IntLit {
+                        value: u64::from(overflow),
+                        suffix: IntSuffix::None,
+                        base: IntBase::Dec,
+                    },
+                    expression.span(),
+                ));
+                self.repeatable_value(value, ty)
+            }
             _ => None,
         }
+    }
+
+    fn checked_constant_values(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Option<(crate::integer::CInteger, bool)> {
+        let CHirExpr::CheckedArithmetic {
+            op,
+            lhs,
+            rhs,
+            target_ty,
+            ..
+        } = expression
+        else {
+            return None;
+        };
+        let constant = |value| {
+            crate::constant::eval_executable_integer_constant(
+                value,
+                &self.unit.types,
+                &self.unit.symbols,
+                self.target,
+            )
+        };
+        Some(crate::integer::eval_checked_arithmetic(
+            *op,
+            constant(lhs)?,
+            constant(rhs)?,
+            crate::constant::canonical_integer_type(&self.unit.types, *target_ty)?,
+        ))
+    }
+
+    /// Only the root condition executes unconditionally here. Keep the real
+    /// checked operation, including its store; record its single-write local
+    /// result only after that evaluation, not while visiting a conditional arm.
+    fn remember_checked_condition(&mut self, expression: &'a CHirExpr<'a>, c: &mut Context<'a>) {
+        match expression {
+            CHirExpr::Cast(_, value, _) | CHirExpr::EvaluateOnce(value, _) => {
+                self.remember_checked_condition(value, c);
+                return;
+            }
+            CHirExpr::StatementExpr {
+                body: CHirStmt::Compound(items, _),
+                ..
+            } => {
+                // An expanded call evaluates its argument declarations before
+                // entering the copied body. Visit only this unconditional
+                // prefix, never a checked store in an arbitrary branch.
+                for item in items {
+                    match item {
+                        CHirBlockItem::Declaration(CHirDecl::Object(object)) => {
+                            if let Some(initializer) = &object.initializer {
+                                for action in initializer.plan.actions() {
+                                    if let InitAction::StoreScalar { value, .. } = action {
+                                        if inspect([Node::Expr(value, false)]).jumps {
+                                            return;
+                                        }
+                                        self.remember_checked_condition(value, c);
+                                    }
+                                }
+                            }
+                        }
+                        _ => break,
+                    }
+                }
+                return;
+            }
+            _ => {}
+        }
+        let CHirExpr::CheckedArithmetic {
+            target: CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::Ident { symbol, facts, .. }, _),
+            ..
+        } = expression
+        else {
+            return;
+        };
+        let original = c
+            .replacements
+            .iter()
+            .find_map(|(old, new)| (new == symbol).then_some(*old))
+            .unwrap_or(*symbol);
+        let Ok(entry) = self.unit.symbols.symbol(*symbol) else {
+            return;
+        };
+        let Some(ty) = self.unit.types.get(facts.ty()) else {
+            return;
+        };
+        if !c.single_mutations.contains(&original)
+            || entry.scope() == self.unit.symbols.file_scope()
+            || !matches!(
+                entry.storage_class(),
+                Some(StorageClass::None | StorageClass::Auto)
+            )
+            || ty.qualifiers.is_volatile
+            || ty.qualifiers.is_atomic
+        {
+            return;
+        }
+        let Some((value, _)) = self.checked_constant_values(expression) else {
+            return;
+        };
+        if value.ty().bits() > 64 {
+            return;
+        }
+        let literal = self.alloc(CHirExpr::Lit(
+            IntLit {
+                value: value.raw_bits() as u64,
+                suffix: IntSuffix::ULL,
+                base: IntBase::Hex,
+            },
+            expression.span(),
+        ));
+        let converted = self.alloc(CHirExpr::Cast(facts.ty(), literal, expression.span()));
+        c.assignment_values.insert(original, converted);
+        c.memo.clear();
     }
 
     // Bounded alternatives from an already executed immutable initializer.
@@ -2656,6 +2796,7 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
             CHirStmt::Return(e, span) if c.end.is_some() => {
+                c.return_count += 1;
                 let mut items = Vec::new();
                 if let Some(e) = e {
                     let value = self.expr(e, c)?;
@@ -2670,6 +2811,15 @@ impl<'a> Substitution<'a, '_> {
                         if self.track_extents {
                             c.return_extent = self.pointer_bounds(value, c, 0);
                         }
+                        c.return_value = self.value_after_execution(value, ty).filter(|value| {
+                            crate::constant::eval_executable_integer_constant(
+                                value,
+                                &self.unit.types,
+                                &self.unit.symbols,
+                                self.target,
+                            )
+                            .is_some()
+                        });
                         if let Ok(place) =
                             ScalarPlace::bind(&self.unit.symbols, &self.unit.types, result)
                         {
@@ -2718,6 +2868,40 @@ impl<'a> Substitution<'a, '_> {
             CHirStmt::Return(e, _) => *e = e.map(|e| self.expr(e, c)).transpose()?,
             CHirStmt::If(e, a, b, _) => {
                 *e = self.expr(e, c)?;
+                let uses = inspect([Node::Expr(e, false)]);
+                if !uses.constant_queries
+                    && !uses.object_queries
+                    && !inspect([Node::Stmt(s)]).entry_labels
+                {
+                    let boolean = self.unit.types.intern(evocc_types::CanonicalType {
+                        kind: TypeKind::Int(evocc_types::IntRank::Bool),
+                        qualifiers: evocc_types::Qualifiers::default(),
+                    });
+                    let condition = self.value_after_execution(e, boolean).and_then(|value| {
+                        crate::constant::eval_executable_integer_constant(
+                            value,
+                            &self.unit.types,
+                            &self.unit.symbols,
+                            self.target,
+                        )
+                    });
+                    if let Some(condition) = condition {
+                        self.remember_checked_condition(e, c);
+                        let selected = if condition.truth() {
+                            *a
+                        } else {
+                            b.unwrap_or_else(|| self.alloc(CHirStmt::Null(s.span())))
+                        };
+                        let selected = self.stmt(selected, c)?;
+                        return Ok(self.alloc(CHirStmt::Compound(
+                            vec![
+                                CHirBlockItem::Statement(self.alloc(CHirStmt::Expr(e, e.span()))),
+                                CHirBlockItem::Statement(selected),
+                            ],
+                            s.span(),
+                        )));
+                    }
+                }
                 let incoming = c.path_ranges.clone();
                 self.assume_range(e, true, c);
                 *a = self.stmt(a, c)?;
@@ -3057,12 +3241,15 @@ impl<'a> Substitution<'a, '_> {
         // Preserve a direct proof for a single final return. Multiple returns
         // use explicit path-selected captures, including unknown-arm flags;
         // the last visited source return is never a function-wide promise.
-        let return_extent = if let Some(slots) = c.return_bounds_slots {
-            Some(self.returned_bounds(slots, span))
-        } else if single_final_return {
+        let one_reachable_final_return = c.return_count == 1
+            && !uses.entry_labels
+            && matches!(f.body.unwrap(), CHirStmt::Compound(items, _)
+                if matches!(items.last(), Some(CHirBlockItem::Statement(CHirStmt::Return(Some(_), _)))));
+        let return_extent = if single_final_return || one_reachable_final_return {
             c.return_extent
         } else {
-            None
+            c.return_bounds_slots
+                .map(|slots| self.returned_bounds(slots, span))
         };
         items.push(CHirBlockItem::Statement(body));
         let end = self.alloc(CHirStmt::Null(span));
@@ -3087,6 +3274,12 @@ impl<'a> Substitution<'a, '_> {
         if let Some(bounds) = return_extent {
             self.extent_calls
                 .insert(result as *const _ as usize, bounds);
+        }
+        if single_final_return || one_reachable_final_return {
+            if let Some(value) = c.return_value {
+                self.inline_values
+                    .insert(result as *const _ as usize, value);
+            }
         }
         Ok(result)
     }

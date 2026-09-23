@@ -165,6 +165,50 @@ fn inline_return_paths_transport_only_the_selected_allocation_extent() {
 }
 
 #[test]
+fn checked_constant_stores_feed_inline_allocation_queries_without_losing_the_store() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/checked-allocation-constant-flow.c"
+    ));
+    let declarations =
+        "typedef unsigned long size_t;char storage[128];char*volatile backing=storage;int calls;\
+        __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){++calls;return backing;}\
+        static inline void*array(size_t count,size_t size){size_t bytes;\
+        if(__builtin_mul_overflow(count,size,&bytes))return 0;return allocate(bytes);}";
+    for n in [0, 1, 11, 128] {
+        assert_constant_program(&format!(
+            "{declarations}int main(void){{void*p=array(1,{n});\
+             return __builtin_object_size(p,1)!={n}||__builtin_dynamic_object_size(p,1)!={n}||calls!=1;}}"
+        ));
+    }
+    let wrapped = declarations.replace(
+        "static inline void*array",
+        "static inline _Bool checked(_Bool overflow){return __builtin_expect(overflow,0);}static inline void*array",
+    ).replace("if(__builtin_mul_overflow(count,size,&bytes))", "if(checked(__builtin_mul_overflow(count,size,&bytes)))");
+    assert_constant_program(&format!(
+        "{wrapped}int main(void){{void*p=array(1,11);return __builtin_object_size(p,1)!=11||calls!=1;}}"
+    ));
+    for source in [
+        "int calls;static inline int f(void){++calls;return 0;}int main(void){if(f())return 2;return calls!=1;}",
+        "static int*out;void change(void){*out=7;}int main(void){int n;out=&n;if(__builtin_mul_overflow(3,4,&n))return 1;change();return n!=7;}",
+        "int main(void){int n;if(__builtin_add_overflow(1,2,&n))return 1;n=7;return n!=7;}",
+        "int main(void){int n=8;volatile int c=0;if(c&&__builtin_add_overflow(1,2,&n))return 1;return n!=8;}",
+        "int main(void){int n=8;if(__builtin_constant_p(__builtin_add_overflow(1,2,&n)))return 1;return n!=8;}",
+        "int main(void){int n=8;goto chosen;if(__builtin_mul_overflow(3,4,&n)){chosen:return n!=8;}return 2;}",
+    ] { assert_constant_program(source); }
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(
+            "int main(void){if(__builtin_mul_overflow(2,3,(int*)0))return 1;return 0;}",
+            mode,
+        );
+        assert!(
+            !output.status.success(),
+            "{mode} removed a required invalid store"
+        );
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3009"));
+    }
+}
+
+#[test]
 fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
     assert_constant_program(
         "typedef unsigned long size_t;char storage[128];\

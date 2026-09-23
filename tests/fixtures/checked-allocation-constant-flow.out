@@ -1,0 +1,11 @@
+2026-09-23, GNU11 AArch64 -O2, fixed offline evo-flight-lab:sealed.
+RED: array(1, constant) loses the static returned allocation bound; no compile error.
+GREEN: both interpreters return 0, including Linux's checked-bool wrapper shape.
+GCC14 14.2.0-19, Clang19 19.1.7, EvoCC native: exit 0 each.
+Source SHA256: ce47395ed9394bc81e0c5b5d4afb783e9a1b69a55cc0acd4f83f73bfcd2bdfee
+Assembly SHA256: 4d35b9c4e1c199f8420a42e303f3b21c77e0ff926588197e54c5612ea11cf3db
+Native SHA256: 336533e4daa8583b5523a271af642ee41cab6d042f0431dc4637d25a3fa4464d
+Required stores remain, including overflow, volatile, one-time indexed output.
+Null destination still reports E3009 in both interpreters; an initial test
+assertion incorrectly expected the E301 family, then was corrected to E3009.
+No kernel or complete benchmark result is inferred from this fixture.
