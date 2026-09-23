@@ -49,6 +49,30 @@ class FullSelftest(unittest.TestCase):
         self.assertNotIn('K1_SELFTEST_HUGEPAGES',
                          lane.program_environment('mm:hugepage-shm', True))
 
+    def test_udmabuf_provisions_the_unchanged_two_gib_hugetlb_workload(self):
+        for expanded in (False, True):
+            environment = lane.program_environment('drivers/dma-buf:udmabuf', expanded)
+            self.assertEqual(environment.get('K1_SELFTEST_HUGEPAGES'), '1024')
+            self.assertEqual(environment.get('K1_BOOT_LANE'), 'hvf-host')
+            contract = Path(environment['K1_KERNEL_CONTRACT'])
+            self.assertNotEqual(contract, lane.ROOT / 'contracts/kernel-target.json')
+            machine = json.loads(contract.read_text())
+            self.assertEqual(machine['qemu']['fixedArgv']['memoryMiB'], 4096)
+            self.assertEqual(machine['qemu']['machine'], 'virt-11.0')
+            self.assertNotIn('K1_SELFTEST_TIMEOUT', environment)
+        ordinary = lane.program_environment('drivers/dma-buf:unrelated', True)
+        self.assertNotIn('K1_KERNEL_CONTRACT', ordinary)
+        self.assertNotIn('K1_SELFTEST_HUGEPAGES', ordinary)
+
+    def test_udmabuf_hugepage_count_survives_the_real_command_line(self):
+        command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "" "" "$3"',
+                   'hugepage-test', str(PATH.parent / 'lib.sh')]
+        done = subprocess.run(command + ['drivers/dma-buf:udmabuf', '1024'],
+                              text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(),
+                         'evo_selftest=drivers/dma-buf:udmabuf kselftest_hugepages=1024')
+
     def test_hugepage_override_is_bounded_and_bound_to_one_program(self):
         command = ['bash', '-c', 'source "$1"; k1_selftest_cmdline "$2" "" "" "$3"',
                    'hugepage-test', str(PATH.parent / 'lib.sh')]
@@ -58,7 +82,7 @@ class FullSelftest(unittest.TestCase):
         self.assertEqual(done.stdout.strip(),
                          'evo_selftest=iommu:iommufd kselftest_hugepages=64')
         for program, value in [('iommu', '64'), ('', '64'), ('iommu:iommufd', '0'),
-                               ('iommu:iommufd', '513'), ('iommu:iommufd', '-1'),
+                               ('iommu:iommufd', '1025'), ('iommu:iommufd', '-1'),
                                ('iommu:iommufd', '64 init=/bin/sh'),
                                ('iommu:iommufd', '99999999999999999999')]:
             with self.subTest(program=program, value=value):
@@ -82,11 +106,12 @@ class FullSelftest(unittest.TestCase):
                                'printf("%u\\n", huge_page_count(1)); return 0; }\n')
             subprocess.run(['cc', '-Wall', '-Wextra', '-Werror', str(program),
                             '-o', str(root / 'probe')], check=True, capture_output=True)
-            for args, expected in [([], '1\n'), (['64'], '64\n'), (['512'], '512\n')]:
+            for args, expected in [([], '1\n'), (['64'], '64\n'), (['512'], '512\n'),
+                                   (['1024'], '1024\n')]:
                 done = subprocess.run([str(root / 'probe'), *args], text=True, capture_output=True)
                 self.assertEqual(done.returncode, 0, done.stderr)
                 self.assertEqual(done.stdout, expected)
-            for value in ('', '0', '-1', '513', '64 ', '64x', '99999999999999999999'):
+            for value in ('', '0', '-1', '1025', '64 ', '64x', '99999999999999999999'):
                 self.assertEqual(subprocess.run([str(root / 'probe'), value],
                                                capture_output=True).returncode, 7)
         self.assertIn('pages = huge_page_count(pages);', source)

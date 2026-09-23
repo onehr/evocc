@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Supplemental memory-capacity lane for unchanged 2 GiB HugeTLB selftests; not the locked K6 flight configuration.",
+  "baseContract": "contracts/kernel-target.json",
+  "baseContractSha256": "85b11559bb43a516956204f0532f57387e8b44bbcf27985ddcb436f353a547d5",
+  "qemu": {
+    "binaryPath": "/opt/homebrew/bin/qemu-system-aarch64",
+    "binarySha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+    "machine": "virt-11.0",
+    "lanes": [
+      {
+        "name": "hvf-host",
+        "role": "Same CPU and accelerator as the ordinary lane, with capacity for the original 2 GiB allocation plus kernel and userspace",
+        "argv": ["-accel", "hvf", "-cpu", "host"]
+      }
+    ],
+    "fixedArgv": {"smp": 4, "memoryMiB": 4096}
+  }
+}

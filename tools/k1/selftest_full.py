@@ -78,6 +78,14 @@ PROGRAM_TIMEOUT_OVERRIDES = {
     },
 }
 PROGRAM_BOOT_LANES = {
+    'drivers/dma-buf:udmabuf': {
+        'lane': 'hvf-host',
+        'contract': 'contracts/kernel-selftest-memory-target.json',
+        'reason': 'The unchanged huge-page migration cases reserve and touch 1024 2 MiB '
+                  'pages. A 2 GiB VM cannot also hold the kernel and userspace. Use a '
+                  'separate 4 GiB machine on both Images without changing the 2 GiB '
+                  'allocation, assertions or timeout; the locked K6 machine is unchanged.',
+    },
     'kvm:hello_el2': {
         'lane': 'tcg-neoverse-n2-el2',
         'contract': 'contracts/kernel-selftest-kvm-target.json',
@@ -133,6 +141,13 @@ PROGRAM_BOOT_LANES = {
 
 
 PROGRAM_HUGEPAGES = {
+    'drivers/dma-buf:udmabuf': {
+        'pages': 1024,
+        'source': 'tools/testing/selftests/drivers/dma-buf/udmabuf.c',
+        'reason': 'MEMFD_SIZE is 1024 and the huge-page cases set page_size to 2 MiB. '
+                  'Reserve the entire original 2 GiB HugeTLB request before the program '
+                  'on both Images; extra guest RAM alone does not populate this pool.',
+    },
     'iommu:iommufd': {
         'pages': 64,
         'source': 'tools/testing/selftests/iommu/iommufd.c',

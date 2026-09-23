@@ -44,14 +44,14 @@ static unsigned huge_page_count(unsigned fallback)
     if (!text)
         return fallback;
     size_t length = strlen(text);
-    if (!length || length > 3 || strspn(text, "0123456789") != length) {
+    if (!length || length > 4 || strspn(text, "0123456789") != length) {
         errno = EINVAL;
         fatal("invalid per-program huge-page count");
     }
     unsigned long pages = strtoul(text, NULL, 10);
-    if (!pages || pages > 512) {
+    if (!pages || pages > 1024) {
         errno = EINVAL;
-        fatal("per-program huge-page count outside 1..512");
+        fatal("per-program huge-page count outside 1..1024");
     }
     return (unsigned)pages;
 }

@@ -80,7 +80,7 @@ k1_selftest_cmdline() {
   if [ -n "$hugepages" ]; then
     case "$program" in *:*) ;; *) k1_die "huge-page setup requires one program" ;; esac
     case "$hugepages" in *[!0-9]*) k1_die "invalid huge-page count" ;; esac
-    [ "${#hugepages}" -le 3 ] && [ "$hugepages" -ge 1 ] && [ "$hugepages" -le 512 ] || k1_die "huge-page count outside 1..512"
+    [ "${#hugepages}" -le 4 ] && [ "$hugepages" -ge 1 ] && [ "$hugepages" -le 1024 ] || k1_die "huge-page count outside 1..1024"
     printf ' kselftest_hugepages=%s' "$hugepages"
   fi
   if [ -n "$timeout" ]; then

@@ -277,6 +277,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     closes **upstream-assumption classification**, not that test as PASS.
     [Paired record](tests/fixtures/selftest-constructor-order.out).
 
+  - [x] **K11c — Supply udmabuf's actual HugeTLB requirement**, 2026-09-24.
+    The [minimal C case](tests/fixtures/selftest-hugetlb-reservation.c) keeps the
+    original 2 GiB mapping and proves ENOMEM with one reserved page versus
+    successful access to all 1024 pages on both kernels. The shared runtime
+    now selects an explicit 4 GiB machine and 1024-page pool for this program
+    only; locked K6, original binary and 45-second timeout stay unchanged.
+    Both original replays improve from five completed cases then FAIL to
+    **7/7 PASS**, with orderly shutdown. 241 K1 tests and Ruff pass. This is
+    resource provisioning, not new compiler or full-run credit.
+    [Paired record](tests/fixtures/selftest-hugetlb-reservation.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   it is not built coverage. Review `kexec`, `prctl`, `thermal/intel/power_floor`

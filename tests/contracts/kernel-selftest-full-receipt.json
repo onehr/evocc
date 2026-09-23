@@ -31474,6 +31474,27 @@
       "greenRecordSha256": "54bea5a2d85587a583c7eb2bc1a3de05d3696848150cf8d4c5bf91a238fdf83b",
       "controlsRecord": ".build/floating-targeted/selftest-tmp-mount-20260924/controls.json",
       "controlsRecordSha256": "e4b18a980c0265e395da8df85c66a58de5b82a66a6d95f490c39824121c86460"
+    },
+    {
+      "id": "K11c",
+      "date": "2026-09-24",
+      "status": "PASS",
+      "scope": "Original udmabuf seven-case program, explicit 4 GiB guest and 1024-page HugeTLB pool on both retained Images",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/selftest-hugetlb-reservation.out",
+      "referenceImageSha256": "8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b",
+      "subjectImageSha256": "f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280",
+      "initramfsSha256": "ff757445b737af69ea4a6c313d91c4b32c6597a1c65a5957e005c13801b1d78d",
+      "originalProgram": "drivers/dma-buf:udmabuf",
+      "originalProgramSha256": "6e04a584c2e789fe28161d9dceaced24627f1360e2ae87de7d185d33058e546e",
+      "machineContract": "contracts/kernel-selftest-memory-target.json",
+      "machineContractSha256": "5c9b2a9f09e0d3dcce05b6296e47b2fea3e1451f47f599aaf161347a48bc5d0b",
+      "hugePages": 1024,
+      "perProgramTimeoutSeconds": 45,
+      "beforeBoth": "FAIL: five subtests complete, then the original 2 GiB HugeTLB mmap fails",
+      "afterBoth": {"programsPassed": 1, "subtestsPassed": 7, "failed": 0, "skipped": 0},
+      "greenRecord": ".build/floating-targeted/selftest-hugetlb-20260924/green.json",
+      "greenRecordSha256": "867a783604771a8e4bc17df7b166383a816818ce247216c9bd483478c7859cff"
     }
   ],
   "targetedDiagnoses": [

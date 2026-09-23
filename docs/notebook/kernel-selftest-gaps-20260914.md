@@ -6,6 +6,25 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Original udmabuf HugeTLB workload — 2026-09-24
+
+TODO K11c now closes the two huge-page cases' environment prerequisite. The
+frozen source requests **1024 × 2 MiB = 2 GiB**, before kernel/userspace overhead;
+the ordinary 2 GiB guest and one-page pool cannot satisfy it. The
+[small C reduction](../../tests/fixtures/selftest-hugetlb-reservation.c) shows
+that a 4 GiB guest with one reserved hugepage still returns ENOMEM, while the
+same guest with 1024 pages maps, writes and reads the complete original-sized
+allocation on both kernels.
+
+The common per-program policy uses a separate 4 GiB machine contract and a
+verified 1024-page pool only for `drivers/dma-buf:udmabuf`. The fresh original
+pair improves from **five cases then FAIL to 7/7 PASS each**, under the same
+45-second timeout; all guest shutdowns and disk-hash checks pass. The locked
+K6 machine is unchanged. 241 K1 tests, Ruff and shell syntax pass; only 5.2 MiB
+of diagnostic/initramfs artifacts are added, without disk copies.
+[Identities, controls and limits](../../tests/fixtures/selftest-hugetlb-reservation.out).
+This is a setup repair on retained Images, not a new full 970-program result.
+
 ### Disk-backed /tmp mountpoint repair — 2026-09-24
 
 TODO K11a closes a real setup defect rather than waiving openat2. Its unchanged

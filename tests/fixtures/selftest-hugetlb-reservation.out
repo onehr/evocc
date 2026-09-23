@@ -1,0 +1,56 @@
+2026-09-24 — provision the unchanged udmabuf HugeTLB allocation.
+
+RED: two declared policy/command-line assertions fail, zero compile errors.
+Frozen udmabuf.c sets MEMFD_SIZE=1024 and page_size=4096*512 for cases 6/7:
+the memfd/mmap request is 2 GiB. The ordinary full-suite environment has only
+2 GiB guest RAM and reserves one 2 MiB page. Both fresh original replays pass
+cases 1..5, fail mmap before case 6, and retain program FAIL.
+
+The small C probe keeps the full 2 GiB request and touches/reads all 1024 pages.
+On BOTH retained kernels, with the same 4 GiB HVF machine:
+  one reserved hugepage   -> mmap fails ENOMEM (expected RED, exit 1)
+  1024 reserved pages     -> mmap plus all page accesses PASS, exit 0
+Thus increasing ordinary RAM alone is not sufficient. All four probe guests
+shut down normally. No filesystem allocation backs these RAM-only memfds.
+
+Repair: the existing per-program environment selects a separate explicit
+4 GiB contract and 1024 reserved 2 MiB pages for drivers/dma-buf:udmabuf only.
+Both Images use identical policy. Init verifies the actual reservation;
+shell/init parsing remains bounded (1..1024), single-program-only and rejects
+malformed/overflowing values. Other programs, the locked 2 GiB K6 machine,
+kernel configs, source/binary, assertions and 45-second timeout are unchanged.
+
+Fresh unchanged original on BOTH kernels: 7 PASS / 0 FAIL / 0 SKIP; both
+nonce-bound boot/shutdown predicates PASS. Source/binary hashes and snapshot
+disks are unchanged. This closes K11c's resource-setup failure, not a compiler
+repair, full 970-program campaign or final composition. Old full counts remain.
+
+241 K1 tests PASS, including extracted C init-parser controls at default/64/
+512/1024 pages and invalid inputs; Ruff, bash syntax and diff checks PASS.
+Changed gate against 991dcbc selects no Rust crate, correctly. Probe and init
+build with sealed GCC-14 -static -O2 -Wall -Wextra -Werror, zero diagnostics.
+
+Environment: evo-flight-lab:sealed, linux/arm64, network none, image
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+QEMU 11.1.1 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e;
+the existing explicit QEMU-drift acknowledgement is retained in each flight.
+
+SHA-256:
+probe 54e70f0e254100544100e8ac8a5c807f4e59363350f7fb1a80ed40bae74cd9b8
+original C 8aa84e83471284104f4f050e3d38d9ff22ae6d3b77a23559c04554185b05165d
+original binary 6e04a584c2e789fe28161d9dceaced24627f1360e2ae87de7d185d33058e546e
+machine contract 5c9b2a9f09e0d3dcce05b6296e47b2fea3e1451f47f599aaf161347a48bc5d0b
+init source 0b45d057f63b9c13754bd911502304ff4f1eef17c808c5955f106bc26efb8bc5
+full initramfs ff757445b737af69ea4a6c313d91c4b32c6597a1c65a5957e005c13801b1d78d
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+GCC disk 82ed09013fa99fe87d1dbc53bd80b5abc818d3301611d2920c05be04b7802f1d
+EvoCC disk 10381543c2b754fcdfb99781a9fc7d8594a6f6c4a59e7305cea7a6c9155bb65e
+
+Small artifacts .build/floating-targeted/selftest-hugetlb-20260924/:
+probe-1.json 69ace52caa52d54e7ea4ca4cd0aca1a122d564bf8ffa4aeed4ee3ce14ea95ef0
+probe-1024.json af8fc9026b7037f4004a09037ca07a895d739d32f60516cdc5b468218a07e016
+red.json 37f98579f35220a3e3918f57b59decf108ce752aa618b302c31dd950f22c137d
+green.json 867a783604771a8e4bc17df7b166383a816818ce247216c9bd483478c7859cff
+All artifacts total 5.2 MiB; disks are existing symlinks, not copies. All eight
+guests are reaped. Final K13 must use rebuilt init and the explicit policy.
