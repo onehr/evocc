@@ -336,10 +336,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   failures with the original seeds and budgets; retain unusable outcomes unless
   a valid matched replay exists. Close with per-case reasons and any recoverable
   comparisons, without replacing seeds. [Receipt](tests/contracts/ladder-csmith-receipt.json).
-  Source-bound reductions now identify 46 reached repeating paths; 22 remain
-  undetermined. The latest [state/call controls](tests/fixtures/csmith-reset-call-cycle.out)
-  resolve three further identities using stopped-process values plus source
-  transitions, and pass both interpreters and all five native controls.
+  Source-bound reductions now identify 54 reached repeating paths; 14 remain
+  undetermined. The latest [invariant controls](tests/fixtures/csmith-invariant-restart.out)
+  resolve eight further identities using source transitions and, for five cases,
+  stopped-process values. Both interpreters and all six native controls pass.
   This is diagnosis, not a terminating original-program checksum or added PASS.
 
 - [x] **B04 — Resolve remaining torture/HVA reference limitations** — `DONE`, P2, 2026-09-23.

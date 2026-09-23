@@ -1,0 +1,80 @@
+2026-09-23 — B03: eight additional reached-path classifications.
+54 identified / 14 undetermined; still 68 oracle-unusable, NOT 68 PASS.
+The original 1,000 seeds, 10-second limits, 932 agreements and zero mismatch
+are unchanged. Finite fuel exists only in the diagnostic C fixture.
+
+Unchanged original bitfield source SHA-256, verified against the prior PC capture:
+54  c047af95e87812427a3f6803484aa9c70c7f9e8c6d60f75759a14096c3af7e83
+114 25ef8db71615c74bb0944fdc29894c48a834c0a435710ac19587f34b19abd89a
+132 3cb87b4dc7c50f2df2ec5d987a310acab62d8c17c01afb1c2d3a66475b7aedcd
+162 96aab1abae1ce26639d5e9d9efacde0a57bd7438fb6a5baffd9860b54be7e188
+173 f4aaac9ffc20dc54349a1c6a9f69ed9c73e228efc5f4ad0576b63c1749dfb92e
+206 1ea598977e158e3d1f3ab5e41bdca0f4aad7cce186b04ed2e3b56d1e1741ad79
+234 7f4a8b7d5ad85d794812883388bd76bbca9d9c164141ff952588877d53193a96
+360 81ee118e8d497a78d81119ffeb9a1ef8078fa58ca2a42c115414c2653bb85056
+PC capture .build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA-256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+
+Source transitions, not deductions from a timeout alone:
+* /114 func_19:184–197 supplies the unmodified int8 local 127 as func_47's
+  uint64 p_50. Its label124 body (437–443) has no write/escape of that value.
+  func_64's signed int16 -11 >= -8 loop is skipped; func_58's signed int8
+  -25,-19,-13,-7 progression ends at -1. Both callees therefore return, and
+  the unchanged nonzero parameter restarts the caller. Union member writes
+  do not alias the parameter. Safe arithmetic helpers do not change this guard.
+* /234 func_42:516–605 binds g_28 and l_157 to the same g_93[2] object. Once
+  its != arm is reached, l_162[6]=8 and l_164[0][4]=0xa8 force its first arms.
+  The only pointee update is OR with a Boolean; g_73 is not written. The inner
+  unsigned-halfword loop runs 6,11,16 and stops at 21. A nonzero pointee breaks
+  with g_68.f0=0; a zero pointee leaves g_68.f0=-4. Either leaves != true.
+  Local l_194=3 restarts. No call or pointer store on this path changes the
+  compared object identities. The fixture covers zero/positive/negative
+  pointees, both comparison outcomes, and repeated transitions.
+* /132 func_90:1052–1102 resets g_75=0; g_41=0 <= -18 skips all writes to
+  g_107. Both stopped oracles observe g_107=0x4e86, g_75=g_41=0. The nonzero
+  guard jumps back before increment; no call or live body mutates it.
+* /54 func_15:781–907 runs a finite signed 19..-3 loop. g_324=0 >=25 skips
+  its entire body, including every possible pointee write. Both oracles see
+  g_6=6, g_324=0 and g_9 at different finite-loop positions. The following
+  p_16=0 iteration jumps back on unchanged g_6. A finite inner loop alone
+  would not explain the timeout; this caller-level restart does.
+* /162 func_1:77–146 selects the zero comma result l_8, not the safe remainder.
+  Its false arm sees unchanged local l_605=-6 and restarts before either
+  induction update. The alternate arm's calls and writes are unreachable.
+* /173 func_50:598–615 repeats its first p_54=0 iteration. Constant 0x3632e6ba
+  OR forces the arm which copies g_85 only to a local; the sole guard-changing
+  else is unreachable. func_58:623–690 resets g_17 to zero and returns at the
+  first l_78 iteration after finite loops; it never modifies g_85. Both oracles
+  observe the same 32-byte g_85 representation, with f3.f0=482. The fixture's
+  target sizeof/offsetof and raw-byte checks independently verify that decoding.
+* /206 func_11:404–421 resets g_278 and g_18.f3 to zero, copies a record to
+  distinct g_266, then restarts on g_166. Both observe g_166=0xe02149df2eaadc72
+  and g_278=0. No write/call before that edge can change the independent guard.
+* /360 func_1:317–352 has safe 1 % 1 == 0, so its alternate arm is selected.
+  Both observe signed-halfword g_654=0xe418 and both induction counters zero.
+  The nonzero guard restarts before subsequent stores or updates. The path
+  changes only a local pointer, not the guard or its object's identity.
+
+Additional state capture: .build/floating-targeted/csmith-invariant-state.json
+SHA-256 57e668830c2390d02585ea3c8bab8827fd591b39c33977d9c31d61247f5b75a6
+Its adjacent Python file records all commands and per-binary symbol addresses.
+Five unchanged sources, GCC14 and Clang19 -O0 -g -static -no-pie, three
+150-ms stop/read/resume samples each; all ten owned children killed/reaped
+with diagnostic exit -9, never counted as terminating benchmark checksums.
+Source mounts read-only; no original g_* values or source bytes modified.
+This establishes reached-state/path diagnosis, not whole-program definedness.
+
+Finite fixture: both C-HIR/EvoIR return 0. GCC14/Clang19/EvoCC native O0/O2
+all exit 0 (six controls). Clang's comma/logical-constant warnings retained.
+Fixed offline linux/arm64 evo-flight-lab:sealed, --cpus 1, network none.
+EvoCC --target=aarch64-unknown-linux-gnu -std=gnu11 with the lane's existing
+.build/ladder/sysroot GCC14/target/usr includes; GCC14 -no-pie links the asm.
+Compiler SHA 359982fba2bf046b252e7e5777676bf51820f466e19ab0860929b1b402199d86
+Fixture SHA e18867269578d51a077212e8669318b18ffe248a54791fe2035283bec2f9f301
+O0 asm SHA 9f9cf0047d315ebcf0942bf2966b3e47fbfd9c0ec308c231acade2389f56a142
+O2 asm SHA 08f64584279fb7126fd8a58e85517838d8a97f3b00159d6b3331ee9f4f4ec5f3
+Native log .build/floating-targeted/csmith-invariant-restart-native.log
+SHA-256 8affc8f4e3d63df326ac6a6ef842e1042e2546daeccb3c2d6f1ddb6429a0f81c
+No production compiler code changes or original campaign rerun in this slice.
+gate-changed f8527e7 selects no crate for these fixture/document changes;
+this is not a fresh Rust/clippy PASS. render-status --check and diff checks pass.

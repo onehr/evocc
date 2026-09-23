@@ -198,6 +198,16 @@ values/aliases and source transition argument are in
 pass both interpreters and all five native variants. Current diagnosis is
 **46 identified / 22 undetermined**, still 68 oracle-unusable, not 68 PASS.
 
+Eight more bitfield cases (/54, /114, /132, /162, /173, /206, /234 and /360)
+are now bound to [finite transition controls and original state observations](../../tests/fixtures/csmith-invariant-restart.out).
+The analysis distinguishes finite callees/inner loops from their restarting
+callers, constant-selected paths and independent unchanged guards. Five require
+additional read-only stopped-process observations; all ten diagnostic children
+were reaped. Two interpreters and six native controls pass, without changing any
+original source or result. Current diagnosis: **54 identified / 14 undetermined**.
+The remaining identities are base /33, /93, /223, /322, /345, /442 and bitfields
+/21, /24, /146, /239, /240, /292, /455, /481. All 68 remain oracle-unusable.
+
 ## c-testsuite floating execution
 
 Source pin: `5c7275656d75`, `tests/single-exec`. These seven originals require
