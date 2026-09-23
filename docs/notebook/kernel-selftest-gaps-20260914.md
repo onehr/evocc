@@ -2523,3 +2523,25 @@ counts and serial identities are in
 This diagnosis exceeded its one-hour slice: retain the reduced failure and next
 read-side entry/retirement question, continue independent TODO work, and do not
 restart the full campaign or label K01 closed.
+
+### Bounded KVM demand-paging profile — 2026-09-23
+
+K02 remains OPEN. With the unchanged installed demand-paging binary, fixed
+Neoverse-N2 EL2 lane and diagnostic `-m 3 -b 64M`, both kernels pass while guest
+execution takes **1.487756 / 5.220563 seconds** (GCC / EvoCC). This preserves the
+original ten-mode/1 GiB/120-second result as a separate, still-failing workload.
+
+The new `kvm-demand-fault-profile.c` fixture traces the common
+`kvm_handle_guest_abort` entry for just 256 KiB, since GCC inlines the inner
+`user_mem_abort` helper. Both profiles contain 87 root calls, 86 page-acquisition
+and stage-2 mapping calls, and zero buffer overruns/dropped events. Inclusive
+instrumented time is higher across acquisition, mapping and page release;
+this does not isolate a single runtime stall or establish a compiler root cause.
+Depth-limited/inlined call trees are not equivalent per-function cost partitions.
+
+The original binary plus its exact two runtime dependencies, existing init and
+the diagnostic occupy a **4.1 MiB** payload on the same **64 MiB** scratch disk.
+Both diagnostic TAP results and nonce-bound shutdowns pass. Full commands,
+timings, negative setup result and artifact hashes are in
+[the bounded profile record](../../tests/fixtures/kvm-demand-fault-profile.out).
+No new full runtime, kernel configuration or campaign has been created.

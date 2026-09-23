@@ -1,0 +1,57 @@
+2026-09-23: TODO K02, bounded paired performance diagnosis; still OPEN.
+
+Unchanged Images/config, fixed tcg-neoverse-n2-el2 contract, one vCPU in the
+original demand_paging_test. Existing full runtime disks use snapshot=on.
+Diagnostic arguments -m 3 -b 64M (one PA48/VA48/4K mode):
+  GCC    1.487756000 seconds, original exit 0, TAP PASS, boot/shutdown PASS.
+  EvoCC  5.220563008 seconds, original exit 0, TAP PASS, boot/shutdown PASS.
+The original ten-mode 1 GiB/120-second failure is NOT closed by this reduction.
+
+Profile fixture executes that installed binary without source modification,
+using -m 3 -b 256K. GCC inlines user_mem_abort, so the common function-graph
+root is kvm_handle_guest_abort, depth 6. All four trace buffers have zero
+overrun/commit-overrun/dropped events; the fixture rejects empty/oversized logs.
+Both reach 87 root invocations, 86 __kvm_faultin_pfn and stage2-map invocations.
+
+Function (inclusive duration, microseconds)     GCC sum   EvoCC sum
+kvm_handle_guest_abort                        41744.0    209663.0
+__kvm_faultin_pfn                              14487.0     71637.9
+kvm_pgtable_stage2_map                          9129.0     43530.1
+kvm_release_page_dirty                         3600.9     17132.0
+Instrumented guest execution: 0.066428000 / 0.304818992 seconds, exit 0 both.
+These timings include instrumentation/scheduling and are not uninstrumented
+performance claims. Sums are inclusive and must not be added together.
+Call depth/inlining differs: a depth-limited leaf does not mean no child cost.
+The measured excess is distributed across page acquisition/mapping/release,
+not evidence of one deadlocked call or proof of a specific compiler defect.
+
+Both profiles reuse the 64 MiB repair scratch disk and a 4.1 MiB initramfs.
+Only the test, its libc/loader, the diagnostic and existing selftest-init are
+included; no full runtime copy or new kernel build. No production code change.
+Build with GCC 14.2.0-19, -static -O2 -Wall -Wextra -Werror in the sealed image.
+Use existing gen_init_cpio and tools/k1/boot.sh; no alternate test framework.
+K1_KERNEL_CONTRACT=contracts/kernel-selftest-kvm-target.json
+K1_BOOT_LANE=tcg-neoverse-n2-el2 K1_KUNIT_AUTORUN=0 K1_BOOT_TIMEOUT=120
+K1_ALLOW_QEMU_DRIFT=1; actual QEMU 11.1.1 SHA-256:
+  45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Evo Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Fixture ecd2bc3c8ad0add47e5d2166c2c5a7d1c05a78703f8b31dd3d5b7ba476b809db
+Test binary 696a0e84a022a2132ad4c768acb511ed8dc6f6bceb233c52dcaf824b2bee01f3
+libc 9a325944115b36e74077786b29531963d96cd55cd6c82f11750a352cdb58fab0
+ld.so 1d8b77f28b7cec0329dca107a28fb0a850193b1dcce59be68fa0b06b514548cc
+Payload d584b246cb2c1a56dec7870537898ef9525f01ebb6a41f1fca630c8293989e12
+
+Capture root .build/k7-coverage/repair-runtime/:
+kvm-demand-64m/reference serial fda4a6b24cc5636ddd9df0d11557261cf796f46bb8e841cfc07f6dad6223ac85
+kvm-demand-64m/subject serial 30a23f6d8b6cfc109a466519806aa15ebbeca4eb644e954e40ae932473f329c6
+kvm-profile/reference-trace serial a1804e96b6ff316bafcd636d8e1f16d5618bbdf33bed3a10e5ea773bfab7993f
+kvm-profile/subject-trace serial 0dc3a47861e5a23bd080491a600bed913d9dd065326f64b716675f1c92daaaa4
+Existing parse_transcript separately verifies diagnostic TAP/exit, not only
+the outer boot verdict. Initial payload setup used a relative argv[0], which
+prevented kselftest from opening its ELF; that attempt is retained as FAIL,
+not included in the measurements above. The final fixture uses an absolute path.
+
+Next: reduce observed redundant comparison/materialization in a separate
+compiler fixture, verify independently, and retain K02 until final rebuilt
+Images pass the unchanged full original mode matrix and 120-second budget.

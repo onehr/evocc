@@ -100,6 +100,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   the reference completes. Profile the exact fixed-CPU/EL2 lane, isolate the hot
   path and correct any code-generation/runtime cause. Close with the complete
   original mode matrix and output checks inside the unchanged budget. [Evidence][kernel].
+  The [bounded paired profile](tests/fixtures/kvm-demand-fault-profile.out)
+  reproduces a 1.49 s / 5.22 s gap at 64 MiB. A 256 KiB function graph has the
+  same 87 fault-handler invocations on both kernels and no dropped events;
+  excess time spans page acquisition/mapping/release, not one proven stall.
+  The 4.1 MiB diagnostic reuses the 64 MiB scratch disk. No original PASS claim.
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
