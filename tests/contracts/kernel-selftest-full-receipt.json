@@ -57441,6 +57441,40 @@
           "SKIP": 5
         }
       }
+    },
+    {
+      "run": "alsa-cleanup-repaired-20260923",
+      "status": "PASS",
+      "scope": "Unchanged original ALSA timer test, repaired userspace dependency, same two Images",
+      "results": {
+        "path": ".evidence/kselftest-full/alsa-cleanup-repaired-20260923/results.json",
+        "sha256": "c9f0478227a6ae6c788e5fcb063a25ce3edac175cedba30fd9461b8147872de2"
+      },
+      "runtimeLibrary": {
+        "version": "1.2.14 + timer async cleanup",
+        "archiveSha256": "be9c88a0b3604367dd74167a2b754a35e142f670292ae47a2fdef27a2ee97a32",
+        "patch": "tools/k1/patches/alsa-lib-1.2.14-timer-async.patch",
+        "patchSha256": "2df03cef5bb80e802273c874ce0fd4ed79167b14922e9abfb90fd2235f69b20d",
+        "binarySha256": "057c2cd239a5a72e43abbaf35e7800faeb766d41d123a08d34f83e5eab840a07",
+        "compiler": "gcc-14",
+        "role": "userspace dependency repair; no EvoCC compilation credit; upstream tests unchanged",
+        "regression": "tools/k1/tests/alsa-timer-async.c",
+        "regressionRedExit": 134,
+        "regressionGreenExit": 0
+      },
+      "nestedOutcomes": {
+        "reference": {
+          "PASS": 2,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subject": {
+          "PASS": 2,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      "claim": "Original program PASS on both unchanged kernels after the explicit runtime-library repair; full-run outcomes unchanged."
     }
   ]
 }

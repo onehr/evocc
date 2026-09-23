@@ -24,6 +24,24 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_timer_runtime_dependency_requires_a_pinned_archive_and_explicit_patch(self):
+        prepare = getattr(lane, 'prepare_runtime_alsa', None)
+        self.assertTrue(callable(prepare), 'the timer dependency repair must survive runtime rebuilds')
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            archive = work / 'runtime-tools/alsa-lib-1.2.14.tar.bz2'
+            archive.parent.mkdir()
+            archive.write_bytes(b'wrong archive')
+            with patch.object(lane.subprocess, 'run') as run, self.assertRaises(ValueError):
+                prepare(work)
+            run.assert_not_called()
+        source = inspect.getsource(lane.install_runtime_alsa)
+        self.assertIn('alsa-lib-1.2.14-timer-async.patch', source)
+        self.assertIn('alsa-timer-async.c', source)
+        self.assertIn('patchSha256', source)
+        self.assertIn('binarySha256', source)
+        self.assertNotIn('NDEBUG', source, 'assertions must remain enabled')
+
     def test_iommufd_provisions_its_original_128m_hugetlb_fixture_on_both_images(self):
         for expanded in (False, True):
             environment = lane.program_environment('iommu:iommufd', expanded)

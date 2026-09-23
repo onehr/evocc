@@ -1,0 +1,36 @@
+--- a/src/async.c
++++ b/src/async.c
+@@ -26,6 +26,9 @@
+ 
+ #include "pcm/pcm_local.h"
+ #include "control/control_local.h"
++#ifdef BUILD_PCM
++#include "timer/timer_local.h"
++#endif
+ #include <signal.h>
+ 
+ static struct sigaction previous_action;
+@@ -163,6 +166,11 @@
+ 		case SND_ASYNC_HANDLER_CTL:
+ 			alist = &handler->u.ctl->async_handlers;
+ 			break;
++#ifdef BUILD_PCM
++		case SND_ASYNC_HANDLER_TIMER:
++			alist = &handler->u.timer->async_handlers;
++			break;
++#endif
+ 		default:
+ 			assert(0);
+ 		}
+@@ -179,6 +187,11 @@
+ 		case SND_ASYNC_HANDLER_CTL:
+ 			err2 = snd_ctl_async(handler->u.ctl, -1, 1);
+ 			break;
++#ifdef BUILD_PCM
++		case SND_ASYNC_HANDLER_TIMER:
++			err2 = snd_timer_async(handler->u.timer, -1, 1);
++			break;
++#endif
+ 		default:
+ 			assert(0);
+ 		}

@@ -31,6 +31,11 @@ BUILD_PACKAGES = ('openssl', 'python3-docutils', 'xxd')
 # it does not change the sealed compiler image or either kernel.
 RUNTIME_ETHTOOL_URL = 'https://www.kernel.org/pub/software/network/ethtool/ethtool-6.15.tar.xz'
 RUNTIME_ETHTOOL_SHA256 = '9477c365114d910120aaec5336a1d16196c833d8486f7c6da67bedef57880ade'
+# The original timer test reaches a missing TIMER arm in this version's
+# snd_async_del_handler. Carry the narrow, tested cleanup patch explicitly;
+# this library is test infrastructure, not an EvoCC-built benchmark object.
+RUNTIME_ALSA_URL = 'https://www.alsa-project.org/files/pub/lib/alsa-lib-1.2.14.tar.bz2'
+RUNTIME_ALSA_SHA256 = 'be9c88a0b3604367dd74167a2b754a35e142f670292ae47a2fdef27a2ee97a32'
 # The source's own TEST_F_TIMEOUT is 1800 and its workload sleeps for 900s.
 # The collection has no settings file, so the runner's 45s default cannot
 # possibly finish it. Keep this measured policy change explicit in receipts.
@@ -433,6 +438,53 @@ def install_runtime_ethtool(work, rootfs):
             'archiveSha256': RUNTIME_ETHTOOL_SHA256, 'binarySha256': file_sha256(destination),
             'compiler': 'gcc-14', 'commands': commands,
             'role': 'unmodified upstream test utility; no EvoCC target-C compilation credit'}
+
+
+def prepare_runtime_alsa(work):
+    archive = work / 'runtime-tools/alsa-lib-1.2.14.tar.bz2'
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    if not archive.is_file():
+        subprocess.run(['curl', '--fail', '--location', '--max-time', '60',
+                        '--output', str(archive), RUNTIME_ALSA_URL], check=True)
+    if file_sha256(archive) != RUNTIME_ALSA_SHA256:
+        raise ValueError('runtime ALSA archive checksum mismatch')
+    return archive
+
+
+def install_runtime_alsa(work, rootfs):
+    archive = work / 'runtime-tools/alsa-lib-1.2.14.tar.bz2'
+    if not archive.is_file() or file_sha256(archive) != RUNTIME_ALSA_SHA256:
+        raise ValueError('runtime ALSA archive checksum missing or incorrect; use --install-deps')
+    source = archive.parent / 'alsa-lib-1.2.14'
+    harness = Path(__file__).resolve().parent
+    fix = harness / 'patches/alsa-lib-1.2.14-timer-async.patch'
+    regression = harness / 'tests/alsa-timer-async.c'
+    probe = archive.parent / 'alsa-timer-async'
+    commands = [['tar', '-xf', str(archive), '-C', str(archive.parent)],
+                ['patch', '--batch', '--forward', '-p1', '-i', str(fix)],
+                ['./configure', '--prefix=/usr', '--libdir=/usr/lib/aarch64-linux-gnu',
+                 '--disable-static'], ['make', '-j1'],
+                ['gcc-14', '-O2', '-Wall', '-Wextra', '-Werror', '-Iinclude', '-Isrc',
+                 str(regression), '-Lsrc/.libs', '-lasound', '-o', str(probe)], [str(probe)]]
+    with (archive.parent / 'alsa-build.log').open('w') as log:
+        for index, command in enumerate(commands):
+            subprocess.run(command, cwd=archive.parent if index == 0 else source,
+                           env={**os.environ, 'CC': 'gcc-14',
+                                'LD_LIBRARY_PATH': str(source / 'src/.libs')},
+                           check=True, timeout=300, stdout=log, stderr=subprocess.STDOUT)
+    destination = rootfs / 'usr/lib/aarch64-linux-gnu/libasound.so.2.0.0'
+    # Its soname symlink and data files are supplied by the matching 1.2.14
+    # distribution package. Reject a different layout rather than adding an
+    # unused library while silently executing the old one.
+    alias = destination.with_name('libasound.so.2')
+    if not alias.is_symlink() or alias.readlink() != Path(destination.name):
+        raise ValueError('unexpected runtime libasound soname layout')
+    shutil.copy2(source / 'src/.libs/libasound.so.2.0.0', destination)
+    return {'version': '1.2.14 + timer async cleanup', 'url': RUNTIME_ALSA_URL,
+            'archiveSha256': RUNTIME_ALSA_SHA256, 'patchSha256': file_sha256(fix),
+            'binarySha256': file_sha256(destination), 'regressionSha256': file_sha256(regression),
+            'regressionExitCode': 0, 'compiler': 'gcc-14', 'commands': commands,
+            'role': 'patched userspace dependency; kernel selftests unchanged; no EvoCC compilation credit'}
 
 
 def install_runtime_helpers(source, installed):
@@ -1125,6 +1177,7 @@ def refresh_runtime(work, kernel_build=None):
                     file_metadata[name] = [original.st_uid, original.st_gid, mode]
     install_runtime_paths(rootfs)
     runtime_ethtool = install_runtime_ethtool(work, rootfs)
+    runtime_alsa = install_runtime_alsa(work, rootfs)
     shutil.copy2('/usr/lib/ld-linux-aarch64.so.1', rootfs / 'usr/lib/ld-linux-aarch64.so.1', follow_symlinks=True)
     subprocess.run(['gcc-14', '-static', '-O2', '-Wall', '-Wextra', '-Werror',
                     '/work/harness/selftest-init.c', '-o', str(work / 'init')], check=True)
@@ -1141,7 +1194,7 @@ def refresh_runtime(work, kernel_build=None):
         metadata['kernelTestModules'] = test_modules
     metadata['runtimePackages'] = subprocess.check_output(['dpkg-query', '-W'], text=True)
     metadata['runtimeHelpers'] = runtime_helpers
-    metadata['runtimeTools'] = {'ethtool': runtime_ethtool}
+    metadata['runtimeTools'] = {'ethtool': runtime_ethtool, 'alsa': runtime_alsa}
     metadata['runtimeModulePrerequisites'] = module_prerequisites
     metadata['runtimeFilesystem'] = {'root': 'ext4', 'features': ['verity'],
                                      'temporaryFiles': '/tmp on the per-flight disk snapshot',
@@ -1210,6 +1263,7 @@ def main():
     if not args.reuse_build or args.refresh_runtime:
         if args.install_deps:
             prepare_runtime_ethtool(work)
+            prepare_runtime_alsa(work)
         installed = json.loads(subprocess.check_output(['/usr/local/bin/container', 'image', 'inspect', image], text=True))
         if installed[0]['configuration']['descriptor']['digest'] != environment['executionReference']:
             raise ValueError('selftest seed image differs from the frozen build environment')

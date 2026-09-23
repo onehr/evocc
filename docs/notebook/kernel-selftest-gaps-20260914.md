@@ -54,14 +54,29 @@ remaining failures all request IOPF: the frozen configuration has no
 `mock_dev_enable_iopf()` returns `-ENODEV`. A separately built configuration
 is still required; neither running Image is modified to conceal that gap.
 
-Two other shared failures now have exact non-compiler causes. ALSA still
-hits the `snd_async_del_handler` missing-TIMER case described below.
+Two other shared failures now have exact non-compiler causes. ALSA's
+`snd_async_del_handler` missing-TIMER case is repaired below.
 The original ntsync suite passes 10/11 cases on each kernel; `wake_all`
 line 971 incorrectly expects zero from `NTSYNC_IOC_CREATE_EVENT`, although
 `drivers/misc/ntsync.c:ntsync_create_event` returns a newly allocated file
 descriptor (9 in both captures). The adjacent three allocations test for a
 nonnegative descriptor. The frozen test's FAIL is retained; its assertion
 has not been weakened or rewritten to obtain a passing verdict.
+
+The ALSA runtime repair now passes the unchanged original `utimer-test` on
+both kernels (2/2 nested cases each), in
+`.evidence/kselftest-full/alsa-cleanup-repaired-20260923/results.json`.
+The tiny device-free `tools/k1/tests/alsa-timer-async.c` first aborts against
+unmodified 1.2.14 at the same assertion (exit 134); after the patch it exits
+zero, checking two shared handlers, last-handler notification shutdown and
+close-time cleanup. The real library repair adds TIMER handling to both
+cleanup switches, under ALSA's existing `BUILD_PCM` guard; no assertion is
+removed. The pinned upstream archive, explicit local patch and GCC-built
+library hash are recorded as a **userspace dependency**, with no EvoCC code
+generation credit. The checked-in runtime installer also builds the patched
+library and passes this regression. Both new runtime disks are COW copies;
+the original failing payloads, modules and kernel Images remain intact.
+This closes the observed ALSA failure, not unrelated sound-hardware tests.
 
 The new execution receipt is `tests/contracts/kernel-expanded-kunit-receipt.json`;
 it remains FAIL because completed execution is not all-tests success. The latest
