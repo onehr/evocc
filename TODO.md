@@ -454,13 +454,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Cross-cutting verification and tooling
 
-- [ ] **T01 — Reconcile the historical issue list with checked-in regressions** — `OPEN`, P1.
-  Map every old inline-asm, GNU89 call/prototype, VLA, relative-label/static-address,
-  aggregate-varargs, pointer-qualification and E3101 case to a fixture, current
-  original replay or named unresolved item. Preserve genuine boundaries such as
-  narrowing-then-widening label constants; do not relabel entire previously fixed
-  families OPEN. Close with no orphan known case or unexplained generic waiver.
-  [Historical reductions and follow-ups][apps].
+- [x] **T01 — Reconcile the historical issue list with checked-in regressions** — `DONE`, P1, 2026-09-23.
+  The [complete identity/fixture crosswalk](tests/fixtures/language-issue-reconciliation.out)
+  maps the old asm, declaration, VLA, static-address, varargs and qualification
+  cases without reopening repaired families. All 107 formerly unclassified
+  torture E3101 failures map to 88 later PASS, 15 named deferrals and four
+  evidenced exclusions; all 148 historical LLVM identities map to actual later
+  results and B01's follow-ups. Source/evidence validation and 68 targeted Rust
+  tests pass. This closes reconciliation, **not** L02/L05/L07–L11, B02/B10 or a
+  fresh full campaign. Narrowing label constants and independent oracle limits
+  remain explicit; generic E3101 is never itself an FP waiver. [Detail][apps].
 
   - [x] **T01a — Repair two independently reproduced inline E3101 paths**.
     [Floating builtin operands](tests/fixtures/inline-value-transport.c) now

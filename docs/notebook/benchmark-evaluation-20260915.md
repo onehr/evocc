@@ -2232,3 +2232,34 @@ No full clone, Rust rebuild or workspace replay is needed to validate this
 tool-only change. The existing K6/K7 results and unresolved module/BTF/config
 items remain separately tracked in
 [the kernel selftest ledger](kernel-selftest-gaps-20260914.md).
+
+## Historical issue reconciliation — 2026-09-23 (TODO T01)
+
+[The identity crosswalk](../../tests/fixtures/language-issue-reconciliation.out)
+joins all earlier named asm, GNU89/prototype, VLA, relative-label/representation,
+varargs, qualifier and E3101 cases to checked-in regressions, measured later
+originals or specific open tasks. It is not a new campaign or claim that the
+compiler has only floating-point work left.
+
+Of the old torture run's 114 E3101 rows, **107** had been compiler failures;
+the other seven were already dispositioned. Those 107 map to **88 PASS,
+15 named FP deferrals (14 binary128, one floating-vector), four evidenced
+not-applicable** in the complete September 19 run. The two E3101 diagnostics
+remaining in that whole later run are a non-void bare return and an extreme
+array-layout conflict, neither a generic FP waiver. Existing classification
+code revalidates each old identity against the source/hash/evidence rules.
+
+All **148** historical LLVM source hashes match the retained pinned sources.
+The later complete run has **119 PASS, 16 compiler failures, ten named FP
+deferrals, two evidenced exclusions, one unusable reference** for this subset.
+All sixteen failures are already covered by B01: three subsequently pass
+targeted replays, twelve receive precise FP deferrals, and LARGE
+`floyd-warshall` remains B02. Historical totals are not rewritten by this join.
+
+Current targeted regressions are **63 language-semantics + five private-leaf
+tests PASS**, zero failures/ignored. Original c-testsuite 00140/00144/00207 and
+the previously named ordinary VLA/asm/relative-label torture programs passed
+their cited full replays; 00144's uninitialized condition is not reused as a
+semantic oracle. The defined-condition qualifier fixture supplies that check.
+The crosswalk retains all 262 historical E3101 identities and points to L02,
+L05, L07–L11 and B02/B10 rather than reopening already repaired families.
