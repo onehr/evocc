@@ -40,8 +40,8 @@ The reviewed two-way analysis labels account for every unavailable identity:
 
 | Campaign | Repeating source path identified | Undetermined; timeout is not a proof |
 |---|---|---|
-| base | 11, 42, 64, 68, 83, 87, 88, 112, 120, 122, 128, 237, 241, 246, 287, 307, 315, 327 (18) | 14, 33, 93, 161, 204, 223, 239, 322, 340, 345, 362, 442, 466 (13) |
-| bitfields | 11, 69, 83, 115, 122, 128, 192, 242, 259, 307, 322, 352, 357, 404, 457 (15) | 14, 21, 24, 26, 54, 104, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 340, 360, 362, 455, 466, 481 (22) |
+| base | 11, 14, 42, 64, 68, 83, 87, 88, 112, 120, 122, 128, 161, 204, 237, 241, 246, 287, 307, 315, 327, 340, 362 (23) | 33, 93, 223, 239, 322, 345, 442, 466 (8) |
+| bitfields | 11, 14, 26, 69, 83, 104, 115, 122, 128, 192, 242, 259, 307, 322, 340, 352, 357, 362, 404, 457 (20) | 21, 24, 54, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 360, 455, 466, 481 (17) |
 
 The source arguments for the first four identities are in
 [the closure notebook](benchmark-closure.md); the bounded optimization probes
@@ -172,8 +172,21 @@ GCC/Clang samples reach this body, and its source digest still matches.
 checks one u8 cycle, both inner paths and genuinely terminating mask controls.
 Both interpreters, EvoCC native and GCC14/Clang19 O0/O2 pass; [identities and
 limits](../../tests/fixtures/csmith-union-loop-invariant.out) are recorded.
-Current analysis is **33 identified / 35 undetermined**, not a new campaign:
+That checkpoint was **33 identified / 35 undetermined**, not a new campaign:
 all 68 retain oracle-unusable and the 932 agreement numerator is unchanged.
+
+A further [finite reset/guard reduction](../../tests/fixtures/csmith-restarted-state.c)
+resolves both campaigns' /14, /340 and /362, plus base/161, base/204,
+bitfields/26 and bitfields/104. The first three pairs differ only in generator
+and statistics comments; their executable text was compared, not inferred from
+the seed. The source arguments distinguish written and tested array elements,
+pass-by-value parameters from later pointee stores, skipped unsigned loops and
+backward branches before the induction update. Both interpreters and GCC14,
+Clang19 O0/O2 plus EvoCC native pass the finite controls, including terminating
+zero-guard alternatives. [Hashes, lines and limits](../../tests/fixtures/csmith-restarted-state.out)
+bind all ten to the existing original-process PC captures. Current analysis is
+**43 identified / 25 undetermined**. No original checksum, budget, source,
+seed or benchmark verdict changed; these are not ten newly passing programs.
 
 ## c-testsuite floating execution
 

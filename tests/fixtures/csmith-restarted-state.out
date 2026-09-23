@@ -1,0 +1,81 @@
+2026-09-23: TODO B03 reached-path diagnosis, not benchmark PASS.
+
+The unchanged source hashes below match the retained GCC14/Clang19 PC capture:
+.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+base/14 169ce188d15c54f28a52c8cfdde741041b09873ab0d1f928397940998592db3f
+bitfields/14 7633f684f8b6e6fb8122f5f80837d58851d26e1fefe3e52ab1cce973d362f1c6
+base/161 8566991eccbdf962b20fb398cd38378a92120cf47a76241ca89668e5bc0788b6
+base/204 5812cd674e67632adf176bbd306a52cc19d00ada14a829dd7ae4c714662e75d2
+bitfields/26 8ebe2d6b983da6cca5af77cc7178f23a5ff712c73a004d72d164787b1db4c4dc
+bitfields/104 41f45651b35bb75c0932df67261138e3c72ad893610d6c86cdaa543db46b917e
+base/340 bffffc00ed6ff3f61654b203b221cd7621a24f07a1d7a9a6489346f87edfe7a7
+bitfields/340 2ea4790bcf86c6b09bd5e61a477b6fe5f803712f261c45acbd85a3661b5b05eb
+base/362 84f547cf674a178621f85f14e41debd0eabced33440595774c44cc36f368de80
+bitfields/362 78798df723587856986c94b7c86e1cf16ef614026a7b3c139fe6bd0effa7656b
+For /14, /340 and /362, full diffs between campaigns differ only in the
+generator-options comment and trailing bitfield-statistics comment. Their
+executable text is identical, not merely assumed identical from the seed.
+
+Source-bound reasons:
+* /14 func_1:93-215. The preceding func_12 only initializes locals and returns
+  its argument. g_25/g_973 still address g_26[3][0], while l_1025 addresses
+  distinct g_26[0][2] (0x53494abc). The former receives signed-halfword
+  0x4abc % 0xbfe4 = 2720; the latter is unchanged. The seven-iteration byte
+  loop terminates at 32, then the nonzero const g_449 jumps back before its
+  outer update. The alternate branch and its calls cannot be reached.
+* /340 func_1:75-115, func_6:142-150. func_6 skips its initialized -9 == 16
+  loop, changes only g_10/g_227 and returns the unchanged g_375. The other
+  callee returns its argument. The u8 g_433 loop breaks on its first visit.
+  g_347 points to a halfword equal to 1; (1 == ((-7) || -9)) ^ -9 is -10,
+  less than g_37[2][6] (0x5bb0). The false arm tests unchanged nonzero g_315
+  and jumps back. No reachable write changes that comparison or guard.
+* /362 func_38:259-345. Its initial caller passes p_40=-1 and p_41=g_26[3]=0;
+  preceding func_18 changes g_29, not g_26. p_41 is a value, so writing -10
+  through g_35 in the callee does not change it. g_51=9 and l_49=0 reset;
+  u16 g_16=-12 skips ==42 and all calls in that body. The false p_41 arm
+  increments an unrelated u8 and jumps back before either induction update.
+* base/161 func_13:170-214. The first p_15=0 iteration sets g_23=0 and skips
+  >=12, including the only g_322 decrement. g_322 is initially 5 and has no
+  other preceding write; its true branch restarts p_15 at zero. The continued
+  p_15!=0 path and later calls do not precede that restart.
+* base/204 func_1:122-152. Array initialization resets g_3/g_4, then g_3=-12.
+  Equal array elements subtract to zero. g_4's finite 0..-20 loop skips its
+  inner g_12=0/==60 loop. Unchanged g_3 is nonzero and restarts initialization
+  before its own increment; there is no call or write through the pointer array.
+* bitfields/26 func_1:100-165. g_2=25 skips <=-21, including every call and
+  every change to g_186 or g_33. Equal operands subtract to zero and the
+  subsequent u16 add writes g_2=1. Nonzero g_186=-4 selects the true branch;
+  g_33.f0=0xd534 restarts before g_72's first update. These are ordinary
+  union halfword accesses, not an assumption about bitfield arithmetic.
+* bitfields/104 func_42:441-455. g_33 is u8: -9 becomes 247 and skips <=33,
+  including both calls and all writes in the body. The remaining pointer
+  store cannot address g_117 (its address never occurs in this program).
+  g_117 starts nonzero; the only other assignments initialize it to 1 or
+  increment it to at most 7. Its backward branch therefore stays true.
+
+The finite C fixture preserves the corresponding counter/guard/storage
+distinctions and includes zero-guard terminating controls. Fuel is added only
+to the reduction, not to the original inputs. It tests the reached repeating
+transitions; it does not prove whole-program definedness or provide a common
+terminating original checksum. All 68 original oracle-unusable outcomes,
+the 10-second original budgets, 1,000 seeds and 932 agreements stay unchanged.
+Analysis changes from 33 identified / 35 undetermined to 43 / 25.
+
+Fixture SHA256 1726d904d4c4a99b54b2020c7ce5cbf6c45a5f82626f4ed2d570c7075039d9b9
+Assembly SHA256 b795fa15d19a98ff7862ca21c6a0562ddb28fa84ab11503382c0f4b43cafa42a
+EvoCC release SHA256 17be8b3c08e55e64bd7608ff37fce23225b693060c5f96e8c11be497c0b54b12
+Both --interpret-c-hir and --interpret-evoir return 0.
+Emission: --target=aarch64-unknown-linux-gnu -std=gnu11 -O2 --emit=asm,
+with -isystem .build/ladder/sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include,
+.build/ladder/sysroot/usr/include/aarch64-linux-gnu and /usr/include in that
+sysroot. Output .build/floating-targeted/csmith-restarted-state.s.
+Sealed offline linux/arm64, one CPU, evo-flight-lab:sealed:
+GCC 14.2.0-19 and Clang 19.1.7 -std=gnu11 -O0 / -O2 all exit 0.
+gcc-14 -no-pie linked EvoCC assembly also exits 0. Source/assembly hashes
+were verified inside the container. Narrow-return and tautological-comparison
+warnings remain visible; they express the tested conversion/range premise.
+No compiler semantic fix was needed for these controls; no full campaign ran.
+render-status --check and git diff --check pass. gate-changed d4b0d48 selects
+no Rust crate for this fixture/documentation-only change; no new workspace
+test/clippy pass is inferred from that empty selection.
