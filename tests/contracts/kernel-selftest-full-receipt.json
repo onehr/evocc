@@ -31523,6 +31523,19 @@
       "record": "tests/fixtures/ptrace-exec-reap-cycle.out",
       "pairedRecord": ".build/floating-targeted/ptrace-exec-reap-20260924/original.json",
       "pairedRecordSha256": "fab4f607bd642a0bc15a8f413be9cf75130c55f70f0c11ee9685ffecc6d56e12"
+    },
+    {
+      "id": "K12a",
+      "date": "2026-09-24",
+      "status": "CLASSIFIED",
+      "collections": ["kexec", "prctl", "thermal/intel/power_floor", "thermal/intel/workload_hint"],
+      "originalOutcome": "buildExit=2: no all target under the frozen arm64 recipe",
+      "reason": "Complete Makefile bodies are gated on x86/ppc64le or native x86; no C compiler is reached",
+      "causalControl": "20 original Makefile variable queries select the exact architecture and CROSS_COMPILE boundaries",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/selftest-build-guards.out",
+      "probeRecord": ".build/floating-targeted/selftest-build-guards-20260924/results.json",
+      "probeRecordSha256": "46bd58d6f5a24862a7ce14aab7a780df15bbd7e57b8ba7c151a3875d0c352a0e"
     }
   ],
   "regressions": []

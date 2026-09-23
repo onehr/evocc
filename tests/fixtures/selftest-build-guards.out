@@ -1,0 +1,54 @@
+2026-09-24 — four source-defined kselftest collection build boundaries.
+
+The original Makefiles are already minimal reproductions (13–24 lines).
+No C compiler is invoked by the failing arm64 recipes. Run their exact
+recorded commands from kernel-selftest-full-receipt.json, build.builds,
+against the unchanged tools/testing/selftests sources inside the sealed
+arm64 container. Each still exits 2: No rule to make target 'all'.
+No all/install target is fabricated, no source guard is removed, and none
+of these unavailable collections becomes an executed test or PASS.
+
+Independently query each original Makefile's TEST_PROGS, TEST_GEN_PROGS and
+TEST_FILES via a stdin-only print target. Twenty controls select:
+
+collection                    arm64 aarch64 x86  x86+cross ppc64le
+kexec                         empty empty   3*   3*        2
+prctl                         empty empty   5    empty     empty
+thermal/intel/power_floor      empty empty   1    empty     empty
+thermal/intel/workload_hint    empty empty   1    empty     empty
+
+* kexec's Makefile.arch tests CC's __LP64__; the sealed 64-bit gcc control
+  enables the third x86-only jump program. This is make-variable inspection,
+  NOT cross-compilation or execution of x86/ppc64le programs on ARM64.
+
+kexec gates its entire body on ARCH_PROCESSED in {x86, ppc64le}; changing
+kernel CONFIG_KEXEC cannot make this frozen arm64 recipe define its targets.
+The other three first exclude CROSS_COMPILE, then require ARCH=x86. prctl
+contains portable-looking individual sources too, but the original collection
+does not admit them for this target. This records a frozen build-recipe limit,
+not a claim that every prctl API is fundamentally x86-only. The two thermal
+collections are explicitly Intel platform interfaces, not missing EvoCC C
+language features. Enabling their guards would be a different test baseline.
+
+Both arm64 spellings are empty. Native x86 selection enables the original
+program lists; CROSS_COMPILE suppresses only the three guarded collections.
+Original/staged Makefile bytes match. All sources are mounted read-only;
+no binaries, kernel Images or disk copies are created. K12a classification
+closes; the four buildExit=2 records and frozen 970-program population stay
+unchanged. K12's configuration build/runtime work and K13 remain OPEN.
+
+Toolchain: evo-flight-lab:sealed, linux/arm64, network none, 2 CPUs/2 GiB;
+immutable image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+Reproduce: the results below contain every original argv, control argv,
+stdin Makefile query, stdout/stderr and status. Only variable queries use
+the appended print target; the four original failing commands are unchanged.
+
+SHA-256 of original Makefiles:
+kexec 6e89a33167fd87994b194d7c2f0e9f888698550823ba2c7f281e4d0f6d378f4a
+prctl 7f8589cb81988f2b122e773be30562e736a2b451394f0433b0ff7fbdd42c3e4a
+thermal/intel/power_floor 111bd3e431274b87a085a674d285d72081c170b067e525bc0905d491c1fa38e2
+thermal/intel/workload_hint 5eb80758e822d42115b0751d36aa278fb12216c32be6f29448155fd8906d0e76
+
+Capture: .build/floating-targeted/selftest-build-guards-20260924/results.json
+SHA-256 46bd58d6f5a24862a7ce14aab7a780df15bbd7e57b8ba7c151a3875d0c352a0e
+Probe script SHA-256 b8f760811d680f154101a26e833110482dc98f97b2ca9f8b6c69ef4dd300a3c7

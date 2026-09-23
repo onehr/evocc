@@ -2773,3 +2773,17 @@ The diagnostic payload is about 4 MiB; every flight reuses the 64 MiB snapshot
 disk. The exact source, module, payload, Images, serials and command boundary
 are recorded in the fixture. K01 remains OPEN pending causal linkage and the
 unchanged original replay; there is no live test from this slice.
+
+### Four collection build guards — 2026-09-24
+
+The four original arm64 build commands still fail before invoking a compiler:
+their upstream Makefiles do not define `all` on this architecture. Twenty
+read-only variable controls confirm kexec's x86/ppc64le guard and the native-x86
+guards around prctl and the two Intel thermal collections. The prctl conclusion
+is deliberately about this frozen recipe, not every individual API/source.
+
+[The source-bound record](../../tests/fixtures/selftest-build-guards.out)
+contains Makefile identities, the exact control matrix and capture hash.
+No source guards, historical build exits, program population or PASS counts
+change. K12a closes classification; K12's new configuration still needs its
+own build/runtime evidence. The diagnostic creates no Image or disk copy.

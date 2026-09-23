@@ -300,10 +300,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
-  it is not built coverage. Review `kexec`, `prctl`, `thermal/intel/power_floor`
-  and `thermal/intel/workload_hint` build gaps and architecture/hardware needs.
+  it is not built coverage. The four build gaps are now source-bound below.
   Build runnable supported sets with matching payloads; give precise reasons
   for unavailable ones. Keep any changed population separate from the frozen 970. [Evidence][kernel].
+
+  - [x] **K12a — Classify four architecture-gated collection recipes**, 2026-09-24.
+    The original `kexec`, `prctl` and two Intel thermal Makefiles reproduce
+    missing `all` before any compiler invocation on arm64. Twenty original
+    Makefile variable controls establish their exact architecture/CROSS_COMPILE
+    guards. This is a frozen-recipe limit, not a claim all prctl APIs require
+    x86. No guards, build outcomes or 970-program denominator change; no test
+    is counted as PASS. [Source-bound record](tests/fixtures/selftest-build-guards.out).
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
