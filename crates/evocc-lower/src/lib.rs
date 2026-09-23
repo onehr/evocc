@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 mod allocation;
+mod cfg;
 mod complex;
 mod conditions;
 mod constants;
@@ -4387,6 +4388,12 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         self.eliminate_switch_forwarders()?;
+        if optimize {
+            cfg::join_linear_blocks(
+                &mut self.blocks,
+                &self.labels.values().map(|label| label.id).collect(),
+            )?;
+        }
         let label_addresses = references
             .labels
             .into_iter()

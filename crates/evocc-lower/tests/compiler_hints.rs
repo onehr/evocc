@@ -127,6 +127,16 @@ fn pure_executable_integer_constants_do_not_need_runtime_arithmetic() {
 }
 
 #[test]
+fn linear_edges_keep_effects_local_objects_and_label_addresses() {
+    assert_eq!(
+        interpreter_results(include_str!(
+            "../../../tests/fixtures/linear-block-binding.c"
+        )),
+        (0, 0)
+    );
+}
+
+#[test]
 fn repeated_array_addresses_share_only_the_pure_computation() {
     let source = "int f(volatile int (*p)[32], int i, int j) { return p[i][j]+p[i][j]; }";
     let arena = Arena::default();

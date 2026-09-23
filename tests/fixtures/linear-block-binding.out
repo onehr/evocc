@@ -1,0 +1,56 @@
+2026-09-23: join unconditional single-entry continuations during lowering.
+
+RED: the array-minimum loop still had edge (6,5), an unconditional branch to
+a unique-entry continuation requiring redundant block-argument copies. One
+assertion failed, zero compilation errors. GREEN: bind those parameters
+simultaneously to the preceding local definitions, append the unchanged
+instructions in order, and retain the existing final terminator.
+Source labels (including static relocation-only references), block_addr
+targets, function entry, self edges and multiply-entered blocks are retained.
+Indirect and asm-goto edges participate in entry counting. Local SSA and
+memory/world remain explicit; no allocator/coalescing policy is changed.
+
+Three structural controls cover operand permutation, effect-token identity,
+indirect entries, label retention and malformed argument types/arity.
+The C fixture covers volatile effects, both branches, loop iterations,
+static label-table dispatch and dynamic local-object lifetimes. Both
+interpreters pass with optimization off/on. Native EvoCC O2 and each of
+GCC-14/Clang-19 O0/O2 exit zero in the offline sealed ARM64 environment.
+
+Changed gate against 5eba25a: 1089 PASS, zero FAIL, three historical ignored;
+Clippy all-targets -D warnings and fmt --check PASS. The first run passed all
+tests but failed Clippy's while-let style check; it was corrected, not waived.
+Final log: .build/floating-targeted/sched-reload-inspect-20260923/linear-block-final-gate.log
+C SHA256 0b472825e8e79f12c4184f524902ad294f7faf3d7b0a108c07116c7eb1c64484
+Compiler SHA256 8e87fa4e8b52514b103b9435f4353563c879c6573fb2cd9a6307985447759007
+Fixture assembly SHA256 92b88448a402ea079ffbd26520a1c2eeebd3c9bb1b6aaebdbf7fa23f12233d40
+
+Original LLVM programs, same frozen argv/source/LARGE inputs as the preceding
+block-local-pure-reuse.out. Original timeit settings, exit-status line,
+HashProgramOutput.sh and fpcmp-target preserved; 60-second whole-test timeout.
+One native worker, after the changed gate completed:
+
+Program         whole check   child exit   wall seconds   user seconds
+lu              PASS          0            59.2533        58.7138
+ludcmp          PASS          0            48.8197        48.5935
+floyd-warshall  TIMEOUT 124    not recorded  60s limit     not recorded
+
+The timeout terminates the monitored process group before a completed time
+summary/output. It is not PASS. The core floyd-warshall function shrinks from
+194 to 167 static machine instructions, but that does not close its timeout.
+lu's remaining time margin is small; no stable performance guarantee follows.
+Assembly SHA256:
+lu             3281c2924c3483b620286aad63c30e05035db671c0d5fa89b5b634a0a83d2f99
+ludcmp         3fae5515b75a5ad0d07b7e9d08a39b76f85f9fa331a02098db7d4a73ddd84a92
+floyd-warshall a6bfff01f3e0ab8f8189a6c64f72193fff768d022f97c6aa940f0c289d712eee
+
+Original-command kernel/sched/build_policy.o also emits/assembles with the
+actual generated headers and original assembler options, without installation.
+Text size: installed EvoCC 729626 bytes; prior constant-only replay 663870;
+current 625158. Its 212 external symbol names/kinds match the installed EvoCC
+object. Against GCC, the names match but four pre-existing scheduler-class
+symbols retain different nm kinds; no stronger cross-compiler kind claim.
+Assembly SHA256 2cc6f3ac2b8dbd0797873d65885a1a3f88d7e1f4817c8c2c3bd29aef435404ac
+Object SHA256 af3e93606170c375711875e1983f378d578e3b5bbe494baea6bba74785b0f8d2
+Artifacts: .build/floating-targeted/linear-block-20260923/.
+No Image, module set, kernel acceptance receipt or full LLVM count is replaced.

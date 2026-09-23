@@ -173,6 +173,18 @@ assembly hashes and records the corrected upstream exit-status/hash contract.
 Earlier manually wrapped hash comparisons that omitted that status line are
 not acceptance evidence; earlier observed child timeouts remain failures.
 
+The follow-up straight-line block merge retains explicit bindings and every
+instruction/effect, while keeping all source/indirect label identities.
+Its small loop RED, permutation/token/lifetime controls, both interpreters and
+GCC14/Clang19/EvoCC native checks pass; the changed gate passes **1,089 tests**,
+zero failures, three historical ignored, Clippy and fmt. Original serial
+replay: `lu` **59.2533 s PASS**, `ludcmp` **48.8197 s PASS**; `floyd-warshall`
+**TIMEOUT at 60 s**, despite its core function shrinking from 194 to 167
+instructions. `tests/fixtures/linear-block-binding.out` records identities and
+the unchanged output contract. The replayed scheduler object's text shrinks
+to 625,158 bytes with no new symbol drift against the installed EvoCC object;
+it is not installed and supplies no new kernel-runtime claim.
+
 The unchanged `compare-fp-3` now links and runs after bounded four-way
 LT/EQ/GT/unordered reasoning; operands and their poison/FPCR obligations are
 still evaluated. The unchanged `20020720-1` also links/runs after exact
