@@ -1,0 +1,81 @@
+2026-09-23 — TODO K03 bounded diagnosis, not full-test acceptance.
+
+The installed, unchanged memslot_modification_stress_test is invoked through
+the existing selftest-init/boot workflow. The fixed Neoverse-N2 EL2 contract,
+four host vCPUs, 4 GiB RAM, Images and test executable are identical between
+these controls. Each guest test uses one vCPU and mode 3 (PA48/VA48/4K).
+No compiler or kernel repair is installed by this diagnostic.
+
+Untraced reduction: -m 3 -b 64M -i 2; original TAP 1/1 and shutdown PASS
+on both kernels. This is not the default 1 GiB/all-mode/10-iteration test,
+which remains subject TIMEOUT at the unchanged 120-second limit.
+
+For the 256 KiB reduction (-m 3 -b 256K -i 2), the fixture runs the original
+ELF and traces kvm_arch_flush_shadow_memslot and kvm_free_stage2_pgd. It bounds
+each trace file at 2 MiB and rejects empty traces, overruns and dropped events.
+Both depth controls have four page-table destructions and two invalidations,
+zero losses on all four CPUs, original exit 0, inner TAP PASS and shutdown PASS.
+
+                              GCC               EvoCC
+depth 6 whole test, ns         259443008          1718397008
+depth 1 whole test, ns         208469008          1274434992
+depth 6 destruction sum, us    16845.008          292145.000
+depth 1 destruction sum, us    3898.000           81147.990
+depth 6 invalidation sum, us   880.992            1624.992
+depth 1 invalidation sum, us   250.000            605.984
+
+These are individual instrumented observations, not statistical benchmarks.
+Depth-one traces avoid tracing nested helpers (including EvoCC's non-inlined
+helpers); they still expose excess time in page-table destruction, not just
+memslot invalidation. This does not explain the entire elapsed-time difference:
+destruction accounts for only ~81 ms of the subject's ~1.27 s. Scheduling and
+tracing remain confounders. Inclusive nested durations must not be added.
+Next: isolate the repeated page-table helpers as ordinary C code, preserve
+their memory/guard behavior, and test any code-generation repair independently.
+K03 remains OPEN until the original full workload on repaired Images passes.
+
+Build: sealed linux/arm64, network none, GCC 14.2.0-19,
+  gcc-14 -static -O2 -Wall -Wextra -Werror -DKVM_PROFILE_MEMSLOT=1
+    '-DKVM_PROFILE_DEPTH="1"' tests/fixtures/kvm-demand-fault-profile.c
+Depth 6 uses the default KVM_PROFILE_DEPTH. Both diagnostic mode branches
+compile with warnings as errors. The original ELF is extracted byte-for-byte
+from the retained reference runtime; its hash matches the selftest build.
+The ftrace control writer handles short writes because frozen ftrace_graph_write
+consumes one whitespace-delimited filter per write; no filter is silently lost.
+
+Boot environment, both sides:
+  K1_ALLOW_QEMU_DRIFT=1
+  K1_KERNEL_CONTRACT=contracts/kernel-selftest-kvm-target.json
+  K1_BOOT_LANE=tcg-neoverse-n2-el2 K1_KUNIT_AUTORUN=0 K1_BOOT_TIMEOUT=90
+  K1_INITRAMFS=.build/k7-coverage/repair-runtime/kvm-memslot-profile/payload.cpio
+  K1_TEST_DISK=.build/k7-coverage/repair-runtime/scratch.img
+  tools/k1/boot.sh IMAGE RUN_DIRECTORY
+Existing parse_transcript validates the inner test using each boot's nonce.
+The 64 MiB scratch disk is opened snapshot=on; no large runtime copy is made.
+
+SHA-256:
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Evo Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Original ELF 6e0fa8aae4396ad8cc6ccedd2513bdc591aec15b89a4eb7a2ea1c4ba49fd2043
+Depth-6 fixture b850fc8509f06fc9b13fc9d8c66cc6c737809407695471963ad243949d85ffe7
+Depth-6 executable f409fdbae2e1b919be053a89ffff0cc16e331b7b651e99b580f98d411d2c7e1a
+Depth-6 payload f7002669ed16451341c925474a6fa01196697139a34dcb0a574fbf4d2f706a53
+Current fixture 8be198fbb399112854c0322a97afc13160c898d256f3ce3823f8e0f55108f805
+Depth-1 executable 111a130bd83d676116bafa9d437c6f02dde84149a93e860f4aa7bd6c8e064427
+Depth-1 payload f6d12658d5cf23862b554fab634672c09d1b2daf414d6848a6c31eea23ad53a9
+
+Captures below .build/k7-coverage/repair-runtime/; serial SHA-256:
+kvm-memslot-64m/reference 7637d30536c0cd20e2b5bba1b18a82745c7c70cadc028b0508930a73a9f54ad5
+kvm-memslot-64m/subject bb09c16e25ac8f44af8e5d1d41af38ec0c32129e428917ebe378cff2a5701acc
+kvm-memslot-profile/reference-complete 8f14119cf706ec724bb3ddce7c2fb0fb968d9356b7ccec42f6f103e6ec3756cf
+kvm-memslot-profile/subject-complete ffaac7edf3057c235de68fc076a9c7b4b185761cb2e0416ddf99cc02758a0a61
+kvm-memslot-profile/reference-root cc1b31da56b7cc0a889c27b4fed1b1c237f9d2ec3fddbad0e0c97270b89bfb1f
+kvm-memslot-profile/subject-root d976a56015f0ddf832367ccce94be537e08e1198b8d13434e02c5616131e0435
+
+Setup failures are NOT passes: the first list omitted its timeout and failed
+boot markers; the next boot completed but its inner diagnostic rejected a
+short set_graph_function write. Their logs remain reference/ and
+reference-trace/ respectively. The root-only payload supersedes the deeper
+payload in place; serial logs and identities above are retained. No campaign
+receipt or historical PASS numerator is changed.

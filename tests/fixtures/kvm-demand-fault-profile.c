@@ -1,6 +1,7 @@
-/* TODO K02 diagnostic, not a replacement for the full 120-second test.
+/* TODO K02/K03 diagnostic, not a replacement for the full 120-second tests.
  * Execute the installed, unchanged kselftest with one 256 KiB guest mode and
- * trace only the stage-2 fault handler. Build with the reference compiler.
+ * trace only the fault handler, or memslot invalidation/destruction with the
+ * -DKVM_PROFILE_MEMSLOT=1. Build with the reference compiler.
  * Use the existing selftest-init and a small read-only initramfs payload. */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -10,10 +11,18 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define TRACE "/sys/kernel/tracing/"
 static unsigned traced_faults;
+#ifndef KVM_PROFILE_MEMSLOT
+#define KVM_PROFILE_MEMSLOT 0
+#endif
+#ifndef KVM_PROFILE_DEPTH
+#define KVM_PROFILE_DEPTH "6"
+#endif
+static const int memslot = KVM_PROFILE_MEMSLOT;
 
 static void fail(const char *what)
 {
@@ -30,7 +39,20 @@ static void control(const char *name, const char *value)
     if (fd < 0)
         fail(path);
     size_t size = strlen(value);
-    if (write(fd, value, size) != (ssize_t)size || close(fd))
+    size_t written = 0;
+    /* ftrace_graph_write intentionally consumes one whitespace-delimited
+     * filter per write, so a multiple-root filter can return a short count. */
+    while (written < size) {
+        ssize_t count = write(fd, value + written, size - written);
+        if (count < 0 && errno == EINTR)
+            continue;
+        if (count <= 0) {
+            if (!count) errno = EIO;
+            fail(path);
+        }
+        written += (size_t)count;
+    }
+    if (close(fd))
         fail(path);
 }
 
@@ -51,7 +73,10 @@ static void report(const char *path)
             fail("diagnostic exceeds 2 MiB per-file bound");
         }
         printf("# %s", line);
-        if (strstr(line, "kvm_handle_guest_abort() {"))
+        /* At depth one function_graph prints a leaf, not an opening brace. */
+        if ((!memslot && strstr(line, "kvm_handle_guest_abort()"))
+            || (memslot && (strstr(line, "kvm_arch_flush_shadow_memslot()")
+                            || strstr(line, "kvm_free_stage2_pgd()"))))
             traced_faults++;
         unsigned long lost;
         if ((sscanf(line, "overrun: %lu", &lost) == 1
@@ -76,8 +101,10 @@ int main(void)
     control("current_tracer", "nop");
     control("buffer_size_kb", "1024");
     /* GCC inlines user_mem_abort; use the common externally visible root. */
-    control("set_graph_function", "kvm_handle_guest_abort");
-    control("max_graph_depth", "6");
+    control("set_graph_function", memslot
+            ? "kvm_arch_flush_shadow_memslot kvm_free_stage2_pgd"
+            : "kvm_handle_guest_abort");
+    control("max_graph_depth", KVM_PROFILE_DEPTH);
     control("options/funcgraph-tail", "1");
     control("current_tracer", "function_graph");
     control("trace", "");
@@ -86,6 +113,9 @@ int main(void)
     if (output < 0)
         fail("open test output");
     control("tracing_on", "1");
+    struct timespec start, end;
+    if (clock_gettime(CLOCK_MONOTONIC, &start))
+        fail("start clock");
     pid_t child = fork();
     if (child < 0)
         fail("fork");
@@ -94,8 +124,12 @@ int main(void)
             _exit(127);
         close(output);
         /* kselftest reads its own ELF using argv[0] to populate guest code. */
-        execl("/tests/demand_paging_test", "/tests/demand_paging_test", "-m", "3",
-              "-b", "256K", (char *)NULL);
+        if (memslot)
+            execl("/tests/memslot_modification_stress_test", "/tests/memslot_modification_stress_test",
+                  "-m", "3", "-b", "256K", "-i", "2", (char *)NULL);
+        else
+            execl("/tests/demand_paging_test", "/tests/demand_paging_test", "-m", "3",
+                  "-b", "256K", (char *)NULL);
         _exit(127);
     }
     close(output);
@@ -105,6 +139,11 @@ int main(void)
             fail("waitpid");
     }
     control("tracing_on", "0");
+    if (clock_gettime(CLOCK_MONOTONIC, &end))
+        fail("end clock");
+    long long ns = (end.tv_sec - start.tv_sec) * 1000000000LL + end.tv_nsec - start.tv_nsec;
+    printf("# diagnostic %s elapsed_ns=%lld (includes function-graph tracing)\n",
+           memslot ? "memslot" : "demand-paging", ns);
     report("/tmp/demand-paging.log");
     for (unsigned cpu = 0; cpu < 4; ++cpu) {
         char path[256];
@@ -118,7 +157,7 @@ int main(void)
         fail("empty fault trace");
     }
     int rc = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
-    printf("%s 1 one-mode demand-paging diagnostic (original exit %d)\n",
-           rc ? "not ok" : "ok", rc);
+    printf("%s 1 one-mode %s diagnostic (original exit %d)\n",
+           rc ? "not ok" : "ok", memslot ? "memslot" : "demand-paging", rc);
     return rc ? 1 : 0;
 }

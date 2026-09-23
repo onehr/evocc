@@ -2562,3 +2562,23 @@ larger size includes other fixes and is not used as this patch's delta.
 clippy and fmt, close this small optimization, not K02. No replacement object
 was installed and the accepted Images are unchanged. See
 [the replay record](../../tests/fixtures/negated-truth-branch.out).
+
+### Bounded memslot invalidation/destruction profile — 2026-09-23
+
+K03 now has a separate paired reduction, not an assumed shared cause with K02.
+The unchanged installed test passes `-m 3 -b 64M -i 2` on both Images. At 256 KiB,
+the shared diagnostic traces two invalidations and four page-table destructions
+on each kernel with no buffer loss. Deep instrumentation changes costs because
+the helper inlining differs, so a second root-only control is retained: whole
+test **0.208469 / 1.274435 s**, destruction **3.898 / 81.148 ms**, invalidation
+**0.250 / 0.606 ms**, reference / subject. These are single instrumented samples;
+neither the nested sums nor the destruction delta explains the whole runtime.
+
+Both inner TAP results and nonce-bound shutdowns pass in both controls. A first
+malformed init list and then a short-write diagnostic failure are recorded as
+failed setup attempts, not PASS. The existing fixture now handles ftrace's
+one-filter-per-write behavior and depth-one leaf rendering. The current payload
+is about 5 MiB and reuses the same 64 MiB scratch disk; historical deep logs are
+kept, not a second large runtime. [Full record](../../tests/fixtures/kvm-memslot-fault-profile.out).
+The original all-mode 120-second timeout remains OPEN; next reduce the repeated
+page-table helpers and verify any compiler repair before rebuilding an Image.

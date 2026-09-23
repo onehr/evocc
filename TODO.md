@@ -119,6 +119,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   Isolate this separately from K02 until a shared cause is demonstrated; retain
   all modes and the 120-second limit. Close with unchanged paired execution,
   not a faster isolated compiler fixture. [Evidence][kernel].
+  The [small paired memslot profile](tests/fixtures/kvm-memslot-fault-profile.out)
+  now separates invalidation and destruction: both kernels perform four page-table
+  destructions and two invalidations without trace loss. Root-only tracing still
+  measures 0.208 / 1.274 s (GCC / EvoCC); destruction is 3.898 / 81.148 ms, so it
+  is not the entire gap. Both reduced TAP tests and shutdowns pass; original
+  all-mode acceptance remains open. Next isolate the repeated page-table helpers.
 
 - [ ] **K04 — ublk stress/shutdown stall** — `OPEN`, P1.
   `test_stress_04.sh` hits the 45-second wrapper limit and stalls in shutdown sync;
