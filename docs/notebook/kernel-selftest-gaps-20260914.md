@@ -140,6 +140,11 @@ operand an external `strlen` call. This is a profile-rule conflict, not an
 unexplained code-generation defect; the existing observable user-defined
 `strlen` regression must also be preserved. No blanket constant folding or
 test exclusion was used to obtain the 25 passes.
+The source-bound reduction is `tests/fixtures/fortify-nonliteral-strlen-ice.c`:
+its ICE masks are GCC14 O0=3/O2=7, Clang19 O0/O2=7 and EvoCC=1 in both
+interpreters/native. The desired two extra bits identify static const array
+and const pointer separately; GCC's O0 difference is retained. The pending
+research brief now includes this exact contract question.
 
 ### Runtime packaging follow-up — 2026-09-23
 

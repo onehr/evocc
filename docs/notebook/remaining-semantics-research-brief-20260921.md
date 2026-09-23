@@ -149,6 +149,20 @@ specific EvoCC contract or a precisely bounded refusal, with compatibility costs
   silent. Establish source definedness under the exact original flags. Silence is
   not a proof of defined behavior, and one tool report is not automatically a
   two-oracle disposition. Recommend the evidence threshold for this specific case.
+* Nonliteral `__builtin_strlen` constant-expression admission (September 23
+  addendum): all allocation/byte-query fixes now pass the original FORTIFY suite
+  except its static const array and static const pointer ICE expectations
+  (`lib/tests/fortify_kunit.c:95,101`). Current 10.1.18 explicitly makes every
+  nonliteral operand an external call. The 19-line
+  `tests/fixtures/fortify-nonliteral-strlen-ice.c` measures classification masks:
+  GCC14 O0=3, O2=7; Clang19 O0/O2=7; EvoCC both interpreters/native=1. All compile.
+  Bits 0/1/2 denote literal/static-const-array/static-const-pointer; mutable
+  pointer, automatic array and mutable array controls are not ICE. Decide a
+  bounded source-classification rule, independently of later optimization;
+  preserve visible user-defined `strlen` effects on the ordinary call path.
+  Address object linkage, qualifier/initializer requirements, offsets, embedded
+  NUL, cycles, invalid pointers and unevaluated contexts. This is not authority
+  to fold arbitrary object reads or delete the existing call-effect regression.
 
 General _Atomic, generic aggregate atomics and additional __atomic RMW interfaces
 remain a separate scope from the implemented legacy __sync operations. Inventory
