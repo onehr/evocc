@@ -1,0 +1,47 @@
+2026-09-23: ublk worker verdict integrity, not a kernel stall repair.
+
+RED: 99 selected Python tests, nine failing assertions, no import/syntax errors.
+The standalone shell reduction has parent exit 0 even after a worker's [FAIL]
+or fatal helper exit. Fault injection into the unchanged upstream script then
+confirms the same behavior with three concurrent workers: three failed device
+additions, or three failed removals, followed by stress_04 : [PASS], exit 0.
+The actual upstream _check_add_dev, run_io_and_kill_daemon and _show_result
+functions run; only device setup/I/O helpers are stubbed. No kernel is exercised
+by this injection. Its clean control has no inner failures.
+
+GREEN: match summaries to the actual ublk script's test ID; preserve FAIL/SKIP
+records and recognized fatal helper diagnostics. A successful outer wrapper
+requires a complete matching summary. Expected block I/O errors are not verdicts.
+Multi-phase success records remain legal. Preserve the outer TAP result and
+denominator; inner failures instead prevent aggregate all-tests acceptance.
+This does not prove every silent worker exited zero: it closes the reproduced
+lost-diagnostic paths, not all possible upstream shell-runner defects.
+
+99 selected tests PASS; full K1 tests 238 PASS; ladder tests 240 PASS.
+Ruff/diff/status-render checks PASS. gate-changed 52282f0 correctly selects no
+Rust crates; it is not recorded as a Rust workspace/clippy run.
+122 retained raw ublk flights reparse as 107 PASS, 6 SKIP, 3 TIMEOUT, 6 FAIL.
+The six recognized inner failures belong to already-failing generic_01/02;
+no historical outcome or receipt is rewritten.
+
+Two fresh serial diagnostic flights reuse the matched existing runtime disks
+via QEMU snapshot=on. The original stress_04 workload and 45-second test limit
+are unchanged. The retained diagnostic init requests SysRq blocked-task stacks
+after the program; both programs exit 0, no blocked tasks are printed, and both
+guests power off (reference 3.465313 s; subject 4.656888 s boot uptime).
+These are additional PASS observations, NOT an explanation/fix of the old stall.
+K04 remains OPEN. No Image, module, original test, or full receipt is replaced.
+
+Source test_stress_04.sh SHA256
+0bb735ff31c1f9ceb5f15f0b3cafa1298fa2a52a83e122f8db03d081c1627d4e
+Source test_common.sh SHA256
+a26a36c865ae1fc4adaec13caa2feed0cba1dda001f37aa63c9a4114bbd46b04
+Reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Diagnostic initramfs ef80c647e75a36055683726c8beb351fe1c4a40afaadb52d6f3d2607a764df0d
+Reference disk 82ed09013fa99fe87d1dbc53bd80b5abc818d3301611d2920c05be04b7802f1d
+Subject disk 10381543c2b754fcdfb99781a9fc7d8594a6f6c4a59e7305cea7a6c9155bb65e
+Reference serial 601e69a9f7fbf5cceae3eacb1851366e61dc55c45360856e84abd5b8a98fad65
+Subject serial 8786e821ffd01b0b35951cca48bab7d40e176fd9368506d5300e6e5b7145b14b
+Result cd08499d9cfece3f17aad10c0d5b1a721de7fc4fcbb59e56690c75524f379b56
+Capture .build/floating-targeted/ublk-verdict-20260923/result.json

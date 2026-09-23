@@ -53,6 +53,48 @@ def normalize_printk_replays(text):
     return output, replays
 
 
+def ublk_inner_results(output, cases):
+    """Retain the frozen scripts' child verdicts, not expected device I/O errors.
+
+    Background ERR_CODE assignments cannot update the parent's shell variable;
+    its final [PASS] and a zero exit do not erase an earlier worker failure.
+    test_common.sh can also exit before the caller prints its [FAIL] record.
+    These are review records, not extra TAP cases or a worker-count denominator.
+    """
+    programs = {}
+    for case in cases:
+        name = re.fullmatch(r'selftests:\s+ublk:\s+test_([a-z]+_\d+)\.sh(?:\s+#.*)?', case['name'])
+        if name:
+            programs[name[1]] = case['outcome']
+    failed, skipped, errors, seen = [], [], [], set()
+    if not programs:
+        return failed, skipped, errors
+    for line in output.splitlines():
+        comment = re.fullmatch(r'\s*(?:#\s*)+(.+?)\s*', line)
+        if not comment:
+            continue
+        text = comment[1]
+        summary = re.match(r'([a-z]+_\d+)\s*:', text)
+        if summary and summary[1] in programs:
+            complete = re.fullmatch(r'([a-z]+_\d+)\s*:\s*\[(PASS|FAIL|SKIP)\]', text)
+            if not complete:
+                errors.append({'lines': [line], 'reason': 'incomplete or malformed ublk summary'})
+                continue
+            seen.add(complete[1])
+            if complete[2] == 'FAIL':
+                failed.append({'line': line, 'failed': 1, 'errors': 0})
+            elif complete[2] == 'SKIP':
+                skipped.append({'line': line, 'skipped': 1})
+        elif (re.fullmatch(r"/dev/ublkc\d+ isn't removed(?: res.*)?", text)
+              or re.fullmatch(r"device isn't dead\(.*\) after killing daemon", text)
+              or re.fullmatch(r'delete dev \d+ failed', text)):
+            failed.append({'line': line, 'failed': 0, 'errors': 1})
+    for name, outcome in programs.items():
+        if outcome == 'PASS' and name not in seen:
+            errors.append({'lines': [], 'reason': f'missing ublk summary for {name}'})
+    return failed, skipped, errors
+
+
 def parse_tap(output):
     plans = re.findall(r'^1\.\.(\d+)(?:\s+.*)?$', output, re.M)
     results = re.findall(r'^(not ok|ok)\s+(\d+)\b(.*)$', output, re.M)
@@ -139,6 +181,10 @@ def parse_tap(output):
             skipped.append({'line': block[1], 'passed': passed, 'skipped': skip_count})
     if scheduler_pass and not scheduler_summaries:
         summary_errors.append({'lines': [], 'reason': 'missing sched_ext summary'})
+    ublk_failed, ublk_skipped, ublk_errors = ublk_inner_results(output, cases)
+    nested.extend(ublk_failed)
+    skipped.extend(ublk_skipped)
+    summary_errors.extend(ublk_errors)
     valid = valid and not summary_errors
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
             'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped,

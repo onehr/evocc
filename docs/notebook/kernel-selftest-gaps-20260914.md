@@ -176,6 +176,24 @@ The separate ublk diagnostic is
 (`67037a60878fa2dde64344b480d6ab5d9d6a5e7ec4496e0e76788f4d4b0853aa`).
 Neither changes the old 970-program totals or constitutes a new full campaign.
 
+The later [worker-verdict reduction](../../tests/fixtures/ublk-background-exit.out)
+exposes a separate upstream shell property: each background worker has its own
+`ERR_CODE`, and `wait` with no operands does not forward its failed status.
+Fault-injected additions/removals in the unchanged original yield three child
+failures followed by parent PASS/exit zero. The shared parser now retains their
+failure summaries/helper diagnostics; expected block I/O errors are not failures.
+All 238 K1 and 240 ladder regressions pass. Re-parsing 122 retained ublk flights
+does not change their outer outcomes; six already-failing flights gain explicit
+inner-failure records. No historical receipt is rewritten.
+
+One new serial pair on the original matched Images/runtime disks also passes
+the unchanged `stress_04` test and powers off at 3.465313/4.656888 seconds. The
+existing post-test SysRq diagnostic reports no blocked tasks. This again does
+**not** explain the old shutdown stall: K04a closes verdict handling; K04 remains
+open. Capture: `.build/floating-targeted/ublk-verdict-20260923/result.json`;
+source, payload, Image, disk and serial hashes are in the linked record. The
+current two-object KVM candidate was not substituted into these old payloads.
+
 The subsequent `sched-blocked-stacks-20260923` diagnostic reaches the original
 120-second program limit during `init_enable_count`: its children are sleeping
 in `do_nanosleep`, and the parent is in `do_wait`. The test performs two sets of

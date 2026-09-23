@@ -1226,6 +1226,24 @@ class FullSelftest(unittest.TestCase):
         clean = output.replace('fail:1', 'fail:0')
         self.assertEqual(selftest.parse_tap(clean)['nestedFailureSummaries'], [])
 
+    def test_ublk_worker_failure_survives_program_and_campaign_accounting(self):
+        spec = importlib.util.spec_from_file_location('ublk_worker_probe', PATH.parent / 'selftest.py')
+        selftest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selftest)
+        for inner in ('# stress_04 : [FAIL]\n', "# /dev/ublkc7 isn't removed res \n"):
+            with self.subTest(inner=inner):
+                output = ('1..1\n' + inner + '# stress_04 : [PASS]\n'
+                          'ok 1 selftests: ublk: test_stress_04.sh\n')
+                parsed = selftest.parse_tap(output)
+                case = lane.program_case('ublk:test_stress_04.sh', {
+                    'boot': {'verdict': 'PASS'}, 'programs': [dict(parsed, outcome='PASS', exitCode=0)]})
+                self.assertEqual(case['outcome'], 'PASS', 'retain the observed wrapper verdict')
+                summary = lane.summarize([
+                    {'id': 'ublk', 'buildExit': 0, 'tests': ['ublk:test_stress_04.sh']}],
+                    [{'id': 'ublk', 'valid': True, 'cases': [case]}])
+                self.assertEqual(summary['nestedFailureReview'], ['ublk:test_stress_04.sh'])
+                self.assertEqual(summary['status'], 'INCOMPLETE')
+
     def test_successful_wrapper_cannot_claim_skipped_inner_assertions(self):
         spec = importlib.util.spec_from_file_location('selftest_skip_probe', PATH.parent / 'selftest.py')
         selftest = importlib.util.module_from_spec(spec)

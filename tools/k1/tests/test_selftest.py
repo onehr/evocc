@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -88,6 +89,51 @@ class KernelSelftest(unittest.TestCase):
             rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
             self.assertEqual(rows[0]['outcome'], 'PASS', 'wrapper result is preserved')
             self.assertNotEqual(lane.compare(rows, rows)['status'], 'PASS')
+
+    def test_ublk_background_failures_survive_a_successful_parent(self):
+        fixture = PATH.parents[2] / 'tests/fixtures/ublk-background-exit.sh'
+        for mode in ('failure', 'helper-exit'):
+            with self.subTest(mode=mode):
+                process = subprocess.run(['bash', str(fixture), mode], text=True,
+                                         capture_output=True, check=False, timeout=5)
+                self.assertEqual(process.returncode, 0, 'reproduce the upstream parent verdict')
+                self.assertIn('stress_04 : [PASS]', process.stdout)
+                output = ('1..1\n' + ''.join('# ' + line + '\n'
+                          for line in process.stdout.splitlines())
+                          + 'ok 1 selftests: ublk: test_stress_04.sh\n')
+                parsed = lane.parse_tap(output)
+                self.assertTrue(parsed['nestedFailureSummaries'])
+                self.assertEqual(parsed['subtests'], {'PASS': 1, 'FAIL': 0, 'SKIP': 0})
+                rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+                self.assertEqual(rows[0]['outcome'], 'PASS', 'preserve the outer wrapper result')
+                self.assertEqual(lane.compare(rows, rows)['status'], 'INCOMPLETE')
+
+    def test_ublk_requires_its_own_complete_summary_for_a_pass(self):
+        outer = 'ok 1 selftests: ublk: test_stress_04.sh\n'
+        for inner in ('', '# stress_04 : [FAI\n', '# stress_04 : [UNKNOWN]\n',
+                      '# stress_03 : [PASS]\n'):
+            with self.subTest(inner=inner):
+                parsed = lane.parse_tap('1..1\n' + inner + outer)
+                self.assertFalse(parsed['valid'])
+                self.assertTrue(parsed['nestedSummaryErrors'])
+        clean = ('1..1\n# I/O error, dev ublkb0, sector 0\n'
+                 '# stress_04 : [PASS]\n' + outer)
+        self.assertTrue(lane.parse_tap(clean)['valid'])
+        self.assertEqual(lane.parse_tap(clean)['nestedFailureSummaries'], [])
+        # Recovery phases may each report success. They are not TAP cases.
+        phases = clean.replace('# stress_04 : [PASS]\n', '# stress_04 : [PASS]\n' * 2)
+        self.assertTrue(lane.parse_tap(phases)['valid'])
+        self.assertTrue(lane.parse_tap('1..1\n' + outer.replace('\n', ' # SKIP no device\n'))['valid'])
+        unrelated = '1..1\n# stress_04 : [FAIL]\nok 1 unrelated\n'
+        self.assertEqual(lane.parse_tap(unrelated)['nestedFailureSummaries'], [])
+
+    def test_ublk_inner_skip_is_not_an_all_assertions_pass(self):
+        output = ('1..1\n# stress_04 : [SKIP]\n# stress_04 : [PASS]\n'
+                  'ok 1 selftests: ublk: test_stress_04.sh\n')
+        parsed = lane.parse_tap(output)
+        self.assertTrue(parsed['nestedSkipSummaries'])
+        rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+        self.assertEqual(lane.compare(rows, rows)['status'], 'INCOMPLETE')
 
     def test_skip_exit_cannot_erase_a_recorded_failure(self):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])

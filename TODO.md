@@ -148,6 +148,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   workload and clean shutdown, or a source-bound non-compiler disposition;
   intermittency alone is not a fix. [Evidence][kernel].
 
+  - [x] **K04a — Preserve ublk worker failures beneath a successful wrapper**, 2026-09-23.
+    The [small shell reduction](tests/fixtures/ublk-background-exit.sh) and
+    fault injection into the unchanged upstream script reproduce parent exit 0
+    after three child failures. The parser now retains matching inner FAIL/SKIP
+    and fatal helper diagnostics, rejecting missing/malformed summaries without
+    mistaking expected device I/O errors for failures. All 238 K1 and 240 ladder
+    tests pass. Both original diagnostic flights pass and shut down, but the old
+    stall is not reproduced or explained: **K04 remains OPEN**.
+    [Scope, hashes and replay](tests/fixtures/ublk-background-exit.out).
+
 - [x] **K05 — PM runtime KUnit pending-resume race** — `DONE`, P1, 2026-09-23.
   The [signed-module reduction](tests/fixtures/pm-runtime-barrier-completion.c)
   selects the completed-worker ordering with `flush_work`: barrier returns zero
