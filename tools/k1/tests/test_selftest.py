@@ -81,6 +81,14 @@ class KernelSelftest(unittest.TestCase):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 memory\n", 1), "flight", ["memory"])
         self.assertNotEqual(lane.compare(rows, rows)["status"], "PASS")
 
+    def test_nested_scheduler_summary_keeps_the_pair_incomplete(self):
+        for failed, skipped in ((1, 0), (0, 1)):
+            output = ('1..1\n# RESULTS:\n#\n# PASSED:  1\n'
+                      f'# SKIPPED: {skipped}\n# FAILED:  {failed}\nok 1 wrapper\n')
+            rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+            self.assertEqual(rows[0]['outcome'], 'PASS', 'wrapper result is preserved')
+            self.assertNotEqual(lane.compare(rows, rows)['status'], 'PASS')
+
     def test_skip_exit_cannot_erase_a_recorded_failure(self):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])
         self.assertEqual(rows[0]['outcome'], 'FAIL')

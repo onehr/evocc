@@ -57494,6 +57494,26 @@
         "kvm:memslot_modification_stress_test": "Original 120-second limit interrupts the third of four guest modes"
       },
       "claim": "Targeted measurements only. The original full 970-program totals and Image binding remain unchanged. No timeout is a PASS."
+    },
+    {
+      "run": "sched-hotplug-reload-reduction-20260923",
+      "status": "INCOMPLETE",
+      "scope": "Unchanged upstream hotplug then reload_loop; serial diagnostic subset, not the full runner or a new 970-program campaign",
+      "results": {
+        "path": ".build/floating-targeted/sched-key-watch-20260923/plain-pair/results.json",
+        "sha256": "23db63ef5b52a86ebd4fcf3c25c2270164b79154d45134cb7c4e6b250ccd1141"
+      },
+      "reference": "NULL at scx_root->ops.flags, address 0x120, balance_scx+0x74; hotplug passed, reload_loop did not complete",
+      "subject": "This invocation passes both selected tests and powers down; the earlier identical reduction faults at balance_one+0x144",
+      "nestedSummaryAudit": {
+        "run": "20260922T033617Z",
+        "program": "sched_ext:runner",
+        "referenceWrapperOutcome": "PASS",
+        "referenceInner": {"PASS": 22, "FAIL": 1, "SKIP": 0},
+        "failure": "allowed_cpus.c:64; expected SCX_EXIT_NONE, received 1025",
+        "repair": "Recognize the runner's complete three-line summary and keep both acceptance paths incomplete; preserve original wrapper counts and raw captures"
+      },
+      "claim": "The crash is reproduced on both compilers, not established as an EvoCC defect and not waived. All prior Image bindings, timeouts and failed attempts remain."
     }
   ]
 }

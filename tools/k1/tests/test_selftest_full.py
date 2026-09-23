@@ -1270,6 +1270,37 @@ class FullSelftest(unittest.TestCase):
         self.assertEqual(clean['nestedFailureSummaries'], [])
         self.assertEqual(clean['nestedSkipSummaries'], [])
 
+    def test_sched_ext_summary_cannot_be_hidden_by_its_zero_exit_wrapper(self):
+        spec = importlib.util.spec_from_file_location('selftest_scx_probe', PATH.parent / 'selftest.py')
+        selftest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selftest)
+        output = ('TAP version 13\n1..1\n# RESULTS:\n# \n'
+                  '# PASSED:  22\n# SKIPPED: 0\n# FAILED:  1\n'
+                  'ok 1 selftests: sched_ext: runner\n')
+        parsed = selftest.parse_tap(output)
+        self.assertEqual(parsed['nestedFailureSummaries'], [
+            {'line': '# FAILED:  1', 'failed': 1, 'errors': 0}])
+        self.assertEqual(parsed['subtests'], {'PASS': 1, 'FAIL': 0, 'SKIP': 0})
+        case = lane.program_case('sched_ext:runner', {
+            'boot': {'verdict': 'PASS'}, 'programs': [dict(parsed, outcome='PASS', exitCode=0)]})
+        self.assertEqual(case['outcome'], 'PASS', 'retain the original outer wrapper verdict')
+        summary = lane.summarize([{'id': 'sched_ext', 'buildExit': 0,
+                                   'tests': ['sched_ext:runner']}],
+                                 [{'id': 'sched_ext', 'valid': True, 'cases': [case]}])
+        self.assertEqual(summary['nestedFailureReview'], ['sched_ext:runner'])
+        self.assertEqual(summary['status'], 'INCOMPLETE')
+        skipped = selftest.parse_tap(output.replace('FAILED:  1', 'FAILED:  0')
+                                    .replace('SKIPPED: 0', 'SKIPPED: 1'))
+        self.assertEqual(skipped['nestedFailureSummaries'], [])
+        self.assertEqual(skipped['nestedSkipSummaries'], [
+            {'line': '# SKIPPED: 1', 'passed': 22, 'skipped': 1}])
+        clean = selftest.parse_tap(output.replace('FAILED:  1', 'FAILED:  0'))
+        self.assertEqual(clean['nestedFailureSummaries'], [])
+        self.assertEqual(clean['nestedSkipSummaries'], [])
+        # Do not turn arbitrary diagnostic text into a suite result.
+        unrelated = selftest.parse_tap(output.replace('# RESULTS:\n# \n', ''))
+        self.assertEqual(unrelated['nestedFailureSummaries'], [])
+
     def test_upstream_timeout_tap_stays_timeout_after_normal_guest_shutdown(self):
         name = 'selftests: mm: run_vmtests.sh # TIMEOUT 900 seconds'
         for exit_code in (0, 1):

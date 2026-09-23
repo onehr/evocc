@@ -87,6 +87,24 @@ def parse_tap(output):
                 nested.append({'line': line, 'failed': totals.get('fail', 0), 'errors': totals.get('error', 0)})
             if totals.get('skip', 0):
                 skipped.append({'line': line, 'passed': totals.get('pass', 0), 'skipped': totals['skip']})
+    # sched_ext's runner reports failures in this three-line summary but can
+    # still exit zero. Preserve the outer TAP result while making its inner
+    # failures/skips visible to the existing acceptance review. Only recognize
+    # the complete summary, not arbitrary "FAILED" text from a test body.
+    summary_lines = [line for line in output.splitlines()
+                     if not re.fullmatch(r'\s*(?:#\s*)+', line)]
+    for index, line in enumerate(summary_lines):
+        if not re.fullmatch(r'\s*(?:#\s*)+RESULTS:\s*', line):
+            continue
+        block = summary_lines[index + 1:index + 4]
+        summary_counts = [re.fullmatch(r'\s*(?:#\s*)+' + label + r':\s*(\d+)\s*', item)
+                          for label, item in zip(('PASSED', 'SKIPPED', 'FAILED'), block)]
+        if len(summary_counts) == 3 and all(summary_counts):
+            passed, skip_count, failed = [int(match[1]) for match in summary_counts]
+            if failed:
+                nested.append({'line': block[2], 'failed': failed, 'errors': 0})
+            if skip_count:
+                skipped.append({'line': block[1], 'passed': passed, 'skipped': skip_count})
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
             'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped}
 
@@ -126,14 +144,16 @@ def compare(reference, subject):
         raise ValueError('reference and subject test denominators differ')
     regressions, baseline_failures = [], []
     for before, after in zip(reference, subject):
-        if before['outcome'] not in ('PASS', 'SKIP'):
+        if (before['outcome'] not in ('PASS', 'SKIP')
+                or before.get('nestedFailureSummaries') or before.get('nestedSkipSummaries')):
             baseline_failures.append(before['id'])
         old_cases = {r['number']: r['outcome'] for r in before['cases']}
         new_cases = {r['number']: r['outcome'] for r in after['cases']}
         lost_pass = any(value == 'PASS' and new_cases.get(n) != 'PASS' for n, value in old_cases.items())
         if (after['outcome'] not in ('PASS', 'SKIP') or lost_pass
                 or before['outcome'] == 'PASS' and after['outcome'] != 'PASS'
-                or before.get('planned') != after.get('planned')):
+                or before.get('planned') != after.get('planned')
+                or after.get('nestedFailureSummaries') or after.get('nestedSkipSummaries')):
             regressions.append(after['id'])
     return {'status': 'PASS' if reference and not regressions and not baseline_failures
             and any(r['outcome'] == 'PASS' for r in subject) else 'INCOMPLETE',

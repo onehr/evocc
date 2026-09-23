@@ -12,7 +12,7 @@ Targeted results and additional configurations use separate denominators.
 |---|---|---|
 | BPF/module kernel, 6,765 target-C records | PASS: `bpf-linkage-isolated-20260923` replaces one audited object and relinks against 6,764 unchanged objects; 812 generated inputs are unchanged, all 745 modules relinked, nonce-bound boot/shutdown PASS | Incremental composition, not a new single-compiler survey. The prior full run and its Image are retained |
 | Matching runtime | PASS: 745 signed EvoCC modules and 17 rebuilt original GCC helpers installed with 970 programs. Three BPF variants each pass the explicit 10-group / 51-subtest module/BTF selector on both kernels, zero FAIL/SKIP | This proves execution of the selected modules, not loading every hardware driver or full BPF acceptance |
-| Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Serial targeted replay resolves three of seven reference-PASS differences; four remain, including a real sched_ext NULL dereference. Shared failures and collection build gaps remain |
+| Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side. These are wrapper results; the nested sched_ext audit below finds an additional internal reference failure | Overall INCOMPLETE. Serial targeted replay resolves three of seven reference-PASS differences; four remain. The sched_ext NULL fault now also reproduces on GCC, so it is not an established EvoCC regression. Shared failures and collection build gaps remain |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
 | Filtered FORTIFY follow-up | Original 26-case suite on audited one-object incremental Images: 22/23/24/25 PASS, now one FAIL; failed assertions 96 → 66 → 31 → 2. All allocation cases and the local initialized-byte query now pass | Not a new 1,504-case run or module acceptance. Two nonliteral `strlen` ICE assertions conflict with the current literal-only specification; no assertion or rule was bypassed |
@@ -118,6 +118,51 @@ The diagnostic SysRq dump interleaves the end marker, so its parsed program
 result is INCOMPLETE; the raw marker records rc=124. The VM's orderly shutdown
 is not a test PASS. A native branch/nop static-key control passes on GCC14,
 Clang19 and EvoCC (`assembly-static-key-toggle.c`); it does not close sched_ext.
+
+### Reduced scheduler reproduction and verdict repair — 2026-09-23
+
+The unchanged upstream `hotplug` followed by unchanged `reload_loop`, on one
+boot with the original 120-second per-program limit, reproduces a NULL read
+at `balance_one+0x144` (`scx_root->ops.flags`, address `0x120`) on the subject.
+Removing all GDB/watchpoint stops and running the same reduction serially on
+both Images then produces **the same NULL field access on the GCC reference**
+(`balance_scx+0x74`, 17.547 seconds); this subject invocation instead passes
+and shuts down at 54.101 seconds. These are intermittent shared failures, not
+proof of an EvoCC miscompile or a closed test. No source/test assertion,
+kernel NULL guard, Image or module payload was changed. The diagnostic init
+only selects and orders these two existing tests.
+
+Results: `.build/floating-targeted/sched-key-watch-20260923/plain-pair/results.json`
+(`23db63ef5b52a86ebd4fcf3c25c2270164b79154d45134cb7c4e6b250ccd1141`).
+The reference serial digest is
+`81d78e74430440a34b3d3abd64c7c73ed9c86a0157d790490c007c0dcb59e74a`;
+the subject serial digest is
+`94c0ddc6b1bf2f390ebc6c3be8569ef00256ef3fe025c1c2d105ae2239e41225`.
+QEMU remains `45d74da5…9d91a3e`, fixed Cortex-A72 TCG, four vCPUs, 2 GiB.
+Single-thread TCG is a separate diagnostic, not an accepted replacement lane.
+
+The upstream scheduler runner also unconditionally returns zero after printing
+its `PASSED` / `SKIPPED` / `FAILED` totals (`runner.c:198–203`). The old complete
+reference capture has `22 / 0 / 1`: `allowed_cpus` fails at line 64, despite the
+outer `ok 1 selftests: sched_ext: runner`. The parser now preserves that outer
+verdict **and** records the complete nested summary; both the full-suite and
+selected-pair gates refuse all-tests PASS when those summaries contain failures
+or skips. A minimal RED reproduces the previously empty failure list; the
+corrected Python gate passes 214 tests. Historical captures and 970 wrapper
+totals are unchanged; the new audit prevents interpreting them as all inner
+assertions passing. The later seven-program serial reference genuinely prints
+`23 / 0 / 0`, so its outcome is not retroactively discarded.
+
+Separately, compiler commit `752e193` folds pure executable integer arithmetic
+through the existing executed-expression evaluator. It does not use the more
+permissive ICE evaluator or discard entered labels, effects or reached UB.
+The focused controls pass both interpreters and GCC14/Clang19/EvoCC native;
+the changed gate passes **1,080 tests, zero failures, three historical ignored**,
+Clippy `-D warnings` and fmt. An original-command, actual-generated-input
+replay of `kernel/sched/build_policy.o` emits in 13.226 seconds and assembles;
+including the preceding Boolean-normalization repair, its text-size count
+falls from 729,626 to 663,870 bytes. This object is **not installed** into a
+kernel: these are code-generation results, not a new boot or timeout closure.
 
 The new execution receipt is `tests/contracts/kernel-expanded-kunit-receipt.json`;
 it remains FAIL because completed execution is not all-tests success. The latest
