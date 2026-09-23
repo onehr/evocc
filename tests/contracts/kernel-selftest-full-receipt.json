@@ -57475,6 +57475,25 @@
         }
       },
       "claim": "Original program PASS on both unchanged kernels after the explicit runtime-library repair; full-run outcomes unchanged."
+    },
+    {
+      "run": "seven-differences-serial-20260923",
+      "status": "INCOMPLETE",
+      "scope": "Seven original reference-PASS differences, serial paired replays with unchanged assertions, arguments and declared budgets",
+      "results": {
+        "path": ".evidence/kselftest-full/seven-differences-serial-20260923/results.json",
+        "sha256": "3465ddded474ca249d1b93c83da08bd7d80afd3af15fa0288a4191746c8e5a59"
+      },
+      "referenceOutcomes": {"PASS": 7},
+      "subjectOutcomes": {"PASS": 3, "TIMEOUT": 4},
+      "bothPass": ["pidfd:pidfd_test", "net:ioam6.sh", "net/forwarding:sch_tbf_prio.sh"],
+      "remaining": {
+        "ublk:test_stress_04.sh": "Original 45-second watchdog followed by shutdown sync stall; later diagnostic-only replay passes, so intermittent failure remains open",
+        "sched_ext:runner": "Kernel NULL dereference at __scx_update_idle+0x290 during original reload_loop, before the VM watchdog; not merely a performance timeout",
+        "kvm:demand_paging_test": "Original 120-second limit interrupts the guest-mode matrix; the first three modes complete",
+        "kvm:memslot_modification_stress_test": "Original 120-second limit interrupts the third of four guest modes"
+      },
+      "claim": "Targeted measurements only. The original full 970-program totals and Image binding remain unchanged. No timeout is a PASS."
     }
   ]
 }

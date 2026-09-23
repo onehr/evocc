@@ -27,6 +27,8 @@ const FIXED_REGISTERS: &str = include_str!("fixtures/assembly_fixed_registers.c"
 const MEMORY_ALTERNATIVES: &str =
     include_str!("../../../tests/fixtures/assembly-memory-alternatives.c");
 const LOCAL_ADDRESS: &str = include_str!("../../../tests/fixtures/inline-local-address.c");
+const STATIC_KEY_TOGGLE: &str =
+    include_str!("../../../tests/fixtures/assembly-static-key-toggle.c");
 const MEMORY_OPERANDS: &str = include_str!("../../../tests/fixtures/assembly-memory-operands.c");
 const INLINE_MEMORY: &str = r#"
 static inline __attribute__((always_inline)) int read_memory(int value) {
@@ -35,6 +37,27 @@ static inline __attribute__((always_inline)) int read_memory(int value) {
 }
 int main(void) { return read_memory(7) != 7; }
 "#;
+
+#[test]
+fn patchable_static_keys_preserve_polarity_and_explicit_successor_bindings() {
+    let ir = emits(STATIC_KEY_TOGGLE);
+    assert_eq!(ir.matches(" = asm.goto ").count(), 2, "{ir}");
+    let output = run(STATIC_KEY_TOGGLE, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let assembly = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        assembly.matches(".pushsection __jump_table").count(),
+        2,
+        "{assembly}"
+    );
+    assert!(assembly.contains(".quad key_false - ."), "{assembly}");
+    assert!(assembly.contains(".quad key_true+1 - ."), "{assembly}");
+    assert!(!assembly.contains("%l["), "{assembly}");
+}
 
 #[test]
 fn simd_assembly_keeps_vector_bindings_and_opaque_execution() {

@@ -12,7 +12,7 @@ Targeted results and additional configurations use separate denominators.
 |---|---|---|
 | BPF/module kernel, 6,765 target-C records | PASS: `bpf-linkage-isolated-20260923` replaces one audited object and relinks against 6,764 unchanged objects; 812 generated inputs are unchanged, all 745 modules relinked, nonce-bound boot/shutdown PASS | Incremental composition, not a new single-compiler survey. The prior full run and its Image are retained |
 | Matching runtime | PASS: 745 signed EvoCC modules and 17 rebuilt original GCC helpers installed with 970 programs. Three BPF variants each pass the explicit 10-group / 51-subtest module/BTF selector on both kernels, zero FAIL/SKIP | This proves execution of the selected modules, not loading every hardware driver or full BPF acceptance |
-| Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Diagnose seven reference-PASS differences, shared failures and four collection build gaps; do not relabel timeouts |
+| Full kselftest, 970 installed programs | Pair finished, no reference reuse: GCC 532 PASS / 121 FAIL / 302 SKIP / 11 TIMEOUT / 2 INVALID_OUTPUT / 2 INCOMPLETE; EvoCC 529 PASS / 114 FAIL / 302 SKIP / 19 TIMEOUT / 3 INVALID_OUTPUT / 3 INCOMPLETE; zero NOT_RUN on either side | Overall INCOMPLETE. Serial targeted replay resolves three of seven reference-PASS differences; four remain, including a real sched_ext NULL dereference. Shared failures and collection build gaps remain |
 | BPF original full program | Fresh reference: 651/5644 successful test/subtest counts, 127 skips, 11 failures. Subject TIMEOUT at the 300-second execution limit, after reaching group 478 | Keep the timeout and its observed nested BTF failure; correct runtime packaging and replay separately, without calling the incomplete program PASS |
 | Expanded KUnit, 6,916 target-C records | Full composition and two audited incremental repairs completed. Latest built-in execution: EvoCC 1,432 PASS / 12 FAIL / 60 SKIP; GCC 1,438 PASS / 7 FAIL / 59 SKIP, each of 1,504 | Four FORTIFY query cases and timing-sensitive PM runtime remain reference-PASS differences, plus one upstream switch-entry XFAIL/SKIP. Preserve the original 19-FAIL and intermediate 11-FAIL captures |
 | Filtered FORTIFY follow-up | Original 26-case suite on audited one-object incremental Images: 22/23/24/25 PASS, now one FAIL; failed assertions 96 → 66 → 31 → 2. All allocation cases and the local initialized-byte query now pass | Not a new 1,504-case run or module acceptance. Two nonliteral `strlen` ICE assertions conflict with the current literal-only specification; no assertion or rule was bypassed |
@@ -82,6 +82,42 @@ generation credit. The checked-in runtime installer also builds the patched
 library and passes this regression. Both new runtime disks are COW copies;
 the original failing payloads, modules and kernel Images remain intact.
 This closes the observed ALSA failure, not unrelated sound-hardware tests.
+
+### Serial replay of the seven subject differences — 2026-09-23
+
+The existing paired runtime, Images, assertions and declared budgets were used
+for 14 serial flights. All seven reference programs pass. The subject now passes
+`pidfd:pidfd_test`, `net:ioam6.sh` and `net/forwarding:sch_tbf_prio.sh`; the latter
+retains its original 5% tolerance. No compiler or kernel change is attributed to
+these recovered results. The four other subject programs remain TIMEOUT:
+
+- `sched_ext:runner` is **not just slow**: the original `reload_loop` reaches
+  a kernel NULL dereference at `__scx_update_idle+0x290`, reading
+  `scx_root->has_op` at address `0x1c0`, on multiple CPUs. The static-key/call
+  path is under diagnosis; no kernel NULL check or test waiver is introduced.
+- `ublk:test_stress_04.sh` reaches its 45-second wrapper limit and then stalls
+  during shutdown sync. A later diagnostic init requests SysRq blocked-task
+  stacks after the same test; that invocation instead passes and powers down
+  at 4.983 seconds. This is evidence of intermittency, not a repaired defect.
+- KVM `demand_paging_test` completes three guest modes before its original
+  120-second limit; `memslot_modification_stress_test` finishes two modes and
+  is interrupted in the third. The reference completes each original matrix.
+
+Captured results: `.evidence/kselftest-full/seven-differences-serial-20260923/results.json`
+(`3465ddded474ca249d1b93c83da08bd7d80afd3af15fa0288a4191746c8e5a59`).
+The separate ublk diagnostic is
+`.evidence/kselftest-full/ublk-blocked-stacks-20260923/result.json`
+(`67037a60878fa2dde64344b480d6ab5d9d6a5e7ec4496e0e76788f4d4b0853aa`).
+Neither changes the old 970-program totals or constitutes a new full campaign.
+
+The subsequent `sched-blocked-stacks-20260923` diagnostic reaches the original
+120-second program limit during `init_enable_count`: its children are sleeping
+in `do_nanosleep`, and the parent is in `do_wait`. The test performs two sets of
+1,024 forks. This capture does not reproduce or explain the earlier NULL crash.
+The diagnostic SysRq dump interleaves the end marker, so its parsed program
+result is INCOMPLETE; the raw marker records rc=124. The VM's orderly shutdown
+is not a test PASS. A native branch/nop static-key control passes on GCC14,
+Clang19 and EvoCC (`assembly-static-key-toggle.c`); it does not close sched_ext.
 
 The new execution receipt is `tests/contracts/kernel-expanded-kunit-receipt.json`;
 it remains FAIL because completed execution is not all-tests success. The latest
