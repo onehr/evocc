@@ -185,11 +185,30 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   [Paired measurement](tests/fixtures/kernel-api-contracts.out), [source evidence][kernel].
 
 - [ ] **K10 — Replay and diagnose the full BPF test_progs program** — `OPEN`, P1.
-  The old subject run times out at 300 seconds after group 478. The new matching
-  BTF/module payload passes selected 10-group/51-subtest sets in three variants,
-  not the full program. Replay the original affected program on that payload;
-  reduce any remaining failure/timeout. Close with complete nested accounting
-  for both sides, retaining reference failures and skips. [Evidence][kernel].
+  The [fresh unchanged replay](tests/fixtures/bpf-complete-replay.out) on matching
+  BTF/module payloads completes on GCC (651/5644 successful test/subtest counts,
+  127 skips, 11 failed tests). EvoCC completes group 482 then times out at the
+  unchanged 300-second limit; both guests shut down normally. Known PMU, errno,
+  UDP-state and verifier-budget causes remain source-bound dispositions, not
+  PASS. BBR/net_cls need K12; stacktrace and stream failures remain open.
+  Close with complete nested accounting on both sides after repair, not the
+  earlier selected 10-group/51-subtest controls. [Evidence][kernel].
+
+  - [x] **K10a — Reject incomplete BPF summaries and label selected replays**.
+    A [small TAP fixture](tests/fixtures/kselftest-bpf-truncated.tap) and malformed,
+    missing, duplicate and empty variants expose false-valid output. Complete
+    counters now survive program accounting; upstream error-log replays are not
+    doubled. The renderer distinguishes a one-program replay from all 970
+    programs. 234 K1/240 ladder tests pass; actual serial captures still reparse
+    as FAIL/TIMEOUT. No original failure is promoted to PASS.
+
+  - [x] **K10b — Pair the known PMU/lock/UDP API reductions**, 2026-09-23.
+    The signed [kernel probe](tests/fixtures/bpf-runtime-contract.c) confirms
+    hardware-event ENOENT, working software counters and recursive-lock EDEADLK
+    on both Images. The expanded [UDP test](tests/fixtures/bpf-udp-sockmap-state.c)
+    confirms the bind prerequisite for both address families and both map types.
+    Both kernels pass all five checks and unload the module. This extends earlier
+    source/reference diagnosis, not a newly repaired compiler or full BPF PASS.
 
 - [ ] **K11 — Finish case-level triage of all other kselftest outcomes** — `OPEN`, P1.
   Shared FAIL/TIMEOUT/INVALID_OUTPUT/INCOMPLETE and SKIP results are not all

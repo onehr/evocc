@@ -909,7 +909,8 @@ def program_case(ident, result):
             'exitCode': row.get('exitCode'),
             'nestedFailureSummaries': row.get('nestedFailureSummaries', []),
             'nestedSkipSummaries': row.get('nestedSkipSummaries', []),
-            'nestedSummaryErrors': row.get('nestedSummaryErrors', [])}
+            'nestedSummaryErrors': row.get('nestedSummaryErrors', []),
+            'bpfSummaries': row.get('bpfSummaries', [])}
 
 
 def reusable_reference(previous, current):

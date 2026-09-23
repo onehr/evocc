@@ -237,7 +237,12 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
     result = " / ".join(f"{cases.get(k, 0)} {k}" for k in keys) if cases else "unmeasured"
     lines.append(f"  K7 selected {selected_state}: {result}; run={run_id(selected)}")
     live = receipts.get("kernel-selftest-full-receipt.json", {})
-    lines.append(f"  K7 all programs {kernel_selftest_status(live, full, receipts)}; run={run_id(live)}")
+    selection = live.get('selection')
+    label = 'targeted replay' if selection else 'all programs'
+    lines.append(f"  K7 {label} {kernel_selftest_status(live, full, receipts)}; run={run_id(live)}")
+    if selection:
+        lines.append(f"    {len(selection.get('programs', []))} selected; full inventory retained; "
+                     "not a new full campaign")
     lines.extend(selftest_progress(live))
     installation = live.get("moduleInstallations", {}).get("subject", {})
     if installation:

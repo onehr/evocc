@@ -68,11 +68,18 @@ def parse_tap(output):
     # Keep its verdict, but never promote it to an all-subtests claim. A nested
     # self-test may intentionally exercise failure, so these require review,
     # not a guessed automatic reclassification of the original program.
-    nested, skipped, summary_errors = [], [], []
+    nested, skipped, summary_errors, bpf_summaries = [], [], [], []
+    bpf_cases = [case for case in cases if re.fullmatch(
+        r'selftests:\s+bpf:\s+test_progs(?:-(?:no_alu32|cpuv4|bpf_gcc))?', case['name'])]
     for line in output.splitlines():
         bpf = re.fullmatch(r'\s*(?:#\s*)+Summary: (\d+)/(\d+) PASSED, (\d+) SKIPPED, (\d+) FAILED\s*', line)
         if bpf:
             passed_tests, passed_subtests, skipped_count, failed_tests = map(int, bpf.groups())
+            bpf_summaries.append({'line': line, 'passedTests': passed_tests,
+                                 'passedSubtests': passed_subtests, 'skipped': skipped_count,
+                                 'failedTests': failed_tests})
+            if not (passed_tests or failed_tests or skipped_count):
+                summary_errors.append({'lines': [line], 'reason': 'BPF summary reports no tests'})
             if failed_tests:
                 nested.append({'line': line, 'failed': failed_tests, 'errors': 0})
             if skipped_count:
@@ -81,12 +88,22 @@ def parse_tap(output):
                 # nor disjoint from the successful-test count.
                 skipped.append({'line': line, 'passedTests': passed_tests,
                                 'passedSubtests': passed_subtests, 'skipped': skipped_count})
+        elif bpf_cases and re.match(r'\s*(?:#\s*)+Summary:', line):
+            summary_errors.append({'lines': [line], 'reason': 'incomplete or malformed BPF summary'})
         if re.match(r'^\s*(?:#\s*)+Totals:', line):
             totals = {key: int(value) for key, value in re.findall(r'\b(pass|fail|skip|error):\s*(\d+)', line)}
             if totals.get('fail', 0) or totals.get('error', 0):
                 nested.append({'line': line, 'failed': totals.get('fail', 0), 'errors': totals.get('error', 0)})
             if totals.get('skip', 0):
                 skipped.append({'line': line, 'passed': totals.get('pass', 0), 'skipped': totals['skip']})
+    # test_progs replays failed case logs before its sole final summary. Those
+    # replayed lines are not new tests, and its skip counter overlaps successful
+    # root tests. Retain all four counters without inventing a TAP denominator.
+    if len(bpf_summaries) > 1:
+        summary_errors.append({'lines': [item['line'] for item in bpf_summaries],
+                               'reason': 'multiple BPF summaries'})
+    if any(case['outcome'] == 'PASS' for case in bpf_cases) and not bpf_summaries:
+        summary_errors.append({'lines': [], 'reason': 'missing BPF summary'})
     # sched_ext's runner reports failures in this three-line summary but can
     # still exit zero. Preserve the outer TAP result while making its inner
     # failures/skips visible to the existing acceptance review. An incomplete
@@ -125,7 +142,7 @@ def parse_tap(output):
     valid = valid and not summary_errors
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
             'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped,
-            'nestedSummaryErrors': summary_errors}
+            'nestedSummaryErrors': summary_errors, 'bpfSummaries': bpf_summaries}
 
 
 def parse_transcript(text, nonce, programs):

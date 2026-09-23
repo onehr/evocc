@@ -1261,6 +1261,7 @@ class FullSelftest(unittest.TestCase):
                          'BPF counters are not additional top-level TAP cases')
         case = lane.program_case('bpf:test_progs', {
             'boot': {'verdict': 'PASS'}, 'programs': [dict(parsed, outcome='PASS', exitCode=0)]})
+        self.assertEqual(case['bpfSummaries'], parsed['bpfSummaries'])
         summary = lane.summarize([{'id': 'bpf', 'buildExit': 0, 'tests': ['bpf:test_progs']}],
                                  [{'id': 'bpf', 'valid': True, 'cases': [case]}])
         self.assertEqual(summary['nestedFailureReview'], ['bpf:test_progs'])
@@ -1269,6 +1270,21 @@ class FullSelftest(unittest.TestCase):
         clean = selftest.parse_tap(output.replace('127 SKIPPED, 10 FAILED', '0 SKIPPED, 0 FAILED'))
         self.assertEqual(clean['nestedFailureSummaries'], [])
         self.assertEqual(clean['nestedSkipSummaries'], [])
+
+    def test_truncated_bpf_summary_remains_invalid_at_program_boundary(self):
+        spec = importlib.util.spec_from_file_location('bpf_truncated', PATH.parent / 'selftest.py')
+        selftest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selftest)
+        output = (PATH.parents[2] / 'tests/fixtures/kselftest-bpf-truncated.tap').read_text()
+        parsed = selftest.parse_tap(output)
+        case = lane.program_case('bpf:test_progs', {
+            'boot': {'verdict': 'PASS'}, 'programs': [dict(parsed, outcome='PASS', exitCode=0)]})
+        self.assertEqual(case['outcome'], 'INVALID_OUTPUT')
+        self.assertTrue(case['nestedSummaryErrors'])
+        summary = lane.summarize([{'id': 'bpf', 'buildExit': 0, 'tests': ['bpf:test_progs']}],
+                                 [{'id': 'bpf', 'valid': False, 'cases': [case]}])
+        self.assertEqual(summary['status'], 'INCOMPLETE')
+        self.assertEqual(summary['outcomes'], {'INVALID_OUTPUT': 1})
 
     def test_sched_ext_summary_cannot_be_hidden_by_its_zero_exit_wrapper(self):
         spec = importlib.util.spec_from_file_location('selftest_scx_probe', PATH.parent / 'selftest.py')

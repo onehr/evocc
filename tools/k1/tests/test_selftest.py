@@ -142,6 +142,44 @@ class KernelSelftest(unittest.TestCase):
         self.assertEqual(lane.normalize_printk_replays('not ok 1 broken\n'),
                          (['not ok 1 broken'], []))
 
+    def test_bpf_wrapper_cannot_hide_a_truncated_or_missing_summary(self):
+        output = (PATH.parents[2] / 'tests/fixtures/kselftest-bpf-truncated.tap').read_text()
+        for sample in (output, '1..1\nok 1 selftests: bpf: test_progs\n'):
+            with self.subTest(sample=sample):
+                parsed = lane.parse_tap(sample)
+                self.assertFalse(parsed['valid'])
+                self.assertEqual(parsed['subtests'], {'PASS': 1, 'FAIL': 0, 'SKIP': 0})
+                self.assertTrue(parsed['nestedSummaryErrors'])
+                rows = lane.parse_transcript(self.transcript(sample), 'flight', ['memory'])
+                self.assertEqual(rows[0]['outcome'], 'INVALID_OUTPUT')
+                self.assertEqual(lane.compare(rows, rows)['status'], 'INCOMPLETE')
+
+    def test_bpf_summary_requires_one_complete_nonempty_counter_record(self):
+        for summary in (
+            '# Summary: 0/0 PASSED, 0 SKIPPED, 0 FAILED\n',
+            '# Summary: 1/1 PASSED, 0 SKIPPED, -1 FAILED\n',
+            '# Summary: 1/1 PASSED, 0 SKIPPED, unknown FAILED\n',
+            '# Summary: 1/1 PASSED, 0 SKIPPED, 0 FAILED\n' * 2,
+        ):
+            with self.subTest(summary=summary):
+                self.assertFalse(lane.parse_tap(
+                    '1..1\n' + summary + 'ok 1 selftests: bpf: test_progs-no_alu32\n')['valid'])
+
+    def test_bpf_error_log_replays_do_not_duplicate_summary_or_outer_counts(self):
+        line = '# Summary: 651/5644 PASSED, 127 SKIPPED, 11 FAILED'
+        output = ('1..1\n# #31 bpf_tcp_ca:FAIL\n# All error logs:\n'
+                  '# #31 bpf_tcp_ca:FAIL\n' + line + '\nnot ok 1 selftests: bpf: test_progs\n')
+        parsed = lane.parse_tap(output)
+        self.assertTrue(parsed['valid'])
+        self.assertEqual(parsed['subtests'], {'PASS': 0, 'FAIL': 1, 'SKIP': 0})
+        self.assertEqual(parsed['bpfSummaries'], [{'line': line, 'passedTests': 651,
+                         'passedSubtests': 5644, 'skipped': 127, 'failedTests': 11}])
+        for name in ('test_progs', 'test_progs-no_alu32', 'test_progs-cpuv4'):
+            skipped = f'1..1\nok 1 selftests: bpf: {name} # SKIP unavailable\n'
+            self.assertTrue(lane.parse_tap(skipped)['valid'])
+        unrelated = '1..1\n# Summary: 3 bytes\nok 1 unrelated\n'
+        self.assertTrue(lane.parse_tap(unrelated)['valid'])
+
     def test_printk_replay_requires_a_matching_timestamp_and_prefix(self):
         for text in ('** replaying previous printk message **\n',
                      '[   1.0] not ok\n** replaying previous printk message **\n[   1.0] ok 1\n',

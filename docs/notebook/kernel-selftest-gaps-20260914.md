@@ -2599,3 +2599,29 @@ paths (floating operand SSA transport and integer-complex parameter/result
 initialization). Both interpreters and 18 GCC/Clang/EvoCC O0/O2 native runs pass.
 The affected gate is **1812 PASS / 0 FAIL / 3 historical ignored**, with Clippy
 and fmt green. [Commands, boundaries and identities](../../tests/fixtures/private-leaf-substitution.out).
+
+### Complete BPF program replay and paired contract controls — 2026-09-23
+
+The common bench flight `20260923T124453Z` reruns the entire original
+`bpf:test_progs` on the matching installed payloads, one worker, without
+changing its 300-second limit. GCC completes: **651/5644 successful test/subtest
+counts, 127 skips, 11 failed tests**. EvoCC completes group 482 then returns
+TIMEOUT; both guests power off. Only this program is selected; the other 969
+are NOT_RUN in the new checkpoint, not erased historical results. The previous
+complete September 22 receipt remains in its evidence directory and Git.
+
+The earlier PMU, resilient-lock and UDP-state diagnoses now have paired small
+kernel/API evidence: a signed diagnostic actually loads/unloads, hardware
+cycle events return ENOENT while software events work, recursive locking returns
+EDEADLK, and all four IPv4/IPv6 x SOCKMAP/SOCKHASH bound/unbound controls pass.
+This extends existing reference/source evidence, not a new compiler repair.
+The original 11 failure groups, remaining configuration/runtime questions,
+commands and all identities are in [the record](../../tests/fixtures/bpf-complete-replay.out).
+
+Eight parser/status RED assertions are corrected: incomplete or duplicated BPF
+summaries cannot be accepted behind an outer PASS, all four mixed-grain counters
+survive accounting, and the ASCII renderer labels the targeted selection.
+234 K1 and 240 ladder tests pass. Reparse preserves actual FAIL/TIMEOUT;
+no source assertion, budget, Image, module installation or full-run numerator
+is changed. The small paired diagnostic payload is about 10 MiB and reuses the
+64 MiB scratch disk. No test from this flight remains active.

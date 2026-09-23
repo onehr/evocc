@@ -1,0 +1,6 @@
+TAP version 13
+1..1
+# #1/1     fixture/first:OK
+# #1       fixture:OK
+# Summary: 1/1 PASSED, 0 SKIPPED,
+ok 1 selftests: bpf: test_progs

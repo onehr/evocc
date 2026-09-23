@@ -765,6 +765,17 @@ class StatusAsciiTest(unittest.TestCase):
         self.assertFalse(any("0/0" in line for line in rows))
         self.assertTrue(any("NOT_RUN" in line or "UNVERIFIED" in line for line in rows))
 
+    def test_targeted_kernel_replay_is_not_labeled_all_program_execution(self):
+        receipt = {'status': 'INCOMPLETE', 'run': 'bpf-replay',
+                   'selection': {'programs': ['bpf:test_progs']},
+                   'execution': {'subject': {'summary': {'programs': 970,
+                                  'outcomes': {'TIMEOUT': 1, 'NOT_RUN': 969}}}}}
+        text = self.render({'kernel-selftest-full-receipt.json': receipt})
+        self.assertIn('K7 targeted replay', text)
+        self.assertIn('1 selected; full inventory retained', text)
+        self.assertIn('969 NOT_RUN', text)
+        self.assertNotIn('K7 all programs', text)
+
     def test_selected_selftest_pass_requires_nonempty_passing_subtests(self):
         for subtests in (None, {}, {"PASS": 0}, {"PASS": 5, "FAIL": 1}, {"PASS": 5, "TIMEOUT": 1}):
             with self.subTest(subtests=subtests):

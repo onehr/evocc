@@ -1,0 +1,88 @@
+2026-09-23 — unchanged full test_progs replay and bounded contract checks.
+
+Existing common entry point, serial worker, unchanged original program:
+python3 tools/bench.py kernel-selftest-all --jobs 1 --allow-qemu-drift
+  --reuse-selftest-build --expanded-selftest-kernel
+  --selftest-runtime .build/k7-coverage/case/selftests/runtime-alsa-fixed-20260923
+  --selftest-kernel-receipt tests/contracts/kernel-bpf-full-receipt.json
+  --selftest-reference-boot .evidence/k1/bpf-reference-boot-20260920/boot.json
+  --selftest-build-root .build/k7-coverage/case/selftests
+  --selftest-source-root .build/k7-coverage/case/linux-src
+  --selftest-headers-root .build/k7-coverage/case/selftests/headers
+  --selftest-kernel-build-root .build/k7-coverage/case/bpf-config
+  --selftest-select bpf:test_progs
+
+Run 20260923T124453Z; reference FAIL, subject TIMEOUT; bench exits 1.
+Reference: 651 successful tests / 5644 successful subtests, 127 skip counts,
+11 failed tests. Skip counts overlap successful root tests; summing these
+as a disjoint root-test denominator is wrong. Failed case logs are replayed
+by upstream before its single summary; repeated lines are not new failures.
+Subject: completes group 482, then original 300-second watchdog returns 124;
+no complete nested summary. Both guests boot and power off normally. A boot
+PASS does not override either program result. Other 969 programs are NOT_RUN
+in this targeted receipt. The September 22 full 970-program pair remains in
+.evidence/kselftest-full/20260922T033617Z/summary.json and Git history; no counts
+are transferred or merged across these runs/Images.
+
+Reference failure groups and bounded disposition/action:
+31 bpf_tcp_ca: missing bbr_cwnd_event BTF; TCP_CONG_ADVANCED/BBR disabled.
+49 cgroup1_hierarchy, 67 cgroup_v1v2, 70 cgrp_local_storage: net_cls mount
+  EINVAL/missing cgroup path; CONFIG_CGROUP_NET_CLASSID disabled. K12 rebuild.
+140 htab_update: original -EBUSY expectation vs documented resilient-lock
+  -EDEADLK. Earlier source/upstream diagnosis is now independently paired.
+361 res_spin_lock_stress: module exists and enters init; hardware CPU-cycle
+  provider returns -ENOENT on the fixed HVF lane. Not a missing .ko. Earlier
+  original fixed-TCG control passes; full TCG run times out. No lane switch.
+391 sockmap_basic, 393 sockmap_listen: unbound UDP insertion expected by old
+  tests, while frozen sock_map_sk_state_allowed requires sk_hashed. Earlier
+  IPv4/SOCKMAP reference probe is extended below; not a new compiler defect.
+404 stacktrace_build_id: compare_stack_ips mismatch; remains OPEN.
+413 stream_success/stream_arena_callback_fault: expected nonempty stream,
+  actual zero. Not reproduced on subject before timeout; remains OPEN.
+507 verif_scale_pyperf600: 8193 pending jumps exceeds 8192 verifier limit;
+  retain earlier source-bound upstream diagnosis, not an instruction-limit fix.
+The subject reaches the same first nine failed groups through 404. None is
+converted to PASS. The incomplete subject cannot establish later agreement.
+
+Paired small controls reuse tools/k1/selftest-init.c, boot.sh and the existing
+64 MiB snapshot disk, not another runtime image. Reference-built diagnostic
+module bpf-runtime-contract.c is signed, actually loaded/unloaded on BOTH
+kernels, and reports hardware=-2, software=0, first-lock=0, reentrant=-35.
+The software-event and first-lock controls exclude a generally broken API.
+The expanded bpf-udp-sockmap-state.c tests IPv4/IPv6 x SOCKMAP/SOCKHASH:
+all four unbound inserts return EOPNOTSUPP; all bind + inserts succeed.
+Both guests: module TAP 1/1 PASS, UDP TAP 4/4 PASS, nonce and shutdown PASS.
+These five diagnostics are not added to the original 970-program population.
+
+Build: sealed linux/arm64, network none, GCC 14.2.0-19; original read-only
+source/bpf-config plus a small external M= directory; normal Kbuild, sign-file,
+gcc-14 -static -O2 -Wall -Wextra -Werror for loaders and existing init.
+Payload uses original gen_init_cpio -t 0; per-test watchdog 15s, boot 60s,
+K1_KUNIT_AUTORUN=0, K1_CONSOLE_LOGLEVEL=7, default hvf-host.
+Final build has no warnings/errors. An earlier perf-only diagnostic preceded
+the extended pair; it is retained as a separate limited observation.
+Artifacts: .build/k7-coverage/repair-runtime/bpf-perf/ (9.7 MiB).
+
+Verdict integrity RED: six invalid/missing/duplicate/empty summary assertions
+and one missing-counter assertion, plus one targeted-status labeling failure.
+GREEN: require one complete nonempty BPF summary for a passing test_progs
+wrapper; retain all counters, failures, skips and unknown/truncated errors.
+Upstream failed-case replays and legitimate outer SKIP remain valid. Program
+accounting keeps INVALID_OUTPUT; actual subject TIMEOUT remains TIMEOUT.
+Reparsing both unchanged serial captures yields the same FAIL/TIMEOUT results.
+234 K1 + 240 ladder Python tests PASS; relevant Ruff and diff checks PASS.
+No Rust crate changed. The renderer calls this a targeted replay, not a full
+campaign, retaining the 970 inventory with 969 NOT_RUN.
+
+SHA-256 identities:
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+full reference serial 01474de68d6ed00a167ac1480c227aa114383dbf2049646b1d1eb13f8e2dc82f
+full subject serial 9ce0402eb55d946169f712fbff1e5c30ffd0504017b5afe229c4d6c707419153
+module source 3e3a7937fc311cae30e501a6be172e716240ce43593a9ba53a8baeb298591b37
+loader source 746af6c3455ddda9fc88e01e497931c6fb7f860a07a33b364afb8f80b24de095
+UDP source 685b4179f26165c7bbbadbce6722c5e127b309b516b568f96e71c2bd1d456f85
+signed module 38d78d1b3d5563b5ffa53ba1bac28424e0737c28ebc7bde47899a87649b38325
+complete payload c0d4f6133e1ef70c60a0990a68d53c3a35917bbf6a532c6b6570f7e94dddb9d4
+paired reference serial 971a549cc20270bcfbca0fc3ea934fa90e1b82256c9a1fe42862b0b299d3467e
+paired subject serial 07e4ea33a5da5dc1eccb2fcb4ee909d00488e9356ec087b620ce42f06954dda1

@@ -96,10 +96,13 @@ verdicts, not individual nested assertions:
 | GCC control | 532 | 121 | 302 | 11 | 2 | 2 |
 | EvoCC | 529 | 114 | 302 | 19 | 3 | 3 |
 
-Later BPF repairs changed the subject Image, so the dashboard marks that full
-run `STALE_IMAGE`. The run finished; this label does not mean tests are still
-running. A nested `sched_ext` failure was also found behind an outer PASS;
-the parser now checks inner summaries, without rewriting historical counts.
+Later BPF repairs changed the subject Image; the September 22 totals remain
+historical. The latest September 23 checkpoint is explicitly a **one-program
+BPF replay**, not a new 970-program campaign: GCC completes with 651/5644
+successful test/subtest counts, 127 skip counts and 11 failed tests; EvoCC
+times out at the unchanged 300-second limit after group 482. Both shut down
+normally. No test is still running from that flight. Nested `sched_ext` and
+BPF summaries are checked without rewriting historical counts.
 
 Boot acceptance audits installed object hashes and generated-input stability,
 then starts the actual Image in QEMU, checks the ordered `/init` markers and
