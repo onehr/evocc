@@ -3,26 +3,62 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260919T231532Z",
+ "run": "20260923T073554Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "driverSha256": "ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875",
  "target": "aarch64-unknown-linux-gnu",
- "unitsTotal": 2,
- "unmeasuredBuildUnits": [],
- "unitsEvoccCompiled": 2,
- "unitsSubstituted": 2,
+ "unitsTotal": 23,
+ "unmeasuredBuildUnits": [
+  {
+   "obj": "tests/evocc-full/unity.o",
+   "source": "tests/unity/src/unity.c",
+   "directory": "",
+   "argv": [
+    "gcc-14",
+    "-std=c89",
+    "-O2",
+    "-c",
+    "tests/unity/src/unity.c",
+    "-o",
+    "tests/evocc-full/unity.o"
+   ]
+  }
+ ],
+ "unitsEvoccCompiled": 23,
+ "unitsSubstituted": 23,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
   "cJSON.o",
-  "cJSON_Utils.o"
+  "cJSON_Utils.o",
+  "tests/evocc-full/parse_examples.o",
+  "tests/evocc-full/parse_number.o",
+  "tests/evocc-full/parse_hex4.o",
+  "tests/evocc-full/parse_string.o",
+  "tests/evocc-full/parse_array.o",
+  "tests/evocc-full/parse_object.o",
+  "tests/evocc-full/parse_value.o",
+  "tests/evocc-full/print_string.o",
+  "tests/evocc-full/print_number.o",
+  "tests/evocc-full/print_array.o",
+  "tests/evocc-full/print_object.o",
+  "tests/evocc-full/print_value.o",
+  "tests/evocc-full/misc_tests.o",
+  "tests/evocc-full/parse_with_opts.o",
+  "tests/evocc-full/compare_tests.o",
+  "tests/evocc-full/cjson_add.o",
+  "tests/evocc-full/readme_examples.o",
+  "tests/evocc-full/minify_tests.o",
+  "tests/evocc-full/json_patch_tests.o",
+  "tests/evocc-full/old_utils_tests.o",
+  "tests/evocc-full/misc_utils_tests.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 2,
+ "unitsInPassingBuild": 23,
  "outcomes": {
-  "assembled": 2
+  "assembled": 23
  },
  "refusalsByCode": {},
  "refusals": [],
@@ -39,11 +75,32 @@
   "stage": "pass",
   "signature": "",
   "regeneratedInputs": [],
-  "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+  "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\ncd tests\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  ./evocc-full/$test\ndone\n)\n",
   "completedTrial": "attempt-1",
   "objectFiles": [
    "cJSON.o",
-   "cJSON_Utils.o"
+   "cJSON_Utils.o",
+   "tests/evocc-full/parse_examples.o",
+   "tests/evocc-full/parse_number.o",
+   "tests/evocc-full/parse_hex4.o",
+   "tests/evocc-full/parse_string.o",
+   "tests/evocc-full/parse_array.o",
+   "tests/evocc-full/parse_object.o",
+   "tests/evocc-full/parse_value.o",
+   "tests/evocc-full/print_string.o",
+   "tests/evocc-full/print_number.o",
+   "tests/evocc-full/print_array.o",
+   "tests/evocc-full/print_object.o",
+   "tests/evocc-full/print_value.o",
+   "tests/evocc-full/misc_tests.o",
+   "tests/evocc-full/parse_with_opts.o",
+   "tests/evocc-full/compare_tests.o",
+   "tests/evocc-full/cjson_add.o",
+   "tests/evocc-full/readme_examples.o",
+   "tests/evocc-full/minify_tests.o",
+   "tests/evocc-full/json_patch_tests.o",
+   "tests/evocc-full/old_utils_tests.o",
+   "tests/evocc-full/misc_utils_tests.o"
   ]
  },
  "attempts": [
@@ -54,7 +111,7 @@
    "status": 0,
    "relinkStatus": 0,
    "regeneratedInputs": [],
-   "unitCount": 2
+   "unitCount": 23
   }
  ],
  "adjustments": {
@@ -70,10 +127,11 @@
   "subject": [
    "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
    "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
-   "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
+   "all 21 programs selected by v1.7.19 tests/CMakeLists.txt, including private helpers embedded through common.h, are additionally compiled as measured test translation units and linked from those installed objects; no assertions or includes are rewritten; Unity alone is reference-built and excluded from the subject population",
+   "the full Unity selection uses explicit -std=c89 -O2 commands beside the release Makefile build, not a claim to reproduce CMake's optional sanitizer/Valgrind configurations; tests run from the original tests directory so the original inputs and json-patch-tests are consumed",
    "The release Makefile explicitly selects -std=c89. The subject receives that option unchanged; a language-mode refusal is distinct from an observed floating-point or header-type refusal. Current first errors are recorded in refusals, not inferred from cJSON's use of double or historical adjusted-header runs."
   ],
-  "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
+  "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
   "optionsTheDriverRejects": [],
   "omittedFlags": [
    "-Wall",
@@ -97,6 +155,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260919T231532Z",
- "summaryLine": "cjson: 2 of 2 units by EvoCC in a passing build; refused by code {}"
+ "evidence": ".evidence/ladder/cjson/20260923T073554Z",
+ "summaryLine": "cjson: 23 of 23 units by EvoCC in a passing build; refused by code {}"
 }

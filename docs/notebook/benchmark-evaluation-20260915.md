@@ -158,6 +158,35 @@ These source/command-bound ledger changes do not rewrite the historical
 
 ### Subsequent targeted LLVM repairs — 2026-09-20
 
+**2026-09-23 cJSON full private-helper closure:** corrected flight
+`20260923T073554Z`, through `tools/bench.py cjson`, installs **23/23** EvoCC
+objects: the two libraries and all 21 original Unity test translation units.
+The latter preserve `common.h`'s embedded `cJSON.c`, so private helpers are
+actually compiled by EvoCC rather than bypassed by reference test compilation.
+The original public Makefile test and five public-API controls remain as separate
+consumers of the installed library objects. Unity alone is reference-built and
+listed in `unmeasuredBuildUnits`. There are zero refusals, exclusions or replaced
+installed objects. Mutation tests independently corrupt each library and one
+private-test object; each corruption fails the suite after relinking without
+recompilation.
+
+All **21 upstream programs** complete; their Unity totals are **161 PASS,
+0 FAIL, 1 IGNORE**. The extra five public-API controls add **54 PASS**.
+The ignored `print_number_should_print_non_number` has an unconditional
+`TEST_IGNORE()` in original `tests/print_number.c:105` (its C89 FIXME), not an
+EvoCC-added skip. Four `disabled: true` fixtures in the pinned JSON-patch inputs
+produce eight SKIPPED messages across apply/generate paths; these are not added
+to the PASS count. Sources/assertions and input files are unchanged. The adapter
+uses the complete pinned CMake test selection beside the release Makefile with
+explicit `-std=c89 -O2`; optional sanitizer/Valgrind builds are not claimed.
+
+Compiler SHA-256 `ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875`;
+test log `.evidence/ladder/cjson/20260923T073554Z/test-attempt-1.log`, SHA-256
+`73bcd3e51d16cd2de7c9d295f58280b1468a9f86e277d0fef4c6368c518e1f08`.
+The source/object/run facts are in `tests/contracts/ladder-cjson-receipt.json`;
+the common bench receipt and generated status now show 23/23. This closes B09's
+stated suite-coverage task, not the complete final application campaign.
+
 **2026-09-23 benchmark verdict correction:** inspection of cJSON flight
 `20260923T073305Z` found an empty test log despite a reported PASS. An adapter's
 trailing newline detached the shared wrapper's redirection, so the recorded

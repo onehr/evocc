@@ -1,37 +1,24 @@
 {
   "schemaVersion": 1,
-  "run": "20260922T033527.045226Z",
-  "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
+  "run": "20260923T073554.220698Z",
+  "subject": "6e7508829a7b558cddb2b66fa66cf32bcdbdb60d",
   "dirty": true,
-  "driver": null,
-  "driverSha256": null,
+  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+  "driverSha256": "ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel-selftest-all",
-    "--reuse-selftest-build",
-    "--expanded-selftest-kernel",
-    "--selftest-runtime",
-    ".build/k7-coverage/case/selftests/runtime",
-    "--selftest-kernel-receipt",
-    "tests/contracts/kernel-bpf-full-receipt.json",
-    "--selftest-reference-boot",
-    ".evidence/k1/bpf-reference-boot-20260920/boot.json",
-    "--selftest-build-root",
-    ".build/k7-coverage/case/selftests",
-    "--selftest-source-root",
-    ".build/k7-coverage/case/linux-src",
-    "--selftest-headers-root",
-    ".build/k7-coverage/case/headers",
-    "--allow-qemu-drift",
+    "cjson",
+    "--evocc",
+    "target/frontend/release/evocc",
     "--jobs",
     "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-selftest-all"
+    "cjson"
   ],
-  "status": "INCOMPLETE",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -648,15 +635,15 @@
     },
     "cjson": {
       "rung": "E3",
-      "note": "installed objects judged by public API tests; full private-helper suite is separate",
+      "note": "installed libraries plus all 21 upstream Unity test translation units",
       "outcomes": {},
       "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
-      "total": 2,
-      "passed": 2,
+      "total": 23,
+      "passed": 23,
       "kind": "units",
-      "compiled": 2,
+      "compiled": 23,
       "excluded": 0,
       "testVerdict": {
         "passed": true,
@@ -665,11 +652,32 @@
         "stage": "pass",
         "signature": "",
         "regeneratedInputs": [],
-        "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+        "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\ncd tests\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  ./evocc-full/$test\ndone\n)\n",
         "completedTrial": "attempt-1",
         "objectFiles": [
           "cJSON.o",
-          "cJSON_Utils.o"
+          "cJSON_Utils.o",
+          "tests/evocc-full/parse_examples.o",
+          "tests/evocc-full/parse_number.o",
+          "tests/evocc-full/parse_hex4.o",
+          "tests/evocc-full/parse_string.o",
+          "tests/evocc-full/parse_array.o",
+          "tests/evocc-full/parse_object.o",
+          "tests/evocc-full/parse_value.o",
+          "tests/evocc-full/print_string.o",
+          "tests/evocc-full/print_number.o",
+          "tests/evocc-full/print_array.o",
+          "tests/evocc-full/print_object.o",
+          "tests/evocc-full/print_value.o",
+          "tests/evocc-full/misc_tests.o",
+          "tests/evocc-full/parse_with_opts.o",
+          "tests/evocc-full/compare_tests.o",
+          "tests/evocc-full/cjson_add.o",
+          "tests/evocc-full/readme_examples.o",
+          "tests/evocc-full/minify_tests.o",
+          "tests/evocc-full/json_patch_tests.o",
+          "tests/evocc-full/old_utils_tests.o",
+          "tests/evocc-full/misc_utils_tests.o"
         ]
       },
       "adjustments": {
@@ -685,10 +693,11 @@
         "subject": [
           "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
           "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
-          "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
+          "all 21 programs selected by v1.7.19 tests/CMakeLists.txt, including private helpers embedded through common.h, are additionally compiled as measured test translation units and linked from those installed objects; no assertions or includes are rewritten; Unity alone is reference-built and excluded from the subject population",
+          "the full Unity selection uses explicit -std=c89 -O2 commands beside the release Makefile build, not a claim to reproduce CMake's optional sanitizer/Valgrind configurations; tests run from the original tests directory so the original inputs and json-patch-tests are consumed",
           "The release Makefile explicitly selects -std=c89. The subject receives that option unchanged; a language-mode refusal is distinct from an observed floating-point or header-type refusal. Current first errors are recorded in refusals, not inferred from cJSON's use of double or historical adjusted-header runs."
         ],
-        "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
+        "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
         "optionsTheDriverRejects": [],
         "omittedFlags": [
           "-Wall",
@@ -711,29 +720,29 @@
         ]
       },
       "status": "PASS",
-      "run": "20260919T231532Z",
-      "evidence": ".evidence/ladder/cjson/20260919T231532Z",
+      "run": "20260923T073554Z",
+      "evidence": ".evidence/ladder/cjson/20260923T073554Z",
       "receipt": "tests/contracts/ladder-cjson-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/cjson.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure"
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 7.1,
+      "seconds": 38.9,
       "previous": {
         "rung": "E3",
-        "note": "installed objects judged by public API tests; full private-helper suite is separate",
+        "note": "installed libraries plus all 21 upstream Unity test translation units",
         "outcomes": {},
         "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
-        "total": 2,
-        "passed": 2,
+        "total": 23,
+        "passed": 23,
         "kind": "units",
-        "compiled": 2,
+        "compiled": 23,
         "excluded": 0,
         "testVerdict": {
           "passed": true,
@@ -742,10 +751,32 @@
           "stage": "pass",
           "signature": "",
           "regeneratedInputs": [],
-          "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\n)\n",
+          "command": "(\nset -e\n./cJSON_test\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  ./tests/$test\ndone\ncd tests\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  ./evocc-full/$test\ndone\n)\n",
+          "completedTrial": "attempt-1",
           "objectFiles": [
             "cJSON.o",
-            "cJSON_Utils.o"
+            "cJSON_Utils.o",
+            "tests/evocc-full/parse_examples.o",
+            "tests/evocc-full/parse_number.o",
+            "tests/evocc-full/parse_hex4.o",
+            "tests/evocc-full/parse_string.o",
+            "tests/evocc-full/parse_array.o",
+            "tests/evocc-full/parse_object.o",
+            "tests/evocc-full/parse_value.o",
+            "tests/evocc-full/print_string.o",
+            "tests/evocc-full/print_number.o",
+            "tests/evocc-full/print_array.o",
+            "tests/evocc-full/print_object.o",
+            "tests/evocc-full/print_value.o",
+            "tests/evocc-full/misc_tests.o",
+            "tests/evocc-full/parse_with_opts.o",
+            "tests/evocc-full/compare_tests.o",
+            "tests/evocc-full/cjson_add.o",
+            "tests/evocc-full/readme_examples.o",
+            "tests/evocc-full/minify_tests.o",
+            "tests/evocc-full/json_patch_tests.o",
+            "tests/evocc-full/old_utils_tests.o",
+            "tests/evocc-full/misc_utils_tests.o"
           ]
         },
         "adjustments": {
@@ -761,10 +792,11 @@
           "subject": [
             "the release Makefile builds the libraries; its public test is relinked from test.c and the installed cJSON.o on every trial",
             "five unchanged public-API Unity programs (cjson_add, compare_tests, minify_tests, old_utils_tests, misc_utils_tests) link both installed objects; CJSON_TESTS_COMMON_H suppresses common.h's embedded cJSON.c, with cJSON.h, stdbool.h and string.h supplied explicitly",
-            "this is the public Makefile test plus 54 public-API Unity assertions, not the full CMake/private-helper Unity suite; CMake is unavailable and private helpers cannot test an independently compiled object",
+            "all 21 programs selected by v1.7.19 tests/CMakeLists.txt, including private helpers embedded through common.h, are additionally compiled as measured test translation units and linked from those installed objects; no assertions or includes are rewritten; Unity alone is reference-built and excluded from the subject population",
+            "the full Unity selection uses explicit -std=c89 -O2 commands beside the release Makefile build, not a claim to reproduce CMake's optional sanitizer/Valgrind configurations; tests run from the original tests directory so the original inputs and json-patch-tests are consumed",
             "The release Makefile explicitly selects -std=c89. The subject receives that option unchanged; a language-mode refusal is distinct from an observed floating-point or header-type refusal. Current first errors are recorded in refusals, not inferred from cJSON's use of double or historical adjusted-header runs."
           ],
-          "buildCommand": "(set -e\nmake\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\n)\n)",
+          "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
           "optionsTheDriverRejects": [],
           "omittedFlags": [
             "-Wall",
@@ -787,13 +819,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20260919T193013Z",
-        "evidence": ".evidence/ladder/cjson/20260919T193013Z"
+        "run": "20260923T073305Z",
+        "evidence": ".evidence/ladder/cjson/20260923T073305Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20260923T073554.220698Z",
+        "subject": "6e7508829a7b558cddb2b66fa66cf32bcdbdb60d",
+        "driverSha256": "ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875"
       }
     },
     "tinycc": {

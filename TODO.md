@@ -225,12 +225,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   libc-test. Classify any newly exposed non-fenv errors separately; do not assume
   L01 alone guarantees full coverage. [Receipt](tests/contracts/ladder-musl-receipt.json).
 
-- [ ] **B09 — Exercise cJSON's complete upstream private-helper suite** — `OPEN`, P2.
-  The recorded 2/2 build and public API tests pass; they do not cover the full
-  Unity/private-helper test selection named by the roadmap. Make that original
-  test build available through the existing lane and execute it without changing
-  assertions. Close with its exact selection/count and installed-object audit.
-  [Receipt](tests/contracts/ladder-cjson-receipt.json).
+- [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
+  The corrected common bench path compiles/installs **23/23** units: both library
+  units and all 21 upstream Unity test TUs, including their embedded private
+  cJSON implementation. All 21 programs complete: **161 PASS / 0 FAIL / 1 upstream
+  IGNORE**, plus the original public test and 54 public-API controls. The pinned
+  non-number test unconditionally calls `TEST_IGNORE`; four upstream disabled
+  JSON-patch fixtures produce eight skip messages across two test directions.
+  Neither is counted as an executed PASS. No assertions changed, no subject
+  object was rebuilt/excluded; Unity alone remains a reference-built harness.
+  Run `20260923T073554Z`; [receipt](tests/contracts/ladder-cjson-receipt.json),
+  [acceptance and limits][apps]. Optional sanitizer/Valgrind configurations were
+  not exercised; B10 still reruns this lane with the final compiler.
 
 - [ ] **B10 — One final serial 15-lane application campaign** — `OPEN`, P1, after tailored closure.
   Freeze the compiler/profile and run the existing `tools/bench.py` lanes without

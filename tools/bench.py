@@ -33,7 +33,7 @@ CATALOG = {
     "csmith": ("E0c", "csmith", "original seeds; unavailable oracles are not passes"),
     "zlib": ("E1", "subject", "mixed-link program tests"),
     "zstd": ("E2", "subject", "mixed-link program tests; see recorded source/build adjustments"),
-    "cjson": ("E3", "subject", "installed objects judged by public API tests; full private-helper suite is separate"),
+    "cjson": ("E3", "subject", "installed libraries plus all 21 upstream Unity test translation units"),
     "tinycc": ("E5", "mixed", "mixed-link compiler tests"),
     "toybox": ("E6", "mixed", "mixed-link tests relative to baseline failures"),
     "musl": ("E7", "mixed", "libc-test relative to baseline failures"),

@@ -53,7 +53,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | Csmith | INCOMPLETE | 932/1,000 checksum agreements | All 1,000 compile; 0 mismatches; 68 unusable-oracle cases are not passes |
 | zlib | PASS | 19/19 TU | Recorded original program tests |
 | zstd | PASS | 44/44 TU | Recorded original tests; build adjustments remain in the receipt |
-| cJSON | PASS | 2/2 TU | Installed objects pass public API tests; not the complete private-helper suite |
+| cJSON | PASS | 23/23 TU | Both libraries + all 21 Unity/private-helper programs; 161 cases PASS, 1 upstream IGNORE; public-API controls also pass |
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | INCOMPLETE | 9/11 TU | Mixed build passes original tests; 2 deferred FP objects |
 | toybox | INCOMPLETE | 201/203 TU | 2 deferred FP objects; shared baseline `chattr` failure |

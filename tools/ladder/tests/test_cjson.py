@@ -17,6 +17,22 @@ spec.loader.exec_module(lane)
 
 
 class ObjectConsumptionTest(unittest.TestCase):
+    def test_private_helper_programs_are_in_the_compiled_object_population(self):
+        expected = (
+            'parse_examples', 'parse_number', 'parse_hex4', 'parse_string',
+            'parse_array', 'parse_object', 'parse_value', 'print_string',
+            'print_number', 'print_array', 'print_object', 'print_value',
+            'misc_tests', 'parse_with_opts', 'compare_tests', 'cjson_add',
+            'readme_examples', 'minify_tests', 'json_patch_tests',
+            'old_utils_tests', 'misc_utils_tests',
+        )
+        self.assertEqual(getattr(lane, 'UPSTREAM_TESTS', ()), expected,
+                         'the full pinned CMake selection must not be a public-API subset')
+        for name in expected:
+            self.assertIn(f'tests/evocc-full/{name}.o', lane.CJSON.test_objects)
+        self.assertIn('tests/evocc-full/unity.o', lane.CJSON.skip_objects,
+                      'the assertion harness is separately reference-built')
+
     def test_relink_observes_each_changed_library_object(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -29,17 +45,19 @@ class ObjectConsumptionTest(unittest.TestCase):
             tests = root / "tests"
             (tests / "unity/src").mkdir(parents=True)
             (tests / "unity/src/unity.c").write_text("/* test runner fixture */\n")
-            for name in ("cjson_add", "compare_tests", "minify_tests",
-                         "old_utils_tests", "misc_utils_tests"):
+            for name in lane.UPSTREAM_TESTS:
                 (tests / f"{name}.c").write_text(
                     '#include "../cJSON.h"\n'
+                    '#ifndef CJSON_TESTS_COMMON_H\n#include "../cJSON.c"\n#endif\n'
                     "int main(void) { return core() != 42 || utils() != 7; }\n"
                 )
             (root / "Makefile").write_text(
                 "CJSON_TEST_SRC = cJSON.c test.c\n"
                 ".PHONY: all static tests test\n"
                 "all: cJSON.o cJSON_Utils.o cJSON_test\n"
-                "static: cJSON.o cJSON_Utils.o\n"
+                "static: libcjson.a libcjson_utils.a\n"
+                "libcjson.a: cJSON.o\n\tar rcs $@ $<\n"
+                "libcjson_utils.a: cJSON_Utils.o\n\tar rcs $@ $<\n"
                 "tests: cJSON_test\n"
                 "test: tests\n\t./cJSON_test\n"
                 "cJSON_test: $(CJSON_TEST_SRC)\n"
@@ -55,8 +73,11 @@ class ObjectConsumptionTest(unittest.TestCase):
             built = run(lane.CJSON.build)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
             originals = {name: (root / name).read_bytes()
-                         for name in ("cJSON.o", "cJSON_Utils.o")}
-            for symbol, object_name in [("core", "cJSON.o"), ("utils", "cJSON_Utils.o")]:
+                         for name in ("cJSON.o", "cJSON_Utils.o", "tests/evocc-full/parse_number.o")}
+            observed = lane.ladder.parse_build_log(built.stdout + built.stderr, str(root))
+            self.assertTrue(set(lane.CJSON.test_objects).issubset({u.obj for u in observed}))
+            for symbol, object_name in [("core", "cJSON.o"), ("utils", "cJSON_Utils.o"),
+                                        ("main", "tests/evocc-full/parse_number.o")]:
                 with self.subTest(object=object_name):
                     for name, contents in originals.items():
                         (root / name).write_bytes(contents)
@@ -73,3 +94,5 @@ class ObjectConsumptionTest(unittest.TestCase):
                     self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
                     self.assertNotEqual(run(lane.CJSON.test).returncode, 0,
                                         f"the tests bypassed changed {object_name}")
+                    self.assertEqual(lane.ladder.recompiled(linked.stdout + linked.stderr, str(root),
+                                                           list(originals)), [])
