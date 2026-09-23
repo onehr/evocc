@@ -1,10 +1,33 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-23. This is a diagnosis ledger. The latest full pair is
+Updated 2026-09-24. This is a diagnosis ledger. The latest full pair is
 `.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
 and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
+
+### Disk-backed /tmp mountpoint repair — 2026-09-24
+
+TODO K11a closes a real setup defect rather than waiving openat2. Its unchanged
+`resolve_test.c:54` requests `MS_PRIVATE` on `/tmp`; the full-suite init kept
+ext4 backing but not a mountpoint. `fs/namespace.c:do_change_type` explicitly
+returns EINVAL for that shape. A [small C reduction](../../tests/fixtures/selftest-tmp-mount.c)
+on both retained Images reproduces the error and shows that self-binding the
+same directory fixes it while preserving inode, data, filesystem and permissions.
+
+The common init now applies this self-bind and rejects setup failure. Fresh
+unchanged-original flights improve from **INVALID_OUTPUT, 0/88 executed to
+88/88 PASS on both kernels**. `openat2_test` (116), `statmount_test_ns` (2) and
+`mount_setattr_test` (34) also pass in both repaired environments: four programs,
+240 nested PASS per kernel, no FAIL/SKIP, eight orderly shutdowns. The original
+45-second limits and all test bytes are unchanged; 239 K1 tests and Ruff pass.
+The [record](../../tests/fixtures/selftest-tmp-mount.out) binds exact Images,
+payloads, original binary and captures. It reuses disks through snapshots,
+creating only 6.1 MiB of small diagnostics, not a new runtime image.
+
+This is a targeted userspace-environment repair, not a new compiler or complete
+970-program result. The old runtime initramfs files and full totals remain
+historical; K13 must use the repaired common init after final composition.
 
 ## Current closure queue — 2026-09-23
 

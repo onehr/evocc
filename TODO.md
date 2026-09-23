@@ -257,6 +257,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   evidence and an action or justified limit; no blanket “both fail” exemption.
   Use the [full receipt][selftest-receipt] and [ledger][kernel].
 
+  - [x] **K11a — Restore /tmp's mountpoint prerequisite on ext4**, 2026-09-24.
+    The [minimal C case](tests/fixtures/selftest-tmp-mount.c) and unchanged
+    `openat2:resolve_test` reproduce EINVAL on both Images before all 88 cases.
+    The common init now self-binds /tmp, preserving disk-backed objects and
+    failing closed on setup errors. The original passes 88/88 on both kernels;
+    three unchanged mount controls pass another 152/152 each. All eight flights
+    shut down; disk hashes remain unchanged. 239 K1 tests and Ruff pass. This
+    closes one runtime-environment failure, not K11/K13's full population.
+    [Identity-bound record](tests/fixtures/selftest-tmp-mount.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   it is not built coverage. Review `kexec`, `prctl`, `thermal/intel/power_floor`

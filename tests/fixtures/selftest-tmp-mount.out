@@ -1,0 +1,60 @@
+2026-09-24 — disk-backed /tmp must also be a mountpoint.
+
+RED: one declared Python regression, no compiler errors. The common full-suite
+init kept /tmp on ext4 but left it a plain directory. Frozen resolve_test.c:54
+unshares its mount namespace and changes /tmp to MS_PRIVATE. Frozen
+fs/namespace.c:do_change_type rejects !path_mounted(path) with -EINVAL.
+Both fresh unchanged-original RED flights reproduce errno 22 before any of
+88 subtests runs; the parser correctly records INVALID_OUTPUT, not PASS.
+
+Minimal C: selftest-tmp-mount.c, reference-built by sealed GCC 14.2.0-19
+with -static -O2 -Wall -Wextra -Werror, then again with -DSELF_BIND=1.
+On BOTH actual kernels: plain directory -> private_rc=-1, errno=22, FAIL;
+self-bound directory -> private_rc=0, errno=0, PASS. Both modes preserve
+sentinel bytes, device/inode, ext4 type and mode 1777. A neighboring ordinary
+directory still returns EINVAL. The test uses an isolated mount namespace,
+cleans up its own objects, and reuses the existing 64 MiB diagnostic disk.
+Expected REDs are not counted as successful original programs.
+
+Repair: full-suite init self-binds /tmp after chmod, failing closed if mount
+fails. It neither copies data nor replaces ext4 with tmpfs. Selected K7 mode
+and /dev/shm retain their tmpfs behavior. Runtime metadata records the setup.
+No kernel, module, upstream source, binary, assertion, timeout or filesystem
+feature is changed. A new 850 KiB initramfs supplies the actual repaired init.
+
+Unchanged originals, serial GCC/EvoCC paired flights on identical old/new disks:
+  openat2:resolve_test                     88/88 PASS on each kernel
+  openat2:openat2_test                    116/116 PASS on each kernel
+  filesystems/statmount:statmount_test_ns   2/2 PASS on each kernel
+  mount_setattr:mount_setattr_test         34/34 PASS on each kernel
+Each of eight GREEN/control flights has a fresh nonce and orderly shutdown;
+all four programs, 240 nested cases per kernel, zero FAIL/SKIP. The original
+45-second wrapper timeout remains. Kernel/test disk hashes match before and
+after each run (QEMU snapshot=on), and the resolve_test binary is identical on
+both disks. These are targeted environment repairs, not new compiler credit,
+new complete 970-program totals, a new Image, or K13/K14 acceptance.
+
+239 K1 Python tests PASS; targeted Ruff and git diff --check PASS.
+tools/gate-changed.sh 83073f4 --offline -j 2 selects no Rust crate, correctly;
+both actual init builds also pass GCC -Wall -Wextra -Werror.
+
+SHA-256:
+probe source 21331f49c6b2d6ba1553eaac8acf86fc35edd4d963a8fae30c8732b6676634fe
+init source a322134ae93c992c9d19f464af8811cbd119c1b0f33407162fd116e64d25d326
+original source 45938550af7b28d5aaeb3f831f30447c1ec599cf4a723c1b918c69fea77c0097
+original executable a10a496abff9be97f64b6e373aa9796b2ebf76b1cd3a9437fb4bbaa7108b4062
+namespace source f0913b01f9c888109656010aa502df9851588b6cc7f522713bbe7c53dbafbcad
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+GCC disk 82ed09013fa99fe87d1dbc53bd80b5abc818d3301611d2920c05be04b7802f1d
+EvoCC disk 10381543c2b754fcdfb99781a9fc7d8594a6f6c4a59e7305cea7a6c9155bb65e
+probe initramfs c0d18ea0976c04bf8bbd5848f0f28792b3c8bb24c9dc3e9de8cc2518868f98f4
+repaired initramfs 52bab54985cd407f9366eac06db6042cd77a21514ac5b4da1202d6bd0cd9641a
+
+Small captures: .build/floating-targeted/selftest-tmp-mount-20260924/
+probe.json a74355797f318f2e330e5e15f464ee610b6c2fd5d57a5e55862bb79ae9718100
+red.json 962a4e467f54cab5d907505a5ecd0cc13432e0ad9aa1a4c6e90d0bb883e9c496
+green.json 54bea5a2d85587a583c7eb2bc1a3de05d3696848150cf8d4c5bf91a238fdf83b
+controls.json e4b18a980c0265e395da8df85c66a58de5b82a66a6d95f490c39824121c86460
+All captures/payloads total 6.1 MiB; disks are symlinks, not copies. Old runtime
+initramfs files remain intact; the final fresh campaign must use rebuilt init.

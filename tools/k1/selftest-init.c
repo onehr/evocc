@@ -279,6 +279,11 @@ int main(void)
     if (full_suite) {
         if (chmod("/tmp", 01777))
             fatal("set temporary directory mode");
+        /* Namespace tests change /tmp's propagation type. That operation
+         * needs a mountpoint, not just a directory in the root filesystem.
+         * A self-bind supplies one without replacing ext4 or copying data. */
+        if (mount("/tmp", "/tmp", NULL, MS_BIND, NULL))
+            fatal("bind-mount disk-backed tmp");
         puts("KSELFTEST_SETUP /tmp ext4 (per-flight snapshot)");
     }
     if (mkdir("/dev/shm", 01777) && errno != EEXIST)

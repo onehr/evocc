@@ -504,6 +504,16 @@ class FullSelftest(unittest.TestCase):
                       'tmpfs cannot exercise the original fs-verity signature test')
         self.assertIn('KSELFTEST_SETUP /tmp ext4', source)
 
+    def test_disk_backed_tmp_is_also_a_mountpoint_for_namespace_tests(self):
+        source = (PATH.parent / 'selftest-init.c').read_text()
+        full_setup = source.split('if (full_suite) {\n        if (chmod("/tmp"', 1)
+        self.assertEqual(len(full_setup), 2, 'full-suite mode must keep the ext4 directory')
+        full_setup = full_setup[1].split('\n    }', 1)[0]
+        self.assertIn('mount("/tmp", "/tmp", NULL, MS_BIND, NULL)', full_setup,
+                      'MS_PRIVATE on a plain ext4 directory returns EINVAL before openat2 runs')
+        self.assertIn('fatal("bind-mount disk-backed tmp")', full_setup,
+                      'do not silently continue after a failed setup mount')
+
     def test_btf_build_checks_capability_and_uses_same_kernel_without_mutating_it(self):
         prepare = getattr(lane, 'prepare_btf_input', None)
         self.assertTrue(callable(prepare), 'pahole version alone silently loses arena attributes')

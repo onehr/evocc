@@ -1200,6 +1200,7 @@ def refresh_runtime(work, kernel_build=None):
     metadata['runtimeModulePrerequisites'] = module_prerequisites
     metadata['runtimeFilesystem'] = {'root': 'ext4', 'features': ['verity'],
                                      'temporaryFiles': '/tmp on the per-flight disk snapshot',
+                                     'temporaryMount': 'self-bind /tmp; same ext4 objects and bytes',
                                      'sharedMemory': '/dev/shm tmpfs'}
     metadata['runtimeFileMetadata'] = file_metadata
     format_rootfs(rootfs, work / 'scratch.img', file_metadata)

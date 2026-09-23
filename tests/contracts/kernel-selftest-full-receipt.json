@@ -31450,5 +31450,31 @@
   },
   "referenceImageSha256": "8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b",
   "referenceStatus": "INCOMPLETE",
+  "targetedRepairs": [
+    {
+      "id": "K11a",
+      "date": "2026-09-24",
+      "status": "PASS",
+      "scope": "Disk-backed /tmp self-bind; unchanged openat2 and mount controls only",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/selftest-tmp-mount.out",
+      "referenceImageSha256": "8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b",
+      "subjectImageSha256": "f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280",
+      "initramfsSha256": "52bab54985cd407f9366eac06db6042cd77a21514ac5b4da1202d6bd0cd9641a",
+      "originalProgram": "openat2:resolve_test",
+      "originalProgramSha256": "a10a496abff9be97f64b6e373aa9796b2ebf76b1cd3a9437fb4bbaa7108b4062",
+      "beforeBoth": "INVALID_OUTPUT: mount MS_PRIVATE returns EINVAL before 88 planned subtests",
+      "afterBoth": {"programsPassed": 1, "subtestsPassed": 88, "failed": 0, "skipped": 0},
+      "controlsBoth": {
+        "openat2:openat2_test": 116,
+        "filesystems/statmount:statmount_test_ns": 2,
+        "mount_setattr:mount_setattr_test": 34
+      },
+      "greenRecord": ".build/floating-targeted/selftest-tmp-mount-20260924/green.json",
+      "greenRecordSha256": "54bea5a2d85587a583c7eb2bc1a3de05d3696848150cf8d4c5bf91a238fdf83b",
+      "controlsRecord": ".build/floating-targeted/selftest-tmp-mount-20260924/controls.json",
+      "controlsRecordSha256": "e4b18a980c0265e395da8df85c66a58de5b82a66a6d95f490c39824121c86460"
+    }
+  ],
   "regressions": []
 }
