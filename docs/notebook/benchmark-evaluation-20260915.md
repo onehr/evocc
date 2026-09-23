@@ -277,6 +277,15 @@ floyd-warshall still times out at 60 seconds; its core is now 160 instructions.
 this verified code-generation improvement from the unresolved performance
 acceptance. No kernel Image or full-campaign result is updated by this change.
 
+The subsequent comparison-selection reduction (TODO B02b) fixes an independent
+C-HIR integer-dereference arm-type refusal and avoids re-evaluating stable
+integer operands already read by a comparison. It uses a pure bit-vector mux,
+not speculative arm execution; all original checks and observable effects
+remain. Six tailored tests and six fixed ARM64 native controls pass. The original
+LARGE program still times out at 60 seconds (160 → 108 core instructions), so
+B02 remains OPEN. [Test and acceptance record](../../tests/fixtures/compared-value-selection.out)
+distinguishes the targeted compiler improvement from the unresolved workload.
+
 **2026-09-23 case reconciliation (TODO B01):** every one of the frozen run's
 44 compiler-failure identities is now joined to its later evidence: **7 targeted
 original PASS, 30 named FP deferrals, 5 evidenced not-applicable, 2 OPEN**.

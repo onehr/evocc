@@ -9979,12 +9979,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         pending.push(TypeTask::Infer(operand));
                         continue;
                     }
-                    crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => {
-                        Err(InterpreterError::UnsupportedExpression {
-                            feature: "non-integer unary operand",
-                            span,
-                        })
+                    crate::UnaryOp::Deref => {
+                        // Conditional conversions inspect both arm types, not
+                        // their values. Resolve the pointee without accessing
+                        // the object or evaluating the pointer expression.
+                        let pointer = self.pointer_type_of_expression(operand)?;
+                        self.integer_type(pointer.pointee(), span)
                     }
+                    crate::UnaryOp::AddrOf => Err(InterpreterError::UnsupportedExpression {
+                        feature: "non-integer unary operand",
+                        span,
+                    }),
                 },
                 CHirExpr::EvaluateOnce(operand, _) => {
                     pending.push(TypeTask::Infer(operand));

@@ -15,6 +15,7 @@ mod constants;
 mod floating;
 mod neon;
 mod reuse;
+mod selection;
 mod tls;
 mod vector;
 
@@ -12387,6 +12388,15 @@ impl<'a> FunctionLowerer<'a> {
         let known_truth =
             self.known_expression_truth(condition, &[then_expression, else_expression]);
         let predicate = self.lower_condition(condition, state)?;
+        if let Some(value) = self.reuse_compared_selection(
+            condition,
+            then_expression,
+            else_expression,
+            &predicate,
+            state,
+        )? {
+            return Ok(value);
+        }
         let keys = self.expression_join_keys(state, &[then_expression, else_expression]);
         let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
         let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;

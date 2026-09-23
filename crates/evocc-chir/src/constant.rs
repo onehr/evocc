@@ -1206,7 +1206,12 @@ pub fn integer_expression_type(
                     .promoted()
                     .ty(),
             ),
-            crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => None,
+            crate::UnaryOp::Deref => {
+                let pointer =
+                    crate::PointerTypeDesc::from_expression(symbols, types, operand).ok()?;
+                canonical_integer_type(types, pointer.pointee())
+            }
+            crate::UnaryOp::AddrOf => None,
         },
         CHirExpr::EvaluateOnce(operand, _) => integer_expression_type(operand, types, symbols),
         CHirExpr::Binary(operator, left, right, _) => {

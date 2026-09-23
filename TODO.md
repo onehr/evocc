@@ -277,6 +277,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     K02 remain OPEN, and no kernel Image inherits this compiler-only repair.
     [Measured record](tests/fixtures/checked-arithmetic-result.out).
 
+  - [x] **B02b — Reuse stable compared integer values**, 2026-09-23.
+    The [minimal selection case](tests/fixtures/compared-value-selection.c)
+    exposed both repeated loads and an independent C-HIR dereference-type
+    inference refusal. Shared pointee typing is now unevaluated; bounded
+    integer selections reuse already compared operands with a bit-vector mux.
+    Original loads/guards remain, while volatile/atomic/call/update cases do
+    not reuse their observations. Six targeted tests and six sealed native
+    controls pass. The unchanged LARGE program still times out at 60 seconds,
+    despite 160 → 108 core instructions: **B02 remains OPEN**. The affected
+    gate passes 1,819 tests, Clippy and fmt; [record](tests/fixtures/compared-value-selection.out).
+
 - [ ] **B03 — Account for Csmith's 68 unusable-oracle cases** — `OPEN`, P1.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining
   31 base / 37 bitfield cases are not passes. Diagnose reference compile/runtime

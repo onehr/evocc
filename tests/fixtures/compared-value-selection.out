@@ -1,0 +1,52 @@
+2026-09-23 — stable integer comparison-selection and dereference arm typing.
+
+RED: three failing CLI tests, zero Rust compilation errors. Ordinary minimum
+reloads its two operands (4 loads rather than 2). Independently, C-HIR rejects
+the conditional's integer dereference arm type with E3007, masking actual
+E3001/E3004/E3009/E3011 execution diagnostics. A second one-assertion RED
+exposes the unnecessary branch/join after the compared values are retained.
+
+GREEN: shared integer type classification obtains a dereference's canonical
+pointee without evaluating its operand. Both conditional arms receive their
+normal conversions; unselected null pointers are not accessed and pointer
+updates occur only once on the selected path.
+
+Optimized lowering matches bounded, typed, structurally identical integer
+operands and reuses the comparison's already evaluated/common-converted values.
+It selects with b ^ ((a ^ b) & -zext(predicate)), using existing total EvoIR
+bit operations rather than inventing C signed arithmetic or a new instruction.
+Both operands have already been semantically read; this does not speculate
+general conditional arms or waive poison/access/arithmetic obligations.
+Symbol, projection, index type and qualifier identities are retained; volatile,
+atomic, calls, updates, allocations and register-bound inputs do not match.
+There is no validator weakening, cross-block use or EqSat allowlist expansion.
+
+Six CLI regressions cover all six comparisons, swapped selection, scalar and
+128-bit values, mixed signedness, narrow promotion, array/record places,
+surrounding live values/effects, unselected expressions and retained errors.
+C-HIR/EvoIR execution at O0/O2, MIR validation/execution and emission pass.
+Sealed ARM64 GCC 14.2.0-19 / Clang 19.1.7 / EvoCC at O0/O2 all exit zero:
+6/6 native controls. Network is disabled; the original sealed image is reused.
+
+Original LLVM LARGE floyd-warshall uses its frozen source SHA and command,
+existing projector/sysroot, timeit limits, appended exit status and upstream
+HashProgramOutput/fpcmp contract. Result remains TIMEOUT 124 at 60 seconds;
+timeit kills its monitored process. No output PASS is inferred. Core function
+instructions are 160 before / 143 with retained branch / 108 with bit selection.
+No reference object, kernel Image, module or full-campaign receipt was replaced.
+The local test/replay directory is less than 1 MiB; no source tree was copied.
+
+Final affected gate against 03fa009: 1819 PASS, 0 FAIL, 3 historical ignored,
+212 result groups in eight crates. Clippy --all-targets -D warnings, workspace
+fmt, renderer and diff checks PASS. The earlier retained-branch gate is a
+separate run and is not counted again.
+The rebuilt release emits byte-identical assembly for the unchanged original.
+Artifact directory: .build/floating-targeted/compared-selection-20260923/.
+SHA-256:
+prior release 53d13449f8be185b1fbad826ac9c52e6704c60491c31fe703eb71624852d13c8
+tested debug 6673b08720461a5d50ae3ef251343ccf1295987374fb176b7bc60d21e41683c1
+rebuilt release 17be8b3c08e55e64bd7608ff37fce23225b693060c5f96e8c11be497c0b54b12
+source fixture 1705cd986f5f94db270f9abd7101583b1c187fe3b0f6854f44bfa69941097408
+original assembly 14a48cb40898d1ade6cc8ae4a1e145a9771dccf335879bc400ec6bdf4fd0254a
+fixture assembly 388c27f8f59544d846e0170bee5629f792138d323d11b2e6a0907dd2b894c04a
+native replay log fedb2d92c53c3620a3467f07e91efdb86dcdd4061cb1e9a02ab49593411fec03
