@@ -31476,5 +31476,20 @@
       "controlsRecordSha256": "e4b18a980c0265e395da8df85c66a58de5b82a66a6d95f490c39824121c86460"
     }
   ],
+  "targetedDiagnoses": [
+    {
+      "id": "K11b",
+      "date": "2026-09-24",
+      "status": "CLASSIFIED",
+      "program": "kselftest_harness:harness-selftest.sh",
+      "originalOutcomeBoth": "FAIL",
+      "reason": "Priority-20000 fixture registration precedes the default-priority direction detector, reversing the expected source-order list",
+      "causalControl": "Moving only the detector to priority 10000 restores the source-order list in six native compiler/optimization pairs",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/selftest-constructor-order.out",
+      "pairedRecord": ".build/floating-targeted/selftest-constructor-order-20260924/original.json",
+      "pairedRecordSha256": "1991640c41b1d8a3a14875678bc55401a249bf6d3acc3a410269189fbdfb4fe9"
+    }
+  ],
   "regressions": []
 }

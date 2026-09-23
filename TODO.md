@@ -267,6 +267,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     closes one runtime-environment failure, not K11/K13's full population.
     [Identity-bound record](tests/fixtures/selftest-tmp-mount.out).
 
+  - [x] **K11b — Verify harness constructor-order failure**, 2026-09-24.
+    The [minimal C case](tests/fixtures/selftest-constructor-order.c) reproduces
+    priority-20000 registration before the default-priority direction detector.
+    All six native compiler/optimization pairs produce the reversed list;
+    moving only the detector earlier fixes the causal control. Both interpreters
+    agree, and the 506-test changed gate passes. The unchanged original still
+    fails only its ordering diff on both kernels, with normal shutdown. This
+    closes **upstream-assumption classification**, not that test as PASS.
+    [Paired record](tests/fixtures/selftest-constructor-order.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   it is not built coverage. Review `kexec`, `prctl`, `thermal/intel/power_floor`

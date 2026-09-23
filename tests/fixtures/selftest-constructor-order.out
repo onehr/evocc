@@ -1,0 +1,51 @@
+2026-09-24 — kselftest harness source-order expectation.
+
+Frozen harness: KSELFTEST_PRIO_TEST_F=20000, default-priority direction
+detector, __LIST_APPEND prepends while the detector is false. The three
+fixture registrations therefore run before detection, producing 321 rather
+than the expected 123. This is an upstream harness assumption, not a kernel
+or EvoCC constructor-order defect.
+
+The small C reduction records both registration trace and resulting list.
+GCC-14 / Clang-19 / EvoCC at O0/O2 all reproduce the source-order assertion
+failure (exit 1), accept the observed order (exit 0), and pass a causal
+control moving only the detector to priority 10000 (exit 0). Eighteen native
+observations, including six expected REDs; zero compilation errors. Six
+C-HIR/EvoIR executions give the same outcomes. No production ordering rule,
+upstream source, expected output or timeout is changed by the control.
+
+The unchanged original harness-selftest.sh is replayed on the existing exact
+GCC/EvoCC Images and test disks. BOTH remain FAIL (exit 1): the only output
+diff is fixture pass/timeout ordering, with fail remaining in the middle.
+Each test's behavior is otherwise the expected behavior. Both guests boot
+and power off normally, and snapshot-backed disk hashes remain unchanged.
+The 45-second wrapper remains. This closes K11b's causal classification,
+not the original as PASS, K11's population, or a new complete campaign.
+
+Changed gate against c83f3b3: 506 PASS / 0 FAIL / 0 ignored, 44 groups;
+Clippy -D warnings, fmt and diff checks PASS. CLI regression lives in the
+existing elf_lifecycles test. No compiler implementation change was needed.
+
+Native environment: evo-flight-lab:sealed, linux/arm64, network none;
+image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2,
+GCC 14.2.0-19 / Clang 19.1.7. The native controls use gnu11 and O0/O2;
+EvoCC asm is assembled by GCC-14 with -no-pie and the same target libc.
+
+SHA-256:
+reduction 31c0aa80c821509c17ee051bc63a47e262c021db2da8e04d65a9b7ed6402e50c
+compiler 14a9d4c6f5f691f00ac0591a5e89e41b6a1d7947f9b999542e04fa030abebdc1
+header dc40c6a15b4dfad56a9bede80cc74cf9af49da7a9667869c395fff575cbc614d
+original C 49929a9ae94d588b6b5a4595ab1300abdfb19a707b1e1120e8d9266a60406175
+original expected e0912d88f479d3b1f64cbe552398aea597fa59da5bafbeb6a3c28d43660c0b5f
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+GCC disk 82ed09013fa99fe87d1dbc53bd80b5abc818d3301611d2920c05be04b7802f1d
+EvoCC disk 10381543c2b754fcdfb99781a9fc7d8594a6f6c4a59e7305cea7a6c9155bb65e
+GCC serial af1a0571843140fad6513170814e15c4d91c7b9a69d15bc264f547582d44e8fb
+EvoCC serial 78ca6736dfeb9cb877b0fd8adf13becd979f0392b1b62078fc9b87ff268724bd
+
+Bounded artifacts .build/floating-targeted/selftest-constructor-order-20260924/:
+native.json b61dca91021e38ed123d9e6116d1d3df4e018a0d08068054938dad01e48a4bbf
+original.json 1991640c41b1d8a3a14875678bc55401a249bf6d3acc3a410269189fbdfb4fe9
+gate.log 3612ec616b945e2698bc3186e5ff4c3f28055c4b46ceac9dc408fbeef3429001
+136 KiB total; existing images/payloads reused without copies; all children reaped.

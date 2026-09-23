@@ -1195,10 +1195,17 @@ instead of `fixture.pass, fixture.fail, fixture.timeout`; each case has the
 expected individual behavior. In `kselftest_harness.h`, TEST_F constructors
 use priority 20000, while `__constructor_order_first` uses the default
 priority and sets the direction flag later. `__LIST_APPEND` prepends while
-that flag is false. This explains the reversed fixture list without a kernel
-execution difference. An additional isolated reference-compiler probe was
-NOT RUN because of the same approval-service failure; the actual VM diff
-and source reasoning are distinguished from that unexecuted check.
+that flag is false. The previously unexecuted probe is now measured (2026-09-24):
+[minimal C](../../tests/fixtures/selftest-constructor-order.c) reproduces that
+list on GCC14, Clang19 and EvoCC at O0/O2; moving only the detector to priority
+10000 fixes the source-order control in all six pairs. Both interpreters agree.
+Eighteen native observations include six expected REDs, not original passes.
+
+Fresh unchanged-original replays still fail the same ordering-only diff on both
+retained kernels; both boot/shutdown predicates pass and disk hashes are intact.
+The 506-test affected gate, Clippy and fmt pass. This closes TODO K11b's
+**upstream harness-assumption classification**, without modifying the upstream
+test/expectation or changing full-run totals. [Exact identities and evidence](../../tests/fixtures/selftest-constructor-order.out).
 
 ## Configuration, architecture and implementation boundaries
 

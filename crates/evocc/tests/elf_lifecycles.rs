@@ -87,6 +87,29 @@ fn program_lifecycle_runs_in_one_state_in_priority_order() {
 }
 
 #[test]
+fn priority_registration_precedes_a_default_priority_direction_detector() {
+    let source = include_str!("../../../tests/fixtures/selftest-constructor-order.c");
+    for (prefix, expected) in [
+        ("", b"0\n".as_slice()),
+        ("#define SOURCE_ORDER 1\n", b"1\n".as_slice()),
+        (
+            "#define SOURCE_ORDER 1\n#define EARLY_DETECTOR 1\n",
+            b"0\n".as_slice(),
+        ),
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(&format!("{prefix}{source}"), mode);
+            assert!(
+                output.status.success(),
+                "{prefix} {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, expected, "{prefix} {mode}");
+        }
+    }
+}
+
+#[test]
 fn exit_runs_finalizers_but_immediate_termination_does_not() {
     for name in ["exit", "_Exit", "quick_exit"] {
         let body = if name == "exit" {
