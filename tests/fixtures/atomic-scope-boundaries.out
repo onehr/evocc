@@ -1,0 +1,59 @@
+2026-09-23 — L11 inventory, not additional atomic implementation.
+
+The three CASEs in atomic-scope-boundaries.c distinguish general _Atomic
+updates, __atomic RMW/CAS/exchange, and generic aggregate atomic load/store.
+All 12 fixed ARM64 reference runs exit zero: GCC 14.2.0-19 / Clang 19.1.7,
+each at -std=gnu11 -O0/-O2, CASE=0/1/2. Command in the offline sealed image:
+  $cc -std=gnu11 -O$opt -DCASE=$case_id atomic-scope-boundaries.c -o probe
+  ./probe
+Image configuration digest:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+Current EvoCC refuses those independent cases with E2702/E2001/E2001,
+respectively. The checked-in CLI regression requires refusal and empty output
+for C-HIR execution, EvoIR emission and assembly emission: nine boundaries.
+The four existing scalar/legacy atomic tests still pass. This is a capability
+inventory with positive oracle controls, not three fixed compiler failures or
+a concurrency proof. Scalar __atomic_load_n/store_n and legacy __sync RMW/CAS
+are implemented; general atomic-C and the other __atomic interfaces are not.
+
+Source/command inventory of the currently pinned application populations:
+
+* SQLite 3.53.4 src/sqliteInt.h:238-239 uses only __atomic_load_n/store_n
+  (relaxed) for AtomicLoad/AtomicStore. sqlite3.c and tsrc repeats are generated
+  copies, not additional interfaces. Its current lane uses the supported path.
+* TinyCC's captured 11 EvoCC objects exclude lib/bcheck.c and lib/stdatomic.c.
+  Those files and tests/tests2/{125_atomic_misc,136_atomic_gcc_style}.c exercise
+  the broader interfaces above; they belong to runtime/test configurations, not
+  the 11-object compiler-build numerator. tccgen.c descriptions and tcctok.h's
+  _Atomic keyword are compiler input data, not host atomic execution.
+* zlib 1.3.2 zutil.h's Z_ONCE uses stdatomic.h/atomic_flag. crc32.c enables it
+  with DYNAMIC_CRC_TABLE (also selected by MAKECRCH). The captured default
+  crc32.o command in .build/ladder/zlib/build.log has neither option; it uses
+  the static CRC table. An alternate dynamic-table build needs separate scope.
+* musl's actual atomics use src/internal/atomic.h and arch/aarch64/atomic_arch.h;
+  its current first refusal is the retained strict-fenv option, not a missing
+  __atomic RMW declaration.
+* Bounded lexical census of C/header sources in the pinned torture execute,
+  c-testsuite, LLVM SingleSource, Csmith base/bitfields, jq, Lua, zstd, cJSON,
+  Mbed TLS, PolyBench and toybox trees finds no further occurrences of
+  __atomic_*, _Atomic or stdatomic.h. The census uses rg --no-ignore so ignored
+  build trees are included. This is not a claim about uncaptured configurations,
+  vendor headers, future versions or all code produced by a tested C compiler.
+
+Follow-up scope is split in TODO L11a/L11b/L11c. No known refusal in a currently
+captured target-object population is reassigned to floating point or PASS.
+The reference fixtures do not authorize unspecified width/order/concurrency,
+provenance, library fallback or ABI behavior. Each extension needs that bounded
+contract and original affected configuration before it can be called complete.
+
+Compiler under test:
+release 53d13449f8be185b1fbad826ac9c52e6704c60491c31fe703eb71624852d13c8
+Targeted test: cargo test -p evocc --test scalar_atomic_access --offline -j 2
+5 PASS, 0 FAIL. No kernel or application artifact was replaced.
+Changed gate against 21ffded: 494 PASS / 0 FAIL, 42 result groups in evocc;
+Clippy -D warnings, workspace fmt and diff checks PASS. The first gate's sole
+formatting failure is retained separately from the corrected green log in
+.build/floating-targeted/atomic-scope-20260923/.
+Fixture SHA-256:
+c824ff22fdedd9cc4032cafd08e16f9cc6b21c22831588eec4eb3e58d1468045

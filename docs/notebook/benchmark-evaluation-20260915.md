@@ -2162,6 +2162,22 @@ and fmt pass (three historical ignored). This closes those reproduced E3101
 subcases, not the entire historical T01 audit or a new application campaign.
 [Detailed record](../../tests/fixtures/private-leaf-substitution.out).
 
+## Additional atomic demand inventory — 2026-09-23
+
+TODO L11 is now an inventory closure, not an atomic feature claim. SQLite's
+captured paths use the already supported scalar load/store operations. Broader
+`_Atomic`, `__atomic` RMW/CAS and generic aggregate operations occur in TinyCC's
+separate runtime/test sources and zlib's nondefault dynamic-CRC configuration,
+not the presently captured 11-object/default-library populations. Compiler
+keyword strings and generated source duplicates do not create new demand.
+
+Three bounded C controls pass GCC14/Clang19 at O0/O2 (12 native runs); EvoCC
+continues to refuse all three at their named boundaries, verified across three
+CLI modes. The existing scalar/legacy atomic controls remain green. Full scope,
+source locations and limitations are in
+[the inventory](../../tests/fixtures/atomic-scope-boundaries.out); L11a–L11c
+track the missing capability contracts. No benchmark numerator changes.
+
 ## Tooling changes and verification
 
 The new Mbed TLS adapter reuses `tools/ladder/subject.py`: original reference

@@ -123,6 +123,27 @@ fn atomic_type_order_and_constant_context_errors_are_not_silent() {
 }
 
 #[test]
+fn broader_atomic_interfaces_are_not_mistaken_for_implemented_scalar_access() {
+    let source = include_str!("../../../tests/fixtures/atomic-scope-boundaries.c");
+    for (case, code) in [(0, "E2702"), (1, "E2001"), (2, "E2001")] {
+        let source = format!("#define CASE {case}\n{source}");
+        for mode in ["--interpret-c-hir", "--emit=evoir", "--emit=asm"] {
+            let output = run(&source, mode);
+            assert!(!output.status.success(), "case {case} {mode}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains(code),
+                "case {case} {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                output.stdout.is_empty(),
+                "unsupported access emitted a product"
+            );
+        }
+    }
+}
+
+#[test]
 fn atomic_pointer_provenance_and_alignment_use_existing_memory_checks() {
     for (source, code) in [
         (

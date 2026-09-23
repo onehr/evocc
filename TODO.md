@@ -407,12 +407,31 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   compiler RED/fix/replay; silence from one oracle is not proof of definedness.
   Feed the result into B01, not directly into a historical numerator. [Brief §C][semantics].
 
-- [ ] **L11 — Inventory additional atomic scope before extending it** — `OPEN`, P2.
-  Scalar atomic load/store and legacy `__sync` RMW already work. Identify actual
-  remaining demand for general `_Atomic`, generic aggregate atomics and additional
-  `__atomic` RMW/CAS interfaces. Split real blockers into bounded child tasks with
-  width/order/provenance/native tests; keep unsupported scope explicit. This task
-  closes an inventory, not arbitrary concurrent-C conformance. [Brief][semantics].
+- [x] **L11 — Inventory additional atomic scope before extending it** — `DONE`, P2, 2026-09-23.
+  The [source/command inventory](tests/fixtures/atomic-scope-boundaries.out)
+  distinguishes SQLite's supported scalar accesses from TinyCC's uncaptured
+  atomic runtime/test paths and zlib's nondefault dynamic CRC table. Three small
+  [C cases](tests/fixtures/atomic-scope-boundaries.c) pass all 12 fixed-oracle
+  controls; nine CLI boundaries retain E2702/E2001 refusals, not false support.
+  No new current-lane target-object blocker was found. This closes the inventory,
+  **not** additional atomic support; the explicit capability tasks below remain.
+
+  - [ ] **L11a — General `_Atomic` objects and updates** — `NEEDS_RULE`, P2.
+    TinyCC's bounds-checking runtime and C11 atomic test configuration expose
+    this scope; fixture CASE=0 currently refuses E2702. Define object operations,
+    widths, orders, volatile/provenance and library/lock-free boundaries; implement
+    shared paths and verify the actual runtime configuration, not just 11/11
+    compiler objects. zlib's optional dynamic-table atomic_flag is also separate.
+  - [ ] **L11b — Additional `__atomic` RMW/CAS/exchange** — `NEEDS_RULE`, P2.
+    CASE=1 refuses E2001. Specify success/failure orders, weak/strong CAS,
+    expected-value updates, dynamic orders and width limits before extending the
+    existing legacy RMW representation. Require native crossed-compiler tests;
+    single-thread interpreter success is not concurrent-memory-model proof.
+  - [ ] **L11c — Generic aggregate atomics** — `NEEDS_RULE`, P2.
+    CASE=2 refuses E2001 for a naturally aligned eight-byte record. Specify
+    representation/initializedness/provenance and lock-free versus runtime-helper
+    obligations; qualify target runtime/ABI support. Scalar builtin acceptance
+    must not silently admit arbitrary size/alignment or unimplemented helpers.
 
 ## Cross-cutting verification and tooling
 
