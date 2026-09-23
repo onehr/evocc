@@ -2474,3 +2474,27 @@ with exit zero, emit the nonce and power off on this smaller disk. Serial hashes
 reference `b8741d48b439675aed9966586463e2b345929f8481984b883adf785d99ad51c6`,
 subject `2aab28726851a134d2acea7cf2d7f6645fb59f61229c03c71f7f86515cb0759f`.
 These are small repair-environment checks, not a new K6/K7 full-suite result.
+
+### PM barrier completion-order diagnosis — 2026-09-23
+
+TODO K05 is now dispositioned with a real signed-module reduction, not a
+successful retry. In the frozen `drivers/base/power/runtime.c`, the worker
+clears `request_pending` before handling its queued resume. The documented
+`pm_runtime_barrier` contract returns one only when a resume remains pending
+and the barrier must wake the device; it returns zero otherwise. The original
+`runtime-test.c:177` requires one immediately after an asynchronous get without
+preventing that worker from completing first.
+
+`tests/fixtures/pm-runtime-barrier-completion.c` forces the completed-worker
+ordering with `flush_work` on 32 of 64 cycles and requires barrier zero in each.
+Both GCC/EvoCC kernels pass those checks, allow either documented return in
+the other cycles, and verify active state followed by synchronous suspension.
+The signed diagnostic actually loads/unloads; its userspace TAP exits zero.
+The unchanged original case was then replayed on the separate expanded-KUnit
+pair: GCC PASS, EvoCC FAIL at precisely `expected 1, actual 0`. That original
+FAIL remains recorded; no assertion or compiler behavior was changed to hide it.
+
+This closes K05's **cause/classification** as an upstream scheduling assumption,
+not original-test PASS or K14's full execution. Source, commands, paired counts,
+hashes, smaller-disk replay and original KTAP results are recorded in
+`tests/fixtures/pm-runtime-barrier-completion.out`.

@@ -1,0 +1,72 @@
+2026-09-23: TODO K05, source-bound asynchronous-completion disposition.
+This is not a compiler fix and does not change the frozen KUnit assertion.
+
+Source hashes:
+pm-runtime-barrier-completion.c
+  971651cd7a33b6c2cfa44edce92d56b5414e3d08225c2c01e80c0109415d7003
+pm-runtime-barrier-completion-load.c
+  900807b814e23e149f72f98ad7f1edfe254aeeca8b7473d3f66503ec6e3b7c3b
+Linux drivers/base/power/runtime.c
+  a20954a2101667f9c72c0f4b0bcb41de917deb65f1d3d6bf5f14472f52a45a30
+Linux drivers/base/power/runtime-test.c
+  6328178dcc7b6ae54a892cf645d6856ffeb0417ca7bba622a467a24d75412391
+
+Contract: runtime.c documents pm_runtime_barrier returning 1 only if a resume
+request is still pending and it must wake the device; otherwise it returns 0.
+pm_runtime_work clears request_pending and resumes the device asynchronously.
+runtime-test.c:177 assumes the worker cannot finish between pm_runtime_get
+and pm_runtime_barrier, but does not exclude that scheduling order.
+
+RED: the unchanged EvoCC expanded-KUnit Image still fails exactly that original
+assertion; the paired GCC Image passes it in this run. Both boot and shut down.
+That timing difference is retained, not converted to a test PASS.
+
+GREEN reduction: a real signed GPL kernel module creates a no-callback device.
+Across 64 get/barrier/put cycles, flush_work deterministically selects the
+completed-worker order on 32 cycles. Those 32 barriers must return 0; all
+remaining barriers must return either 0 or 1. Every cycle separately checks
+the active state and subsequent successful synchronous suspension.
+Module loading fails on a violation; the loader checks actual load/unload.
+
+Build: sealed evo-flight-lab:sealed, linux/arm64, network none, GCC 14.2.0-19.
+Original Kbuild: make -C /work/src O=/work/kernel ARCH=arm64 CC=gcc-14
+HOSTCC=gcc-14 M=/work/probe/driver -j2 modules (source/kernel mounted read-only).
+Loader: gcc-14 -static -O2 -Wall -Wextra -Werror.
+Sign only the diagnostic with the reference kernel's existing module key.
+Module SHA-256 fd71da8b5bb198c411ea28aa1338f6cd16f71ce7d93cdd6aba5ea2028863594b
+Initramfs SHA-256 ce372ad65d869a6117b10440840e51f628c5012bafe9fddc75de5b8609ccbcc7
+Existing selftest-init.c, gen_init_cpio and boot.sh; no new runner.
+
+Paired reduction on the BPF configuration, hvf-host, four vCPUs:
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+  completed_zero=32 immediate_zero=22 immediate_one=10 result=0
+Evo Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+  completed_zero=32 immediate_zero=23 immediate_one=9 result=0
+Both valid TAP 1/1 PASS, exit 0, fresh nonce and orderly shutdown.
+Artifact root .build/floating-targeted/pm-barrier-contract-20260923/
+reference-boot serial 60246fd493f73e58a23a5425cde04805fe54058fb13ca7b5082432e41e60ef58
+subject-boot serial 5599e605924fb147a33c2dd3d359ac0e833f094bc3cc8bcd78f2a8465e3420d2
+
+After storage compaction, both reductions also pass using the shared 64 MiB
+repair scratch disk; its bytes are unchanged by QEMU snapshot flights.
+Artifact root .build/k7-coverage/repair-runtime/
+reference-pm-boot serial b8741d48b439675aed9966586463e2b345929f8481984b883adf785d99ad51c6
+subject-pm-boot serial 2aab28726851a134d2acea7cf2d7f6645fb59f61229c03c71f7f86515cb0759f
+
+Unchanged original replay on the separate expanded-KUnit configuration:
+K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=1
+K1_KUNIT_FILTER=pm_runtime_test_cases.pm_runtime_error_test K1_BOOT_TIMEOUT=120
+tools/k1/boot.sh <Image> <capture>
+GCC Image 01d31b39590079ffb6461e6268c6c2445500ca0376c367b937ef9eecf7f9bebd
+  reference-original-pm serial 8e6d028460e090750fc897edc46a81ee302cb5f1588f09ed9fc9012a4f34fe70
+  original case PASS.
+Evo Image 29090f227ea34a63462bc4289df4264aba783d659102e0c9da0fb08ba07c94a7
+  subject-original-pm serial 7ba0ece6e620135d79d637aa28f0351b47498a668fd89934f1766a2c8938ad59
+  original case FAIL: expected 1, pm_runtime_barrier returned 0.
+QEMU 11.1.1 SHA-256 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Actual emulator drift is explicit, not hidden as the older contract binary.
+
+Conclusion: the original assertion excludes a documented legal completion
+order. The reduction passes on both kernels without changing kernel behavior
+or original assertions. Close K05's diagnosis, retain original FAIL, and leave
+K14's fresh full-suite execution open. No KUnit population was reduced.

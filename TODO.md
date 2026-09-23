@@ -108,11 +108,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   workload and clean shutdown, or a source-bound non-compiler disposition;
   intermittency alone is not a fix. [Evidence][kernel].
 
-- [ ] **K05 — PM runtime KUnit pending-resume race** — `OPEN`, P1.
-  `pm_runtime_error_test` has both PASS and FAIL observations around asynchronous
-  resume/barrier timing. Reduce the worker/request ordering and compare matched
-  kernels. Close with an explained source/runtime or compiler cause and the
-  original test's disposition; do not claim a compiler repair from a retry. [Evidence][kernel].
+- [x] **K05 — PM runtime KUnit pending-resume race** — `DONE`, P1, 2026-09-23.
+  The [signed-module reduction](tests/fixtures/pm-runtime-barrier-completion.c)
+  selects the completed-worker ordering with `flush_work`: barrier returns zero
+  in all 32 such cycles on both kernels, as the frozen API documents. Both also
+  pass all 64 active/suspend checks. The unchanged original replay remains GCC
+  PASS / EvoCC FAIL at its unsupported assumption that resume is still pending.
+  This closes **classification as a timing-sensitive upstream assertion**, not
+  that original as PASS or a compiler repair. [Paired record](tests/fixtures/pm-runtime-barrier-completion.out).
+  K14's fresh complete execution remains open.
 
 - [ ] **K06 — Build and run the IOPF-enabled configuration** — `OPEN`, P1.
   IOMMU is 218 PASS / 6 FAIL / 5 SKIP on both kernels; the six failures reach the
