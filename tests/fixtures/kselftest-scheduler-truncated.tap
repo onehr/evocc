@@ -1,0 +1,6 @@
+TAP version 13
+1..1
+# RESULTS:
+# PASSED: 22
+# SKIPPED: 0
+ok 1 selftests: sched_ext: runner

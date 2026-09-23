@@ -93,6 +93,44 @@ class KernelSelftest(unittest.TestCase):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])
         self.assertEqual(rows[0]['outcome'], 'FAIL')
 
+    def test_truncated_scheduler_summary_cannot_be_an_all_tests_pass(self):
+        output = (PATH.parents[2] / 'tests/fixtures/kselftest-scheduler-truncated.tap').read_text()
+        parsed = lane.parse_tap(output)
+        self.assertFalse(parsed['valid'], 'missing nested FAILED count was silently ignored')
+        self.assertEqual(parsed['subtests'], {'PASS': 1, 'FAIL': 0, 'SKIP': 0},
+                         'the observed outer verdict must remain intact')
+        self.assertTrue(parsed['nestedSummaryErrors'])
+        rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+        self.assertEqual(rows[0]['outcome'], 'INVALID_OUTPUT')
+        self.assertEqual(lane.compare(rows, rows)['status'], 'INCOMPLETE')
+
+    def test_scheduler_summary_requires_ordered_nonnegative_counts_and_a_test(self):
+        for counts in (
+            '# PASSED: 22\n',
+            '# PASSED: 22\n# SKIPPED: 0\n# FAILED: -1\n',
+            '# PASSED: 22\n# SKIPPED: 0\n# FAILED: unknown\n',
+            '# PASSED: 22\n# PASSED: 22\n# FAILED: 0\n',
+            '# FAILED: 0\n# SKIPPED: 0\n# PASSED: 22\n',
+            '# PASSED: 0\n# SKIPPED: 0\n# FAILED: 0\n',
+        ):
+            with self.subTest(counts=counts):
+                output = '1..1\n# RESULTS:\n' + counts + 'ok 1 selftests: sched_ext: runner\n'
+                self.assertFalse(lane.parse_tap(output)['valid'])
+
+    def test_unrelated_results_heading_is_not_scheduler_protocol(self):
+        output = '1..1\n# RESULTS:\n# bytes: 42\nok 1 unrelated\n'
+        self.assertTrue(lane.parse_tap(output)['valid'])
+
+    def test_scheduler_wrapper_requires_a_summary_only_when_it_claims_pass(self):
+        output = '1..1\nok 1 selftests: sched_ext: runner\n'
+        self.assertFalse(lane.parse_tap(output)['valid'])
+        skipped = output.replace('runner\n', 'runner # SKIP unavailable\n')
+        self.assertTrue(lane.parse_tap(skipped)['valid'])
+        healthy = output.replace('ok 1', '# RESULTS:\n# PASSED: 23\n# SKIPPED: 0\n# FAILED: 0\nok 1')
+        parsed = lane.parse_tap(healthy)
+        self.assertTrue(parsed['valid'])
+        self.assertEqual(parsed['nestedSummaryErrors'], [])
+
     def test_printk_replay_removes_only_the_identical_interrupted_prefix(self):
         text = ('[   30.710764]    \n** replaying previous printk message **\n'
                 '[   30.710764]         # Subtest: intlog10_test\n'

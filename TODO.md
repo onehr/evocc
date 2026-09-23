@@ -68,6 +68,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   disposition; one successful retry and the failed single-thread TCG experiment
   do not close it. [Evidence][kernel].
 
+  - [x] **K01a — Fail closed on truncated sched_ext result summaries**.
+    [Minimal fixture](tests/fixtures/kselftest-scheduler-truncated.tap) reproduced
+    seven false-valid assertions. The parser now retains malformed/missing/empty
+    summary errors through program accounting; outer TAP results are not rewritten.
+    All 219 K1 Python regressions and targeted Ruff/diff checks pass. This closes the verdict subcase,
+    **not** the kernel NULL fault or the fresh paired run.
+
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;
   the reference completes. Profile the exact fixed-CPU/EL2 lane, isolate the hot

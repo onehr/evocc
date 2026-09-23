@@ -68,7 +68,7 @@ def parse_tap(output):
     # Keep its verdict, but never promote it to an all-subtests claim. A nested
     # self-test may intentionally exercise failure, so these require review,
     # not a guessed automatic reclassification of the original program.
-    nested, skipped = [], []
+    nested, skipped, summary_errors = [], [], []
     for line in output.splitlines():
         bpf = re.fullmatch(r'\s*(?:#\s*)+Summary: (\d+)/(\d+) PASSED, (\d+) SKIPPED, (\d+) FAILED\s*', line)
         if bpf:
@@ -89,24 +89,43 @@ def parse_tap(output):
                 skipped.append({'line': line, 'passed': totals.get('pass', 0), 'skipped': totals['skip']})
     # sched_ext's runner reports failures in this three-line summary but can
     # still exit zero. Preserve the outer TAP result while making its inner
-    # failures/skips visible to the existing acceptance review. Only recognize
-    # the complete summary, not arbitrary "FAILED" text from a test body.
+    # failures/skips visible to the existing acceptance review. An incomplete
+    # recognized summary is invalid evidence, not an empty list of failures.
+    # An unrelated RESULTS heading is not enough to identify this protocol.
+    scheduler_pass = any(case['outcome'] == 'PASS'
+                         and re.fullmatch(r'selftests:\s+sched_ext:\s+runner', case['name'])
+                         for case in cases)
+    scheduler_summaries = 0
     summary_lines = [line for line in output.splitlines()
                      if not re.fullmatch(r'\s*(?:#\s*)+', line)]
     for index, line in enumerate(summary_lines):
         if not re.fullmatch(r'\s*(?:#\s*)+RESULTS:\s*', line):
             continue
         block = summary_lines[index + 1:index + 4]
+        if not scheduler_pass and not any(
+                re.match(r'\s*(?:#\s*)+(?:PASSED|SKIPPED|FAILED):', item) for item in block):
+            continue
+        scheduler_summaries += 1
         summary_counts = [re.fullmatch(r'\s*(?:#\s*)+' + label + r':\s*(\d+)\s*', item)
                           for label, item in zip(('PASSED', 'SKIPPED', 'FAILED'), block)]
-        if len(summary_counts) == 3 and all(summary_counts):
-            passed, skip_count, failed = [int(match[1]) for match in summary_counts]
-            if failed:
-                nested.append({'line': block[2], 'failed': failed, 'errors': 0})
-            if skip_count:
-                skipped.append({'line': block[1], 'passed': passed, 'skipped': skip_count})
+        if len(summary_counts) != 3 or not all(summary_counts):
+            summary_errors.append({'lines': [line, *block],
+                                   'reason': 'incomplete or malformed sched_ext summary'})
+            continue
+        passed, skip_count, failed = [int(match[1]) for match in summary_counts]
+        if passed + skip_count + failed == 0:
+            summary_errors.append({'lines': [line, *block],
+                                   'reason': 'sched_ext summary reports no tests'})
+        if failed:
+            nested.append({'line': block[2], 'failed': failed, 'errors': 0})
+        if skip_count:
+            skipped.append({'line': block[1], 'passed': passed, 'skipped': skip_count})
+    if scheduler_pass and not scheduler_summaries:
+        summary_errors.append({'lines': [], 'reason': 'missing sched_ext summary'})
+    valid = valid and not summary_errors
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
-            'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped}
+            'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped,
+            'nestedSummaryErrors': summary_errors}
 
 
 def parse_transcript(text, nonce, programs):

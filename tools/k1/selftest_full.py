@@ -908,7 +908,8 @@ def program_case(ident, result):
             'valid': row.get('valid', False) and boot == 'PASS',
             'exitCode': row.get('exitCode'),
             'nestedFailureSummaries': row.get('nestedFailureSummaries', []),
-            'nestedSkipSummaries': row.get('nestedSkipSummaries', [])}
+            'nestedSkipSummaries': row.get('nestedSkipSummaries', []),
+            'nestedSummaryErrors': row.get('nestedSummaryErrors', [])}
 
 
 def reusable_reference(previous, current):

@@ -1301,6 +1301,22 @@ class FullSelftest(unittest.TestCase):
         unrelated = selftest.parse_tap(output.replace('# RESULTS:\n# \n', ''))
         self.assertEqual(unrelated['nestedFailureSummaries'], [])
 
+    def test_truncated_scheduler_summary_survives_program_and_campaign_accounting(self):
+        spec = importlib.util.spec_from_file_location('selftest_scx_truncated', PATH.parent / 'selftest.py')
+        selftest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selftest)
+        output = (PATH.parents[2] / 'tests/fixtures/kselftest-scheduler-truncated.tap').read_text()
+        parsed = selftest.parse_tap(output)
+        case = lane.program_case('sched_ext:runner', {
+            'boot': {'verdict': 'PASS'}, 'programs': [dict(parsed, outcome='PASS', exitCode=0)]})
+        self.assertEqual(case['outcome'], 'INVALID_OUTPUT')
+        self.assertEqual(case['nestedSummaryErrors'], parsed['nestedSummaryErrors'])
+        summary = lane.summarize([{'id': 'sched_ext', 'buildExit': 0,
+                                   'tests': ['sched_ext:runner']}],
+                                 [{'id': 'sched_ext', 'valid': False, 'cases': [case]}])
+        self.assertEqual(summary['outcomes'], {'INVALID_OUTPUT': 1})
+        self.assertEqual(summary['status'], 'INCOMPLETE')
+
     def test_upstream_timeout_tap_stays_timeout_after_normal_guest_shutdown(self):
         name = 'selftests: mm: run_vmtests.sh # TIMEOUT 900 seconds'
         for exit_code in (0, 1):

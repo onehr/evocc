@@ -2330,3 +2330,18 @@ mseal/checkpoint-restore conflict. LKDTM instrumentation/hardening, Rust and
 IMA requirements remain separate work. The obsolete TEST_BLACKHOLE_DEV
 request is not an available Kconfig symbol; the current code uses
 BLACKHOLE_DEV_KUNIT_TEST. None of these observations becomes a test waiver.
+
+### Truncated scheduler verdict regression — 2026-09-23
+
+`tests/fixtures/kselftest-scheduler-truncated.tap` reduces the runner protocol
+to an outer PASS with a missing inner FAILED count. Seven RED assertions
+confirmed that missing/malformed/negative/reordered/empty inner counters were
+silently treated as valid evidence. The parser now reports `nestedSummaryErrors`,
+preserves the outer counts, and carries those errors into program accounting as
+INVALID_OUTPUT. A passed scheduler wrapper without its summary is also invalid;
+an upstream SKIP or an unrelated RESULTS heading is not reclassified.
+
+All **219 K1 Python tests**, targeted Ruff and `git diff --check` pass;
+`gate-changed.sh HEAD` correctly selects no Rust crates. No kernel run or sealed
+receipt was rewritten. This closes TODO K01a's verdict-integrity subcase, not
+K01's runtime NULL fault or K13's full paired acceptance.
