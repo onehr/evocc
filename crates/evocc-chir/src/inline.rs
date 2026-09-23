@@ -621,7 +621,7 @@ pub fn needs_substitution(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> boo
             || f.attributes.iter().any(|a| a.semantic_name() == Some("always_inline"))
             || constant_inline_return(unit, f, target).is_some()
             || f.has_internal_linkage(unit.symbols())))
-    }) || !static_integer_values(unit, target).is_empty()
+    }) || !static_scalar_values(unit, target).is_empty()
         || has_constant_queries(unit)
 }
 
@@ -773,25 +773,45 @@ fn common_parameter_values<'a>(
 }
 
 // This is an execution optimization, not an extension of integer constant
-// expressions or constant_p. An address escape or volatile access prevents it.
-fn static_integer_values<'a>(
+// expressions. An address escape or volatile access prevents it. A private
+// pointer also stays invariant when no C/alias/assembly use can modify it.
+fn static_scalar_values<'a>(
     unit: &CHirUnit<'a>,
     target: &TargetDataLayout,
 ) -> BTreeMap<SymbolId, (&'a CHirExpr<'a>, TypeId)> {
     let uses = inspect(unit.iter().map(Node::Decl));
+    let aliases = crate::linkage::SymbolLinkage::derive(unit).ok();
     uses.statics
         .iter()
         .filter_map(|(&symbol, object)| {
             let canonical = unit.types.get(object.ty)?;
-            if !canonical.qualifiers.is_const
+            let private_pointer = matches!(canonical.kind, TypeKind::Pointer(_))
+                && object.storage == StorageClass::Static
+                && !object.attributes.iter().any(|attribute| {
+                    matches!(
+                        attribute.semantic_name(),
+                        Some("used" | "retain" | "section")
+                    )
+                })
+                && aliases
+                    .as_ref()
+                    .is_some_and(|linkage| !linkage.aliases.values().any(|s| *s == symbol))
+                && !uses.assembly.iter().any(|text| {
+                    text.split(|c: char| {
+                        !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '$'))
+                    })
+                    .any(|word| word == object.name.spelling)
+                });
+            if (!canonical.qualifiers.is_const && !private_pointer)
                 || canonical.qualifiers.is_volatile
                 || canonical.qualifiers.is_atomic
                 || uses.mutable.contains(&symbol)
                 || object.asm_label.is_some()
-                || !matches!(
-                    canonical.kind,
-                    TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)
-                )
+                || !(private_pointer
+                    || matches!(
+                        canonical.kind,
+                        TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)
+                    ))
             {
                 return None;
             }
@@ -801,13 +821,15 @@ fn static_integer_values<'a>(
                 return None;
             };
             (path.is_root()
-                && crate::constant::eval_integer_constant(
-                    value,
-                    &unit.types,
-                    &unit.symbols,
-                    target,
-                )
-                .is_some())
+                && (private_pointer
+                    && repeatable_argument(value, &unit.types, &unit.symbols, target)
+                    || crate::constant::eval_integer_constant(
+                        value,
+                        &unit.types,
+                        &unit.symbols,
+                        target,
+                    )
+                    .is_some()))
             .then_some((symbol, (*value, object.ty)))
         })
         .collect()
@@ -946,6 +968,7 @@ pub(crate) fn substitute_for_execution<'a>(
         eligible,
         globals: BTreeMap::new(),
         static_values: BTreeMap::new(),
+        static_byte_objects: BTreeMap::new(),
         pure_constants,
         serial: 0,
         active: Vec::new(),
@@ -957,7 +980,14 @@ pub(crate) fn substitute_for_execution<'a>(
         track_extents: uses.object_queries,
         extent_scope: unit.symbols.file_scope(),
     };
-    for (symbol, (value, ty)) in static_integer_values(unit, target) {
+    for (&symbol, object) in &uses.statics {
+        if pass.immutable_array(object.ty) {
+            if let Some(bytes) = pass.initialized_array_bytes(object) {
+                pass.static_byte_objects.insert(symbol, bytes);
+            }
+        }
+    }
+    for (symbol, (value, ty)) in static_scalar_values(unit, target) {
         let converted = pass.alloc(CHirExpr::Cast(ty, value, value.span()));
         if let Some(value) = pass.repeatable_value(converted, ty) {
             pass.static_values.insert(symbol, value);
@@ -984,6 +1014,9 @@ pub(crate) fn substitute_for_execution<'a>(
             o.span,
         )?;
         pass.globals.insert(s, fresh);
+        if let Some(bytes) = pass.static_byte_objects.get(&s).copied() {
+            pass.static_byte_objects.insert(fresh, bytes);
+        }
         lifted.push(o);
     }
     let mut declarations = Vec::new();
@@ -1213,6 +1246,7 @@ struct Context<'a> {
     track_ranges: bool,
     allow_sequential_values: bool,
     object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
+    byte_objects: BTreeMap<SymbolId, literal_queries::Bytes<'a>>,
     single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     exposed_objects: BTreeSet<SymbolId>,
@@ -1242,6 +1276,7 @@ impl Context<'_> {
             track_ranges: false,
             allow_sequential_values: false,
             object_bounds: BTreeMap::new(),
+            byte_objects: BTreeMap::new(),
             single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
             exposed_objects: BTreeSet::new(),
@@ -1266,6 +1301,7 @@ struct Substitution<'a, 't> {
     eligible: BTreeMap<SymbolId, &'a FunctionDecl<'a>>,
     globals: BTreeMap<SymbolId, SymbolId>,
     static_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
+    static_byte_objects: BTreeMap<SymbolId, literal_queries::Bytes<'a>>,
     pure_constants: BTreeMap<SymbolId, crate::integer::CInteger>,
     serial: u64,
     active: Vec<SymbolId>,
@@ -1579,7 +1615,7 @@ impl<'a> Substitution<'a, '_> {
         ) {
             return Some(vec![value]);
         }
-        if let Some(value) = self.literal_byte_query(expression) {
+        if let Some(value) = self.literal_byte_query(expression, c) {
             return Some(vec![value]);
         }
         let values = |e| self.possible_query_values(e, c, initialized);
@@ -2157,6 +2193,15 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
         }
+        if c.declaration_prefix
+            && matches!(o.storage, StorageClass::None | StorageClass::Auto)
+            && c.scope != self.unit.symbols.file_scope()
+        {
+            if let Some(bytes) = self.initialized_array_bytes(&o) {
+                c.byte_objects.insert(o.symbol, bytes);
+                c.memo.clear();
+            }
+        }
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
     /// Instantiating a local type must rename its captured sizes as well as
@@ -2201,6 +2246,22 @@ impl<'a> Substitution<'a, '_> {
         e: &'a CHirExpr<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
+        if c.expand_calls
+            && !c.byte_objects.is_empty()
+            && matches!(
+                e,
+                CHirExpr::CheckedArithmetic { .. }
+                    | CHirExpr::Atomic(_)
+                    | CHirExpr::Vector(_)
+                    | CHirExpr::Complex(_)
+                    | CHirExpr::BuiltinVarArgs { .. }
+            )
+        {
+            // These families can write through an address. Query operands are
+            // unevaluated, but an executed operation kills prior byte facts.
+            c.byte_objects.clear();
+            c.memo.clear();
+        }
         if !c.path_ranges.is_empty()
             && matches!(
                 e,
@@ -2410,6 +2471,10 @@ impl<'a> Substitution<'a, '_> {
                 for a in args.iter_mut() {
                     *a = self.expr(a, c)?;
                 }
+                if c.expand_calls && !c.byte_objects.is_empty() {
+                    c.byte_objects.clear();
+                    c.memo.clear();
+                }
                 let bounds = if self.track_extents && c.expand_calls {
                     self.capture_allocation(f, args, c.scope)?
                 } else {
@@ -2527,11 +2592,19 @@ impl<'a> Substitution<'a, '_> {
                 *place = self.place(place, c, e.span())?;
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = self.expr(value, c)?;
+                if c.expand_calls {
+                    c.byte_objects.clear();
+                    c.memo.clear();
+                }
             }
             CHirExpr::MemoryRead { place, facts, .. }
             | CHirExpr::MemoryUpdate { place, facts, .. } => {
                 *place = self.place(place, c, e.span())?;
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
+                if c.expand_calls && matches!(e, CHirExpr::MemoryUpdate { .. }) {
+                    c.byte_objects.clear();
+                    c.memo.clear();
+                }
             }
             CHirExpr::StatementExpr {
                 body, value, facts, ..
@@ -2672,6 +2745,19 @@ impl<'a> Substitution<'a, '_> {
         s: &'a CHirStmt<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirStmt<'a>, InlineError> {
+        if matches!(
+            s,
+            CHirStmt::While(..)
+                | CHirStmt::DoWhile(..)
+                | CHirStmt::For(..)
+                | CHirStmt::Label(..)
+                | CHirStmt::Goto(..)
+                | CHirStmt::ComputedGoto(..)
+                | CHirStmt::Asm(..)
+        ) {
+            c.byte_objects.clear();
+            c.memo.clear();
+        }
         let mut out = s.clone();
         match &mut out {
             CHirStmt::Compound(items, _) => {
@@ -2680,6 +2766,7 @@ impl<'a> Substitution<'a, '_> {
                 // of its own immutable symbol, even after another statement.
                 let incoming = inspect([Node::Stmt(s)]).entry_labels;
                 let outer_prefix = c.declaration_prefix;
+                let outer_bytes = c.byte_objects.keys().copied().collect::<BTreeSet<_>>();
                 let outer_assignments = c.assignment_values.clone();
                 let outer_sequential = c.sequential_values.keys().copied().collect::<BTreeSet<_>>();
                 let outer_allow_sequential = c.allow_sequential_values;
@@ -2775,6 +2862,8 @@ impl<'a> Substitution<'a, '_> {
                 }
                 *items = result;
                 c.declaration_prefix = outer_prefix;
+                c.byte_objects
+                    .retain(|symbol, _| outer_bytes.contains(symbol));
                 c.allow_sequential_values = outer_allow_sequential;
                 // Keep invalidations of outer objects; never export facts for
                 // declarations in a conditionally executed nested scope.

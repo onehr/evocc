@@ -209,6 +209,13 @@ fn checked_constant_stores_feed_inline_allocation_queries_without_losing_the_sto
 }
 
 #[test]
+fn constant_byte_queries_use_initialized_objects_without_broadening_source_ice() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/constant-query-object-bytes.c"
+    ));
+}
+
+#[test]
 fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
     assert_constant_program(
         "typedef unsigned long size_t;char storage[128];\
@@ -1232,9 +1239,60 @@ fn constant_queries_prove_literal_bytes_without_broadening_source_ice() {
         "int main(void){const char*p=\"abc\";int i=0;return __builtin_constant_p(p[i++])||i;}",
         "int main(void){const char*p=\"abc\";int i=0;return __builtin_constant_p((i++,p)[0])||i;}",
         "int main(void){const char*p=\"abc\";volatile int i=0;return __builtin_constant_p(p[i]);}",
-        "int main(void){char bytes[]=\"abc\";return __builtin_constant_p(bytes[0]);}",
+        "int main(void){char bytes[]=\"abc\";volatile char c='z';bytes[0]=c;return __builtin_constant_p(bytes[0]);}",
         "int calls;unsigned long strlen(const char*p){++calls;return 37;}int main(void){const char*p=\"abc\";return __builtin_strlen(p)!=37||calls!=1;}",
     ] {
         assert_constant_program(source);
+    }
+}
+
+#[test]
+fn initialized_byte_queries_drop_facts_after_possible_writes() {
+    for source in [
+        "int main(void){char a[4]=\"abc\";volatile char v='z';a[0]=v;return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[4]=\"abc\";char*p=a;volatile char v='z';*p=v;return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "__attribute__((noinline)) void change(char*p){*p='z';}int main(void){char a[4]=\"abc\";change(a);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[4]=\"abc\";volatile int v='z';__builtin_add_overflow(v,0,&a[0]);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[4]=\"abc\";volatile char v='z';__atomic_store_n(a,v,0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[4]=\"abc\";volatile int n=1;while(n--){a[0]='z';}return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){goto later;{char a[4]=\"abc\";later:return __builtin_constant_p(a[0]);}}",
+        "int main(void){char a[4];return __builtin_constant_p(a[0]);}",
+        "static const char*p=\"abc\";int main(void){p=\"z\";return p[0]!='z';}",
+        "static const char*p=\"abc\";__attribute__((noinline)) void change(const char**q){*q=\"z\";}int main(void){change(&p);return p[0]!='z';}",
+        "static const char*p=\"abc\";extern const char*q __attribute__((alias(\"p\")));int main(void){q=\"z\";return p[0]!='z';}",
+    ] { assert_constant_program(source); }
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(
+            "int main(void){char a[4];int known=__builtin_constant_p(a[0]);return known+a[0];}",
+            mode,
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
+    }
+}
+
+#[test]
+fn initialized_byte_queries_respect_array_limits_qualifiers_and_unevaluated_inputs() {
+    for source in [
+        "int main(void){char a[80]=\"abc\";return !__builtin_constant_p(a[79])||a[79]!=0||__builtin_constant_p(a[80])||__builtin_constant_p(a[-1]);}",
+        "int main(void){char a[3]=\"abc\";return !__builtin_constant_p(a[2])||__builtin_constant_p(a[3])||a[2]!='c';}",
+        "int main(void){unsigned char a[]=\"a\\0b\\377\";return !__builtin_constant_p(a[3])||a[1]||a[3]!=255;}",
+        "int main(void){volatile char a[]=\"abc\";return __builtin_constant_p(a[0]);}",
+        "int main(void){char a[]=\"abc\";int i=0;return __builtin_constant_p(a[i++])||i||!__builtin_constant_p(a[0]);}",
+        "int main(void){char a[]=\"abc\";int q=__builtin_constant_p(a[0]='z');return q||a[0]!='a'||!__builtin_constant_p(a[0]);}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn private_pointer_query_facts_exclude_linker_visible_storage() {
+    for source in [
+        "static const char*p __attribute__((used))=\"abc\";const char*get(void){return p;}",
+        "static const char*p __attribute__((section(\".callbacks\")))=\"abc\";const char*get(void){return p;}",
+        "static const char*p=\"abc\";asm(\".quad p\");const char*get(void){return p;}",
+        "static const char*p=\"abc\";extern const char*q __attribute__((alias(\"p\")));const char*get(void){return p;}",
+    ] {
+        let output=run(source,"--emit=evoir");
+        assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("global_addr @p"),"{source}");
     }
 }

@@ -1,0 +1,15 @@
+2026-09-23, GNU11 AArch64 -O2, fixed offline evo-flight-lab:sealed.
+RED: the original byte query cannot prove a string-initialized local array;
+both compilation paths succeed, but C-HIR returns 1 instead of 0.
+GREEN: both interpreters and GCC14/Clang19/EvoCC native execution return 0.
+Source SHA256: fc83d532b443a4615749e667f11398778d5cd8563dbefd9a30b281829e4aabb4
+Assembly SHA256: d5e7467b5fad7a7376ea5df27c1b87137742742728689d5475b2e23e8c703bd6
+Native SHA256: 9c87a151f52f90f5162d420fa359386852d73a1defe10a544b73c41fb98626a6
+Additional RED: a checked arithmetic store left a stale byte fact; after the
+invalidation fix, writes, aliases, atomic stores, loops, escapes, qualifiers,
+uninitialized reads and unevaluated query operands all pass their controls.
+73 compiler-query and 31 effective-option Rust tests PASS.
+tools/gate-changed.sh 19d8579 --offline -j1: PASS, including affected reverse
+dependencies, Clippy -D warnings and workspace fmt.
+This is execution/query precision, not broader source ICE admission. Nonliteral
+strlen ICE expectations and the original kernel suite remain separate.
