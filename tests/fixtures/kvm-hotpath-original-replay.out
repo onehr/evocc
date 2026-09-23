@@ -1,0 +1,72 @@
+2026-09-23: K02/K03 integrated diagnostic, both remain OPEN.
+
+The negated-truth/private-leaf repairs are installed in two target objects,
+using release 53d13449f8be185b1fbad826ac9c52e6704c60491c31fe703eb71624852d13c8:
+  virt/kvm/kvm_main.o
+    ca8e05b860ff14fe6889ec7115c1b240f3ad4afef7eb2aeb3b910d07e3421cce
+  arch/arm64/kvm/hyp/pgtable.o
+    fb7b00c00e42fc241e731f11a898163577601f014a552fe8a8673ab92286edec
+Original Kbuild commands, actual subject-generated headers and 60s compile
+limits retained. Both match all reference global symbol names/kinds. All
+6765 installed target-C records are audited before/after link; 6763 retain
+their parent composition. This is NOT a uniform new-compiler rebuild.
+
+Initial post-link audit stopped: the inventory spells kvm_main with
+arch/arm64/kvm/../../../virt/kvm/kvm_main.o. The adapter compared spelling,
+leaving that row's old hash. Canonical matching now preserves original record
+identity; all 6765 physical paths are distinct. The full audit passes, no
+check removed. The failed audit and resume logs remain separately retained.
+
+Kbuild complete link: exit 0, 199.876s. Generated source/header inputs remain
+byte-identical, including Module.symvers/.vmlinux.export.c. All 745 modules
+relink against new BTF; 3552 target-C and five reference-assembly inputs are
+unchanged. Signing/installation/module runtime are NOT performed here; the old
+module payload must not accompany this Image. Published acceptance is unchanged.
+
+Parent Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Candidate    2b87033b367eff31d0c88d9e212a5d3c4b75f5fc5a7d35f5b999ad3d5c06626c
+vmlinux      fbf5db9cd4b2c2dd40523eb9ded5aed498ac82e49ee10f8549d7d7285de9c118
+units.jsonl  103b51a1e200b22beb848eee2801d6ce7859ad95183e457573ca371cd759115c
+Inventory    6c06c7d615b46cb0f1503104ade8bbaf8fac45cfbe20ca32aa5cc39a172bc9ea
+Config       2f938cda8169ed22e90e46b4e43a9b3752daa6c457497fb13e14a3d66abdfa28
+Reference    8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+
+Original binaries, zero arguments: default 1 GiB and all ten guest modes.
+Existing selftest-init gives each program its unchanged 120s watchdog;
+240s boot timeout includes setup/shutdown, not a raised test budget.
+Serial observations, no concurrent benchmark VM/build:
+  program                           reference       candidate
+  demand_paging_test                exit 0, 10/10   timeout 124, 3/10 completed
+  memslot_modification_stress_test   exit 0, 10/10   timeout 124, 3/10 completed
+All four nonce-bound boots and normal shutdowns PASS; candidates enter mode
+four before termination. These programs do not emit their own TAP plan.
+Direct exit/mode observations do not replace the full-suite wrapper's verdict;
+no K13 receipt is rewritten. The two repairs do not close these timeouts.
+
+A 4.0 MiB initramfs reuses the 64 MiB snapshot scratch disk: original ELFs,
+libc/loader and existing init only. No full runtime copy or config reduction.
+Parent Image/vmlinux/two objects are retained using APFS copy-on-write.
+
+Both sides, each program separately:
+  K1_ALLOW_QEMU_DRIFT=1
+  K1_KERNEL_CONTRACT=contracts/kernel-selftest-kvm-target.json
+  K1_BOOT_LANE=tcg-neoverse-n2-el2 K1_KUNIT_AUTORUN=0 K1_BOOT_TIMEOUT=240
+  K1_SELFTEST_COLLECTION=PROGRAM
+  K1_INITRAMFS=.build/floating-targeted/kvm-hotpath-20260923/payload.cpio
+  K1_TEST_DISK=.build/k7-coverage/repair-runtime/scratch.img
+  tools/k1/boot.sh IMAGE RUN_DIRECTORY
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Payload b31c60595529ba1b92725c709b6590f80c7901a35d89d9512dbfc5f4e2e57df2
+Demand ELF 696a0e84a022a2132ad4c768acb511ed8dc6f6bceb233c52dcaf824b2bee01f3
+Memslot ELF 6e0fa8aae4396ad8cc6ccedd2513bdc591aec15b89a4eb7a2ea1c4ba49fd2043
+ELF/libc/loader identities match the earlier small profiles.
+
+Evidence .evidence/k1/kvm-hotpath-20260923/: repair.json, units.jsonl,
+relink.log, module-link artifacts, runtime/{reference,subject}-{PROGRAM}/boot.*.
+Serial hashes, reference / subject:
+  demand 19212d98bb26889dacb37b5a5c9dc93ce9c20f760207898b9e8f684b8a85314b
+         de39bf1cc9767d8c4f51e2303873ff0218a2302eaf9e1c73efda3ca9666d833a
+  memslot 720f2acb6d20be1dc7663bc38586c338d00b20dddbe7289aef8e178ed0c6a473
+          73c4f439bb5aa5f78c43faa6a8cfd84b635c279675dbbe1eb3dcb1442cbb6116
+All four flights ended. Next reduce further redundant value/address work in
+observed hot paths; retain the budgets. K02/K03 and T04 remain OPEN.

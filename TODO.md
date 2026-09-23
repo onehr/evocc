@@ -105,6 +105,9 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   same 87 fault-handler invocations on both kernels and no dropped events;
   excess time spans page acquisition/mapping/release, not one proven stall.
   The 4.1 MiB diagnostic reuses the 64 MiB scratch disk. No original PASS claim.
+  [Integrated two-object replay](tests/fixtures/kvm-hotpath-original-replay.out):
+  the repaired Image boots, but the original default workload still times out
+  after three complete modes; GCC finishes all ten. K02 remains OPEN.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -125,6 +128,9 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   measures 0.208 / 1.274 s (GCC / EvoCC); destruction is 3.898 / 81.148 ms, so it
   is not the entire gap. Both reduced TAP tests and shutdowns pass; original
   all-mode acceptance remains open. Next isolate the repeated page-table helpers.
+  The [new linked candidate](tests/fixtures/kvm-hotpath-original-replay.out)
+  installs the two gated KVM repairs but still times out in the fourth mode;
+  GCC completes all ten. Both shutdowns pass; this is not K03 closure.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN

@@ -2625,3 +2625,27 @@ survive accounting, and the ASCII renderer labels the targeted selection.
 no source assertion, budget, Image, module installation or full-run numerator
 is changed. The small paired diagnostic payload is about 10 MiB and reuses the
 64 MiB scratch disk. No test from this flight remains active.
+
+### Integrated KVM repair replay — 2026-09-23
+
+The gated negated-truth/private-leaf repairs are installed in `kvm_main.o`
+and hyp `pgtable.o`. The complete kernel and 745 modules relink, all 6,765
+target-C records retain audited provenance, and generated inputs are unchanged.
+The first audit stopped on a canonical-path spelling mismatch in the one-off
+adapter; after fixing the lookup, the full audit passes. This is an incremental
+composition (two new-compiler objects), not a uniform rebuild.
+
+The new Image `2b87033b…c06626c` boots and powers off in both KVM replays.
+Nevertheless, both unchanged default programs still hit **120 seconds** after
+three complete guest modes, whereas GCC finishes all ten. **K02/K03 stay OPEN**.
+The 4 MiB payload reuses the 64 MiB snapshot scratch disk and original binaries;
+no full runtime copy was created. Direct exit/mode observations do not replace
+K13's wrapper/nested verdicts. All four flights ended.
+
+[The record](../../tests/fixtures/kvm-hotpath-original-replay.out) binds commands,
+objects, generated inputs, Image, module link and serial captures. Parent
+Image/vmlinux are retained copy-on-write under
+`.build/floating-targeted/kvm-hotpath-20260923/before/`. New modules are not yet
+signed/installed/tested, so the old accepted payload cannot accompany this
+candidate. Published K6/C02 acceptance remains its historical subject; T04
+still requires final uniform composition before new full claims.
