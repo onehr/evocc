@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-23**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.35**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.36**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -321,6 +321,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     controls pass. The unchanged LARGE program still times out at 60 seconds,
     despite 160 → 108 core instructions: **B02 remains OPEN**. The affected
     gate passes 1,819 tests, Clippy and fmt; [record](tests/fixtures/compared-value-selection.out).
+
+  - [x] **B02c — Select bounded compared-value muxes with CMP/CSEL**, 2026-09-23.
+    [Minimal C](tests/fixtures/compared-value-csel.c) and MIR RED → GREEN cover
+    96 shape/allocation cases, 600 exact executions and eight negative chains.
+    Seven CLI regressions, twelve native controls and the 980-test affected
+    gate pass, with Clippy/fmt. Existing evaluations, effects and guards remain.
+    Original LARGE core shrinks 108 → 102 instructions but still times out
+    at 60 seconds; **B02 remains OPEN**. [Record](tests/fixtures/compared-value-csel.out).
 
 - [ ] **B03 — Account for Csmith's 68 unusable-oracle cases** — `OPEN`, P1.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining

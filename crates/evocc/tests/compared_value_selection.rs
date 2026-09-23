@@ -165,6 +165,26 @@ fn selection_keeps_conversions_both_edges_and_source_effects() {
 }
 
 #[test]
+fn full_width_csel_keeps_high_bits_and_signed_comparisons() {
+    let source = include_str!("../../../tests/fixtures/compared-value-csel.c");
+    for level in ["-O0", "-O2"] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+            let output = run(source, level, mode);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if mode.starts_with("--interpret") {
+                assert_eq!(output.stdout, b"0\n");
+            } else if level == "-O2" {
+                assert!(String::from_utf8_lossy(&output.stdout).contains("csel "));
+            }
+        }
+    }
+}
+
+#[test]
 fn selection_does_not_erase_arithmetic_or_memory_errors() {
     for (source, code) in [
         ("int f(int a,int b){return a+b<7?a+b:7;} int main(void){volatile int x=2147483647;return f(x,1);}", "E3004"),

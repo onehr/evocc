@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.35** | **Authoritative reference** | **2026-09-23**
+**Revision 0.36** | **Authoritative reference** | **2026-09-23**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -382,6 +382,19 @@ computations and lower whether or not a `ub.assume` consumes them.
 
 Every form outside this table and the later explicitly admitted families is
 refused; scalar f32/f64 is admitted by revision 0.33, not by the legacy E4001 row.
+
+**Compared-value selection (0.36).** Instruction selection may replace the
+contiguous full-width integer chain `c=icmp(x,y); e=zext(c); mask=0-e;
+d=a xor b; masked=d and mask; result=b xor masked` with `cmp x,y; csel a,b`,
+using the same signed/unsigned predicate, when a/b are x/y in either order.
+All arithmetic values have the same `bits<32>` or `bits<64>` type; every removed
+intermediate has exactly one use. The zero may be an existing constant or a
+single-use constant between extension and subtraction. Otherwise the ordinary
+rows apply. No intervening instruction, effect, guard, operand evaluation or
+block binding is removed or moved; source symbolic-address operands are excluded.
+The comparison's flags have their one adjacent CSEL consumer under Section 2.
+This selects existing machine instructions, without adding an EvoIR operation,
+expanding the EqSat allowlist, or authorizing speculative conditional arms.
 
 ## 6. Frame and Calling Convention (Darwin arm64, scalar)
 
@@ -1018,6 +1031,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.36 | 2026-09-23 | Select the bounded, single-use full-width compared-value bit mux with existing adjacent CMP/CSEL. Preserve all prior evaluations, guards, effects and block bindings; unmatched chains retain ordinary lowering. |
 | 0.35 | 2026-09-23 | Errata: synchronize 128-bit division/remainder lowering and E4003 with the approved hosted runtime path; mark E4006/E4008 withdrawn under existing indirect-edge/pointer-difference rules and remove the stale 1.9.61 diagnostic boundary claim. No new execution scope or waived guard. |
 | 0.34 | 2026-09-21 | Preserve validated function-section placement through native emission, including aliases, code labels, CFI and link-ordered patch registrations; restore each following function's own placement. |
 | 0.31 | 2026-09-15 | Carry bounded scalar atomic order/volatile/pointer metadata through validation, text, allocation and interpretation; emit the natural-width AArch64 LDR/STR or LDAR/STLR mapping. |

@@ -1,0 +1,57 @@
+2026-09-23 — B02 compared-value instruction selection; original B02 stays OPEN.
+
+RED: compared_value_csel has one expected failing shape assertion, two passing
+controls and zero Rust compilation errors: no CSEL is selected for the complete
+comparison/extension/negated-mask/XOR chain.
+
+GREEN: the shared MIR lowerer selects existing CMP/CSEL only for the contiguous
+single-use 32/64-bit chain. The comparison's already-evaluated inputs are the
+two choices, optionally reversed. Nonzero masks, changed dependencies, another
+consumer, intervening instructions, narrower/128-bit types and symbolic-address
+operands keep ordinary lowering. All source guards, memory/volatile/atomic
+observations and local SSA bindings remain. Flags have one adjacent consumer.
+No new IR operation, verifier relaxation, unchecked profile or EqSat rule.
+EvoMIR 0.36 records this bounded selection, not a new language permission.
+
+Three MIR tests pass: 96 matched shape/allocation/round-trip cases, 600 exact
+execution comparisons (zero, one, signed extrema and all-ones), and eight
+nonmatching chains. Seven CLI tests pass both C-HIR/EvoIR O0/O2 and machine
+controls, including high-bit signed/unsigned selection, surrounding effects,
+unselected arms and retained E3001/E3004/E3009/E3011 diagnostics.
+Two C fixtures x GCC14/Clang19/EvoCC x O0/O2 = 12 native PASS in the sealed
+linux/arm64 image with networking disabled. Raw compiler warnings are retained.
+
+The unchanged LLVM LARGE floyd-warshall is rebuilt via its existing projector,
+source hash, original argv, sysroot and output comparison contract. The core
+shrinks from 108 to 102 instructions, but the original program still reaches
+60 seconds, exits 124, and timeit kills its monitored process. This is TIMEOUT,
+not an output PASS. Both core versions in the original binary get CSEL.
+The rebuilt release emits byte-identical original assembly to the tested debug
+compiler. No kernel Image or full benchmark receipt inherits this improvement.
+
+Affected gate against 0ac63cd: 980 PASS, zero FAIL, four historical ignored,
+119 result groups in evocc, evocc-mir, evocc-policy, evocc-proofcheck and
+evocc-randgate. Clippy --all-targets -D warnings and workspace fmt PASS.
+The four ignored standing native/extended campaigns remain ignored, not passes.
+Status is regenerated; diff and renderer checks pass.
+
+Artifacts: .build/floating-targeted/csel-20260923/ (under 1 MiB).
+Commands: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+  cargo test -p evocc-mir --test compared_value_csel --offline -j2
+  cargo test -p evocc --test compared_value_selection --offline -j2
+  tools/gate-changed.sh 0ac63cd --offline -j2
+  python3 .build/floating-targeted/csel-20260923/replay.py
+  container run --rm --platform linux/arm64 --network none --cpus 2
+    -v <probe>:/probe -v <fixtures>:/fixtures:ro -v <frozen LLVM tree>:/suite:ro
+    evo-flight-lab:sealed sh /probe/native.sh
+The native script contains the unchanged timeit/HashProgramOutput/fpcmp path;
+timeout 60 applies to that original, not a reduced N or a replacement seed.
+
+SHA-256:
+debug compiler a967aebf5a9134d5654452913c15bbcdaa385a5987ab6ea1020ff25ace9740d1
+release compiler 359982fba2bf046b252e7e5777676bf51820f466e19ab0860929b1b402199d86
+C fixture a84dfdd64857bf27e6cd759ca5877f6b1c7512c2e95f6bdf7ff2b0c84d36de08
+MIR tests 568fc1dd8bf7aec3221ad8c44bd47b125f3f92398d59198a869b40e1acf7dfaf
+original assembly 40594ee371a17cc5ca990764bbdb9f78e0a3cb73edf96475c4a3919529a2e7ae
+native log 7f788ba6a0499544fc158af0845bb5366c80fa290a6c84fb3a7d6eeb1103e953
+gate log e79242346a89a2c9371d83edf7544c4462e70ddcccdff683a0178b22e14e3e3a

@@ -1657,9 +1657,15 @@ fn lower_block(
     // A checked full-width add/sub already produces its arithmetic value.
     // Its use after the guard still enters through an explicit block argument.
     let mut computed_result = None;
+    // A matched pure selection chain is emitted at its comparison. It contains
+    // no obligation, effect or externally used intermediate to skip.
+    let mut selected_until = 0;
     lowerer.literal_only = assembly_literal_definitions(block);
 
     for (index, inst) in block.insts.iter().enumerate() {
+        if index < selected_until {
+            continue;
+        }
         if computed_result == Some(index) {
             computed_result = None;
             continue;
@@ -2070,7 +2076,9 @@ fn lower_block(
             }
         }
 
-        if lower_checked_result(lowerer, &mut insts, block, index)? {
+        if let Some(length) = lower_compared_selection(lowerer, &mut insts, block, index)? {
+            selected_until = index + length;
+        } else if lower_checked_result(lowerer, &mut insts, block, index)? {
             computed_result = Some(index + 2);
         } else {
             lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;
@@ -2085,6 +2093,76 @@ fn lower_block(
         term,
     });
     Ok(())
+}
+
+/// b ^ ((a ^ b) & -zext(icmp(x, y))) is exactly icmp(x, y) ? a : b.
+/// Match only the contiguous, full-register-width chain over the compared
+/// values; this is instruction selection, not speculative evaluation or DCE.
+/// In particular no guard/effect moves, and the flags have one adjacent user.
+fn lower_compared_selection(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    block: &Block,
+    index: usize,
+) -> Result<Option<usize>, String> {
+    let remaining = &block.insts[index..];
+    let [Inst::ICmp(condition, op, lhs, rhs), Inst::ZExt(extended, input, _), tail @ ..] =
+        remaining
+    else {
+        return Ok(None);
+    };
+    if condition != input || !matches!(extended.ty, EvoIRType::Bits(32 | 64)) {
+        return Ok(None);
+    }
+    let (local_zero, tail) = match tail {
+        [Inst::Const(value, 0), tail @ ..] => (Some(value), tail),
+        _ => (None, tail),
+    };
+    let [Inst::Sub(mask, zero, amount), Inst::Xor(difference, a, b), Inst::And(masked, diff, bits), Inst::Xor(result, fallback, chosen), ..] =
+        tail
+    else {
+        return Ok(None);
+    };
+    if amount != extended
+        || diff != difference
+        || bits != mask
+        || fallback != b
+        || chosen != masked
+        || !((a == lhs && b == rhs) || (a == rhs && b == lhs))
+        || [lhs, rhs, zero, mask, difference, masked, result]
+            .iter()
+            .any(|value| value.ty != extended.ty)
+        || [condition, extended, mask, difference, masked]
+            .iter()
+            .any(|value| uses_of(block, value.id) != 1)
+        || [lhs, rhs]
+            .iter()
+            .any(|value| lowerer.symbolic_addresses.contains_key(&value.id))
+    {
+        return Ok(None);
+    }
+    if let Some(local_zero) = local_zero {
+        if zero != local_zero || uses_of(block, zero.id) != 1 {
+            return Ok(None);
+        }
+    } else if lowerer.constants.get(&zero.id) != Some(&0) {
+        return Ok(None);
+    }
+    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+    let selected = lowerer.fresh(class);
+    let taken = lowerer.reg(a)?;
+    let untaken = lowerer.reg(b)?;
+    let (flags, cond) = lower_compare(lowerer, insts, *op, lhs, rhs)?;
+    insts.push(MInst::Csel {
+        dst: selected,
+        flags,
+        lhs: taken,
+        rhs: untaken,
+        cond,
+        width: width_of(class),
+    });
+    lowerer.bind(result, selected);
+    Ok(Some(6 + usize::from(local_zero.is_some())))
 }
 
 /// Select the existing full-width `adds/subs; cset vc` sequence once for

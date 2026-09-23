@@ -2272,3 +2272,18 @@ their cited full replays; 00144's uninitialized condition is not reused as a
 semantic oracle. The defined-condition qualifier fixture supplies that check.
 The crosswalk retains all 262 historical E3101 identities and points to L02,
 L05, L07–L11 and B02/B10 rather than reopening already repaired families.
+
+## Compared-value machine selection — 2026-09-23 (TODO B02c)
+
+The [minimal C/IR cases](../../tests/fixtures/compared-value-csel.out) close the
+bounded CMP/CSEL selection repair. A single-use full-width bit mux over the
+comparison's already evaluated operands becomes an adjacent compare/select;
+all guards, effects and local SSA constraints remain. Ninety-six structure and
+allocation checks, 600 exact MIR comparisons, seven CLI tests and twelve sealed
+native controls pass. The affected gate is 980 PASS, zero FAIL, four historical
+ignored; Clippy and fmt also pass. EvoMIR 0.36 records this machine selection.
+
+The unchanged original LARGE Floyd workload still times out at 60 seconds,
+despite 108 → 102 core instructions. B02 is OPEN; no reduced workload, source
+change, unchecked policy or kernel runtime claim substitutes for that result.
+Release/debug emission is byte-identical for the replayed original.
