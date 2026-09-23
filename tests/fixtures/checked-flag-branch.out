@@ -1,0 +1,56 @@
+2026-09-24 — select checked branches directly from adjacent flags.
+
+RED: zero Rust compile errors; two declared shape assertions fail and two
+semantic/nonmatching controls pass. An initial malformed negative fixture
+lacked a canonical blank line; that fixture error was corrected before RED.
+The small C fixture is checked-flag-branch.c, not a modified benchmark.
+
+GREEN scope: only an immediately preceding, single-use Boolean whose final
+machine definition is CSET adjacent to its flags producer uses B.<inverse>
+to the original reason's trap. The success continuation and all live values
+still use explicit edge arguments. Other Boolean uses, edge transport,
+intervening source instructions and compound predicates retain CSET/TBZ.
+The 128-bit multiplication predicate's final Boolean AND is a fallback,
+not incorrectly treated as a single condition code. No effect, source-width
+check, UB obligation, trap, validator or EqSat restriction is removed.
+Use counts include terminator operands and are computed once per block,
+not rescanned for every guard. EvoMIR 0.37 records this bounded selection;
+allocation/coalescing policy is unchanged.
+
+Five MIR tests: 14 eligible predicate/width shapes plus a composite fallback,
+12 comparison conditions, 300 comparison outcomes and 300 arithmetic outcomes,
+four nonmatching controls, and a 32-live-value continuation with real spills.
+Every generated module validates, round-trips and passes the independent
+allocation checker. Four CLI tests include old arithmetic regressions;
+new controls execute C-HIR/EvoIR at O0/O2, MIR, and retained volatile loads.
+All 20 erroneous C-HIR/EvoIR invocations retain E3004/E3005 as appropriate.
+The targeted Rust invocation reports 38 PASS, zero failures/ignored.
+
+Offline ARM64 image evo-flight-lab:sealed, network none, 2 CPUs:
+GCC 14.2.0-19 / Clang 19.1.7 / EvoCC positive C controls at O0/O2: 6/6 exit 0.
+EvoCC five invalid operations at O0/O2: 10/10 SIGTRAP, core dumps disabled;
+oracle UB execution is not used as a reference. All children are reaped.
+
+Original LLVM LARGE floyd-warshall: source and complete original argv from
+20260919T230110Z, existing command projection and unchanged timeit/output hash
+checks. Result remains TIMEOUT 124 at 60 seconds; timeit kills its monitored
+child. Core function instruction count 102 -> 98 is NOT a performance PASS.
+The native controls and original replay used compiler 8da3280b...; the final
+use-count-cache rebuild 14a9d4c6... emits byte-identical assembly for all twelve
+controls and the original, checked against the pre-rebuild hashes. No kernel
+Image or module was changed, and no full-campaign result inherits this repair.
+
+Affected gate against 27a0817: 989 PASS, zero failures, four historical ignored
+across 121 result groups; Clippy --all-targets -D warnings and fmt --check PASS.
+Capture: .build/floating-targeted/checked-flags-20260924/changed-gate.log.
+
+SHA-256:
+C fcbe7e8d8cf4ac4055a1aaf87469117ac18552c979b465196d01eeff0e27b405
+native-tested compiler 8da3280b07a0d4cdbce99bec4545ed1c9344c225939227cbb6f941223e9d6ca7
+final debug compiler 14a9d4c6f5f691f00ac0591a5e89e41b6a1d7947f9b999542e04fa030abebdc1
+control O0 assembly 0ad22ce2defdbe68fa10cde3e4fc1d33618c39a7cf68b096e9272b8f24f42d3f
+control O2 assembly 7f028861b0f106b96ae9cb0d72c9c9bbf104250f961a233000d52d3ef80a281b
+original assembly 835841bb40fe1e2efe15820ee489b9c412329c9b94b274bab62e34bbab0c05f8
+native log f2507ed3e7d733cc78b8f01288d53982b7df50e0f90d9139f51c9aa20b945f0f
+original log 89ce1c80f9aa4dd3e32a55c88e8e25f7af2cc47edb632a84d56e880370b628f5
+gate log 070662a6e84ad2798fc137f13cd77d92cec115bcf32a088379fdb4081b59bded

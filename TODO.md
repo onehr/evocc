@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-24**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.36**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.37**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -329,6 +329,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     gate pass, with Clippy/fmt. Existing evaluations, effects and guards remain.
     Original LARGE core shrinks 108 → 102 instructions but still times out
     at 60 seconds; **B02 remains OPEN**. [Record](tests/fixtures/compared-value-csel.out).
+
+  - [x] **B02d — Branch directly on single-use checked flags**, 2026-09-24.
+    The [small C case](tests/fixtures/checked-flag-branch.c), 600 MIR boundary
+    executions, real-spill continuation and nonmatching controls retain all
+    traps, volatile accesses and explicit edge bindings. Six positive native
+    runs and ten expected-trap negatives pass; the affected gate is 989 PASS,
+    zero failures, four historical ignored, Clippy/fmt green. Original LARGE
+    core shrinks 102 → 98 instructions but still times out at 60 seconds:
+    **B02 remains OPEN**. No kernel Image changes. [Record](tests/fixtures/checked-flag-branch.out).
 
 - [x] **B03 — Account for Csmith's 68 unusable-oracle cases** — `DONE`, P1, 2026-09-24.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining

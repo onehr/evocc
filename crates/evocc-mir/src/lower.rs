@@ -1661,6 +1661,9 @@ fn lower_block(
     // no obligation, effect or externally used intermediate to skip.
     let mut selected_until = 0;
     lowerer.literal_only = assembly_literal_definitions(block);
+    // Count once, including all edge operands: checking each guard must not
+    // rescan a large source block and make instruction selection quadratic.
+    let use_counts = block_use_counts(block);
 
     for (index, inst) in block.insts.iter().enumerate() {
         if index < selected_until {
@@ -1671,10 +1674,13 @@ fn lower_block(
             continue;
         }
         if let Inst::UbAssume(condition, reason) = inst {
-            // Section 5, checked profile: "tbz %c, #0, trap_label where the
-            // label holds brk #imm for the reason". The instructions after the
-            // obligation become a continuation block, because a terminator ends
-            // a block and a block's arguments are its only inputs.
+            // Section 5: the guard still branches to its reason's trap. An
+            // adjacent, single-use CSET can give its flags directly to that
+            // branch; otherwise test the materialized boolean's low bit.
+            // Instructions after the obligation enter a continuation through
+            // explicit block arguments, whichever branch spelling is selected.
+            let checked_flags =
+                take_checked_flags(&mut insts, lowerer, block, &use_counts, index, condition)?;
             let condition = lowerer.reg(condition)?;
             let imm = ub_immediate(*reason);
             let trap = lowerer.trap_block(imm);
@@ -1691,11 +1697,17 @@ fn lower_block(
                 continuation_args.push(fresh);
                 rebind.insert(reg.id, fresh);
             }
-            lowerer.blocks.push(MBlock {
-                id: current_id,
-                args: std::mem::take(&mut current_args),
-                insts: std::mem::take(&mut insts),
-                term: MTerm::Tb {
+            let term = if let Some((flags, valid_when)) = checked_flags {
+                MTerm::BCond {
+                    flags,
+                    cond: valid_when.inverted(),
+                    taken: trap,
+                    taken_args: Vec::new(),
+                    untaken: continuation,
+                    untaken_args: carried,
+                }
+            } else {
+                MTerm::Tb {
                     nonzero: false,
                     src: condition,
                     bit: 0,
@@ -1703,7 +1715,13 @@ fn lower_block(
                     taken_args: Vec::new(),
                     untaken: continuation,
                     untaken_args: carried,
-                },
+                }
+            };
+            lowerer.blocks.push(MBlock {
+                id: current_id,
+                args: std::mem::take(&mut current_args),
+                insts: std::mem::take(&mut insts),
+                term,
             });
             // Both limbs are local SSA values. A checked operation splits
             // the block, so the continuation must use both new bindings.
@@ -2066,7 +2084,7 @@ fn lower_block(
         if let Inst::ICmp(result, operation, lhs, rhs) = inst {
             if index + 1 == block.insts.len() {
                 if let Inst::CondBr(condition, ..) = &block.terminator {
-                    if condition.id == result.id && uses_of(block, result.id) == 1 {
+                    if condition.id == result.id && use_counts.get(&result.id) == Some(&1) {
                         let (flags, cond) =
                             lower_compare(lowerer, &mut insts, *operation, lhs, rhs)?;
                         fused = Some((flags, cond));
@@ -2076,7 +2094,9 @@ fn lower_block(
             }
         }
 
-        if let Some(length) = lower_compared_selection(lowerer, &mut insts, block, index)? {
+        if let Some(length) =
+            lower_compared_selection(lowerer, &mut insts, block, &use_counts, index)?
+        {
             selected_until = index + length;
         } else if lower_checked_result(lowerer, &mut insts, block, index)? {
             computed_result = Some(index + 2);
@@ -2103,6 +2123,7 @@ fn lower_compared_selection(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
     block: &Block,
+    use_counts: &HashMap<u32, usize>,
     index: usize,
 ) -> Result<Option<usize>, String> {
     let remaining = &block.insts[index..];
@@ -2134,7 +2155,7 @@ fn lower_compared_selection(
             .any(|value| value.ty != extended.ty)
         || [condition, extended, mask, difference, masked]
             .iter()
-            .any(|value| uses_of(block, value.id) != 1)
+            .any(|value| use_counts.get(&value.id) != Some(&1))
         || [lhs, rhs]
             .iter()
             .any(|value| lowerer.symbolic_addresses.contains_key(&value.id))
@@ -2142,7 +2163,7 @@ fn lower_compared_selection(
         return Ok(None);
     }
     if let Some(local_zero) = local_zero {
-        if zero != local_zero || uses_of(block, zero.id) != 1 {
+        if zero != local_zero || use_counts.get(&zero.id) != Some(&1) {
             return Ok(None);
         }
     } else if lowerer.constants.get(&zero.id) != Some(&0) {
@@ -2221,15 +2242,49 @@ fn lower_checked_result(
     Ok(true)
 }
 
-/// How many times `value` is read in `block`, terminator included.
-fn uses_of(block: &Block, value: u32) -> usize {
-    block
+/// How many times each value is read in this block, terminator included.
+fn block_use_counts(block: &Block) -> HashMap<u32, usize> {
+    let mut counts = HashMap::new();
+    for value in block
         .insts
         .iter()
         .chain(std::iter::once(&block.terminator))
         .flat_map(inst_uses)
-        .filter(|used| used.id == value)
-        .count()
+    {
+        *counts.entry(value.id).or_default() += 1;
+    }
+    counts
+}
+
+/// Fuse only the condition produced immediately before this obligation. The
+/// boolean must have no other consumer (including an edge argument), and its
+/// CSET must be adjacent to the flags producer. No effect or instruction moves.
+fn take_checked_flags(
+    insts: &mut Vec<MInst>,
+    lowerer: &Lowerer,
+    block: &Block,
+    use_counts: &HashMap<u32, usize>,
+    index: usize,
+    condition: &Value,
+) -> Result<Option<(VReg, Cond)>, String> {
+    if use_counts.get(&condition.id) != Some(&1)
+        || !index.checked_sub(1).is_some_and(|previous| {
+            inst_results(&block.insts[previous])
+                .iter()
+                .any(|result| result.id == condition.id)
+        })
+    {
+        return Ok(None);
+    }
+    let [.., producer, MInst::Cset { dst, flags, cond }] = insts.as_slice() else {
+        return Ok(None);
+    };
+    if *dst != lowerer.reg(condition)? || !inst_defs(producer).contains(flags) {
+        return Ok(None);
+    }
+    let selected = (*flags, *cond);
+    insts.pop();
+    Ok(Some(selected))
 }
 
 /// Assembly immediates are link-time operands, not runtime address loads.

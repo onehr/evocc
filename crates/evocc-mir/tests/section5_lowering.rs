@@ -361,15 +361,14 @@ func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (
 
 #[test]
 fn an_obligation_becomes_a_checked_branch_to_a_trap() {
-    // Section 5: "checked profile: tbz %c, #0, trap_label where the label holds
-    // brk #imm for the reason".
+    // Section 5: the single-use adjacent comparison branches directly on
+    // flags. Its false edge still reaches the original reason's BRK.
     let lowered = lower(UB_ASSUME);
     let function = &lowered.functions[0];
     assert!(matches!(
         function.blocks[0].term,
-        MTerm::Tb {
-            nonzero: false,
-            bit: 0,
+        MTerm::BCond {
+            cond: evocc_mir::Cond::Eq,
             ..
         }
     ));

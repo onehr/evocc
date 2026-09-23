@@ -286,6 +286,16 @@ LARGE program still times out at 60 seconds (160 → 108 core instructions), so
 B02 remains OPEN. [Test and acceptance record](../../tests/fixtures/compared-value-selection.out)
 distinguishes the targeted compiler improvement from the unresolved workload.
 
+The 2026-09-24 checked-flag selection (TODO B02d) removes only a single-use
+adjacent CSET before its checked branch. Source-width predicates, traps,
+volatile observations and continuation parameters remain. The affected gate
+passes **989 tests, zero failures, four historical ignored**, Clippy and fmt;
+six native positive controls and ten expected-trap negatives pass. Original
+LARGE still times out at 60 seconds (102 → 98 core instructions). The
+[source-bound record](../../tests/fixtures/checked-flag-branch.out) retains
+that negative result; B02 and the full campaign stay OPEN. No kernel Image
+inherits this compiler-only improvement.
+
 **2026-09-23 case reconciliation (TODO B01):** every one of the frozen run's
 44 compiler-failure identities is now joined to its later evidence: **7 targeted
 original PASS, 30 named FP deferrals, 5 evidenced not-applicable, 2 OPEN**.

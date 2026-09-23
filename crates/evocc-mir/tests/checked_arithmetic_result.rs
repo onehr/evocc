@@ -50,9 +50,8 @@ fn checked_add_sub_carry_the_existing_result_over_the_guard() {
                     )),
                 "{bits} {op}: repeated arithmetic after checking the same operation"
             );
-            let MTerm::Tb {
-                bit: 0,
-                nonzero: false,
+            let MTerm::BCond {
+                cond: evocc_mir::Cond::Vs,
                 untaken_args,
                 ..
             } = &function.blocks[0].term

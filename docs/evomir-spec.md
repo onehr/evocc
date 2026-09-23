@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.36** | **Authoritative reference** | **2026-09-23**
+**Revision 0.37** | **Authoritative reference** | **2026-09-24**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -367,7 +367,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, retaining the complete ordered CFG and address arguments; effect ordering is preserved as above, and Section 7 implements simultaneous entry bindings |
 | `ret v...` | `ret` listing the results |
 | `trap.<reason>` | `brk` with the reason's number |
-| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)`, where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
+| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)` (or the equivalent adjacent-flags selection below), where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
 | `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
@@ -395,6 +395,18 @@ block binding is removed or moved; source symbolic-address operands are excluded
 The comparison's flags have their one adjacent CSEL consumer under Section 2.
 This selects existing machine instructions, without adding an EvoIR operation,
 expanding the EqSat allowlist, or authorizing speculative conditional arms.
+
+**Checked flag branches (0.37).** When an obligation is the only use of the
+immediately preceding EvoIR instruction's Boolean result, and that result's
+machine definition is a final `cset c, flags, condition` adjacent to its flags
+producer, selection may remove the CSET and use `b.<inverse-condition>` to the
+same reason's trap. The original success continuation and every live edge
+argument remain; the flags producer and branch are adjacent under Section 2.
+Other uses, including successor arguments or a second obligation, require the
+Boolean to remain materialized. Intervening source instructions prevent this
+selection, and unmatched forms retain TBZ. This is only selection of existing
+instructions: no predicate, effect, trap, source-width test or EqSat restriction
+is removed, and the allocator's coalescing policy is unchanged.
 
 ## 6. Frame and Calling Convention (Darwin arm64, scalar)
 
@@ -1031,6 +1043,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.37 | 2026-09-24 | Select an adjacent single-use checked Boolean directly with its producer's flags and an inverted conditional trap branch; retain every guard, effect and continuation argument, with ordinary TBZ for unmatched forms. |
 | 0.36 | 2026-09-23 | Select the bounded, single-use full-width compared-value bit mux with existing adjacent CMP/CSEL. Preserve all prior evaluations, guards, effects and block bindings; unmatched chains retain ordinary lowering. |
 | 0.35 | 2026-09-23 | Errata: synchronize 128-bit division/remainder lowering and E4003 with the approved hosted runtime path; mark E4006/E4008 withdrawn under existing indirect-edge/pointer-difference rules and remove the stale 1.9.61 diagnostic boundary claim. No new execution scope or waived guard. |
 | 0.34 | 2026-09-21 | Preserve validated function-section placement through native emission, including aliases, code labels, CFI and link-ordered patch registrations; restore each following function's own placement. |
