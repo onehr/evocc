@@ -1986,6 +1986,8 @@ FORTIFY repairs reach 25/26 PASS, not a new full KUnit result. The
 [generated dashboard](status.md) and [README snapshot](../README.md#status--2026-09-23)
 separate current receipts, targeted follow-ups and open gates. The dated kernel
 journal below retains older failures; it is not the current status table.
+The Git-tracked [execution backlog](../TODO.md) maps the remaining concrete
+issues and acceptance gates to stable task IDs, next actions and closure evidence.
 
 The kernel is the launch target, but "the kernel boots" is a single bit that
 arrives late. The ladder below gives Q1 (correct on real code) a reading at

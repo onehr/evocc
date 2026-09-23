@@ -35,6 +35,8 @@ Each receipt retains its compiler and input identity. See the generated
 [status dashboard](docs/status.md), [pinned roadmap](docs/roadmap.md),
 [application ledger](docs/notebook/benchmark-evaluation-20260915.md) and
 [kernel issue ledger](docs/notebook/kernel-selftest-gaps-20260914.md).
+The Git-tracked [TODO list](TODO.md) gives each remaining task a stable ID,
+priority, next action and evidence-based closure condition.
 
 ### Application benchmarks
 
@@ -291,4 +293,6 @@ changed crates and their dependents for Cargo tests, Clippy and fmt; relevant
 Python/Ruff, layout corpora and isolated offline checks run separately. A passing
 changed gate is not a new application or kernel measurement. Regenerate the
 dashboard with `python3 tools/render-status.py`; `--check` detects receipt drift.
+Update [TODO.md](TODO.md) in each relevant implementation commit; a targeted fix
+does not close its full benchmark or kernel acceptance task without that replay.
 Figures come from `tools/render-figures.py` and are not live status indicators.
