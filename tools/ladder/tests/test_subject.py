@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -23,6 +24,54 @@ TREE = "/work/zstd/zstd-1.5.7"
 
 
 class ParseBuildLogTest(unittest.TestCase):
+    def test_multiline_commands_cannot_replace_failure_with_redirection_status(self) -> None:
+        for operation in ('reference_build', 'relink', 'run_tests'):
+            for suffix in ('', '\n', '\n# adapter end\n'):
+                with self.subTest(operation=operation, suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    mount = root / 'probe'
+                    (mount / 'source').mkdir(parents=True)
+                    evidence = root / 'evidence'
+                    evidence.mkdir()
+                    command = "(printf '%s\\n' actual-test-output; exit 7)" + suffix
+                    subject = ladder.Subject(name='probe', rung='test', pin='', url='',
+                                             sha256='', tree='source', build=command,
+                                             test=command, relink=command)
+
+                    def local_container(directory, name, script, timeout=30):
+                        self.assertEqual(directory, mount)
+                        return subprocess.run(['bash', '-c', script.replace(f'/work/{name}', str(mount))],
+                                              capture_output=True, text=True, timeout=timeout, check=False)
+
+                    with mock.patch.object(ladder, 'BUILD', root), \
+                            mock.patch.object(ladder, 'container', side_effect=local_container):
+                        function = getattr(ladder, operation)
+                        result = (function(subject, mount / 'source', evidence)
+                                  if operation == 'reference_build'
+                                  else function(subject, evidence, 'red'))
+                    self.assertEqual(result['status'], 7, 'a redirection is not the tested command')
+                    self.assertIn('actual-test-output', result.get('log', result.get('tail', '')))
+
+    def test_configure_errexit_is_not_disabled_by_the_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mount = root / 'probe'
+            (mount / 'source').mkdir(parents=True)
+            evidence = root / 'evidence'
+            evidence.mkdir()
+            subject = ladder.Subject(name='probe', rung='test', pin='', url='', sha256='',
+                                     tree='source', build='echo build-must-not-run', test='', relink='',
+                                     configure='(set -e; echo configure; false; echo unreachable)\n')
+            def local_container(directory, name, script, timeout=30):
+                return subprocess.run(['bash', '-c', script.replace(f'/work/{name}', str(mount))],
+                                      capture_output=True, text=True, timeout=timeout, check=False)
+            with mock.patch.object(ladder, 'BUILD', root), \
+                    mock.patch.object(ladder, 'container', side_effect=local_container):
+                result = ladder.reference_build(subject, mount / 'source', evidence)
+            self.assertNotEqual(result['status'], 0)
+            self.assertEqual((evidence / 'configure.log').read_text(), 'configure\n')
+            self.assertFalse((mount / 'build.log').exists())
+
     def test_final_acceptance_does_not_repeat_the_same_completed_passing_trial(self) -> None:
         passed = {'passed': True, 'units': ['a.o', 'b.o']}
         rerun = mock.Mock(return_value={'passed': False})

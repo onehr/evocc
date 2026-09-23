@@ -395,11 +395,15 @@ def _unit_from_argv(argv: list[str], directory: str, relative) -> Unit | None:
 
 def reference_build(subject: Subject, tree: Path, evidence: Path) -> dict:
     """Build with the adapter's reference compiler and keep the original log."""
+    # The enclosing group is required even if an adapter already uses one:
+    # a trailing newline/comment must not detach redirection from the command
+    # and make $? describe an empty, successful redirection instead.
     script = (
         f"set -o pipefail; cd /work/{subject.name}/{subject.tree} || exit 2\n"
-        + (f"{subject.configure} > /work/{subject.name}/configure.log 2>&1 || exit 3\n"
+        + (f"(\n{subject.configure}\n) > /work/{subject.name}/configure.log 2>&1\n"
+           'if [ "$?" -ne 0 ]; then exit 3; fi\n'
            if subject.configure else "")
-        + f"{subject.build} > /work/{subject.name}/build.log 2>&1; echo \"build-status=$?\"\n"
+        + f"(\n{subject.build}\n) > /work/{subject.name}/build.log 2>&1; echo \"build-status=$?\"\n"
     )
     completed = container(BUILD / subject.name, subject.name, script)
     log = (BUILD / subject.name / "build.log")
@@ -441,10 +445,10 @@ def _status(stdout: str, key: str) -> int:
 
 
 def run_tests(subject: Subject, evidence: Path, tag: str) -> dict:
-    """Run the subject's own suite in the container and keep its log."""
+    """Capture the complete suite command and its status, including multiline adapters."""
     script = (
         f"cd /work/{subject.name}/{subject.tree} || exit 2\n"
-        f"{subject.test} > /work/{subject.name}/test.log 2>&1; echo \"test-status=$?\"\n"
+        f"(\n{subject.test}\n) > /work/{subject.name}/test.log 2>&1; echo \"test-status=$?\"\n"
     )
     completed = container(BUILD / subject.name, subject.name, script, timeout=3600)
     log = BUILD / subject.name / "test.log"
@@ -458,7 +462,7 @@ def relink(subject: Subject, evidence: Path, tag: str) -> dict:
     """Relink around the installed objects with the subject's own make."""
     script = (
         f"cd /work/{subject.name}/{subject.tree} || exit 2\n"
-        f"{subject.relink} > /work/{subject.name}/relink.log 2>&1; echo \"relink-status=$?\"\n"
+        f"(\n{subject.relink}\n) > /work/{subject.name}/relink.log 2>&1; echo \"relink-status=$?\"\n"
     )
     completed = container(BUILD / subject.name, subject.name, script, timeout=1800)
     log = BUILD / subject.name / "relink.log"

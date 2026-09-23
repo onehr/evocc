@@ -158,6 +158,19 @@ These source/command-bound ledger changes do not rewrite the historical
 
 ### Subsequent targeted LLVM repairs — 2026-09-20
 
+**2026-09-23 benchmark verdict correction:** inspection of cJSON flight
+`20260923T073305Z` found an empty test log despite a reported PASS. An adapter's
+trailing newline detached the shared wrapper's redirection, so the recorded
+zero was the redirection's status rather than the suite's. Six minimal RED
+assertions reproduce this in build, relink and test wrappers. Explicit enclosing
+subshells now bind the complete command, output and exit status; configuration
+failure handling also preserves `set -e`. That flight is **invalid acceptance
+evidence**, not a claimed compiler failure or PASS; the subsequent cJSON replay
+below uses the corrected path. Other current Subject adapters' build/relink/test
+strings do not have this trailing-newline shape; this inspection is not a new
+runtime result for them. Frozen receipts are retained, and B10 still requires
+the final campaign.
+
 **2026-09-23 follow-up:** `lu` and `ludcmp` now pass their unchanged LARGE
 inputs and original output checks in **58.9642 / 58.7030 seconds**, under the
 original 60-second whole-test limit. Block-local reuse removes duplicate pure

@@ -364,6 +364,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   bounded result. Passing this gate alone does not close B10/K13/K14.
   [Workflow](README.md#layout-and-development).
 
+  - [x] **T05a — Preserve multiline benchmark command failures**.
+    Six RED assertions showed that trailing newlines/comments detached log
+    redirection and replaced exit 7 with exit 0 in build/relink/test wrappers.
+    Shared command grouping now preserves output and status; configuration
+    failures also retain their `set -e` behavior. Unit tests cover all paths.
+    The invalid cJSON flight `20260923T073305Z` is superseded, not accepted.
+    This repairs the harness, not all historical benchmark claims; B10 remains.
+
 ## Later roadmap gates — not substitutes for runtime closure
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
