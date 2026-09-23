@@ -1,0 +1,16 @@
+2026-09-23, GNU11 AArch64 -O2, fixed offline evo-flight-lab:sealed.
+RED after the first original KUnit replay: nested unlikely wrappers hide the
+constant checked allocation size; unrelated volatile location writes hide
+known local string bytes. Each reduction returns 1, with no compile errors.
+GREEN: both interpreters return 0; GCC14, Clang19 and EvoCC native exit 0.
+Source SHA256: 49e6452eb24204ee3a15813ab997e40a79be6558a98e3ef1c3b627f231cff362
+Assembly SHA256: 245c98ac32ccfbeea1e94ae9419dfc4efbdab7e4151ed4891ebc985777ac9a80
+Native SHA256: 56ded21ca55ac08071ad14cee620663398ccebd132e4901633077304be0c6553
+75 query tests pass, including mutable/escaped pointer parameters, pointer
+fields which alias local storage, and effects in the expectation prediction.
+Changed gate: 1,786 PASS, zero FAIL, three historical ignored; clippy -D warnings
+and fmt pass. Original fortify_kunit.o replay assembles in 42.14 seconds with
+unchanged input files and exact symbol parity; kernel execution is recorded
+separately after the diagnostic relink.
+The preserved first original replay is 24 PASS / 2 FAIL of 26, 31 failed
+assertions. This tailored GREEN is not a new kernel-suite result.

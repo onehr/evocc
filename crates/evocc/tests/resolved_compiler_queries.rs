@@ -216,6 +216,42 @@ fn constant_byte_queries_use_initialized_objects_without_broadening_source_ice()
 }
 
 #[test]
+fn checked_allocation_facts_cross_nested_boolean_expectations() {
+    assert_constant_program(
+        "typedef unsigned long size_t;char storage[256];int calls;\
+         __attribute__((noinline,alloc_size(2))) void*allocate(void*d,size_t n,unsigned f){++calls;return storage;}\
+         static inline _Bool checked(_Bool overflow){return __builtin_expect(!!overflow,0);}\
+         static inline void*array(void*d,size_t n,size_t s,unsigned f){size_t bytes;\
+           if(__builtin_expect(!!checked(__builtin_mul_overflow(n,s,&bytes)),0))return (void*)0;\
+           return allocate(d,bytes,f);}\
+         static inline void*zero(void*d,size_t n,size_t s,unsigned f){return array(d,n,s,f|256);}\
+         int main(void){void*a=array(0,1,11,3);void*b=zero(0,128,1,3);void*c=array(0,1,0,3);\
+           return __builtin_object_size(a,1)!=11||__builtin_object_size(b,1)!=128||\
+             __builtin_object_size(c,1)!=0||calls!=3;}",
+    );
+}
+
+#[test]
+fn initialized_byte_queries_survive_unrelated_volatile_location_stores() {
+    assert_constant_program(
+        "struct location{const char*file;int line;};struct test{struct location last;};\
+         int f(struct test*t){char a[80]=\"Test!\";\
+           *(const char*volatile*)&t->last.file=\"here\";*(volatile int*)&t->last.line=7;\
+           return !__builtin_constant_p(a[0])||!__builtin_constant_p(a[79]);}\
+         int main(void){struct test t={0};return f(&t)||t.last.line!=7;}",
+    );
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/fortify-query-context.c"
+    ));
+    for source in [
+        "int f(char*p){char a[]=\"abc\";p=a;volatile char z='z';*p=z;return __builtin_constant_p(a[0])||a[0]!='z';}int main(void){return f(0);}",
+        "int f(char*p){char a[]=\"abc\";char**q=&p;*q=a;volatile char z='z';*p=z;return __builtin_constant_p(a[0])||a[0]!='z';}int main(void){return f(0);}",
+        "struct box{char*p;};int f(struct box*b){char a[]=\"abc\";b->p=a;volatile char z='z';*b->p=z;return __builtin_constant_p(a[0])||a[0]!='z';}int main(void){struct box b={0};return f(&b);}",
+        "typedef unsigned long size_t;char storage[20];__attribute__((noinline,alloc_size(1)))void*allocate(size_t n){return storage;}static inline void*array(void){size_t n;if(__builtin_expect(!!__builtin_mul_overflow(1,11,&n),(n=7)))return 0;return allocate(n);}int main(void){void*p=array();return __builtin_dynamic_object_size(p,1)!=7;}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
 fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
     assert_constant_program(
         "typedef unsigned long size_t;char storage[128];\

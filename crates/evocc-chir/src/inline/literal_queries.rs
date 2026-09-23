@@ -11,6 +11,76 @@ pub(super) struct Bytes<'a> {
 }
 
 impl<'a> Substitution<'a, '_> {
+    pub(super) fn invalidate_written_bytes(&self, place: &MemoryPlace<'a>, c: &mut Context<'a>) {
+        if !c.expand_calls || c.byte_objects.is_empty() {
+            return;
+        }
+        if let PlaceRoot::Object { symbol } = place.root() {
+            c.byte_objects.remove(symbol);
+        } else if !self.byte_write_is_disjoint(place, c, 16) {
+            c.byte_objects.clear();
+        }
+        c.memo.clear();
+    }
+
+    fn byte_write_is_disjoint(&self, place: &MemoryPlace<'a>, c: &Context<'a>, depth: u8) -> bool {
+        let Some(depth) = depth.checked_sub(1) else {
+            return false;
+        };
+        match place.root() {
+            PlaceRoot::Object { symbol } => !c.byte_objects.contains_key(symbol),
+            PlaceRoot::PointerExpression { pointer, .. } => {
+                self.byte_address_is_disjoint(pointer, c, depth)
+            }
+            PlaceRoot::CompoundLiteral { .. } => false,
+        }
+    }
+
+    fn byte_address_is_disjoint(&self, pointer: &CHirExpr<'a>, c: &Context<'a>, depth: u8) -> bool {
+        let Some(depth) = depth.checked_sub(1) else {
+            return false;
+        };
+        match pointer {
+            CHirExpr::Cast(ty, value, _)
+                if self
+                    .unit
+                    .types
+                    .get(*ty)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Pointer(_))) =>
+            {
+                self.byte_address_is_disjoint(value, c, depth)
+            }
+            CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::Ident { symbol, .. }, _) => {
+                !c.byte_objects.contains_key(symbol)
+            }
+            CHirExpr::Unary(UnaryOp::AddrOf, CHirExpr::MemoryRead { place, .. }, _) => {
+                self.byte_write_is_disjoint(place, c, depth)
+            }
+            CHirExpr::Ident { symbol, facts, .. } => {
+                let original = c
+                    .replacements
+                    .iter()
+                    .find_map(|(old, new)| (new == symbol).then_some(*old))
+                    .unwrap_or(*symbol);
+                // An unchanged incoming pointer cannot name this activation's
+                // freshly created array. A pointer loaded from its fields can:
+                // do not look through such loads or mutable parameter storage.
+                !c.mutable.contains(&original)
+                    && self
+                        .unit
+                        .symbols
+                        .symbol(original)
+                        .is_ok_and(|s| s.kind() == SymbolKind::Parameter)
+                    && self.unit.types.get(facts.ty()).is_some_and(|ty| {
+                        matches!(ty.kind, TypeKind::Pointer(_))
+                            && !ty.qualifiers.is_volatile
+                            && !ty.qualifiers.is_atomic
+                    })
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn initialized_array_bytes(&self, object: &ObjectDecl<'a>) -> Option<Bytes<'a>> {
         let ty = self.unit.types.get(object.ty)?;
         let TypeKind::Array {

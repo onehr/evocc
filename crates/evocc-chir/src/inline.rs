@@ -1464,6 +1464,16 @@ impl<'a> Substitution<'a, '_> {
                 self.repeatable_value(converted, ty)
             }
             CHirExpr::Comma(_, value, _) => self.value_after_execution(value, ty),
+            CHirExpr::Unary(UnaryOp::Not, operand, span) => {
+                let operand_ty = self.unit.types.intern(evocc_types::CanonicalType {
+                    kind: TypeKind::Int(evocc_types::IntRank::Bool),
+                    qualifiers: evocc_types::Qualifiers::default(),
+                });
+                let operand = self.value_after_execution(operand, operand_ty)?;
+                let value = self.alloc(CHirExpr::Unary(UnaryOp::Not, operand, *span));
+                self.repeatable_value(value, ty)
+            }
+            CHirExpr::BuiltinExpect(value, _, _) => self.value_after_execution(value, ty),
             CHirExpr::CheckedArithmetic { .. } => {
                 let (_, overflow) = self.checked_constant_values(expression)?;
                 let value = self.alloc(CHirExpr::Lit(
@@ -1515,7 +1525,24 @@ impl<'a> Substitution<'a, '_> {
     /// result only after that evaluation, not while visiting a conditional arm.
     fn remember_checked_condition(&mut self, expression: &'a CHirExpr<'a>, c: &mut Context<'a>) {
         match expression {
-            CHirExpr::Cast(_, value, _) | CHirExpr::EvaluateOnce(value, _) => {
+            CHirExpr::Cast(_, value, _)
+            | CHirExpr::EvaluateOnce(value, _)
+            | CHirExpr::Unary(UnaryOp::Not, value, _) => {
+                self.remember_checked_condition(value, c);
+                return;
+            }
+            CHirExpr::BuiltinExpect(value, prediction, _)
+                if crate::constant::eval_executable_integer_constant(
+                    prediction,
+                    &self.unit.types,
+                    &self.unit.symbols,
+                    self.target,
+                )
+                .is_some() =>
+            {
+                // A pure prediction cannot overwrite the checked result.
+                // The complete expression, including both argument effects,
+                // is still evaluated by the existing builtin contract.
                 self.remember_checked_condition(value, c);
                 return;
             }
@@ -2592,18 +2619,14 @@ impl<'a> Substitution<'a, '_> {
                 *place = self.place(place, c, e.span())?;
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = self.expr(value, c)?;
-                if c.expand_calls {
-                    c.byte_objects.clear();
-                    c.memo.clear();
-                }
+                self.invalidate_written_bytes(place, c);
             }
             CHirExpr::MemoryRead { place, facts, .. }
             | CHirExpr::MemoryUpdate { place, facts, .. } => {
                 *place = self.place(place, c, e.span())?;
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
-                if c.expand_calls && matches!(e, CHirExpr::MemoryUpdate { .. }) {
-                    c.byte_objects.clear();
-                    c.memo.clear();
+                if matches!(e, CHirExpr::MemoryUpdate { .. }) {
+                    self.invalidate_written_bytes(place, c);
                 }
             }
             CHirExpr::StatementExpr {
