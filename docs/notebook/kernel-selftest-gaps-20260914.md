@@ -83,6 +83,72 @@ library and passes this regression. Both new runtime disks are COW copies;
 the original failing payloads, modules and kernel Images remain intact.
 This closes the observed ALSA failure, not unrelated sound-hardware tests.
 
+### K08/K09: measured API/test mismatches — 2026-09-23
+
+These are now **closed classifications**, not compiler repairs or extra PASSs.
+The unchanged originals and their FAIL records remain in the full receipts.
+The checked-in reductions are `tests/fixtures/ntsync-create-event.c`,
+`hw-breakpoint-kernel-task.c` and its userspace loader; the compact measurement
+is `tests/fixtures/kernel-api-contracts.out`. Both programs pass on each existing
+BPF-composition Image with valid TAP, exit zero and orderly nonce-bound shutdown.
+The diagnostics are GCC-built; the ntsync module comes from each Image's own
+signed installation. The breakpoint diagnostic is separately reference-built,
+signed, actually loaded and unloaded. This is not another full KUnit flight.
+
+**ntsync:** frozen `Documentation/userspace-api/ntsync.rst:137–154` specifies a
+descriptor return; `drivers/misc/ntsync.c:721–738,789–807` allocates, installs and
+returns that descriptor. Frozen `wake_all:971` instead expects zero, unlike its
+three immediately preceding allocations. The reduction keeps fd 0 occupied,
+observes descriptor **5 on both kernels**, and checks FD_CLOEXEC, event READ/RESET,
+EFAULT and EBADF. The upstream maintainer's [July 23 correction, patch 1/5](https://list.winehq.org/hyperkitty/list/wine-devel%40list.winehq.org/thread/VRHDVNLX6JZDTN3IZ6MIQNFGFF34ODQB/)
+changes that same expectation to a nonnegative-descriptor check. It is supporting
+upstream evidence, **not a patch applied to our frozen suite**; no kernel change
+or synthetic local fix is needed to explain this failure, and 10/11 stays 10/11.
+
+**ARM64 breakpoints:** every failing original uses `register_test_bp` with
+`&break_vars[idx]` and a non-NULL task; it fails its first positive-allocation
+assertion at `hw_breakpoint_test.c:70`, before testing capacity/accounting.
+`arch_build_bp_info` classifies the address as EL1;
+`hw_breakpoint_arch_parse:577–582` then explicitly refuses EL1 + task with EINVAL.
+The small module observes CPU-wide success and **-22 for both task forms** on
+both kernels. This is the selected ARM64 API boundary, not insufficient emulated
+slots, a missing kernel option, or evidence of a register-allocation bug.
+
+| Original failed case | First unsupported request |
+|---|---|
+| `test_one_task_on_all_cpus` | `cpu=-1, task=current` |
+| `test_two_tasks_on_all_cpus` | `cpu=-1, task=current` before creating the second task's breakpoint |
+| `test_one_task_on_one_cpu` | first online CPU, `task=current` |
+| `test_one_task_mixed` | first online CPU, `task=current` |
+| `test_two_tasks_on_one_cpu` | first online CPU, `task=current` before the second task |
+| `test_two_tasks_on_one_all_cpus` | first online CPU, `task=current` |
+| `test_task_on_all_and_one_cpu` | `cpu=-1, task=current` |
+
+The unmodified `test_one_cpu` and `test_many_cpus` controls pass on both original
+expanded KUnit runs; both configurations enable ARM64 hardware breakpoints and
+the suite, and the >1-CPU/available-slot setup checks were reached successfully.
+The seven task-bound EL1 capacity scenarios cannot be claimed as exercised on
+this API. A future architecture-appropriate upstream test redesign or separate
+architecture would have a separate identity; deleting these assertions or
+changing the compiler to bypass the kernel's rejection is not a fix.
+
+Frozen source SHA-256:
+
+```text
+drivers/misc/ntsync.c                         2fb92d6befb6a67cfba3ccab51bd65bc313994fe5c20c1223d3b79cb74129e45
+tools/testing/selftests/drivers/ntsync/ntsync.c fe18dff484db066b198250b97f3cf4985d4c6cdbe4e95e44991f102bf1aabc63
+Documentation/userspace-api/ntsync.rst        9800abd461ecbc6af8c045941631238e0a86e992d94af85ed27f7f70076ebc9f
+kernel/events/hw_breakpoint_test.c            26edba8c8257ceef40c1a3c80066cf0f1e4d0a6bd13b504da95358095198f2a4
+arch/arm64/kernel/hw_breakpoint.c             09d821905139bc157f84f90130335fe0705ac238c6e248cd655b0cd64c05584c
+```
+
+Original captures: `.evidence/kselftest-full/runtime-repair-pair-20260923/results.json`
+and `.evidence/kunit/expanded-{reference,subject-query}-builtin-20260922/boot.log`.
+The two new diagnostic captures live under
+`.build/floating-targeted/ntsync-contract-20260923/{reference,subject}-pair-boot/`.
+They preserve the original Images/runtime disks and do not alter either frozen
+test population, historical numerator or acceptance receipt.
+
 ### Serial replay of the seven subject differences — 2026-09-23
 
 The existing paired runtime, Images, assertions and declared budgets were used

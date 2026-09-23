@@ -1,0 +1,58 @@
+2026-09-23: K08/K09 source-bound dispositions, not compiler repairs.
+
+Sources (SHA-256):
+ntsync-create-event.c 4dcad268e181ccd54497231c8bf369c2d987d0aac174fab4c5f4401f29490031
+hw-breakpoint-kernel-task.c 2263907666e94322a773bdb41244da00cb57447741af18830f4a781687b1eda7
+hw-breakpoint-kernel-task-load.c 856169f3af8a17e770371c404306e4f123d11ccdf5f6c18a2f81cf13eba932f8
+
+Reference-built diagnostics: sealed GCC 14.2.0-19, linux/arm64, network none.
+User programs: gcc-14 -static -O2 -Wall -Wextra -Werror
+ntsync additionally uses -isystem /work/headers (the frozen installed headers).
+Kernel module: original Kbuild, ARCH=arm64 CC=gcc-14 HOSTCC=gcc-14,
+M=/work/probe/driver -j2 modules; original source/pristine trees mounted read-only.
+Only this test module is signed with the existing kernel's build key.
+An initial init-wrapper build failed -Werror=return-type after main was renamed;
+declaring its existing nonreturning poweroff helper noreturn corrected the harness.
+The final module build had subsecond shared-filesystem clock-skew warnings, no
+compiler errors. Actual signed-module loading, API checks and unloading passed.
+
+Payload builder: original usr/gen_init_cpio -t 0; retained tools/k1/selftest-init.c
+and tools/k1/boot.sh, no new runner. The small init overlay loads the original
+signed ntsync module. The original runtime disk is only a QEMU snapshot scratch
+device; no full clone, payload replacement or persistent disk write is made.
+K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=0 K1_CONSOLE_LOGLEVEL=1 K1_BOOT_TIMEOUT=90
+Default hvf-host lane; each diagnostic has a 15-second watchdog.
+
+Images:
+GCC    8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC  f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Signed original ntsync modules:
+GCC    0bc94553835f71edffff10ba6719e494a707f6938f6aa1b80ccee7b0e55493b4
+EvoCC  40afcc9dcc499439e31537e741cf67c129f1aa08219ae9b41926c75ff8684a13
+Reference-built breakpoint diagnostic module:
+26824430613aea988f3a07348a161f298651988d3e65ad84965d5ba88dc1449d
+Final initramfs:
+GCC    487ee343d3189f7302cbf2650c33ddf93d8e3f2e9a04d89c8cef815d37525731
+EvoCC  a129b26e5f82431e0d42dea63387346b50835e6f5b879f1814cb2f8bb718ca01
+
+Actual result on BOTH kernels, parsed by selftest.parse_transcript:
+ntsync-create-event: exit 0, valid TAP 1/1 PASS, no skip/failure.
+  CREATE_EVENT returns descriptor 5, not 0; FD_CLOEXEC, READ/RESET state,
+  EFAULT on a NULL argument and EBADF after close all hold.
+hw-breakpoint-kernel-task-load: exit 0, valid TAP 1/1 PASS, no skip/failure.
+  CPU-wide EL1 registration succeeds. Per-task registration on all CPUs and on
+  a specific CPU returns -EINVAL. The module is then successfully unloaded.
+Both boots have a fresh nonce and orderly poweroff.
+
+Artifacts: .build/floating-targeted/ntsync-contract-20260923/
+reference-pair-boot/boot.json and boot.log:
+  serial fc8aaaa93bd57344d88ec19bbce1c9056c9491f9d90c789cd43b73db28e732dc
+subject-pair-boot/boot.json and boot.log:
+  serial 751db4f09decee5a47d0f456610f66cb687b1ec0488f3ea321ac0d6df02d35b1
+
+Original failures remain recorded, not converted to PASS:
+ntsync wake_all: frozen line 971 expects zero from CREATE_EVENT.
+hw_breakpoint: seven task-bound EL1 cases ask for an intentionally rejected API.
+See docs/notebook/kernel-selftest-gaps-20260914.md for exact case names,
+source hashes, upstream correction and original full-run captures.
+These two diagnostic programs are not added to the frozen 970/1504 populations.

@@ -115,19 +115,22 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   wording, shared classification tests and the unchanged 26-case kernel suite;
   K14 remains separate. [Decision request][semantics].
 
-- [ ] **K08 — Disposition the seven shared EL1 breakpoint failures** — `OPEN`, P1.
-  The test requests per-task kernel-address breakpoints that the ARM64 source
-  rejects with `-EINVAL`. Bind each failure to the exact source/config contract
-  and decide applicability or a separately identified upstream repair. Preserve
-  the frozen FAILs; an unsupported hardware/API combination is not a passed test.
-  Close with case-level evidence and an explicit coverage limit. [Evidence][kernel].
+- [x] **K08 — Disposition the seven shared EL1 breakpoint failures** — `DONE`, P1, 2026-09-23.
+  All seven cases are mapped to their first task-bound kernel-address allocation.
+  A [real kernel-API reduction](tests/fixtures/hw-breakpoint-kernel-task.c) verifies
+  CPU-wide EL1 success and both per-task forms returning `-EINVAL` on GCC/EvoCC
+  kernels; its signed diagnostic module actually loads and unloads. This closes
+  **classification as an ARM64 API/test mismatch**, not those seven tests as PASS.
+  The two CPU-wide original controls pass; no assertion/config was changed.
+  [Paired measurement](tests/fixtures/kernel-api-contracts.out), [case table][kernel].
 
-- [ ] **K09 — Disposition ntsync wake_all's return-value expectation** — `OPEN`, P1.
-  Both kernels pass 10/11; the remaining assertion expects zero from
-  `CREATE_EVENT`, which returns descriptor 9 in the capture. Verify the exact
-  ioctl/test contract and upstream resolution. Close with an evidence-backed
-  disposition or separately recorded test repair and paired replay; do not
-  silently relax the frozen assertion. [Evidence][kernel].
+- [x] **K09 — Disposition ntsync wake_all's return-value expectation** — `DONE`, P1, 2026-09-23.
+  Frozen documentation/implementation and the maintainer's upstream correction
+  agree: `CREATE_EVENT` returns a descriptor, not zero. The [small real ioctl
+  test](tests/fixtures/ntsync-create-event.c) passes both kernels, including state,
+  close, EFAULT and EBADF controls. This is an **upstream assertion defect**, not
+  a compiler defect or a waived PASS: the unchanged original remains 10/11.
+  [Paired measurement](tests/fixtures/kernel-api-contracts.out), [source evidence][kernel].
 
 - [ ] **K10 — Replay and diagnose the full BPF test_progs program** — `OPEN`, P1.
   The old subject run times out at 300 seconds after group 478. The new matching
