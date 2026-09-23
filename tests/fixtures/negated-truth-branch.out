@@ -1,0 +1,58 @@
+2026-09-23: redundant negated-truth lowering, reduced from KVM null guards.
+
+RED: the new CLI regression compiles with zero Rust errors; its shape check
+fails because null_case contains two ICmp instructions, expected one. The
+original value/effect control passes. This is missed code-generation quality,
+not evidence that those returned values were previously wrong.
+
+GREEN: !integer and !pointer compare the already-evaluated full-width value
+directly with zero/null. No intermediate (x != 0) boolean is needed. The
+existing compare/branch fusion then applies without any MIR/SSA/validator
+relaxation. Floating negation retains its unordered-truth path. Pointer null
+values retain their pointer type rather than converting to integers.
+
+Three Rust regressions PASS, including O0/O2 C-HIR/EvoIR execution, validated
+IR/MIR, assembly generation, narrow/128-bit values, function pointers, numeric
+boolean results, +/-zero, NaN, volatile evaluation once and short-circuiting.
+Negative interpreter controls retain E3001/E3002/E3005 (uninitialized read,
+division by zero, illegal shift count). They are not run as native C oracles.
+Fixed sealed arm64 GCC 14.2.0-19 and Clang 19.1.7 at O0/O2 return 0; EvoCC's
+O0/O2 assemblies, linked with GCC and run in the same image, also return 0.
+The null_case native body shrinks from 19 to 14 instructions: the eliminated
+instructions are cset, a zero materialization, two bit masks and a comparison.
+
+Original-unit replay: virt/kvm/kvm_main.c, unchanged .o.cmd projection via
+tools/k1/cmdrecord.py, including PAC, SSP sysreg/offset, auto-init, patchable
+entries, debug types and -fno-strict-overflow. Sealed assembler uses the
+recorded -Wa,-march=armv8.5-a. No object is installed and no Image is relinked.
+Controlled prior/current compiler comparison on those identical inputs:
+                       text       data     bss
+before                243232     14005     168
+after                 237968     14005     168
+Global symbol names/types are identical. Both assemblers emit the same five
+existing zero-length .space warnings. The older installed Image object has
+text=291804 but includes other compiler differences; do not attribute that
+larger reduction to this patch. Full K02 runtime remains OPEN.
+
+Changed gate against 6eeee66: 1094 PASS, 0 FAIL, 3 existing ignored tests,
+123 groups across evocc/evocc-eqopt/evocc-lower/evocc-policy/evocc-proofcheck/
+evocc-randgate. Clippy -D warnings and workspace fmt check PASS. This is the
+affected-crate gate, not a new complete kernel/application campaign.
+
+SHA-256:
+source 6857996620f7d97f664b8e16d74c3d447c21f37ac920d732b01b77fc4be98f44
+prior release ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875
+tested debug 5c7218c4d85438547dc5c53342dce6193b456b8581d0ca599f47018b28c28fab
+new release ae75daf20819c4f27fd041c0164d4a085dbc2008af019c0e1c0266275946c142
+O2 fixture assembly 6b9cb1dcf17a1e47d1405f6c281b25e907cb3c6dd9c04c2072f820d9ef9deb01
+kvm C 29f34138df7bcbade1e753ddc0b2030422fb1a8bbaae8f8cb45f27bc2627b10e
+kvm .cmd f534406dffdadccfab1116df7ca5ff4e6d1a94141f557d3810cd861cd7416c7f
+before assembly 3fb67057a3ce8b8352fc8ac00a121506f8de37ad5f0d0e664c4795e0a9a97296
+after assembly 0f0ddd7116c951286d608405c257c36c746dd398825feb7f63f7a9ebd797a294
+before object e26e1a461f479ec6d14b37e5ad90c3dc5a2ea129941b3f8fbad57f34fa7514bb
+after object 5fa2681fd61f2284687cfb922169ff1aa2da15cd41cca43db5bf91f96eeebb8f
+The separately rebuilt final release emits byte-identical assembly to the
+tested debug build for the actual KVM unit and both native fixture variants.
+Small generated artifacts: .build/floating-targeted/negated-truth-20260923/.
+Run: CARGO_TARGET_DIR=target/frontend cargo test -p evocc
+     --test negated_truth_branch --offline -j 2

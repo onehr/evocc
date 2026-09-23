@@ -2545,3 +2545,20 @@ Both diagnostic TAP results and nonce-bound shutdowns pass. Full commands,
 timings, negative setup result and artifact hashes are in
 [the bounded profile record](../../tests/fixtures/kvm-demand-fault-profile.out).
 No new full runtime, kernel configuration or campaign has been created.
+
+The corresponding compiler reduction found `!x` lowered as two comparisons
+(`x != 0`, then boolean `== 0`), preventing the existing branch fusion. The
+shared truth-comparison path now emits a direct full-width integer/pointer
+comparison, preserving operand effects, poison obligations and the separate
+floating unordered path. Its small fixture passes O0/O2 in both interpreters
+and GCC14/Clang19/EvoCC native execution. Negative controls retain E3001, E3002
+and E3005. A null guard falls from 19 to 14 native instructions.
+
+The unchanged original `virt/kvm/kvm_main.c` command also emits and assembles;
+on identical source/flags, prior/current compiler text sizes are 243232/237968
+bytes with identical global symbol names/types. The earlier installed object's
+larger size includes other fixes and is not used as this patch's delta.
+**1094 PASS, 0 FAIL, 3 historical ignores** across six affected crates, plus
+clippy and fmt, close this small optimization, not K02. No replacement object
+was installed and the accepted Images are unchanged. See
+[the replay record](../../tests/fixtures/negated-truth-branch.out).

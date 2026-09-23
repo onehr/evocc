@@ -106,6 +106,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   excess time spans page acquisition/mapping/release, not one proven stall.
   The 4.1 MiB diagnostic reuses the 64 MiB scratch disk. No original PASS claim.
 
+  - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
+    [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
+    both interpreters and native GCC/Clang/EvoCC controls pass at O0/O2.
+    The original `virt/kvm/kvm_main.o` reassembles with identical global symbols,
+    text 243232 → 237968 bytes on controlled prior/current builds. The 1094-test
+    affected gate, clippy and fmt pass. No Image was changed; K02 still needs its
+    unchanged full-mode runtime replay after final rebuild. [Record](tests/fixtures/negated-truth-branch.out).
+
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
   Isolate this separately from K02 until a shared cause is demonstrated; retain

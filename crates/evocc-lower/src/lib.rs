@@ -10702,11 +10702,16 @@ impl<'a> FunctionLowerer<'a> {
                 self.cast(operand, promoted, state)
             }
             UnaryOp::Not => {
-                let truth = self.lower_condition_value(operand, state)?;
-                let zero = self.fresh_value(EvoIRType::Bits(1));
-                self.emit(state, Inst::Const(zero.clone(), 0))?;
-                let result = self.fresh_value(EvoIRType::Bits(1));
-                self.emit(state, Inst::ICmp(result.clone(), CmpOp::Eq, truth, zero))?;
+                // !x is x == 0 at x's full width. Materializing x != 0
+                // first adds a second comparison and hides the branch from
+                // the existing compare/cond_br machine lowering. Evaluate x
+                // once above; keep floating unordered truth on its own path.
+                let value = if evocc_evoir::floating_kind(&operand.value.ty).is_some() {
+                    self.floating_truth(operand, state)?
+                } else {
+                    operand.value
+                };
+                let result = self.compare_with_zero(value, CmpOp::Eq, state)?;
                 Ok(ExprValue {
                     value: result,
                     integer: CIntegerType::INT,
@@ -14050,21 +14055,26 @@ impl<'a> FunctionLowerer<'a> {
         if value.value.ty == EvoIRType::Bits(1) {
             return Ok(value.value);
         }
-        if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
-            let null = self.fresh_value(value.value.ty.clone());
-            self.emit(state, Inst::PtrNull(null.clone()))?;
-            let condition = self.fresh_value(EvoIRType::Bits(1));
-            self.emit(
-                state,
-                Inst::ICmp(condition.clone(), CmpOp::Ne, value.value, null),
-            )?;
-            return Ok(condition);
-        }
-        let zero = self.constant(state, value.integer, 0)?;
+        self.compare_with_zero(value.value, CmpOp::Ne, state)
+    }
+
+    fn compare_with_zero(
+        &mut self,
+        value: Value,
+        comparison: CmpOp,
+        state: &State,
+    ) -> Result<Value, LowerError> {
+        let zero = self.fresh_value(value.ty.clone());
+        let constant = if matches!(value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+            Inst::PtrNull(zero.clone())
+        } else {
+            Inst::Const(zero.clone(), 0)
+        };
+        self.emit(state, constant)?;
         let condition = self.fresh_value(EvoIRType::Bits(1));
         self.emit(
             state,
-            Inst::ICmp(condition.clone(), CmpOp::Ne, value.value, zero.value),
+            Inst::ICmp(condition.clone(), comparison, value, zero),
         )?;
         Ok(condition)
     }
