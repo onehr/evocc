@@ -2147,6 +2147,21 @@ the proposed fix.
 qualifier-discard, and integer-record-varargs control probes. The control
 prevents overgeneralizing the remaining mixed-member ABI refusal.
 
+## Complete inline values — 2026-09-23 targeted follow-up
+
+Two new small explicit-always-inline cases independently reproduce E3101 on
+the prior release: a floating builtin retains a foreign SSA operand after a
+later argument opens CFG blocks, and an integer-complex parameter/result uses
+the generic scalar conversion/assignment path. These are **not FP deferrals**.
+Both shared paths now retain explicit value transport and complete complex
+pair semantics, without weakening validators or initializer admissibility.
+
+The two fixtures plus a bounded private-leaf reduction pass both interpreters
+and 18 native GCC14/Clang19/EvoCC O0/O2 runs. All 1,812 affected tests, Clippy
+and fmt pass (three historical ignored). This closes those reproduced E3101
+subcases, not the entire historical T01 audit or a new application campaign.
+[Detailed record](../../tests/fixtures/private-leaf-substitution.out).
+
 ## Tooling changes and verification
 
 The new Mbed TLS adapter reuses `tools/ladder/subject.py`: original reference

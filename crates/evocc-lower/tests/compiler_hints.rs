@@ -619,7 +619,8 @@ fn dynamic_stack_allocation_never_becomes_an_external_call() {
         ),
         ("void f(void){__builtin_alloca(16);}", true),
         (
-            "static void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
+            // Preserve the call so this tests binding rather than inlining.
+            "static __attribute__((noinline)) void *alloca(unsigned long n){return 0;} void *f(void){return alloca(16);}",
             false,
         ),
     ] {

@@ -32,11 +32,27 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         use evocc_chir::floating::FloatingBuiltin::*;
-        let operands = expression
-            .operands
-            .iter()
-            .map(|operand| self.lower_expr(operand, state))
-            .collect::<Result<Vec<_>, _>>()?;
+        // A later operand may open blocks (an inlined call, conditional or
+        // statement expression). Earlier operands remain live through the
+        // explicit environment, exactly like ordinary/vector/complex operands;
+        // keeping their original Value IDs would violate local SSA.
+        let mut keys = Vec::new();
+        for operand in &expression.operands {
+            let value = self.lower_expr(operand, state)?;
+            let key = self.retain_temporary(value.value, state);
+            keys.push((key, value.integer));
+        }
+        let operands = keys
+            .into_iter()
+            .map(|(key, integer)| ExprValue {
+                value: state
+                    .env
+                    .remove(&key)
+                    .expect("retained floating operand")
+                    .value,
+                integer,
+            })
+            .collect::<Vec<_>>();
         let fp = operands[0].value.ty.clone();
         let kind = floating_kind(&fp).ok_or(LowerError::FloatingValue {
             span: expression.span,

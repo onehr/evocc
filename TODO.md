@@ -126,6 +126,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   is not the entire gap. Both reduced TAP tests and shutdowns pass; original
   all-mode acceptance remains open. Next isolate the repeated page-table helpers.
 
+  - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
+    The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
+    through the existing C-HIR inliner, with declaration-chain barriers and
+    explicit cost/lifetime/address boundaries. Interpreter/native controls and
+    the 1,812-test affected gate pass. The original page-table object assembles
+    with identical exports and three fewer helper calls, but text grows by 128
+    bytes; no runtime improvement is inferred. No Image changed: K03 remains
+    OPEN. [Full result](tests/fixtures/private-leaf-substitution.out).
+
 - [ ] **K04 — ublk stress/shutdown stall** — `OPEN`, P1.
   `test_stress_04.sh` hits the 45-second wrapper limit and stalls in shutdown sync;
   a later diagnostic invocation passes in 4.983 seconds. Capture the blocked I/O
@@ -414,6 +423,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   narrowing-then-widening label constants; do not relabel entire previously fixed
   families OPEN. Close with no orphan known case or unexplained generic waiver.
   [Historical reductions and follow-ups][apps].
+
+  - [x] **T01a — Repair two independently reproduced inline E3101 paths**.
+    [Floating builtin operands](tests/fixtures/inline-value-transport.c) now
+    transport earlier values across later operands' CFG edges; [integer-complex
+    parameters/results](tests/fixtures/inline-complex-parameter.c) use complete
+    pair conversion, assignment and result storage. Both explicit always-inline
+    cases fail on the prior release, independently of K03a's new eligibility.
+    Both interpreters and all GCC/Clang/EvoCC O0/O2 native controls pass; validator
+    and initializer rules are unchanged. [Measured record](tests/fixtures/private-leaf-substitution.out).
 
 - [ ] **T02 — Put expanded KUnit behind the common bench entry point** — `OPEN`, P1.
   The `kernel-kunit` adapter now wraps the existing boot/init workflow and

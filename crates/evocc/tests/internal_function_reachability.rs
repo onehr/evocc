@@ -126,7 +126,7 @@ fn function_linkage_is_inherited_from_its_first_declaration() {
             failures.push(String::from_utf8_lossy(&output.stderr).into_owned());
         }
         let source = format!(
-            "static int hidden(int); {prefix}int hidden(int n){{return n;}}int main(void){{return hidden(0);}}"
+            "static int hidden(int) __attribute__((noinline)); {prefix}int hidden(int n){{return n;}}int main(void){{return hidden(0);}}"
         );
         let output = run(&source, "--emit=evoir");
         assert!(output.status.success(), "{:?}", output.stderr);

@@ -1,4 +1,4 @@
-//! Source-level substitution of always-inline calls and constant inline leaves.
+//! Source-level substitution of explicit inline calls and bounded private leaves.
 //!
 //! This pass produces ordinary C-HIR objects, statements and expressions.
 //! It does not add a second execution path or relax an assembly constraint.
@@ -35,6 +35,8 @@ struct Uses<'a> {
     object_queries: bool,
     has_loops: bool,
     has_calls: bool,
+    has_local_objects: bool,
+    activation_sensitive: bool,
     unknown_memory: bool,
     writes: BTreeSet<SymbolId>,
     entry_labels: bool,
@@ -194,6 +196,7 @@ fn inspect_ordered<'a>(
                 visit(decl);
                 match decl {
                     CHirDecl::Object(o) => {
+                        uses.has_local_objects = true;
                         if let Some(cleanup) = o.cleanup {
                             work.push(Node::Expr(cleanup, false));
                         }
@@ -337,6 +340,13 @@ fn inspect_ordered<'a>(
             }
             Node::Expr(e, callee) => {
                 visit_expression(e);
+                uses.activation_sensitive |= matches!(
+                    e,
+                    CHirExpr::BuiltinReturnAddress { .. }
+                        | CHirExpr::BuiltinFrameAddress { .. }
+                        | CHirExpr::BuiltinVarArgs { .. }
+                        | CHirExpr::CompoundLit(..)
+                );
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
                 uses.constant_queries |= matches!(
@@ -890,6 +900,21 @@ pub(crate) fn substitute_for_execution<'a>(
         }
     }
     let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
+    // An optimization barrier can be written on another declaration of the
+    // same symbol. Do not infer permission from the definition node alone.
+    let mut no_optional_substitution = BTreeSet::new();
+    for_each_declaration_ordered(unit, |declaration| {
+        if let CHirDecl::Function(function) = declaration {
+            if function.attributes.iter().any(|attribute| {
+                matches!(
+                    attribute.semantic_name(),
+                    Some("noinline" | "noipa" | "noclone")
+                )
+            }) {
+                no_optional_substitution.insert(function.symbol);
+            }
+        }
+    });
     // Honor ordinary inline hints for small, acyclic private or inline-only
     // helpers too. An inline-only body's external fallback is still distinct.
     // The bound limits code growth; mandatory always_inline remains separate.
@@ -925,6 +950,27 @@ pub(crate) fn substitute_for_execution<'a>(
         }
         false
     };
+    // Small private predicates need not carry an inline spelling to benefit
+    // from the existing, shared substitution. Keep this first cost model leaf
+    // only: no transitive growth, loop duplication, local storage/lifetimes,
+    // label identity, assembly or activation-dependent builtin semantics.
+    // Reads and argument effects still execute at the selected call site.
+    let private_leaf = |function: &FunctionDecl<'_>| {
+        let body = &bodies[&function.symbol];
+        function.has_internal_linkage(unit.symbols())
+            && body.nodes <= 48
+            && !body.has_calls
+            && !body.has_loops
+            && !body.has_local_objects
+            && body.exposed_objects.is_empty()
+            && !body.activation_sensitive
+            && !body.entry_labels
+            && !body.addressed_labels
+            && !body.owns_statements
+            && !body.constant_queries
+            && body.assembly.is_empty()
+            && !no_optional_substitution.contains(&function.symbol)
+    };
     let mut candidates = roles.definitions.clone();
     candidates.extend(
         roles
@@ -938,6 +984,7 @@ pub(crate) fn substitute_for_execution<'a>(
             f.body.is_some()
                 && (roles.always_inline.contains(&f.symbol)
                     || constant_inline_return(unit, f, target).is_some()
+                    || private_leaf(f)
                     || (!f.inline_spans.is_empty()
                         && (f.has_internal_linkage(unit.symbols()) || !roles.is_definition(f))
                         && !f
@@ -1823,6 +1870,29 @@ impl<'a> Substitution<'a, '_> {
         )
     }
 
+    fn converted_value(
+        &self,
+        ty: TypeId,
+        value: &'a CHirExpr<'a>,
+        span: SourceSpan,
+    ) -> &'a CHirExpr<'a> {
+        if crate::complex::rank(&self.unit.types, ty).is_some() {
+            // C complex is scalar, but its value/conversion is a pair, not the
+            // generic scalar Cast path. Use the parser's ordinary conversion
+            // node and StoreScalar initializer; do not widen InitPlan rules.
+            self.alloc(CHirExpr::Complex(crate::complex::ComplexExpr {
+                op: crate::complex::ComplexOp::Convert,
+                operands: vec![value],
+                facts: ExprFacts::value(ty),
+                span,
+            }))
+        } else if self.complete_object_value(ty) {
+            value
+        } else {
+            self.alloc(CHirExpr::Cast(ty, value, span))
+        }
+    }
+
     fn object(
         &self,
         s: SymbolId,
@@ -1833,8 +1903,8 @@ impl<'a> Substitution<'a, '_> {
         let ty = symbol.ty();
         let initializer = value.map(|v| {
             // Record, list and vector parameters use the same complete-object
-            // initialization as an ordinary declaration. A vector is not a
-            // scalar destination in the checked initialization plan.
+            // initialization as an ordinary declaration. Complex remains a C
+            // scalar, initialized through its ordinary converted pair value.
             let action = if self.complete_object_value(ty) {
                 InitAction::CopyAggregate {
                     path: SubobjectPath::root(),
@@ -2915,11 +2985,7 @@ impl<'a> Substitution<'a, '_> {
                     let expression = if let Some(result) = c.result {
                         let target = self.ident(result, *span);
                         let ty = self.unit.symbols.symbol(result).unwrap().ty();
-                        let value = if self.complete_object_value(ty) {
-                            value
-                        } else {
-                            self.alloc(CHirExpr::Cast(ty, value, *span))
-                        };
+                        let value = self.converted_value(ty, value, *span);
                         if self.track_extents {
                             c.return_extent = self.pointer_bounds(value, c, 0);
                         }
@@ -2932,8 +2998,13 @@ impl<'a> Substitution<'a, '_> {
                             )
                             .is_some()
                         });
-                        if let Ok(place) =
+                        // Match the parser's update-target classification:
+                        // integer complex is a C scalar, but its two-component
+                        // value is assigned through a complete memory place.
+                        if let Some(place) =
                             ScalarPlace::bind(&self.unit.symbols, &self.unit.types, result)
+                                .ok()
+                                .filter(|_| crate::complex::rank(&self.unit.types, ty).is_none())
                         {
                             self.alloc(CHirExpr::Assign {
                                 op: AssignmentOp::Simple,
@@ -3310,7 +3381,9 @@ impl<'a> Substitution<'a, '_> {
             let s = self.fresh(scope, return_type, StorageClass::None, span)?;
             c.result = Some(s);
             let object = self.object(s, None, span);
-            if self.complete_object_value(return_type) {
+            if self.complete_object_value(return_type)
+                || crate::complex::rank(&self.unit.types, return_type).is_some()
+            {
                 // Like the existing call-result buffer, an aggregate result
                 // belongs to the caller, not the callee's ended block.
                 self.temporaries.push(object);
@@ -3321,11 +3394,7 @@ impl<'a> Substitution<'a, '_> {
         for ((parameter, arg), bounds) in parameters.iter().zip(args).zip(argument_bounds) {
             let ty = self.substituted_type(parameter.ty, &c);
             let fresh = self.fresh(inline_scope, ty, StorageClass::None, span)?;
-            let arg = if self.complete_object_value(ty) {
-                *arg
-            } else {
-                self.alloc(CHirExpr::Cast(ty, arg, span))
-            };
+            let arg = self.converted_value(ty, arg, span);
             items.push(CHirBlockItem::Declaration(self.object(
                 fresh,
                 Some(arg),

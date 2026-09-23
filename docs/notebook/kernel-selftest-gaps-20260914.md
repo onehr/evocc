@@ -2582,3 +2582,20 @@ is about 5 MiB and reuses the same 64 MiB scratch disk; historical deep logs are
 kept, not a second large runtime. [Full record](../../tests/fixtures/kvm-memslot-fault-profile.out).
 The original all-mode 120-second timeout remains OPEN; next reduce the repeated
 page-table helpers and verify any compiler repair before rebuilding an Image.
+
+### Bounded private leaf substitution — 2026-09-23
+
+The shared C-HIR inliner now admits small, unaddressed private leaves without
+requiring an explicit inline hint. Its initial cost model excludes local
+objects, loops/calls, label/asm/activation-sensitive behavior and declaration-chain
+optimization barriers. The K03 predicate reduction and native controls pass;
+the original `arch/arm64/kvm/hyp/pgtable.o` reassembles with identical exports.
+Three `kvm_pgtable_walk_continue` calls disappear, but text is **41688 → 41816**
+bytes, so this is not evidence of a runtime speedup. No installed object or
+Image changed; K03's all-mode 120-second acceptance remains OPEN.
+
+Broader testing also reduced and repaired two existing explicit-inline E3101
+paths (floating operand SSA transport and integer-complex parameter/result
+initialization). Both interpreters and 18 GCC/Clang/EvoCC O0/O2 native runs pass.
+The affected gate is **1812 PASS / 0 FAIL / 3 historical ignored**, with Clippy
+and fmt green. [Commands, boundaries and identities](../../tests/fixtures/private-leaf-substitution.out).

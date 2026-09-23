@@ -267,10 +267,13 @@ fn debug_information_does_not_resurrect_an_unemitted_internal_function() {
 
 #[test]
 fn debug_external_attributes_follow_c_linkage_and_omit_false_flags() {
-    let debug = successful(run(
-        &["--emit=asm", "-g"],
-        include_str!("../../../tests/fixtures/debug-linkage.c"),
-    ));
+    // This check needs an out-of-line internal definition, not an eliminated
+    // private leaf. Retention is independent of the linkage encoded by DWARF.
+    let source = format!(
+        "static int inherited_function(int) __attribute__((noinline));\n{}",
+        include_str!("../../../tests/fixtures/debug-linkage.c")
+    );
+    let debug = successful(run(&["--emit=asm", "-g"], &source));
     let entry = |name: &str| {
         debug
             .split_once(&format!(".asciz {name:?}\n"))

@@ -1,0 +1,60 @@
+2026-09-23 — bounded private-leaf substitution and complete inline values.
+
+RED: zero Rust compilation errors; 1 declared leaf-call shape failure, 3
+controls PASS. Further explicit-always_inline reductions fail on the prior
+release independently of the new cost model: inline-value-transport.c has a
+foreign SSA Value ID after its second builtin operand opens a block;
+inline-complex-parameter.c reports E3101 for a synthetic scalar destination.
+
+GREEN: use the existing C-HIR substitution for private leaves of at most 48
+nodes, excluding calls, loops, local objects, exposed objects, assembly, label
+identity, statement expressions, constant queries, activation-sensitive
+builtins and optimization barriers anywhere in the declaration chain. Existing
+address/alias/reference retention and variadic boundaries still apply. There
+is no new IR rule, source admission or EqSat allowlist expansion.
+
+Floating builtin operands now retain earlier values in the explicit live
+environment across later operands' control flow. Integer-complex parameters
+use the ordinary pair-conversion node and checked StoreScalar initializer;
+results use the parser's complete memory-place assignment and caller-owned
+storage. Complex remains a C scalar, not an InitPlan CopyAggregate exception.
+No validator, poison check or arithmetic obligation is weakened.
+
+Five CLI regressions validate IR and both interpreters at O0/O2, cover
+conversion/evaluation/read counts, unselected null reads, cost/admission
+boundaries and retained E3001/E3002/E3004/E3009. The existing 63 language
+semantic cases also pass. Four old call/body-inspection tests explicitly use
+noinline to preserve what they inspect; their semantic assertions are intact.
+The three C fixtures each exit zero with sealed GCC 14.2.0-19, Clang 19.1.7
+and EvoCC at O0/O2: 18/18 native runs. All use linux/arm64, network none,
+evo-flight-lab:sealed configuration digest
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+
+The unchanged arch/arm64/kvm/hyp/pgtable.o is replayed using its original
+Kbuild command and actual bpf-config generated headers. Existing cmdrecord
+projection records omitted options and forwards original assembler flags.
+Old/new objects assemble with identical exported symbol names/types. Three
+calls and the unused kvm_pgtable_walk_continue definition disappear; total
+object text is 41688 -> 41816 bytes, data 1032 -> 1000 bytes. This is NOT a
+runtime speedup measurement or original K03 PASS. No installed kernel object,
+Image or module was changed. The original 120-second all-mode failure remains.
+
+Affected gate against 1a2e98d: 1812 PASS, 0 FAIL, 3 historical ignored,
+211 result groups across eight crates. Clippy --all-targets -D warnings,
+workspace fmt --check and diff checks PASS. Initial failed gate retained
+separately; the green gate is not a reinterpretation of that earlier failure.
+The rebuilt release emits byte-identical original page-table assembly to the
+tested debug compiler; no additional runtime acceptance is inferred.
+Artifacts: .build/floating-targeted/private-leaf-20260923/ (about 10 MiB).
+No clone, kernel rebuild or additional runtime disk was made.
+
+SHA-256:
+prior release 0611f328d0871d74657da98b071d88bdc1ee24effae294bd06906a088d02c6fe
+tested debug 689b0bfc27b0209ad66d9e95634b6adf190877e4ad0745bc16b0da98d39a6e16
+rebuilt release 53d13449f8be185b1fbad826ac9c52e6704c60491c31fe703eb71624852d13c8
+private leaf fixture a26a22f97cd2a358161acc54df160461bfaabae6b748ccc3539151bcad144dfc
+floating fixture d68f3c8fc6e729303b0ad1bce69dddc9919a00cf622d68683223205fc42c6c5e
+complex fixture f583beaa9138e416e78d638f18bccffc7bc712817d2990aefc419ae055c4c223
+original before assembly 970ba18aa9658403eeae728198b0fa690588145861ef3112c9b478f3d5394626
+original after assembly be3256d983d0a20dff29c6ffe18e245e209d50baf4816f03837da4e82997a722
+native replay log 92966bb95052a5ddfbc9732ebdd1ba0582169ce9f530f7c7c539baf82320f79e

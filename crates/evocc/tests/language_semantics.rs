@@ -41,7 +41,8 @@ fn benchmark_frontier_floating_absolute_calls() {
     );
     assert!(!text.contains("call @fabs"));
     for source in [
-        "static double fabs(double x){return x;} double f(double x){return fabs(x);}",
+        // Preserve the call under test; ordinary private leaves may inline.
+        "static __attribute__((noinline)) double fabs(double x){return x;} double f(double x){return fabs(x);}",
         "extern double fabs(double) __asm__(\"alternate\"); double f(double x){return fabs(x);}",
         "extern double (*fabs)(double); double f(double x){return fabs(x);}",
         "extern int fabs(int); int f(int x){return fabs(x);}",
