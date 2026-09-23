@@ -381,6 +381,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     The invalid cJSON flight `20260923T073305Z` is superseded, not accepted.
     This repairs the harness, not all historical benchmark claims; B10 remains.
 
+  - [x] **T05b — Run the workspace gate for manifest-only changes**.
+    Five RED assertions showed that changes only to `Cargo.toml` or `Cargo.lock`
+    incorrectly took the no-crates early exit, including a simulated failing test.
+    Manifest selection now precedes that exit. The actual shell script is covered
+    by offline stand-ins for committed/dirty changes, reverse dependencies,
+    non-Cargo no-op changes and failure propagation in
+    [regressions](tools/ladder/tests/test_gate_changed.py). This does not substitute
+    for the final real workspace gate.
+
 ## Later roadmap gates — not substitutes for runtime closure
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
