@@ -185,8 +185,18 @@ backward branches before the induction update. Both interpreters and GCC14,
 Clang19 O0/O2 plus EvoCC native pass the finite controls, including terminating
 zero-guard alternatives. [Hashes, lines and limits](../../tests/fixtures/csmith-restarted-state.out)
 bind all ten to the existing original-process PC captures. Current analysis is
-**43 identified / 25 undetermined**. No original checksum, budget, source,
+**43 identified / 25 undetermined** at that checkpoint. No original checksum, budget, source,
 seed or benchmark verdict changed; these are not ten newly passing programs.
+
+Read-only stopped-process observations now resolve base/239 and both /466
+identities. Both oracles have the same unchanged nonzero guard in /239's
+reset-before-update loop. In /466 the sampled callee loops themselves are
+finite; its caller repeatedly resets the argument state and branches back on
+the callee's eight counter increments. The original hashes, observed global
+values/aliases and source transition argument are in
+[the record](../../tests/fixtures/csmith-reset-call-cycle.out). Finite controls
+pass both interpreters and all five native variants. Current diagnosis is
+**46 identified / 22 undetermined**, still 68 oracle-unusable, not 68 PASS.
 
 ## c-testsuite floating execution
 

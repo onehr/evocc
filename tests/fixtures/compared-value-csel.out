@@ -35,7 +35,7 @@ evocc-randgate. Clippy --all-targets -D warnings and workspace fmt PASS.
 The four ignored standing native/extended campaigns remain ignored, not passes.
 Status is regenerated; diff and renderer checks pass.
 
-Artifacts: .build/floating-targeted/csel-20260923/ (under 1 MiB).
+Artifacts: .build/floating-targeted/csel-20260923/ (about 1.2 MiB).
 Commands: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
   cargo test -p evocc-mir --test compared_value_csel --offline -j2
   cargo test -p evocc --test compared_value_selection --offline -j2

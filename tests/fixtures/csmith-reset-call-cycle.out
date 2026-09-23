@@ -1,0 +1,65 @@
+2026-09-23 — B03 unchanged-state diagnostics: base/239, base/466, bitfields/466.
+46 of 68 unusable-oracle paths identified; 22 remain undetermined.
+This is source-bound diagnosis, not an original PASS or whole-program UB proof.
+
+The original source bytes match the prior two-oracle PC sample capture:
+base/239 8a485853bf8149841a8b4e058b8844b8545bee3217309b5066f57a9f10e1131f
+base/466 c45e9dd9720ae6b47320dbda3590061c1536cd336f02c8e9cdc768ed36f52c51
+bitfields/466 e066f35b82c5c1b87ad221495c4d50b2c17524251bc0a31ebbf44335c2dd2ff7
+The /466 executable text is identical; only generator/statistics comments differ.
+Original PC capture: .build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+
+An additional bounded diagnostic builds each unchanged source with GCC14 and
+Clang19 at -O0 -g -static -no-pie, launches an owned child, then three times
+stops it after 150 ms, reads selected globals via /proc/<pid>/mem, and resumes.
+Each child is killed and reaped after diagnosis (termination -9, NOT PASS).
+The binary symbols/addresses and hashes are recorded separately for each build.
+No source instrumentation, g_5 write, changed seed or raised benchmark budget.
+
+base/239: both compilers observe g_5=0x6544d187 and g_7=-10 in all three samples.
+Earlier PC samples reach func_73 lines 709–717. The loop initializes g_7=-10,
+tests g_7<17, updates only a local XOR accumulator, then takes goto lbl_445 on
+the unchanged nonzero g_5 before g_7's update. There is no call or pointer store
+in this body. Its safe shift helper returns its left operand for this excessive
+count; the subsequent 8-bit divide by 0x51 gives zero, leaving the accumulator
+unchanged too. Sampling establishes the reaching state; the source transition
+shows why it repeats. The finite control also checks the terminating g_5=0 case.
+
+Both /466: prior samples reach func_2's finite body (lines 203–271). New samples
+show table g_130[3][4]=1, g_130[0][3]=1, g_130[0][2]=-10, g_468=1 and
+g_375=&g_130[0][3] for both compilers. g_668 ranges through its reset/increment
+cycle while g_534/g_477 remain zero. This is NOT an infinite inner for loop:
+func_2 returns during those outer loops' first iteration. Caller func_1's
+constant-safe-shift condition is nonzero (lines 89–95), copies *g_375 to g_468,
+calls func_2 with &g_130[3][4], then restarts if g_668 is nonzero.
+
+At that observed state, func_2 resets g_668 to zero and initially breaks on the
+nonzero table element. (*p_3)^20 is true. Its bounded eight-iteration body
+increments g_668 eight times, sets *g_375=1, and ORs zero into g_468 (the
+constant 0xc6de9556 has low bit zero). Therefore the true branch executes the
+finite 28,25,...,4 loop and stores the comparison result 1 back to *p_3;
+the huge uint64 constant exceeds g_668. The function returns, its caller sees
+g_668=8 and restarts in the same controlling state. No alternate func_4 call is
+reached on this path. The finite reduction covers zero/nonzero initial table
+states (g_668=16/8), preserves the separated pointee/guard addresses, and adds
+fuel only to the reduction. It does not modify any original benchmark loop.
+
+Both C-HIR and EvoIR return zero; GCC14/Clang19 O0/O2 and EvoCC O2 assembly all
+exit zero. Clang's tautological-large-constant warning is retained. The first
+local invocation omitted the sysroot and got E0105; using the same existing
+ARM64 sysroot as the lane resolves that setup error, not a compiler fix.
+The only new C file is the finite regression; no production code changes.
+The original denominator remains 1,000, with 932 agreeing, zero mismatch and
+68 oracle-unusable. These three diagnostic terminations add no checksum PASS.
+
+Environment: evo-flight-lab:sealed, linux/arm64, network none, --cpus 2;
+original source/runtime mounts read-only, only this small result folder writable.
+Compile flags also preserve -DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP
+-DINT_MAX=2147483647 and each campaign's runtime include path.
+Capture: .build/floating-targeted/csmith-stopped-state-20260923/result.json
+SHA-256 700dbcd2dd9f0f61c52159afeae70ab2942d188c2514019dac571343ec543182
+Finite source SHA-256
+0566863d383c0c604e7dcfe7f5eaddaf9713111b4e43e38b1c794376a43bfbe0
+Commands, per-build argv, diagnostics, symbol maps and observations are in the
+capture; native.log retains five native outcomes. All six children were reaped.
