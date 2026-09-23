@@ -7682,6 +7682,25 @@
    "-w"
   ]
  },
+ "targetedFollowups": [
+  {
+   "task": "B02",
+   "date": "2026-09-24",
+   "scope": "One unchanged LARGE original; does not update frozen full-campaign counters",
+   "source": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c",
+   "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953",
+   "driverSha256": "d9148a721a6997f8d62bf2ba463d5b963668020b5949b9e324b1eca7b0a0b091",
+   "assemblySha256": "faef7f932d5015b812e6ff4816ca39a2135510ba9bb204089c1a067d291853b7",
+   "outcome": "PASS",
+   "timeoutSeconds": 60,
+   "realSeconds": 52.036,
+   "exitCode": 0,
+   "outputHash": "50f7f0386b159a1161e1cf5fbd132682",
+   "outputComparisonExitCode": 0,
+   "evidence": "tests/fixtures/loop-value-transport.out",
+   "capture": ".build/floating-targeted/loop-transport-20260924/original-verified.log"
+  }
+ ],
  "evidence": ".evidence/ladder/llvm-test-suite/20260919T230110Z",
  "summaryLine": "LLVM SingleSource: 1014/1735 C programs compiled by EvoCC and PASS; {'PASS': 1014, 'compiler-refused': 708, 'oracle-unusable': 1, 'runtime-failure': 11, 'link-failure': 1}"
 }

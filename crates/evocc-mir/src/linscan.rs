@@ -1150,7 +1150,7 @@ fn resolve(merged: &BTreeMap<u32, VReg>, reg: VReg) -> VReg {
     VReg::new(current.id, reg.class)
 }
 
-fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
+pub(crate) fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
     match term {
         MTerm::Indirect { target, edges } => std::iter::once(target)
             .chain(edges.iter_mut().flat_map(|(_, args)| args))
@@ -1503,7 +1503,7 @@ fn replace_def(inst: &mut MInst, from: VReg, to: VReg) {
 }
 
 /// Mutable access to an instruction's operand slots, definitions or uses.
-fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
+pub(crate) fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
     match inst {
         MInst::Vector { dst, args, .. }
         | MInst::Aes { dst, args, .. }

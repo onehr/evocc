@@ -7,7 +7,7 @@
 //! allocation, on virtual registers, as its own pass; the lowering of Section
 //! 5 does not do it."
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::{
     inst_defs, inst_uses, term_edges, term_uses, MBlock, MFunction, MInst, MTerm, RegClass, VReg,
@@ -37,6 +37,8 @@ pub const SCRATCH_LIMIT: u32 = 1 << 25;
 /// same rule keeps that from arising.
 #[must_use]
 pub fn out_of_ssa(function: &MFunction) -> MFunction {
+    let forwarding = forwarded_parameters(function);
+    let source = |reg: VReg| forwarding.get(&reg.id).copied().unwrap_or(reg);
     let split = split_critical_edges(function);
     let parameters: BTreeMap<u32, Vec<VReg>> = split
         .blocks
@@ -82,6 +84,8 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                     parameters[target].iter().copied().zip(args.iter().copied())
                 })
                 .filter(|(dst, _)| needed.contains(&dst.id))
+                .filter(|(dst, _)| !forwarding.contains_key(&dst.id))
+                .map(|(dst, src)| (dst, source(src)))
                 .collect();
             let mut moves = Vec::new();
             if pairs
@@ -111,6 +115,8 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                 .copied()
                 .zip(args.iter().copied())
                 .filter(|(dst, _)| needed.contains(&dst.id))
+                .filter(|(dst, _)| !forwarding.contains_key(&dst.id))
+                .map(|(dst, src)| (dst, source(src)))
                 .collect();
             if pairs.is_empty() {
                 continue;
@@ -147,6 +153,14 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
             }
         }
         clear_edge_args(&mut term);
+        for inst in &mut insts {
+            for slot in crate::linscan::operand_slots(inst, false) {
+                *slot = source(*slot);
+            }
+        }
+        for slot in crate::linscan::term_slots(&mut term) {
+            *slot = source(*slot);
+        }
         // The entry block's arguments are the function's parameters, bound by
         // the caller rather than by an edge, so no copy can remove them. They
         // are the fixed operands of the boundary that Section 7 hands the
@@ -166,6 +180,95 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         name: function.name.clone(),
         blocks,
     }
+}
+
+/// Eliminate a trivial phi: apart from passing itself unchanged, every incoming
+/// edge must transport the same value. Repeat through the dependent parameters
+/// to simplify forwarding chains and unchanged loop cycles. A nontrivial phi is
+/// still a definition, so an inner loop may forward an outer induction value
+/// without incorrectly identifying that value with its initial constant.
+/// This is SSA identity, NOT physical coalescing or equality of constant bits.
+fn forwarded_parameters(function: &MFunction) -> BTreeMap<u32, VReg> {
+    fn resolve(aliases: &BTreeMap<u32, VReg>, mut value: VReg) -> VReg {
+        // Only canonical, distinct roots are linked below, so this cannot
+        // cycle. Do not truncate a long forwarding chain at an arbitrary cap.
+        while let Some(&next) = aliases.get(&value.id) {
+            value = next;
+        }
+        value
+    }
+
+    // This is a pre-SSA-destruction analysis, so malformed/non-SSA test inputs
+    // must not receive an identity proof. Inline asm is deliberately excluded
+    // initially: its tied/read-write constraints require a separate audit.
+    // Indirect dispatch also stays unchanged. Its union copy can overwrite a
+    // self-edge source even when a different target is selected; replacing that
+    // target's saved binding with the source would observe the wrong value.
+    if crate::validate::validate_function(function).is_err()
+        || function.blocks.iter().any(|b| {
+            matches!(b.term, MTerm::AsmGoto { .. } | MTerm::Indirect { .. })
+                || b.insts.iter().any(|i| matches!(i, MInst::Asm(_)))
+        })
+    {
+        return BTreeMap::new();
+    }
+    let mut parameters = BTreeMap::new();
+    let mut incoming: BTreeMap<u32, Vec<VReg>> = BTreeMap::new();
+    let mut users: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for (index, block) in function.blocks.iter().enumerate() {
+        parameters.insert(block.id, &block.args);
+        for &arg in &block.args {
+            if index != 0 {
+                incoming.insert(arg.id, Vec::new());
+            }
+        }
+    }
+    for block in &function.blocks {
+        for (target, args) in term_edges(&block.term) {
+            // An entry backedge is outside this bounded rule: entry values are
+            // caller bindings, not a loop phi with an additional hidden edge.
+            if target == function.blocks[0].id {
+                return BTreeMap::new();
+            }
+            for (param, &arg) in parameters[&target].iter().zip(args) {
+                incoming.get_mut(&param.id).unwrap().push(arg);
+                users.entry(arg.id).or_default().push(param.id);
+            }
+        }
+    }
+    let mut aliases = BTreeMap::new();
+    let mut pending: VecDeque<_> = incoming.keys().copied().collect();
+    let mut queued: BTreeSet<_> = incoming.keys().copied().collect();
+    while let Some(id) = pending.pop_front() {
+        queued.remove(&id);
+        if aliases.contains_key(&id) {
+            continue;
+        }
+        let distinct: BTreeSet<_> = incoming[&id]
+            .iter()
+            .map(|&value| resolve(&aliases, value))
+            .filter(|value| value.id != id)
+            .collect();
+        if distinct.len() != 1 {
+            continue;
+        }
+        let root = *distinct.first().unwrap();
+        aliases.insert(id, root);
+        // A later replacement of the root must also revisit users of this
+        // alias. Transfer these dependencies rather than scanning all phis.
+        if let Some(dependents) = users.remove(&id) {
+            for &dependent in &dependents {
+                if queued.insert(dependent) {
+                    pending.push_back(dependent);
+                }
+            }
+            users.entry(root.id).or_default().extend(dependents);
+        }
+    }
+    aliases
+        .iter()
+        .map(|(&id, &value)| (id, resolve(&aliases, value)))
+        .collect()
 }
 
 /// Only total register computations can be discarded. In particular, every

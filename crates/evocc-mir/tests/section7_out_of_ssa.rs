@@ -348,9 +348,15 @@ fn every_block_argument_and_edge_argument_is_gone() {
 }
 
 #[test]
-fn an_edge_becomes_the_moves_its_arguments_named() {
+fn a_single_reaching_definition_needs_no_transport_copy() {
     let after = out_of_ssa(&straight_edge());
-    assert_eq!(moves(find(&after, 0)), vec![(4, 2), (5, 3)]);
+    assert!(after.blocks.iter().all(|block| moves(block).is_empty()));
+    assert_eq!(
+        find(&after, 1).term,
+        MTerm::Ret {
+            values: vec![w(2), w(3)]
+        }
+    );
 }
 
 /// A self-loop that passes its two arguments back crossed over: the parallel
@@ -408,8 +414,8 @@ fn a_swap_uses_one_scratch_register() {
     let sequence: Vec<(u32, u32)> = after.blocks.iter().flat_map(moves).collect();
     assert_eq!(
         sequence.len(),
-        6,
-        "two on the entry edge, three on the swap, one on the exit: {sequence:?}"
+        5,
+        "two on the entry edge, three on the swap; the exit just forwards: {sequence:?}"
     );
 }
 

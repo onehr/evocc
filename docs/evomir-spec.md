@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.37** | **Authoritative reference** | **2026-09-24**
+**Revision 0.38** | **Authoritative reference** | **2026-09-24**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -668,6 +668,24 @@ function's parameters; the allocator removes them by assigning `x0`
 onwards. This happens before allocation, as its own pass; the lowering of
 Section 5 does not do it.
 
+**Identical-value transport (revision 0.38).** At the validated SSA boundary,
+an ordinary block parameter may be identified with its sole distinct incoming
+value when all other incoming bindings pass that same parameter unchanged.
+Repeat this rule through forwarding chains; a phi with two distinct incoming
+definitions is not a trivial phi, even if their constant bits happen to agree.
+Counters, exchanged values and ordinary merges retain their parallel copies.
+Complete incoming edges are inspected, including different bindings from the
+same predecessor/target pair. Entry parameters remain caller bindings; entry
+backedges and functions containing inline assembly or indirect dispatch are
+initially excluded from this reduction. In particular, an indirect union-copy
+self-edge may overwrite the source needed by another target, whose independent
+receiving location must not be removed by a direct-edge identity argument.
+Remove only the proven transport
+copies and rewrite their uses during SSA destruction, never in the local-SSA
+input form. No instruction, memory access, guard, lifecycle action, label or
+successor is moved or removed by this identity rule. Remaining copies follow
+the placement/cycle rules above and the independent allocation verifier.
+
 **Indirect entries (revision 0.29).** A computed edge cannot be split merely
 by changing its CFG target: `block_addr` and static relocations still denote
 the original label. Its explicit SSA parameters require non-conflicting
@@ -753,8 +771,9 @@ live across a call is assigned a callee-saved register or spilled. Ties are
 broken by virtual register number, and among free registers the lowest-numbered
 one of the class is taken, callee-saved only for an interval that spans a call
 (revision 0.4), so the allocation is deterministic and the emitted text is a
-stable digest. No coalescing beyond removing a move whose two operands got
-the same register.
+stable digest. Physical allocation performs no coalescing beyond removing a
+move whose two operands got the same register; the preceding identical-value
+SSA transport reduction is independent of physical locations.
 
 The output is verified, not trusted (Section 9): every physical register
 read is defined on every path, no two simultaneously live values share a
@@ -1043,6 +1062,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.38 | 2026-09-24 | Remove only proven trivial block-argument transport during SSA destruction, including unchanged loop cycles; retain nontrivial merges, complete edges, original effects and deterministic physical allocation. |
 | 0.37 | 2026-09-24 | Select an adjacent single-use checked Boolean directly with its producer's flags and an inverted conditional trap branch; retain every guard, effect and continuation argument, with ordinary TBZ for unmatched forms. |
 | 0.36 | 2026-09-23 | Select the bounded, single-use full-width compared-value bit mux with existing adjacent CMP/CSEL. Preserve all prior evaluations, guards, effects and block bindings; unmatched chains retain ordinary lowering. |
 | 0.35 | 2026-09-23 | Errata: synchronize 128-bit division/remainder lowering and E4003 with the approved hosted runtime path; mark E4006/E4008 withdrawn under existing indirect-edge/pointer-difference rules and remove the stale 1.9.61 diagnostic boundary claim. No new execution scope or waived guard. |

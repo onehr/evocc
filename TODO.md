@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-24**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.37**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.38**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -49,7 +49,7 @@ commands and measurements stay in the [kernel ledger][kernel],
 ## Execution order
 
 1. **Reconcile known cases (T01/B01), then diagnose runtime failures K01–K05**
-   using small reductions; B02 is the outstanding application timeout.
+   using small reductions; B02's targeted LARGE timeout is now repaired.
 2. **Repair configuration/build gaps K06/K10–K12**, independently of pending
    language decisions. Resolve K07 and L01–L10 with bounded rules/probes; implement
    the shared paths and replay affected originals B05–B09.
@@ -324,19 +324,24 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 
 - [x] **B01 — Reconcile every original LLVM failure with subsequent repairs** — `DONE`, P1, 2026-09-23.
   All 44 original failure identities now have a [case-level mapping](tests/fixtures/llvm-failure-reconciliation.out):
-  7 targeted original-program PASS, 30 named FP deferrals, 5 evidenced
-  not-applicable and 2 OPEN (`floyd-warshall` B02, integer-vector `pr23135` L10).
+  8 targeted original-program PASS (including September 24 B02), 30 named FP
+  deferrals, 5 evidenced not-applicable and 1 OPEN (integer-vector `pr23135` L10).
   The existing adapter validates all 35 reviews against exact source/argv and
   evidence. Eight obsolete scalar-FP waivers are removed with a RED/GREEN test.
-  This closes reconciliation only: L02–L05/B02/L10 remain open, and the frozen
+  This closes reconciliation only: L02–L05/L10 remain open, and the frozen
   1,735-program run and its PASS numerator are unchanged. [Evidence][apps].
 
-- [ ] **B02 — LLVM LARGE floyd-warshall performance failure** — `OPEN`, P1.
-  It still times out at 60 seconds after the core shrank from 194 to 167
-  instructions; `lu` and `ludcmp` now pass their original LARGE runs. Profile and
-  reduce the remaining code-generation bottleneck, preserving guards and effects.
-  Close on unchanged LARGE input/output checks within the original limit, not
-  MINI_DATASET correctness or assembly size. [Evidence][apps].
+- [x] **B02 — LLVM LARGE floyd-warshall performance failure** — `DONE`, P1, 2026-09-24.
+  The [small loop transport case](tests/fixtures/loop-value-transport.c) goes
+  RED → GREEN by removing proven trivial phi copies during SSA destruction,
+  without moving loads, guards or effects. Counter/swap/indirect-edge negatives,
+  real spills, both interpreters and six native controls pass; the changed gate
+  is 995 PASS, zero failures, four historical ignored, Clippy/fmt green.
+  **Unchanged LARGE execution, output hash and comparison now PASS in 52.0360 s**
+  inside the original 60-second limit (98 → 57 core instructions). This closes
+  the targeted original, not B10 or a stable performance claim. No kernel Image
+  inherits it. [Identity-bound record](tests/fixtures/loop-value-transport.out).
+  The preceding unsuccessful reductions are retained below as historical steps.
   The [pointer-index reduction](tests/fixtures/repeated-pointer-index.c) now
   shares pure MIR index preparation and passes all interpreter/native controls
   and its changed gate; the unchanged LARGE replay still times out (166 core

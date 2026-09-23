@@ -296,6 +296,21 @@ LARGE still times out at 60 seconds (102 → 98 core instructions). The
 that negative result; B02 and the full campaign stay OPEN. No kernel Image
 inherits this compiler-only improvement.
 
+**2026-09-24 B02 closure:** the [minimal loop transport case](../../tests/fixtures/loop-value-transport.c)
+goes RED → GREEN by eliminating only trivial phi copies at SSA destruction.
+Distinct incoming values, counters, swapping cycles and computed-dispatch
+receiving slots retain their bindings; no loads, checks or effects are hoisted.
+Both interpreters, six fixed-target native controls, five data register classes
+with real spills and the independent allocation checker pass. The affected gate
+is **995 PASS, zero failures, four historical ignored**, Clippy/fmt green.
+The unchanged LARGE `floyd-warshall` now passes its original timeit, appended
+exit-status hash and comparison in **52.0360 s**, within the original **60 s**
+limit. Core size 98 → 57 is supporting evidence, not the PASS predicate.
+The [record](../../tests/fixtures/loop-value-transport.out) retains the first
+wrapper's incorrect expected-file path as exit 2 and the subsequent complete
+PASS separately. B02 is closed; B10, K02/K03 and full-campaign numerators are
+unchanged. No kernel Image or large runtime artifact was rebuilt.
+
 **2026-09-23 case reconciliation (TODO B01):** every one of the frozen run's
 44 compiler-failure identities is now joined to its later evidence: **7 targeted
 original PASS, 30 named FP deferrals, 5 evidenced not-applicable, 2 OPEN**.
@@ -308,6 +323,10 @@ are removed; a regression test reproduces all eight stale entries before GREEN.
 The [44-case map](../../tests/fixtures/llvm-failure-reconciliation.out) preserves
 every original identity and distinguishes later compiler versions. This is an
 accounting closure, **not** a new 1,735-program campaign or increased PASS count.
+
+The September 24 B02 replay updates that 44-case reconciliation to **8 targeted
+original PASS, 30 named FP deferrals, 5 not-applicable, 1 OPEN (`pr23135`)**.
+The original full receipt's counts still remain historical and unchanged.
 
 The unchanged `compare-fp-3` now links and runs after bounded four-way
 LT/EQ/GT/unordered reasoning; operands and their poison/FPCR obligations are

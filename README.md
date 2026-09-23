@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.105](docs/evoir-spec.md) and [EvoMIR 0.37](docs/evomir-spec.md).
+[EvoIR 1.9.105](docs/evoir-spec.md) and [EvoMIR 0.38](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -70,8 +70,10 @@ The historical LLVM 44-failure count is not a claim that all 44 remain broken:
 later original-program replays pass `compare-fp-1`, `compare-fp-3`,
 `compare-fp-4`, `pr50310` and `20020720-1`. On September 23, unchanged LARGE
 `lu` and `ludcmp` also pass in **59.2533 s / 48.8197 s** under the original
-60-second limit; `floyd-warshall` still times out. A new full LLVM campaign
-has not run, so these repairs do not increase its frozen numerator.
+60-second limit. On September 24, unchanged LARGE `floyd-warshall` passes its
+original output/hash checks in **52.0360 s** after removal of redundant loop
+transport copies. A new full LLVM campaign has not run, so these targeted
+repairs do not increase its frozen numerator.
 
 ### Linux boot, kselftest and KUnit
 

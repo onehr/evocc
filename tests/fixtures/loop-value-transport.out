@@ -1,0 +1,66 @@
+2026-09-24 — TODO B02, unchanged LARGE Floyd acceptance after SSA transport repair.
+
+RED: one declared MIR transport-shape failure, one semantic control PASS,
+zero Rust compilation errors. The small C input is loop-value-transport.c.
+The shared out-of-SSA pass now removes only trivial phi transport: all incoming
+definitions agree, apart from unchanged self-forwarding. Distinct definitions,
+swaps and counters retain their copies, even when their constant bits agree.
+Entry bindings, local-SSA validation, accesses, guards and label identities stay.
+EvoMIR 0.38 states this rule separately from unchanged physical allocation.
+
+Inline-asm/asm.goto and computed-goto functions remain on the existing path.
+The indirect-cycle regression caught why: a joint self-edge copy can overwrite
+the source needed by another selected target. Its separate receiving slot and
+saved branch register must remain. This negative is not weakened or deleted.
+
+Tailored checks: four MIR tests include 144 exact pre-allocation executions,
+counter/swap controls, different bindings to one target, and all five data
+register classes under actual spilling. The independent allocation checker
+passes. Existing cycle, indirect dispatch, critical-edge and deterministic
+allocation tests pass. The C case checks nested loops, volatile counts, zero-trip
+null-pointer controls and alternating values through both C-HIR/EvoIR at O0/O2,
+MIR, native emission and allocation verification. Four interpreter and two MIR
+executions return zero; all memory-operation and trap counts are retained.
+GCC 14.2.0-19, Clang 19.1.7 and EvoCC O0/O2 native controls: six exit-zero PASS.
+
+Affected gate against fd45c75: 995 PASS, zero failures, four historical ignored
+across 123 result groups; Clippy --all-targets -D warnings and fmt --check PASS.
+The CLI test was then switched to include_str!/stdin so changed-gate tracks its
+fixture dependency; that test was rerun and passes. No production code changed.
+
+Original source/argv: frozen LLVM row 20260919T230110Z, not MINI_DATASET.
+Source: SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c
+Source SHA-256 5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953
+The existing ladder command projector retains the complete semantic flags;
+link uses the original Clang 19 target toolchain and libm. Native execution uses
+the sealed offline ARM64 image, two CPUs/four GiB, original timeit, appended
+exit status, HashProgramOutput.sh and fpcmp-target against the upstream LARGE
+reference output. The whole execution/hash/compare remains inside 60 seconds.
+
+Verified result: exit 0; real 52.0360 s / user 51.1836 s / sys 0.1000 s.
+Hash 50f7f0386b159a1161e1cf5fbd132682 matches the unchanged expected file.
+Core function: 98 -> 57 instructions. This closes B02 on actual original output
+and time, not on instruction count. It is one observed timing, not a stable
+performance guarantee or the separate same-task GCC -O2 roadmap comparison.
+The first run also finished (53.3665 s) and produced the same hash, but its
+verification path incorrectly named the build-tree symlink, removed during
+earlier storage cleanup. That run's wrapper exit 2 is retained, not counted as
+PASS. The corrected complete second invocation above is the acceptance run.
+
+Compiler abc337fa... emitted the tested assembly. After formatting/gate rebuild,
+compiler d9148a72... emits byte-identical two controls and original assembly.
+Capture root .build/floating-targeted/loop-transport-20260924/ is 220 KiB before
+the native log; no kernel Image, module, runtime disk or full receipt count is
+replaced. The final B10 application campaign and K02/K03 remain separate.
+
+SHA-256:
+C 8cc99a4a6f7df01d90ff15f8ea89476b7d0f0319187cc672f90254d6419724a9
+native-tested compiler abc337fa1b8c4848bce0cd4cb619ac653bb2686c0a9b97fdf222e401d76fe228
+final compiler d9148a721a6997f8d62bf2ba463d5b963668020b5949b9e324b1eca7b0a0b091
+control O0 e6ff5b5d0a4cf4ad5d43c48b6804d9f6cf28dcc49964c882b35df680c977c0db
+control O2 afb63c9079f5c32ebdd87c8e5fc3e431ae4f0b79e85b56a07a846fc9e8a70283
+original assembly faef7f932d5015b812e6ff4816ca39a2135510ba9bb204089c1a067d291853b7
+verified log b1f09fb2ce1c97383dbdd03c52e93df863d065a9cdb667956990f300c0623bae
+verified time a7caa1ebc60a3e93ba24466674d69cdb81b51fde94fb769661470d72abf93821
+gate ed8183d9c65949f2a899bf95e7cbc1efbcbcaf03e411c0436c801a87cb65d8a8
+native log 85e25f2d2130565c92978f025759233a64d32fcb4461fc2f25f3b01fdc1d6f9b

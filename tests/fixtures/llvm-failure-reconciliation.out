@@ -1,4 +1,5 @@
-2026-09-23: TODO B01, reconciliation, NOT a new benchmark campaign.
+2026-09-23: TODO B01, reconciliation; B02 row updated 2026-09-24.
+NOT a new benchmark campaign.
 Original population: LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
 Frozen results: .evidence/ladder/llvm-test-suite/20260919T230110Z/results.jsonl
 SHA-256 a038af1819d0f71ac20321103ab1247d24b8d57df400326b458bae70d74f0b6a
@@ -6,14 +7,14 @@ Original 1735 dispositions: 1014 PASS, 44 compiler-failure, 17 FP-deferred,
 659 not-applicable, 1 oracle-unusable. Those historical totals are unchanged.
 
 The 44 original compiler-failure identities reconcile as:
-  7 unchanged originals subsequently PASS in targeted replay;
+  8 unchanged originals subsequently PASS in targeted replay;
   30 source/argv-bound named FP deferrals (11 binary128, 1 binary16,
      9 floating-complex, 9 floating-vector);
   5 source/argv-bound evidenced not-applicable originals;
-  2 OPEN originals: LARGE floyd-warshall timeout and pr23135 integer-vector UB.
+  1 OPEN original: pr23135 integer-vector UB.
 This is not 1049 fresh passes, not a final-compiler campaign, and not evidence
 that all remaining failures are floating point. Deferred implementations and
-fresh full acceptance remain open in TODO L02-L05, L10, B02 and B10.
+fresh full acceptance remain open in TODO L02-L05, L10 and B10.
 
 Validation uses the existing llvm-test-suite.py program_disposition function
 on each frozen row and the unchanged source checkout. All 35 reviewed rows
@@ -40,8 +41,9 @@ D = llvm-declaration-frontier.out plus source/argv-bound disposition: the
 U = llvm-uninitialized-original.out: positive uninitialized-read observations
     in independently compiled GCC/Clang UBSan-instrumented originals under
     Memcheck; plain Memcheck alone is NOT a positive control.
-T = repeated-pointer-index.out: original LARGE still TIMEOUT at 60 seconds;
-    repeated-pointer-index.c and linear-block-binding.c are small reductions.
+T = loop-value-transport.out: unchanged LARGE original PASS at 52.0360 seconds
+    within 60 seconds, original hash/exit-status comparison, compiler d9148a72...;
+    earlier timeout measurements remain in their individual records.
 V = llvm-vector-overflow-reduction.c/.out: integer lane signed multiplication
     exceeds INT_MAX; both interpreters E3004; original Clang instrumentation
     does not diagnose it. L10 remains NEEDS_RULE, not an approved exclusion.
@@ -53,7 +55,7 @@ Benchmarks/Misc/mandel.c | FP-deferred floating-complex | F / L04
 Benchmarks/Misc/mandel-2.c | FP-deferred floating-complex | F / L04
 Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c | targeted PASS | P
 Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c | targeted PASS | P
-Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c | OPEN TIMEOUT | T / B02
+Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c | targeted PASS | T
 Regression/C/2008-01-07-LongDouble.c | FP-deferred binary128 | F / L02
 Regression/C/float16-smoke.c | FP-deferred binary16 | F / L03
 Regression/C/gcc-c-torture/execute/20010605-2.c | FP-deferred floating-complex | F / L04
