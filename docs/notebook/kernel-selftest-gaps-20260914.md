@@ -2498,3 +2498,28 @@ This closes K05's **cause/classification** as an upstream scheduling assumption,
 not original-test PASS or K14's full execution. Source, commands, paired counts,
 hashes, smaller-disk replay and original KTAP results are recorded in
 `tests/fixtures/pm-runtime-barrier-completion.out`.
+
+### Smaller static-key runtime reductions — 2026-09-23
+
+K01 remains OPEN. The tracked `sched-static-key-lifetime.c` module reproduces
+missing publication under fixed Cortex-A72 TCG on **both** existing kernels,
+without hotplug, BPF, object freeing or scheduler callbacks. It counts missing
+pointers rather than dereferencing them. The matching release/acquire memory
+gate control passes. In the final paired flight, static-key missing counts are
+10,068,125 (GCC) and 5,043,611 (EvoCC); memory-gate counts are both zero.
+
+The separate `static-key-immediate.c` control checks 256 local/cross-CPU toggles
+and 512 concurrent toggles bounded by a stable sequence number, without RCU or
+object publication. Both kernels pass, with 28,441,826 / 23,169,747 stable queries
+and no errors. Disabling TCG block chaining, adding reader ISB, or adding a full
+memory barrier does not cure the RCU reduction. None of these observations alone
+proves an emulator or kernel root cause, and no production workaround is made.
+
+All flights reuse the **same 64 MiB snapshot disk** and the unchanged Images;
+only small signed diagnostic modules/initramfs payloads are built. Existing TAP
+parsing retains test FAIL even when boot/shutdown is PASS. Source, build, payload,
+counts and serial identities are in
+[the bounded record](../../tests/fixtures/sched-static-key-lifetime.out).
+This diagnosis exceeded its one-hour slice: retain the reduced failure and next
+read-side entry/retirement question, continue independent TODO work, and do not
+restart the full campaign or label K01 closed.

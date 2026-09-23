@@ -1,0 +1,43 @@
+2026-09-23: finite transition control for TODO B03, not original benchmark PASS.
+Original bitfields/352 source SHA-256:
+8ddcb39e66d61dc077bacfe1a668112d7e60b4590662b4165673a09b49152fed
+It matches the existing source-bound two-oracle diagnostic capture:
+.build/floating-targeted/csmith-oracle-timeout-samples-20260920.json
+SHA-256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+GCC samples func_2:452; Clang samples func_2:479 (other samples are memcpy).
+Those locations are inside the same reached loop at lines 444-520.
+
+Source argument:
+The loop is inside if (p_3), so its parameter is nonzero. Its signed i16 union
+member starts at 4 and receives a u8 subtraction result after every iteration.
+Thereafter it is 0..255 and cannot fail >= -8. The inner u16 loop either breaks
+on its nonzero p_3 path or finishes after 0,9,18. Its subsequent g_8=3/<-23
+and l_319=0/<-5 loops are skipped, including the only nested return.
+The sole outer break tests l_320[2][5] after AND with l_327[8]. These are
+initialized to 3 and 0xc538d2c8; their AND is zero and stays zero. No other
+executed store in this loop changes that element, mask, or induction member;
+there are no function calls. Earlier escaped union addresses do not create
+a write in this body. Repeated array initialization explains memcpy samples.
+
+The reduction retains the signed union member, unsigned helper-result
+conversion, both inner-loop paths, pointer-based AND and conditional break.
+256 diagnostic visits cover one full u8 transition cycle; they are NOT a fuel
+limit inserted into the original. UINT32_MAX masks are terminating controls.
+This identifies a reached repeating transition, not whole-program definedness
+or a terminating checksum. Original seed, source, 10-second limit and label
+oracle-unusable remain unchanged. B03 now has 33 identified / 35 undetermined.
+
+Current fixture SHA-256:
+20a481af2a70f25567bae76049165159fc738a301e57c0e560dd46797c4a11e1
+EvoCC release SHA-256:
+ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875
+Assembly SHA-256:
+27fcd36909ba94dc0a591b4a2ee6d790e048b8c1d377dff7f2e58bde2ea2a29a
+Both --interpret-c-hir and --interpret-evoir return 0.
+Emission: --target=aarch64-unknown-linux-gnu -std=gnu11 -O2 --emit=asm,
+existing ladder-sysroot GCC private, architecture and generic include dirs.
+Sealed evo-flight-lab:sealed, linux/arm64, network none, one CPU:
+GCC 14.2.0-19 and Clang 19.1.7, -std=gnu11 -O0/-O2: all four exit 0.
+EvoCC assembly linked by gcc-14 -no-pie: native exit 0.
+Source/assembly digests were verified inside that container.
+This diagnosis required no new campaign, source clone or full workspace.

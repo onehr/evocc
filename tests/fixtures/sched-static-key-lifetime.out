@@ -1,0 +1,99 @@
+2026-09-23: TODO K01 diagnostic controls. K01 remains OPEN.
+These isolate a shared runtime failure; they are not a compiler/kernel fix,
+an unchanged sched_ext PASS, or proof of a QEMU/RCU root cause.
+
+Final source SHA-256:
+sched-static-key-lifetime.c
+  5ace05935c512ea39601d38f2cca6ba44075dbdb19dc01be05796ebe255aa2b0
+sched-static-key-lifetime-load.c
+  1f779b127c6a38a378a193b9c33d9f012770667bc5a2fe926ff28b08d00fdcf3
+static-key-immediate.c
+  7ed08d575e39ae43f70e67ae5636fda412a804ced24363cb675ebcc6b6a708e2
+static-key-immediate-load.c
+  6147a6f84600ce3a7c13dd9b192cb1a66ce1f2521c1c78034930cd62de41d051
+
+The lifetime module has four CPU-bound readers, RCU read sections, a static
+published object and 1024 enable/disable/grace-period/clear cycles. It never
+frees or dereferences that object: a missing pointer is counted, not crashed.
+No BPF, hotplug, scheduler callback or debugger stop is needed to observe this
+failure. memory_gate=1 replaces branch patching with a release/acquire Boolean.
+The same build/payload runs each mode on each kernel.
+
+Final fixed TCG Cortex-A72, four CPUs, 2048 MiB, same 64 MiB snapshot disk:
+                    static-key reads / missing       memory-gate reads / missing
+GCC reference       130167215 / 10068125 FAIL           51990477 / 0 PASS
+EvoCC subject        69865759 /  5043611 FAIL           33672713 / 0 PASS
+The first missing observation on every reader sees instruction d503201f (NOP)
+and key count 0. This after-the-fact observation alone does NOT establish
+when the read section entered, stale translation, or a broken grace period.
+Both kernels boot and power off; the existing TAP parser separately records
+the static-key test exit 1 and memory control exit 0. Boot PASS is not test PASS.
+
+The independent static-key-immediate.c control has no RCU or object publication.
+First, 256 toggles check the calling CPU and synchronous callbacks on all CPUs.
+Then four concurrent readers check 512 toggles: an odd sequence excludes an
+update, acquire plus a full barrier and matching even sequences delimit a
+stable-state query. The expected Boolean is derived from that sequence.
+Final GCC: 28441826 stable queries, zero mismatches.
+Final Evo: 23169747 stable queries, zero mismatches.
+Both have zero immediate/remote mismatches; real module load/unload and TAP
+1/1, exit 0 pass. These positive controls narrow, but do not close, K01.
+
+Earlier bounded variants, each with its own retained payload/serial identity:
+  Disable TCG TB chaining only: GCC 1687725 missing, Evo 796471 missing; FAIL.
+  KEY_READER_ISB before the branch: GCC 12867988, Evo 3562129 missing; FAIL.
+  KEY_READER_MB before the branch: GCC 5954592, Evo 3498941 missing; FAIL.
+Those are diagnostic changes, not production repairs or accepted lane changes.
+The initial uninstrumented payload passed on HVF on both kernels, but differs
+from the final source. Neither that result nor the simpler controls promotes
+the unchanged sched_ext hotplug/reload sequence to PASS.
+
+Build environment: evo-flight-lab:sealed, linux/arm64, network none,
+GCC 14.2.0-19. Diagnostic modules are GCC-built infrastructure on BOTH kernels;
+this is not additional EvoCC compilation credit. Source and kernel build roots
+are read-only; only the small external-module directory is writable.
+  make -s -C /work/src O=/work/kernel ARCH=arm64 CC=gcc-14 HOSTCC=gcc-14
+    M=/work/probe/driver -j2 modules
+  scripts/sign-file sha256 <existing matching key/certificate> <diagnostic.ko>
+  gcc-14 -static -O2 -Wall -Wextra -Werror <loader.c> -o <loader>
+  usr/gen_init_cpio -t 0 <payload.spec> > <payload.cpio>
+The two preprocessor controls use KCFLAGS=-DKEY_READER_ISB or
+-DKEY_READER_MB; final baseline explicitly resets KCFLAGS=.
+Small make clock-skew warnings (under 0.1 seconds) were retained; new payloads
+were produced and actually executed. No full kernel was rebuilt or replaced.
+
+Flight: K1_ALLOW_QEMU_DRIFT=1 K1_KUNIT_AUTORUN=0 K1_CONSOLE_LOGLEVEL=7
+K1_BOOT_LANE=tcg-cortex-a72 K1_INITRAMFS=<payload> K1_TEST_DISK=<64MiB scratch>
+tools/k1/boot.sh <Image> <capture>. Lifetime payload contains two tests with
+120-second per-test bounds, outer bound 300; stable control outer bound 90.
+QEMU 11.1.1 SHA-256
+45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Actual drift is recorded; frozen contracts are unchanged.
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Evo Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+
+Final lifetime payload (under .build/floating-targeted/static-key-lifetime-20260923/):
+  final.cpio 253d15539a95b69e6db73326ca469e1c14ea037e9d871e548f1125b7ea844f9f
+Final stable payload (under .build/k7-coverage/repair-runtime/immediate/):
+  final.cpio 0a33e55d4c3bebd49df5b6ea978f76a594ec5e635a38f1ff088a356975dfc8be
+Final serials under .build/k7-coverage/repair-runtime/:
+  reference-static-key-final
+    a53df7fd9282a7054efb39a16994446fe28f1b1f6dd44ce797810876d418ec1c
+  subject-static-key-final
+    ac286534854846ed71f47b7398c06cfaa839be0244a002c7e3481cbb30013259
+  reference-static-key-stable-final
+    c75cc3a2dbbe846ba85ff30db2a5ae84e794c2c225ff7d15a70bab19265b3541
+  subject-static-key-stable-final
+    c7d60554272c349ba90ec2cf72b7ca04a04580354db6dff4d8220063f1382f0d
+Earlier variant serials, same repair-runtime parent:
+  reference-static-key-nochain bc0bb400af11d0680c60f43a888fb6948ad2ee946e5dc29d6589a93824e0cb8e
+  subject-static-key-nochain 96f7a4a4447700d8d053df5ddd1a8c1c2ef0e55c8d095c06d6dca3f473ca3ab0
+  reference-static-key-isb ae05ad9fd2b05e61c3d8af9ae323fafb626213502b0c6b58c26eaea2243847bd
+  subject-static-key-isb 920788d70f9542a34511d635c0fd640be3213cdddc1f18ea7d5dcebf987a1e4d
+  reference-static-key-mb e2b87c9eedd6a14b9daaf2755cdb8a076aceeb48f8acafda39f2b64f22470a98
+  subject-static-key-mb c51593efa4d33e35319f8cb3e4404db25ddded68bce250fd18e04845a0ebfbed
+
+The next necessary check is read-side entry/retirement ordering and its
+relationship to the unchanged scheduler fault, not another unqualified retry.
+The bounded reduction work exceeded the one-hour diagnosis slice; retain K01
+OPEN and proceed to independent TODO work rather than launching a full campaign.

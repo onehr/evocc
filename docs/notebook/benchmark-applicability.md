@@ -41,7 +41,7 @@ The reviewed two-way analysis labels account for every unavailable identity:
 | Campaign | Repeating source path identified | Undetermined; timeout is not a proof |
 |---|---|---|
 | base | 11, 42, 64, 68, 83, 87, 88, 112, 120, 122, 128, 237, 241, 246, 287, 307, 315, 327 (18) | 14, 33, 93, 161, 204, 223, 239, 322, 340, 345, 362, 442, 466 (13) |
-| bitfields | 11, 69, 83, 115, 122, 128, 192, 242, 259, 307, 322, 357, 404, 457 (14) | 14, 21, 24, 26, 54, 104, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 340, 352, 360, 362, 455, 466, 481 (23) |
+| bitfields | 11, 69, 83, 115, 122, 128, 192, 242, 259, 307, 322, 352, 357, 404, 457 (15) | 14, 21, 24, 26, 54, 104, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 340, 360, 362, 455, 466, 481 (22) |
 
 The source arguments for the first four identities are in
 [the closure notebook](benchmark-closure.md); the bounded optimization probes
@@ -50,7 +50,7 @@ for both 307 identities and bitfields/457 are in
 Their repeating source paths explain why the reference executions do not
 provide a common terminating checksum; they do not turn an unusable input
 into a passing compiler test. All 68 keep their original benchmark label,
-and individual source classification of the other 36 remains open.
+and individual source classification of the other 35 remains open.
 
 On 2026-09-20, the unchanged 68 sources were independently compiled at O0
 by both sealed oracles with a separate diagnostic sampling translation unit,
@@ -157,8 +157,23 @@ controls for the reset, unchanged union member, and unsigned initialization
 pass both interpreters, EvoCC native and both sealed oracles at O0/O2; they
 include zero-guard terminating controls. The same record binds their source
 identities and current fixture/assembly hashes.
-Current analysis is **32 identified / 36 undetermined**; none of the 68
+That checkpoint was **32 identified / 36 undetermined**; none of the 68
 oracle-unusable benchmark outcomes is converted to PASS or removed.
+
+**2026-09-23:** bitfields/352 adds one reached type-range cycle. Lines 444–520
+assign a u8 decrement result to a signed i16 union member, keeping `>= -8`
+true. The only reachable outer break tests an independent local array element
+after `3 & 0xc538d2c8`, which becomes zero and remains zero. The nonzero
+parameter either breaks the inner loop or allows its finite 0/9/18 progression;
+the later return is inside an initializer-skipped loop. No call or other store
+in the repeating body changes the counter, mask or tested element. The original
+GCC/Clang samples reach this body, and its source digest still matches.
+[The finite reduction](../../tests/fixtures/csmith-union-loop-invariant.c)
+checks one u8 cycle, both inner paths and genuinely terminating mask controls.
+Both interpreters, EvoCC native and GCC14/Clang19 O0/O2 pass; [identities and
+limits](../../tests/fixtures/csmith-union-loop-invariant.out) are recorded.
+Current analysis is **33 identified / 35 undetermined**, not a new campaign:
+all 68 retain oracle-unusable and the 932 agreement numerator is unchanged.
 
 ## c-testsuite floating execution
 

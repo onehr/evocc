@@ -81,6 +81,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   demonstrated cause and unchanged paired replay, or an evidenced shared/upstream
   disposition; one successful retry and the failed single-thread TCG experiment
   do not close it. [Evidence][kernel].
+  The [small signed-module matrix](tests/fixtures/sched-static-key-lifetime.out)
+  now reproduces missing publication on both kernels without BPF/hotplug/freeing.
+  Ordinary memory-gate and sequence-bounded static-key controls pass; instruction
+  and data-barrier variants do not cure the concurrent RCU reduction. Root cause
+  and linkage to the original fault remain unproved. The bounded diagnosis slice
+  is recorded; next isolate read-side entry/retirement, not a production NULL guard.
 
   - [x] **K01a — Fail closed on truncated sched_ext result summaries**.
     [Minimal fixture](tests/fixtures/kselftest-scheduler-truncated.tap) reproduced
@@ -214,6 +220,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   failures with the original seeds and budgets; retain unusable outcomes unless
   a valid matched replay exists. Close with per-case reasons and any recoverable
   comparisons, without replacing seeds. [Receipt](tests/contracts/ladder-csmith-receipt.json).
+  Source-bound reductions now identify 33 reached repeating paths; 35 remain
+  undetermined. The latest [union-counter control](tests/fixtures/csmith-union-loop-invariant.out)
+  passes both interpreters and all five native controls for bitfields/352.
+  This is diagnosis, not a terminating original-program checksum or added PASS.
 
 - [ ] **B04 — Resolve remaining torture/HVA reference limitations** — `OPEN`, P2.
   Torture retains three oracle-unusable originals, and GCC's HVA-varargs
