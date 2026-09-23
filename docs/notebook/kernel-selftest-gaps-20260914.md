@@ -2667,3 +2667,33 @@ Image/vmlinux are retained copy-on-write under
 signed/installed/tested, so the old accepted payload cannot accompany this
 candidate. Published K6/C02 acceptance remains its historical subject; T04
 still requires final uniform composition before new full claims.
+
+### BPF build-id and callback ordering diagnoses — 2026-09-23
+
+Two small real-API observers now close the **classification** of the remaining
+build-id/stream assumptions, not full BPF acceptance. The
+[source-bound record](../../tests/fixtures/bpf-runtime-ordering.out) preserves
+commands, hashes, failed setup attempts, original results and claim limits.
+
+For `stacktrace_build_id`, both Images return seven build-id frames from the
+first helper and seven IP fallback frames from the next. Reversing
+`get_stackid`/`get_stack` reverses which map contains which representation.
+The frozen kernel explicitly allows one outstanding IRQ-disabled mmap-unlock
+work item per CPU and falls back when it is busy. The original byte comparison
+assumes away that allowed difference; its unchanged replay still fails on both.
+
+For `stream_arena_callback_fault`, the observer loads the unchanged upstream
+BPF skeleton and reads the stream before/after callback progress. GCC returns
+zero bytes initially, then 888 bytes at the first 10 ms poll; EvoCC already has
+958 bytes at its initial read. Both synchronous controls return their fault
+record immediately. The upstream runner has no callback-completion observation
+before requiring a nonempty stream. The probe does not increase its timeout.
+
+Both diagnostic programs pass all four assertions per Image and shut down.
+The original `test_progs -t stacktrace_build_id,stream_success` pair reports
+`2/8 PASSED, 1 SKIPPED, 1 FAILED` on each: stream 8/8, build-id comparison FAIL,
+NMI variant SKIP on HVF. The earlier full reference stream failure stays in the
+historical receipt; this later PASS is not attributed to a compiler change.
+The 5.4 MiB diagnostic payload uses the existing 64 MiB snapshot scratch disk;
+original-group replays reuse the matched full runtime disks without copying.
+K10 still needs complete execution within 300 seconds, plus K12 configuration.

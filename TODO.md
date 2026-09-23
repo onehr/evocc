@@ -206,7 +206,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   127 skips, 11 failed tests). EvoCC completes group 482 then times out at the
   unchanged 300-second limit; both guests shut down normally. Known PMU, errno,
   UDP-state and verifier-budget causes remain source-bound dispositions, not
-  PASS. BBR/net_cls need K12; stacktrace and stream failures remain open.
+  PASS. BBR/net_cls need K12; stacktrace and stream assumptions are now
+  source-bound dispositions below. The 300-second whole-program timeout remains.
   Close with complete nested accounting on both sides after repair, not the
   earlier selected 10-group/51-subtest controls. [Evidence][kernel].
 
@@ -225,6 +226,24 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     confirms the bind prerequisite for both address families and both map types.
     Both kernels pass all five checks and unload the module. This extends earlier
     source/reference diagnosis, not a newly repaired compiler or full BPF PASS.
+
+  - [x] **K10c — Diagnose consecutive stack build-id helper results**, 2026-09-23.
+    The [raw-BPF reduction](tests/fixtures/bpf-stack-buildid-order.c) confirms
+    on both Images that the first helper converts seven frames while the second
+    falls back to seven IPs; reversing helper order reverses the representations.
+    Frozen `mmap_unlock_work.h` explicitly allows this when IRQ-disabled lookup
+    has already queued its deferred unlock. The unchanged original still fails
+    its byte-equality assertion on both kernels. This closes **classification
+    of an invalid test assumption**, not that original as PASS. [Record](tests/fixtures/bpf-runtime-ordering.out).
+
+  - [x] **K10d — Diagnose the timer callback's premature stream read**, 2026-09-23.
+    A [small observer](tests/fixtures/bpf-stream-callback-completion.c) uses the
+    retained original BPF skeleton. On GCC its initial read returns zero and
+    a later read returns the fault record; EvoCC already has the record at the
+    first read. Both synchronous controls pass. The original selected group
+    now passes all eight subtests on both sides, while its earlier full-run
+    failure remains recorded. This is **asynchronous-completion classification**,
+    not a timeout relaxation or compiler fix. [Paired source-bound result](tests/fixtures/bpf-runtime-ordering.out).
 
 - [ ] **K11 — Finish case-level triage of all other kselftest outcomes** — `OPEN`, P1.
   Shared FAIL/TIMEOUT/INVALID_OUTPUT/INCOMPLETE and SKIP results are not all

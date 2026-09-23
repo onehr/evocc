@@ -1,0 +1,71 @@
+2026-09-23: K10c/K10d source-bound diagnoses using real kernel APIs.
+
+Original REDs are retained in the complete test_progs raw captures, not inferred
+from a zero-exit mock: stacktrace_build_id fails compare_stack_ips on both
+kernels; the GCC complete flight also gets zero bytes at its immediate read of
+stream_arena_callback_fault. No original assertion or BPF program is patched.
+
+K10c: bpf-stack-buildid-order.c loads small raw-BPF programs at the original
+urandom_read_iter kprobe. Each calls the same two original helpers, with their
+order reversed in the control. Both kernels produce exactly:
+  get_stackid first: stack map 7 VALID / 0 IP; array 0 VALID / 7 IP; 224 bytes
+  get_stack first:   stack map 0 VALID / 7 IP; array 7 VALID / 0 IP; 224 bytes
+Frozen kernel/bpf/mmap_unlock_work.h explicitly defers mmap_read_unlock when
+IRQs are disabled, using one per-CPU irq_work slot; the next lookup falls back
+while that slot is busy. stackmap.c handles this by returning IP representations.
+The original kprobe invokes these helpers consecutively but test_progs compares
+all representation bytes. Its own NMI companion already avoids this comparison
+for the analogous one-outstanding-translation boundary. This is a test/API
+assumption mismatch, not permission to require two identical build-id snapshots.
+
+K10d: bpf-stream-callback-completion.c loads the retained upstream stream.skel.h
+without changing its BPF instructions. It selects the synchronous subprogram
+fault and asynchronous timer fault separately, executes each original program
+once, then observes the stream. The 100 x 10 ms polling bound is diagnostic-only:
+  GCC synchronous: first/final 839 bytes, polls 0
+  GCC callback:    first 0, final 888 bytes, polls 1
+  Evo synchronous:first/final 961 bytes, polls 0
+  Evo callback:   first/final 958 bytes, polls 0
+Every nonempty record contains the expected unmapped-arena WRITE fault message.
+helpers.c arms a soft hrtimer; test_loader.c reads immediately after program
+return and requires >0 bytes, without observing callback completion. A zero
+initial read is demonstrably not evidence that the callback produced no fault.
+This explains the recorded reference failure; it is not an EvoCC semantic fix.
+
+Both diagnostic programs: 4/4 assertions PASS per Image, both orderly shutdowns.
+Unchanged original selected replay: test_progs -t stacktrace_build_id,stream_success
+Both report 2/8 PASSED, 1 SKIPPED, 1 FAILED: stream_success 8/8, build-id equality
+still FAIL, NMI variant SKIP on HVF. These counters are upstream counters, not
+disjoint TAP populations. No full 970-program/test_progs receipt is rewritten.
+K10 still requires the full original workload within 300 seconds and K12 config.
+
+Build: sealed linux/arm64, network none, gcc-14 -O0 -g -Wall -Wextra -Werror.
+The raw-BPF probe is static, -fno-omit-frame-pointer -Wl,--build-id=sha1.
+The stream observer uses the retained selftests/bpf/tools/build/libbpf/libbpf.a,
+its tools/include and stream.skel.h, with -lelf -lz -lzstd. The diagnostic payload
+adds only its five inspected dynamic dependencies (libelf/libz/libc/libzstd/ld).
+An initial missing u64 skeleton alias failed compilation, then a missing program
+in an incompletely generated payload produced two real failed executions. A
+static libelf attempt also failed to link its missing eu_search_tree symbols.
+None is a PASS. The corrected alias and dynamic dependency closure produced
+the complete 5.4 MiB payload below; no new disk or kernel clone was made.
+
+Source SHA256:
+bpf-stack-buildid-order.c 90f6472ddc151e61a19f2b5a45b8242cbdb3ef3002f178562015c05f13ac298d
+bpf-stream-callback-completion.c bf9368ea37114205f679a537c9999d5af223be9e2c02131ac491a47429fdafe4
+mmap_unlock_work.h 439f3163e8f4416ba284f3a70f9918431c6e83ed3c5caa8a6d6a11c06467a3aa
+stackmap.c 3c2e529eca26e4b5385c4906dd5bfd5d05f82cfbf5f7f5d319353dbb56a7d733
+prog_tests/stacktrace_build_id.c 7c96b82e13698d881055f0d64914e9859590f588a6c4947724be893f33b0f052
+test_loader.c 9a1c39e586ee8b06f3c087b8a11920c74a18d7726aabff01f4c8b74b59a75865
+progs/stream.c 96847007339043f9a766bee0646780ac67d074eaa7d6a3a261fdfa0a3b4f316f
+stream.skel.h 85c81a5c551d2cec2a262daa3b9763cabb92821c43c0c95babbf04de76f1fcfb
+Reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Payload 7ee6b0ee06aec551c685a9dc395cee4250b545777c136bab4bba0c3b6f78ea78
+Diagnostic reference serial 27de71ac3ca918c3fc86cfd4e56bad1ec78443dc525707b90d8af09238028161
+Diagnostic subject serial bcaf9fa21ed2bf43e844ae0afbaea5173f3059584637363223c37fbe9220776e
+Original reference serial cdcb984a3e101667f81fe98ae328638b6637eb0d73c43ad8433bf4b03a45cbd5
+Original subject serial a6ce4e638239943a29c953cf08a18a1d4af055d34eab177091d1de080d3ec31b
+Capture .build/floating-targeted/bpf-stack-buildid-20260923/
+result-ready.json 10c3bcab747732a59a7befe1d0159b92b01b26594daa4b71789e27a4b965be11
+original.json abad62690511a5ed6cb58644200051f71c82f925bdc0e0b8d693da3bcebca9da
