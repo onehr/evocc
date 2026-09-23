@@ -8,12 +8,12 @@ every unit separately into ``generated/obj`` and links them in one step, and
 it skips a unit whose object is newer than its source, so an installed EvoCC
 object survives the relink untouched.
 
-The oracle is ``make tests``, which runs the applets against recorded
-expectations. Some of those tests need a filesystem, a user database or a
-network that the sealed container does not have, so the baseline is measured
-first and the rung passes when the substituted build fails no test the
-reference build passed. Anything printf-shaped or floating point is expected
-to be refused (E4001 and friends) and is counted, not chased.
+The oracle is the original ``scripts/test.sh`` recipe, with its documented
+``VERBOSE=all`` option so a failure does not truncate the suite. Baseline
+failures and skips remain non-passes; a substituted run must also complete,
+preserve every test occurrence and regress no baseline outcome. Installed
+EvoCC objects are hashed before and after relinking/testing. Unsupported
+source features are counted separately from test and environment failures.
 
 Usage:
   python3 tools/ladder/toybox.py [--evocc PATH] [--jobs N] [--skip-reference]
@@ -26,7 +26,9 @@ import datetime as dt
 import json
 from pathlib import Path
 import re
+import shlex
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -58,34 +60,88 @@ echo reference-build-ok
 """
 
 TEST_SCRIPT = f"""
-cd {CONTAINER_ROOT}
+cd {CONTAINER_ROOT} || exit 2
 export HOSTCC=gcc-14
 export CC={CONTAINER_ROOT}/evo-recordcc
 export EVO_CMDLOG={CONTAINER_ROOT}/relink-commands.log
 : > $EVO_CMDLOG
-make -j4 > relink.log 2>&1
-if [ ! -x toybox ]; then echo relink-failed; tail -30 relink.log; exit 0; fi
-make tests > tests.log 2>&1 || true
-echo tests-done
+: > tests.log
+# Replay the captured original link, preserving every argument. The upstream
+# make target ignores changed .o files; forcing make.sh instead can discard all
+# installed objects when its append-only generated/build.sh cache grows.
+if ! @LINK_COMMAND@ > relink.log 2>&1 || [ ! -x generated/unstripped/toybox ]; then
+  echo relink-failed; tail -30 relink.log; exit 2
+fi
+strip -s -R '.note*' -R .comment generated/unstripped/toybox -o toybox || exit 2
+chmod 555 toybox || exit 2
+# Same upstream test recipe, without asking make to rebuild substituted code.
+# Source it in a child shell: an early `exit` cannot print the completion marker.
+# A normal failing suite returns false at the end, which must still be recorded.
+unset TEST_HOST TEST_ALL DEBUG SHOWPASS SHOWFAIL SHOWSKIP
+ASAN=1 VERBOSE=all bash -c '
+  . scripts/test.sh
+  status=$?
+  printf "\\nEVOCC_TOYBOX_TESTS_COMPLETE status=%s\\n" "$status"
+  exit "$status"
+' > tests.log 2>&1
+exit $?
 """
 
-VERDICT = re.compile(r"^(PASS|FAIL|SKIP):\s*(.*)$", re.M)
+VERDICT = re.compile(r"^(PASS|FAIL|SKIP):[ \t]*(.*)$", re.M)
+COMPLETION = re.compile(r"^EVOCC_TOYBOX_TESTS_COMPLETE status=([0-9]+)$", re.M)
+OutcomeId = tuple[str, int]
 
 
-def outcomes(log: Path) -> dict[str, str]:
+def outcomes(log: Path) -> dict[OutcomeId, str]:
     """Every ``PASS``/``FAIL``/``SKIP`` line the toybox test suite printed."""
     if not log.exists():
         return {}
-    found: dict[str, str] = {}
+    found: dict[OutcomeId, str] = {}
+    occurrences: dict[str, int] = {}
     for verdict, name in VERDICT.findall(log.read_text(errors="replace")):
-        key = name.strip()
-        if found.get(key) != "FAIL":
-            found[key] = verdict
+        name = name.strip()
+        occurrences[name] = occurrences.get(name, 0) + 1
+        found[name, occurrences[name]] = verdict
     return found
 
 
+def outcome_name(key: OutcomeId) -> str:
+    return f"{key[0]} [occurrence {key[1]}]"
+
+
 def failures(log: Path) -> set[str]:
-    return {name for name, verdict in outcomes(log).items() if verdict == "FAIL"}
+    return {outcome_name(key) for key, verdict in outcomes(log).items() if verdict == "FAIL"}
+
+
+def regressions(baseline: dict[OutcomeId, str], found: dict[OutcomeId, str]) -> list[str]:
+    """Fail closed on lost/added occurrences, new failures and lost execution."""
+    differences = [f"missing {outcome_name(key)}" for key in baseline.keys() - found.keys()]
+    differences += [f"unexpected {outcome_name(key)}" for key in found.keys() - baseline.keys()]
+    for key in baseline.keys() & found.keys():
+        before, after = baseline[key], found[key]
+        if after != before and after != "PASS":
+            differences.append(f"{outcome_name(key)}: {before} -> {after}")
+    return sorted(differences)
+
+
+def audit_objects(tree: Path, expected: dict[str, str]) -> list[str]:
+    return [
+        unit for unit, digest in expected.items()
+        if not (tree / unit).is_file() or mixed.sha256(tree / unit) != digest
+    ]
+
+
+def test_summary(log: Path, verdict: str) -> dict:
+    found = outcomes(log)
+    return {
+        "completed": verdict == "tests-done",
+        "verdict": verdict,
+        "tests": len(found),
+        "outcomes": {status: list(found.values()).count(status) for status in ("PASS", "FAIL", "SKIP")},
+        "failing": sorted(failures(log)),
+        "logSha256": mixed.sha256(log) if log.is_file() else None,
+        "binarySha256": mixed.sha256(log.parent / "toybox") if (log.parent / "toybox").is_file() else None,
+    }
 
 
 def prepare(build: Path, source: Path) -> tuple[Path, list[str], list[str]]:
@@ -102,16 +158,118 @@ def prepare(build: Path, source: Path) -> tuple[Path, list[str], list[str]]:
 
 def reference_build(tree: Path) -> str:
     done = mixed.container({MOUNT: tree}, BUILD_SCRIPT, timeout=3600)
-    return "ok" if "reference-build-ok" in done.stdout else (done.stdout + done.stderr)[-500:]
+    if done.returncode == 0 and "reference-build-ok" in done.stdout:
+        return "ok"
+    return (done.stdout + done.stderr)[-500:] or f"exit {done.returncode}"
 
 
-def relink_and_test(tree: Path) -> tuple[str, set[str]]:
-    done = mixed.container({MOUNT: tree}, TEST_SCRIPT, timeout=5400)
+def link_command(tree: Path) -> list[str]:
+    """Replay only the frozen final object link, never a source compilation."""
+    log = tree / "commands.log"
+    links = []
+    for record in log.read_bytes().split(b"\x01\n"):
+        fields = [field.decode("utf-8") for field in record.strip(b"\n").split(b"\0") if field]
+        if len(fields) < 3 or fields[0] != CONTAINER_ROOT:
+            continue
+        argv = fields[1:]
+        if "-o" not in argv or argv[-2:] != ["-o", "generated/unstripped/toybox"]:
+            continue
+        if "-c" in argv or "-E" in argv or any(arg.endswith((".c", ".S")) for arg in argv):
+            raise ValueError("toybox final link unexpectedly compiles source")
+        links.append(argv)
+    if not links or any(argv != links[0] for argv in links):
+        raise ValueError("missing or inconsistent original toybox final link")
+    units = {unit.name for unit in mixed.parse_commands(log, CONTAINER_ROOT)}
+    objects = [arg for arg in links[0] if arg.endswith(".o")]
+    if not units or set(objects) != units or len(objects) != len(units):
+        raise ValueError("toybox link objects do not match recorded compilation population")
+    # install_recorder's compiler is fixed to gcc-14 in the sealed image.
+    return ["gcc-14", *links[0]]
+
+
+def relink_and_test(
+    tree: Path, expected_objects: dict[str, str] | None = None,
+) -> tuple[str, dict[OutcomeId, str]]:
+    expected_objects = expected_objects or {}
+    if audit_objects(tree, expected_objects):
+        return "object-mismatch-before-test", {}
+    try:
+        command = link_command(tree)
+    except (OSError, UnicodeError, ValueError):
+        return "invalid-link-record", {}
+    try:
+        done = mixed.container({MOUNT: tree}, TEST_SCRIPT.replace("@LINK_COMMAND@", shlex.join(command)), timeout=5400)
+    except subprocess.TimeoutExpired:
+        return "test-timeout", {}
     if "relink-failed" in done.stdout:
-        return "relink-failed", set()
-    if "tests-done" not in done.stdout:
-        return "no-verdict", set()
-    return "tests-done", failures(tree / "tests.log")
+        return "relink-failed", {}
+    log = tree / "tests.log"
+    contents = log.read_text(errors="replace") if log.is_file() else ""
+    completed = COMPLETION.findall(contents)
+    found = outcomes(log)
+    if (len(completed) != 1 or not found
+            or not contents.rstrip().endswith(f"EVOCC_TOYBOX_TESTS_COMPLETE status={completed[0]}")):
+        return "no-verdict", found
+    status = int(completed[0])
+    if (status not in (0, 1) or done.returncode != status
+            or (status == 1) != ("FAIL" in found.values())
+            or any(not key[0] for key in found)):
+        return "inconsistent-verdict", found
+    if audit_objects(tree, expected_objects):
+        return "object-mismatch-after-test", found
+    return "tests-done", found
+
+
+def probe_candidate(
+    subject: mixed.Tree, candidate: list[str], asm_dir: Path, baseline: dict[OutcomeId, str],
+) -> tuple[bool, str, dict]:
+    installed = mixed.substitute(subject, candidate, asm_dir)
+    if set(installed) != set(candidate):
+        return True, "missing-object", {"completed": False, "verdict": "missing-object"}
+    expected = {
+        unit: mixed.sha256(asm_dir / "obj" / (mixed.flat_name(unit) + ".o"))
+        for unit in candidate
+    }
+    verdict, found = relink_and_test(subject.root, expected)
+    summary = test_summary(subject.root / "tests.log", verdict)
+    summary["objectFiles"] = expected
+    changes = regressions(baseline, found) if verdict == "tests-done" else []
+    summary["regressions"] = changes
+    failed = verdict != "tests-done" or bool(changes)
+    note = verdict if verdict != "tests-done" else ",".join(changes[:3]) or "no-regression"
+    return failed, note, summary
+
+
+def select_and_confirm(
+    subject: mixed.Tree, candidates: list[str], asm_dir: Path,
+    baseline: dict[OutcomeId, str], evidence: Path, *, budget: int, no_bisect: bool,
+) -> tuple[list[str], list[str], str, dict, dict]:
+    """The last bisection probe/cache entry is not the final installed build."""
+    bisection: dict = {}
+    failing: list[str] = []
+    try:
+        if no_bisect:
+            selected = candidates
+        else:
+            def fails(candidate):
+                failed, note, _ = probe_candidate(subject, candidate, asm_dir, baseline)
+                return failed, note
+
+            bisection = mixed.narrow(candidates, fails, evidence / "bisect.jsonl", budget)
+            selected = bisection["passingSet"]
+            failing = bisection["failingUnits"]
+        if not selected:
+            return [], failing, "no-validated-substitution", bisection, {}
+        # Always execute, even if this candidate was cached by narrow().
+        failed, note, summary = probe_candidate(subject, selected, asm_dir, baseline)
+        if summary.get("logSha256"):
+            shutil.copyfile(subject.root / "tests.log", evidence / "substituted-tests.log")
+        result = f"final-replay-failed:{note}" if failed else "no-regression"
+        if not failed and bisection.get("budgetExhausted"):
+            result = "bisection-budget-exhausted"
+        return [] if failed else selected, failing, result, bisection, summary
+    finally:
+        subject.restore_all()
 
 
 def main() -> int:
@@ -145,17 +303,18 @@ def main() -> int:
         if status != "ok":
             print(f"toybox: reference build failed: {status}", file=sys.stderr)
             return 1
-    verdict, baseline_failures = relink_and_test(tree)
+    verdict, baseline_outcomes = relink_and_test(tree)
+    baseline_failures = failures(tree / "tests.log")
     print(f"toybox: baseline {verdict}, {len(baseline_failures)} failing tests")
     if verdict != "tests-done":
-        print("toybox: the reference build does not relink", file=sys.stderr)
+        print("toybox: the reference suite did not complete consistently", file=sys.stderr)
         return 1
-    baseline_outcomes = outcomes(tree / "tests.log")
+    baseline_test = test_summary(tree / "tests.log", verdict)
     shutil.copyfile(tree / "tests.log", evidence / "baseline-tests.log")
 
     units = mixed.parse_commands(tree / "commands.log", CONTAINER_ROOT)
-    #: ``main.o`` carries the generated applet table and the build script
-    #: deletes it on every run, so it can never stay substituted.
+    #: Preserve the frozen 203-unit population: generated applet-table main.o
+    #: was excluded by the original make-based adapter and remains reference-built.
     units = [unit for unit in units if not unit.name.endswith("/main.o")]
     by_name = {unit.name: unit for unit in units}
     print(f"toybox: {len(units)} units")
@@ -181,42 +340,18 @@ def main() -> int:
     failing: list[str] = []
     test_result = "not-run"
     bisection: dict = {}
+    substituted_test: dict = {}
 
     if candidates:
         subject = mixed.Tree(tree, build / "toybox-pristine")
-        journal = evidence / "bisect.jsonl"
-
-        def fails(candidate: list[str]) -> tuple[bool, str]:
-            mixed.substitute(subject, candidate, asm_dir)
-            what, found = relink_and_test(subject.root)
-            if what != "tests-done":
-                return True, what
-            extra_failures = sorted(found - baseline_failures)
-            return bool(extra_failures), ",".join(extra_failures[:3]) or "no-regression"
-
-        if arguments.no_bisect:
-            mixed.substitute(subject, candidates, asm_dir)
-            verdict, found = relink_and_test(subject.root)
-            regressions = sorted(found - baseline_failures)
-            substituted = candidates if verdict == "tests-done" and not regressions else []
-            test_result = "no-regression" if substituted else f"{verdict}:{len(regressions)}-regressions"
-        else:
-            bisection = mixed.narrow(candidates, fails, journal, arguments.budget)
-            substituted = bisection["passingSet"]
-            failing = bisection["failingUnits"]
-            if bisection["budgetExhausted"]:
-                test_result = "bisection-budget-exhausted"
-            elif substituted:
-                test_result = "no-regression"
-            else:
-                test_result = "regressions-everywhere"
-        if (tree / "tests.log").exists():
-            shutil.copyfile(tree / "tests.log", evidence / "substituted-tests.log")
-        subject.restore_all()
+        substituted, failing, test_result, bisection, substituted_test = select_and_confirm(
+            subject, candidates, asm_dir, baseline_outcomes, evidence,
+            budget=arguments.budget, no_bisect=arguments.no_bisect,
+        )
 
     refusals = mixed.refusal_table(rows)
     receipt = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "rung": PIN["rung"],
         "subject": PIN["subject"],
         "authority": "docs/roadmap.md, milestone ladder",
@@ -224,9 +359,18 @@ def main() -> int:
         "pin": PIN,
         "driverSha256": mixed.sha256(arguments.evocc),
         "target": mixed.TARGET,
-        "baselineTest": {
-            "tests": len(baseline_outcomes),
-            "failing": sorted(baseline_failures),
+        "baselineTest": baseline_test,
+        "substitutedTest": substituted_test,
+        "substitutedUnits": substituted,
+        "testContract": {
+            "recipe": "scripts/test.sh (original make tests recipe)",
+            "verbose": "all",
+            "ASAN": "1 (original recipe environment, not a sanitizer-instrumentation claim)",
+            "relinkArgv": link_command(tree),
+            "relink": "original recorded object link plus upstream strip/chmod; no source rebuild",
+            "completion": "normal return from sourced upstream recipe; status/outcomes agree",
+            "identity": "test name plus occurrence; identical reference/subject population",
+            "objects": "installed EvoCC hashes checked before and after relink/test",
         },
         "units": len(units),
         "unitsCompiledByEvocc": sum(
@@ -248,7 +392,7 @@ def main() -> int:
             "highBytesReEscaped": [],
             "sysroot": mixed.SYSROOT_ADJUSTMENTS,
             "defines": mixed.SYSROOT_DEFINES,
-            "unitsNotSubstitutable": ["the object built from main.c"],
+            "unitsNotSubstitutable": ["main.c: reference-built generated applet table, outside frozen population"],
         },
         "unconsumedGccOptions": mixed.omitted_table(rows),
         "evidence": str(evidence),

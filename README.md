@@ -56,7 +56,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | cJSON | PASS | 23/23 TU | Both libraries + all 21 Unity/private-helper programs; 161 cases PASS, 1 upstream IGNORE; public-API controls also pass |
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | INCOMPLETE | 9/11 TU | Mixed build passes original tests; 2 deferred FP objects |
-| toybox | INCOMPLETE | 201/203 TU | 2 deferred FP objects; shared baseline `chattr` failure |
+| toybox | VALIDATION_GAP | 201/203 TU compiled historically | Old tests stopped at `chattr`; complete tests and audited relink require replay; 2 FP objects remain |
 | musl + libc-test | FAIL | 0/1,339 TU | Original `-frounding-math` requires unsupported strict fenv; subject tests not run |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,014/1,735 programs PASS | Frozen account: 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; follow-ups below |

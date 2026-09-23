@@ -20,6 +20,30 @@ The three original torture reference refusals also reproduce with their exact
 source hashes. [Measurements and limits](../../tests/fixtures/hva-varargs-reference.out)
 close their accounting only; no full-campaign result or PASS numerator changes.
 
+September 23 toybox acceptance correction (B06a/T05c): the historical 201/203
+objects were compiled, but both test logs contain only **57 occurrences
+(56 PASS / 1 FAIL)** and stop at `chattr immutable`. The previous dictionary
+also collapsed two identically named base64 tests. A further RED proves that
+plain `make` can retain an old executable because generated objects are absent
+from its prerequisites. The common scoreboard is now **VALIDATION_GAP**, with
+zero validated full-suite units; original captures and compilation counts remain.
+The adapter replays the recorded object-link argv and upstream strip step,
+preserving source/config/generated inputs, then audits installed object hashes.
+It uses upstream `VERBOSE=all`, checks normal completion and exit status,
+preserves occurrence identities and force-replays the final bisection selection.
+Forcing the upstream build recipe was tested and rejected: its append-only
+`generated/build.sh` cache caused the installed subject object to be rebuilt.
+
+The [small filesystem probe](../../tests/fixtures/toybox-filesystem-flags.c)
+records GETFLAGS failing with ENOTTY on the FUSE benchmark mount but succeeding
+on container-local ext4, identically for GCC14/Clang19 O0/O2 and EvoCC.
+The unchanged complete **chattr subset**, not the full suite, now runs on actual
+reference/current-EvoCC applet relinks: both **0 PASS / 5 FAIL / 10 SKIP**;
+the subject object survives and its binary hash differs from the reference.
+This is an evidenced filesystem boundary, not a waived PASS. Two FP objects,
+complete toybox execution and any newly exposed applet failures remain B06/B10.
+[Measured identities and acceptance limits](../../tests/fixtures/toybox-filesystem-flags.out).
+
 Kernel testing continues independently. The new EL2/GICv3 KVM reference run
 starts all 37 original programs: **24 PASS / 4 SKIP / 2 FAIL / 6 TIMEOUT /
 1 INCOMPLETE**, with source-bound configuration, memory and timing diagnoses
@@ -107,7 +131,7 @@ No new workspace, source clone or target tree was created. Parent run:
 | Csmith (`20260919T222655Z`) | 1,000/1,000 emitted; 932 agreements; 0 mismatches | 68 oracle-unusable, unchanged seeds and time limits |
 | LLVM (`20260919T230110Z`) | 1,014/1,735 PASS | 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; classification review pending |
 | TinyCC (`20260919T231249Z`) | 8/11 objects in passing mixed build | 2 deferred FP first errors and 1 real E3101 static initializer |
-| toybox (`20260919T231320Z`) | 201/203 objects | 2 deferred FP first errors; shared baseline chattr failure |
+| toybox (`20260919T231320Z`) | 201/203 compiled; acceptance invalidated | September 23 audit: truncated test prefix and unverified relink; 2 FP objects remain |
 | musl (`20260919T231421Z`) | 0/1,339 objects; subject tests NOT RUN | Original `-frounding-math` now faithfully forwarded and explicitly refused; not 1,339 independent compiler defects |
 | zlib (`20260919T231524Z`) | 19/19 objects, original tests PASS | None in this configuration |
 | cJSON (`20260919T231532Z`) | 2/2 objects, original tests PASS | None in this configuration |
@@ -2080,8 +2104,9 @@ Validation after the compiler repairs:
 
 ### Reference-suite failures are still failures
 
-Toybox's unchanged 56-outcome test inventory retains `chattr immutable` on
-both builds. Musl retains 17 libc-test failures on both builds. Its captured
+The old toybox inventory counted 56 distinct names, not a full suite: the
+September 23 audit above invalidates that acceptance claim and records all 57
+prefix occurrences. Musl retains 17 libc-test failures on both builds. Its captured
 `baseline-REPORT` names the missing `_PC_TIMESTAMP_RESOLUTION` and
 `_SC_XOPEN_UUCP` API constants; static-build dynamic-loading/TLS failures;
 `strptime` parsing and `strtold` rounding differences; `wordexp` shell/output

@@ -54,5 +54,17 @@
   "-fno-strict-aliasing": 203,
   "-o": 203
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z",
+ "acceptanceAudit": {
+  "date": "2026-09-23",
+  "status": "VALIDATION_GAP",
+  "completeSuite": false,
+  "rawOccurrencesPerSide": 57,
+  "outcomesPerSide": {"PASS": 56, "FAIL": 1, "SKIP": 0},
+  "reason": "Both logs stop at chattr immutable; duplicate names were collapsed. Plain make also does not depend on substituted object files. Historical unitsInPassingBuild is not validated full-suite coverage.",
+  "baselineLogSha256": "193a0f35e2e1be4b61b6ff1b1ce52bc0209baf5d840ddb3a9f29b3279b47a945",
+  "subjectLogSha256": "3027c6fa89124ff4fb2f7f5dc5dda5598a5806278b298513ad8463563c4011e6",
+  "evidence": "tests/fixtures/toybox-filesystem-flags.out",
+  "freshFullReplay": "NOT_RUN"
+ }
 }

@@ -266,11 +266,21 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   11/11 with no replacement rebuild/symbol exclusion. [Receipt](tests/contracts/ladder-tinycc-receipt.json).
 
 - [ ] **B06 — Finish toybox compilation and chattr diagnosis** — `OPEN`, P2.
-  Coverage is 201/203 with two deferred FP objects; `chattr` also fails on the
-  baseline. Treat FP implementation and filesystem/test capability as separate
-  causes. Close with all objects installed and original applet results, giving
-  source/filesystem evidence for any remaining inapplicability rather than a
-  blanket baseline waiver. [Receipt](tests/contracts/ladder-toybox-receipt.json).
+  Historical compilation is 201/203 with two deferred FP objects, but both old
+  test logs stop after 57 occurrences at the first `chattr` failure; they are
+  not full-suite acceptance. The adapter now requires the recorded object link,
+  complete upstream execution, every duplicate occurrence and final object hashes.
+  Close with all objects installed and original applet results; the common score
+  is `VALIDATION_GAP`, not 201 validated units. [Receipt](tests/contracts/ladder-toybox-receipt.json).
+
+  - [x] **B06a — Isolate chattr's filesystem requirement**, 2026-09-23.
+    The [minimal ioctl probe](tests/fixtures/toybox-filesystem-flags.c) returns
+    ENOTTY on the benchmark FUSE mount and succeeds on container-local ext4 in
+    all five GCC/Clang/EvoCC controls. The unchanged 15-case chattr subset
+    completes with 5 FAIL / 10 SKIP on both a real reference relink and a
+    hash-audited current-EvoCC applet relink. This closes the original filesystem
+    diagnosis, **not** those cases as PASS or B06's remaining full-suite work.
+    [Record and limits](tests/fixtures/toybox-filesystem-flags.out).
 
 - [ ] **B07 — Finish jq's binary128 interface and original tests** — `OPEN`, P2, after L02.
   `src/builtin.c` calls `nexttoward(double, long double)`; 68/69 objects and mixed
@@ -459,6 +469,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     non-Cargo no-op changes and failure propagation in
     [regressions](tools/ladder/tests/test_gate_changed.py). This does not substitute
     for the final real workspace gate.
+
+  - [x] **T05c — Reject partial or unlinked toybox acceptance**.
+    REDs reproduce truncated/shared failures, duplicate-name loss, stale binaries,
+    missing tests and stale bisection results. The adapter now replays the exact
+    original object-link argv, audits installed objects, uses upstream
+    `VERBOSE=all` with normal-return/status checks, and confirms the final selected
+    build uncached. The real pinned harness and targeted chattr replay validate
+    the path; historical receipts are explicitly invalidated for full coverage.
+    [Regression tests](tools/ladder/tests/test_toybox.py), [record](tests/fixtures/toybox-filesystem-flags.out).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

@@ -1,0 +1,77 @@
+2026-09-23: B06a filesystem diagnosis / T05c benchmark-verdict repair.
+This is not a full toybox suite or a new 203-unit compilation survey.
+
+Source toybox-filesystem-flags.c SHA-256:
+85ee41361029daf2ac51ec94a8e9d9d98d73ea82a36f0e34a029501369e70828
+EvoCC release SHA-256:
+0611f328d0871d74657da98b071d88bdc1ee24effae294bd06906a088d02c6fe
+Pinned toybox 0.8.14 source files:
+scripts/test.sh 90098f203d7f256831c2e2838fdc492e0245ce6aeb653cc8de5b41253ae6bb51
+scripts/runtest.sh 6a96206f47880affdd3c91260873c584491b2a0f621c6953d65a262196738670
+tests/chattr.test 2f3f9ca9a9d7aada1f0a7a850dd7c9106f2b2e77bb9c04ff4f97d6094a60f59e
+
+Environment: evo-flight-lab:sealed, linux/arm64, --network none;
+GCC 14.2.0-19 and Clang 19.1.7. Fixture compiled at -std=gnu11 -O0/-O2
+with each oracle. EvoCC --emit=asm --target=aarch64-unknown-linux-gnu uses
+the original exported sysroot; gcc-14 assembles/links its output.
+Each of the five executables exits 0 (observations collected), and prints:
+/work/probes filesystem=65735546 getflags=-1 errno=25 flags=0
+/tmp filesystem=ef53 getflags=0 errno=0 flags=80000
+The two directories are the host-backed FUSE mount and container-local ext4.
+The probe creates only a temporary file, reads filesystem/flag metadata and
+removes that file; it never sets immutable or append-only flags.
+Thus the original chattr immutable failure's first GETFLAGS ioctl is unsupported
+by the benchmark filesystem. This is not an EvoCC value mismatch or chattr PASS.
+It does not prove immutable SETFLAGS permission or every filesystem feature.
+
+Upstream-harness control: source the pinned runtest.sh, set TESTDIR to a fresh
+container-local directory and VERBOSE=all. One deliberately wrong expectation
+is followed by two successful identically named tests. Actual result:
+FAIL: integrity first
+PASS: integrity repeat
+PASS: integrity repeat
+failcount=1; shell exit 1.
+An initial manual harness invocation omitted TESTDIR and one argument; its
+output was invalid and is not used as acceptance evidence.
+
+Original affected source: toys/other/lsattr.c (also implements chattr), compiled
+with the unchanged recorded argv through mixed.evocc_command. Its captured
+-Os/-funsigned-char/-fno-asynchronous-unwind-tables and original headers remain;
+the adapter's existing unconsumed flags remain explicitly recorded, not newly
+claimed as supported. Retained GCC objects supply the rest of this small mixed
+diagnostic. main.c is outside the historical 203-unit substitution population.
+Replay exact original final-link argv from commands.log, then original strip
+and chmod. Run unchanged tests/chattr.test with original runtest/portability
+and applet symlinks, VERBOSE=all, ASAN=1 recipe environment. This is not a claim
+that the tested binary is sanitizer-instrumented. Reference objects restored
+afterward; the binary is re-created by the next measured link, not reused.
+
+Reference object 84be23477a511fdef377aefb3e512c9a52d67c9ec95b59c25959c465b06e580e
+Subject object   8db3d0d9b83812be2cf0b6b8c8594482f2f7c883022ba5bc7c22c34f1b091d8b
+Reference binary e4f4fbab0bb2b203ebbc948f14524268a76a4c9d599ae3f1866a932d5f7a9f22
+Subject binary   d38e11ff93e67bd87822674727d04c78a4e2d1e6cd88a498ca8a7dd38e8a77d2
+Both installed object hashes survive link/test unchanged.
+Both original chattr subsets COMPLETE: 15 occurrences, 0 PASS / 5 FAIL / 10 SKIP,
+failcount=5, exit 1. Failures: immutable, append-only, multiple bits, multiple
+files, -R. Conditional skips are nine attribute toggles and -v version.
+Reference log baa3a31303cc7169a96d95d0420019234e7e792a221c1b9f674789f30007c4dd
+Subject log   1cce40fc659f195a4b8c99d76b886eb7a5debdbd5c7b0224a918bcedfe8f145d
+Artifacts: .build/floating-targeted/toybox-integrity-20260923/
+An earlier forced-make attempt rebuilt the subject object and was REJECTED by
+the hash audit. make.sh appends generated/build.sh; multiple #d blocks then
+force recompilation. No upstream source/cache rewrite is used as a workaround.
+
+Historical 20260919T231320Z logs each stop at the first chattr failure:
+57 occurrences = 56 PASS / 1 FAIL, not the old dictionary's 56 distinct names.
+Neither has a complete-suite verdict or an audited installed-object relink.
+The receipt's original compilation counts/captures are preserved and explicitly
+audited as VALIDATION_GAP. No new full-campaign numerator is manufactured.
+
+Adapter RED: 7 assertion failures / 1 control pass, zero import/compile errors.
+Additional relink prerequisite and recipe-environment REDs also fail as intended.
+GREEN: 22 toybox boundary tests; 239 complete ladder Python tests pass.
+The common entry point rejects missing completion, stale objects, partial logs,
+regressed/missing/duplicate occurrences and unconfirmed bisection selections.
+Ruff and changed gate (no Rust crates changed) pass; status is re-rendered.
+Remaining: B06's two FP objects, complete source-bound toybox execution and any
+new failures it reveals; B10 final campaign. Failures/skips above are not PASS.

@@ -22,6 +22,36 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_toybox_historical_failed_prefix_has_no_validated_unit_numerator(self):
+        data = {'units': 203, 'unitsInPassingBuild': 201, 'unitsCompiledByEvocc': 201,
+                'testResult': 'no-regression', 'baselineTest': {'tests': 56, 'failing': ['chattr immutable']}}
+        row = bench.metrics('toybox', data)
+        self.assertEqual((row['status'], row['passed'], row['compiled']), ('VALIDATION_GAP', 0, 201))
+
+    def test_toybox_needs_complete_population_and_installed_object_audit(self):
+        result = {'completed': True, 'tests': 3, 'outcomes': {'PASS': 3, 'FAIL': 0, 'SKIP': 0},
+                  'failing': [], 'logSha256': 'log', 'binarySha256': 'binary',
+                  'objectFiles': {'a.o': 'hash'}, 'regressions': []}
+        data = {'units': 1, 'unitsInPassingBuild': 1, 'unitsCompiledByEvocc': 1,
+                'testResult': 'no-regression', 'substitutedUnits': ['a.o'],
+                'baselineTest': copy.deepcopy(result), 'substitutedTest': copy.deepcopy(result)}
+        self.assertEqual(bench.metrics('toybox', data)['status'], 'PASS')
+        for key, value in (('completed', False), ('tests', 2), ('objectFiles', {}),
+                           ('regressions', ['missing test']), ('logSha256', None), ('binarySha256', None)):
+            changed = copy.deepcopy(data)
+            changed['substitutedTest'][key] = value
+            with self.subTest(key=key):
+                self.assertNotEqual(bench.metrics('toybox', changed)['status'], 'PASS')
+        for outcome in ('FAIL', 'SKIP'):
+            changed = copy.deepcopy(data)
+            for side in ('baselineTest', 'substitutedTest'):
+                changed[side]['outcomes'] = {'PASS': 2, outcome: 1}
+                changed[side]['failing'] = ['one'] if outcome == 'FAIL' else []
+            self.assertNotEqual(bench.metrics('toybox', changed)['status'], 'PASS')
+        changed = copy.deepcopy(data)
+        changed['testResult'] = 'bisection-budget-exhausted'
+        self.assertEqual(bench.metrics('toybox', changed)['status'], 'INCOMPLETE')
+
     def test_kunit_has_a_distinct_adapter_and_receipt_without_building_a_compiler(self):
         self.assertIn('kernel-kunit', bench.CATALOG)
         args = bench.parser().parse_args(['kernel-kunit', '--allow-qemu-drift'])

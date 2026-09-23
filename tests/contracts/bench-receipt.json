@@ -902,7 +902,7 @@
     },
     "toybox": {
       "rung": "E6",
-      "note": "mixed-link tests relative to baseline failures",
+      "note": "201/203 compiled historically; test logs stop after 57 occurrences at chattr. Complete test population and actual relink/object audit require fresh replay.",
       "outcomes": {},
       "refusals": {
         "E3049": 1,
@@ -911,11 +911,12 @@
       "baselineFailures": 1,
       "failingUnits": [],
       "total": 203,
-      "passed": 201,
+      "passed": 0,
+      "historicallyInstalled": 201,
       "kind": "units",
       "compiled": 201,
       "excluded": 0,
-      "testVerdict": "no-regression",
+      "testVerdict": "historical-prefix-only",
       "adjustments": {
         "sourcePageBreaksStripped": [],
         "noreturnSpecifiersRemoved": [],
@@ -926,7 +927,12 @@
           "the object built from main.c"
         ]
       },
-      "status": "INCOMPLETE",
+      "status": "VALIDATION_GAP",
+      "acceptanceAudit": {
+        "date": "2026-09-23",
+        "evidence": "tests/fixtures/toybox-filesystem-flags.out",
+        "freshFullReplay": "NOT_RUN"
+      },
       "run": "20260919T231320Z",
       "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",

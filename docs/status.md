@@ -8,7 +8,7 @@ Benchmark orchestrator run: `20260923T073554.220698Z`; checkout `6e7508829a7b`; 
 EvoCC roadmap checkpoint | EvoIR 1.9.105 | EvoMIR 0.35
 =========================================================================================================
 APPLICATIONS - each lane keeps its own frozen measurement
-  1 FAIL | 5 INCOMPLETE | 7 PASS | 2 PROFILE_CLEAN
+  1 FAIL | 4 INCOMPLETE | 7 PASS | 2 PROFILE_CLEAN | 1 VALIDATION_GAP
   Rung Benchmark        Status          Validated            Measurement (UTC run ID)
   -------------------------------------------------------------------------------------------------------
   E0a  torture          PROFILE_CLEAN   1,504/1,692 programs 20260919T222250.259791Z
@@ -19,7 +19,7 @@ APPLICATIONS - each lane keeps its own frozen measurement
   E3   cjson            PASS            23/23 TU             20260923T073554.220698Z
   E4   mbedtls          PASS            382/382 TU           20260919T222250.259791Z
   E5   tinycc           INCOMPLETE      9/11 TU              20260920T000937.504004Z
-  E6   toybox           INCOMPLETE      201/203 TU           20260919T222250.259791Z
+  E6   toybox           VALIDATION_GAP  0/203 TU             20260919T222250.259791Z
   E7   musl             FAIL            0/1,339 TU           20260919T222250.259791Z
   E8   polybench        PASS            30/30 programs       20260919T222250.259791Z
   E9   llvm-test-suite  INCOMPLETE      1,014/1,735 programs 20260919T222250.259791Z
@@ -85,7 +85,7 @@ PASS is limited to the lane's recorded configuration, installed objects and orig
 | cjson | installed libraries plus all 21 upstream Unity test translation units | `ef62a7d2fae2` |
 | mbedtls | default release selftest and CTest against installed objects; mixed-link ramp | `ff5f51e540ab` |
 | tinycc | mixed-link compiler tests | `3d4dac628a65` |
-| toybox | mixed-link tests relative to baseline failures | `ff5f51e540ab` |
+| toybox | 201/203 compiled historically; test logs stop after 57 occurrences at chattr. Complete test population and actual relink/object audit require fresh replay. | `ff5f51e540ab` |
 | musl | libc-test relative to baseline failures | `ff5f51e540ab` |
 | polybench | PASS: 30; 30 original kernels, MINI_DATASET array-output correctness; reference-built allocation utility, not performance | `ff5f51e540ab` |
 | llvm-test-suite | PASS: 1014; compiler-failure: 44; FP-deferred: 17; not-applicable: 659; oracle-unusable: 1 | `ff5f51e540ab` |

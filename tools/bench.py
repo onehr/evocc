@@ -398,7 +398,33 @@ def metrics(name, data):
         baseline = data.get("baselineTest", {})
         if isinstance(baseline, dict):
             row["baselineFailures"] = baseline.get("libcTestFailingCases", len(baseline.get("failing", [])))
-        if name == "cjson" and (
+        if name == "toybox":
+            subject = data.get("substitutedTest", {})
+            row["testOutcomes"] = {
+                "reference": baseline.get("outcomes", {}), "subject": subject.get("outcomes", {}),
+            }
+            complete = all(
+                result.get("completed") is True and result.get("logSha256") and result.get("binarySha256")
+                and isinstance(result.get("tests"), int) and result["tests"] > 0
+                and sum(result.get("outcomes", {}).values()) == result["tests"]
+                for result in (baseline, subject)
+            )
+            objects = subject.get("objectFiles", {})
+            if (not complete or baseline.get("tests") != subject.get("tests")
+                    or not objects or len(objects) != row["passed"]
+                    or set(objects) != set(data.get("substitutedUnits", []))):
+                row.update(status="VALIDATION_GAP", historicallyInstalled=row["passed"], passed=0,
+                           note="complete test population and final installed-object audit required")
+            elif subject.get("regressions") != []:
+                row.update(status="FAIL", passed=0)
+            elif row["testVerdict"] == "bisection-budget-exhausted":
+                row["status"] = "INCOMPLETE"
+            elif row["testVerdict"] != "no-regression":
+                row.update(status="FAIL", passed=0)
+            elif any(result.get("outcomes", {}).get(outcome, 0)
+                     for result in (baseline, subject) for outcome in ("FAIL", "SKIP")):
+                row["status"] = "INCOMPLETE"
+        elif name == "cjson" and (
             not isinstance(row["testVerdict"], dict)
             or not row["testVerdict"].get("objectFiles")
             or not set(data.get("substitutedUnits", [])).issubset(
