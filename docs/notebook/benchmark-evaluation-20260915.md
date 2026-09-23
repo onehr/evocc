@@ -158,6 +158,21 @@ These source/command-bound ledger changes do not rewrite the historical
 
 ### Subsequent targeted LLVM repairs — 2026-09-20
 
+**2026-09-23 follow-up:** `lu` and `ludcmp` now pass their unchanged LARGE
+inputs and original output checks in **58.9642 / 58.7030 seconds**, under the
+original 60-second whole-test limit. Block-local reuse removes duplicate pure
+integer/address computations while retaining every load, effect and guard;
+the small RED goes from four row/element address computations to two, with
+both volatile reads and all six access/provenance checks intact. The changed
+gate passes **1,084 tests, zero failures, three historical ignored**, Clippy
+`-D warnings` and fmt. Both interpreters and sealed native GCC14/Clang19/EvoCC
+controls pass. `floyd-warshall` remains a 60-second timeout. These are two
+targeted closures, not a new full 1,735-program count; their timing margin is
+small. `tests/fixtures/block-local-pure-reuse.out` binds the compiler and
+assembly hashes and records the corrected upstream exit-status/hash contract.
+Earlier manually wrapped hash comparisons that omitted that status line are
+not acceptance evidence; earlier observed child timeouts remain failures.
+
 The unchanged `compare-fp-3` now links and runs after bounded four-way
 LT/EQ/GT/unordered reasoning; operands and their poison/FPCR obligations are
 still evaluated. The unchanged `20020720-1` also links/runs after exact

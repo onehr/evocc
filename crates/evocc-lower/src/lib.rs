@@ -13,6 +13,7 @@ mod conditions;
 mod constants;
 mod floating;
 mod neon;
+mod reuse;
 mod tls;
 mod vector;
 
@@ -4442,6 +4443,9 @@ impl<'a> FunctionLowerer<'a> {
             param_marks,
         };
         allocation::share_allocation_sites(&mut function)?;
+        if optimize {
+            reuse::reuse_pure_block_values(&mut function);
+        }
         renumber_function(&mut function)?;
         Ok((function, label_addresses))
     }

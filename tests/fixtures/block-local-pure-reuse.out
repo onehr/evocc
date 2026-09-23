@@ -1,0 +1,49 @@
+2026-09-23: reuse identical, already computed block-local pure values at -O.
+
+RED: repeated volatile p[i][j] produced four PtrOffset instructions, expected
+two (row and element). One assertion failed with zero compilation errors.
+GREEN: two PtrOffset, both volatile loads, all four PointerValid checks and
+both AccessInBounds checks remain. No load forwarding, speculative execution,
+cross-block SSA reference, memory guard removal or FP rewrite is introduced.
+Full operand types, offset direction/signedness/scale and operand identity
+are part of the key. Keys are not iterated to choose emission order.
+
+Both interpreters pass the C control with and without optimization. Separate
+negative controls retain E3001, E3009, E3011, E3010 and E3004. GCC-14 O2,
+Clang-19 O2 and EvoCC O2 native ARM64 executions each exit zero, in the
+existing sealed linux/arm64 image, offline. The changed gate against 62f72c9
+passes 1084 tests, zero failures, three historical ignored, plus Clippy
+all-targets -D warnings and fmt --check. Capture:
+.build/floating-targeted/sched-reload-inspect-20260923/pure-reuse-gate.log
+
+C source SHA256 9ab31402b2be9d8caf8e5dd34bc474a835c0776ad49878be20f8b4a11ce7e5ae
+Compiler SHA256 4a0e21716d0d66423664ebbbaa43c49d39bb97426c3d19ccec2cbf88598c057a
+Assembly SHA256 a1337b9f09da0e41e16aaefb378420ea45b166883200aa67896cc72d053b96fc
+
+Original LLVM replay uses the unchanged 20260919T230110Z compile-commands,
+LARGE_DATASET, -O3, FP_ABSTOLERANCE=1e-5, POLYBENCH_DUMP_ARRAYS and target
+sysroot. Only the same three warning flags are omitted. GCC-14 links EvoCC
+assembly with -no-pie -lm. Tests run serially, without another benchmark VM.
+
+Program         child exit   wall seconds   user seconds   original check
+lu              0            58.9642        58.7832        PASS
+ludcmp          0            58.7030        58.5482        PASS
+floyd-warshall  137          60.0062        59.9997        TIMEOUT
+
+lu/ludcmp use upstream timeit-target with its original 7200-second CPU and
+inner wall settings, --append-exitstatus, original HashProgramOutput.sh and
+fpcmp-target. GNU timeout enforces the original 60-second whole-test limit,
+including verification. Both complete check processes return zero.
+Assembly SHA256:
+lu             b3944252acd22d3cc2b6904da3680f1c45739da3fb57f22b31e174a3ae98fb2e
+ludcmp         1068638e1255e8b08f7e3db6a1331b1e8f5eb82f1e03a5323ac58bdb9fb850ac
+floyd-warshall 6a3e5aeac6d7094dc384539486ed29a5249bd9f2ded4feab937481ad1e6bfee0
+
+The first timing-only invocation omitted --append-exitstatus. Its lu/ludcmp
+exit-zero timings are real, but its hash mismatches are NOT compiler failures
+or acceptance evidence: SingleSource/lit.local.cfg requires traditional
+output including that line. The corrected *-verified.time/.out captures
+above supersede those comparisons. floyd-warshall still exceeds 60 seconds
+before producing output; no hash comparison is needed to establish timeout.
+Artifacts: .build/floating-targeted/pure-reuse-20260923/.
+No full LLVM receipt or kernel Image is replaced by these targeted results.

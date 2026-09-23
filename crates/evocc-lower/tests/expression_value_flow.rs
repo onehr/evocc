@@ -53,6 +53,30 @@ fn executable_integer_folding_keeps_reached_failures() {
 }
 
 #[test]
+fn local_computation_reuse_keeps_poison_accesses_and_arithmetic_guards() {
+    for (source, code) in [
+        ("int main(void){int x;return (x+1)+(x+1);}", "E3001"),
+        ("int main(void){int *p=0;return p[1]+p[1];}", "E3009"),
+        (
+            "int main(void){int a[2]={1,2};int i=2;return a[i]+a[i];}",
+            "E3011",
+        ),
+        (
+            "int main(void){int *p;{int a[2]={1,2};p=a;if(p[1]!=2)return 1;}return p[1];}",
+            "E3010",
+        ),
+        (
+            "int f(int x){return (x+1)+(x+1);}int main(void){return f(2147483647);}",
+            "E3004",
+        ),
+    ] {
+        for optimize in [false, true] {
+            evaluates_with_optimization(source, Some(code), optimize);
+        }
+    }
+}
+
+#[test]
 fn direct_wide_field_shifts_use_declared_precision_not_storage_precision() {
     // This harness consumes C tokens, not preprocessing directives.
     for width in [33, 40, 52, 58, 64] {

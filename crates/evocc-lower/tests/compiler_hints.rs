@@ -127,6 +127,66 @@ fn pure_executable_integer_constants_do_not_need_runtime_arithmetic() {
 }
 
 #[test]
+fn repeated_array_addresses_share_only_the_pure_computation() {
+    let source = "int f(volatile int (*p)[32], int i, int j) { return p[i][j]+p[i][j]; }";
+    let arena = Arena::default();
+    let file = FileId::new(45028);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module = evocc_lower::lower_unit_with_optimization(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        true,
+    )
+    .unwrap();
+    let insts: Vec<_> = module.functions[0]
+        .blocks
+        .iter()
+        .flat_map(|b| &b.insts)
+        .collect();
+    assert_eq!(
+        insts
+            .iter()
+            .filter(|inst| matches!(inst, evocc_evoir::Inst::PtrOffset { .. }))
+            .count(),
+        2,
+        "one row and one element address, not duplicate computations"
+    );
+    assert_eq!(
+        insts
+            .iter()
+            .filter(|inst| matches!(inst, evocc_evoir::Inst::Load { .. }))
+            .count(),
+        2,
+        "both original volatile reads must remain"
+    );
+    assert_eq!(
+        insts
+            .iter()
+            .filter(|inst| matches!(inst, evocc_evoir::Inst::PointerValid { .. }))
+            .count(),
+        4,
+        "each original provenance/lifetime check must remain"
+    );
+    assert_eq!(
+        insts
+            .iter()
+            .filter(|inst| matches!(inst, evocc_evoir::Inst::AccessInBounds { .. }))
+            .count(),
+        2,
+        "each original complete access check must remain"
+    );
+    assert_eq!(
+        interpreter_results(include_str!(
+            "../../../tests/fixtures/block-local-pure-reuse.c"
+        )),
+        (0, 0)
+    );
+}
+
+#[test]
 fn guarded_constant_queries_use_dominating_range_facts() {
     for source in [
         "int check(int n){if(n>0){int x=n;return __builtin_constant_p((long long)x>=0)&&((long long)x>=0);}return 1;}
