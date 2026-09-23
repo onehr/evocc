@@ -786,9 +786,102 @@ struct Lowerer {
     destination_readers: HashMap<u32, VReg>,
     /// How many record frame slots this function has taken an origin for.
     record_origins: u64,
+    /// Only pure address preparation already executed in the current machine
+    /// block. Clear on every block boundary, including guard/varargs splits;
+    /// these temporaries are not implicit inputs to a continuation.
+    address_preparation: AddressPreparation,
+}
+
+#[derive(Default)]
+struct AddressPreparation {
+    extended: HashMap<(VReg, u16, evocc_evoir::IndexSignedness), VReg>,
+    scaled: HashMap<(VReg, u64), VReg>,
+    factors: HashMap<u64, VReg>,
 }
 
 impl Lowerer {
+    fn pointer_delta(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        index: &Value,
+        signedness: evocc_evoir::IndexSignedness,
+        scale: u64,
+    ) -> Result<VReg, String> {
+        // Address arithmetic is modulo the machine pointer width. The EvoIR
+        // interpreter checks the full-width delta before access.
+        let bits = significant_bits(&index.ty).min(64);
+        let raw = if index.ty == EvoIRType::Bits(128) {
+            self.pair(index)?.0
+        } else {
+            self.reg(index)?
+        };
+        let key = (raw, bits, signedness);
+        let extended = if let Some(reg) = self.address_preparation.extended.get(&key) {
+            *reg
+        } else {
+            // Decode the index according to its own width and signedness,
+            // not the base pointer or another use of the same raw bits.
+            let reg = match signedness {
+                evocc_evoir::IndexSignedness::Signed => {
+                    self.sign_extend(insts, raw, bits, Width::X)
+                }
+                evocc_evoir::IndexSignedness::Unsigned => {
+                    self.zero_extend(insts, raw, bits, Width::X)
+                }
+            };
+            let reg = if reg.class == RegClass::Gpr64 {
+                reg
+            } else {
+                let dst = self.fresh(RegClass::Gpr64);
+                insts.push(MInst::Mov { dst, src: reg });
+                dst
+            };
+            self.address_preparation.extended.insert(key, reg);
+            reg
+        };
+        if scale == 1 {
+            return Ok(extended);
+        }
+        if let Some(delta) = self.address_preparation.scaled.get(&(extended, scale)) {
+            return Ok(*delta);
+        }
+        // Section 5: shift for powers of two, multiply otherwise. Reusing a
+        // previous delta never reuses the base, a load, or an access check.
+        let delta = self.fresh(RegClass::Gpr64);
+        if scale.is_power_of_two() {
+            insts.push(MInst::BinaryImm {
+                op: BinOp::Lsl,
+                dst: delta,
+                lhs: extended,
+                imm: u64::from(scale.trailing_zeros()),
+                width: Width::X,
+            });
+        } else {
+            let factor = if let Some(factor) = self.address_preparation.factors.get(&scale) {
+                *factor
+            } else {
+                let factor = self.fresh(RegClass::Gpr64);
+                insts.push(MInst::MovImm {
+                    dst: factor,
+                    imm: scale,
+                });
+                self.address_preparation.factors.insert(scale, factor);
+                factor
+            };
+            insts.push(MInst::Binary {
+                op: BinOp::Mul,
+                dst: delta,
+                lhs: extended,
+                rhs: factor,
+                width: Width::X,
+            });
+        }
+        self.address_preparation
+            .scaled
+            .insert((extended, scale), delta);
+        Ok(delta)
+    }
+
     fn fresh(&mut self, class: RegClass) -> VReg {
         let reg = VReg::new(self.next_vreg, class);
         self.next_vreg += 1;
@@ -1310,6 +1403,7 @@ fn lower_function(
         destination: None,
         destination_readers: HashMap::new(),
         record_origins: 0,
+        address_preparation: AddressPreparation::default(),
     };
 
     for (index, block) in function.blocks.iter().enumerate() {
@@ -1406,6 +1500,7 @@ fn lower_block(
     external: &dyn Fn(&str) -> bool,
     entry: bool,
 ) -> Result<(), String> {
+    lowerer.address_preparation = AddressPreparation::default();
     // Section 6 (revision 0.18): the entry block's arguments are the
     // function's parameters "in the same order and with the same type", so the
     // marks apply to them position by position.
@@ -1602,6 +1697,7 @@ fn lower_block(
             }
             current_id = continuation;
             current_args = continuation_args;
+            lowerer.address_preparation = AddressPreparation::default();
             continue;
         }
 
@@ -1941,6 +2037,7 @@ fn lower_block(
                 current_id = merge;
                 current_args = params;
                 insts = body;
+                lowerer.address_preparation = AddressPreparation::default();
                 continue;
             }
         }
@@ -2610,61 +2707,7 @@ fn lower_inst(
             scale,
         } => {
             let base = lowerer.reg(base)?;
-            let bits = significant_bits(&index.ty).min(64);
-            // Address arithmetic is modulo the machine pointer width. The
-            // EvoIR interpreter checks the full-width delta before access.
-            let raw = if index.ty == EvoIRType::Bits(128) {
-                lowerer.pair(index)?.0
-            } else {
-                lowerer.reg(index)?
-            };
-            // EvoIR Section 3.7 "decodes %index according to the mnemonic",
-            // so the extension is the one the signedness names.
-            let extended = match signedness {
-                evocc_evoir::IndexSignedness::Signed => {
-                    lowerer.sign_extend(insts, raw, bits, Width::X)
-                }
-                evocc_evoir::IndexSignedness::Unsigned => {
-                    lowerer.zero_extend(insts, raw, bits, Width::X)
-                }
-            };
-            let extended = if extended.class == RegClass::Gpr64 {
-                extended
-            } else {
-                let dst = lowerer.fresh(RegClass::Gpr64);
-                insts.push(MInst::Mov { dst, src: extended });
-                dst
-            };
-            // Section 5: "scale by `lsl` first when the scale is a power of
-            // two, `mul` otherwise".
-            let delta = if *scale == 1 {
-                extended
-            } else if scale.is_power_of_two() {
-                let dst = lowerer.fresh(RegClass::Gpr64);
-                insts.push(MInst::BinaryImm {
-                    op: BinOp::Lsl,
-                    dst,
-                    lhs: extended,
-                    imm: u64::from(scale.trailing_zeros()),
-                    width: Width::X,
-                });
-                dst
-            } else {
-                let factor = lowerer.fresh(RegClass::Gpr64);
-                insts.push(MInst::MovImm {
-                    dst: factor,
-                    imm: *scale,
-                });
-                let dst = lowerer.fresh(RegClass::Gpr64);
-                insts.push(MInst::Binary {
-                    op: BinOp::Mul,
-                    dst,
-                    lhs: extended,
-                    rhs: factor,
-                    width: Width::X,
-                });
-                dst
-            };
+            let delta = lowerer.pointer_delta(insts, index, *signedness, *scale)?;
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::Binary {
                 op: match direction {

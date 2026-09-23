@@ -180,6 +180,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   reduce the remaining code-generation bottleneck, preserving guards and effects.
   Close on unchanged LARGE input/output checks within the original limit, not
   MINI_DATASET correctness or assembly size. [Evidence][apps].
+  The [pointer-index reduction](tests/fixtures/repeated-pointer-index.c) now
+  shares pure MIR index preparation and passes all interpreter/native controls
+  and its changed gate; the unchanged LARGE replay still times out (166 core
+  instructions). [Bounded result](tests/fixtures/repeated-pointer-index.out).
 
 - [ ] **B03 — Account for Csmith's 68 unusable-oracle cases** — `OPEN`, P1.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining

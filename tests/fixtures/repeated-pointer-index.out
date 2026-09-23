@@ -1,0 +1,32 @@
+2026-09-23: reuse pure pointer-index preparation inside one machine block.
+
+RED: same_stride generated two sxtw instructions for the same bits<32>
+index, expected one; one assertion failed, no compilation errors. GREEN:
+the extension and scaled delta are shared between different bases, while
+both loads remain. Different row strides still have separate multiplications.
+The key includes the original register, source width, signedness and scale.
+Every source-block, UB-guard and varargs split clears the preparation state;
+no computed address, access check, token, memory event or flag is cached.
+
+The C fixture checks negative indices, distinct strides and a guarded
+continuation. C-HIR, EvoIR and MIR interpreters return zero. Native EvoCC and
+GCC-14/Clang-19 O0/O2 return zero in evo-flight-lab:sealed, linux/arm64,
+network none. Debug and release compilers emit byte-identical fixture assembly.
+An initial invocation incorrectly passed unsupported -o to EvoCC; the missing
+assembly stopped that native attempt. It is not a PASS. Correct stdout-based
+emission and the complete repeated native command are the results above.
+
+Changed gate against 0417ef1: 956 PASS, zero FAIL, four historical ignored,
+Clippy --all-targets -D warnings and fmt --check PASS.
+Capture: .build/floating-targeted/address-preparation-20260923/changed-gate.log
+Fixture SHA256 90e68065db0875f320a19c47a4d1bfbbbc8789f71bd498fdac614ac96c834cf8
+Release SHA256 ef62a7d2fae2d979e76d2ad30d5bc94c6ee60ef387a679b35e54d423bdee7875
+Assembly SHA256 39585e4a2409c3c80a1305d91e60d54d376c256c605362afc14797e08c732429
+
+Unchanged original LLVM floyd-warshall replay uses the frozen 20260919T230110Z
+compile command, LARGE_DATASET, original timeit limits/exit-status handling,
+HashProgramOutput.sh and fpcmp-target, inside the original 60-second whole-test
+budget. Result: TIMEOUT 124; timeit kills the monitored program on SIGTERM.
+Core static instructions: 167 -> 166. This is not B02 closure and no full
+LLVM/kernel receipt is replaced. Assembly SHA256:
+fbcbbc6482d1c999489ecfdd413627398e066bdec1d8d045aa9350d05ffe4ab8

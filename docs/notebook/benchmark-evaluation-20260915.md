@@ -185,6 +185,14 @@ the unchanged output contract. The replayed scheduler object's text shrinks
 to 625,158 bytes with no new symbol drift against the installed EvoCC object;
 it is not installed and supplies no new kernel-runtime claim.
 
+The next reduced address-preparation case removes repeated MIR index extensions
+and scaling within a block, with typed/signed keys and no cross-block reuse.
+Its C-HIR/EvoIR/MIR and sealed native controls pass, as does the changed gate
+(956 PASS, zero failures, four historical ignored, Clippy and fmt). The original
+LARGE `floyd-warshall` still reaches its unchanged 60-second limit; 167 → 166
+core instructions is not enough. [Fixture and bounded result](../../tests/fixtures/repeated-pointer-index.out)
+retain identities; TODO B02 stays OPEN and no full-run numerator changes.
+
 The unchanged `compare-fp-3` now links and runs after bounded four-way
 LT/EQ/GT/unordered reasoning; operands and their poison/FPCR obligations are
 still evaluated. The unchanged `20020720-1` also links/runs after exact
