@@ -140,6 +140,14 @@ the subject serial digest is
 `94c0ddc6b1bf2f390ebc6c3be8569ef00256ef3fe025c1c2d105ae2239e41225`.
 QEMU remains `45d74da5…9d91a3e`, fixed Cortex-A72 TCG, four vCPUs, 2 GiB.
 Single-thread TCG is a separate diagnostic, not an accepted replacement lane.
+That diagnostic has now finished: **both sides time out at the outer 195-second
+limit**, after `hotplug` fails its original one-second scheduler watchdog;
+`reload_loop` remains incomplete. The capture's `hotplugPass` boolean only
+reflects the runner's zero exit status and is **not** an assertion PASS.
+The raw logs contain `not ok 1 hotplug` / `FAILED: 1` on both sides. This does
+not resolve the intermittent NULL fault, justify a longer watchdog or replace
+the fixed multi-thread TCG lane. Capture:
+`.build/floating-targeted/sched-key-watch-20260923/single-tcg-pair/results.json`.
 
 The upstream scheduler runner also unconditionally returns zero after printing
 its `PASSED` / `SKIPPED` / `FAILED` totals (`runner.c:198–203`). The old complete

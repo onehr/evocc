@@ -57514,6 +57514,18 @@
         "repair": "Recognize the runner's complete three-line summary and keep both acceptance paths incomplete; preserve original wrapper counts and raw captures"
       },
       "claim": "The crash is reproduced on both compilers, not established as an EvoCC defect and not waived. All prior Image bindings, timeouts and failed attempts remain."
+    },
+    {
+      "run": "sched-single-tcg-diagnostic-20260923",
+      "status": "INCOMPLETE",
+      "scope": "Diagnostic single-thread TCG, not a replacement acceptance lane",
+      "results": {
+        "path": ".build/floating-targeted/sched-key-watch-20260923/single-tcg-pair/results.json",
+        "sha256": "13b914a98ecbc8da375621dd3a7c5feafdda869d596b9641a81e32804a1164ff"
+      },
+      "both": "Outer 195-second timeout, hotplug FAIL at the unchanged one-second scheduler watchdog, reload_loop incomplete; no orderly shutdown",
+      "nestedAudit": "The diagnostic hotplugPass field measures rc=0 only; both raw logs say not ok 1 hotplug and FAILED: 1. It is not a passing assertion result.",
+      "claim": "Neither the NULL fault nor the original full scheduler test is closed; no Image, timeout or accepted lane changed."
     }
   ]
 }
