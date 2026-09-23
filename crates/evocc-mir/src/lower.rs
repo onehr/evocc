@@ -1654,9 +1654,16 @@ fn lower_block(
     insts.extend(prologue);
     // Set when an `icmp` was fused into the block's `cond_br`.
     let mut fused: Option<(VReg, Cond)> = None;
+    // A checked full-width add/sub already produces its arithmetic value.
+    // Its use after the guard still enters through an explicit block argument.
+    let mut computed_result = None;
     lowerer.literal_only = assembly_literal_definitions(block);
 
     for (index, inst) in block.insts.iter().enumerate() {
+        if computed_result == Some(index) {
+            computed_result = None;
+            continue;
+        }
         if let Inst::UbAssume(condition, reason) = inst {
             // Section 5, checked profile: "tbz %c, #0, trap_label where the
             // label holds brk #imm for the reason". The instructions after the
@@ -1665,7 +1672,11 @@ fn lower_block(
             let condition = lowerer.reg(condition)?;
             let imm = ub_immediate(*reason);
             let trap = lowerer.trap_block(imm);
-            let carried = live_across(lowerer, block, index + 1);
+            // If the next pure arithmetic instruction has already been
+            // computed by its predicate, transport its result, not operands
+            // used only by that otherwise-repeated instruction.
+            let from = index + 1 + usize::from(computed_result == Some(index + 1));
+            let carried = live_across(lowerer, block, from);
             let continuation = lowerer.fresh_block();
             let mut continuation_args = Vec::new();
             let mut rebind = HashMap::new();
@@ -2059,7 +2070,11 @@ fn lower_block(
             }
         }
 
-        lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;
+        if lower_checked_result(lowerer, &mut insts, block, index)? {
+            computed_result = Some(index + 2);
+        } else {
+            lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;
+        }
     }
 
     let term = lower_terminator(lowerer, &mut insts, function, block, current_id, ids, fused)?;
@@ -2070,6 +2085,62 @@ fn lower_block(
         term,
     });
     Ok(())
+}
+
+/// Select the existing full-width `adds/subs; cset vc` sequence once for
+/// predicate / checked obligation / identical arithmetic. Nothing effectful
+/// moves across the obligation, and it retains its ordinary checked branch.
+fn lower_checked_result(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    block: &Block,
+    index: usize,
+) -> Result<bool, String> {
+    let Some([predicate, Inst::UbAssume(condition, UbReason::SignedOverflow), arithmetic]) =
+        block.insts.get(index..index + 3)
+    else {
+        return Ok(false);
+    };
+    let (check, result, lhs, rhs, a, b, op) = match (predicate, arithmetic) {
+        (Inst::SignedAddDefined(check, lhs, rhs), Inst::Add(result, a, b)) => {
+            (check, result, lhs, rhs, a, b, FlagOp::Adds)
+        }
+        (Inst::SignedSubDefined(check, lhs, rhs), Inst::Sub(result, a, b)) => {
+            (check, result, lhs, rhs, a, b, FlagOp::Subs)
+        }
+        _ => return Ok(false),
+    };
+    if check != condition
+        || lhs != a
+        || rhs != b
+        || result.ty != lhs.ty
+        || !matches!(result.ty, EvoIRType::Bits(32 | 64))
+        || lowerer.literal_only.contains(&result.id)
+        || lowerer.symbolic_addresses.contains_key(&lhs.id)
+        || lowerer.symbolic_addresses.contains_key(&rhs.id)
+    {
+        return Ok(false);
+    }
+    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+    let value = lowerer.fresh(class);
+    let flags = lowerer.fresh(RegClass::Flags);
+    insts.push(MInst::FlagBinary {
+        op,
+        dst: value,
+        flags,
+        lhs: lowerer.reg(lhs)?,
+        rhs: lowerer.reg(rhs)?,
+        width: width_of(class),
+    });
+    let valid = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::Cset {
+        dst: valid,
+        flags,
+        cond: Cond::Vc,
+    });
+    lowerer.bind(check, valid);
+    lowerer.bind(result, value);
+    Ok(true)
 }
 
 /// How many times `value` is read in `block`, terminator included.

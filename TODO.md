@@ -227,6 +227,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   and its changed gate; the unchanged LARGE replay still times out (166 core
   instructions). [Bounded result](tests/fixtures/repeated-pointer-index.out).
 
+  - [x] **B02a — Reuse the value computed by checked add/sub**, 2026-09-23.
+    The [small C reduction](tests/fixtures/checked-arithmetic-result.c) and IR
+    shape test went RED → GREEN. Full-width 32/64-bit predicates keep their
+    computed value across the guard using explicit block arguments; every
+    obligation, trap and volatile read remains. C-HIR/EvoIR/MIR/native controls
+    pass, as does the 964-test affected gate, Clippy and fmt. Original LARGE
+    replay still times out at 60 s (160 versus 166 core instructions): B02 and
+    K02 remain OPEN, and no kernel Image inherits this compiler-only repair.
+    [Measured record](tests/fixtures/checked-arithmetic-result.out).
+
 - [ ] **B03 — Account for Csmith's 68 unusable-oracle cases** — `OPEN`, P1.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining
   31 base / 37 bitfield cases are not passes. Diagnose reference compile/runtime

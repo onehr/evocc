@@ -1,0 +1,48 @@
+2026-09-23 — retain the arithmetic result of a checked add/sub.
+
+RED, after correcting the test harness's Display/whitespace mistakes:
+zero Rust compile errors; one declared failure, two controls PASS. The shape
+test observes a second add after signed_add_defined / ub.assume, although
+the existing flag-setting instruction already computed the same value.
+
+GREEN: only the adjacent full-width (32/64-bit) predicate / signed-overflow
+obligation / identical add or sub pattern shares that value. The selected
+adds/subs and cset vc still execute; tbz still selects the E3004 trap. The
+result crosses the continuation as an explicit SSA block argument. Other
+live operands/booleans remain explicitly transported by ordinary liveness.
+No obligation, memory event or token is hoisted or removed. Different
+operands/operations, nonadjacent shapes, narrow/pair values and symbolic asm
+operands retain the original lowering. No IR syntax or numerical rule changed.
+
+Three MIR tests check the shape, text roundtrip, signed extrema, exact values,
+overflow traps and nonmatching controls. Two CLI tests cover O0/O2, both source
+interpreters, MIR execution/validation, consecutive checked operations, loop
+backedges, retained volatile loads and E3001/E3004 negative controls. Native
+EvoCC and sealed GCC 14.2.0-19 / Clang 19.1.7 at O0/O2 all exit 0 on the C
+fixture. Container: evo-flight-lab:sealed, linux/arm64, network none.
+
+Native function instruction counts, controlled old/new fixture compilation:
+  add32: 9 -> 8; sub64: 9 -> 8; twice: 15 -> 13.
+Affected gate against a135fb6: 964 PASS, 0 FAIL, 4 historical ignored, 116 groups;
+Clippy --all-targets -D warnings and workspace fmt --check PASS. This includes
+native corpus, allocator verification, proof and randomized semantic controls.
+Capture: .build/floating-targeted/checked-result-20260923/changed-gate.log.
+
+Unchanged LLVM LARGE floyd-warshall replay uses its frozen 20260919T230110Z
+compile command through the existing projection, original timeit limits,
+append-exitstatus and HashProgramOutput/fpcmp checks, under the unchanged
+60-second whole-test limit. Result: TIMEOUT 124; timeit receives SIGTERM and
+kills its monitored process. No final output PASS. Core instructions: prior
+retained assembly 166, new 160. Debug and rebuilt release emit byte-identical
+assembly for this original. B02/K02 remain OPEN; no kernel Image is replaced,
+and no whole-campaign receipt inherits this targeted result.
+
+SHA-256:
+C fixture 1ada66bab56a48e0134044208d46dcdcd605abfae10d7e34d37ae1ec1e0db703
+prior compiler ae75daf20819c4f27fd041c0164d4a085dbc2008af019c0e1c0266275946c142
+new release 0611f328d0871d74657da98b071d88bdc1ee24effae294bd06906a088d02c6fe
+fixture before dd75242fcae30a713fca40f34a8ad832433cc4c943ea3d3b806a60ee2cfffea4
+fixture after cb653c076ca2e383ee6d68f53db2878c0eb382d5d3575c8e017ba4a0ce8dab68
+original after 881d29e677cec02f8e086d3da1101cc36b1c527a55636ded45bc9629d0fdf674
+Generated artifacts use one small checked-result-20260923 directory; no
+workspace clone, new kernel build or large runtime disk was created.

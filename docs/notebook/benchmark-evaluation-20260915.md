@@ -244,6 +244,15 @@ LARGE `floyd-warshall` still reaches its unchanged 60-second limit; 167 → 166
 core instructions is not enough. [Fixture and bounded result](../../tests/fixtures/repeated-pointer-index.out)
 retain identities; TODO B02 stays OPEN and no full-run numerator changes.
 
+The checked-add/sub result reduction then reuses the value already computed
+by the overflow predicate, passing it explicitly across the existing guard.
+Both interpreters, MIR/native controls and the affected gate (964 PASS, zero
+failures, four historical ignored, Clippy/fmt) pass. The unchanged LARGE
+floyd-warshall still times out at 60 seconds; its core is now 160 instructions.
+[Targeted record](../../tests/fixtures/checked-arithmetic-result.out) separates
+this verified code-generation improvement from the unresolved performance
+acceptance. No kernel Image or full-campaign result is updated by this change.
+
 **2026-09-23 case reconciliation (TODO B01):** every one of the frozen run's
 44 compiler-failure identities is now joined to its later evidence: **7 targeted
 original PASS, 30 named FP deferrals, 5 evidenced not-applicable, 2 OPEN**.
