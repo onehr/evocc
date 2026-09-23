@@ -437,6 +437,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     The 96-bit refusal test is named precisely rather than implying 128-bit
     values are rejected. The larger metadata/proof audit remains T03.
 
+  - [x] **T03b — Remove the obsolete static-pointer emission refusal**.
+    EvoMIR §8's introduction still contradicted the already-approved 0.12/0.15
+    relocation rules and its own E4005 withdrawal. A text assertion reproduced
+    that contradiction; the erratum now names symbolic/addend and block targets,
+    without widening frontend initializer admission. All four
+    [native-emission shape tests](crates/evocc-mir/tests/section8_relocations.rs)
+    and four [IR relocation/address tests](crates/evocc-evoir/tests/relocations_and_addresses.rs)
+    pass. This is clause consistency, not a new implementation or full T03 closure.
+
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   New scheduler code-size repairs are not installed, and existing kernel receipts
   include audited incremental compositions. Before final acceptance, freeze the

@@ -753,10 +753,16 @@ a build-time choice.
 The assembly text is the platform assembler's syntax. Functions are emitted
 in module order, each as `.globl` (external functions only, revision 0.16)/`.p2align log2(align)` (the function's `align=N`, EvoIR 1.9.88, 4 when absent; revision 0.26)/label/body; globals as data
 in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
-EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin). The
-only relocations this revision emits are the page-relative pair for
-`global_addr` and `func_addr` and the branch relocation of `bl`; a pointer
-inside static data (EvoIR `E3026`) is refused. In `%l[...]` the bracket holds the label's position in the declared list, counting from zero, or `bN` naming that position; a label has no name of its own in either representation (revision 0.8, taken at the point of use and to be revisited when a C front end lowers a real `asm goto`). An `asm` is emitted as its template with every operand reference replaced:
+EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin).
+Static pointer relocations are supported: revision 0.12 emits each
+`(offset, @symbol, addend)` as `.xword symbol+addend` at its specified byte
+offset, preserving surrounding data; revision 0.15 also permits the
+function/block local symbols of Section 5. This is in addition to address
+materialization and call relocations; the later external-symbol, linkage,
+TLS and relative-label rules specify their own forms. A static pointer is
+not itself a refusal (`E4005` was withdrawn at 0.12); frontend `E3026`
+remains the boundary for unsupported initializer expressions, not all
+symbolic addresses. In `%l[...]` the bracket holds the label's position in the declared list, counting from zero, or `bN` naming that position; a label has no name of its own in either representation (revision 0.8, taken at the point of use and to be revisited when a C front end lowers a real `asm goto`). An `asm` is emitted as its template with every operand reference replaced:
 `%0` to `%9` and `%[name]` by the operand's register in its natural width,
 `%w0` and `%x0` by the 32-bit and 64-bit spelling of that register, a `Q`
 operand by `[reg]`, an immediate operand by its value, `%l[label]` by the
