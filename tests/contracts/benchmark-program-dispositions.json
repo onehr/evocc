@@ -1864,32 +1864,6 @@
         "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/complex-1.c"
       ]
     },
-    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c": {
-      "disposition": "FP-deferred",
-      "reason": "main calls foo(double), which calls fabs and performs a floating comparison. Its link_error reference is intentionally unreachable, not the criterion for this disposition.",
-      "sourceSha256": "4520a96e5b9f279852f32f22c4551a1eff4cbdbb934275af62079f4de3cd4bf8",
-      "evidence": [
-        "tests/fixtures/llvm-floating-value-paths.out",
-        ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-      ],
-      "originalArguments": [
-        "/usr/bin/clang-19",
-        "-DNDEBUG",
-        "-O3",
-        "-DNDEBUG",
-        "-w",
-        "-Werror=date-time",
-        "-Wno-implicit-int",
-        "-Wno-int-conversion",
-        "-Wno-implicit-function-declaration",
-        "-w",
-        "-Wno-error=incompatible-pointer-types",
-        "-o",
-        "CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
-        "-c",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c"
-      ]
-    },
     "llvm-test-suite:SingleSource/UnitTests/StructModifyTest.c": {
       "disposition": "FP-deferred",
       "reason": "main populates two mixed records and printS1 reads their float/double fields into printf.",
@@ -2891,58 +2865,6 @@
         "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/durbin/durbin.c"
       ]
     },
-    "llvm-test-suite:SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c": {
-      "disposition": "FP-deferred",
-      "reason": "The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-      "sourceSha256": "8e752a8d13e90c6464c3573cf75a7df201a36dc0d43914de49ae65a88da20f15",
-      "evidence": [
-        "tests/fixtures/llvm-polybench-floating-paths.out",
-        ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-      ],
-      "originalArguments": [
-        "/usr/bin/clang-19",
-        "-DFP_ABSTOLERANCE=1e-5",
-        "-DNDEBUG",
-        "-O3",
-        "-DNDEBUG",
-        "-w",
-        "-Werror=date-time",
-        "-I",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-        "-DPOLYBENCH_DUMP_ARRAYS",
-        "-Wno-error=incompatible-pointer-types",
-        "-o",
-        "CMakeFiles/lu.dir/lu.c.o",
-        "-c",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c"
-      ]
-    },
-    "llvm-test-suite:SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c": {
-      "disposition": "FP-deferred",
-      "reason": "The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-      "sourceSha256": "e724fc2006a0ea556eba773ead35c64532680ffdc185fd07ff40e8264280a549",
-      "evidence": [
-        "tests/fixtures/llvm-polybench-floating-paths.out",
-        ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-      ],
-      "originalArguments": [
-        "/usr/bin/clang-19",
-        "-DFP_ABSTOLERANCE=1e-5",
-        "-DNDEBUG",
-        "-O3",
-        "-DNDEBUG",
-        "-w",
-        "-Werror=date-time",
-        "-I",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-        "-DPOLYBENCH_DUMP_ARRAYS",
-        "-Wno-error=incompatible-pointer-types",
-        "-o",
-        "CMakeFiles/ludcmp.dir/ludcmp.c.o",
-        "-c",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c"
-      ]
-    },
     "llvm-test-suite:SingleSource/Benchmarks/Polybench/linear-algebra/solvers/trisolv/trisolv.c": {
       "disposition": "FP-deferred",
       "reason": "The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its original -DFMA_DISABLED=1 disables the secondary check, not the floating kernel or output.",
@@ -2997,32 +2919,6 @@
         "CMakeFiles/deriche.dir/deriche.c.o",
         "-c",
         "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/medley/deriche/deriche.c"
-      ]
-    },
-    "llvm-test-suite:SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c": {
-      "disposition": "FP-deferred",
-      "reason": "The original LLVM variant has an integer kernel, but main calls check_FP, which converts array values to double and executes subtraction/fabs/comparison; its enabled output also calls print_element(double). The original source/flags are unchanged.",
-      "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953",
-      "evidence": [
-        "tests/fixtures/llvm-polybench-floating-paths.out",
-        ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-      ],
-      "originalArguments": [
-        "/usr/bin/clang-19",
-        "-DFP_ABSTOLERANCE=1e-5",
-        "-DNDEBUG",
-        "-O3",
-        "-DNDEBUG",
-        "-w",
-        "-Werror=date-time",
-        "-I",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-        "-DPOLYBENCH_DUMP_ARRAYS",
-        "-Wno-error=incompatible-pointer-types",
-        "-o",
-        "CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
-        "-c",
-        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c"
       ]
     },
     "llvm-test-suite:SingleSource/Benchmarks/Polybench/medley/nussinov/nussinov.c": {
@@ -3224,16 +3120,12 @@
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/pr44683.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main calls copysign_bug with double; the result depends on floating comparisons, multiplication and copysign. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "53a119ac02d6158753b6d384c8ec7bb3a1b21ee6c370de0df9bab071bfa710d7", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-int-conversion", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-pr44683.dir/pr44683.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/pr44683.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/20010114-2.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main calls rintf; its result depends on floating fabs, comparisons, addition and subtraction. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "fd68df76efbbfff1cbaa3a7caf79291147e240e961aedb326dfc8e4a8a2f5094", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-20010114-2.dir/20010114-2.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/20010114-2.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/20030331-1.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main calls rintf; it reads the floating x object and performs fabs, comparisons and arithmetic. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "67e1f29381019213d3fbb4a87ee47493996e7ca74b94aa3d201bc89fd81b0d09", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-20030331-1.dir/20030331-1.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/20030331-1.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
-    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-1.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main exercises floating unordered and ordered comparisons with infinities and NaNs. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "f15591956c78506d4d768fc2f5d549fc9351cbd6903821097af2f9cb9ffbf7cc", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-compare-fp-1.dir/compare-fp-1.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-1.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
-    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-3.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main calls all_tests with floating parameters and ordered/unordered comparisons. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "6524414fd13d4e0c721a321c70c206abf328d61a3d8943366b6cf248143f0446", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-fno-trapping-math", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-compare-fp-3.dir/compare-fp-3.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-3.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
-    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-4.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main exercises floating unordered and ordered comparisons with infinities and NaNs. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "09a3e2b5941e9e845fae2022d0fb11524dde87f29296540d94e49db11f56d191", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-compare-fp-4.dir/compare-fp-4.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/compare-fp-4.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/copysign1.c": {"disposition":"FP-deferred","reason":"Required floating execution: main calls float, double and long-double copysign routines and checks their returned representations. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"619e1de9c972cb7f5e775346d100fc0edbead41e65192f2695787baf9f3be4e0","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-copysign1.dir/copysign1.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/copysign1.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/copysign2.c": {"disposition":"FP-deferred","reason":"Required floating execution: main computes float, double and long-double copysign from floating array reads. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"1b6ba517c494e7404b04a7a9f736764b29287b2e765da950269c167ffc59ed14","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-copysign2.dir/copysign2.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/copysign2.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-1.c": {"disposition":"FP-deferred","reason":"Required floating execution: main adds and compares float, double and long-double infinity values. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"0f95b0367637df8cef3bfc5622b221f31af434e0ac75f0d2af4f86a900ed9374","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-inf-1.dir/inf-1.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-1.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-2.c": {"disposition":"FP-deferred","reason":"Required floating execution: main calls float, double and long-double comparison functions. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"e58879789ff22482ced9757cd13235c55de8e5305c96558a34811447cd8af966","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-inf-2.dir/inf-2.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-2.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-3.c": {"disposition":"FP-deferred","reason":"Required floating execution: main calls float, double and long-double comparison functions using huge-value constants. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"fd7bba839c6ac50df9cce9c05cd7cc423c119b6b98c93730bcb256e6752511e9","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-inf-3.dir/inf-3.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/inf-3.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr36332.c": {"disposition":"FP-deferred","reason":"Required floating execution: main calls foo with long double; foo compares it to infinity. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"21abe2e90b757a8b4a9dc61ed2db5de2ebe48e26a2642a3b6fb4e9c9be295bf0","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-pr36332.dir/pr36332.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr36332.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["binary128"]},
-    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr50310.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main calls foo which compares floating array elements, then checks floating results. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "117f18a1e521590e26ff961595ac2b0d7bfaa0aa9df30dc5dc02497634247b3e", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-pr50310.dir/pr50310.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr50310.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr72824-2.c": {"disposition":"FP-deferred","reason":"Required floating execution: main reads a floating vector lane through copysignf and compares the floating result. Both fixed oracles compile and exit zero at O0/O2.","sourceSha256":"ddcdc1a14132eeadd43636a81da1f86863e0051a11c7655b14f88bd358ff002f","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-ieee-pr72824-2.dir/pr72824-2.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr72824-2.c"],"evidence":["tests/fixtures/llvm-floating-builtins.out"],"deferredFeatures":["floating-vector"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr72824.c": {"disposition": "FP-deferred", "reason": "Required floating execution: main reads a floating array element through copysignf and compares the floating result. Both fixed oracles compile and exit zero at O0/O2.", "sourceSha256": "ae77d2495c6b51077d27296f52dd76b75143923fa6b16f8fa11bc93282d8a922", "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-ieee-pr72824.dir/pr72824.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/pr72824.c"], "evidence": ["tests/fixtures/llvm-floating-builtins.out"]},
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20020321-1.c": {"disposition": "FP-deferred", "reason": "Requires floating argument/result calling conventions and floating value operations in the original callable interface; unchanged original exits zero under both fixed oracles at O0/O2", "sourceSha256": "06a7d47f62e7ba826936f4624ab481b7457858ccfc335959525d0d2e41ba2fd0", "evidence": ["tests/fixtures/torture-floating-frontier.out"], "originalArguments": ["/usr/bin/clang-19", "-DNDEBUG", "-O3", "-DNDEBUG", "-w", "-Werror=date-time", "-Wno-implicit-int", "-Wno-int-conversion", "-Wno-implicit-function-declaration", "-w", "-Wno-error=incompatible-pointer-types", "-o", "CMakeFiles/GCC-C-execute-20020321-1.dir/20020321-1.c.o", "-c", "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20020321-1.c"], "reviewedEquivalentProgram": "torture:20020321-1"},

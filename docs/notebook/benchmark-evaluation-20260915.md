@@ -235,6 +235,19 @@ LARGE `floyd-warshall` still reaches its unchanged 60-second limit; 167 → 166
 core instructions is not enough. [Fixture and bounded result](../../tests/fixtures/repeated-pointer-index.out)
 retain identities; TODO B02 stays OPEN and no full-run numerator changes.
 
+**2026-09-23 case reconciliation (TODO B01):** every one of the frozen run's
+44 compiler-failure identities is now joined to its later evidence: **7 targeted
+original PASS, 30 named FP deferrals, 5 evidenced not-applicable, 2 OPEN**.
+The deferrals are 11 binary128, 1 binary16, 9 floating-complex and 9 floating-vector;
+they are remaining implementation work, not passes. The open non-FP cases are
+the LARGE `floyd-warshall` timeout (B02) and signed integer-vector `pr23135` (L10).
+All 35 reviewed rows validate through the existing adapter against the unchanged
+source hash, original argv and evidence files. Eight obsolete scalar-FP reviews
+are removed; a regression test reproduces all eight stale entries before GREEN.
+The [44-case map](../../tests/fixtures/llvm-failure-reconciliation.out) preserves
+every original identity and distinguishes later compiler versions. This is an
+accounting closure, **not** a new 1,735-program campaign or increased PASS count.
+
 The unchanged `compare-fp-3` now links and runs after bounded four-way
 LT/EQ/GT/unordered reasoning; operands and their poison/FPCR obligations are
 still evaluated. The unchanged `20020720-1` also links/runs after exact

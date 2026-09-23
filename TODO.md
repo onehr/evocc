@@ -188,12 +188,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 
 ## Application failures, accounting and replays
 
-- [ ] **B01 — Reconcile every original LLVM failure with subsequent repairs** — `OPEN`, P1.
-  The frozen 1,735-program run has 44 compiler failures; several originals now
-  pass, so 44 is not the current defect count. Join original source/argv records
-  to tailored fixes, named deferrals and approved dispositions. Close with a
-  per-case residual list and a minimal repro for every distinct real failure;
-  unresolved E3101 is not automatically FP. L10 handles `pr23135`. [Evidence][apps].
+- [x] **B01 — Reconcile every original LLVM failure with subsequent repairs** — `DONE`, P1, 2026-09-23.
+  All 44 original failure identities now have a [case-level mapping](tests/fixtures/llvm-failure-reconciliation.out):
+  7 targeted original-program PASS, 30 named FP deferrals, 5 evidenced
+  not-applicable and 2 OPEN (`floyd-warshall` B02, integer-vector `pr23135` L10).
+  The existing adapter validates all 35 reviews against exact source/argv and
+  evidence. Eight obsolete scalar-FP waivers are removed with a RED/GREEN test.
+  This closes reconciliation only: L02–L05/B02/L10 remain open, and the frozen
+  1,735-program run and its PASS numerator are unchanged. [Evidence][apps].
 
 - [ ] **B02 — LLVM LARGE floyd-warshall performance failure** — `OPEN`, P1.
   It still times out at 60 seconds after the core shrank from 194 to 167

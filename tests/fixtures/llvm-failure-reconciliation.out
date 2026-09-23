@@ -1,0 +1,94 @@
+2026-09-23: TODO B01, reconciliation, NOT a new benchmark campaign.
+Original population: LLVM test-suite 2919e55176a572ee085cb46b291c47b7092c363e.
+Frozen results: .evidence/ladder/llvm-test-suite/20260919T230110Z/results.jsonl
+SHA-256 a038af1819d0f71ac20321103ab1247d24b8d57df400326b458bae70d74f0b6a
+Original 1735 dispositions: 1014 PASS, 44 compiler-failure, 17 FP-deferred,
+659 not-applicable, 1 oracle-unusable. Those historical totals are unchanged.
+
+The 44 original compiler-failure identities reconcile as:
+  7 unchanged originals subsequently PASS in targeted replay;
+  30 source/argv-bound named FP deferrals (11 binary128, 1 binary16,
+     9 floating-complex, 9 floating-vector);
+  5 source/argv-bound evidenced not-applicable originals;
+  2 OPEN originals: LARGE floyd-warshall timeout and pr23135 integer-vector UB.
+This is not 1049 fresh passes, not a final-compiler campaign, and not evidence
+that all remaining failures are floating point. Deferred implementations and
+fresh full acceptance remain open in TODO L02-L05, L10, B02 and B10.
+
+Validation uses the existing llvm-test-suite.py program_disposition function
+on each frozen row and the unchanged source checkout. All 35 reviewed rows
+pass exact originalArguments, source SHA-256 and evidence-file validation.
+The remaining 9 historical failures correctly stay compiler-failure when
+only that old row is classified: subsequent PASS requires actual later-run
+evidence, not a new waiver. Eight obsolete pre-scalar-FP reviews were removed
+(the seven repaired originals plus floyd-warshall); the regression test first
+fails eight subcases and then passes. No old receipt was rewritten.
+
+Evidence keys (paths relative to tests/fixtures unless stated otherwise):
+S = benchmark-small-frontier.out: unchanged-source/argv native replay;
+    compare-fp-1/4/pr50310 compiler 3d4dac62...3b5e3;
+    compare-fp-3 compiler b625baf1...21a9b;
+    20020720-1 compiler b5428a5c...1fc32. No link_error stubs.
+P = linear-block-binding.out: unchanged LARGE output/hash/exit-status checks,
+    compiler 8e87fa4e...59007; lu 59.2533s, ludcmp 48.8197s, original limit 60s.
+    The small timing margin is not a stable performance guarantee.
+F = llvm-floating-value-paths.out, llvm-floating-builtins.out, and the exact
+    source/argv/evidence/deferredFeatures row in
+    tests/contracts/benchmark-program-dispositions.json. NEON additionally S.
+D = llvm-declaration-frontier.out plus source/argv-bound disposition: the
+    approved GNU11 implicit-declaration boundary, not oracle rejection.
+U = llvm-uninitialized-original.out: positive uninitialized-read observations
+    in independently compiled GCC/Clang UBSan-instrumented originals under
+    Memcheck; plain Memcheck alone is NOT a positive control.
+T = repeated-pointer-index.out: original LARGE still TIMEOUT at 60 seconds;
+    repeated-pointer-index.c and linear-block-binding.c are small reductions.
+V = llvm-vector-overflow-reduction.c/.out: integer lane signed multiplication
+    exceeds INT_MAX; both interpreters E3004; original Clang instrumentation
+    does not diagnose it. L10 remains NEEDS_RULE, not an approved exclusion.
+
+Every path below has the prefix SingleSource/. All 44 identities occur once.
+path | later disposition | evidence / remaining task
+Benchmarks/BenchmarkGame/partialsums.c | FP-deferred floating-vector | F / L05
+Benchmarks/Misc/mandel.c | FP-deferred floating-complex | F / L04
+Benchmarks/Misc/mandel-2.c | FP-deferred floating-complex | F / L04
+Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c | targeted PASS | P
+Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c | targeted PASS | P
+Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c | OPEN TIMEOUT | T / B02
+Regression/C/2008-01-07-LongDouble.c | FP-deferred binary128 | F / L02
+Regression/C/float16-smoke.c | FP-deferred binary16 | F / L03
+Regression/C/gcc-c-torture/execute/20010605-2.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/20020720-1.c | targeted PASS | S
+Regression/C/gcc-c-torture/execute/20030910-1.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/20040208-1.c | not-applicable | D
+Regression/C/gcc-c-torture/execute/20040709-3.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/20090113-1.c | not-applicable | U
+Regression/C/gcc-c-torture/execute/991030-1.c | not-applicable | D
+Regression/C/gcc-c-torture/execute/complex-1.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/complex-2.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/complex-5.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/complex-6.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/pr23135.c | OPEN integer-vector overflow | V / L10
+Regression/C/gcc-c-torture/execute/pr38969.c | FP-deferred floating-complex | F / L04
+Regression/C/gcc-c-torture/execute/ieee/20010226-1.c | not-applicable | D
+Regression/C/gcc-c-torture/execute/ieee/compare-fp-1.c | targeted PASS | S
+Regression/C/gcc-c-torture/execute/ieee/compare-fp-3.c | targeted PASS | S
+Regression/C/gcc-c-torture/execute/ieee/compare-fp-4.c | targeted PASS | S
+Regression/C/gcc-c-torture/execute/ieee/copysign1.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/copysign2.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/inf-1.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/inf-2.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/inf-3.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/pr28634.c | not-applicable | D
+Regression/C/gcc-c-torture/execute/ieee/pr29302-1.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/pr36332.c | FP-deferred binary128 | F / L02
+Regression/C/gcc-c-torture/execute/ieee/pr50310.c | targeted PASS | S
+Regression/C/gcc-c-torture/execute/ieee/pr72824-2.c | FP-deferred floating-vector | F / L05
+UnitTests/2009-04-16-BitfieldInitialization.c | FP-deferred binary128 | F / L02
+UnitTests/byval-alignment.c | FP-deferred binary128 | F / L02
+UnitTests/Vector/build.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/build2.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/constpool.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/simple.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/sumarray.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/sumarray-dbl.c | FP-deferred floating-vector | F / L05
+UnitTests/Vector/AArch64/aarch64_neon_intrinsics.c | FP-deferred floating-vector | F,S / L05

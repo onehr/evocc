@@ -15,6 +15,23 @@ spec.loader.exec_module(e0)
 
 
 class ProgramDispositionTest(unittest.TestCase):
+    def test_repaired_scalar_llvm_cases_and_timeout_have_no_obsolete_fp_waiver(self):
+        root = Path(__file__).resolve().parents[3]
+        programs = json.loads((root / 'tests/contracts/benchmark-program-dispositions.json').read_text())['programs']
+        originals = [
+            'Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c',
+            'Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c',
+            'Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c',
+            'Regression/C/gcc-c-torture/execute/20020720-1.c',
+            'Regression/C/gcc-c-torture/execute/ieee/compare-fp-1.c',
+            'Regression/C/gcc-c-torture/execute/ieee/compare-fp-3.c',
+            'Regression/C/gcc-c-torture/execute/ieee/compare-fp-4.c',
+            'Regression/C/gcc-c-torture/execute/ieee/pr50310.c',
+        ]
+        for source in originals:
+            with self.subTest(source=source):
+                self.assertNotIn('llvm-test-suite:SingleSource/' + source, programs)
+
     def measure(self, rule=None, *, evidence=True, raw='fail', emission='emitted'):
         source = 'float declaration_only; int main(void){return 1;}\n'
         with tempfile.TemporaryDirectory() as directory:
