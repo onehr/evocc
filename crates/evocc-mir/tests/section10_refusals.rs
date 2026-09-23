@@ -24,7 +24,7 @@ func @main(%arg0: bits<96>, %arg1: mem<all>, %arg2: world) -> (bits<96>, mem<all
 ";
 
 #[test]
-fn an_integer_wider_than_sixty_four_bits_is_e4003() {
+fn a_non_pair_ninety_six_bit_integer_is_e4003() {
     assert_eq!(codes(WIDE_INTEGER), vec!["E4003"]);
 }
 
@@ -122,8 +122,8 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 
 #[test]
 fn ordinary_scalar_static_data_is_not_refused() {
-    // E4005 names "a pointer inside static initial bytes", which EvoIR
-    // Section 2.1 already places outside the Day 7 profile; plain bytes lower.
+    // Plain bytes lower. Pointer relocations also lower under the current
+    // profile; their separate checks live in section8_relocations.rs.
     let module = parse_section9_module(POINTER_IN_STATIC_DATA.as_bytes()).expect("canonical EvoIR");
     assert!(lower_module(&module).is_ok());
 }

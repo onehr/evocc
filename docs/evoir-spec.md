@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.104** | **Authoritative reference** | **2026-09-21**
+**Revision 1.9.105** | **Authoritative reference** | **2026-09-23**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2140,7 +2140,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3030` | `not-lowered: varargs` | lowering |
 | `E3031` | `not-lowered: frame-address` | lowering (levels above zero only since 1.9.72) |
 | `E3032` | `not-lowered: pointer-difference` | lowering — **withdrawn at 1.9.67** |
-| `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
+| `E3033` | `not-executed: wide-integer` | unsupported execution widths; withdrawn for 128-bit division/remainder by Appendix D's reviewed S08 rule |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | legacy lowering refusal, superseded by exposed-address arithmetic |
 | `E3035` | `not-lowered: global-register-variable` | lowering — **withdrawn at 1.9.67** (implicit `asm`) |
 | `E3042` | `not-lowered: checked-arithmetic-width` | lowering — executor-allocated, **withdrawn at 1.9.67** |
@@ -3700,9 +3700,14 @@ are exactly a 64-by-64-bit product read as two halves (`math64.h`,
 `lib/math/div64.c`), the `cmpxchg128` family (a union of one `u128` and two
 `u64` halves crossing `asm` operands and a return), and `GENMASK_U128`
 constants: `zext`, `mul`, `lshr`, `trunc`, `load`, `store`, `copy` and the
-call boundary. `sdiv`, `udiv`, `srem` and `urem` on `bits<128>` stay
-`E3033` (`not-executed: wide-integer`) until a unit needs one; the cohort's
-`mul_u64_u64_div_u64` divides the halves by hand. Reference values, both
+call boundary. Appendix D's **Hosted wide integer division** ruling subsequently
+admits `sdiv`, `udiv`, `srem` and `urem` on `bits<128>`: both interpreters execute
+them and hosted native lowering uses the ordinary pair-ABI runtime helpers.
+Division by zero remains E3002, remainder by zero E3003, and signed MIN/-1 E3004
+for either operator; none of these obligations is removed. The native runtime
+dependency is explicit, not a freestanding-library guarantee. This paragraph
+synchronizes that already-approved rule (revision 1.9.105); the original kernel
+cohort's `mul_u64_u64_div_u64` divides the halves by hand. Reference values, both
 oracles (`p35-run.c` in `.evidence/builtin-probes/20260902-2c23684c/`):
 `((u128)0xffffffffffffffff * 0xfffffffffffffffe) >> 64` is
 `0xfffffffffffffffd`; `((u128)0x123456789abcdef0 * 0xfedcba9876543210) >> 37`
@@ -6466,6 +6471,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |
 | 1.9.104 | 2026-09-21 | Apply approved function-section placement through declaration merging, canonical IR/proof metadata and ELF emission, preserving linkage, alignment, aliases, labels and patchable entries. |
 | 1.9.103 | 2026-09-20 | Apply approved scalar binary32/binary64 numerical/environment contract, explicit operations and conversion obligation, HFA metadata and profile identity; implementation acceptance remains separately measured. |
 | 1.9.100 | 2026-09-15 | Apply the reviewed bounded scalar atomic load/store contract, explicit order/volatile/events and AArch64 mapping; register E2947/E3062. Single-thread interpreter traces do not claim a concurrent memory model. |

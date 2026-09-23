@@ -1,7 +1,8 @@
 # EvoCC remaining work
 
-Updated **2026-09-23**, audited against `a83d803`, EvoIR **1.9.104** and
-EvoMIR **0.34**. This is the Git-tracked execution backlog, not a new test run.
+Updated **2026-09-23**, initially audited against `a83d803`; current clauses are
+EvoIR **1.9.105** and EvoMIR **0.35**. This is the Git-tracked execution backlog,
+not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
 original ledgers; the IDs below belong to this tracker.
@@ -356,6 +357,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   traversal, effects, metadata mutation and independent proof reconstruction.
   Close discrepancies or assign specific child tasks, not a blanket “spec done”.
   [EvoIR](docs/evoir-spec.md), [EvoMIR](docs/evomir-spec.md).
+
+  - [x] **T03a — Synchronize retired diagnostic boundaries**.
+    Errata align E3033/E4003 with Appendix D's approved hosted 128-bit division,
+    E4006 with full indirect edges and E4008 with pointer subtraction. Existing
+    arithmetic guards, invalid-target checks, local SSA and runtime-library
+    dependencies remain intact; no new feature is authorized by the edit.
+    The 96-bit refusal test is named precisely rather than implying 128-bit
+    values are rejected. The larger metadata/proof audit remains T03.
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   New scheduler code-size repairs are not installed, and existing kernel receipts

@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.34** | **Authoritative reference** | **2026-09-21**
+**Revision 0.35** | **Authoritative reference** | **2026-09-23**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -334,7 +334,8 @@ in the table is refused with the diagnostic named in Section 10.
 |---|---|
 | `const.bits<N>` | `mov #imm` |
 | `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
-| `sdiv`, `udiv`, `srem`, `urem` | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
+| `sdiv`, `udiv`, `srem`, `urem`, width <= 64 | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
+| `sdiv`, `udiv`, `srem`, `urem`, width 128 | the already-approved S08 hosted path (EvoIR Appendix D): ordinary calls to `__divti3`, `__udivti3`, `__modti3`, `__umodti3`, respectively, with low/high argument pairs in `x0:x1` and `x2:x3` and the result in `x0:x1`; allocation sees ordinary call clobbers and preserves live values. The hosted target must supply libgcc/compiler-rt helpers; no freestanding dependency is silently supplied. The original divide/remainder/overflow guards remain before the call. |
 | `divisor_nonzero %d` | zero-extend `%d` per Section 3, `cmp %d, #0` then `cset ne` |
 | `signed_div_rem_no_overflow %a, %b` | sign-extend both per Section 3; `cmp %a, #INT_MIN_N` (the minimum of `bits<N>`, materialized), `cset ne` into `%p`; `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q` |
 | `signed_add_defined %a, %b` / `signed_sub_defined` | at the register width: `adds`/`subs` into a scratch, then `cset vc`; below it: sign-extend both operands, `add`/`sub` at the register width, and compare the result with the sign extension of its low `N` bits (`sbfx` then `cmp`, `cset eq`), because the `v` flag reports the register and never the source width (revision 0.3; `bits<3>`: 3 + 3 is 6, outside -4..3, so 0) |
@@ -342,7 +343,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `shift_count_defined.<s> %x, %amt` | extend `%amt` by its declared signedness `<s>` to the register width, `cmp` with `#N`, `cset lo`: a sign-extended negative amount exceeds every bound up to 64 as an unsigned quantity, so one unsigned comparison serves both signednesses (revision 0.3; zero-extending a signed `bits<1>` amount of 1 had answered 1 where EvoIR decodes -1 and answers 0) |
 | `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR 3.3.1 defines the predicate (revision 0.3) |
 | `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
-| `bits<128>` forms (revision 0.10; the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form the oracles emit, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` selecting the 64-or-more case (`p35-int128.c`, `shl_var`, `lshr_var`, both compilers); `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, exactly as both oracles emit for a `volatile u128` (the cohort's atomic 128-bit accesses are `asm`); `shift_count_defined` compares the amount with `#128`; `copy` is unchanged; the remaining UB predicates and `sdiv`/`udiv`/`srem`/`urem` at width 128 are `E4003` (the cohort has none; EvoIR keeps division `E3033`) |
+| `bits<128>` forms (revision 0.10; the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form the oracles emit, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` selecting the 64-or-more case (`p35-int128.c`, `shl_var`, `lshr_var`, both compilers); `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, exactly as both oracles emit for a `volatile u128` (the cohort's atomic 128-bit accesses are `asm`); `shift_count_defined` compares the amount with `#128`; `copy` is unchanged; the UB predicates and hosted division/remainder follow their current rows in this table |
 | 128-bit UB predicates (revision 0.26; the pair is `lo`, `hi`) | `divisor_nonzero`: `orr t, lo, hi`, `cmp t, #0`, `cset ne`. `signed_div_rem_no_overflow`: `%a` is `MIN` when `lo == 0` and `hi == 0x8000000000000000`, `%b` is `-1` when both halves are all ones; the predicate is the negation of their conjunction, computed with `cmp`/`ccmp` and one `cset`. `signed_add_defined`: `adds t, alo, blo`, `adcs t, ahi, bhi`, `cset vc`; `signed_sub_defined`: `subs`, `sbcs`, `cset vc`. `signed_mul_defined`: take the magnitudes of both operands (negate the pair when `hi` is negative), form the 256-bit product of the magnitudes from the four 64-bit limb products with `mul`/`umulh` and carries, and answer true exactly when the high 128 bits are zero and the low 128 bits do not exceed `2^127 - 1` (operand signs equal) or `2^127` (signs differ). `shift_count_defined` with a 128-bit shifted value: as at narrower widths with bound `#128`. `signed_shl_defined` at 128: the conjunction of the count predicate, `ahi` non-negative, and the round trip through the pair shift sequences of revision 0.10 (`(x << amt) >> amt == x` with the arithmetic right shift). Under EvoIR 1.9.88 the front end no longer emits `signed_shl_defined`, so the row serves older modules. |
 | `va_start %ap` | in a variadic function only: store to the list object at `%ap` the five fields of Section 6 (`stack`, `gr_top`, `vr_top`, `gr_offs`, `vr_offs`) |
 | `va_arg.T %ap` | the register-then-stack procedure of Section 6 for `T`'s size and alignment, ending in a load of `T` from the computed address |
@@ -905,23 +906,23 @@ revision admits, and vice versa, and the receipt names it.
 
 ## 10. Diagnostics
 
-All are reported at the EvoIR instruction that could not be lowered; the
-driver emits no assembly for a function with any of them. Four codes
-(`E4005` to `E4008`) name forms a validated EvoIR module cannot
-contain at revision 1.9.61, because EvoIR's own fail-closed codes exclude
-them earlier; they are defined so that the boundary is named from both
-sides, and are never emitted today.
+Active refusals are reported at the EvoIR instruction that could not be
+lowered; the driver emits no assembly for a function with any of them.
+Withdrawn codes remain named so historical receipts can be read. In particular,
+the former static-pointer-data, indirect-branch, level-zero frame-address and
+pointer-difference boundaries are implemented; the old 1.9.61 impossibility
+description is not the current supported profile.
 
 | Code | Name | Meaning |
 |---|---|---|
 | `E4001` | legacy `not-lowered: floating-point` | Withdrawn for admitted scalar f32/f64; deferred formats remain frontend refusals |
 | `E4002` | `not-lowered: vector` | Unsupported vector execution or external ABI; supported integer vectors are admitted. Sub-8-byte native arguments/results remain refused after conflicting cross-link controls (`integer-vector-small*.c`), without rejecting local operations. |
-| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division and remainder (the UB predicates lower since revision 0.26) |
+| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; width 128 includes the UB predicates and hosted division/remainder |
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
 | `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
-| `E4006` | `not-lowered: indirect-branch` | computed goto (EvoIR `E3029` boundary) |
+| `E4006` | legacy `not-lowered: indirect-branch` | withdrawn for the complete `br.indirect` edge-binding path in revision 0.29 (EvoIR 1.9.92); foreign/invalid targets and malformed successor bindings retain their independent checks |
 | `E4007` | `not-lowered: frame-address` | withdrawn at revision 0.17 (EvoIR 1.9.72 lowers level zero) |
-| `E4008` | `not-lowered: pointer-difference` | EvoIR `E3032` boundary |
+| `E4008` | legacy `not-lowered: pointer-difference` | withdrawn with EvoIR 1.9.67: `ptr.to_int` operands, 64-bit subtraction and exact signed division lower through existing scalar forms; the C-HIR same-object check is unchanged |
 | `E4009` | `not-lowered: unsupported-form` | any EvoIR instruction absent from Section 5 |
 | `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments on Darwin (Linux lowers stack arguments, revision 0.10) |
 | `E4011` | `abi: aggregate-by-value` | withdrawn at revision 0.18: `byval`/`sret` records follow AAPCS64 (Section 6) |
@@ -1011,6 +1012,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.35 | 2026-09-23 | Errata: synchronize 128-bit division/remainder lowering and E4003 with the approved hosted runtime path; mark E4006/E4008 withdrawn under existing indirect-edge/pointer-difference rules and remove the stale 1.9.61 diagnostic boundary claim. No new execution scope or waived guard. |
 | 0.34 | 2026-09-21 | Preserve validated function-section placement through native emission, including aliases, code labels, CFI and link-ordered patch registrations; restore each following function's own placement. |
 | 0.31 | 2026-09-15 | Carry bounded scalar atomic order/volatile/pointer metadata through validation, text, allocation and interpretation; emit the natural-width AArch64 LDR/STR or LDAR/STLR mapping. |
 | 0.32 | 2026-09-15 | Add integer SIMD representation/classes, real fixed/variadic vector and HVA ABI, ELF lifecycle registrations, and all four Linux TLS addressing models. |
