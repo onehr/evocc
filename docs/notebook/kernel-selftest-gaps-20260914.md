@@ -2411,3 +2411,66 @@ All **219 K1 Python tests**, targeted Ruff and `git diff --check` pass;
 `gate-changed.sh HEAD` correctly selects no Rust crates. No kernel run or sealed
 receipt was rewritten. This closes TODO K01a's verdict-integrity subcase, not
 K01's runtime NULL fault or K13's full paired acceptance.
+
+### Bounded repair workspace — 2026-09-23
+
+The user authorized retiring superseded payloads and shrinking the existing
+case-sensitive build volume before further TODO repairs. This does not change
+the kernel configuration, test population, timeouts or historical verdicts.
+The 79 GiB host sparse image is a build workspace, not the approximately
+143 MiB boot Image. Keep the BPF and expanded-KUnit reference/subject build
+roots, their Images, modules, symbols, configs and signing material while
+kernel reductions still require them. Keep the shared source and exact headers.
+
+After checking that no QEMU/project container or open file handle used them,
+retired these seven `scratch.img` files under `case/selftests/`:
+
+- `scratch.img` (the duplicate staging disk);
+- `runtime/reference/scratch.img`;
+- `runtime/reference-helper-only/scratch.img`;
+- `runtime/subject/scratch.img`;
+- `runtime-alsa-20260923/reference/scratch.img`;
+- `runtime-alsa-20260923/subject/scratch.img`;
+- `runtime-prereqs-20260923/reference/scratch.img`.
+
+Their small build manifests, initramfs files, source/commands and measured logs
+remain. Exact historical runtime disks are **no longer retained**: old receipts
+remain observations, not promises that those payloads can be replayed without
+reconstruction. Rebuilding a historical payload does not inherit its verdict.
+The current BPF pair is `runtime-alsa-fixed-20260923/{reference,subject}`;
+the separately required KUnit runtime is unchanged. QEMU already uses
+`snapshot=on`, so a new test flight must not clone a full runtime disk.
+
+The deleted payloads had about 23.2 GiB of summed allocated-file sizes, but
+APFS shared extents make that **not** a physical-space recovery measurement.
+Record volume/image measurements after compaction and verify retained hashes
+before claiming recovery. No new full workspace or full kernel copy is created.
+
+Also retire the generated `case/selftests/rootfs` staging tree (3.9 GiB)
+and only `*.s`, `*.o`, `*.aserr` in `case/bpf/evocc-out` (a 3.4 GiB assembly
+cache). Keep the cache manifest/recipe and every installed object in `bpf/out`.
+The selftest `--reuse-build --runtime-root` path reads the retained payloads
+and build manifest, not the staging tree; `--refresh-runtime` will require
+restoring/rebuilding staging first. No source or accepted installed object is
+deleted. These generated files are reconstructible, not backed up byte-for-byte.
+
+In-place compaction completed and the volume remounted at its unchanged path.
+Host allocated bytes fell from **85,277,872,128 to 64,999,383,040**
+(79.42 to 60.54 GiB), recovering **18.89 GiB**, measured on this image rather
+than inferred from unrelated host free-space changes. The volume itself now
+uses about 54 GiB; its 80 GiB maximum is retained for the later complete link.
+All **ten** before/after SHA-256 checks match: four BPF/KUnit Images, their four
+configs and both current full runtime disks. This closes the cleanup check,
+not any outstanding compiler or kernel-test issue.
+
+The diagnostic workspace now has one **64 MiB** ext4 scratch disk at
+`.build/k7-coverage/repair-runtime/scratch.img`, made with the existing selected
+selftest formatter command (`mke2fs -q -F -t ext4 -b 1024 -E
+lazy_itable_init=0,lazy_journal_init=0 ... 65536`). Its SHA-256 is
+`257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb`.
+The unchanged 1.8 MiB PM-barrier initramfs and both unchanged BPF kernels
+successfully load/unload the signed diagnostic module, finish its TAP test
+with exit zero, emit the nonce and power off on this smaller disk. Serial hashes:
+reference `b8741d48b439675aed9966586463e2b345929f8481984b883adf785d99ad51c6`,
+subject `2aab28726851a134d2acea7cf2d7f6645fb59f61229c03c71f7f86515cb0759f`.
+These are small repair-environment checks, not a new K6/K7 full-suite result.

@@ -39,6 +39,12 @@ commands and measurements stay in the [kernel ledger][kernel],
 - Record an active long run's PID/container, log, compiler/Image/payload identity
   and last observation in its existing ledger. A stale receipt is not a live job.
   Keep heavy campaigns serial; reuse build trees and retain only necessary evidence.
+- During tailored repair, retain one current reference/subject runtime pair per
+  required kernel configuration. Retire superseded large payloads after checking
+  open handles and preserving their build manifests/results; record that their
+  exact historical runtime is no longer retained. Do not clone the workspace or
+  reduce the final kernel configuration to save storage. Rebuild final artifacts
+  with the repaired compiler before K13/K14; old Images cannot inherit new fixes.
 
 ## Execution order
 
@@ -54,6 +60,13 @@ commands and measurements stay in the [kernel ledger][kernel],
    or application campaign does not close the optimizer/performance/release gates.
 
 No item below is marked actively running merely because it is queued here.
+
+Storage checkpoint (2026-09-23): superseded runtime disks and generated staging/
+assembly caches were retired; in-place compaction recovered **18.89 GiB**.
+All ten retained Image/config/runtime hashes match. Small module diagnostics now
+use one 64 MiB scratch disk and existing initramfs payloads; both kernel controls
+booted, ran the PM reduction and powered off. This is environment maintenance,
+not K13/K14 acceptance. [Retention and recovery details][kernel].
 
 ## Kernel runtime and acceptance
 
