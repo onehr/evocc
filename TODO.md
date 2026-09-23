@@ -330,17 +330,20 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     Original LARGE core shrinks 108 → 102 instructions but still times out
     at 60 seconds; **B02 remains OPEN**. [Record](tests/fixtures/compared-value-csel.out).
 
-- [ ] **B03 — Account for Csmith's 68 unusable-oracle cases** — `OPEN`, P1.
+- [x] **B03 — Account for Csmith's 68 unusable-oracle cases** — `DONE`, P1, 2026-09-24.
   All 1,000 programs emit, 932 checksums agree and zero mismatch; the remaining
   31 base / 37 bitfield cases are not passes. Diagnose reference compile/runtime
   failures with the original seeds and budgets; retain unusable outcomes unless
   a valid matched replay exists. Close with per-case reasons and any recoverable
   comparisons, without replacing seeds. [Receipt](tests/contracts/ladder-csmith-receipt.json).
-  Source-bound reductions now identify 54 reached repeating paths; 14 remain
-  undetermined. The latest [invariant controls](tests/fixtures/csmith-invariant-restart.out)
-  resolve eight further identities using source transitions and, for five cases,
-  stopped-process values. Both interpreters and all six native controls pass.
-  This is diagnosis, not a terminating original-program checksum or added PASS.
+  All **68/68** identities now have source-bound repeating-path diagnoses;
+  none remains undetermined. The [final fourteen](tests/fixtures/csmith-final-restarts.out)
+  distinguish finite callees from restarting callers, unchanged guards and
+  width-sensitive transitions, using unchanged-source observations on both
+  oracles. Two permanent C controls pass eight interpreter and twelve native
+  executions; the changed gate passes 503 tests, Clippy and fmt. All diagnostic
+  children are reaped. This closes **accounting only**, not those 68 original
+  programs as PASS: the 932-agreement numerator and B10 remain unchanged.
 
 - [x] **B04 — Resolve remaining torture/HVA reference limitations** — `DONE`, P2, 2026-09-23.
   The [separate-TU HVA reduction](tests/fixtures/hva-varargs-reference.c) isolates

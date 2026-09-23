@@ -123,5 +123,17 @@
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260919T222655Z"
+ "evidence": ".evidence/ladder/csmith/20260919T222655Z",
+ "oracleDiagnosis": {
+  "date": "2026-09-24",
+  "task": "B03",
+  "classificationOnly": true,
+  "originalRun": "20260919T222655Z",
+  "reachedRepeatingPaths": 68,
+  "undetermined": 0,
+  "originalPassNumeratorUnchanged": true,
+  "index": "docs/notebook/benchmark-applicability.md#csmith-unavailable-reference-accounting",
+  "finalRecord": "tests/fixtures/csmith-final-restarts.out",
+  "scope": "Source-bound reached-path accounting, not a terminating checksum or whole-program definedness proof. All 68 original outcomes remain oracle-unusable."
+ }
 }

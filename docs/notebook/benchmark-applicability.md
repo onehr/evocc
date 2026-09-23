@@ -40,8 +40,8 @@ The reviewed two-way analysis labels account for every unavailable identity:
 
 | Campaign | Repeating source path identified | Undetermined; timeout is not a proof |
 |---|---|---|
-| base | 11, 14, 42, 64, 68, 83, 87, 88, 112, 120, 122, 128, 161, 204, 237, 241, 246, 287, 307, 315, 327, 340, 362 (23) | 33, 93, 223, 239, 322, 345, 442, 466 (8) |
-| bitfields | 11, 14, 26, 69, 83, 104, 115, 122, 128, 192, 242, 259, 307, 322, 340, 352, 357, 362, 404, 457 (20) | 21, 24, 54, 114, 132, 146, 162, 173, 206, 234, 239, 240, 292, 360, 455, 466, 481 (17) |
+| base | 11, 14, 33, 42, 64, 68, 83, 87, 88, 93, 112, 120, 122, 128, 161, 204, 223, 237, 239, 241, 246, 287, 307, 315, 322, 327, 340, 345, 362, 442, 466 (31) | None (0) |
+| bitfields | 11, 14, 21, 24, 26, 54, 69, 83, 104, 114, 115, 122, 128, 132, 146, 162, 173, 192, 206, 234, 239, 240, 242, 259, 292, 307, 322, 340, 352, 357, 360, 362, 404, 455, 457, 466, 481 (37) | None (0) |
 
 The source arguments for the first four identities are in
 [the closure notebook](benchmark-closure.md); the bounded optimization probes
@@ -50,7 +50,7 @@ for both 307 identities and bitfields/457 are in
 Their repeating source paths explain why the reference executions do not
 provide a common terminating checksum; they do not turn an unusable input
 into a passing compiler test. All 68 keep their original benchmark label,
-and individual source classification of the other 35 remains open.
+and the dated diagnostic sequence below accounts for the remaining identities.
 
 On 2026-09-20, the unchanged 68 sources were independently compiled at O0
 by both sealed oracles with a separate diagnostic sampling translation unit,
@@ -204,9 +204,22 @@ The analysis distinguishes finite callees/inner loops from their restarting
 callers, constant-selected paths and independent unchanged guards. Five require
 additional read-only stopped-process observations; all ten diagnostic children
 were reaped. Two interpreters and six native controls pass, without changing any
-original source or result. Current diagnosis: **54 identified / 14 undetermined**.
-The remaining identities are base /33, /93, /223, /322, /345, /442 and bitfields
+original source or result. That checkpoint was **54 identified / 14 undetermined**.
+The then-remaining identities were base /33, /93, /223, /322, /345, /442 and bitfields
 /21, /24, /146, /239, /240, /292, /455, /481. All 68 remain oracle-unusable.
+
+**2026-09-24 — B03 accounting closed:** all fourteen now have
+[source-bound diagnoses and original-process observations](../../tests/fixtures/csmith-final-restarts.out).
+The analysis checks conversions and aliasing, skipped guard-changing paths,
+and caller restarts after finite inner loops. The two permanent small C
+controls pass C-HIR/EvoIR at O0/O2 (eight executions) and GCC14/Clang19/EvoCC
+native O0/O2 (twelve executions). The evocc changed gate passes 503 tests,
+Clippy and fmt. All 28 original diagnostic children were killed and reaped;
+their diagnostic exit -9 is not a benchmark result. Current diagnosis:
+**68 identified / 0 undetermined**, but still **932 agreeing / 68 oracle-unusable**.
+No original source, seed, budget, checksum or historical numerator changed;
+the final complete campaign remains B10, and this is not a whole-program
+definedness proof or a new claim that all Csmith programs terminate.
 
 ## c-testsuite floating execution
 

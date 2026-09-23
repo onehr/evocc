@@ -1,0 +1,164 @@
+2026-09-24 — B03: final 14 reached-path diagnoses, not original-program PASS.
+All 68 unusable-oracle identities now have a source-bound repeating path.
+The historical 1,000 seeds / 932 agreements / zero mismatches / 68 unusable
+outcomes, source bytes and ten-second campaign budgets are unchanged.
+
+Original source SHA-256 (matches the previous independent PC capture):
+base/33  91ce5f479655382575366c051876803fe96e0d9c5b1f926321d8ebccc4ac3505
+base/93  6696bde13c14dce4862d76384b97485f13478161bfffa33b3a08205444152e17
+base/223 5d9634d82def813af84b4229343b0f001861c6e625495d7e099d7f9643610332
+base/322 784bd354d1e52657fcc6ddd9fac8dca596012dca66d62c320113903445da40bc
+base/345 33eeb74ee64e18d4d38d0b624ce3bc1da0580a550c76ea2a77d6f3074f0222de
+base/442 ffd6f9f1454f8929f9be4e46fd1e3c361728fc542b8a1eeaa8bb6af7b9fcd24d
+bitfields/21  504c4cecfd9d2d79d5e92f5e576b73e821c81f814fcb5567dbf70eda1cc51720
+bitfields/24  1c3dcb90b4353bfbb0464d64e4e567659c4ff05066dffc5ea5fc3c53fff2558d
+bitfields/146 3aab6a004118bdb0e861b1daca51888e6e8aa460be33acd942c6895a24e31b35
+bitfields/239 633362a2c51afee182121e9de8b1a981892ec7235e36be56a60d1107c9dadbfe
+bitfields/240 2901672e670680bb781610b16ceb01c5e7852159a6d0b21e7e276f7c874b0c71
+bitfields/292 4ffa1c56f3103507be991ced8d28eb757f2c0320879733b1f55e37b4b63aa77e
+bitfields/455 acfb0481e03c0e62b6eb3c4d2f32b6fb56147557496a32960845b05efa37970d
+bitfields/481 33c197935e77ed3a8881f6eb55b44576686a03c94ad04f95772ff6e901c1cb9f
+
+Source argument + reached state, not an inference from timeout alone:
+* base/33, func_47:254–265,485–522. The constant comma result selects the
+  arm resetting *p_50=0 and binding l_585=&l_584. Ten XORs with 0x5cf8a057
+  restore g_6[5]; the additional 0/1 << 60 term vanishes on i32 assignment.
+  The safe divisor is zero, so the helper returns its nonzero numerator;
+  l_663=-1 restarts before g_253 changes. Both stopped oracles observe
+  g_253=0 and g_6[5] alternating 0x3a5fcfa7/0x66a76ff0. The addresses refer
+  to distinct caller parameter storage, local l_584 and the global array.
+* base/93, func_9:196–265. g_415[1].f2=1, unchanged on this path, right
+  shifts a Boolean to zero. The false arm ORs the same shared value into
+  the caller local, then back; neither points into g_415. Finite four-step
+  loops precede the l_663=-10 backedge, before g_105 increments. Both
+  observations retain count 1 and g_64=&g_54. l_669 is wrapping u32.
+* base/223, func_31:350–607. g_129.f4=16==36 skips the first body. At the
+  observed g_5=0, safe unsigned (1<=g_5)-g_5 is zero. The else arm's 31
+  iterations reset the same object to zero; its inner 0==-11 loop is skipped.
+  g_129.f6=0x3a is separate and unchanged, so the caller restarts.
+* base/322, func_1:173–356 and func_7:506–949. func_19 resets g_6 to 4;
+  func_15's 0==44 loop is skipped and returns 26, leaving l_14[0] nonzero.
+  func_22 changes g_30/g_26/g_37, not g_6. The g_298.f5 loop is SIGNED and
+  finite. In func_7's later 16,12,...,-20 loop, the narrowed numerator is
+  22346 and divisor -10, so remainder 6 selects the arm not writing g_6.
+  The next nonzero-object loop breaks, func_92 changes no object, and the
+  callee returns 4. Main's two prelude alternatives do not change g_147 or
+  const g_227.f1. Its first index pair observes g_147[4][1]=0x3e and
+  g_227.f1=1 and restarts. These values also match both stopped oracles.
+  The sampled finite callee loop alone would not establish the cause.
+* base/345, func_1:107–332, func_2:340–429. func_2's argument loop ends at
+  28 and its first g_296 iteration returns that value. Called func_16/30/35
+  do not write the independent g_90 guard; the huge func_30 body is skipped
+  by unsigned 0>=2. Main compares 28 to UINT64_MAX-9, selects its non-returning
+  arm, then repeats on g_90. All reached main helpers are func_16; its u16
+  counter either breaks on g_9 or wraps to zero after 24 iterations. The
+  other loops are finite and change no g_90. Both observe g_90=0x991ee505
+  and g_9=0x87cf2e5664dc9ed9. Uncalled func_44's g_90 stores are not evidence
+  that the reached cycle can terminate.
+* base/442, func_1:110–122. ((i64)result-1)||result is true for every i32
+  result stored from func_7, including zero. The observed g_105.f6=0x21fbfd46
+  immediately restarts main. All called functions before this edge preserve
+  that member; main's only updates are after the restart. Sampled func_17,
+  func_19 and func_7 inner loops are not independently called infinite loops.
+* bitfields/21, func_49:1596–1767. The nonnull l_60 sets g_20[0]=0 and
+  selects the false arm. Signed p_51 runs 0,-8,-16; its first iteration runs
+  five middle iterations, the next two one each. Signed p_50's 5..26 and
+  g_25.f5's 0..0 loops are finite. The later masked subtract 255-(x&0xf9)
+  is never zero, so the early-return alternative is unreachable. The g_25.f1
+  guard then restarts before either zero counter increments. Both observe
+  g_20[0]=0, g_25.f1=2. No called function or reached store changes that byte.
+* bitfields/24, func_7:118–143, func_11:201–226. The callee's finite 0..45
+  loop repeatedly resets g_23=0, skips <=-26, and returns 50. The caller
+  multiplies (1+p_8) by signed 0xe450bb101eb64d07; p_8=0/1 gives a defined
+  nonzero result. First p_8=0 returns; the next call p_8=1 restarts before
+  g_23's first decrement. Both observe g_3=1/g_23=0; no reached body changes
+  the by-value argument or multiplicand.
+* bitfields/146, func_27:746–768. func_51's forced first arm sets g_33=1
+  and g_56=&g_61[1]; func_46 writes only that pointee. func_39's first loop
+  breaks on g_33=1 before the guard-writing region, then runs finite 27x29
+  iterations. In func_36:1293, a Boolean & 0xb9b8b638 is zero; safe remainder
+  remains zero, unequal to i16 0xcb82. Its safe division is zero, skipping
+  the only g_159 loop. The callee returns on its first outer iteration;
+  func_27 assigns g_33=1 and restarts on unchanged g_159=-1 (both oracles).
+* bitfields/239, func_1:85–205. u64 l_2 compares below the u64 conversion
+  of negative i16 g_75=0xc247. func_3 is finite and writes no global. In the
+  selected arm l_384&6=2; the i8 subtraction receives 0 and 11 and gives -11.
+  Its func_26 only changes local pointers. g_74=4 remains separate and is the
+  subsequent backedge guard on both oracles; the alternative writes/calls
+  are not reached. The fixture explicitly exercises the width conversions.
+* bitfields/240, func_1:107–156. u64 g_436=-10 DOES satisfy >=30; u32
+  g_104.f6=-20 DOES NOT satisfy <=52. The first zero index tuple reaches
+  goto on g_675=0x04b9b014, observed unchanged by both oracles. func_10's
+  u8 0>=57 body is skipped, so its descendant func_31 and g_675-- are not
+  called. func_4 cannot write g_675. This is not a huge finite countdown.
+* bitfields/292, func_2:241–279. g_18=0 selects func_14's first-iteration
+  return; its other callees are not invoked. func_8 has three empty iterations
+  and returns. g_5=0..-19 is finite, g_25 decrements as u8. l_484=&g_220.f4
+  differs from &g_87. g_81.f5=5446 survives the self-copies/other field writes
+  and restarts before g_306.f1 decrements; both oracles observe this state.
+* bitfields/455, func_21:757–852. The OR with 0x70c2376c2938f306 cannot
+  equal l_549=0x0464482f; the alternate -27==24 loop is skipped. p_23 is
+  &g_11[3][6]. Its observed value -68 gives zero quotient by g_281=0x336adbc7.
+  The nine-step else arm self-stores it and toggles l_446's pointee by 0/1;
+  the invalid safe shift count is (u8)g_445=88, not an executed C shift by 88.
+  Observations find -9/-10 in the separately toggled array object. Even aliasing
+  would preserve the zero quotient for these small values, as the control
+  checks. g_445=0xe7085cf5d29a8c58 is unchanged, restarting at first l_484=24.
+* bitfields/481, func_30:643–670. p_32 is the by-value g_201 bit-field
+  (72712), not an alias. For any u8 p_33, its masked u16 quotient is below
+  0xe0df, hence g_87=0 after the 21-step loop. Both g_86 and l_204 point to
+  that object. Successive helper conversions give i16 7176, u8 8, then
+  wrapping 8+255=7; subtracting (i8)4875=11 gives -4. Both conditions for
+  the backward goto hold. The parameter, g_81=-1 and g_128.f2=4875 are not
+  modified before the edge; sampled globals agree on both compilers.
+
+Read-only original observation commands/identities:
+  .build/floating-targeted/csmith-final-state.py
+  .build/floating-targeted/csmith-final-state.json
+  SHA256 c0a44f11297596356f99a1f54f5e6a6b9a841187d8ee95ed1825c8d9e96f594d
+  Prior PC capture csmith-oracle-timeout-samples-20260920.json:
+  SHA256 6d3ab40325606ca66653df9692e9eb194bc63dec5b4e8f11ce43b7967b0f5171
+14 unchanged originals x GCC14/Clang19, -O0 -g -static -no-pie, existing
+CSMITH_MINIMAL/USE_MATH_MACROS_NOTMP/INT_MAX defines and runtime includes.
+Three 150-ms SIGSTOP/read-/proc/pid/mem/SIGCONT samples each; no source or
+state writes. All 28 owned children explicitly killed/reaped, exit -9 NOT PASS.
+Per-build commands, binary hashes, symbol address/size maps and raw bytes are
+in the capture. This establishes reached state plus a source-path argument,
+not proof that the entire original is UB-free or a new terminating checksum.
+
+Two finite fixtures, both interpreters at O0/O2: 8 executions return zero.
+GCC14, Clang19, EvoCC at O0/O2: 12 native executions exit zero.
+Fixed offline linux/arm64 evo-flight-lab:sealed, one CPU:
+image sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+GCC14.2.0-19 / Clang19.1.7; EvoCC assembly linked with GCC14 -no-pie.
+EvoCC release SHA256 359982fba2bf046b252e7e5777676bf51820f466e19ab0860929b1b402199d86
+EvoCC debug SHA256 a967aebf5a9134d5654452913c15bbcdaa385a5987ab6ea1020ff25ace9740d1
+Only tests/docs changed; neither production compiler binary was rebuilt.
+
+Fixture SHA256:
+csmith-finite-inner-restarts.c 221acf8f5fb3944a5254e3bbadf7a8d426df137f75788eed8a483d7e5bbceb59
+csmith-caller-restarts.c cde51ec58e27419e3067f702f20271f3369b0f3d664b48151e9447cf8ac225eb
+Assembly SHA256 (O0 / O2):
+finite-inner: 989d6e463d86e010288a258e2a9f938fe790d462dbf264af26b247c4272f9724
+              43807505ef803533673c9637b92ca6200f03710e4cb4318db586b39ca0ae8bbf
+caller:       dd549137ff65977796c7a8643cac9bcf1549dcec8f27ee54b562064e3bfd196f
+              3b9c7a9b7edb98dca70037bd8fc52bea7edce53d49e1a2408863bda8ea8498e9
+Native logs .build/floating-targeted/csmith-{finite-inner,caller}-restarts-native.log
+both SHA256 21e053a43d838f69d4a342bbf831b85c10cc5bccec2ff405d62138c0e2b62989
+(Same six status lines; distinct fixture/assembly identities above.)
+
+The initial diagnostic draft had a declaration immediately after a label
+(E1003); moving the declaration out fixes the test source. Combining eight
+transitions of all controls exceeded the CLI's 100,000-step EvoIR fuel;
+two transitions plus zero/alternate controls fit the unchanged CLI limit.
+These were reduction construction issues, not original compiler bug fixes.
+The permanent Rust integration tests include both C fixtures and test four
+interpreter/optimization combinations apiece. Their raw output is checked,
+not just process status. The original campaign is not rerun or relabeled.
+
+Changed gate a435321: 503 evocc tests PASS, zero failed/ignored, Clippy -D
+warnings and workspace fmt PASS. No other crate changed or was tested in this
+gate. Log .build/floating-targeted/csmith-final-gate.log, SHA256
+1f11992207a7b748342ca1017df9f505cfd2a3371b55e871b67956ea99b488fb.
+All 248 ladder Python tests also pass. render-status and its --check complete;
+generated status is byte-unchanged because no original benchmark score changed.
