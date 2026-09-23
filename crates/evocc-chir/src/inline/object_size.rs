@@ -5,13 +5,21 @@ use super::*;
 use evocc_types::{ArrayBound, CanonicalType, FunctionParameters, IntRank, Qualifiers};
 
 type Expr<'a> = &'a CHirExpr<'a>;
-type Extent<'a> = (Expr<'a>, Expr<'a>);
+// Start, byte size, and whether this extent is known on the executed path.
+// The last component matters at an inline return join: an unknown arm must
+// not borrow an allocation fact from a different return.
+type Extent<'a> = (Expr<'a>, Expr<'a>, Expr<'a>);
 
 #[derive(Clone, Copy)]
 pub(super) struct Bounds<'a> {
     offset: Expr<'a>,
     whole: Option<Extent<'a>>,
     member: Option<Extent<'a>>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ReturnBounds {
+    slots: [SymbolId; 7],
 }
 
 pub(super) fn allocation_sizes(unit: &CHirUnit<'_>) -> BTreeMap<SymbolId, Vec<usize>> {
@@ -53,6 +61,77 @@ pub(super) fn allocation_sizes(unit: &CHirUnit<'_>) -> BTreeMap<SymbolId, Vec<us
 }
 
 impl<'a> Substitution<'a, '_> {
+    /// Private caller-lifetime objects implement the ordinary value join.
+    /// They carry no pointer authority, and are written only on the return
+    /// path that actually executes, after its pointer expression is evaluated.
+    pub(super) fn new_return_bounds(
+        &mut self,
+        span: SourceSpan,
+    ) -> Result<ReturnBounds, InlineError> {
+        let ty = self.size_type();
+        let mut slots = Vec::new();
+        for _ in 0..7 {
+            let symbol = self.fresh(self.extent_scope, ty, StorageClass::None, span)?;
+            self.temporaries.push(self.object(symbol, None, span));
+            slots.push(symbol);
+        }
+        Ok(ReturnBounds {
+            slots: slots.try_into().unwrap(),
+        })
+    }
+
+    pub(super) fn bind_return_bounds(
+        &self,
+        destination: ReturnBounds,
+        bounds: Option<Bounds<'a>>,
+        span: SourceSpan,
+    ) -> Result<Vec<CHirBlockItem<'a>>, InlineError> {
+        let zero = self.size_value(0, span);
+        let values = bounds.map_or([zero; 7], |bounds| {
+            let whole = bounds.whole.unwrap_or((zero, zero, zero));
+            let member = bounds.member.unwrap_or((zero, zero, zero));
+            [
+                bounds.offset,
+                whole.0,
+                whole.1,
+                whole.2,
+                member.0,
+                member.1,
+                member.2,
+            ]
+        });
+        destination
+            .slots
+            .into_iter()
+            .zip(values)
+            .map(|(symbol, value)| {
+                let place = ScalarPlace::bind(&self.unit.symbols, &self.unit.types, symbol)
+                    .map_err(|error| self.error(span, error))?;
+                let ty = place.ty();
+                Ok(CHirBlockItem::Statement(self.alloc(CHirStmt::Expr(
+                    self.alloc(CHirExpr::Assign {
+                        op: AssignmentOp::Simple,
+                        place,
+                        target: self.ident(symbol, span),
+                        value,
+                        facts: ExprFacts::value(ty),
+                        span,
+                    }),
+                    span,
+                ))))
+            })
+            .collect()
+    }
+
+    pub(super) fn returned_bounds(&self, slots: ReturnBounds, span: SourceSpan) -> Bounds<'a> {
+        let [offset, ws, wn, wk, ms, mn, mk] = slots.slots.map(|s| self.ident(s, span));
+        Bounds {
+            offset,
+            whole: Some((ws, wn, wk)),
+            member: Some((ms, mn, mk)),
+        }
+    }
+
     /// Analyze the already evaluated body of a statement expression. The
     /// returned facts reference allocation-time captures, never a replay of
     /// the allocation or its argument effects. Unknown control flow drops
@@ -217,10 +296,11 @@ impl<'a> Substitution<'a, '_> {
 
     fn complete_bounds(&self, size: Expr<'a>) -> Bounds<'a> {
         let zero = self.size_value(0, size.span());
+        let known = self.size_value(1, size.span());
         Bounds {
             offset: zero,
-            whole: Some((zero, size)),
-            member: Some((zero, size)),
+            whole: Some((zero, size, known)),
+            member: Some((zero, size, known)),
         }
     }
 
@@ -502,7 +582,7 @@ impl<'a> Substitution<'a, '_> {
                 let choose = |a, b| self.size_choose(test, a, b);
                 let merge = |a: Option<Extent<'a>>, b: Option<Extent<'a>>| {
                     let (a, b) = (a?, b?);
-                    Some((choose(a.0, b.0), choose(a.1, b.1)))
+                    Some((choose(a.0, b.0), choose(a.1, b.1), choose(a.2, b.2)))
                 };
                 Some(Bounds {
                     offset: choose(yes.offset, no.offset),
@@ -575,7 +655,11 @@ impl<'a> Substitution<'a, '_> {
         ) {
             bounds.whole
         } else {
-            Some((bounds.offset, self.type_size(field.field_ty(), span)?))
+            Some((
+                bounds.offset,
+                self.type_size(field.field_ty(), span)?,
+                bounds.whole?.2,
+            ))
         };
         Some(bounds)
     }
@@ -672,13 +756,19 @@ impl<'a> Substitution<'a, '_> {
         if mode & 1 != 0 {
             if let Some(whole) = bounds.whole {
                 let complete = self.remaining_extent(bounds, whole);
-                remaining = self.size_choose(
+                let limited = self.size_choose(
                     self.size_binary(BinaryOp::Lt, remaining, complete),
                     remaining,
                     complete,
                 );
+                remaining = self.size_choose(whole.2, limited, remaining);
             }
         }
+        remaining = self.size_choose(
+            extent.2,
+            remaining,
+            self.size_value(fallback, operand.span()),
+        );
         if let Some(value) = crate::constant::eval_integer_constant(
             remaining,
             &self.unit.types,

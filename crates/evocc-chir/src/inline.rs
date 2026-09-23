@@ -1221,6 +1221,7 @@ struct Context<'a> {
     prefix: Option<u64>,
     result: Option<SymbolId>,
     return_extent: Option<object_size::Bounds<'a>>,
+    return_bounds_slots: Option<object_size::ReturnBounds>,
     end: Option<SpannedName>,
 }
 
@@ -1247,6 +1248,7 @@ impl Context<'_> {
             prefix: None,
             result: None,
             return_extent: None,
+            return_bounds_slots: None,
             end: None,
         }
     }
@@ -2703,6 +2705,9 @@ impl<'a> Substitution<'a, '_> {
                     items.push(CHirBlockItem::Statement(
                         self.alloc(CHirStmt::Expr(expression, *span)),
                     ));
+                    if let Some(slots) = c.return_bounds_slots {
+                        items.extend(self.bind_return_bounds(slots, c.return_extent, *span)?);
+                    }
                 }
                 items.push(CHirBlockItem::Statement(
                     self.alloc(CHirStmt::Goto(c.end.clone().unwrap(), *span)),
@@ -2919,6 +2924,31 @@ impl<'a> Substitution<'a, '_> {
         }
         let body = f.body.unwrap();
         let uses = inspect([Node::Stmt(body)]);
+        let single_final_return = match body {
+            CHirStmt::Compound(items, _) => match items.split_last() {
+                Some((CHirBlockItem::Statement(CHirStmt::Return(Some(value), _)), prefix)) => {
+                    !inspect(
+                        prefix
+                            .iter()
+                            .map(|item| match item {
+                                CHirBlockItem::Declaration(declaration) => Node::Decl(declaration),
+                                CHirBlockItem::Statement(statement) => Node::Stmt(statement),
+                            })
+                            .chain([Node::Expr(value, false)]),
+                    )
+                    .jumps
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        let joined_bounds = self.track_extents
+            && !single_final_return
+            && !uses.entry_labels
+            && matches!(
+                self.unit.types.get(return_type).unwrap().kind,
+                TypeKind::Pointer(_)
+            );
         let inline_scope = self
             .unit
             .symbols
@@ -2970,6 +3000,13 @@ impl<'a> Substitution<'a, '_> {
             c.replacements.insert(symbol, fresh);
         }
         let mut items = Vec::new();
+        if joined_bounds {
+            let slots = self.new_return_bounds(span)?;
+            // An invocation that falls off the body must not reuse captures
+            // left by a previous invocation. Unknown does not read its result.
+            items.extend(self.bind_return_bounds(slots, None, span)?);
+            c.return_bounds_slots = Some(slots);
+        }
         if !matches!(
             self.unit.types.get(return_type).unwrap().kind,
             TypeKind::Void
@@ -3017,30 +3054,15 @@ impl<'a> Substitution<'a, '_> {
         self.active.push(f.symbol);
         let body = self.stmt(body, &mut c)?;
         self.active.pop();
-        // A single final source return can export the fact proved at that
-        // return, including a local initialized by an earlier allocation.
-        // Earlier returns or source jumps cannot establish this boundary.
-        // The existing allocation-time captures belong to the caller; never
-        // replay the prefix, its calls or the returned pointer expression.
-        let return_extent = match f.body.unwrap() {
-            CHirStmt::Compound(items, _) => match items.split_last() {
-                Some((CHirBlockItem::Statement(CHirStmt::Return(Some(value), _)), prefix))
-                    if !inspect(
-                        prefix
-                            .iter()
-                            .map(|item| match item {
-                                CHirBlockItem::Declaration(declaration) => Node::Decl(declaration),
-                                CHirBlockItem::Statement(statement) => Node::Stmt(statement),
-                            })
-                            .chain([Node::Expr(value, false)]),
-                    )
-                    .jumps =>
-                {
-                    c.return_extent
-                }
-                _ => None,
-            },
-            _ => None,
+        // Preserve a direct proof for a single final return. Multiple returns
+        // use explicit path-selected captures, including unknown-arm flags;
+        // the last visited source return is never a function-wide promise.
+        let return_extent = if let Some(slots) = c.return_bounds_slots {
+            Some(self.returned_bounds(slots, span))
+        } else if single_final_return {
+            c.return_extent
+        } else {
+            None
         };
         items.push(CHirBlockItem::Statement(body));
         let end = self.alloc(CHirStmt::Null(span));

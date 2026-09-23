@@ -1,0 +1,13 @@
+2026-09-23, GNU11 AArch64, -O2, fixed offline evo-flight-lab:sealed.
+Source SHA256: fed8909563ebbb62f527542683ce9068c517fc381b505d912c5e002f4ac403ac
+RED on 19d8579: C-HIR returns 2 (missing returned allocation extent), no compile error.
+GREEN: both C-HIR and EvoIR return 0.
+GCC-14 14.2.0-19: native exit 0.
+Clang-19 19.1.7: native exit 0.
+EvoCC -> GCC-14 assembler/linker: native exit 0.
+Assembly SHA256: b1721b86774d64e08f4f56d95fbf7e85a6580ab650a4887c9893926989c85229
+Native executable SHA256: 0309996e0d5fcbe01b590a3eb3bc805100d96c254e7f7abeffb42be86c6ae5c2
+The first native attempt had no EvoCC assembly (unsupported -o); it is not PASS.
+Corrected invocation emits assembly on stdout before assembling; all three pass.
+68 compiler-query tests, 42 C-HIR tests, Clippy -D warnings, fmt: PASS.
+This is tailored validation, not a kernel or application campaign result.

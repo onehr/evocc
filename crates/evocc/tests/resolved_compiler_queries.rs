@@ -85,15 +85,21 @@ fn direct_inline_returns_preserve_allocation_extents_without_replaying_calls() {
     ] {
         assert_constant_program(&format!("{declarations}{body}"));
     }
-    for wrapper in [
-        "__attribute__((noinline)) void*indirect(size_t n){return allocate(n);}",
-        "static inline void*indirect(size_t n){if(n)return allocate(n);return allocate(7);}",
+    for (wrapper, extent) in [
+        (
+            "__attribute__((noinline)) void*indirect(size_t n){return allocate(n);}",
+            "~0ul",
+        ),
+        (
+            "static inline void*indirect(size_t n){if(n)return allocate(n);return allocate(7);}",
+            "11",
+        ),
     ] {
-        // No body-wide allocation promise is invented for an unexpanded call
-        // or multiple possible return paths. The runtime call still happens.
+        // An unexpanded call stays opaque. Expanded multiple returns now
+        // transport the executed arm's extent, not a body-wide size promise.
         assert_constant_program(&format!(
             "{declarations}{wrapper}int main(void){{volatile size_t n=11;void*p=indirect(n);\
-             return calls!=1||__builtin_dynamic_object_size(p,1)!=~0ul;}}"
+             return calls!=1||__builtin_dynamic_object_size(p,1)!={extent};}}"
         ));
     }
 }
@@ -122,6 +128,40 @@ fn inline_local_results_preserve_captured_extents_and_effects() {
              return calls!=1||__builtin_dynamic_object_size(p,1)!=~0ul;}}"
         ));
     }
+}
+
+#[test]
+fn inline_return_paths_transport_only_the_selected_allocation_extent() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/inline-allocation-return-paths.c"
+    ));
+    let declarations =
+        "typedef unsigned long size_t;char storage[128];char*volatile backing=storage;int calls;\
+        __attribute__((noinline,alloc_size(1))) void*allocate(size_t n){++calls;return backing;}";
+    for (wrapper, known, calls) in [
+        ("static inline void*f(int c){if(c)return allocate(11);return backing;}", 11, 1),
+        ("static inline void*f(int c){if(c)return 0;return allocate(7);}", u64::MAX, 1),
+        ("static inline void*f(int c){if(c){void*p=allocate(11);return p;}return backing;}", 11, 1),
+        ("static inline void*f(int c){if(c){void*volatile p=allocate(11);return p;}return backing;}", u64::MAX, 1),
+    ] {
+        // Each call needs its own capture; the unknown arm must overwrite a
+        // previous known result. Query operands themselves never execute.
+        let unknown = if wrapper.contains("return allocate(7)") { "7" } else { "~0ul" };
+        assert_constant_program(&format!(
+            "{declarations}{wrapper}int main(void){{volatile int c=1;void*a=f(c);\
+             c=0;void*b=f(c);if(__builtin_dynamic_object_size(a,1)!={known}ul||\
+             __builtin_dynamic_object_size(b,1)!={unknown}||calls!={calls})return 1;\
+             if(__builtin_dynamic_object_size(f(c++),1)!=~0ul||c)return 2;\
+             return __builtin_object_size(a,1)!=~0ul;}}"
+        ));
+    }
+    assert_constant_program(&format!(
+        "{declarations}struct S{{char a[4];char b[8];}};static struct S object;\
+         static inline char*f(int c){{if(c)return object.b+2;return allocate(7);}}\
+         int main(void){{volatile int c=1;char*p=f(c);c=0;char*q=f(c);\
+         return __builtin_dynamic_object_size(p,0)!=6||__builtin_dynamic_object_size(p,1)!=6||\
+         __builtin_dynamic_object_size(q,2)!=7||__builtin_dynamic_object_size(q,3)!=7||calls!=1;}}"
+    ));
 }
 
 #[test]
