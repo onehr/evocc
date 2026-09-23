@@ -164,6 +164,8 @@ python3 tools/bench.py llvm-test-suite jq lua sqlite --jobs 2
 python3 tools/bench.py kernel-full --jobs 2 --low-disk --allow-qemu-drift
 python3 tools/bench.py kernel-selftest --allow-qemu-drift
 python3 tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift
+python3 tools/bench.py kernel-kunit --allow-qemu-drift --dry-run
+python3 tools/bench.py kernel-kunit --status
 ```
 
 Preview an expensive all-lane campaign before executing it:
@@ -183,9 +185,19 @@ compiler without rebuilding it.
 target-C compilation, installation, link and boot. Selftest commands do not
 rebuild the kernel. These examples select the locked default configuration;
 expanded configurations need explicit matching receipt, source and runtime
-arguments (`--help` and the kernel ledger describe them). There is currently
-no standalone `kernel-kunit` bench adapter: expanded KUnit has a separate
-receipt and is not implicitly run by `kernel-selftest-all` or `all`.
+arguments (`--help` and the kernel ledger describe them). `kernel-kunit` reuses
+the boot/init workflow and pinned upstream parser for the separate expanded
+configuration: 1,504 built-in cases plus 31 actually loaded modules / 765 cases
+on **each** kernel. It is included in `all`, not in `kernel-selftest-all`.
+It does not rebuild Images or copy test disks. Supply matching audited artifacts
+with `--kunit-kernel-receipt`, `--kunit-reference-boot`,
+`--kunit-reference-runtime`, `--kunit-subject-runtime`, `--kunit-source-root`
+and `--kunit-builtin-initramfs`. The current incremental Image and retained
+module disk do not match the older full-composition receipt; preflight rejects
+that combination until T04's final composition/runtime rebuild. The adapter's
+tests and historical-log replay are **not** a fresh KUnit execution.
+`python3 tools/k1/kunit.py --check` performs that read-only preflight;
+`bench.py ... --status` shows retained receipts without revalidating artifacts.
 
 `kernel-selftest` uses one shared reference-compiled userspace payload on both
 kernels. `kernel-selftest-all` attempts upstream `TARGETS` and `TARGETS_HOTPLUG`

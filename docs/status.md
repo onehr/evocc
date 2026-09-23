@@ -53,6 +53,7 @@ KERNEL - configurations and runtime populations remain separate
     follow-up fortify (26 tests): 23 PASS / 3 FAIL / 0 SKIP; filtered; not a full KUnit rerun
     follow-up fortify (26 tests): 24 PASS / 2 FAIL / 0 SKIP; filtered; not a full KUnit rerun
     follow-up fortify (26 tests): 25 PASS / 1 FAIL / 0 SKIP; filtered; not a full KUnit rerun
+  Unified KUnit bench: NOT_RUN; executionComplete=False; run=unmeasured
 
 ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion percentage)
   Scalar semantic gate: 21000 random IR programs; 0 mismatches

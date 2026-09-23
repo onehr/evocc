@@ -1,6 +1,7 @@
 """The common entry point must report benchmark verdicts, not runner exits."""
 
 import importlib.util
+import copy
 from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
@@ -21,6 +22,90 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_kunit_has_a_distinct_adapter_and_receipt_without_building_a_compiler(self):
+        self.assertIn('kernel-kunit', bench.CATALOG)
+        args = bench.parser().parse_args(['kernel-kunit', '--allow-qemu-drift'])
+        command, env = bench.command('kernel-kunit', args, Path('/unused/compiler'))
+        self.assertTrue(any(part.endswith('/k1/kunit.py') for part in command))
+        self.assertNotIn('--evocc', command)
+        self.assertEqual(env['K1_ALLOW_QEMU_DRIFT'], '1')
+        self.assertEqual(bench.lane_receipt('kernel-kunit').name, 'kernel-kunit-bench-receipt.json')
+        self.assertIn('kernel-kunit', bench.select(['all']))
+
+    def test_kunit_metrics_do_not_promote_module_load_or_shared_failures(self):
+        builtin = {'complete': True, 'tests': 1504, 'outcomes': {'PASS': 1504},
+                   'boot': {'verdict': 'PASS', 'imageSha256': 'image'}}
+        modules = {'complete': True, 'tests': 765, 'outcomes': {'PASS': 765}, 'filesLoaded': 31,
+                   'boot': {'verdict': 'PASS', 'imageSha256': 'image'}}
+        data = {'status': 'PASS', 'executionComplete': True, 'kernelImageSha256': 'image',
+                'comparison': {'executionComplete': True}, 'moduleComparison': {'executionComplete': True},
+                'reference': {**builtin, 'modules': copy.deepcopy(modules)},
+                'subject': {**builtin, 'modules': copy.deepcopy(modules)}}
+        row = bench.metrics('kernel-kunit', data)
+        self.assertEqual((row['status'], row['passed'], row['total']), ('PASS', 2269, 2269))
+        for field, value in (('filesLoaded', 30), ('complete', False), ('tests', 764),
+                             ('boot', {'verdict': 'PASS', 'imageSha256': 'old'})):
+            changed = copy.deepcopy(data)
+            changed['subject']['modules'][field] = value
+            with self.subTest(field=field):
+                self.assertEqual(bench.metrics('kernel-kunit', changed)['status'], 'INCOMPLETE')
+        for outcome, expected in (('FAIL', 'FAIL'), ('SKIP', 'INCOMPLETE')):
+            changed = copy.deepcopy(data)
+            changed['reference']['modules']['outcomes'] = {'PASS': 764, outcome: 1}
+            self.assertEqual(bench.metrics('kernel-kunit', changed)['status'], expected)
+        data['moduleComparison']['executionComplete'] = False
+        self.assertEqual(bench.metrics('kernel-kunit', data)['status'], 'INCOMPLETE')
+        row = bench.metrics('kernel-kunit', {'status': 'RUNNING'})
+        self.assertEqual((row['status'], row['passed'], row['outcomes']),
+                         ('INCOMPLETE', 0, {'NOT_RUN': 2269}))
+
+    def test_kunit_passes_explicit_inputs_and_rejects_reference_reuse_or_selection(self):
+        values = ['source-root', 'kernel-receipt', 'reference-boot', 'reference-runtime',
+                  'subject-runtime', 'builtin-initramfs']
+        args = bench.parser().parse_args(['kernel-kunit', *[
+            part for option in values for part in ('--kunit-' + option, '/chosen/' + option)]])
+        command, _ = bench.command('kernel-kunit', args, Path('/unused'))
+        for option in values:
+            self.assertEqual(command[command.index('--' + option) + 1], '/chosen/' + option)
+        for extra in (['--reuse-selftest-reference', '/old'], ['--selftest-select', 'one'],
+                      ['--reuse-kernel-survey', '/old']):
+            with self.subTest(extra=extra):
+                args = bench.parser().parse_args(['kernel-kunit', *extra])
+                with self.assertRaises(ValueError):
+                    bench.command('kernel-kunit', args, Path('/unused'))
+
+    def test_kunit_status_and_dry_run_never_start_or_record_a_measurement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.object(bench, 'ROOT', root), patch.object(bench, 'execute') as execute, \
+                 patch.object(bench, 'save') as save, redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(bench.main(['kernel-kunit', '--status']), 0)
+                self.assertIn('NOT_RUN', output.getvalue())
+                self.assertEqual(bench.main(['kernel-kunit', '--dry-run']), 0)
+                execute.assert_not_called()
+                save.assert_not_called()
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_kunit_only_run_needs_no_compiler_and_does_not_read_an_old_receipt_as_new(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'tests/contracts').mkdir(parents=True)
+            calls = []
+            row = {'rung': 'K7', 'status': 'INCOMPLETE', 'passed': 1, 'total': 2, 'kind': 'cases'}
+            with patch.object(bench, 'ROOT', root), \
+                 patch.object(bench, 'execute', side_effect=lambda cmd, env: (calls.append(cmd) or 0, [])), \
+                 patch.object(bench, 'read_result', return_value=row), \
+                 patch.object(bench.subprocess, 'check_output', return_value='checkout'), \
+                 patch.object(bench.subprocess, 'run', return_value=SimpleNamespace(returncode=0)):
+                self.assertEqual(bench.main(['kernel-kunit']), 1)
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0][-1].endswith('/k1/kunit.py'))
+            self.assertIsNone(json.loads((root / bench.RECEIPT).read_text())['driver'])
+            path = root / 'tests/contracts/kernel-kunit-bench-receipt.json'
+            path.write_bytes(b'old result')
+            with self.assertRaisesRegex(ValueError, 'unchanged'):
+                bench.read_result('kernel-kunit', path.read_bytes(), None, receipt_path=path)
+
     def test_supplemental_kernel_survey_uses_its_existing_trees_and_bounded_storage(self):
         options = {option for action in bench.parser()._actions for option in action.option_strings}
         self.assertIn('--kernel-work-root', options)

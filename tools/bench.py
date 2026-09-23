@@ -47,6 +47,7 @@ CATALOG = {
     "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
     "kernel-selftest": ("K7", "kernel-selftest", "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate"),
     "kernel-selftest-all": ("K7", "kernel-selftest-all", "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate"),
+    "kernel-kunit": ("K7", "kernel-kunit", "expanded built-in and actually loaded module suites; paired results, skips and failures remain separate"),
 }
 
 
@@ -55,6 +56,7 @@ def parser():
     p.add_argument("benchmarks", nargs="*", help="names (space/comma separated), or all")
     p.add_argument("--list", action="store_true", help="list adapters and roadmap gaps")
     p.add_argument("--dry-run", action="store_true", help="print commands without building or measuring")
+    p.add_argument("--status", action="store_true", help="show retained selected receipts; no build, execution or fresh acceptance claim")
     p.add_argument("--evocc", type=Path, help="measure this existing binary; do not build another one")
     p.add_argument("--no-build", action="store_true", help="reuse the default release binary")
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
@@ -82,6 +84,10 @@ def parser():
     p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
     p.add_argument("--reuse-selftest-reference", type=Path,
                    help="reuse a completed unchanged GCC reference summary and payload; still execute every program on the current EvoCC kernel")
+    for option in ('source-root', 'kernel-receipt', 'reference-boot', 'reference-runtime',
+                   'subject-runtime', 'builtin-initramfs'):
+        p.add_argument('--kunit-' + option, type=Path,
+                       help='kernel-kunit: explicit ' + option.replace('-', ' ') + '; existing artifacts only')
     return p
 
 
@@ -110,6 +116,18 @@ def command(name, args, binary):
     env["PYTHONUNBUFFERED"] = "1"
     if args.resume_kernel_prepared and name != 'kernel-full':
         raise ValueError('--resume-kernel-prepared requires kernel-full')
+    if name == 'kernel-kunit':
+        if args.reuse_kernel_survey or args.reuse_selftest_reference or args.selftest_select:
+            raise ValueError('kernel-kunit requires a fresh complete pair, not a survey, reference reuse or selection')
+        if args.allow_qemu_drift:
+            env['K1_ALLOW_QEMU_DRIFT'] = '1'
+        cmd = [sys.executable, '-u', str(ROOT / 'tools/k1/kunit.py')]
+        for option in ('source-root', 'kernel-receipt', 'reference-boot', 'reference-runtime',
+                       'subject-runtime', 'builtin-initramfs'):
+            value = getattr(args, 'kunit_' + option.replace('-', '_'))
+            if value:
+                cmd += ['--' + option, str(value)]
+        return cmd, env
     if name in ("kernel-selftest", "kernel-selftest-all"):
         if args.reuse_kernel_survey:
             raise ValueError("kernel-selftest consumes the booted Image, not a compilation survey")
@@ -200,6 +218,8 @@ def command(name, args, binary):
 
 
 def lane_receipt(name, args=None):
+    if name == 'kernel-kunit':
+        return ROOT / 'tests/contracts/kernel-kunit-bench-receipt.json'
     if name == "kernel-selftest-all":
         return ROOT / "tests/contracts/kernel-selftest-full-receipt.json"
     if name == "kernel-selftest":
@@ -235,7 +255,49 @@ def metrics(name, data):
     """Normalize claim ceilings, without rewriting a lane's raw outcomes."""
     row = {"rung": CATALOG[name][0], "note": CATALOG[name][2], "outcomes": {},
            "refusals": {}, "baselineFailures": 0, "failingUnits": data.get("failingUnits", [])}
-    if name == "kernel-selftest-all":
+    if name == 'kernel-kunit':
+        contract = json.loads((ROOT / 'tests/contracts/kernel-expanded-kunit-contract.json').read_text())
+        total = contract['builtInCases'] + contract['moduleCases']
+        outcomes = Counter()
+        reference = {}
+        complete = data.get('executionComplete') is True
+        complete &= all(data.get(key, {}).get('executionComplete') is True
+                        for key in ('comparison', 'moduleComparison'))
+        for label in ('reference', 'subject'):
+            builtin = data.get(label, {})
+            modules = builtin.get('modules', {})
+            for part, expected in ((builtin, contract['builtInCases']), (modules, contract['moduleCases'])):
+                counts = part.get('outcomes', {})
+                if any(not isinstance(n, int) or n < 0 for n in counts.values()):
+                    raise ValueError('invalid KUnit outcome count')
+                complete &= (part.get('complete') is True and part.get('tests') == expected
+                             and sum(counts.values()) == expected and part.get('boot', {}).get('verdict') == 'PASS')
+                if label == 'subject':
+                    complete &= part.get('boot', {}).get('imageSha256') == data.get('kernelImageSha256')
+                    outcomes.update(counts)
+                else:
+                    reference.setdefault('outcomes', Counter()).update(counts)
+            complete &= modules.get('filesLoaded') == len(contract['suiteModules'])
+        if sum(outcomes.values()) > total:
+            raise ValueError('KUnit outcomes exceed the frozen population')
+        outcomes['NOT_RUN'] += total - sum(outcomes.values())
+        outcomes = +outcomes
+        combined = outcomes + Counter(reference.get('outcomes', {}))
+        status = ('INCOMPLETE' if not complete else 'FAIL' if combined.get('FAIL') or combined.get('ERROR')
+                  else 'PASS' if set(combined) == {'PASS'} else 'INCOMPLETE')
+        if data.get('status') == 'ERROR':
+            status = 'ERROR'
+        elif data.get('status') == 'FAIL' and complete:
+            status = 'FAIL'
+        elif data.get('status') not in ('PASS', 'FAIL', 'INCOMPLETE'):
+            status = 'INCOMPLETE'
+        row.update(total=total, passed=outcomes.get('PASS', 0), kind='cases', status=status,
+                   outcomes=dict(outcomes), reference=reference, executionComplete=complete,
+                   builtInCases=contract['builtInCases'], moduleCases=contract['moduleCases'],
+                   moduleFiles=len(contract['suiteModules']), kernelImageSha256=data.get('kernelImageSha256'))
+        if data.get('error'):
+            row['error'] = data['error']
+    elif name == "kernel-selftest-all":
         measured = data.get('execution', {}).get('subject', {}).get('summary', {})
         row.update(total=measured.get('programs', 0), passed=measured.get('outcomes', {}).get('PASS', 0),
                    kind='programs', status=data['status'], outcomes=measured.get('outcomes', {}),
@@ -384,17 +446,20 @@ def read_result(name, before, expected, survey_run=None, *, receipt_path=None,
     if name == "kernel":
         survey = ROOT / data["survey"]["runDirectory"] / "substitution.json"
         digest = json.loads(survey.read_text())["evoccSha256"]
-    if name in ('kernel-selftest', 'kernel-selftest-all'):
+    if name in ('kernel-selftest', 'kernel-selftest-all', 'kernel-kunit'):
         receipt_name = data.get('kernelReceiptPath', 'tests/contracts/kernel-full-receipt.json')
         kernel = ROOT / receipt_name
         if kernel_receipt_path is not None:
             selected = (ROOT / kernel_receipt_path).resolve()
             if not selected.is_relative_to(ROOT.resolve()) or kernel.resolve() != selected:
                 raise ValueError('selftest receipt differs from the selected kernel')
-        elif receipt_name not in ('tests/contracts/kernel-full-receipt.json', 'tests/contracts/kernel-kunit-receipt.json'):
+        elif receipt_name not in ('tests/contracts/kernel-full-receipt.json', 'tests/contracts/kernel-kunit-receipt.json',
+                                  'tests/contracts/kernel-expanded-kunit-full-receipt.json'):
             raise ValueError('unrecognized kernel acceptance receipt')
         if data['kernelReceiptSha256'] != sha256(kernel):
             raise ValueError('kernel selftests name a different complete kernel receipt')
+        if name == 'kernel-kunit' and data['contractSha256'] != sha256(ROOT / 'tests/contracts/kernel-expanded-kunit-contract.json'):
+            raise ValueError('KUnit receipt names a different population contract')
     elif digest != expected:
         raise ValueError("receipt names a different compiler binary")
     row = metrics(name, data)
@@ -447,15 +512,34 @@ def main(argv=None):
     if not selected:
         parser().print_help()
         return 2
+    if args.status:
+        for name in selected:
+            path = lane_receipt(name, args)
+            if not path.exists():
+                print(f'{name}: NOT_RUN (no receipt)')
+                continue
+            try:
+                data = json.loads(path.read_text())
+                row = metrics(name, data.get('latest', data))
+                print(f'{name}: retained {row["status"]} {row["passed"]}/{row["total"]}; '
+                      f'run={row.get("run")}; artifacts not revalidated')
+            except (OSError, KeyError, TypeError, ValueError) as error:
+                print(f'{name}: INVALID_RECEIPT {error}')
+                return 2
+        return 0
     if args.survey_only and (selected != ["kernel"] or args.reuse_kernel_survey):
         print("--survey-only requires kernel alone and cannot reuse a prior survey", file=sys.stderr)
         return 2
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/frontend")).resolve()
     binary = (args.evocc or target / "release/evocc").resolve()
-    needs_compiler = any(name not in ('kernel-selftest', 'kernel-selftest-all') and CATALOG[name][1] for name in selected)
+    needs_compiler = any(name not in ('kernel-selftest', 'kernel-selftest-all', 'kernel-kunit') and CATALOG[name][1] for name in selected)
     if args.dry_run:
-        for name in selected:
-            print(name + ": " + (shlex.join(command(name, args, binary)[0]) if CATALOG[name][1] else CATALOG[name][2]))
+        try:
+            for name in selected:
+                print(name + ": " + (shlex.join(command(name, args, binary)[0]) if CATALOG[name][1] else CATALOG[name][2]))
+        except (OSError, KeyError, TypeError, ValueError) as error:
+            print(error, file=sys.stderr)
+            return 2
         return 0
     (ROOT / ".build").mkdir(exist_ok=True)
     with (ROOT / ".build/bench.lock").open("a") as lock:
@@ -519,7 +603,8 @@ def main(argv=None):
                     if needs_compiler and sha256(binary) != driver:
                         raise ValueError("compiler changed during evaluation")
                     row = read_result(name, before, driver, args.survey_run, receipt_path=path,
-                                      kernel_receipt_path=args.selftest_kernel_receipt)
+                                      kernel_receipt_path=(args.kunit_kernel_receipt if name == 'kernel-kunit'
+                                                           else args.selftest_kernel_receipt))
                     if code:
                         row.update(status="ERROR", error=f"runner exit {code}", errorTail=tail)
                 except (OSError, KeyError, TypeError, ValueError) as error:

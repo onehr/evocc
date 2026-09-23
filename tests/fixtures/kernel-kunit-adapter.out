@@ -1,0 +1,36 @@
+2026-09-23: T02 adapter closure slice; T02/K14 remain OPEN for fresh execution.
+
+RED: nine declared unittest failures (adapter and catalog absent), zero import
+errors in the corrected RED invocation. An earlier test import put tools/k1
+before the standard library and shadowed bisect; that harness mistake was fixed
+before establishing RED. It is not a product failure or accepted test result.
+
+GREEN: tools/k1/kunit.py reuses boot.sh, selftest-init.c, composition/module
+preflight and the pinned frozen Linux KTAP parser. It never rebuilds/copies a
+kernel or test disk. Both built-in and module flights run on both Images;
+modules are loaded by the existing nonce-framed init protocol. Shared FAIL,
+SKIP, truncated plans, failed/empty loads, foreign nonce, duplicate boundaries,
+changed population, missing duplicate cases and stale payloads cannot become
+PASS. Post-plan extra KTAP results are rejected instead of ignored.
+
+Read-only replay of the four ORIGINAL retained serial captures:
+  expanded-reference-builtin-20260922: 1504 = 1438 PASS + 7 FAIL + 59 SKIP
+  expanded-subject-query-builtin-20260922: 1504 = 1432 PASS + 12 FAIL + 60 SKIP
+  expanded-reference-modules-20260922: 31 loaded; 765 PASS
+  expanded-subject-query-modules-20260922: 31 loaded; 765 PASS
+All counts match their existing receipts. Duplicate case multiplicity remains.
+No new kernel runtime numerator/receipt is created by this parser replay.
+
+tools/bench.py kernel-kunit --dry-run prints the existing-artifact command.
+tools/bench.py kernel-kunit --status reports NOT_RUN (no fresh bench receipt).
+tools/k1/kunit.py --check exits 2 before launching QEMU:
+  full composition module changed: arch/arm64/crypto/sha3-ce.ko
+This is the expected T04 precondition failure against the old full-composition
+receipt; the current incremental Image/module payload cannot inherit it.
+The older expanded result and accepted K6 receipts are unchanged.
+
+Validation: all 230 K1 and 215 ladder Python tests PASS; targeted Ruff,
+render-status --check and git diff --check PASS. tools/gate-changed.sh d5375e7
+correctly selects no Rust crates for this Python/contract-only change; it is
+not a new Rust workspace-gate claim. No QEMU process was launched and no
+Image, module, initramfs or disk was copied/modified in this slice.

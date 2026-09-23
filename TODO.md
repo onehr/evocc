@@ -386,11 +386,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   [Historical reductions and follow-ups][apps].
 
 - [ ] **T02 — Put expanded KUnit behind the common bench entry point** — `OPEN`, P1.
-  `tools/bench.py` has no standalone `kernel-kunit` adapter. Wrap the existing
-  composition/runtime workflow, retaining built-in/module populations, Image and
-  payload checks and nested verdicts. Close with adapter REDs, dry-run/status
-  behavior and real K14 execution; do not invent a second runner or let `all`
-  silently imply KUnit ran. [Current usage](README.md#evaluate-the-roadmap).
+  The `kernel-kunit` adapter now wraps the existing boot/init workflow and
+  pinned upstream parser, with separate 1,504 built-in / 31-module, 765-case
+  populations. Boundary, duplicate-case, stale-payload and verdict REDs pass;
+  historical raw-log replay reproduces both old full results exactly without
+  writing a fresh receipt. Dry-run/status are read-only; `all` explicitly includes
+  the lane. Live preflight rejects the outdated composition's changed
+  `arch/arm64/crypto/sha3-ce.ko`, rather than booting mismatched artifacts.
+  **Real K14 execution after T04 remains required** to close T02.
+  [Adapter record](tests/fixtures/kernel-kunit-adapter.out),
+  [current usage](README.md#evaluate-the-roadmap).
 
 - [ ] **T03 — Spec/implementation/acceptance consistency audit** — `OPEN`, P1.
   Map current clauses to positive/negative tests and original evidence. Start with

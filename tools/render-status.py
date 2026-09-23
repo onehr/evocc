@@ -32,6 +32,7 @@ RECEIPTS = (
     "kernel-bpf-full-receipt.json", "kernel-selftest-receipt.json",
     "kernel-selftest-full-receipt.json", "kernel-kunit-receipt.json",
     "kernel-expanded-kunit-receipt.json", "semantic-gate-contract.json",
+    "kernel-kunit-bench-receipt.json",
     "lean-p0-receipt.json", "lean-correspondence-receipt.json",
 )
 OUTCOMES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "INVALID_OUTPUT", "INCOMPLETE", "NOT_RUN")
@@ -256,6 +257,11 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         kunit = receipts.get("kernel-kunit-receipt.json", {})
         lines.append(f"  Earlier KUnit configuration: {kunit.get('status', 'NOT_RUN')}")
     lines.extend("  " + line for line in kunit_progress(kunit).splitlines())
+    unified = receipts.get('kernel-kunit-bench-receipt.json', {})
+    lines.append(f"  Unified KUnit bench: {unified.get('status', 'NOT_RUN')}; "
+                 f"executionComplete={unified.get('executionComplete', False)}; run={run_id(unified)}")
+    if unified:
+        lines.extend('    ' + line for line in kunit_progress(unified).splitlines())
 
     gates = receipts.get("semantic-gate-contract.json", {}).get("receipt", {})
     semantic, machine = gates.get("campaign", {}), gates.get("b1", {}).get("campaign", {})
