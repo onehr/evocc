@@ -1,155 +1,294 @@
 <p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
 <h1 align="center">EvoCC</h1>
-<p align="center">a C compiler whose optimizer keeps every equivalent form</p>
+<p align="center">a C compiler with checked equality-saturation optimization</p>
 
-EvoCC is a C compiler written from scratch in Rust. It has its own preprocessor, parser, IRs, optimizer, register allocator and emitter; the platform assembler and linker are the only outside tools. The optimizer is an [e-graph](https://egraphs-good.github.io/): a rewrite adds an equivalent form instead of replacing code, a cost model picks one form at the end, and every union carries a certificate that a separate program checks. The target is AArch64 (Linux and macOS), and the program it is being brought up on is the Linux 6.18.44 `arm64 virtconfig` kernel.
+EvoCC is an experimental C compiler written in Rust, targeting AArch64 Linux
+and macOS. It has its own preprocessor, parser, checked IR, SSA lowering,
+optimizer, register allocator and assembly emitter. Native builds use platform
+assemblers, linkers and runtime libraries. Linux 6.18.44 is the kernel target;
+the application ladder below measures progress beyond kernel boot.
+
+Its bounded scalar optimizer uses an [e-graph](https://egraphs-good.github.io/):
+rewrites retain equivalent alternatives, extraction chooses a form, and a
+separate checker verifies the rewrite certificate. This is not a proof of the
+whole compiler or a claim that every program is optimized through EqSat.
 
 ![EvoCC](docs/images/evocc-concept.png)
 
-The compiler is written by AI agents. What keeps that honest:
+The illustration describes the design, not a live completion counter.
+The authoritative language and machine profiles are
+[EvoIR 1.9.104](docs/evoir-spec.md) and [EvoMIR 0.34](docs/evomir-spec.md).
+GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
+documented profile decisions resolve supported disagreements, and remaining
+unsupported forms have explicit refusal boundaries.
 
-- **The specification decides.** Every language rule lives in [docs/evoir-spec.md](docs/evoir-spec.md) and [docs/evomir-spec.md](docs/evomir-spec.md). Before a rule is written, the behaviour is checked against GCC 14.2 and Clang 19.1 in a sealed container. Where the two disagree, the rule refuses the construct. Anything unspecified is refused with a numbered diagnostic.
-- **Tests first, receipts after.** Each change starts with a commit whose failing tests are listed in advance, and ends with a receipt in `tests/contracts/` holding the numbers. An agent that finds a gap in the specification stops and reports it.
-- **Numbers are produced, not typed.** Run milestones through `python3 tools/bench.py csmith cjson` (or `--list`, or `all`). One release compiler is measured across the selected lanes; failures, unavailable oracles and missing adapters remain visible. [docs/status.md](docs/status.md) is rendered from the receipts by `tools/render-status.py`; `--check` fails if it drifts.
+## Status — 2026-09-23
 
-## Where it is
+**Full kernel boot is working; full kernel testing and the complete application
+ladder are not yet closed.** The latest recorded application lanes contain
+**7 PASS, 2 PROFILE_CLEAN, 5 INCOMPLETE and 1 FAIL**.
 
-![Milestones](docs/images/evocc-milestones.png)
+This is an audit of existing measurements, not a new run of today's checkout.
+Most application results come from the September 19–20 campaign, TinyCC has a
+later lane replay, and September 23 targeted repairs are identified separately.
+Each receipt retains its compiler and input identity. See the generated
+[status dashboard](docs/status.md), [pinned roadmap](docs/roadmap.md),
+[application ledger](docs/notebook/benchmark-evaluation-20260915.md) and
+[kernel issue ledger](docs/notebook/kernel-selftest-gaps-20260914.md).
 
-The frozen front-end gate covers 2,798 kernel translation units. On September 13,
-the complete Linux 6.18.44 configuration linked and booted to init with all
-**2,799 target-C objects from EvoCC**, then shut down normally. That first
-build combined two recorded EvoCC revisions. A subsequent uniform rebuild
-with the tested spill allocator also boots, with no GCC target-C fallback;
-the [K6 receipt](tests/contracts/kernel-full-receipt.json) binds its exact Image
-and nonce. K7's historical selected upstream kselftests pass **125/125 subtests in nine
-programs**, on both the earlier Image and the GCC reference kernel, with no
-failures, skips or timeouts ([receipt](tests/contracts/kernel-selftest-receipt.json)).
-An expanded run of every upstream selftest collection is now available; its
-[separate receipt](tests/contracts/kernel-selftest-full-receipt.json) retains
-build gaps, unavailable hardware/configuration, skips and failures rather than
-extending the selected-subset PASS to all tests. The latest expanded attempt is
-**BLOCKED**: 935 declared programs/scripts are installed, but the EvoCC Image
-overflows its kernel stack while starting disk-backed userspace, before any
-test begins. Recompiling the previously stale objects with the existing allocator
-fix makes that exact startup test pass, without enlarging the kernel stack.
-The complete kernel is now uniformly rebuilt; full runtime retesting is pending.
-This does not erase the earlier boot/subset result or establish full K7. KUnit has not run. Current
-figures are in [docs/status.md](docs/status.md), with remaining
-constructs in the [benchmark review](docs/notebook/benchmark-evaluation.md).
-The illustration above is not a live counter. The evaluation ladder and pinned
-subjects are in [docs/roadmap.md](docs/roadmap.md).
+### Application benchmarks
+
+`PASS` is bounded by the recorded build and test selection. `PROFILE_CLEAN`
+means zero compiler failures after evidenced deferrals, inapplicability and
+unusable-oracle cases are separated; it does **not** mean all originals passed.
+TU counts are EvoCC translation units retained in the lane's tested build,
+not test counts. Mixed-link builds can still contain reference-built code.
+
+| Benchmark | Status | Recorded result | Scope or remaining issue |
+|---|---|---:|---|
+| GCC torture | PROFILE_CLEAN | 1,504/1,692 programs PASS | 0 compiler failures; 39 FP-deferred, 146 not applicable, 3 oracle-unusable |
+| c-testsuite | PROFILE_CLEAN | 219/220 programs PASS | 1 binary128 deferral |
+| Csmith | INCOMPLETE | 932/1,000 checksum agreements | All 1,000 compile; 0 mismatches; 68 unusable-oracle cases are not passes |
+| zlib | PASS | 19/19 TU | Recorded original program tests |
+| zstd | PASS | 44/44 TU | Recorded original tests; build adjustments remain in the receipt |
+| cJSON | PASS | 2/2 TU | Installed objects pass public API tests; not the complete private-helper suite |
+| Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
+| TinyCC | INCOMPLETE | 9/11 TU | Mixed build passes original tests; 2 deferred FP objects |
+| toybox | INCOMPLETE | 201/203 TU | 2 deferred FP objects; shared baseline `chattr` failure |
+| musl + libc-test | FAIL | 0/1,339 TU | Original `-frounding-math` requires unsupported strict fenv; subject tests not run |
+| PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
+| LLVM test-suite | INCOMPLETE | 1,014/1,735 programs PASS | Frozen account: 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; follow-ups below |
+| jq | INCOMPLETE | 68/69 TU | Mixed build passes `make check`; remaining `nexttoward` interface needs binary128 |
+| Lua | PASS | 34/34 TU | Matching official `all.lua`, without soft skips |
+| SQLite | PASS | 86/86 TU | Public Tcl `veryquick`: 329,803 assertions; not proprietary TH3 |
+
+The [benchmark receipt](tests/contracts/bench-receipt.json) and individual
+`ladder-*-receipt.json` files bind these results to their measured subjects.
+The historical LLVM 44-failure count is not a claim that all 44 remain broken:
+later original-program replays pass `compare-fp-1`, `compare-fp-3`,
+`compare-fp-4`, `pr50310` and `20020720-1`. On September 23, unchanged LARGE
+`lu` and `ludcmp` also pass in **59.2533 s / 48.8197 s** under the original
+60-second limit; `floyd-warshall` still times out. A new full LLVM campaign
+has not run, so these repairs do not increase its frozen numerator.
+
+### Linux boot, kselftest and KUnit
+
+All kernel rows use Linux 6.18.44 ARM64, but the configurations and Images
+differ. Target-C objects come from EvoCC; assembly, host build tools and
+userspace test dependencies are accounted for separately.
+
+| Scope | Verified result | Limit |
+|---|---|---|
+| K6 locked configuration | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
+| BPF/module configuration | **6,765/6,765 target-C**, complete link/boot PASS; 745 modules relinked, signed and installed | Latest composition: 1 repaired + 6,764 retained EvoCC objects, not a fresh one-compiler survey; not every driver loaded |
+| K7 selected kselftests | Both kernels: **9/9 programs, 125/125 subtests PASS**, no skip/failure | Not all kselftests or KUnit |
+| Full installed kselftest population | All **970 programs started on each kernel**; aggregate INCOMPLETE; counts below | Unbuilt collections and unavailable hardware remain; latest Image needs a full rerun |
+| Expanded built-in KUnit | Of 1,504 cases: EvoCC **1,432 PASS / 12 FAIL / 60 SKIP**; GCC **1,438 / 7 / 59** | Subsequent filtered repairs are not a new full result |
+| Expanded KUnit modules | Both kernels actually loaded all **31 test modules**, **765/765 cases PASS** | This retained 6,916-target-C composition differs from later filtered FORTIFY Images; its 809-module configuration disables module signing |
+
+The last full 970-program pair (September 22) records these **program-level**
+verdicts, not individual nested assertions:
+
+| Kernel | PASS | FAIL | SKIP | TIMEOUT | INVALID_OUTPUT | INCOMPLETE |
+|---|---:|---:|---:|---:|---:|---:|
+| GCC control | 532 | 121 | 302 | 11 | 2 | 2 |
+| EvoCC | 529 | 114 | 302 | 19 | 3 | 3 |
+
+Later BPF repairs changed the subject Image, so the dashboard marks that full
+run `STALE_IMAGE`. The run finished; this label does not mean tests are still
+running. A nested `sched_ext` failure was also found behind an outer PASS;
+the parser now checks inner summaries, without rewriting historical counts.
+
+Boot acceptance audits installed object hashes and generated-input stability,
+then starts the actual Image in QEMU, checks the ordered `/init` markers and
+per-run nonce, and requires normal poweroff. Kselftests compare the two kernels
+with matching test payloads in fresh per-program VMs. CPU/EL2 requirements and
+explicit timeout policies are recorded for both sides. KUnit executes in the
+kernel, with built-in and module results kept separate.
+
+Targeted repairs bring FORTIFY to **25/26 PASS** (failed assertions **96 → 2**),
+IOMMU to **218 PASS / 6 FAIL / 5 SKIP** on both kernels, and ALSA timer tests
+to **2/2 PASS** on both. Three BPF variants each pass the selected 10 groups /
+51 module/BTF subtests. Remaining work includes the nonliteral `strlen`
+constant-expression rule, two KVM timeouts, intermittent `sched_ext` and `ublk`
+failures, PM runtime timing, shared breakpoint failures, IOPF/config coverage
+and the full BPF program. Not every shared failure is diagnosed. A fresh
+complete 970-program pair and 1,504-case KUnit run after those repairs remain
+outstanding.
+
+Evidence: [locked K6](tests/contracts/kernel-full-receipt.json),
+[BPF/module K6](tests/contracts/kernel-bpf-full-receipt.json),
+[selected K7](tests/contracts/kernel-selftest-receipt.json),
+[full kselftest](tests/contracts/kernel-selftest-full-receipt.json),
+[expanded KUnit](tests/contracts/kernel-expanded-kunit-receipt.json).
+
+### Language and research boundaries
+
+Scalar `float`/`double` execution, both interpreters, AAPCS64 HFA/varargs,
+integer vectors, TLS, lifecycle registration and the approved GNU extensions
+are implemented with targeted tests. The scalar FP engine has **661,848**
+independent numerical checks across 32 operations. Strict dynamic fenv,
+executable binary128, floating complex/vectors and other explicitly refused
+forms remain outside the current executable profile. FP is not the only
+remaining application or kernel-test blocker.
+
+Other measured dialect boundaries, including tiny-vector external ABI,
+integer-complex division, pointer-to-VLA type queries and nonzero-depth return
+addresses, are itemized in the [remaining-semantics brief](docs/notebook/remaining-semantics-research-brief-20260921.md).
+
+Whole-kernel EqSat reproducibility/certificate acceptance (G2), the GCC `-O2`
+performance comparison (Q2), measured self-improvement (Q3), x86/release gates
+and a pinned Doom integration still have no accepted completion result.
+Scalar proof results and successful boot do not close those milestones.
 
 ## Try it
 
 ### Evaluate the roadmap
 
+Read receipts without launching builds or VMs:
+
 ```sh
+python3 tools/render-status.py --ascii
+python3 tools/render-status.py --check
 python3 tools/bench.py --list
-python3 tools/bench.py csmith cjson
-python3 tools/bench.py torture zlib toybox --jobs 4
-python3 tools/bench.py kernel-selftest --allow-qemu-drift
-python3 tools/bench.py kernel-selftest-all --jobs 2 --allow-qemu-drift
-python3 tools/bench.py all --programs 500 --jobs 4 --budget 20 --allow-qemu-drift
 ```
 
-`all` runs every available lane sequentially and lists missing adapters explicitly.
-It is a long native evaluation, not a unit-test shortcut. Csmith's default is
-500 programs **per campaign** (1,000 total); `--budget` limits toybox/musl
-bisection probes, not corpus size. `--allow-qemu-drift` explicitly acknowledges
-the installed QEMU digest for the kernel lane. `--dry-run` prints commands;
-`--evocc PATH` measures an existing compiler without rebuilding it.
-`kernel-selftest` alone reuses the measured K6 and reference Images without
-rebuilding the compiler or kernel; it builds one shared reference-compiled
-userspace test payload and checks actual test results on both kernels.
-`kernel-selftest-all` enumerates upstream `TARGETS` and `TARGETS_HOTPLUG` with
-`SKIP_TARGETS` empty, attempts each build, and runs installed programs/scripts
-on both unchanged Images. Each program gets a fresh VM disk snapshot; at most
-two VMs run concurrently, so a hung program cannot hide the later programs.
-Its counts are upstream **program-level outcomes**, not individual assertions;
-some programs legitimately skip or contain no applicable subtests. It needs
-additional userspace dependencies and can take hours. `--reuse-selftest-build`
-reuses the installed payload but still executes the tests again. Upstream
-timeouts are retained; programs explicitly disabling them get a documented
-300-second VM safety watchdog, plus cleanup and boot allowances. A timeout is
-not a pass.
+Run selected lanes through the common entry point:
 
-The script streams lane output, keeps only a small summary under `.evidence/bench/`,
+```sh
+python3 tools/bench.py csmith cjson
+python3 tools/bench.py torture zlib toybox --jobs 2 --budget 45
+python3 tools/bench.py llvm-test-suite jq lua sqlite --jobs 2
+python3 tools/bench.py kernel-full --jobs 2 --low-disk --allow-qemu-drift
+python3 tools/bench.py kernel-selftest --allow-qemu-drift
+python3 tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift
+```
+
+Preview an expensive all-lane campaign before executing it:
+
+```sh
+python3 tools/bench.py all --programs 500 --jobs 2 --budget 45 --allow-qemu-drift --dry-run
+```
+
+`all` runs available lanes sequentially. It is a long native evaluation, not a
+unit-test shortcut. Csmith's default is 500 programs **per campaign** (1,000
+total); `--budget` limits toybox/musl bisection probes, not corpus size.
+`--allow-qemu-drift` explicitly acknowledges the installed QEMU digest for
+kernel lanes. `--dry-run` prints commands; `--evocc PATH` measures an existing
+compiler without rebuilding it.
+
+`kernel` is the historical mixed-link ramp; use `kernel-full` for complete
+target-C compilation, installation, link and boot. Selftest commands do not
+rebuild the kernel. These examples select the locked default configuration;
+expanded configurations need explicit matching receipt, source and runtime
+arguments (`--help` and the kernel ledger describe them). There is currently
+no standalone `kernel-kunit` bench adapter: expanded KUnit has a separate
+receipt and is not implicitly run by `kernel-selftest-all` or `all`.
+
+`kernel-selftest` uses one shared reference-compiled userspace payload on both
+kernels. `kernel-selftest-all` attempts upstream `TARGETS` and `TARGETS_HOTPLUG`
+with `SKIP_TARGETS` empty, then runs installed programs/scripts in fresh VM
+disk snapshots, at most two concurrently. It requires the provisioned lab
+and additional dependencies, and can take hours. `--reuse-selftest-build`
+requires a matching installed payload and still executes tests again; omit
+it for initial preparation. Upstream timeouts are retained except for recorded
+per-program budgets applied equally to both kernels. Unlimited programs
+otherwise have a 300-second safety watchdog, plus cleanup/boot allowances.
+
+The script streams lane output, keeps a summary under `.evidence/bench/`,
 updates `tests/contracts/bench-receipt.json`, and renders `docs/status.md`.
-Single-lane runs retain older readings for other milestones, explicitly marked
-as previous measurements with their original compiler identity.
-Existing lane evidence is reused, not copied into another archive. Exit 0 means
-all selected gates pass; 1 means measured gaps or failures; 2 means a runner or
-evidence error. Do not run the legacy lane scripts concurrently against the same
-build directories. Partial mixed-link coverage is not a fully compiled milestone.
-A PASS is bounded by the displayed configuration and population; a smaller
-`--programs` experiment does not replace the full campaign's acceptance gate.
-Native lanes require the existing sealed flight-lab image and their pinned
-source/build inputs. Missing prerequisites are reported as errors, never skips.
+Single-lane runs retain older measurements with their original compiler
+identity; a dashboard refresh is not a fresh full run. Existing evidence is
+referenced, not copied into another archive. Exit 0 means selected gates are
+PASS or evidenced PROFILE_CLEAN, **not necessarily that every original passed**;
+1 means measured gaps/failures; 2 means a runner, usage or evidence error.
+
+Native lanes require the sealed flight-lab image and pinned source/build
+inputs. Do not run legacy lane scripts concurrently against the same build
+directories. Reuse existing trees and `--low-disk` for kernel work instead of
+making duplicate workspaces. Partial mixed-link coverage or reduced
+`--programs` experiments do not close a full milestone.
 
 ### Compile a program
 
+Reuse the benchmark's target directory rather than creating a second build tree:
+
 ```sh
-cargo build --release
+CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
 ```
 
+Save this as `demo.c`:
+
 ```c
-// demo.c
 struct point { int x, y; };
-static inline int dot(struct point a, struct point b) { return a.x * b.x + a.y * b.y; }
+static inline int dot(struct point a, struct point b) {
+    return a.x * b.x + a.y * b.y;
+}
 int main(void) {
     struct point p = { .x = 3, .y = 4 };
-    int n = ({ int t = dot(p, p); t + 1; });          /* statement expression: 26 */
+    int n = ({ int t = dot(p, p); t + 1; });
     return __builtin_choose_expr(__builtin_constant_p(1), n / 2, 0);
 }
 ```
 
-The two interpreters are separate implementations and must agree; the native binary must agree with both:
+The independent interpreters should both print `13`; the final command emits
+Linux AArch64 assembly, not a linked executable:
 
 ```sh
-$ target/release/evocc --interpret-c-hir demo.c      # checked high-level IR
-13
-$ target/release/evocc --interpret-evoir demo.c      # after lowering to SSA
-13
-$ target/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
+target/frontend/release/evocc --interpret-c-hir demo.c
+target/frontend/release/evocc --interpret-evoir demo.c
+target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
 ```
 
-A rewrite removes the multiply but keeps the overflow obligation the program carried, because an optimization may remove work, not a fact the program must satisfy:
-
-```sh
-$ echo 'int f(int x) { return x * 1; }' > opt.c
-$ target/release/evocc --emit=evoir -Oeq-scalar opt.c | tail -4
-    %v2 = signed_mul_defined %v0, %v1
-    ub.assume.signed_overflow %v2
-    ret %v0
-}
-```
-
-`evo-proofcheck before.evoir after.evoir proof.evp2` re-checks the certificate for such a rewrite. Other flags: `-E`, `--parse-only`, `--emit=c-hir`, `--emit=evoir`, and `--survey`, which reports every diagnostic in a file instead of the first.
+Other flags include `-E`, `--parse-only`, `--emit=c-hir`, `--emit=evoir`,
+`-Oeq-scalar` and `--survey`. The standalone
+`target/frontend/release/evo-proofcheck before.evoir after.evoir proof.evp2` checks a scalar rewrite
+certificate; an optimization may remove work without discarding the original
+undefined-behavior obligations.
 
 ## How it works
 
-- C lowers to EvoIR, a block-argument SSA in which memory and observable effects are explicit `mem` and `world` tokens, undefined behaviour is an `ub.assume` obligation, and pointers carry provenance. The e-graph only sees programs whose dangerous parts are already explicit.
-- Rewrites merge e-classes instead of replacing nodes. Pass order stops mattering; the cost model chooses at extraction from everything the rules proved equal.
-- Each union records why it was allowed. `evo-proofcheck` replays the record against the before and after programs and shares no code with the optimizer.
-- The rewrite rules themselves are machine-checked. Every rule of the scalar registry and every row of the known-bits analysis it relies on is proved in Lean 4 against one model of the EvoIR scalar semantics, for every width the profile admits; an audit lists the axioms each proof uses and writes a receipt, and the Rust implementations are compared with the Lean model on 1.3 million vectors. This checks the rules, not the whole compiler: the front end, the backend and the memory model are not proved.
-- EvoMIR's register allocation is checked by an independent verifier. A randomized gate runs 21,000 generated programs as source IR, optimized IR, machine IR and native binary on both targets.
-- Kernel bring-up starts with reference-built inputs and targeted object substitutions. The complete lane requires every target-C object from EvoCC, checks that kbuild retained them through the full link, and boots the resulting Image with a fresh nonce. The first complete boot is recorded above; selftests are a separate milestone.
+- C lowers to EvoIR, block-argument SSA with explicit `mem` and `world`
+  tokens, `ub.assume` obligations and pointer provenance. Ordinary cross-block
+  values travel through explicit edge arguments.
+- Within admitted scalar regions, rewrites merge e-classes instead of replacing
+  nodes. Extraction chooses among alternatives found within explicit budgets;
+  this does not eliminate every phase-ordering or optimization limitation.
+- `evo-proofcheck` independently replays certificates against the before/after
+  modules. Floating operations and other excluded forms do not acquire an
+  optimization license merely because they parse or execute.
+- All **55 scalar rule theorems** are machine-checked in Lean 4. The rule and
+  known-bits model is compared with Rust implementations on **1,325,045 vectors**.
+  The [proof audit](tests/contracts/lean-p0-receipt.json) records assumptions;
+  the front end, backend and memory model are not proved by these results.
+- EvoMIR allocation has an independent verifier. Recorded scalar and MIR gates
+  each cover **21,000 generated IR programs** with zero mismatches; native C
+  corpora separately pass **384/384 on Linux and 384/384 on Darwin**. These are
+  different populations, not 21,000 native cross-platform C programs.
+- Kernel bring-up uses original Kbuild inputs, then requires every target-C
+  object from EvoCC, retained through generated-input convergence and linking.
+  Actual boot and runtime selftests are separate acceptance steps.
 
-## Layout
+## Layout and development
 
-```
+```text
 crates/evocc            driver                      crates/evocc-egraph      e-graph core
 crates/evocc-cpp        preprocessor                crates/evocc-eqopt       rewrites, certificates
 crates/evocc-lex        lexer                       crates/evocc-proof       certificate format
-crates/evocc-parser     C11 + GNU parser            crates/evocc-proofcheck  evo-proofcheck
-lean/                   Lean 4 proofs of the rules  tools/lean               proof audit, vectors
+crates/evocc-parser     C11 + GNU parser            crates/evocc-proofcheck  proof checker
 crates/evocc-types      types and layout            crates/evocc-policy      cost and schedule policies
 crates/evocc-chir       checked IR, interpreter     crates/evocc-randgate    randomized semantic gate
-crates/evocc-lower      C-HIR -> EvoIR              crates/evocc-mir         EvoMIR, allocation, emission
-crates/evocc-evoir      EvoIR, validator, interp    tools/k1/                kernel mixed-link lane
-docs/                   specifications, roadmap, status, figures
-tests/contracts/        frozen corpora and receipts
+crates/evocc-lower      C-HIR -> EvoIR              crates/evocc-mir         allocation and emission
+crates/evocc-evoir      EvoIR, validator, interp    crates/evocc-memory      object and provenance model
+lean/                  Lean 4 proofs               tools/lean/             proof audit, vectors
+tools/bench.py         benchmark entry point       tools/k1/               kernel build/runtime lanes
+docs/                  specifications and status   tests/contracts/        corpora and receipts
 ```
 
-Every landing passes the workspace tests, `clippy -D warnings`, `rustfmt`, Ruff, both layout corpora against the sealed oracles, and an isolated offline replay; `tools/gate-changed.sh` runs the same gate for only the crates a change touched. Figures come from `tools/render-figures.py`.
+Changes follow RED → shared implementation → targeted tests → affected original
+program replay → gate → receipt. `tools/gate-changed.sh <base-commit>` selects
+changed crates and their dependents for Cargo tests, Clippy and fmt; relevant
+Python/Ruff, layout corpora and isolated offline checks run separately. A passing
+changed gate is not a new application or kernel measurement. Regenerate the
+dashboard with `python3 tools/render-status.py`; `--check` detects receipt drift.
+Figures come from `tools/render-figures.py` and are not live status indicators.

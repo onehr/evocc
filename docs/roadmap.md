@@ -1967,12 +1967,25 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 Latest application refresh: [2026-09-15 measurements and issue inventory](notebook/benchmark-evaluation-20260915.md).
 The September 20 refresh includes implemented protected ELF visibility, builtin
 side effects, integer vectors, VLA scope/bounds, SIMD asm and scalar f32/f64.
-The current unresolved application frontier includes three LLVM large-data
-timeouts and a vector-overflow applicability decision, alongside deferred
-strict fenv, binary128, floating complex/vector execution and baseline-suite
-failures. See the dated ledger for original-program versus targeted results.
+The September 23 original-program follow-ups pass LLVM LARGE `lu` and `ludcmp`
+under their unchanged 60-second limit; `floyd-warshall` still times out. A
+vector-overflow applicability decision, deferred strict fenv, binary128,
+floating complex/vector execution and baseline-suite failures remain open.
+The last complete LLVM measurement remains 1,014/1,735; targeted repairs do
+not recompute that numerator. See the dated ledger for measured identities.
 Kernel configurations and runtime tests retain their own separate receipts;
 this application run does not rerun them.
+
+**September 23 status audit:** all fifteen application lanes have measurements:
+7 PASS, 2 PROFILE_CLEAN, 5 INCOMPLETE and 1 FAIL. PROFILE_CLEAN is not all-originals
+PASS. Full kernel boot is verified for both the 2,799-target-C locked configuration
+and the 6,765-target-C BPF/module composition. The complete 970-program kselftest
+pair and 1,504-case built-in KUnit pair have executed but have not passed as a
+whole; both kernels' 31 KUnit test modules pass 765/765 cases. Later filtered
+FORTIFY repairs reach 25/26 PASS, not a new full KUnit result. The
+[generated dashboard](status.md) and [README snapshot](../README.md#status--2026-09-23)
+separate current receipts, targeted follow-ups and open gates. The dated kernel
+journal below retains older failures; it is not the current status table.
 
 The kernel is the launch target, but "the kernel boots" is a single bit that
 arrives late. The ladder below gives Q1 (correct on real code) a reading at
@@ -2033,10 +2046,17 @@ Rules that hold for every rung:
 | E11 | Lua | 5.5.1 (2026-07-24, lua.org/download.html) | ~35 TU | official test suite | FP |
 | E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
 | K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
-| K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): incremental composition of 2,723 prior + 76 repaired EvoCC objects; zero reference target-C fallback, not a fresh single-compiler survey |
-| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T100557Z`; KUnit NOT_RUN; expanded collection coverage is measured separately below |
+| K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): subsequent uniform EvoCC rebuild `read-only-storage-20260913`, zero reference target-C fallback; larger configurations are separate |
+| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T144437Z`; full kselftest and expanded KUnit are separately measured and remain incomplete |
 
-The current [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-13)
+### Historical kernel acceptance journal
+
+For the current configuration-specific results use [status.md](status.md) and
+the [K7 issue ledger](notebook/kernel-selftest-gaps-20260914.md). The following
+September 13–20 entries preserve the earlier sequence, including resolved
+BLOCKED/NOT_RUN states; they do not supersede the September 23 checkpoint.
+
+The [kernel boot blocker tracker](notebook/benchmark-closure.md#kernel-boot-blocker-tracker-updated-2026-09-14)
 separates compile refusals, link/relocation failures, runtime failures, build
 provenance and the K6/K7 measurement gaps. Its statuses are distinct from the
 receipt-backed counts in `docs/status.md`: assembled units and locally verified
