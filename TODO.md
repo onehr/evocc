@@ -238,12 +238,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   passes both interpreters and all five native controls for bitfields/352.
   This is diagnosis, not a terminating original-program checksum or added PASS.
 
-- [ ] **B04 — Resolve remaining torture/HVA reference limitations** — `OPEN`, P2.
-  Torture retains three oracle-unusable originals, and GCC's HVA-varargs
-  self-control failure remains reference evidence, not ABI acceptance. Diagnose
-  those exact controls and record supported conclusions and limits. Close their
-  accounting without calling a broken reference PASS; tiny-vector ABI is L06.
-  [Torture receipt](tests/contracts/ladder-e0-receipt.json), [ABI ledger][apps].
+- [x] **B04 — Resolve remaining torture/HVA reference limitations** — `DONE`, P2, 2026-09-23.
+  The [separate-TU HVA reduction](tests/fixtures/hva-varargs-reference.c) isolates
+  GCC O2's missing register-save-area loads; stack arguments work, as do GCC O0
+  and Clang O0/O2. Eight usable EvoCC/native ABI pairs and the unchanged original
+  pass; the GCC O2 self-control and callee pairs remain unusable. All three
+  original torture refusals are reproduced on fixed Clang 19: missing isinf
+  aliases, decimal floating types/literals and GNU floating shuffle. GCC's
+  originals pass O0/O2. This closes **reference-limit accounting**, not those
+  programs as PASS; no source, flag, historical numerator or ABI changed.
+  [Measured record](tests/fixtures/hva-varargs-reference.out); tiny-vector ABI is L06.
 
 - [ ] **B05 — Replace TinyCC's final two reference-built FP objects** — `OPEN`, P2.
   Current coverage is 9/11; the static-initializer E3101 is already repaired and

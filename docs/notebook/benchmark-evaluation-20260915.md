@@ -11,6 +11,15 @@ retained. SQLite passed **329,803 assertions**, Mbed TLS **148/148 CTest**, and
 zstd **44/44 objects**. LLVM, TinyCC, musl and deferred language boundaries
 still prevent overall closure; their small reductions are the next repair batch.
 
+September 23 reference-limit closure (B04): the separate-TU
+[`hva-varargs-reference.c`](../../tests/fixtures/hva-varargs-reference.c) isolates
+GCC 14 O2's omitted HVA register-save-area reads while stack arguments work.
+Eight usable EvoCC/reference ABI pairs and the unchanged original varargs
+fixture pass; the GCC O2 self-control and callee pairs remain oracle-unusable.
+The three original torture reference refusals also reproduce with their exact
+source hashes. [Measurements and limits](../../tests/fixtures/hva-varargs-reference.out)
+close their accounting only; no full-campaign result or PASS numerator changes.
+
 Kernel testing continues independently. The new EL2/GICv3 KVM reference run
 starts all 37 original programs: **24 PASS / 4 SKIP / 2 FAIL / 6 TIMEOUT /
 1 INCOMPLETE**, with source-bound configuration, memory and timing diagnoses

@@ -1,0 +1,66 @@
+2026-09-23 — B04 reference-limit accounting, not a new campaign.
+Fixed linux/arm64, network none, evo-flight-lab:sealed:
+  image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  GCC 14.2.0-19; Debian Clang 19.1.7; GNU11; O0/O2; 10 s per execution.
+  EvoCC ae75daf20819c4f27fd041c0164d4a085dbc2008af019c0e1c0266275946c142
+
+HVA reduction: hva-varargs-reference.c, worker compiled without HVA_DRIVER;
+driver compiled separately with -DHVA_DRIVER (-DHVA_TRACE for printed values).
+The aggregate contains two 8-byte integer vectors. One/four arguments exercise
+the SIMD save area; five crosses to the stack; eight named vector arguments
+force the whole anonymous pair onto the stack. Expected: 11 / 44 / 55 / 11.
+
+                            one   four  five  stacked   exit
+GCC O0                       11     44    55       11      0
+GCC O2                        0      0    11       11      1
+Clang O0                     11     44    55       11      0
+Clang O2                     11     44    55       11      0
+GCC O2 -fno-strict-aliasing   11     44    55       11      0
+
+The GCC O2 worker itself warns that its compiler-generated ha.3 may be
+uninitialized. In read_pairs, .L7 is the register-argument path: it increments
+the iteration and adds x4, initialized to zero, without loading an argument.
+The stack path does load offsets 0/14 and produces the expected result.
+Disabling tree-sra, tree-dce or tree-fre separately does not fix the result;
+disabling strict aliasing does. This isolates the failing reference path and
+an optimization dependency, not a proved GCC internal pass/bug-number diagnosis.
+The C source does not alias incompatible objects: the caller and va_arg use
+the identical aggregate type. No workaround flag changes the accepted O2 lane.
+
+EvoCC/EvoCC plus all four reference callers/EvoCC callee and EvoCC caller/
+GCC O0, Clang O0/O2 callee: 8/8 PASS. EvoCC caller/GCC O2 callee: exit 1,
+matching the broken GCC self-control; ORACLE_UNUSABLE, never PASS.
+Original integer-vector-varargs-{worker,driver}.c replays unchanged:
+same eight usable pairs PASS; EvoCC caller/GCC O2 callee and GCC O2 self-control
+both exit 2. Existing vector_variadic_values_keep_the_simd_argument_class Rust
+regression passes both interpreters and assembly generation. No ABI change.
+Sub-8-byte vector ABI disagreement remains the separate L06 task.
+
+Three original torture sources, hashes checked against the disposition table:
+  pr39228: GCC O0/O2 compile/run 0; Clang O0/O2 compile 1, unknown builtins
+    __builtin_isinff and __builtin_isinfl. EvoCC retains E2001 at __builtin_isinff.
+  pr80692: GCC O0/O2 compile/run 0; Clang O0/O2 compile 1, unsupported _Decimal64
+    and DD suffix. EvoCC retains E0112 at the decimal type declaration.
+  pr85331: GCC O0/O2 compile/run 0; Clang O0/O2 compile 1, unknown builtin
+    __builtin_shuffle and consequent int/vector type error. EvoCC retains
+    E3050 for the floating vector. Integer shuffle support is not FP shuffle.
+These are three distinct missing reference-language controls. Their original
+sources/flags and oracle-unusable classification remain unchanged, not PASS.
+
+Reproduce native controls in the sealed image:
+  CC -std=gnu11 -O{0,2} -c hva-varargs-reference.c -o worker.o
+  CC -std=gnu11 -O{0,2} -DHVA_DRIVER -DHVA_TRACE -c hva-varargs-reference.c -o driver.o
+  gcc-14 worker.o driver.o -o probe; timeout 10 ./probe
+Substitute exactly one object with EvoCC --target=aarch64-unknown-linux-gnu
+--emit=asm output, assembled by GCC. Clang reference assembly uses Clang's
+assembler because GNU as does not accept its .addrsig directive; no filtering.
+Original torture: CC -std=gnu11 -O{0,2} ORIGINAL.c -lm -o probe; timeout 10 ./probe.
+
+SHA-256:
+fixture 79f455d7a67c1c572f82928b6026898b538078bf985cbbffc5dfd799cb375b49
+GCC O2 worker assembly edaede53a2edc6cea6c40082e3526f15e6e3d8b210f4f7ed3235a6e69d3a9a81
+EvoCC worker assembly cdd15f151c050469491caffb2f79fd9fe0fb1989fe57916ca17bb6e2805ae160
+pr39228 db812d882eb3636213f482b4cfcfc660bf24b2340ae40e0074de70f1b4c13e76
+pr80692 1bf37020e7b5154a181f116a0fba8422b8a2880d3882a2ade2b154a8833ebcd6
+pr85331 35b9bec3b10824bb2b18389b075645c262c5a9d66099b8746fa4f1d8d3618309
+Small generated artifacts: .build/floating-targeted/hva-reference-20260923/.

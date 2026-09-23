@@ -3846,7 +3846,8 @@
       "reason": "GCC-14 runs the original at O0/O2, but Clang-19 rejects __builtin_isinff/__builtin_isinfl; there is no usable dual-oracle execution control. The subject's floating builtin refusal is retained, not counted as PASS.",
       "sourceSha256": "db812d882eb3636213f482b4cfcfc660bf24b2340ae40e0074de70f1b4c13e76",
       "evidence": [
-        "tests/fixtures/torture-floating-frontier.out"
+        "tests/fixtures/torture-floating-frontier.out",
+        "tests/fixtures/hva-varargs-reference.out"
       ]
     },
     "torture:pr80692": {
@@ -3854,7 +3855,8 @@
       "reason": "GCC-14 runs the original at O0/O2, but Clang-19 rejects _Decimal64 and DD literals; there is no usable dual-oracle execution control. Neither decimal floating support nor subject correctness is claimed.",
       "sourceSha256": "1bf37020e7b5154a181f116a0fba8422b8a2880d3882a2ade2b154a8833ebcd6",
       "evidence": [
-        "tests/fixtures/torture-floating-frontier.out"
+        "tests/fixtures/torture-floating-frontier.out",
+        "tests/fixtures/hva-varargs-reference.out"
       ]
     },
     "torture:pr85331": {
@@ -3862,7 +3864,8 @@
       "reason": "GCC-14 runs the original at O0/O2, but Clang-19 rejects __builtin_shuffle on its floating vectors. The admitted GCC-only integer shuffle does not establish a dual-oracle floating control, and the subject remains refused.",
       "sourceSha256": "35b9bec3b10824bb2b18389b075645c262c5a9d66099b8746fa4f1d8d3618309",
       "evidence": [
-        "tests/fixtures/torture-floating-frontier.out"
+        "tests/fixtures/torture-floating-frontier.out",
+        "tests/fixtures/hva-varargs-reference.out"
       ]
     },
     "torture:20010122-1": {
