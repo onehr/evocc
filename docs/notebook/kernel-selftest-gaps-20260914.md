@@ -53,6 +53,11 @@ remaining failures all request IOPF: the frozen configuration has no
 `CONFIG_IOMMU_IOPF`, so `iopf_queue_alloc()` is a NULL-returning stub, and
 `mock_dev_enable_iopf()` returns `-ENODEV`. A separately built configuration
 is still required; neither running Image is modified to conceal that gap.
+The existing 1.8 MiB candidate directory now resolves the hidden IOPF symbol
+through `CONFIG_ARM_SMMU_V3_SVA=y` using the original Kconfig, not by editing
+generated headers. The configuration-only receipt is
+`.build/floating-targeted/selftest-iopf-config-review-20260923.json`;
+this is a build prerequisite, not a runtime PASS.
 
 Two other shared failures now have exact non-compiler causes. ALSA's
 `snd_async_del_handler` missing-TIMER case is repaired below.
