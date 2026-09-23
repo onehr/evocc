@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
 use evocc_evoir::{parse_section9_module, render_module, validate_module};
-use evocc_proof::render_evp1;
+use evocc_proof::{parse_evp1, render_evp1, sha256_hex, EvpCertificate};
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
@@ -30,6 +30,41 @@ impl ProofFiles {
             proof: directory.join("proof.evp"),
             directory,
         }
+    }
+
+    fn reject_forged_output(&self, certificate: &EvpCertificate, forged: &str) {
+        // A hostile producer controls both after.evo and its claimed digest.
+        // Keep the candidate well typed and canonical: malformed text, stale
+        // checksums or whitespace alone must not satisfy this semantic test.
+        let module = parse_section9_module(forged.as_bytes()).unwrap();
+        validate_module(&module).unwrap();
+        let forged = render_module(&module);
+        let digest = sha256_hex(forged.as_bytes());
+        assert_ne!(
+            digest, certificate.output_digest,
+            "mutation disappeared in the codec"
+        );
+        let mut certificate = certificate.clone();
+        certificate.output_digest = digest;
+        fs::write(&self.after, &forged).unwrap();
+        fs::write(&self.proof, render_evp1(&certificate)).unwrap();
+
+        // This deliberately passes a producer-only integrity check. Acceptance
+        // must instead fail when independently rebuilding the authorized IR.
+        let written = parse_evp1(&fs::read(&self.proof).unwrap()).unwrap();
+        assert_eq!(
+            written.output_digest,
+            sha256_hex(&fs::read(&self.after).unwrap())
+        );
+        let output = Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+            .args([&self.before, &self.after, &self.proof])
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(3),
+            "forged semantic output: {forged}\n{output:?}"
+        );
     }
 }
 
@@ -84,11 +119,7 @@ fn scalar_proof_cannot_drop_or_relocate_a_patchable_function_entry() {
     ] {
         let forged = after.replace(field, replacement);
         validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        let mut certificate = outcome.certificate.clone();
-        certificate.output_digest = evocc_proof::sha256_hex(forged.as_bytes());
-        fs::write(&files.after, forged).unwrap();
-        fs::write(&files.proof, render_evp1(&certificate)).unwrap();
-        assert!(!replay().status.success(), "{replacement}");
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -104,15 +135,17 @@ fn scalar_proof_cannot_reclassify_a_homogeneous_floating_argument() {
     fs::write(&files.before, render_module(&before)).unwrap();
     fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
     let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    assert!(Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+        .args([&files.before, &files.after, &files.proof])
+        .output()
+        .unwrap()
+        .status
+        .success());
     for replacement in ["hfa=2xf32", "hva=1xvec<2, bits<32>>"] {
         let forged = after.replace("hfa=1xf64", replacement);
         validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
-            .args([&files.before, &files.after, &files.proof])
-            .output()
-            .unwrap();
-        assert!(!output.status.success(), "{replacement}");
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -149,8 +182,7 @@ fn scalar_proof_cannot_change_floating_bits_operations_or_predicates() {
     ] {
         assert_ne!(forged, after);
         validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(!replay().status.success());
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -180,8 +212,7 @@ fn scalar_proof_cannot_drop_or_change_hfa_transport_alignment() {
         let forged = after.replace(&mark, &format!("byval(32, 32, hfa=4xf64{replacement})"));
         assert_ne!(forged, after);
         validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(!replay().status.success(), "{original} -> {replacement}");
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -211,8 +242,7 @@ fn scalar_proof_cannot_change_simd_assembly_constraints_or_clobbers() {
     ] {
         assert_ne!(forged, after);
         validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(!replay().status.success());
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -241,18 +271,28 @@ fn scalar_proof_cannot_replace_an_aes_round_with_its_inverse() {
     assert_ne!(forged, after);
     let module = parse_section9_module(forged.as_bytes()).unwrap();
     validate_module(&module).unwrap();
-    fs::write(&files.after, forged).unwrap();
-    assert!(
-        !replay().status.success(),
-        "a scalar proof changed AES semantics"
-    );
+    files.reject_forged_output(&outcome.certificate, &forged);
 }
 
 #[test]
 fn scalar_proofs_preserve_load_instance_and_tls_metadata() {
-    let source=format!("global @local origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\n\ntls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n\nfunc @startup(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    ret %v0, %v1\n}}\n\n{MODULE}");
-    let source=source.replace("tls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n\n", "")
-        + "\ntls @local model=global_dynamic\n\ninit @startup priority=201\nfini @startup priority=202\n";
+    let startup = concat!(
+        "func @startup(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n^entry(%v0: mem<all>, %v1: world):\n    ret %v0, %v1\n}\n\n",
+    );
+    let with_access = MODULE.replace(
+        "    (%v7, %v8) = copy %v3, %v4,",
+        "    (%v10, %v11, %v12) = tls_addr @local, %v3, %v4\n    (%v7, %v8) = copy %v11, %v12,",
+    );
+    let source = format!(
+        "global @local origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\n\
+         global @other origin=1 kind=file visibility=external size=4 align=4 bytes=09000000 initialized=1111\n\n\
+         {startup}{}{with_access}\n\
+         tls @local model=global_dynamic\ntls @other model=global_dynamic\n\n\
+         init @startup priority=201\ninit @second priority=201\nfini @startup priority=202\n",
+        startup.replace("@startup", "@second"),
+    );
     let before = parse_section9_module(source.as_bytes()).unwrap();
     let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
     assert!(outcome.report.optimized_values > 0);
@@ -274,18 +314,22 @@ fn scalar_proofs_preserve_load_instance_and_tls_metadata() {
         String::from_utf8_lossy(&result.stderr)
     );
     for forged in [
-        after.replace("priority=201", "priority=203"),
+        after.replacen("priority=201", "priority=203", 1),
+        after.replace("priority=202", "priority=204"),
         after.replace("init @startup priority=201\n", ""),
-        after.replace("model=global_dynamic", "model=initial_exec"),
-        after.replace("tls @local model=global_dynamic\n\n", ""),
+        after.replace("init @second", "fini @second"),
+        after.replace("fini @startup", "fini @second"),
+        after.replace(
+            "init @startup priority=201\ninit @second priority=201",
+            "init @second priority=201\ninit @startup priority=201",
+        ),
+        after.replacen("model=global_dynamic", "model=initial_exec", 1),
+        after.replace("tls @other model=global_dynamic\n", ""),
+        after.replace("tls_addr @local", "tls_addr @other"),
     ] {
         assert_ne!(forged, after);
         parse_section9_module(forged.as_bytes()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(
-            !replay().status.success(),
-            "load-instance metadata escaped independent replay"
-        );
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -317,11 +361,7 @@ fn scalar_proofs_cannot_change_atomic_order_or_drop_an_atomic_access() {
             .replace("atomic=true", "atomic=false"),
     ] {
         parse_section9_module(forged.as_bytes()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(
-            !replay().status.success(),
-            "atomic semantics escaped the checker"
-        );
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -363,11 +403,7 @@ fn vector_lane_selection_is_preserved_outside_scalar_rewrites() {
         .unwrap();
     extract.arguments[1] = replacement;
     validate_module(&forged).unwrap();
-    fs::write(&files.after, render_module(&forged)).unwrap();
-    assert!(
-        !replay().status.success(),
-        "a scalar proof changed the vector lane"
-    );
+    files.reject_forged_output(&outcome.certificate, &render_module(&forged));
     let after = render_module(&outcome.module);
     for forged in [
         after.replace(", hva=3xvec<2, bits<32>>", ""),
@@ -375,11 +411,7 @@ fn vector_lane_selection_is_preserved_outside_scalar_rewrites() {
     ] {
         let module = parse_section9_module(forged.as_bytes()).unwrap();
         validate_module(&module).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(
-            !replay().status.success(),
-            "a scalar proof changed the external vector ABI"
-        );
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -419,11 +451,7 @@ fn scalar_proofs_cannot_change_visibility_of_any_symbol_record() {
             + "\n";
         assert_ne!(forged, after, "{prefix}");
         parse_section9_module(forged.as_bytes()).unwrap();
-        fs::write(&files.after, forged).unwrap();
-        assert!(
-            !replay().status.success(),
-            "changed {prefix} visibility escaped the checker"
-        );
+        files.reject_forged_output(&outcome.certificate, &forged);
     }
 }
 
@@ -504,12 +532,10 @@ fn volatile_copy_access_kind_survives_independent_reconstruction() {
     );
     // Both modules are well typed and volatile, but changing the event from
     // a read to a write is not authorized by a scalar equality proof.
-    fs::write(
-        &files.after,
-        render_module(&outcome.module).replace("copy.volatile.read ", "copy.volatile.write "),
-    )
-    .unwrap();
-    assert!(!replay().status.success());
+    files.reject_forged_output(
+        &outcome.certificate,
+        &render_module(&outcome.module).replace("copy.volatile.read ", "copy.volatile.write "),
+    );
 }
 
 #[test]
@@ -557,9 +583,5 @@ fn computed_edges_survive_renumbering_and_cannot_change_under_a_scalar_proof() {
     // Same type and local definition, but not the object's original address.
     // General SSA validation cannot establish the C variable correspondence.
     validate_module(&forged).unwrap();
-    fs::write(&files.after, render_module(&forged)).unwrap();
-    assert!(
-        !replay().status.success(),
-        "scalar proof must not authorize changed edge bindings"
-    );
+    files.reject_forged_output(&outcome.certificate, &render_module(&forged));
 }

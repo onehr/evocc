@@ -1,0 +1,42 @@
+2026-09-23 — T03c independent metadata/proof replay audit.
+
+Scope: EvoIR 1.9.105 Sections 2/3/4/5/7/8/9/11 and EvoMIR 0.35's
+corresponding placement, ABI and symbol contracts, as exercised by the existing
+copy_is_opaque integration test. This is not an audit of every spec clause.
+
+The previous mutations generally retained the original output digest; most
+did not explicitly establish that a producer-controlled replacement digest
+also fails. The checker already reconstructs from the original module rather
+than trusting that digest. No production checker defect was found here.
+
+Each candidate now parses, validates and renders canonically. Its changed
+output digest must differ from the valid baseline, and the written certificate
+is reparsed to prove its claimed digest matches the candidate bytes. Thus a
+producer-only hash check ACCEPTS the control, while the real independent
+checker must return semantic-rejection exit 3, not parse-error 2 or a crash.
+The input module, rewrite proof, registry and budget remain unchanged.
+
+37 independently rejected changes:
+  function patch placement and section                  6
+  HFA versus HVA/member format                          2
+  floating NaN payload, operation and conversion guard   3
+  HFA natural transport alignment                       2
+  SIMD assembly constraint and clobber                   2
+  AES round versus inverse                              1
+  lifecycle priority/root/phase/function/tie order, TLS  9
+  atomic order and replacement with ordinary store       2
+  vector lane and public HVA ABI                         3
+  visibility of global/extern/declare/alias/function      5
+  volatile representation-read versus write             1
+  same-typed indirect-edge storage address                1
+
+All 13 Rust tests pass, including 14 positive replay controls (the alignment
+test has two baselines). Lifecycle coverage includes equal-priority ordering;
+TLS coverage includes changing an actual tls_addr target, not only its model.
+The initial expanded fixture had an extra blank line in its global table;
+that fixture-format error was corrected, not reported as a compiler defect.
+
+Changed gate against 235c031: 44 PASS, 0 FAIL, 0 ignored in 8 groups;
+Clippy --all-targets -D warnings and workspace fmt PASS. Temporary test files
+are removed by the existing RAII helper. No VM, source copy or campaign ran.
+T03's wider audit and R01 whole-kernel certificates remain open.

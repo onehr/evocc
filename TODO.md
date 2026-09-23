@@ -528,6 +528,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     and four [IR relocation/address tests](crates/evocc-evoir/tests/relocations_and_addresses.rs)
     pass. This is clause consistency, not a new implementation or full T03 closure.
 
+  - [x] **T03c — Rehash semantic proof-mutation candidates** — 2026-09-23.
+    The existing [independent replay tests](crates/evocc-proofcheck/tests/copy_is_opaque.rs)
+    now submit well-typed canonical changes with matching producer-authored
+    output digests. All 37 mutations still fail with semantic exit 3, including
+    same-priority lifecycle order, TLS address identity, FP/ABI, atomic order,
+    visibility and indirect-edge bindings. Fourteen valid replay controls and
+    the 44-test affected gate pass. This strengthens acceptance; no checker
+    implementation defect or whole-kernel certificate closure is claimed.
+    [Scope and field matrix](tests/fixtures/proof-semantic-metadata.out).
+
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   New scheduler code-size repairs are not installed, and existing kernel receipts
   include audited incremental compositions. Before final acceptance, freeze the
