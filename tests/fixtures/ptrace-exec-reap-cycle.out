@@ -1,0 +1,51 @@
+2026-09-24 — causal diagnosis of the frozen vmaccess attach deadlock.
+
+Small C: ptrace-exec-reap-cycle.c. The child creates a PTRACE_TRACEME sibling,
+joins it, and enters exec. The parent enters PTRACE_ATTACH without first
+reaping that sibling. A second parent thread observes both kernel stacks,
+then performs exactly that waitpid. Both retained kernels show:
+  tracer stack contains ptrace_attach;
+  tracee stack contains begin_new_exec (EvoCC also shows de_thread);
+  sibling waitpid reports its successful exit;
+  the blocked PTRACE_ATTACH then returns 0, not EAGAIN;
+  the stop/detach/kill/reap cleanup completes with no children left.
+Both bounded reductions PASS and shut down. This is an active causal
+intervention, not merely “both kernels time out” or a timing-only retry.
+
+Frozen kernel/ptrace.c:457 takes cred_guard_mutex with mutex_intr, returning
+ERESTARTNOINTR on interruption. Frozen fs/exec.c takes that mutex before
+begin_new_exec/de_thread; de_thread waits for traced siblings to be reaped.
+The original single tracer cannot reap while blocked trying to attach.
+This identifies the frozen kernel/test contract mismatch independently of
+EvoCC: the test expects a nonblocking EAGAIN which this kernel path lacks.
+Updating that source/API/test baseline is separate authority, not a compiler
+repair, timeout extension, or permission to fabricate a PASS.
+
+Fresh unchanged ptrace:vmaccess on both Images: 1 PASS / 1 FAIL (the original
+30-second attach-subtest timeout), program FAIL. Both 45-second wrapper and
+nonce-bound boot/shutdown remain unchanged and complete. No original source,
+assertion, userspace binary, kernel or config was edited. All snapshot disk
+hashes are unchanged. K11d closes causal classification only; K11/K13 remain.
+
+Probe compiles with sealed GCC-14 -static -pthread -O2 -Wall -Wextra -Werror,
+zero compilation errors; uses a ten-second safety alarm and fifteen-second
+outer bound. The ordinary runtime init is reused. Changed gate b10a00d selects
+no Rust crate; diff checks pass. All diagnostic children and VMs are reaped.
+Artifacts total 2.3 MiB; no Image or test disk copies.
+
+SHA-256:
+probe 2d5a7941b3f72ae8eb351689cb1c1eaa186cace23b55d143af47315ac7b116b6
+ptrace.c fb526a024bcc0d5b20e2dd42bc8424b6525ec50c3bbfeaf48976ffd0bff71f15
+exec.c a405cc78d797a513516db2a7ce24ea90cf034bc8ef23f08a6e9756f2d0b4d9e1
+original vmaccess.c 8bc9143fbeecfca26af3ab6ef7b8fb65cb54318d5b13da4371ba2ff717496d17
+probe initramfs 0ac8408e91a7779037497bc2fdddecb635b894c02dcfc707aa3f7a25a9ce77eb
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+GCC probe serial 10bd2e9d3ae5c4ed465876764e74ef8ed0a7e6885b0d44ad254cce666a29dcb6
+EvoCC probe serial 8c9215f2b15c077087717438a0bc2d6d0fa7046e74577a304f02fcbd06551f89
+GCC original serial 4863b57e6cf45eeae11a58c7b85548da745100e15aa6d3bf327e2dffef74963f
+EvoCC original serial 2e65fde9052f77eb556dcf7097c85a5f3b35234f3659dbae6dbff7b79573b191
+
+Captures: .build/floating-targeted/ptrace-exec-reap-20260924/
+probe.json 6b7ce13a6c208d61ccf9bd3d3154d8fc51fe2ab243fe8d1d136cc988870af62d
+original.json fab4f607bd642a0bc15a8f413be9cf75130c55f70f0c11ee9685ffecc6d56e12

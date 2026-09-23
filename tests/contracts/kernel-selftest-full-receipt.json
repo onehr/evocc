@@ -31510,6 +31510,19 @@
       "record": "tests/fixtures/selftest-constructor-order.out",
       "pairedRecord": ".build/floating-targeted/selftest-constructor-order-20260924/original.json",
       "pairedRecordSha256": "1991640c41b1d8a3a14875678bc55401a249bf6d3acc3a410269189fbdfb4fe9"
+    },
+    {
+      "id": "K11d",
+      "date": "2026-09-24",
+      "status": "CLASSIFIED",
+      "program": "ptrace:vmaccess",
+      "originalOutcomeBoth": "FAIL: one PASS and one 30-second attach timeout",
+      "reason": "The frozen kernel attach waits for cred_guard_mutex held by exec, which waits for the ptraced sibling's reap by that same blocked tracer",
+      "causalControl": "Both blocked stacks are observed; another tracer thread reaps the sibling and releases attach; all children then reaped",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/ptrace-exec-reap-cycle.out",
+      "pairedRecord": ".build/floating-targeted/ptrace-exec-reap-20260924/original.json",
+      "pairedRecordSha256": "fab4f607bd642a0bc15a8f413be9cf75130c55f70f0c11ee9685ffecc6d56e12"
     }
   ],
   "regressions": []

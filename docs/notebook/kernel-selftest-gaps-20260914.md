@@ -1614,6 +1614,16 @@ selection, not new failures or passes. Summary SHA-256:
   The original FAIL is retained rather than turning the proposed patch into
   an unmeasured PASS.
 
+The wait-cycle attribution is now directly measured (2026-09-24, TODO K11d),
+not just source reasoning. The [bounded C reduction](../../tests/fixtures/ptrace-exec-reap-cycle.c)
+captures `ptrace_attach` in the blocked tracer and `begin_new_exec` in the
+tracee on both retained kernels. A second tracer thread reaps the ptraced
+sibling; that releases the blocked attach, which returns 0 rather than EAGAIN.
+Stop/detach/kill/reap checks confirm no child remains. Fresh unchanged-original
+flights retain **1 PASS / 1 attach-timeout FAIL** on each kernel, both with
+normal shutdown. This closes causal classification, not test PASS or permission
+to modify the frozen kernel API. [Exact stacks and identities](../../tests/fixtures/ptrace-exec-reap-cycle.out).
+
 Five additional unmodified BPF/tracing command records now emit and assemble
 with release `77faa6b3479296b0560e55f611254585146f5b0d443dcd72c3d6c82e48f27d8a`:
 `kernel/trace/trace.o`, `kernel/events/core.o`, `kernel/trace/bpf_trace.o`,

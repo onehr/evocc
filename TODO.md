@@ -288,6 +288,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     resource provisioning, not new compiler or full-run credit.
     [Paired record](tests/fixtures/selftest-hugetlb-reservation.out).
 
+  - [x] **K11d — Demonstrate the frozen ptrace/exec wait cycle**, 2026-09-24.
+    The [small C case](tests/fixtures/ptrace-exec-reap-cycle.c) captures the
+    tracer inside `ptrace_attach` and tracee inside `begin_new_exec` on both
+    kernels. A second tracer thread's sibling reap releases the blocked attach;
+    stop/detach/reap controls pass without leaving children. The unchanged
+    original still has one PASS and one 30-second attach FAIL on each kernel.
+    This closes **frozen kernel/test mismatch classification**, not an original
+    PASS; changing that baseline is not an EvoCC compiler fix.
+    [Source-bound record](tests/fixtures/ptrace-exec-reap-cycle.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   it is not built coverage. Review `kexec`, `prctl`, `thermal/intel/power_floor`
