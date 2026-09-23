@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-23**, initially audited against `a83d803`; current clauses are
+Updated **2026-09-24**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.105** and EvoMIR **0.36**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -622,6 +622,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     build uncached. The real pinned harness and targeted chattr replay validate
     the path; historical receipts are explicitly invalidated for full coverage.
     [Regression tests](tools/ladder/tests/test_toybox.py), [record](tests/fixtures/toybox-filesystem-flags.out).
+
+  - [x] **T05d — Select Rust tests when their external fixtures change**, 2026-09-24.
+    Eleven RED assertions exposed missed `include!`/`include_str!`/`include_bytes!`
+    dependencies outside crates, including a concealed failing test. Selection
+    now follows literal/nested inputs and reverse dependencies; unresolved
+    expressions fail closed by selecting their owner. Deleted/dirty inputs,
+    raw literals, cycles and the actual compared-value CLI source are covered by
+    [12 offline gate tests](tools/ladder/tests/test_gate_changed.py).
+    All 248 ladder tests, Ruff, shell syntax and the real 7-test CLI suite pass.
+    Stand-in Cargo checks prove selection/error propagation, not a workspace
+    PASS; the final health gate remains T05.
 
 ## Later roadmap gates — not substitutes for runtime closure
 

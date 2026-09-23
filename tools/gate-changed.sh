@@ -9,14 +9,71 @@
 # Prints the crate set it chose, then runs: cargo test -p <set>, cargo clippy
 # --all-targets for the same set, and cargo fmt --check for the workspace.
 # A workspace Cargo.toml/Cargo.lock change runs every crate. Other changes
-# outside crates (tools/, docs/, tests/contracts/) run no cargo tests; run the
-# relevant Python tests or renderer check by hand.
+# outside crates also select consumers of Rust include!/include_str!/include_bytes!
+# inputs, including nested includes. Unrelated external changes run no cargo
+# tests; run the relevant Python tests or renderer check by hand. A nonliteral
+# include cannot be resolved here, so external changes conservatively select its
+# owner instead of silently skipping a possible dependency.
 set -eu
 BASE="${1:?base commit required}"; shift || true
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 changed="$(git diff --name-only "$BASE"...HEAD; git status --short | awk '{print $2}')"
-crates="$(printf '%s\n' "$changed" | sed -n 's|^crates/\([^/]*\)/.*|\1|p' | sort -u)"
+crates="$(python3 - "$changed" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+root = Path.cwd()
+paths = {Path(path) for path in sys.argv[1].splitlines() if path}
+owners = {path.parts[1] for path in paths
+          if len(path.parts) > 2 and path.parts[0] == "crates"}
+external = {path.resolve() for path in paths if path.parts[0] != "crates"}
+invocation = re.compile(r'\b(include_str|include_bytes|include)\s*!\s*([({\[])\s*')
+literal = re.compile(r'r(?P<hashes>#{0,255})"(?P<raw>.*?)"(?P=hashes)|"(?:[^"\\]|\\.)*"', re.S)
+closing = {"(": ")", "{": "}", "[": "]"}
+
+def uses_changed_input(source, visited):
+    source = source.resolve()
+    if source in visited:
+        return False
+    visited.add(source)
+    try:
+        contents = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        # A missing/unreadable nested Rust include must not conceal dependencies.
+        return True
+    for call in invocation.finditer(contents):
+        value = literal.match(contents, call.end())
+        if value is None:
+            return True
+        tail = contents[value.end():].lstrip()
+        if tail.startswith(","):
+            tail = tail[1:].lstrip()
+        if not tail.startswith(closing[call[2]]):
+            return True
+        try:
+            name = value["raw"] if value["raw"] is not None else json.loads(value[0])
+            dependency = (source.parent / name).resolve()
+        except (ValueError, OSError):
+            # Unhandled Rust escapes/expressions over-select, never under-select.
+            return True
+        if dependency in external:
+            return True
+        if call[1] == "include" and uses_changed_input(dependency, visited):
+            return True
+    return False
+
+if external:
+    for crate in sorted((root / "crates").iterdir()):
+        if crate.is_dir() and crate.name not in owners:
+            visited = set()
+            if any(uses_changed_input(source, visited) for source in crate.rglob("*.rs")):
+                owners.add(crate.name)
+print("\n".join(sorted(owners)))
+PY
+)"
 if printf '%s\n' "$changed" | grep -qE '^(Cargo\.(toml|lock))$'; then crates="$(ls crates)"; echo "workspace manifest changed: testing every crate"; fi
 if [ -z "$crates" ]; then echo "no crate changed since $BASE; nothing to test"; exit 0; fi
 # reverse dependencies inside the workspace, via cargo metadata
