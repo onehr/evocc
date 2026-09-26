@@ -1,0 +1,69 @@
+2026-09-26 — K01b: userspace concurrent instruction-publication discrepancy.
+This is diagnostic infrastructure compiled by the fixed GCC/Clang oracles,
+NOT an EvoCC language-conformance test or an unchanged sched_ext acceptance.
+
+One AArch64 MOV/RET function lives in a memfd. Three controls acknowledge each
+generation before modification: RWX, RW/RX aliases, aliases plus reader ISB.
+Five continuous controls patch the aligned MOV while readers call it; the
+writer publishes data, enables code, disables code, obtains a writer-preferring
+rwlock grace period, then retires data. Readers hold the matching read lock.
+All use __builtin___clear_cache and registered PRIVATE_EXPEDITED_SYNC_CORE;
+query/registration/syscall failures are never treated as successful execution.
+Four pinned readers, 512 rounds, 20-second program bound; no RCU/static key,
+BPF, CPU hotplug, kernel module, production patch, freed object or GDB.
+
+Eight modes, same payload and Images in every flight:
+                              GCC kernel         EvoCC kernel
+MT TCG, Cortex-A72             3 PASS / 5 FAIL    3 PASS / 5 FAIL
+HVF, host                     8 PASS / 0 FAIL    8 PASS / 0 FAIL
+single-thread TCG, Cortex-A72  8 PASS / 0 FAIL    8 PASS / 0 FAIL
+All six boots and orderly shutdowns PASS. All programs finish 512 rounds.
+The sealed ARM64 container also passes all eight native program controls.
+
+MT-TCG missing-publication counts (GCC kernel / EvoCC kernel):
+GCC single mapping continuous       7871872 / 9283072
+GCC aliases continuous              8882240 / 9003200
+GCC aliases plus ISB                11780608 / 8373504
+Clang single mapping continuous     6563072 / 10322368
+Clang aliases continuous            8503040 / 8556800
+Every initial bad-event snapshot reports returned 1 while the instruction
+word reads 52800000 (mov w0, #0), inside the read-side critical section.
+The three handshake controls each execute exactly 131072 calls without misses.
+Every continuous control performs millions of calls; HVF/ST have zero misses.
+
+This establishes a shared concurrent-code publication discrepancy outside
+EvoCC-generated test code, kernel static keys and RCU. Aliasing alone, GCC-only
+probe generation, and absence of a reader ISB do not explain it. It does NOT
+yet identify the faulty emulator instruction/cache path or establish that a
+specific fix resolves the original sched_ext NULL fault. Keep K01/K01b OPEN.
+Do not silently switch the full runner to HVF (its hotplug path already fails),
+relax its budget, suppress its assertions, or call an incomplete run PASS.
+
+Build each with GCC 14.2.0-19 / Clang 19.1.7:
+  COMPILER -static -O2 -Wall -Wextra -Werror -pthread
+    tests/fixtures/instruction-publish-alias.c -o smc-single
+Executable-name symlinks select alias, continuous and isb; see main().
+The fixed sealed image is 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+Native preparation uses four CPUs, 1 GiB, network none. Flights reuse the
+64 MiB snapshot scratch disk; payload is 2380288 bytes with two ELF files and
+symlink aliases, not eight binary copies. No full runtime disk or source clone.
+ST's separate contract is diagnostic-only; locked acceptance files unchanged.
+The prior signed-module disassembly also places __rcu_read_lock at offset a0
+before its patchable branch at b0; it was not simply hoisted outside that call.
+
+Linux contract: frozen include/uapi/linux/membarrier.h:89-116.
+https://cdn.kernel.org/doc/html/latest/scheduler/membarrier.html
+QEMU invalidation design (background, not proof of this specific bug):
+https://www.qemu.org/docs/master/devel/multi-thread-tcg.html
+
+Captures/scripts: .build/floating-targeted/instruction-publish-20260926/
+SHA-256:
+source bd87c5bd14d767847fb9ff094a2ad25a1f0ee79f1f7bbc761b6ae4d70c52285b
+GCC ELF 54b1c7e29ac6f1c90df4200016afeca6901c32be87524ccbc47851e8e0915ad6
+Clang ELF 3867435c8770262cce592c50ef0e541b2896588420a1409264b4110ebdfa0379
+payload ba24b405897a6385bdadbdf6a4d561eb8f992a15c787a82942c396f0dbb3f38a
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+QEMU 11.1.1 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+result.json 4d9f77919e187a5bc76ef0eff82ab0b01dc052e581e8ec74f3349a37e6cab2b4
+result-tcg-single.json 934ac3e23804094ae746576a7573a2b904addd62d373b1f31dff5bd08821da7e

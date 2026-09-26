@@ -103,6 +103,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     All 219 K1 Python regressions and targeted Ruff/diff checks pass. This closes the verdict subcase,
     **not** the kernel NULL fault or the fresh paired run.
 
+  - [ ] **K01b — Resolve the concurrent instruction-publication runtime discrepancy** — `OPEN`, P1.
+    The [userspace C reduction](tests/fixtures/instruction-publish-alias.c)
+    removes kernel static keys, RCU, hotplug and EvoCC-generated test code.
+    GCC/Clang continuous-patching controls fail on both kernels under MT-TCG,
+    including single mappings and explicit reader ISB; each first bad snapshot
+    reads `mov w0, #0` but records return value 1. Handshake controls pass.
+    The identical payload passes all eight modes on HVF and diagnostic ST-TCG
+    on both kernels. This is a concrete shared runtime boundary, not yet a
+    localized QEMU fix or proof of the original sched_ext cause. Diagnose the
+    publication/invalidation path, then replay the unchanged original. Do not
+    silently change the locked lane or waive the failure. [Full matrix](tests/fixtures/instruction-publish-alias.out).
+
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;
   the reference completes. Profile the exact fixed-CPU/EL2 lane, isolate the hot

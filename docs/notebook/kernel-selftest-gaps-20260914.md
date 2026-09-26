@@ -6,6 +6,23 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Concurrent instruction publication outside the kernel probe — 2026-09-26
+
+K01b now reproduces a narrower shared discrepancy in an ordinary userspace
+program built by GCC14 and Clang19, without kernel static keys, RCU or modules.
+An aligned AArch64 MOV/RET is published with cache maintenance and registered
+Linux sync-core barriers; a writer-preferring rwlock provides the data-retirement
+grace period. Both kernels on MT-TCG pass the three handshake controls but fail
+all five continuous controls, including single mappings and reader ISB.
+Initial bad snapshots read `mov w0, #0` while the call returned `1`.
+
+The same eight modes all pass on both HVF and diagnostic single-thread TCG;
+all six flights boot and shut down normally. This removes several confounders,
+but does not identify a specific QEMU fix or close the original sched_ext fault.
+The tiny 2.3 MiB payload and existing scratch disk add no full runtime copy;
+acceptance lanes, original verdicts and budgets are unchanged.
+[Source, protocol, counts and hashes](../../tests/fixtures/instruction-publish-alias.out).
+
 ### Single-pass automatic representation zeroing — 2026-09-26
 
 K02d removes redundant ordinary value stores after whole-object automatic

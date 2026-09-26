@@ -31499,6 +31499,24 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K01b",
+      "date": "2026-09-26",
+      "status": "OPEN_RUNTIME_PUBLICATION",
+      "program": "sched_ext:runner",
+      "changesFullRunTotals": false,
+      "compilerRepair": false,
+      "reason": "GCC/Clang userspace continuous code publication reproduces the shared MT-TCG discrepancy without kernel static keys, RCU or hotplug; exact runtime cause and original-test linkage still require diagnosis",
+      "mtTcgEachKernel": "3 handshake PASS, 5 continuous FAIL",
+      "hvfEachKernel": "8 PASS",
+      "diagnosticSingleThreadTcgEachKernel": "8 PASS",
+      "observation": "Every first bad snapshot reads instruction 52800000 (mov w0, #0) while the call returned 1",
+      "record": "tests/fixtures/instruction-publish-alias.out",
+      "pairedRecord": ".build/floating-targeted/instruction-publish-20260926/result.json",
+      "pairedRecordSha256": "4d9f77919e187a5bc76ef0eff82ab0b01dc052e581e8ec74f3349a37e6cab2b4",
+      "singleThreadRecord": ".build/floating-targeted/instruction-publish-20260926/result-tcg-single.json",
+      "singleThreadRecordSha256": "934ac3e23804094ae746576a7573a2b904addd62d373b1f31dff5bd08821da7e"
+    },
+    {
       "id": "K11f",
       "date": "2026-09-26",
       "status": "OPEN_FINAL_RETEST",
