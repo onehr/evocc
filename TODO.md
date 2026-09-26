@@ -92,6 +92,9 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   The identical payload passes all three modes on both HVF and single-thread
   TCG; only multi-thread TCG fails. This is a narrower runtime discrepancy,
   not a proven emulator cause or an unchanged sched_ext PASS.
+  September 26's identical-payload MT-TCG `-d nochain` control still fails the
+  static and preemption-disabled modes on both Images (memory controls pass).
+  Direct-block chaining is not a necessary cause; the control is not a repair.
 
   - [x] **K01a — Fail closed on truncated sched_ext result summaries**.
     [Minimal fixture](tests/fixtures/kselftest-scheduler-truncated.tap) reproduced

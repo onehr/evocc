@@ -60,3 +60,31 @@ result-hvf-host.json 664d33901cdb7a64fa072404ada2b0119b3750b0bbad75e16f67bb297b9
 result-tcg-single.json a8a54c0534cc0746e984063c53d531caae817073087fb8d4f326d6e50f9c8e09
 Each result records the actual program verdicts and bound serial/Image hashes.
 All six flights have exited. No heavy campaign or kernel rebuild was launched.
+
+2026-09-26 — Direct-block-chaining negative control (diagnostic only).
+The same source/module/payload/Images were replayed with MT TCG Cortex-A72
+and only QEMU's `-d nochain` added in a separate diagnostic contract. Local
+QEMU help identifies this option as disabling direct block chaining. CPU/RAM,
+program bounds and the original locked acceptance contracts are unchanged.
+
+Missing pointers (static / memory / preemption-disabled):
+GCC reference       273139 / 0 / 335854
+EvoCC subject       105318 / 0 / 148643
+Both boot/shutdown verdicts are PASS; each has two program FAILs and one PASS.
+All programs finish the original 256 rounds. Disabling direct block chaining
+does not remove the discrepancy; it is neither a remedy nor evidence that
+chaining is its necessary cause. The emulator attribution and causal link to
+the original sched_ext fault remain unproved. K01 stays OPEN.
+
+Added command: -accel tcg,thread=multi -cpu cortex-a72 -d nochain
+nochain.py reuses the same 64 MiB snapshot scratch disk; no runtime disk copy.
+result-tcg-nochain.json
+  2b4a58fc2ed9bf170adb796b8f293095034d9dbd5bb195b053ffa2ef021440b8
+tcg-nochain-contract.json
+  9b588223561878fc2817aec8d577c197bf173e0931925f393c3ee6624d656a75
+reference boot.log
+  7284ac3cf3c7d00b88b683706832de5e307e405b0e56083bf25ae58b09625ae3
+subject boot.log
+  ee89188671832f7f11fbc874ef45b421c2c84c113d501c96709bba9f6fd74683
+Both control flights have exited. The separate uniform kernel compilation
+continues; this diagnostic neither mutates nor accepts that new composition.

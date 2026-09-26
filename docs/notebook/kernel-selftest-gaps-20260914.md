@@ -2929,6 +2929,14 @@ disk. The exact source, module, payload, Images, serials and command boundary
 are recorded in the fixture. K01 remains OPEN pending causal linkage and the
 unchanged original replay; there is no live test from this slice.
 
+September 26 negative control: disabling direct translated-block chaining with
+QEMU `-d nochain` still produces 273,139 / 105,318 missing pointers in the static
+mode and 335,854 / 148,643 with preemption disabled; the memory controls pass.
+Both Images finish all tests and shut down. This same-payload experiment rules
+out direct block chaining as a necessary condition, not other MT-TCG behavior
+or a kernel/runtime interaction. The fixture records its command and hashes;
+neither the original sched_ext verdict nor K01's OPEN status changes.
+
 ### Four collection build guards — 2026-09-24
 
 The four original arm64 build commands still fail before invoking a compiler:
