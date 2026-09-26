@@ -307,12 +307,13 @@ def read_allowlist(path: Path) -> list[str]:
 
 def resume_prepared_rows(run: Path, records: dict[str, Record], args,
                          cache: dict, inputs: str) -> tuple[list[dict], dict]:
-    """Recover only a complete first pass; rerun every prepared-input consumer.
+    """Recover only a complete first pass; revalidate prepared-input consumers.
 
     The normal cache binds source, all inputs, command and compiler. Installed
     object hashes additionally prove that the interrupted pass reached the
-    existing working tree. Partial second-pass outputs are not reused as
-    compilation evidence, and the earlier run is never modified.
+    existing working tree. The separate prepared cache validates completed
+    batches; uncheckpointed partial outputs are not evidence. Never modify the
+    earlier run's inventory.
     """
     inventory = run / 'units.jsonl'
     rows = [json.loads(line) for line in inventory.read_text().splitlines()]
@@ -341,7 +342,7 @@ def resume_prepared_rows(run: Path, records: dict[str, Record], args,
         recovered.append(dict(row, outcome='substituted', installedSha256=row['objectSha256']))
     return recovered, {'run': str(run), 'inventorySha256': sha256_file(inventory),
                        'firstPassUnits': len(rows), 'preparedCompilationsReused': 0,
-                       'policy': 'recompile every object against actual generated inputs; repeat link and boot'}
+                       'policy': 'verify every prepared-input compilation; repeat fixed-point check, link and boot'}
 
 
 def emit_assembly(
@@ -900,23 +901,71 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
                             run_dir: Path) -> dict:
     """Compile against the headers produced by this composition's vDSO.
 
-    This is build ordering, not a survey-cache shortcut. Recompile every
-    selected object rather than assuming GCC's dependency set equals EvoCC's.
-    A second prepare must reach a fixed point before the final link.
+    Every selected object must consume the actual generated inputs, not an
+    assumed GCC dependency subset. Completed batches can survive interruption
+    only with the same complete input snapshot, compiler, commands and objects.
+    A second prepare must still reach a fixed point before the final link.
     """
-    result = {"prepareExitCode": relink(args.src_root, out_root,
-              run_dir / "prepare.log", args.relink_jobs, ("prepare",))}
-    if result["prepareExitCode"] != 0:
-        return result
     toolchain_root = getattr(args, 'toolchain_root', None)
-    before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
     compiler = sha256_file(args.evocc)
+    image = sealed_image()
+    checkpoint_path = args.k1_root / 'prepared-cache.json'
+    checkpoint = {} if args.no_cache else load_cache(checkpoint_path)
+    state = checkpoint.get('prepared', {})
+    implementation = sha256_file(Path(__file__))
+    before = None
+    if (getattr(args, 'resume_prepared_run', None) and isinstance(state, dict)
+            and state.get('compiler') == compiler and state.get('image') == image
+            and state.get('implementation') == implementation
+            and isinstance(state.get('log'), str) and Path(state['log']).is_file()
+            and sha256_file(Path(state['log'])) == state.get('logSha256')):
+        before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
+    resumed = before is not None and before == state.get('inputs')
+    result = {'prepareExitCode': 0, 'preparedCacheHits': 0}
+    entries = checkpoint.get('objects', {}) if resumed else {}
+    if not isinstance(entries, dict):
+        entries = {}
+    if resumed:
+        result['prepareReusedFrom'] = state['log']
+    else:
+        log = run_dir / 'prepare.log'
+        result['prepareExitCode'] = relink(args.src_root, out_root, log,
+                                          args.relink_jobs, ('prepare',))
+        if result['prepareExitCode'] != 0:
+            return result
+        before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
+        state = {'compiler': compiler, 'image': image, 'implementation': implementation,
+                 'inputs': before, 'log': str(log.resolve()), 'logSha256': sha256_file(log)}
     selected = [row for row in rows if row["outcome"] == "substituted"]
+    keys = {}
+    for old in selected:
+        unit = old['unit']
+        argv, _ = evocc_argv(records[unit], args.evocc, args.src_root, out_root,
+                             toolchain_root=toolchain_root)
+        assembler = assemble_argv(records[unit], TARGET_COMPILER,
+                                  f'/work/asm/{unit[:-2]}.s', f'/work/asm/{unit}')
+        assembler_identity = hashlib.sha256(json.dumps(assembler).encode()).hexdigest()
+        keys[unit] = cache_key(unit, compiler, 'prepared-v1:' + assembler_identity, argv, before)
+
     def compile_one(old):
+        unit = old['unit']
+        cached = entries.get(keys[unit])
+        obj = asm_root / unit
+        if (isinstance(cached, dict) and cached.get('unit') == unit
+                and cached.get('outcome') == 'assembled'
+                and cached.get('preparedReusable') is True
+                and not cached.get('missingSymbols') and not cached.get('extraSymbols')
+                and obj.is_file() and sha256_file(obj) == cached.get('objectSha256')):
+            return dict(cached, preparedCacheHit=True, object=str(obj),
+                        record=str(records[unit].path))
         row = emit_assembly(old["unit"], records[old["unit"]], args.evocc,
                             args.src_root, out_root, asm_root, args.timeout, toolchain_root)
         row["compileInputRoot"] = str(out_root)
         row["compileInputSnapshotSha256"] = before
+        row['preparedCacheHit'] = False
+        if row['outcome'] == 'emitted':
+            row['preparedReusable'] = not re.search(
+                rb'\.(?:include|incbin)\b', assembly_path(asm_root, unit).read_bytes())
         return row
     compiled = []
     size = 64 if getattr(args, 'low_disk', False) else max(1, len(selected))
@@ -926,9 +975,28 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
             assemble_batch(batch, records, asm_root, out_root, use_cache=not args.no_cache)
             check_symbol_parity(batch, asm_root, pristine, args.k1_root / "symbols")
             if getattr(args, 'low_disk', False):
-                release_successful_assembly(batch, asm_root)
+                release_successful_assembly([row for row in batch if not row['preparedCacheHit']], asm_root)
             compiled.extend(batch)
+            result['preparedCacheHits'] += sum(row['preparedCacheHit'] for row in batch)
+            for row in batch:
+                key = keys[row['unit']]
+                entries.pop(key, None)
+                if (row['outcome'] == 'assembled' and row.get('preparedReusable')
+                        and not row.get('missingSymbols') and not row.get('extraSymbols')):
+                    entries[key] = dict(row)
+            if not args.no_cache:
+                save_cache(checkpoint_path, {'prepared': state, 'objects': entries})
+            progress = {'state': 'CHECKPOINT', 'examinedUnits': len(compiled),
+                        'pid': os.getpid(),
+                        'observedAtUTC': dt.datetime.now(dt.timezone.utc).isoformat(),
+                        'requestedUnits': len(selected), 'preparedCacheHits': result['preparedCacheHits'],
+                        'compilerSha256': compiler, 'inputSnapshotSha256': before}
+            save_cache(run_dir / 'prepared-progress.json', progress)
+            print(f"k1: prepared {len(compiled)} of {len(selected)} examined; "
+                  f"{result['preparedCacheHits']} resumed compilations", flush=True)
     if before != input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root) or compiler != sha256_file(args.evocc):
+        if not args.no_cache:
+            save_cache(checkpoint_path, {})
         raise ValueError("prepared inputs changed while compiling dependent objects")
     for row in compiled:
         # The vDSO already ran through preparation: leaving identical objects
@@ -1156,7 +1224,7 @@ def main() -> int:
                                                 args, cache, inputs_sha256)
         pending = []
         print(f"k1: recovered {len(rows)} verified installed first-pass objects; "
-              "all prepared-input consumers will run again", flush=True)
+              "every prepared-input consumer requires matching compilation evidence", flush=True)
     snapshot_seconds = time.monotonic() - started
     keys: dict[str, str] = {}
     reused: list[dict] = []
@@ -1274,6 +1342,9 @@ def main() -> int:
         print("k1: preparing generated headers and recompiling their consumers", flush=True)
         preparation = recompile_after_prepare(rows, records, args, asm_root, pristine,
                                                out_root, run_dir)
+        if resumption is not None:
+            resumption['preparedCompilationsReused'] = preparation.get('preparedCacheHits', 0)
+            resumption['policy'] = 'verify every prepared-input compilation; repeat fixed-point check, link and boot'
         ready = (preparation.get("prepareExitCode") == 0
                  and preparation.get("verifyPrepareExitCode") == 0
                  and preparation.get("preparedInputsStable")

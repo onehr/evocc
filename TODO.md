@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-26**, initially audited against `a83d803`; current clauses are
+Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.105** and EvoMIR **0.44**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -860,6 +860,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     Original-command audit retains all 7,002 target-C and 37 named host records;
     no target source/object is deleted or dropped, no flag is newly ignored.
     [Exact reproduction and accounting](tests/fixtures/kernel-host-command-role.out).
+
+  - [x] **T04c — Recover verified prepared-input compilation batches**, 2026-09-27.
+    An interrupted second pass previously lost every completed compilation.
+    Recovery now binds the entire prepared input snapshot, compiler, command,
+    assembler image, successful preparation and retained object; symbol parity
+    and the final generated-input fixed point are still checked. Fault-injection
+    tests and all 250 K1 Python tests pass. The real 65-object C reduction resumes
+    64 verified objects, compiles one, links and returns the new header value in
+    all 65 functions. This is recovery validation, not kernel acceptance; the
+    already-running worker loaded the old implementation and is unchanged.
+    [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,

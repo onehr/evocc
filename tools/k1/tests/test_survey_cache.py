@@ -25,6 +25,142 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_prepared_compilation_resumes_verified_batches_without_reemitting(self):
+        self._prepared_checkpoint_case()
+
+    def test_prepared_checkpoint_invalidates_changed_inputs_and_compiler(self):
+        for change in ('header', 'new-header', 'compiler', 'command', 'prepare-log', 'image', 'malformed-cache'):
+            with self.subTest(change=change):
+                self._prepared_checkpoint_case(change)
+
+    def test_prepared_checkpoint_rejects_missing_corrupt_and_external_assembly_objects(self):
+        for change in ('object', 'missing-object', 'external-assembly', 'no-cache', 'timeout', 'symbol-drift'):
+            with self.subTest(change=change):
+                self._prepared_checkpoint_case(change)
+
+    def test_prepared_checkpoint_is_discarded_if_inputs_change_during_compilation(self):
+        self._prepared_checkpoint_case('during-compile')
+
+    def _prepared_checkpoint_case(self, change=None):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, pristine, output, assembly, first, second = [
+                root / name for name in ('src', 'pristine', 'out', 'asm', 'first', 'second')]
+            for path in (source, pristine, output, assembly, first, second):
+                path.mkdir()
+            binary = root / 'evocc'
+            binary.write_bytes(b'compiler')
+            (output / 'offsets.h').write_text('#define OFFSET 4\n')
+            records = {}
+            # 65 objects exercise one complete low-disk batch followed by an
+            # interrupted batch, without a kernel tree or a compiler process.
+            for i in range(65):
+                unit = f'u{i:02}.o'
+                (source / f'u{i:02}.c').write_text(f'int f{i}(void) {{ return {i}; }}\n')
+                path = pristine / f'.{unit}.cmd'
+                path.write_text(f'savedcmd_{unit} := gcc-14 -c -o {unit} /work/src/u{i:02}.c\n')
+                records[unit] = substitute.parse_record(path)
+                (output / unit).write_bytes(b'first-pass')
+            rows = [{'unit': unit, 'outcome': 'substituted'} for unit in records]
+            args = SimpleNamespace(src_root=source, evocc=binary, k1_root=root,
+                                   toolchain_root=None, jobs=1, relink_jobs=1, timeout=1,
+                                   low_disk=True, no_cache=False, allow_symbol_drift=False,
+                                   require_all=True, resume_prepared_run=None)
+            emitted = []
+            interrupt = True
+            def emit(unit, record, *unused):
+                emitted.append(unit)
+                if interrupt and unit == 'u64.o':
+                    raise RuntimeError('injected interruption')
+                if interrupt and change == 'timeout' and unit == 'u00.o':
+                    return {'unit': unit, 'outcome': 'timeout'}
+                if not interrupt and change == 'during-compile' and unit == 'u64.o':
+                    (output / 'offsets.h').write_text('#define OFFSET 12\n')
+                path = substitute.assembly_path(assembly, unit)
+                path.write_text('.include "external.inc"\n' if change == 'external-assembly'
+                                and unit == 'u00.o' else '.text\n')
+                return {'unit': unit, 'record': str(record.path), 'outcome': 'emitted',
+                        'assemblySha256': substitute.sha256_file(path)}
+            def assemble(batch, *unused, **keywords):
+                for row in batch:
+                    if row['outcome'] != 'emitted':
+                        continue
+                    path = assembly / row['unit']
+                    path.write_bytes(b'prepared object ' + row['unit'].encode())
+                    row.update(outcome='assembled', object=str(path),
+                               objectSha256=substitute.sha256_file(path))
+            def parity(batch, *unused):
+                for row in batch:
+                    row.update(missingSymbols=[], extraSymbols=['unexpected'] if interrupt
+                               and change == 'symbol-drift' and row['unit'] == 'u00.o' else [])
+            def prepare(src, out, log, *unused):
+                log.write_text('prepare completed\n')
+                # Real Kbuild rewrites identical GEN Makefile bytes: a resume
+                # must validate the old prepared state before doing that again.
+                (out / 'Makefile').write_text('generated\n')
+                return 0
+            with patch.object(substitute, 'emit_assembly', side_effect=emit), \
+                 patch.object(substitute, 'assemble_batch', side_effect=assemble), \
+                 patch.object(substitute, 'check_symbol_parity', side_effect=parity) as symbols, \
+                 patch.object(substitute, 'relink', side_effect=prepare) as relink, \
+                 patch.object(substitute, 'sealed_image', return_value='sha256:' + 'a' * 64) as image:
+                with self.assertRaisesRegex(RuntimeError, 'injected interruption'):
+                    substitute.recompile_after_prepare(rows, records, args, assembly,
+                                                       pristine, output, first)
+                self.assertEqual((output / 'u00.o').read_bytes(), b'first-pass')
+                self.assertFalse(substitute.assembly_path(assembly, 'u01.o').exists())
+                progress = substitute.load_cache(first / 'prepared-progress.json')
+                self.assertEqual(progress['examinedUnits'], 64)
+                self.assertEqual(progress['state'], 'CHECKPOINT')
+                emitted.clear()
+                interrupt = False
+                args.resume_prepared_run = first
+                if change == 'header':
+                    (output / 'offsets.h').write_text('#define OFFSET 8\n')
+                if change == 'new-header':
+                    (output / 'new.h').write_text('new input\n')
+                if change == 'compiler':
+                    binary.write_bytes(b'new compiler')
+                if change == 'command':
+                    record = records['u00.o']
+                    records['u00.o'] = substitute.Record(record.path, record.unit,
+                                                        (*record.argv, '-fwrapv'), record.source_token)
+                if change == 'prepare-log':
+                    (first / 'prepare.log').write_text('incomplete\n')
+                if change == 'image':
+                    image.return_value = 'sha256:' + 'b' * 64
+                if change == 'malformed-cache':
+                    (root / 'prepared-cache.json').write_text('{partial')
+                if change == 'object':
+                    (assembly / 'u00.o').write_bytes(b'corrupt')
+                if change == 'missing-object':
+                    (assembly / 'u00.o').unlink()
+                if change == 'no-cache':
+                    args.no_cache = True
+                relink.reset_mock()
+                symbols.reset_mock()
+                if change == 'during-compile':
+                    with self.assertRaisesRegex(ValueError, 'prepared inputs changed'):
+                        substitute.recompile_after_prepare(rows, records, args, assembly,
+                                                           pristine, output, second)
+                    self.assertEqual(substitute.load_cache(root / 'prepared-cache.json'), {})
+                    self.assertEqual((output / 'u00.o').read_bytes(), b'first-pass')
+                    return
+                result = substitute.recompile_after_prepare(rows, records, args, assembly,
+                                                            pristine, output, second)
+                fresh_all = change in ('header', 'new-header', 'compiler', 'prepare-log', 'image',
+                                       'no-cache', 'malformed-cache')
+                expected = 65 if fresh_all else 2 if change else 1
+                self.assertEqual(len(emitted), expected,
+                                 'an interrupted prepared pass must not reemit verified unchanged objects')
+                self.assertEqual(result['preparedCacheHits'], 65 - expected)
+                self.assertEqual(result['failedUnits'], [])
+                self.assertTrue(result['preparedInputsStable'])
+                self.assertEqual(relink.call_count, 2 if fresh_all else 1)
+                self.assertEqual(sum(len(call.args[0]) for call in symbols.call_args_list), 65,
+                                 'cached objects must still undergo current symbol comparison')
+                self.assertTrue(all(row['outcome'] == 'substituted' for row in rows))
+
     def test_a_reconfigured_tree_cannot_count_stale_module_metadata_as_target_c(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

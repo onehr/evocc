@@ -1,0 +1,47 @@
+2026-09-27 — TODO T04c: interrupted actual-header compilation recovery.
+
+RED: after 64 verified objects and an injected interruption at object 65,
+recompile_after_prepare emitted all 65 again instead of only the remaining one.
+No import/compilation error caused the failure. The first pass already had
+durable checkpoints; the prepared-input pass kept its results only in memory.
+
+GREEN: checkpoint validated batches through the existing atomic cache writer.
+Reuse requires unchanged compiler, full input tree snapshot (including metadata),
+frontend/assembler commands, immutable assembler image, harness implementation,
+successful prepare log and retained object SHA. No GCC dependency subset is
+assumed. Recheck current exported symbols even for hits; .include/.incbin output,
+timeouts, malformed cache and symbol drift are not reusable. No object is
+installed until all input identities are revalidated. The existing final
+generated-input content fixed point, full link and boot are not skipped.
+CHECKPOINT progress carries PID/time and examined counts, not a live/PASS claim.
+
+250 K1 Python tests PASS; changed Python Ruff and git diff --check PASS.
+gate-changed a78ad96 reports no changed Rust crates, not a new workspace PASS.
+Mutation cases cover existing/new headers, compiler, command, assembler image,
+prepare log, malformed checkpoint, absent/corrupt object, external assembly,
+timeout, symbol drift, disabled cache and inputs changing during compilation.
+The last case rejects before installation and discards the checkpoint.
+
+Real isolated integration: 65 functions from kernel-prepared-consumer.c are
+compiled by EvoCC and assembled by GCC14 in evo-flight-lab:sealed (ARM64,
+network none). A fixture prepare changes PREPARED_OFFSET from 7 to 37.
+Interrupt before object 65: installed first-pass objects remain untouched.
+Resume: 64 matching object hits / 1 newly emitted object; 65 current symbol
+comparisons; fixed-point check passes. A GCC static caller checks all 65
+functions return 37, and exits 0. Compiler SHA:
+314b21866d89269e0efa7bec87f2ca458a14f24b81e34409549a76a010c2e3d8
+Input snapshot: 78dd02b5abae116f22d92738955a4f7c25432d8390464c7314d01d531053bb7f
+Assembler image: sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+Kbuild prepare in this integration is an explicit stand-in, not an actual
+kernel prepare/link/boot. T04/K13/K14 remain OPEN. The already-running kernel
+worker imported the previous implementation; this change does not retrospectively
+checkpoint that worker or restart its compilation.
+
+Permanent fault-injection replay:
+  python3 -m unittest discover -s tools/k1/tests -p test_survey_cache.py
+Full Python gate:
+  python3 -m unittest discover -s tools/k1/tests
+Real-object integration and raw result (small, ignored local artifacts):
+  .build/floating-targeted/prepared-resume-20260927/replay.py
+  .build/floating-targeted/prepared-resume-20260927/result.json

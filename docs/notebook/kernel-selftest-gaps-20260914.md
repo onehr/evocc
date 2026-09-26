@@ -1,10 +1,26 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-26. This is a diagnosis ledger. The latest full pair is
+Updated 2026-09-27. This is a diagnosis ledger. The latest full pair is
 `.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
 and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
+
+### Prepared-input recovery without repeating completed work — 2026-09-27
+
+T04c fixes lost second-pass progress. Its interrupted 65-object C reduction now
+reuses 64 verified objects, emits only the remaining one, checks all symbols,
+links and observes the new generated-header value in all 65 functions. Cache
+mutations and all **250** K1 Python regressions pass. Recovery binds the full
+input snapshot, compiler, both command classes, sealed assembler, preparation
+and retained object hashes; final input convergence/link/boot remain mandatory.
+This is a workflow repair, not new kernel runtime acceptance. Its fixture
+preparation deliberately stands in for Kbuild. [Exact tests and boundary](../../tests/fixtures/kernel-prepared-consumer.out).
+
+At 2026-09-26 16:52 UTC, the original owner **93550** / worker **93553** remain
+alive, with two compiler children and approximately 3h20m elapsed; host free
+space is **106 GiB**. That worker imported the earlier code: it has not acquired
+these checkpoints retrospectively. No duplicate build or runtime disk was made.
 
 ### Seccomp filter values versus cost estimates — 2026-09-26
 
