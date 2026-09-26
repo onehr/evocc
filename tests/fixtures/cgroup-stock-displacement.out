@@ -1,4 +1,46 @@
-2026-09-26 — K11g, delayed dying-memcg release; diagnosis OPEN.
+2026-09-26 — K11g, delayed dying-memcg release; classification closed below.
+
+FINAL-REFERENCE FOLLOW-UP (same day):
+Add css_release stack triggers and local page/object drain probes. Both trace
+capture assertions PASS, no lost events, both boot/shutdown predicates PASS.
+After 20s idle, reference retains 5 offlined memcg identities; subject retains 8.
+Every identity (5/5 and 8/8) has a matched final css_release(ref=css+16) and
+mem_cgroup_css_released(css). Each final-reference stack contains
+folio_batch_move_lru -> folios_put_refs -> __mem_cgroup_uncharge_folios ->
+uncharge_folio/uncharge_batch -> css_release. Reference releases four on root
+activity and the fifth on later faults; subject releases all eight on root
+activity. The per-CPU folio batch owns the references, not a demonstrated empty
+charge-stock slot. Source mm/swap.c takes folio_get in __folio_batch_add_and_move
+and releases via folios_put in folio_batch_move_lru; this is a matching measured
+kernel path on both compilers, not merely the observation that both fail.
+
+Identity analysis snapshots offlined-minus-released at the idle marker; later
+address reuse must not overwrite that set. All delayed identities have witnesses.
+The initial analysis incorrectly retained only the final offline per address;
+its 2-vs-5 assertion failed. Correct chronological handling gives 5/5 and 8/8.
+
+Unchanged cgroup:test_kmem, existing matched full runtimes, same 45s limit:
+reference inner 4 PASS / 2 FAIL; subject inner 3 PASS / 3 FAIL. Both outer FAIL,
+both boot/shutdown PASS. Dead-group test still FAILs (3/2 dying at its last wait);
+missing-slab test still FAILs. Subject also fails deletion accounting:
+memory.current 5890048, sum 4841472, difference 1048576 == MAX_VMSTAT_ERROR,
+where the original requires strictly less. This separate K11h remains OPEN.
+No original assertion/flag/budget changed; no kernel patch or compiler workaround.
+K11g closes classification only, not original-test PASS or fresh full acceptance.
+
+Final trace build/replay/attribution/original records:
+.build/floating-targeted/cgroup-release-trace-20260926/
+trace source 9a3b9b9c676b512fdf074b6109ceba9f823119701b83063124726546774367cf
+trace ELF d2afa2b17a41afe96f573ee42a758b5d8d6cc06b1e3654d648692316fc8f9b50
+trace result e1b5b3534f44f24c02d0cb55d3314faf349023345555301258238f23b62cab25
+attribution 28b1fb0a71059f723c4c2b36eb067d383c46ae0e49fc645e2baad41a07355f90
+reference trace 0149bdfddad8e6fd25a06562adc88062cd79184953bc64f242b752dffbc35001
+subject trace df8e7bc320af91a923b73cb7ad5b029e38f7db6e7102bf5ab36029e7f74bd43e
+original result 97e6f9f51716c89dd2ca43a790f11478708ef779f095ab03ac6d6e80d4cd52fa
+reference original 882e693e95aa2469c08bd45b2590840e0efa74f116e00779ce2711f037438b88
+subject original e8fee78d7b394c27975d6e58664d0137f5419fb67fb5accde94be1b5a152c504
+
+EARLIER OBSERVATION AND HYPOTHESIS (superseded by attribution above):
 
 Reuse frozen test_kmem.c functions, not a rewritten stress workload:
 30 groups through cg_run_in_subcgroups(parent, alloc_dcache, (void*)100, 30),

@@ -68,6 +68,10 @@ int main(void)
     control("kprobe_events", "p:memcg_diag/drain drain_stock stock=$arg1:x64 index=$arg2:u32 pages=+1($arg1):u8[7] owners=+8($arg1):x64[7]\n", 1);
     control("kprobe_events", "p:memcg_diag/offline mem_cgroup_css_offline css=$arg1:x64\n", 1);
     control("kprobe_events", "p:memcg_diag/released mem_cgroup_css_released css=$arg1:x64\n", 1);
+    control("kprobe_events", "p:memcg_diag/last_ref css_release ref=$arg1:x64\n", 1);
+    control("events/memcg_diag/last_ref/trigger", "stacktrace", 0);
+    control("kprobe_events", "p:memcg_diag/local_pages drain_local_memcg_stock\n", 1);
+    control("kprobe_events", "p:memcg_diag/local_objects drain_local_obj_stock\n", 1);
     control("events/memcg_diag/enable", "1", 0);
     control("trace", "", 0);
     control("tracing_on", "1", 0);
@@ -112,9 +116,13 @@ int main(void)
         report(name);
     }
     control("events/memcg_diag/enable", "0", 0);
+    control("events/memcg_diag/last_ref/trigger", "!stacktrace", 0);
     control("kprobe_events", "-:memcg_diag/drain\n", 1);
     control("kprobe_events", "-:memcg_diag/offline\n", 1);
     control("kprobe_events", "-:memcg_diag/released\n", 1);
+    control("kprobe_events", "-:memcg_diag/last_ref\n", 1);
+    control("kprobe_events", "-:memcg_diag/local_pages\n", 1);
+    control("kprobe_events", "-:memcg_diag/local_objects\n", 1);
     int ok = completed && WIFEXITED(status) && WEXITSTATUS(status) == 0;
     printf("%s 1 complete trace observation, not original-test acceptance\n", ok ? "ok" : "not ok");
     return !ok;

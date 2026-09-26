@@ -8,6 +8,24 @@ Targeted results and additional configurations use separate denominators.
 
 ### Dying-memcg control and reference tracing — 2026-09-26
 
+**Follow-up: K11g classification closed.** A `css_release` stack trace now binds
+each delayed memcg to its last reference. All **5/5 reference and 8/8 subject**
+identities release through `folio_batch_move_lru → folios_put_refs →
+__mem_cgroup_uncharge_folios → css_release`, after new page faults. The frozen
+`mm/swap.c` explicitly takes a folio reference when adding it to a per-CPU
+batch and drops it when draining that batch. This accounts for this population;
+it is not the guessed empty charge-stock remedy. Both trace-capture assertions
+pass with no lost events, and all flights shut down normally.
+
+Unchanged original replay still FAILs: reference inner **4 PASS / 2 FAIL**,
+subject **3 PASS / 3 FAIL**. Both retain `test_kmem_dead_cgroups` and the known
+missing-slab `test_percpu_basic` failures. Subject's additional immediate
+deletion-accounting failure is exactly 1,048,576 bytes, equal to its strictly
+excluded margin; this remains the separate OPEN K11h, not a waived failure.
+No sleep, margin, source, timeout, kernel or original full-run total changed.
+K11g closes attribution only; K13 still retests the final composition.
+
+Earlier control, before final-reference attribution:
 K11g now reuses the frozen 30-group dead-cgroup workload and the existing
 100-group threaded workload, including the original helper's ignored argument.
 The old matched BPF Images retain 5/4 and 2/8 dying descendants after 20 seconds

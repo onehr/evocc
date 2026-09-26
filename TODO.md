@@ -391,15 +391,25 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     7 PASS / 1 SKIP, but the historical subject timeout and measured slowdown
     are not declared repaired by that retry. Preserve them for K13's final pair.
 
-  - [ ] **K11g — Attribute delayed dying-memcg release** — `OPEN`, P1.
+  - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
-    retains 5/4 dying groups after 20s on GCC/EvoCC, then clears them with root
-    activity before distinct-memcg stock displacement. The 100-group threaded
-    control similarly retains 2/8 then clears. Bounded kprobes observe delayed
-    CSS release on both kernels without lost events, but do not yet identify
-    its last reference holder. Do not equate this with the upstream empty-stock
-    fix or waive the original FAIL. Next trace the final reference-drop path.
+    and final-reference stack traces account for every delayed CSS identity:
+    5/5 GCC and 8/8 EvoCC releases come from per-CPU LRU folio batches through
+    folios_put/uncharge, not the hypothesized empty charge-stock slot. New page
+    faults drain the batches; simply waiting 20s does not. No lost trace events.
+    Unchanged original pairs still FAIL: GCC inner 4 PASS/2 FAIL, EvoCC 3/3;
+    dead-cgroup FAIL remains on both. This closes **source-bound classification**,
+    not a kernel patch, compiler repair, original PASS or K13 acceptance.
     [Measured controls and limits](tests/fixtures/cgroup-stock-displacement.out).
+
+  - [ ] **K11h — Bound immediate memcg-deletion accounting** — `OPEN`, P1.
+    Keep separate from K11g's dead-object references and the classified missing
+    slab in test_percpu_basic. The fresh original's EvoCC difference is exactly
+    1,048,576 bytes, rejected by the upstream strict `< MAX_VMSTAT_ERROR`;
+    GCC passes that case. Earlier paired observations also exceed that bound
+    before falling below it after one second. Quantify charge-stock and
+    asynchronous statistic contributions before a source-bound disposition;
+    do not widen the margin or insert a sleep in the original test.
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
