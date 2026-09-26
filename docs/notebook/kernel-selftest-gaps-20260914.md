@@ -73,8 +73,21 @@ Uniform subject run launched at 2026-09-26 08:03 UTC through `tools/bench.py
 kernel-full`: owner PID **11928**, worker **11932**, two jobs, low-disk batches,
 release SHA `e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f`.
 Invocation and state: `.evidence/bench/20260926T080306.877549Z/summary.json`;
-unit journal and eventual link logs: `.evidence/k1/20260926T080306Z/`.
-This is RUNNING at launch, not a permanent liveness assertion. Actual-header
+capture: `.evidence/k1/20260926T080306Z/`. **Both processes exited** before
+source compilation: unknown `-fomit-frame-pointer` exposed a second inventory
+bug, not a need to weaken the option audit. With `HOSTCC=gcc-14`, the old
+compiler-name-only classifier counted 37 host-tool objects as target-C.
+
+T04b now recognizes the frozen Kbuild host-recipe include marker while retaining
+target `__KERNEL__` generators even under `scripts/`. Its minimal saved-command
+RED has two failures and zero import errors; all **246** K1 regressions now pass,
+plus Ruff. `roles.json` lists each original command/hash and verifies **7,002
+target-C + 37 HOSTCC**, with zero unreviewed target options and no artifact
+mutation. The earlier 7,039 count was mixed-role, not 37 compiler failures or
+test exclusions. The 847-module count is unchanged. No frame option was admitted
+or silently ignored. [Role regression](../../tests/fixtures/kernel-host-command-role.out).
+
+Restart the uniform composition after this correction. Actual-header
 convergence, all-object/module audits and boot must pass before the subject
 IOMMU replay. K13/K14 remain NOT RUN on this new configuration. Disk checkpoint:
 108 GiB host free, 30 GiB build-volume free; no new large runtime disk.

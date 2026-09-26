@@ -156,10 +156,26 @@ def parse_record(path: Path) -> Record:
 
 def is_target_c_compile(record: Record) -> bool:
     """Whether this record is a target C compilation, not a link or a host tool."""
+    # CC and HOSTCC can both be gcc-14 in a native arm64 reference build.
+    # The frozen Kbuild Makefile adds scripts/include to KBUILD_HOSTCFLAGS,
+    # whereas target KBUILD_CPPFLAGS defines __KERNEL__. Use that positive
+    # host-recipe evidence, not a source-directory or optimization-flag guess.
+    # Keep ambiguous records in the ordinary option audit rather than silently
+    # excluding them. Target generators also live under scripts/.
+    args = record.argv[1:]
+    kernel = any(arg == '-D__KERNEL__' or arg.startswith('-D__KERNEL__=')
+                 for arg in args) or any(
+        left == '-D' and (right == '__KERNEL__' or right.startswith('__KERNEL__='))
+        for left, right in zip(args, args[1:]))
+    host_include = CONTAINER_SOURCE_PREFIX + 'scripts/include'
+    host = ('-I' + host_include in args or any(
+        left == '-I' and right == host_include
+        for left, right in zip(args, args[1:]))) and not kernel
     return (
         record.tool == "gcc-14"
         and "-c" in record.argv
         and record.source_token.endswith(".c")
+        and not host
     )
 
 

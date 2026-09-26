@@ -41,3 +41,8 @@ were archived recoverably; 7039 current target-C records / 847 modules remain.
 Reference Image and current built-in iommufd.o unchanged; no failing C removed.
 Thin payload ~3 MiB; reuse 64 MiB scratch through snapshot; scratch and retained
 full-runtime source disk hashes unchanged. No new Linux clone or runtime disk.
+
+Subsequent T04b correction: the 7039-record inventory above still included 37
+HOSTCC objects because CC and HOSTCC both named gcc-14. The separate original
+recipe/argv audit records 7002 target-C + 37 host tools, retaining all identities.
+See kernel-host-command-role.out. This does not alter the Image or runtime result.

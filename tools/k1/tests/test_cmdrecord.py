@@ -125,6 +125,29 @@ class DecodeTest(unittest.TestCase):
         )
         self.assertFalse(cmdrecord.is_target_c_compile(cmdrecord.parse_record(host)))
 
+    def test_hostcc_using_the_same_gcc_binary_is_not_target_c(self):
+        for include in ('-I /work/src/scripts/include', '-I/work/src/scripts/include'):
+            with self.subTest(include=include):
+                self.record_file.write_text(
+                    'savedcmd_scripts/mod/modpost.o := gcc-14 -O2 '
+                    '-fomit-frame-pointer ' + include
+                    + ' -c -o scripts/mod/modpost.o /work/src/scripts/mod/modpost.c\n')
+                self.assertFalse(cmdrecord.is_target_c_compile(self.record()))
+
+    def test_kernel_role_overrides_host_header_or_directory_heuristics(self):
+        # Kbuild also compiles target-C generators under scripts/. Neither that
+        # directory nor including a host helper header makes them HOSTCC output.
+        self.record_file.write_text(
+            'savedcmd_scripts/mod/devicetable-offsets.o := gcc-14 -D__KERNEL__ '
+            '-I /work/src/scripts/include -c -o scripts/mod/devicetable-offsets.o '
+            '/work/src/scripts/mod/devicetable-offsets.c\n')
+        self.assertTrue(cmdrecord.is_target_c_compile(self.record()))
+
+    def test_unclassified_frame_option_is_not_a_host_marker(self):
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 -fomit-frame-pointer '))
+        self.assertTrue(cmdrecord.is_target_c_compile(self.record()))
+        self.assertEqual(cmdrecord.omitted_option_class('-fomit-frame-pointer'), 'UNREVIEWED')
+
     def test_a_link_step_is_not_a_target_compile(self) -> None:
         link = self.out / "lib/.link.o.cmd"
         link.write_text(

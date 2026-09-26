@@ -1,0 +1,32 @@
+2026-09-26 — TODO T04b; frozen Kbuild command role, not compiler semantics.
+
+RED: test_hostcc_using_the_same_gcc_binary_is_not_target_c fails both separated
+and joined -I spellings; zero import errors. First real kernel-full attempt
+20260926T080306.877549Z exits before compilation: unreviewed -fomit-frame-pointer.
+The option belongs to 37 HOSTCC objects, not to any of the 7002 target-C records.
+
+Cause: the old classifier assumed tool == gcc-14 implies target when -c names
+a C source. The new reference invocation uses both CC=gcc-14 and HOSTCC=gcc-14.
+Frozen Linux Makefile:509 adds -I $(srctree)/scripts/include to KBUILD_HOSTCFLAGS;
+Makefile:603 sets target KBUILD_CPPFLAGS=-D__KERNEL__.
+scripts/Makefile.host:133-136 uses HOSTCC/hostc_flags for host-cobjs.
+This is build-role evidence, not a source-directory whitelist.
+
+GREEN: identify positive host-recipe header evidence only in the absence of
+the target __KERNEL__ marker. Target generators under scripts/ remain target-C;
+ambiguous commands remain in the existing audit. The unreviewed frame-pointer
+flag is still UNREVIEWED, not a host marker and not a new omitted-option waiver.
+Three regressions including both RED variants pass; all 246 K1 tests and Ruff
+pass. gate-changed reports no affected Rust crates; no new Cargo PASS claimed.
+
+Actual inventory: 7039 mixed-role records = 7002 target-C + 37 HOSTCC objects;
+847 generated-module records unchanged. All original host command identities,
+argv and .cmd hashes are retained in runtime-config-20260926/roles.json under
+.build/floating-targeted/. Target option audit finds zero unknown flags.
+No source/object is deleted, modified, compiled or excluded because it failed.
+Host tools remain reference-built infrastructure, outside the target-C claim.
+The preceding stale-module reconciliation remains a distinct 7040 -> 7039 step.
+
+Run: python3 -m unittest discover -s tools/k1/tests -p test_cmdrecord.py
+Full Python gate: python3 -m unittest discover -s tools/k1/tests
+Original inventory audit: python3 .build/floating-targeted/runtime-config-20260926/audit-roles.py

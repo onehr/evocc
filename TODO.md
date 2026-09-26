@@ -207,9 +207,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   5 SKIP → 224 PASS / 0 FAIL / 5 SKIP**, under the original 45-second limit;
   the five skips explicitly exclude the upstream `no_viommu` variant.
   Three new IOPF objects also compile/assemble with EvoCC and identical exports.
-  The uniform **7,039-target-C / 847-module** subject composition is now running
-  through the common bench, reusing the old build tree. EvoCC runtime is still
-  NOT RUN. Close only after its audited link/boot and unchanged paired replay;
+  The corrected inventory is **7,002 target-C / 847 modules** plus 37 separate
+  HOSTCC objects. The first common-bench launch rejected the mixed-role inventory
+  before compilation (T04b); uniform composition must be restarted. EvoCC runtime
+  is still NOT RUN. Close only after its audited link/boot and unchanged paired replay;
   do not count the reference result as compiler acceptance.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [live run][kernel].
 
@@ -681,8 +682,9 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     [Scope and field matrix](tests/fixtures/proof-semantic-metadata.out).
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
-  The September 26 common bench is uniformly rebuilding the reviewed configuration
-  with release `e8bddc0a…`; previous receipts describe incremental compositions.
+  The September 26 common bench uses release `e8bddc0a…` for the reviewed
+  configuration; its first launch stopped on the inventory-role defect T04b.
+  Previous receipts describe incremental compositions.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
@@ -700,6 +702,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     record: raw 7,040 → current 7,039, with five old generated files recoverably
     archived and the built-in object untouched. T04 acceptance remains pending.
     [Minimal reproduction and boundary](tests/fixtures/kernel-stale-module-inventory.out).
+
+  - [x] **T04b — Distinguish same-binary HOSTCC from target compilation**, 2026-09-26.
+    `HOSTCC=gcc-14` exposed 37 host-tool objects in the old compiler-name-only
+    classifier. Frozen Kbuild host-header and target `__KERNEL__` markers now
+    identify the roles; directories and `-fomit-frame-pointer` are not waivers.
+    The two RED variants now pass, as do all 246 K1 regressions and Ruff.
+    Original-command audit retains all 7,002 target-C and 37 named host records;
+    no target source/object is deleted or dropped, no flag is newly ignored.
+    [Exact reproduction and accounting](tests/fixtures/kernel-host-command-role.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,
