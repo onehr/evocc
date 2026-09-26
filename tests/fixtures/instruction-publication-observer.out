@@ -1,0 +1,87 @@
+2026-09-26 — K01b: observe the actually executed target, not reread code bytes.
+
+The fixed-address wrapper includes instruction-publish-alias.c unchanged. It
+only selects MAP_FIXED_NOREPLACE addresses and prints the publication address.
+The aligned direct-B protocol, immutable return targets, cache maintenance,
+sync-core, retirement rwlock, 512 rounds and 20-second bound remain unchanged.
+This is a GCC-built diagnostic, not an EvoCC language or sched_ext acceptance.
+
+Build in the existing sealed ARM64 image, network disabled:
+  gcc-14 -static -fno-pie -no-pie -O2 -Wall -Wextra -Werror -pthread
+    tests/fixtures/instruction-publication-fixed.c -o gcc-continuous
+Select the other five modes with executable-name symlinks; see included main().
+All six native controls PASS. nm -S gives the observed ELF addresses:
+  published         004b19f0, size 4
+  publication_main  00400c44, size 069c
+  install_code      00400920, size 00b4
+Do not reuse these addresses with a different ELF.
+
+The host observer builds against the installed QEMU 11.1.1 API-7 header:
+  clang -std=c11 -O2 -Wall -Wextra -Werror -dynamiclib
+    -undefined dynamic_lookup -I/opt/homebrew/Cellar/qemu/11.1.1/include
+    $(pkg-config --cflags glib-2.0)
+    tests/fixtures/instruction-publication-plugin.c -o observer-target.dylib
+Add to the existing diagnostic TCG flight (not the locked acceptance contract):
+  -plugin file=PATH/observer-target.dylib,pub=4b19f0,mainlo=400c44,mainhi=4012e0,patchlo=400920,patchhi=4009d4
+  -d plugin
+The plugin makes no guest writes, register changes or cache flushes. Writer
+memory callbacks observe completed 32-bit stores in the two named functions.
+Execution callbacks observe entry into immutable return-one targets at
+300000000c or 300010000c while the completed code store is 14000001 (branch to
+return zero) and published is zero. The read lock keeps publication stable
+during the call. The plugin is bounded to this ELF/protocol, not a general
+guest-address attribution mechanism.
+
+                                GCC kernel        EvoCC kernel
+Fixed wrapper, plain MT-TCG       3 PASS / 3 FAIL   3 PASS / 3 FAIL
+Target observer, MT-TCG           3 PASS / 3 FAIL   4 PASS / 2 FAIL
+Target observer, ST-TCG           6 PASS / 0 FAIL   6 PASS / 0 FAIL
+All six final/plain boots and orderly shutdowns PASS. Same Images, payload,
+4 CPUs and Cortex-A72 in all these flights; only diagnostic threading/observer
+settings differ. The observer perturbs timing; one alias+ISB lucky PASS is not
+a repair. Three memory-gate/locked-MOV/handshake controls pass in every flight.
+
+MT target observer: guest missed-publication counts in program order:
+  GCC kernel:   27392, 40512, 128320, 0, 0, 0 = 196224
+  EvoCC kernel: 135744, 184640, 0, 0, 0, 0   = 320384
+Host target-entry witnesses match these sums EXACTLY: 196224 / 320384.
+Both observe 9733 completed relevant stores. ST-TCG has zero guest misses,
+zero target witnesses and zero entry-sample observations on both kernels.
+This localizes the bounded discrepancy to TCG executing the wrong return path
+after the disabling publication, on both kernels. It does not locate the exact
+invalidation race or prove the original sched_ext NULL fault has this cause.
+K01/K01b remain OPEN; no original failure, limit or full-run numerator changes.
+
+Important evidence correction: qemu_plugin_insn_data calls translator_st,
+which can reread guest bytes at translation completion. Its sampled word is
+NOT proof of the word originally decoded. The first observer version relied
+on entry samples, missed one reference failure and is retained only as an
+incomplete experiment. Current target-entry witnesses do not use that sampled
+entry word as their proof. Versioned sources inspected:
+  https://raw.githubusercontent.com/qemu/qemu/v11.1.1/plugins/api.c
+  https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/translator.c
+The earlier invalidation-window hypothesis remains a hypothesis, not a fix.
+
+Capture: .build/floating-targeted/instruction-plugin-20260926/
+replay.py reuses tools/k1/selftest.py.flight and the retained matched Images.
+The 1585664-byte payload and small host plugin reuse the existing 64 MiB scratch
+disk; it is unchanged after every flight. No runtime disk or Linux clone added.
+Host and sealed C compile with -Werror; gate-changed against 512ee1b correctly
+selects no Rust crates for these standalone diagnostics. Renderer/check passes.
+
+SHA-256:
+fixed source 079347ca1d4d1525f984eb53fafe93b2ec2087edcf79f49e25ac65340ae8f1b9
+included source aea98940002005de23cd2071f61b0415d640a6d355b96c5a75d6534f9a3e576b
+observer source 10a093ec6e332061655afae75ab5cb16579e0a6874aa368697238e5a5e650f75
+GCC ELF a4f0f6a80f24d8c23143ce58aee06069f9cc2dde79f6d0adc398dfe081cb9ffb
+observer dylib c1879d039a3aa516f0e026ff9a85e3172f353d87d3d746a9239e2b54bea7bc84
+payload 8a6c761df8a32b5b8da415c20dc1a02a42e0e3402d66d6bb965a7bafd5a4e37b
+native.log 0935442ef2ce7a767bd5f0318a6778011011d3ceb9b8b0a5517db08b10076c6b
+result-target.json 502a85fce63b06acc42881eda0eb33b560d8a7559a18b2a664b3e0adadc277b2
+result-target-single.json 76c5d1b23fb2d99a5a873c21c881478b1acad92c41e49451fa16baab9e882dad
+result-plain-observed.json 58e9228e4168c01f3477c443dd83dc8a81f3e127de7015a66949428f3b3b6264
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+Serial hashes are bound in each result. No QEMU, kernel or compiler patch.

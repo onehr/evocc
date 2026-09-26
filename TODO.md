@@ -116,6 +116,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     localized QEMU fix or proof of the original sched_ext cause. Diagnose the
     publication/invalidation path, then replay the unchanged original. Do not
     silently change the locked lane or waive the failure. [Full matrix](tests/fixtures/instruction-publish-alias.out).
+    A [read-only target observer](tests/fixtures/instruction-publication-observer.out)
+    now sees actual entry into the immutable return-one path after the disabling
+    code/data stores. Its **196224/320384** witnesses exactly match guest misses
+    on GCC/EvoCC MT-TCG; both ST-TCG controls pass 6/6 with zero witnesses.
+    Instruction-data API samples reread memory and are not decoded-opcode proof;
+    the target witness avoids that inference. This localizes the reduced wrong
+    control flow, not its exact invalidation race or the original NULL fault.
 
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;

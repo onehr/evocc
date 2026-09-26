@@ -6,6 +6,30 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Instruction-publication target observation — 2026-09-26
+
+K01b's fixed-address GCC reduction now has a read-only QEMU API-7 observer.
+Completed writer stores are compared with actual entry into immutable return
+targets, not a guessed translated opcode. Under MT-TCG, the host observes
+**196224 GCC / 320384 EvoCC** entries into return-one after the code points to
+return-zero and the publication flag is clear; these counts exactly match the
+guest failures. Both single-thread diagnostic flights pass **6/6**, with zero
+witnesses. Plain MT flights fail three modes on each kernel. Observer timing
+changes which concurrent mode fails, so a lucky PASS is not a remedy.
+
+The first observer exposed an important API limit: instruction-data retrieval
+can reread guest bytes after decoding. Those earlier entry samples remain an
+incomplete experiment; the new target-entry witness does not rely on them.
+This localizes the small runtime failure but does not establish the exact QEMU
+race or close sched_ext's original NULL fault. K01/K01b stay OPEN. All flights
+shut down; only a 1.5 MiB payload and tiny plugin were added, with no runtime
+disk copy. [Protocol, commands, source caveat and hashes](../../tests/fixtures/instruction-publication-observer.out).
+
+Live build checkpoint: **6400/7002** first-pass objects assembled, no failures;
+owner **13358**, worker **13361** remain active. A generated-input second pass,
+link/provenance/boot and new K13/K14 acceptance are still pending. This is a
+point-in-time observation, not a claim those runtime tests are already running.
+
 ### Constant shift selection — 2026-09-26
 
 K02f's minimal C and IR assertions went RED → GREEN. Known scalar counts now
