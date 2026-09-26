@@ -31499,6 +31499,22 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K12-splice-module",
+      "date": "2026-09-26",
+      "status": "REFERENCE_PASS_SUBJECT_PENDING",
+      "program": "splice:short_splice_read.sh",
+      "changesFullRunTotals": false,
+      "reason": "Old paired failures lack test_module and its sysfs paths; the new matching reference module loads and restores the original test",
+      "referenceImageSha256": "13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388",
+      "configSha256": "f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd",
+      "referenceDiagnosticPassed": 8,
+      "referenceOriginal": "PASS within unchanged 5-second limit",
+      "subject": "NOT_RUN: uniform Image and matching module pending",
+      "record": "tests/fixtures/module-sysfs-splice.out",
+      "result": ".build/floating-targeted/module-splice-20260926/result.json",
+      "resultSha256": "5bfe0a1c69c68d608b30170d0f8d3a395966831d592ec3fe5dbf643a88456233"
+    },
+    {
       "id": "K11e",
       "date": "2026-09-26",
       "status": "CLASSIFIED",

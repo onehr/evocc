@@ -351,6 +351,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching
   new module runtime are not yet accepted. The four build gaps are source-bound below.
+  The new reference's signed `test_module` now actually loads/unloads: the
+  [eight-assertion sysfs splice control](tests/fixtures/module-sysfs-splice.out)
+  and unchanged `short_splice_read.sh` PASS within its original five seconds.
+  This closes that reference prerequisite only; the new subject/module pair
+  still needs its own replay, as do the other affected collections.
   Build runnable supported sets with matching payloads; give precise reasons
   for unavailable ones. Keep any changed population separate from the frozen 970. [Evidence][kernel].
 

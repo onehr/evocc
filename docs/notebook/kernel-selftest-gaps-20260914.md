@@ -2950,3 +2950,19 @@ contains Makefile identities, the exact control matrix and capture hash.
 No source guards, historical build exits, program population or PASS counts
 change. K12a closes classification; K12's new configuration still needs its
 own build/runtime evidence. The diagnostic creates no Image or disk copy.
+
+### New reference's module-backed splice prerequisite — 2026-09-26
+
+The reviewed configuration's `CONFIG_TEST_LKM=m` now has actual runtime
+evidence: the matching signed `test_module` loads, exposes both sysfs paths,
+and unloads. Four full/two-byte splice comparisons and all eight diagnostic
+assertions pass. The unchanged upstream `short_splice_read.sh` and helper also
+exit zero under the original five-second limit. Its old paired FAIL explicitly
+reported the missing module, before trying the absent sysfs objects.
+
+[The small source-bound record](../../tests/fixtures/module-sysfs-splice.out)
+binds the module, Image, config, original inputs and serial. Only the GCC
+reference is executed here; the new uniform EvoCC composition is still building
+and must supply its own matching module. K12 and the old full-run totals remain
+open/unchanged. This flight uses a 4.7 MiB initramfs and the existing 64 MiB
+snapshot scratch disk; all its processes exited without a large runtime copy.

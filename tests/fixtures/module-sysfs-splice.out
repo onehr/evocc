@@ -1,0 +1,53 @@
+2026-09-26 — K12 splice module prerequisite; reference-only runtime evidence.
+
+The retained September 22 full run fails splice:short_splice_read.sh on BOTH
+Images: modprobe cannot find test_module, then the two sysfs paths do not exist.
+Earlier proc/sys splice checks already succeed. CONFIG_TEST_LKM=m in the reviewed
+new configuration builds the exact lib/test_module.ko required by this script.
+
+module-sysfs-splice.c, built with sealed GCC14 -static -O2 -Wall -Wextra -Werror,
+runs on the new matching GCC Image. It observes the missing path before load,
+loads a newly signed COPY of that Image's module, compares full and two-byte
+splice against read for coresize and sections/.init.text, then runs the original
+unchanged script and helper. A five-second alarm preserves splice/settings's
+original limit. It unloads the module and checks that the path disappears again.
+All 8 diagnostic assertions PASS; original shell exit 0; boot/shutdown PASS.
+The missing-module prerequisite has a causal reference control, not merely
+equal failure counts. New EvoCC Image/module replay remains NOT_RUN while its
+uniform build proceeds; neither old full-run totals nor K12 are closed here.
+
+The script/helper, shell/coreutils and libraries were extracted read-only from
+the retained matching reference runtime. Only needed files enter a 4,923,904-byte
+initramfs. The existing 64 MiB scratch disk is used in snapshot mode and its
+hash is unchanged. No full runtime copy or source/kernel mutation was made.
+Readelf confirms libc/loader and grep's libpcre2 are the complete dependency set.
+
+Build: container run --rm --platform linux/arm64 --network none --cpus 1
+ --memory 1G; fixtures/harness/new reference build mounted read-only, probe
+ directory writable; evo-flight-lab:sealed sh /probe/build.sh.
+Signature: existing reference scripts/sign-file sha256 and its own
+ certs/signing_key.pem/certs/signing_key.x509, applied only to the probe copy.
+Flight: existing tools/k1/selftest.py, hvf-host, four CPUs, 2048 MiB,
+ K1_ALLOW_QEMU_DRIFT=1, K1_KUNIT_AUTORUN=0; whole diagnostic 15s + 60s boot.
+Changed gate: no Rust crate affected; the C compilation and actual guest run
+ above are acceptance for this diagnostic. No fresh Cargo/workspace PASS.
+
+SHA-256:
+source 27e80295c152f07b23f1943221f171dbff71e5b85ac943a301ca6b079f94a9ae
+probe 16a33c30cc0c1651fce971b29344c90c3f9e4173267133aefe86363cfd966f80
+original script b421b0b82697337f33313c0f48c4b9e87cbe124681962c5912b1e4e3900084e3
+original helper 0a56149de1363da44be1b2aa0ce9501544c33e43025847881b76420a7b7f5d0d
+unsigned module a797074c4ff3e1cd61f080498a5dd0a8d612b06d0ebf9911f23b3f83607a2648
+signed module c7538154de1ee5f3d3c90a101f4e8c32f16fe308546e904914446886f97c7dc4
+Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+payload cedb771c823ce23ffc8aa875d0d7e10a53725a7c8b81c21a4dda419709f5d590
+scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+serial 4b5c41d35a6f294cca99070d28456c0c5eb6b111d84c4569e0886b7b2f37cbfc
+result 5bfe0a1c69c68d608b30170d0f8d3a395966831d592ec3fe5dbf643a88456233
+
+Commands, captured inputs, result.json and serial:
+ .build/floating-targeted/module-splice-20260926/
+The diagnostic process and its QEMU have exited. The separate kernel compiler
+continues with its original release binary; this flight grants no compilation
+credit to EvoCC for the reference-built module or diagnostic userspace.
