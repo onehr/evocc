@@ -194,8 +194,12 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 ";
 
 #[test]
-fn a_constant_lowers_to_a_move_immediate_and_add_to_add() {
-    assert_eq!(mnemonics(&lower(ADD)), vec!["mov#", "add"]);
+fn a_small_constant_selects_add_immediate_while_larger_ones_keep_registers() {
+    assert_eq!(mnemonics(&lower(ADD)), vec!["mov#", "add#"]);
+    assert_eq!(
+        mnemonics(&lower(&ADD.replace("bits<32> 7", "bits<32> 4096"))),
+        vec!["mov#", "add"]
+    );
 }
 
 #[test]

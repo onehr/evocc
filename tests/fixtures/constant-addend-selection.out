@@ -1,0 +1,51 @@
+2026-09-26 — K02g: select existing bounded add/sub immediates.
+
+RED: the MIR immediate-shape assertion and CLI assembly assertion fail, with
+zero Rust compilation errors. The source's numeric result already agrees.
+GREEN: full-register bits<32>/bits<64> ADD/SUB select the existing unsigned
+twelve-bit immediate for directly known constants in [0,4095]. Only ADD may
+commute already evaluated SSA operands. Source overflow checks, narrow/pair
+paths, dynamic operands and nonmatching operations remain unchanged.
+
+Four MIR tests: 24 selection cases, 120 exact EvoIR/MIR comparisons, eight
+nonmatching/dynamic controls, two original E3004 traps and 48 Linux/Darwin
+assembler encodings. The CLI case passes O0/O2 C-HIR, EvoIR, MIR and assembly.
+The first affected gate had 1025 PASS / 2 FAIL / 4 historical ignored: one old
+register-form assertion and a spill fixture whose small constants now no longer
+created pressure. The latter retains its real-spill assertion, using constants
+4097..4136 and the corresponding exact sum. All 35 existing lowering/native
+tests then pass. Final affected gate against c96d55f: 1027 PASS / 0 FAIL /
+4 historical ignored; Clippy -D warnings and fmt PASS. This is not a complete
+workspace/offline-replay claim.
+
+Sealed ARM64: 14 PASS — six whole-program controls (EvoCC/GCC14/Clang19 x
+O0/O2) and eight mixed links (two oracles x two directions x O0/O2).
+Image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2,
+GCC 14.2.0-19, Clang 19.1.7, network none. Optimized and native-tested debug
+compiler fixture assemblies agree byte for byte for all six source variants.
+
+Original new-config KVM commands, flags, input hashes and exported names/kinds
+agree, within the unchanged 60-second emission limit:
+virt/kvm/kvm_main.o: text 166792 -> 166060; data/BSS 13933/168 unchanged;
+189 register add/sub operations become immediate; emission 6.400 seconds.
+arch/arm64/kvm/hyp/pgtable.o: text 33748 -> 33620; data/BSS 1000/0 unchanged;
+38 register add/sub operations become immediate; emission 4.615 seconds.
+Text uses the same complete read-only section accounting as the prior record,
+not .text alone. No objects installed; original runtime NOT RUN. K02/K03 remain
+OPEN. Frozen release e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f
+is unchanged and excludes K02d/e/f/g. No runtime speedup is inferred.
+
+Commands: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+cargo test -p evocc-mir -p evocc --test constant_addend_selection --offline -j 2
+cargo test -p evocc-mir --test section5_lowering --test section9_native_differential --offline -j 2
+tools/gate-changed.sh c96d55f --offline -j 2
+Local scripts/results: .build/floating-targeted/constant-addend-20260926/
+
+SHA256:
+source 2670163dd1b152621a4d9923d04467635fad1f5d4bc155730a4fc5944d9fc155
+optimized compiler 314b21866d89269e0efa7bec87f2ca458a14f24b81e34409549a76a010c2e3d8
+kernel.json 774e0b7e86131466cb1950c83f8ef6947441d9773562e78f023eacb63dad1ea5
+preparation.json 7e6628280b40a3f4cce32727e04da9d6d6324bfc849b18217d6b654164a7348b
+native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+gate-first.log 13f62170ed7a527b85218a44fa6204403e037c95efedcb0b7c9f0c37f5bf289c
+gate.log a21adbfeb66c09dd094d27b3c1e847f4ff7a201bf356eaa906a67c892d86cf75

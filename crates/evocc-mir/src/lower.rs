@@ -4009,13 +4009,46 @@ fn simple(
     let left = lowerer.reg(lhs)?;
     let right = lowerer.reg(rhs)?;
     let dst = lowerer.fresh(class);
-    insts.push(MInst::Binary {
-        op,
-        dst,
-        lhs: left,
-        rhs: right,
-        width: width_of(class),
-    });
+    let width = width_of(class);
+    // Select an existing unsigned 12-bit immediate, never fold away the
+    // source's checked-arithmetic predicate. Commuting ADD only exchanges
+    // already-evaluated SSA operands; SUB must keep its minuend/subtrahend.
+    // Narrow and pair values keep their established representation paths.
+    let small = |value: &Value| {
+        lowerer
+            .constants
+            .get(&value.id)
+            .map(|raw| raw & width.mask())
+            .filter(|raw| *raw <= 4095)
+    };
+    let immediate = if matches!(result.ty, EvoIRType::Bits(32 | 64)) {
+        match op {
+            BinOp::Add => small(rhs)
+                .map(|imm| (left, imm))
+                .or_else(|| small(lhs).map(|imm| (right, imm))),
+            BinOp::Sub => small(rhs).map(|imm| (left, imm)),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Some((lhs, imm)) = immediate {
+        insts.push(MInst::BinaryImm {
+            op,
+            dst,
+            lhs,
+            imm,
+            width,
+        });
+    } else {
+        insts.push(MInst::Binary {
+            op,
+            dst,
+            lhs: left,
+            rhs: right,
+            width,
+        });
+    }
     lowerer.bind(result, dst);
     Ok(())
 }

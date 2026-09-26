@@ -310,7 +310,9 @@ fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
 "
         );
         for id in 10..50 {
-            writeln!(source, "    %v{id} = const.bits<64> {}", id - 9).unwrap();
+            // Keep these values outside the bounded add-immediate selector:
+            // this is a real spill/lifetime test, not constant materialization.
+            writeln!(source, "    %v{id} = const.bits<64> {}", 4096 + id - 9).unwrap();
         }
         source.push_str(
             "    (%v50, %v51, %v52) = alloca.dynamic %v8, %v9, %v2 [origin=1, align=16]
@@ -331,7 +333,7 @@ fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
     (%v100, %v101, %v102) = load %v99, %v98, %v50 : bits<64>
     %v103 = add.bits<64> %v94, %v96
     %v104 = add.bits<64> %v103, %v100
-    %v105 = const.bits<64> 834
+    %v105 = const.bits<64> 164674
     %v106 = sub.bits<64> %v104, %v105
     %v107 = trunc.bits<32> %v106
     ret %v107, %v101, %v102

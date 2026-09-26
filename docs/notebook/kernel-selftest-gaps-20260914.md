@@ -6,6 +6,40 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Interrupted uniform build recovered — 2026-09-26
+
+At the next live inspection, neither original PID 13358 nor 13361 nor any
+kernel/compiler child remained. The old bench summary still said RUNNING;
+the termination cause is not established. Its first pass completed **7002/7002
+assembled** and `prepare.log` completed successfully, but there was no complete
+prepared-input/link/boot receipt. Those facts are not K13/K14 acceptance.
+
+The existing `--resume-kernel-prepared .evidence/k1/20260926T080947Z` path has
+now verified all 7002 installed objects against their cache/input/compiler
+identities and entered actual-header compilation. New run:
+`.evidence/k1/20260926T133321Z`; bench
+`.evidence/bench/20260926T133321.056520Z`; owner **93550**, worker **93553**.
+The release hash remains `e8bddc0a…686e312f`; partial second-pass products are
+not credited as compilation evidence. No first-pass recompilation, new clone
+or runtime disk was requested. Free space at restart: **106 GiB host / 26 GiB
+build volume**. Subsequent lifecycle/provenance/boot and K13/K14 are still pending.
+This is a live restart checkpoint, not a perpetual-running claim.
+
+### Constant add/sub selection — 2026-09-26
+
+K02g's C and IR reductions go RED → GREEN: full-register constant addends in
+[0,4095] select existing immediate instructions. Only evaluated ADD operands
+commute; source guards, narrow/pair operations and dynamic values are unchanged.
+Four MIR tests cover 120 exact value comparisons, two overflow traps and 48
+assembler encodings; the CLI fixture and 14 native/mixed-link controls pass.
+The first gate found two obsolete test-shape assumptions; the spill regression
+was adjusted to retain actual register pressure, not remove its spill assertion.
+The final gate is **1027 PASS / 0 FAIL / 4 historical ignored**, Clippy/fmt green.
+Both unchanged original KVM commands assemble with identical exported symbols:
+text **166792 → 166060** and **33748 → 33620** bytes. Objects are not installed;
+K02/K03 runtime acceptance stays OPEN. The frozen uniform compiler excludes this
+change. [Permanent test and exact record](../../tests/fixtures/constant-addend-selection.out).
+
 ### Syscall-user-dispatch architecture boundary — 2026-09-26
 
 K11i adds actual bounded execution to the earlier source diagnosis: both GCC

@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.43** | **Authoritative reference** | **2026-09-26**
+**Revision 0.44** | **Authoritative reference** | **2026-09-26**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -211,6 +211,14 @@ width `N <= 64`; do not mask a count modulo the machine width to select it.
 The source count obligation and the operand's zero/sign extension remain in
 place. Dynamic/out-of-range counts and 128-bit pair operations keep their
 existing paths. This is instruction selection, not an EqSat rewrite.
+
+For full-register `bits<32>`/`bits<64>` addition and subtraction, a directly
+known right operand in `[0, 4095]` may select the existing unsigned twelve-bit
+immediate form (revision 0.44). Addition may commute already evaluated SSA
+operands to place such a constant on the right; subtraction may not. Preserve
+all source checked-arithmetic obligations and evaluations. Narrow/pair values,
+other operations, dynamic values and constants outside this bounded selection
+keep their established paths; this adds no EqSat rule or flag-setting form.
 
 `bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
 their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
@@ -1127,6 +1135,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
 | 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |
 | 0.42 | 2026-09-26 | Select either adjacent conditional successor as fall-through after parameter-copy placement; invert only the emitted condition, retaining logical edges, labels and long-branch relaxation. |
 | 0.41 | 2026-09-26 | Errata: synchronize dynamic allocation/release forms, grammar and frame rules with the existing EvoIR Appendix D contract and implementation; fixed storage remains stable, only the top dynamic allocation can be popped, and function-lifetime allocations are not reclaimed at VLA scope exit. No new execution scope. |

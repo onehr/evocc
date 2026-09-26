@@ -31672,6 +31672,22 @@
   ],
   "targetedCompilerRepairs": [
     {
+      "id": "K02g",
+      "date": "2026-09-26",
+      "status": "TARGETED_PASS",
+      "scope": "Select existing full-register add/sub immediates for known constants in [0,4095]; commute only evaluated ADD operands and preserve source guards; not an original KVM runtime pass",
+      "record": "tests/fixtures/constant-addend-selection.out",
+      "changesFullRunTotals": false,
+      "installed": false,
+      "runtime": "NOT_RUN",
+      "compilerSha256": "314b21866d89269e0efa7bec87f2ca458a14f24b81e34409549a76a010c2e3d8",
+      "objectRecord": ".build/floating-targeted/constant-addend-20260926/kernel.json",
+      "objectRecordSha256": "774e0b7e86131466cb1950c83f8ef6947441d9773562e78f023eacb63dad1ea5",
+      "nativeControlsPassed": 14,
+      "assemblerEncodingChecks": 48,
+      "gate": {"passed": 1027, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
+    },
+    {
       "id": "K02f",
       "date": "2026-09-26",
       "status": "TARGETED_PASS",

@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-26**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.43**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.44**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -204,6 +204,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     but text changes by only 0/-56 bytes. Nothing is installed; no runtime
     speedup is claimed and the frozen full build excludes this repair.
     K02/K03 stay OPEN. [Exact boundaries and results](tests/fixtures/constant-shift-selection.out).
+
+  - [x] **K02g — Select bounded constant add/sub immediates**, 2026-09-26.
+    The [small C case](tests/fixtures/constant-addend-selection.c) and MIR shape
+    assertions go RED → GREEN. Full-register constants in [0,4095] use existing
+    immediate forms; only ADD commutes evaluated operands. Overflow guards and
+    all nonmatching paths remain. Four MIR tests, one CLI test, 48 assembler
+    encodings, 14 native/mixed-link controls and the 1027-test affected gate pass;
+    Clippy/fmt pass. The spill regression still forces real spills. Original KVM
+    objects keep exports and shrink by 732/128 text bytes. No objects installed,
+    no runtime speedup claim; the frozen full build excludes this repair.
+    K02/K03 stay OPEN. [Exact evidence](tests/fixtures/constant-addend-selection.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
@@ -807,8 +818,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
-  The corrected launch is running; previous receipts describe incremental compositions.
-  Later K02d/K02e/K02f are independently tested but deliberately absent from that frozen
+  The corrected launch completed its 7002-object first pass, then was found
+  interrupted with a stale RUNNING summary. The verified prepared-input resume
+  is now running (`20260926T133321Z`); previous receipts describe incremental compositions.
+  Later K02d/K02e/K02f/K02g are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
