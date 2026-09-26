@@ -347,6 +347,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     no global tunable, source, original timeout or historical total is changed.
     [Paired record](tests/fixtures/rseq-registration-order.out).
 
+  - [ ] **K11f — Retest pidfd's recycling-loop timeout on the final Image** — `OPEN`, P1.
+    The [bounded syscall reduction](tests/fixtures/pidfd-recycle-progress.out)
+    completes 1024 stop/continue/reap cycles in root and fresh namespaces on
+    both kernels. The namespace's actual 4M PID limit explains the original's
+    bounded-search SKIP. Fresh unchanged originals both finish within 45s with
+    7 PASS / 1 SKIP, but the historical subject timeout and measured slowdown
+    are not declared repaired by that retry. Preserve them for K13's final pair.
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching

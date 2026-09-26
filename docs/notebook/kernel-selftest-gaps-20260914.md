@@ -2966,3 +2966,19 @@ reference is executed here; the new uniform EvoCC composition is still building
 and must supply its own matching module. K12 and the old full-run totals remain
 open/unchanged. This flight uses a 4.7 MiB initramfs and the existing 64 MiB
 snapshot scratch disk; all its processes exited without a large runtime copy.
+
+### PID namespace recycling boundary and bounded progress — 2026-09-26
+
+The [1024-cycle C reduction](../../tests/fixtures/pidfd-recycle-progress.out)
+passes in both root and fresh PID/mount namespaces on the retained pair. Root
+`pid_max` is 32768, but each new namespace is initialized to 4194304 by the
+frozen kernel. The original's 32768-bound search explicitly skips when it
+passes that bound; the root sysctl is not its effective recycling limit.
+
+The unchanged original now completes on both sides under 45 seconds, with
+**7 PASS / 1 SKIP** internally (outer PASS). Neither that retry nor the bounded
+controls constitutes a compiler repair or evidence of actual PID reuse. The
+old subject TIMEOUT remains, and the small loops still measure a substantial
+subject/reference duration gap. K11f stays OPEN for final-subject validation.
+All flights end normally; the controls use a 2.25 MiB payload and the existing
+scratch disk, and original replays reuse the retained runtime pair.

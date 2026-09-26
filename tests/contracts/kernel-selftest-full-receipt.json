@@ -31499,6 +31499,22 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K11f",
+      "date": "2026-09-26",
+      "status": "OPEN_FINAL_RETEST",
+      "program": "pidfd:pidfd_test",
+      "changesFullRunTotals": false,
+      "reason": "New PID namespaces use a 4M limit, while the original recycling search explicitly skips past 32768; this does not explain away its historical timeout",
+      "causalControl": "Root and fresh-namespace 1024-cycle fork/stop/continue/reap controls complete, six assertions per Image",
+      "freshOriginalBoth": "outer PASS; inner 7 PASS, 0 FAIL, 1 SKIP; unchanged 45-second bound",
+      "compilerRepair": false,
+      "record": "tests/fixtures/pidfd-recycle-progress.out",
+      "probeRecord": ".build/floating-targeted/pidfd-progress-20260926/namespace-result.json",
+      "probeRecordSha256": "3a1b6201ec8b78c567cb1185e7521ec5d15707074723ac85bad399a4a0c2cb99",
+      "pairedRecord": ".build/floating-targeted/pidfd-progress-20260926/original.json",
+      "pairedRecordSha256": "a91f2c9aec431dcb47caa756c8396526b162444a86211ceada705cf9e1d46fd8"
+    },
+    {
       "id": "K12-splice-module",
       "date": "2026-09-26",
       "status": "REFERENCE_PASS_SUBJECT_PENDING",

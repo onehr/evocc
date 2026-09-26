@@ -1,0 +1,60 @@
+2026-09-26 — K11f bounded pidfd progress and unchanged-original replay.
+K11f remains OPEN for the historical timeout/final-subject replay; no repair.
+
+The old full run reached seven successful assertions, then its last recycling
+loop hit 45 seconds only on EvoCC. The new small reference-built C observer
+runs 1024 pipe/fork/SIGSTOP/SIGCONT/reap cycles and checks the already-retired
+proc descriptor reports ESRCH on every cycle. No PID sysctl, original source,
+original argument, original deadline, kernel or userspace runtime is changed.
+
+Final same-payload GCC/EvoCC pair (seconds for the 1024-cycle loop):
+                           reference             subject
+root namespace             0.084779              0.351297
+fresh PID/mount namespace   0.083400              0.365978
+Each side completes both programs and all six assertions, then powers down.
+This proves bounded progress and the retired-descriptor check, NOT PID-number
+reuse or the original 32768-cycle test, nor a cause for all historic timeouts.
+
+Both root namespaces report pid_max=32768; both fresh namespaces report
+4194304. Frozen kernel/pid_namespace.c:110 initializes a new namespace to
+PID_MAX_LIMIT, which include/linux/threads.h sets to 4M for this 64-bit profile.
+The original test bounds its search by PIDFD_MAX_DEFAULT=32768 and explicitly
+skips after a created PID exceeds that value (pidfd_test.c:198-202,364-369).
+The root's 32768 value therefore cannot establish that this nested test will
+exercise actual reuse of PID 1000. This explains the observed final SKIP,
+not the previous execution's 45-second timeout.
+
+Fresh unchanged original, same retained Image/runtime pair, one VM at a time:
+  reference: outer PASS, inner 7 PASS / 0 FAIL / 1 SKIP, shutdown at 15.506s
+  subject:   outer PASS, inner 7 PASS / 0 FAIL / 1 SKIP, shutdown at 32.966s
+The upstream wrapper limit is still 45s; neither the skip nor a successful
+retry is relabeled as eight passing assertions or a compiler performance fix.
+The older TIMEOUT remains recorded. A new uniform Image must be tested again.
+
+Build: sealed ARM64 GCC14 -static -O2 -Wall -Wextra -Werror, with and without
+FRESH_NAMESPACE. Existing selftest-init.c and gen_init_cpio; no new framework.
+Flight: existing selftest.py, hvf-host, 4 CPUs/2048 MiB, KUnit autorun off,
+QEMU drift acknowledged. Each bounded control has 15s; original has 45s.
+Small payload 2355712 bytes; existing 64 MiB snapshot scratch. Original replays
+reuse retained full runtime disks read-only/snapshot, with unchanged hashes.
+All diagnostic/original QEMU processes exited. Changed gate reports no Rust
+crate affected; no Cargo/workspace PASS is implied by these C/kernel controls.
+
+SHA-256:
+source c9d2271ca30f861d0f95db0a175c113804e5894ad36adddbdd31bb48fde07b33
+root ELF 7245522fee9a56c3225141621fd62a1ca8c40eb311dd49ea9f9c994d3d3ea741
+namespace ELF e79002694b1f9505a006f0f7fcf2ca03293315535be5ecc256bedc90ec95fac5
+payload d2bc460ee0eef61ff8a800e1d247101c744adbf6fc10e27855e53f1064a6612d
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+reference control serial 4553f65da58b62217fff15a7d89f80d8c9d75c74c68183f36f5f69116434f89f
+subject control serial 2cbd72fe98f67c3c7c4bf4ab201257e155befc3b97acdb501aa70ae00ecdf84d
+reference original serial cf977b8290456e048803a85308fcabb872bd0458f841331a35bf80052e84dbcf
+subject original serial 4ff667c8c9ea6841154df1a7f5797958601596da40d8e348e525c5c128762797
+pid_namespace.c 5176a10ff37810d64ffe06668bd37dd37c0a76c0c9943f1f987bca2ecc66e839
+threads.h ac7161de729d183418eee161e1d0bbc2253839139d20e1d8a278510b6108d130
+original C ad83b9ed85e8f6f204563e7960048e896a94338043c91297f3cb4c53c5e17514
+
+Directory: .build/floating-targeted/pidfd-progress-20260926/
+namespace-result.json 3a1b6201ec8b78c567cb1185e7521ec5d15707074723ac85bad399a4a0c2cb99
+original.json a91f2c9aec431dcb47caa756c8396526b162444a86211ceada705cf9e1d46fd8
