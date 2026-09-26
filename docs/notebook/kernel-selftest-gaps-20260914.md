@@ -6,6 +6,27 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Dying-memcg control and reference tracing — 2026-09-26
+
+K11g now reuses the frozen 30-group dead-cgroup workload and the existing
+100-group threaded workload, including the original helper's ignored argument.
+The old matched BPF Images retain 5/4 and 2/8 dying descendants after 20 seconds
+(GCC/EvoCC). Root-cgroup fork/affinity/page activity clears all four populations
+before the distinct-memcg displacement phase begins. A bounded trace on a fresh
+30-group pair observes the remaining 3/5 CSS releases during that control, with
+no dropped events. An out-of-line `drain_stock` probe alone cannot rule out
+inlined drains or establish the final reference holder. Both trace flights
+complete and shut down; their TAP assertion is capture completion, not an
+original kselftest PASS. Plain observation programs have no TAP and remain
+INVALID_OUTPUT in the generic parser, despite successful observation exits.
+
+The source has the pattern addressed by upstream
+[empty-stock reference release](https://lkml.rescloud.iu.edu/2608.2/04093.html),
+but these controls do not establish that patch as the cause or remedy here.
+K11g stays OPEN for the final reference-drop path. No kernel, original timeout,
+test assertion or production runtime changes. Payloads total under 6 MiB and
+reuse the existing 64 MiB scratch disk. [Sources and hashes](../../tests/fixtures/cgroup-stock-displacement.out).
+
 ### Conditional fall-through selection — 2026-09-26
 
 K02e closes a bounded emission inefficiency observed in both original KVM

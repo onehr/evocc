@@ -1,0 +1,56 @@
+2026-09-26 — K11g, delayed dying-memcg release; diagnosis OPEN.
+
+Reuse frozen test_kmem.c functions, not a rewritten stress workload:
+30 groups through cg_run_in_subcgroups(parent, alloc_dcache, (void*)100, 30),
+and 100 groups through alloc_kmem_smp. Preserve the helper's ignored argument.
+Observe for 20s, then perform 8 root-cgroup fork/affinity/one-page cycles on
+each of 4 CPUs; observe 3s; only then charge 8 distinct memcgs per CPU and
+observe 5s. All control memcgs are outside the measured parent and stay alive
+until observation completes. This diagnostic does not alter original limits.
+
+Retained original-group dying counts after idle / root-control / displacement:
+GCC: 5 / 0 / 0. EvoCC: 4 / 0 / 0.
+Threaded-group counts: GCC 2 / 0 / 0; EvoCC 8 / 0 / 0.
+All four exit zero as observation completion; no TAP was emitted, so the generic
+selftest parser correctly records INVALID_OUTPUT, not PASS. Both boot/shutdown
+predicates PASS. Do not infer an original test PASS from these observations.
+
+Follow-up trace wrapper reuses the exact stock ELF and original-group path.
+Frozen BTF layout: stock nr_pages[7] offset 1, cached[7] offset 8, css offset 0.
+Kprobes record stock draining, memcg offlining/release and observation markers.
+GCC: idle retains 3, then all three releases at 21.225685..21.225742 seconds.
+EvoCC: idle retains 5, then releases at 25.559410..25.590174 seconds.
+Both reach zero before the distinct-stock phase. No out-of-line drain_stock
+event occurs during that release interval, but inlined paths are not ruled out.
+All per-CPU overrun/commit-overrun/dropped counters are zero. Two trace-capture
+assertions PASS and both boot/shutdown predicates PASS. Capture completion
+does not establish the exact reference owner or waive original failure.
+
+The upstream report "mm: memcg: release the css reference when a stock slot
+empties" describes a real matching source pattern, not demonstrated causality:
+https://lkml.rescloud.iu.edu/2608.2/04093.html
+Root activity clearing the population before displacement is a critical control.
+Next: capture the final css_release caller, including inlined drain paths.
+No frozen kernel patched; no new full runtime disk, no full benchmark credit.
+
+Sealed ARM64 GCC14.2.0-19, static O2. Trace wrapper -Wall -Wextra -Werror.
+Frozen upstream helper compiled via its existing include/source paths.
+QEMU11.1.1 acknowledged drift, locked MT-TCG Cortex-A72 / four CPUs / 2GiB.
+Reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Shared scratch unchanged 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+Local build.sh/replay.py and result.json:
+.build/floating-targeted/cgroup-stock-20260926/
+.build/floating-targeted/cgroup-stock-trace-20260926/
+
+SHA256:
+observation source e9152557aa0e4f33b1ebb7af4fbbf0e8b3e209e02941e7b0df17dd198fe5929b
+observation ELF aea718f23860c78c452a321f57da2d86da1cf0ea3ffdc756eb74cbe9524acd0d
+observation result 60b8e5037a32df916c2cc5dc29f4b257e2df94c40a91ca6e127f79e2695da47d
+reference capture 68cdf784547ba4622f771530521e1c34ca32cf63ebd2b6c729be278da43a6640
+subject capture c411f577277b74bfdff877f482860762a5ae282057f15645a0477da8159860cf
+trace source 4cf08433097529c646467992182bfcd0f9ed38b9bce8a91915cd23ce3e97264c
+trace ELF 79f3f0361a29efc2e55452794c51b8b5e0afcfd58227c6a3f2142682c6580ea7
+trace result 7309886c316f06350bd8f93cc33de257123f185c160fe72dd39930cb35f62dbf
+reference trace 0231ceefc525f689494a7ff8513d0a9243639fb74272c2ae20a8ead8402cb9de
+subject trace 5bdee5527314b0b3007db5a54beba8d5b26bc4adcad2abd4ab180911c53ab97b

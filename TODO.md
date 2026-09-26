@@ -391,6 +391,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     7 PASS / 1 SKIP, but the historical subject timeout and measured slowdown
     are not declared repaired by that retry. Preserve them for K13's final pair.
 
+  - [ ] **K11g — Attribute delayed dying-memcg release** — `OPEN`, P1.
+    The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
+    retains 5/4 dying groups after 20s on GCC/EvoCC, then clears them with root
+    activity before distinct-memcg stock displacement. The 100-group threaded
+    control similarly retains 2/8 then clears. Bounded kprobes observe delayed
+    CSS release on both kernels without lost events, but do not yet identify
+    its last reference holder. Do not equate this with the upstream empty-stock
+    fix or waive the original FAIL. Next trace the final reference-drop path.
+    [Measured controls and limits](tests/fixtures/cgroup-stock-displacement.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching
@@ -759,7 +769,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
   The corrected launch is running; previous receipts describe incremental compositions.
-  Later K02d is independently tested but deliberately absent from that frozen
+  Later K02d/K02e are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
