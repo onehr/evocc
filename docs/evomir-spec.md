@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.40** | **Authoritative reference** | **2026-09-26**
+**Revision 0.41** | **Authoritative reference** | **2026-09-26**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -316,8 +316,10 @@ stated.
 | Form | Semantics |
 |---|---|
 | `frame.slot rd [origin=O, size=S, align=A]` | `rd := the address of a fresh object of S bytes at alignment A`, one per dynamic execution of the instruction, as EvoIR Section 3.7 requires of `alloca`; after allocation the slot is a fixed frame offset (Section 6), and the reuse of that memory by a re-executed `alloca` is sound because EvoIR ends the previous object's lifetime before the site is reached again |
+| `stack.alloc rd, rn [origin=O, align=A]` | fresh uninitialized object of the runtime unsigned `gpr64` byte count `rn`, with distinct origin O and power-of-two alignment A; `rd` is `gpr64`; preserves fixed-frame storage and earlier live dynamic objects, with a disjoint outgoing-argument area below the new object (Section 6) |
+| `stack.release rn` | ends the dynamic object's logical lifetime in the object interpreter; native emission reclaims stack bytes only if this object is still the top dynamic allocation, otherwise retaining the bytes until later frame restoration; never releases an intervening live function-lifetime allocation |
 | `mem.copy [dst], [src], #size, #align` | copies `size` bytes from `src` to `dst`, transferring per-byte initializedness and pointer fragments exactly as EvoIR Section 3.8's `copy` does (identical or disjoint ranges); emission expands it to `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes and a counted loop above; the loads of the expansion never report an uninitialized read, because they move representation, not values |
-| `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the slot's offset from `sp` (revision 0.4) |
+| `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the stable frame slot, from `sp` only when it remains fixed and otherwise using the entry-frame base (Section 6) |
 | the prologue and epilogue | synthesized at emission from Section 6 and never present as instructions: the interpreter's memory is EvoIR's object model, with no linear stack, no `sp` and no return address, so they are not interpretable; the allocated form is judged by the verifier and the native run (revision 0.4) |
 | the register-offset addressing of `mem.copy`'s counted loop | emission's business, like the prologue's pre-indexed `stp` and `frame.slot`'s `add rd, sp, #off`: the loop counts an offset in a register, so the expansion uses the register-offset form of `ldr`/`str`, which the table's immediate rows do not admit and which only emission ever writes (revision 0.5) |
 | `asm` / `asm.goto` | the EvoIR instruction of its specification's Section 3.11, carried through unchanged: the template, its operands with their constraints, its clobbers and, for `asm.goto`, its label successors. The interpreter does not execute it (it reports `E3021`); emission writes the template with each operand reference replaced by the operand's assigned register, memory address or immediate |
@@ -354,7 +356,8 @@ in the table is refused with the diagnostic named in Section 10.
 | `global_addr @g` / `func_addr @f` | `adrp` + `add` with the symbol spellings of Section 4 |
 | `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` when the scale is a power of two and `mul` otherwise, then `add` for the add direction and `sub` for the subtract direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`, an admissible difference because the pointer-formation guard has been asserted before |
 | `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
-| `lifetime.end` | nothing |
+| `alloca.dynamic` | `stack.alloc` at the instruction's program point, preserving byte-count operand, origin and alignment |
+| `lifetime.end` | `stack.release` for an address originating from dynamic allocation, including explicit edge transport; fixed frame slots remain reserved and need no native instruction |
 | `pointer_valid`, `access_in_bounds` | nothing: the guards are the obligations the front end already lowered into `ub.assume`; the instruction itself has no machine effect |
 | `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker; bounded immediate address selection below preserves access attributes |
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
@@ -525,8 +528,29 @@ rounded to its declared alignment, laid out in origin order from the top of
 the frame downward), then the spill area (one 8-byte slot per spilled
 virtual register), then the register save area of a variadic function
 (Section 6, 64 bytes), then outgoing stack arguments (Linux only, revision 0.10).
-`sp` stays 16-byte aligned at every call. The frame is static: no dynamic
-`alloca` exists in EvoIR.
+`sp` stays 16-byte aligned at every call. Fixed slots remain in this frame;
+EvoIR's approved `alloca.dynamic` additionally moves `sp` at runtime.
+
+**Dynamic frames (revision 0.41, synchronization with EvoIR Appendix D).**
+Each `stack.alloc` evaluates its existing size operand once, subtracts that
+unsigned byte count from the current SP and rounds the object address down to
+`max(A, 16)` alignment. A private 16-byte header below the object records the
+previous SP; below that header, emission reserves the aligned outgoing-argument
+area. The header and outgoing arguments are not bytes of the user object.
+Fixed objects, callee-save slots and spills use addresses derived from the
+stable entry frame (`x29`, including the fixed frame's realignment), not the
+moving SP. Returning restores SP from `x29` before restoring the saved frame
+record; recursion therefore retains distinct activations.
+
+`stack.release` restores the saved SP only when its object address identifies
+the current top allocation (current SP plus the outgoing area and header).
+Otherwise it leaves native stack storage reserved: ending a VLA scope must
+not pop a later function-lifetime `alloca`. Logical lifetime still ends,
+including in the interpreter, so retaining bytes does not authorize later
+access. Allocation and release use reserved scratch registers and do not
+clobber live NZCV. No stack-overflow guarantee or general non-top reclamation
+is introduced. These are the already-approved function-lifetime and VLA
+rules, not a new dynamic-storage model.
 
 Physical frame bytes may be reused by distinct logical origins only when the
 address has one definition and every use is a direct, bounded, nonvolatile
@@ -1029,6 +1053,8 @@ instruction     := "%v" int ":" class " = " op operands
                  | "%v" int ":" class ", %v" int ":flags = " ("adds"|"subs") ".w"|".x" operands   ; a register and the flags
                  | "%v" int ":" class " = " op ".w"|".x" operands        ; width suffix on two-width forms
                  | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
+                 | "%v" int ":gpr64 = stack.alloc " reg ", [origin=" int ", align=" int "]"
+                 | "stack.release " reg
                  | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " [" reg "], [" reg "], #" int ", #" int
                  | store-form [" volatile"]
                  | "%v" int ":" class " = atomic.load." atomic-kind " " atomic-order [" volatile"] " [" reg "]"
@@ -1087,6 +1113,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.41 | 2026-09-26 | Errata: synchronize dynamic allocation/release forms, grammar and frame rules with the existing EvoIR Appendix D contract and implementation; fixed storage remains stable, only the top dynamic allocation can be popped, and function-lifetime allocations are not reclaimed at VLA scope exit. No new execution scope. |
 | 0.40 | 2026-09-26 | Select bounded same-block constant pointer offsets into existing ordinary load/store immediates, preserving access attributes, strict-alignment encodability, guards and effect boundaries. |
 | 0.39 | 2026-09-24 | Forward direct-edge identities through ordinary validated-SSA assembly without changing its effects; distinguish independent fixed input occurrences of the same value while preserving genuine tied-operand conflicts. |
 | 0.38 | 2026-09-24 | Remove only proven trivial block-argument transport during SSA destruction, including unchanged loop cycles; retain nontrivial merges, complete edges, original effects and deterministic physical allocation. |

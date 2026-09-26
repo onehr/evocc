@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-26**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.40**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.41**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -695,6 +695,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     the 44-test affected gate pass. This strengthens acceptance; no checker
     implementation defect or whole-kernel certificate closure is claimed.
     [Scope and field matrix](tests/fixtures/proof-semantic-metadata.out).
+
+  - [x] **T03d — Synchronize dynamic-stack forms and frame clauses**, 2026-09-26.
+    The MIR spec regression went RED while the executable allocation/release
+    control passed. EvoMIR 0.41 now reflects the existing Appendix D contract:
+    stable fixed storage, explicit runtime allocation, disjoint outgoing area
+    and top-only release without popping function-lifetime objects. The 28-test
+    lowering suite, native spill variants, three object-lifetime and six VLA CLI
+    tests pass; affected gate **1010 PASS / 0 FAIL / 4 historical ignored**,
+    Clippy/fmt green. This closes an erratum, not a new compiler feature or T03.
+    [Exact scope and commands](tests/fixtures/dynamic-stack-contract.out).
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed

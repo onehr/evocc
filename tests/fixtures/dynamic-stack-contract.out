@@ -1,0 +1,37 @@
+2026-09-26 — EvoMIR dynamic-stack clause consistency, TODO T03d.
+
+RED: section5_lowering's new spec regression failed with
+"missing allocation pseudo-form"; the new executable IR lowering/round-trip
+control passed. Zero compilation errors. This was a stale normative clause,
+not a newly demonstrated compiler execution defect.
+
+EvoIR Appendix D already approves alloca.dynamic and lifetime.end/stack.release.
+EvoMIR 0.41 synchronizes Sections 4/5/6/9: runtime byte count, fresh object,
+stable fixed-frame/spill storage, disjoint outgoing arguments, private previous-SP
+header, and top-only release. It removes "no dynamic alloca" and the blanket
+"lifetime.end | nothing" row. Intervening function-lifetime allocations are not
+reclaimed by VLA scope exit; retained native bytes do not prolong logical lifetime.
+No new operation, relaxed validator, runtime implementation or ABI is introduced.
+
+All commands use CARGO_TARGET_DIR=target/frontend, CARGO_NET_OFFLINE=true,
+--offline -j 2. The running kernel survey's release compiler is untouched.
+
+cargo test -p evocc-mir --test section5_lowering
+  28 PASS / 0 FAIL; origin/alignment/size/address operands survive machine text;
+  fixed lifetime.end does not emit a dynamic pop.
+cargo test -p evocc-mir --test section9_native_differential
+  dynamic_stack_storage_preserves_fixed_objects_and_spills
+  1 PASS / 0 FAIL; three fixed-size/alignment variants, actual spills,
+  both IR interpreters, text round-trip and host-native execution.
+cargo test -p evocc-lower --test expression_value_flow dynamic_stack_objects
+  3 PASS / 0 FAIL; block/call/recursion, function lifetime, uninitializedness,
+  bounds and alignment remain checked.
+cargo test -p evocc --test language_semantics variable_array
+  6 PASS / 0 FAIL; captures, reentry, release, retained alloca, initialization
+  option and ended-object E3010 controls.
+
+tools/gate-changed.sh HEAD --offline -j 2
+  1010 PASS / 0 FAIL / 4 historical ignored; Clippy -D warnings and fmt PASS.
+  Log: .build/floating-targeted/runtime-config-20260926/dynamic-stack-gate.log
+  This is the affected gate, not final workspace/offline acceptance or a new
+  full native Linux benchmark. Wider T03 and all final runtime gates remain open.

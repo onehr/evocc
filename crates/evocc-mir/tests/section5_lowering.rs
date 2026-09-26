@@ -14,6 +14,66 @@ fn lower(text: &str) -> evocc_mir::MModule {
     lowered
 }
 
+#[test]
+fn dynamic_allocation_and_release_preserve_their_text_operands() {
+    let source = "func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=8, align=8]
+    (%v6, %v7, %v8) = alloca.dynamic %v4, %v5, %v0 [origin=1, align=64]
+    (%v9, %v10) = lifetime.end %v7, %v8, %v3
+    (%v11, %v12) = lifetime.end %v9, %v10, %v6
+    %v13 = const.bits<32> 0
+    ret %v13, %v11, %v12
+}
+";
+    let module = lower(source);
+    let insts = &module.functions[0].blocks[0].insts;
+    let (allocated, size) = insts
+        .iter()
+        .find_map(|inst| match inst {
+            MInst::StackAlloc {
+                dst,
+                size,
+                origin: 1,
+                align: 64,
+            } => Some((*dst, *size)),
+            _ => None,
+        })
+        .expect("dynamic allocation keeps its origin and alignment");
+    assert_ne!(allocated, size, "the byte-count operand is not its result");
+    let released: Vec<_> = insts
+        .iter()
+        .filter_map(|inst| match inst {
+            MInst::StackRelease { address } => Some(*address),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(released, vec![allocated], "fixed slots are not popped");
+    let text = render_module(&module);
+    assert!(text.contains(" = stack.alloc "));
+    assert!(text.contains("stack.release "));
+    assert_eq!(evocc_mir::parse_module(&text).unwrap(), module);
+}
+
+#[test]
+fn dynamic_stack_contract_is_present_in_the_machine_specification() {
+    let spec = include_str!("../../../docs/evomir-spec.md");
+    assert!(
+        spec.contains("| `stack.alloc "),
+        "missing allocation pseudo-form"
+    );
+    assert!(
+        spec.contains("| `stack.release "),
+        "missing release pseudo-form"
+    );
+    assert!(spec.contains("| `alloca.dynamic`"), "missing lowering row");
+    assert!(!spec.contains("| `lifetime.end` | nothing |"));
+    assert!(!spec.contains("The frame is static: no dynamic"));
+    assert!(spec.contains(" = stack.alloc "), "missing canonical syntax");
+}
+
 /// The mnemonics of a lowered module, without the result extension.
 ///
 /// Section 6 has a function extend a result narrower than 32 bits before it
