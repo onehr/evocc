@@ -431,6 +431,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     tolerance or sleep is applied. Separate LRU/slab findings remain separate.
     [Evidence, source and unchanged verdicts](tests/fixtures/cgroup-stock-capacity.out).
 
+  - [x] **K11i — Verify arm64 syscall-user-dispatch's unavailable boundary** — `DONE`, P1, 2026-09-26.
+    The [small C probe](tests/fixtures/syscall-dispatch-unavailable.c) confirms
+    all three frozen `!GENERIC_ENTRY` EINVAL stubs while ordinary tracing still
+    stops, resumes and reaps its child. GCC/Clang-built probes pass 14 assertions
+    per kernel. All three unchanged originals still FAIL on both kernels with
+    normal shutdown; none is relabeled PASS. This closes **architecture-boundary
+    classification**, not dispatch support or K11/K13's full population.
+    [Source, original replays and hashes](tests/fixtures/syscall-dispatch-unavailable.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching

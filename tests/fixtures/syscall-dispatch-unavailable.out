@@ -1,0 +1,58 @@
+2026-09-26 — K11i: frozen arm64 syscall-user-dispatch API boundary.
+
+This is source-bound classification, not a compiler repair or original PASS.
+Frozen Linux 6.18.44 arch/Kconfig defines hidden GENERIC_ENTRY, selected by x86
+but not arm64. include/linux/syscall_user_dispatch.h has unconditional -EINVAL
+stubs for set_syscall_user_dispatch and both ptrace config operations when that
+option is absent. kernel/sys.c and kernel/ptrace.c route the tested requests to
+those exact functions. This is not a missing module, permission problem or a
+configuration toggle we may safely force on arm64: its syscall entry path does
+not implement the required dispatch work. No kernel source/config was changed.
+
+Minimal permanent source: syscall-dispatch-unavailable.c.
+Seven assertions per ELF: ON/OFF/invalid-selector all reach EINVAL; ordinary
+TRACEME reaches SIGSTOP; GET preserves the sentinel-filled output on EINVAL;
+SET of the original valid descriptor returns EINVAL; CONT resumes/reaps child.
+The test only owns/traces its own child and leaves no running child behind.
+Both sealed GCC14 and Clang19 builds pass -static -O2 -Wall -Wextra -Werror.
+Under the unchanged TCG Cortex-A72 lane, both retained kernels pass both ELFs:
+  GCC kernel   2 programs, 14 PASS / 0 FAIL / 0 SKIP
+  EvoCC kernel 2 programs, 14 PASS / 0 FAIL / 0 SKIP
+All diagnostics finish inside 15 seconds, with nonce-bound boot and shutdown.
+These PASS assertions confirm the unsupported boundary; they do not claim SUD
+functionality or replace upstream tests in the 970-program denominator.
+
+Unchanged original replays on matching retained runtime disks, 45 seconds each:
+  syscall_user_dispatch:sud_test       FAIL on both; inner 0 PASS / 7 FAIL
+  syscall_user_dispatch:sud_benchmark  FAIL on both; enable reports EINVAL
+  ptrace:get_set_sud                  FAIL on both; first GET assertion
+All six original flights complete and shut down normally. No timeout, assertion,
+return value, source, verdict or historical full-run total was rewritten.
+K11i closes this three-program architecture-boundary classification; K11/K13
+still require the other populations and fresh final-composition acceptance.
+
+Capture: .build/floating-targeted/syscall-dispatch-20260926/
+Build command per compiler:
+  COMPILER -static -O2 -Wall -Wextra -Werror
+    tests/fixtures/syscall-dispatch-unavailable.c -o OUTPUT
+The sealed ARM64 image is reused, network none. Its kernel usr/gen_init_cpio
+packs the two ELFs and retained init. replay.py uses tools/k1/selftest.py.flight;
+--original selects the three unchanged originals on snapshot runtime disks.
+The small diagnostic uses the existing 64 MiB scratch; original disks and
+Images are unchanged, hashes verified before and after. No new runtime clone.
+gate-changed selects no Rust crates for this standalone C diagnosis; renderer
+and JSON/diff checks pass.
+
+SHA-256:
+source 8625f10525513122e8dc9d41d72c64f6cc771f87cafe61cdb5147b60b16916b6
+GCC ELF 7469d775b0710216bb914e1e68b6b687614de0787fc96e253f0a3d1c2a810c11
+Clang ELF c7743060a29e1ede8c9fde91f3583bdcdc3da874086e76fc5908d0ed4914a3c3
+payload 922ae775c0376bad3b12d77bebe66e8037aae557327c8ef586b983e2a7b4e6e8
+result.json a4456be572109a84e4b969943d64a6063237caba3164d36a7a2ac02675bbad0f
+original.json 3886b388529af53184b84c66290806ba0b49cb2f32f319045cb1f2e36c5c192a
+include/linux/syscall_user_dispatch.h 8686ed80ff376f4aded36e7069932c3d99d78b75364852a4b39acbf15abeb489
+arch/arm64/Kconfig ed037e44764992d78c6b17bee05480752d3ae9bd66c2ceabf52628a3103ca1e5
+arch/Kconfig 0bf4dc634768f4107187edc2f79804885bdcbdce6236697c3c52f757e2df22f9
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Per-flight serial, payload, disk and Image digests are bound in the two records.

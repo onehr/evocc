@@ -31499,6 +31499,22 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K11i",
+      "date": "2026-09-26",
+      "status": "CLASSIFIED",
+      "programs": ["syscall_user_dispatch:sud_test", "syscall_user_dispatch:sud_benchmark", "ptrace:get_set_sud"],
+      "changesFullRunTotals": false,
+      "compilerRepair": false,
+      "reason": "Frozen arm64 does not select GENERIC_ENTRY; prctl and both ptrace SUD requests reach unconditional EINVAL stubs, while ordinary trace stop/resume/reap works",
+      "probeEachKernel": "14 PASS across GCC/Clang ELFs; this tests the unavailable boundary, not SUD functionality",
+      "originalEachKernel": "All three unchanged programs FAIL; normal boot/shutdown, original 45-second bounds",
+      "record": "tests/fixtures/syscall-dispatch-unavailable.out",
+      "probeRecord": ".build/floating-targeted/syscall-dispatch-20260926/result.json",
+      "probeRecordSha256": "a4456be572109a84e4b969943d64a6063237caba3164d36a7a2ac02675bbad0f",
+      "pairedRecord": ".build/floating-targeted/syscall-dispatch-20260926/original.json",
+      "pairedRecordSha256": "3886b388529af53184b84c66290806ba0b49cb2f32f319045cb1f2e36c5c192a"
+    },
+    {
       "id": "K11h",
       "date": "2026-09-26",
       "status": "CLASSIFIED",

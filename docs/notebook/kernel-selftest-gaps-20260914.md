@@ -6,6 +6,20 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Syscall-user-dispatch architecture boundary — 2026-09-26
+
+K11i adds actual bounded execution to the earlier source diagnosis: both GCC
+and Clang versions of a seven-assertion C probe pass on each retained kernel.
+Enable/disable and both ptrace configuration APIs reach the frozen arm64
+`!CONFIG_GENERIC_ENTRY` EINVAL stubs, while ordinary stop/resume/reap works.
+GET does not touch its sentinel destination. This is not a missing module or
+a safe user-toggle: arm64 lacks this generic syscall-entry implementation.
+The three unchanged originals (`sud_test`, `sud_benchmark`, `get_set_sud`)
+remain FAIL on both kernels; all six flights shut down within their original
+limits. Classification closes, not those original tests or full K7 acceptance.
+No source/config/timeout change or runtime disk copy.
+[Permanent C case and identity-bound results](../../tests/fixtures/syscall-dispatch-unavailable.out).
+
 ### Instruction-publication target observation — 2026-09-26
 
 K01b's fixed-address GCC reduction now has a read-only QEMU API-7 observer.
