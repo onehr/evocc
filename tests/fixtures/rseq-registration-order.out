@@ -1,0 +1,54 @@
+2026-09-26 — TODO K11e; classification, not compiler repair or original PASS.
+
+The direct upstream syscall_errors_test assumes no prior rseq registration.
+The frozen glibc registers the main thread before main. kernel/rseq.c:502-512
+rejects a different registration address with EINVAL before access_ok at
+532-533 can return EFAULT. The original invalid address is aligned -4096UL.
+The upstream companion run_syscall_errors_test.sh sets glibc.pthread.rseq=0
+before exec. Both are separate programs in the unchanged 970-test population.
+
+Small reference-built C probe, both retained kernels:
+  default glibc registration, invalid address -> EINVAL
+  disable registration before the probe's exec, same address -> EFAULT
+  register private aligned 32-byte area -> success
+  invalid different address -> EINVAL
+  duplicate own registration -> EBUSY
+  unregister own area -> success; invalid address -> EFAULT again
+Two TAP assertions PASS on each kernel, zero FAIL/SKIP, clean shutdown.
+The probe does not unregister glibc's area or impose a tunable on other tests.
+
+Fresh unchanged originals through their existing complete runtime/wrapper:
+  GCC: direct FAIL, companion script PASS
+  EvoCC: direct FAIL, companion script PASS
+All four boot/shutdown predicates PASS. Upstream timeout=0 remains untouched;
+diagnostic whole-boot bound 105 seconds, all cases finish normally. No test
+bytes, assertions, argv or wrapper policy changed. Direct FAIL remains FAIL.
+This is a reproducible libc/test-precondition mismatch, not source UB or an
+EvoCC miscompile. No historical full-run numerator changes and K13 remains open.
+
+Build: GCC14 in evo-flight-lab:sealed, linux/arm64, network none, one CPU/2 GiB:
+gcc-14 -static -O2 -Wall -Wextra -Werror rseq-registration-order.c -o rseq-registration-order
+Small flights use tools/k1/selftest.flight, existing init and 64 MiB snapshot disk.
+Original flights reuse runtime-alsa-fixed-20260923 without copying either disk.
+gate-changed acf4bfc: no Rust crate changed; no Cargo gate claimed.
+Initial diagnostic setup lacked init's required huge-pages file: no test ran;
+the failed capture remains in flights/setup-failed-reference, not acceptance.
+
+SHA256 identities:
+probe source 63dafea912151117032641133d82122e73842eb1a726c804d8414cd6c0c0e0be
+probe ELF c0939c8963885da8bb64f86b5b319fe793998d7e367874012850ba9e86f2a1a7
+payload 8d46a10b1402bc1a29ac2690567616c126d7e0ba453eab420b72779e6615832f
+GCC Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+EvoCC Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+original C fbf6acc7ebb243ee5c79d31f59ca4a9f0f68d57afd68c6550d9864e37d13af21
+companion script 1721a687bcfb5d983f4b08e1cf6a93981564c45e84dfb740324cf05ffc64a938
+kernel rseq.c a9d14ac4e9385ddb699a1706f835763e0a79d0119b70681c9d85b22d4f31b5cc
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Installed-QEMU drift acknowledged, hvf-host lane, not a new locked-K6 claim.
+
+Capture .build/floating-targeted/rseq-registration-20260926/:
+results.json 09912984e1f9658bda00d0b9523bab853fddf639935516c6a5853a2767328ffe
+original.json cd4b2036a1bd58a88545ca246a2be38bdcc1a5aa2b3da47a63420807edd207b5
+Both captures include exact serial hashes, original runtime hashes and nonces.
+All diagnostic children are reaped; the independent uniform kernel compile
+continues in its separate existing build tree.

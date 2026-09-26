@@ -333,6 +333,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     PASS; changing that baseline is not an EvoCC compiler fix.
     [Source-bound record](tests/fixtures/ptrace-exec-reap-cycle.out).
 
+  - [x] **K11e — Verify rseq's unregistered-thread prerequisite**, 2026-09-26.
+    The [small C reduction](tests/fixtures/rseq-registration-order.c) observes
+    EINVAL with glibc registration, EFAULT without it, then EINVAL/EFAULT again
+    around its own registration/unregistration, on both retained kernels.
+    Both unchanged direct originals still FAIL; both unchanged upstream
+    companion scripts PASS because they disable glibc registration before exec.
+    All six diagnostic/original flights shut down normally. This closes
+    **registration-precondition classification**, not the direct test as PASS;
+    no global tunable, source, original timeout or historical total is changed.
+    [Paired record](tests/fixtures/rseq-registration-order.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching

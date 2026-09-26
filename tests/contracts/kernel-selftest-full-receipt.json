@@ -31499,6 +31499,22 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K11e",
+      "date": "2026-09-26",
+      "status": "CLASSIFIED",
+      "program": "rseq:syscall_errors_test",
+      "originalOutcomeBoth": "FAIL",
+      "companionOutcomeBoth": "PASS: unchanged run_syscall_errors_test.sh",
+      "reason": "The direct test assumes an unregistered thread; glibc has already registered, so the kernel returns EINVAL before checking the invalid address",
+      "causalControl": "The small paired probe disables glibc registration only before its own exec, observes EFAULT, then EINVAL and EFAULT across explicit registration and unregistration",
+      "changesFullRunTotals": false,
+      "record": "tests/fixtures/rseq-registration-order.out",
+      "probeRecord": ".build/floating-targeted/rseq-registration-20260926/results.json",
+      "probeRecordSha256": "09912984e1f9658bda00d0b9523bab853fddf639935516c6a5853a2767328ffe",
+      "pairedRecord": ".build/floating-targeted/rseq-registration-20260926/original.json",
+      "pairedRecordSha256": "cd4b2036a1bd58a88545ca246a2be38bdcc1a5aa2b3da47a63420807edd207b5"
+    },
+    {
       "id": "K11b",
       "date": "2026-09-24",
       "status": "CLASSIFIED",

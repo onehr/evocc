@@ -6,6 +6,28 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### rseq registration-precondition control — 2026-09-26
+
+K11e now has a real small C reduction and unchanged original pair, beyond the
+earlier source-only diagnosis. Both retained Images pass its two TAP assertions:
+glibc's existing registration causes EINVAL before address validation; disabling
+registration before the probe's exec yields EFAULT at the same aligned invalid
+address. Its own register/unregister cycle changes that result back and forth,
+with the expected EBUSY duplicate-registration control. It never unregisters
+glibc's own area or changes a process-wide test policy.
+
+The unchanged direct `syscall_errors_test` still FAILs on both kernels; the
+unchanged upstream `run_syscall_errors_test.sh` PASSes on both by setting
+`glibc.pthread.rseq=0` before exec. All six flights boot and power down normally;
+existing disk hashes remain unchanged. The first diagnostic packaging attempt
+missed init's mandatory huge-page settings file and did not execute a test;
+its failed setup capture is retained separately, not counted as PASS.
+
+This closes **classification of an upstream direct-run precondition**, not a
+compiler repair, removal from the 970-program population, or new full-campaign
+acceptance. The 2 MiB initramfs reuses the 64 MiB scratch disk; originals use
+the already retained runtime disks. [Source, commands and hashes](../../tests/fixtures/rseq-registration-order.out).
+
 ### Constant field-address instruction selection — 2026-09-26
 
 TODO K02c closes another bounded compiler repair, not the original timeouts.
