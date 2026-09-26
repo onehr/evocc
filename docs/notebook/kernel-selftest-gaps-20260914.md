@@ -87,7 +87,13 @@ mutation. The earlier 7,039 count was mixed-role, not 37 compiler failures or
 test exclusions. The 847-module count is unchanged. No frame option was admitted
 or silently ignored. [Role regression](../../tests/fixtures/kernel-host-command-role.out).
 
-Restart the uniform composition after this correction. Actual-header
+Corrected uniform run `20260926T080946.994870Z` is now executing: owner PID
+**13358**, worker **13361**, same compiler/config and two jobs. At the first
+checkpoint, **64/7,002** objects are assembled and symbol-verified, zero failures;
+successful assembly is released. Its append-only unit journal is
+`.evidence/k1/20260926T080947Z/units.jsonl`; the common bench summary is under
+`.evidence/bench/20260926T080946.994870Z/`. Do not infer future liveness from this
+observation. Actual-header
 convergence, all-object/module audits and boot must pass before the subject
 IOMMU replay. K13/K14 remain NOT RUN on this new configuration. Disk checkpoint:
 108 GiB host free, 30 GiB build-volume free; no new large runtime disk.

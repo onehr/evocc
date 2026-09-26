@@ -209,7 +209,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   Three new IOPF objects also compile/assemble with EvoCC and identical exports.
   The corrected inventory is **7,002 target-C / 847 modules** plus 37 separate
   HOSTCC objects. The first common-bench launch rejected the mixed-role inventory
-  before compilation (T04b); uniform composition must be restarted. EvoCC runtime
+  before compilation (T04b); the corrected uniform run has verified its first
+  64 objects and is continuing (live identity in the ledger). EvoCC runtime
   is still NOT RUN. Close only after its audited link/boot and unchanged paired replay;
   do not count the reference result as compiler acceptance.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [live run][kernel].
@@ -684,7 +685,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
-  Previous receipts describe incremental compositions.
+  The corrected launch is running; previous receipts describe incremental compositions.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
@@ -756,6 +757,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     All 248 ladder tests, Ruff, shell syntax and the real 7-test CLI suite pass.
     Stand-in Cargo checks prove selection/error propagation, not a workspace
     PASS; the final health gate remains T05.
+
+  - [x] **T05e — Show new kernel attempts beside historical acceptance**, 2026-09-26.
+    Three RED status-rendering controls hid RUNNING/ERROR/INTERRUPTED behind a
+    retained old K6 PASS. The ASCII and generated status now show the selected
+    attempt's state/run separately, without erasing historical results or
+    claiming live-process monitoring. Two regression tests (including all
+    three states) and all 250 ladder tests pass; Ruff and render/check pass.
+    An unrelated application run does not relabel an older kernel attempt.
+    [Regression](tools/ladder/tests/test_bench.py).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

@@ -684,6 +684,30 @@ class StatusAsciiTest(unittest.TestCase):
         self.assertTrue(any("locked" in line.lower() for line in locked))
         self.assertTrue(any("bpf" in line.lower() for line in current))
 
+    def test_new_kernel_attempt_does_not_disappear_behind_retained_pass(self):
+        old = {'status': 'PASS', 'run': 'old-composition', 'requestedUnits': 2,
+               'counts': {'substituted': 2}, 'completeComposition': True,
+               'relinkExitCode': 0, 'imageSha256': 'old-image',
+               'boot': {'verdict': 'PASS', 'imageSha256': 'old-image'}}
+        for state in ('RUNNING', 'ERROR', 'INTERRUPTED'):
+            with self.subTest(state=state):
+                text = self.render({
+                    'kernel-bpf-full-receipt.json': old,
+                    'bench-receipt.json': {'run': 'new-attempt', 'selected': ['kernel-full'],
+                                           'benchmarks': {'kernel-full': {'status': state}}},
+                })
+                self.assertIn(f'Attempt kernel-full: {state}; run=new-attempt', text)
+                self.assertIn('Retained compositions below are not this attempt', text)
+                self.assertIn('run=old-composition', text)
+                self.assertIn('2/2 target-C; link=PASS; boot=PASS', text)
+
+    def test_old_kernel_attempt_is_not_presented_as_selected_by_application_run(self):
+        text = self.render({'bench-receipt.json': {
+            'run': 'application-run', 'selected': ['cjson'],
+            'benchmarks': {'kernel-full': {'status': 'ERROR'}},
+        }})
+        self.assertNotIn('Attempt kernel-full:', text)
+
     def test_kunit_builtin_failures_are_not_hidden_by_passing_modules(self):
         text = self.render({"kernel-expanded-kunit-receipt.json": {
             "status": "FAIL", "executionComplete": True, "config": {"targetCRecords": 6916},

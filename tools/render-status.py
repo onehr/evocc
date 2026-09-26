@@ -209,6 +209,18 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         "  TU = translation unit. Mixed-link coverage and whole-program PASS are different claims.",
         "", "KERNEL - configurations and runtime populations remain separate",
     ]
+    # An adapter can stop before replacing its last completed lane receipt.
+    # Show the selected attempt independently, so that an old K6 PASS cannot
+    # conceal the new attempt's RUNNING/ERROR/INTERRUPTED state. A receipt is
+    # still a checkpoint, not proof that its recorded process remains alive.
+    pending_kernel = False
+    for name in bench.get('selected', []):
+        if name == 'kernel' or name.startswith('kernel-'):
+            state = rows.get(name, {}).get('status', 'NOT_RUN')
+            lines.append(f"  Attempt {name}: {state}; run={run_id(bench)}")
+            pending_kernel |= state != 'PASS'
+    if pending_kernel:
+        lines.append('    Retained compositions below are not this attempt\'s acceptance.')
     full = receipts.get("kernel-full-receipt.json", {})
     bpf = receipts.get("kernel-bpf-full-receipt.json", {})
     for label, receipt in (("locked", full), ("bpf", bpf)):

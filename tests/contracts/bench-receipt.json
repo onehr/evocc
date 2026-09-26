@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "run": "20260926T080306.877549Z",
-  "subject": "b6d7f3cc39cac99bb7b3d6c7572e684d17246502",
+  "run": "20260926T080946.994870Z",
+  "subject": "0aedfe6b2604a8310680b17eb4bf43acd1aaf4b4",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
   "driverSha256": "e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f",
@@ -26,7 +26,7 @@
   "selected": [
     "kernel-full"
   ],
-  "status": "ERROR",
+  "status": "RUNNING",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -5383,16 +5383,8 @@
     },
     "kernel-full": {
       "rung": "K6",
-      "status": "ERROR",
-      "error": "receipt unchanged; previous evidence is not a new measurement",
-      "errorTail": [
-        "Traceback (most recent call last):",
-        "  File \"/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py\", line 1394, in <module>",
-        "    raise SystemExit(main())",
-        "  File \"/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py\", line 1144, in main",
-        "    raise ValueError(f\"unreviewed effective build options: {unreviewed}\")",
-        "ValueError: unreviewed effective build options: ['-fomit-frame-pointer']"
-      ],
+      "status": "RUNNING",
+      "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py",
@@ -5412,32 +5404,7 @@
         "--src-root",
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/linux-src",
         "--low-disk"
-      ],
-      "exitCode": 1,
-      "seconds": 32.2,
-      "previous": {
-        "rung": "K6",
-        "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
-        "outcomes": {
-          "substituted": 6765
-        },
-        "refusals": {},
-        "baselineFailures": 0,
-        "failingUnits": [],
-        "total": 6765,
-        "passed": 6765,
-        "compiled": 6765,
-        "kind": "units",
-        "status": "PASS",
-        "testVerdict": "PASS",
-        "evidence": ".evidence/k1/bpf-linkage-isolated-20260923",
-        "run": null
-      },
-      "measurement": {
-        "run": "20260926T080306.877549Z",
-        "subject": "b6d7f3cc39cac99bb7b3d6c7572e684d17246502",
-        "driverSha256": "e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f"
-      }
+      ]
     },
     "kernel-selftest": {
       "rung": "K7",
