@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-26**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.39**. This is the Git-tracked execution backlog,
+EvoIR **1.9.105** and EvoMIR **0.40**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -136,6 +136,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     native O0/O2 controls and the 1001-test changed gate pass. Both original KVM
     objects assemble with identical exports; this alone is not a runtime PASS.
     [Evidence and exact scope](tests/fixtures/asm-value-transport.out).
+
+  - [x] **K02c — Select bounded constant memory displacements**, 2026-09-26.
+    The [minimal C](tests/fixtures/memory-address-selection.c) first failed its
+    offset-shape assertion without compilation errors. Same-block constant
+    pointer offsets now use existing typed load/store immediates; volatility,
+    access width/alignment, guards and effect boundaries remain unchanged.
+    Seven Rust tests, 48 assembler checks, 12 native controls and the 1008-test
+    affected gate pass, including Clippy/fmt. Original KVM objects retain their
+    exports; text shrinks 187376 → 176264 and 37328 → 34996 bytes. Nothing is
+    installed and no timing claim is inferred. K02/K03 remain OPEN.
+    [Exact evidence](tests/fixtures/memory-address-selection.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.

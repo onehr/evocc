@@ -6,6 +6,25 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Constant field-address instruction selection — 2026-09-26
+
+TODO K02c closes another bounded compiler repair, not the original timeouts.
+One same-block, immediately usable constant `ptr.offset` can now select the
+existing load/store displacement. Index width/signedness, exact scale/direction,
+encoding bounds and strict-alignment byte expansion are checked; memory accesses,
+volatile events, guards, ordinary block arguments and atomics are not rewritten.
+
+The permanent C/MIR reductions pass both language interpreters, pre-allocation
+MIR, independent allocation verification, 48 AArch64 assembler checks and
+12 sealed native controls (three compilers × O0/O2 × ordinary/strict alignment).
+Changed gate against `b92cc58`: **1008 PASS, 0 FAIL, 4 historical ignored**;
+Clippy and fmt pass. The two unchanged old-config KVM commands were recovered
+from the subject tree and checked against their recorded hashes, avoiding the
+concurrently changing reference build. Exported names/kinds still agree; text
+is **187376 → 176264** and **37328 → 34996** bytes. Objects are **not installed**,
+runtime is NOT RUN, and full-run totals are unchanged. EvoMIR 0.40 records the
+bounded selection contract. [Reproducer and measurements](../../tests/fixtures/memory-address-selection.out).
+
 ### Runtime configuration build and artifact transition — 2026-09-26
 
 K06/K12 now proceeds beyond Kconfig-only diagnosis. The reviewed candidate

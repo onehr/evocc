@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.39** | **Authoritative reference** | **2026-09-24**
+**Revision 0.40** | **Authoritative reference** | **2026-09-26**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -356,9 +356,9 @@ in the table is refused with the diagnostic named in Section 10.
 | `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
 | `lifetime.end` | nothing |
 | `pointer_valid`, `access_in_bounds` | nothing: the guards are the obligations the front end already lowered into `ub.assume`; the instruction itself has no machine effect |
-| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker |
+| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker; bounded immediate address selection below preserves access attributes |
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
-| `store [volatile]` | `str` of the matching width, `str.p` for a pointer |
+| `store [volatile]` | `str` of the matching width, `str.p` for a pointer; bounded immediate address selection below preserves access attributes |
 | `atomic.load/store order [volatile]` | corresponding `atomic.load/store.K` with identical order/volatile and scalar/pointer kind |
 | `copy` with static size | `mem.copy` |
 | `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; validated size 1/2/4/8 and alignment >= size guarantee exactly one source load and one destination store, with only the specified sides observable; initializedness and pointer metadata follow ordinary `mem.copy` |
@@ -375,6 +375,20 @@ in the table is refused with the diagnostic named in Section 10.
 | `return_address` | `ldr rd, [x29, #8]`: the saved link register of this frame record, valid anywhere in the body because every function keeps a frame pointer (revision 0.17) |
 | `frame_address` | `mov rd, x29` (revision 0.17) |
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
+
+**Bounded immediate addresses (revision 0.40).** An ordinary typed load/store
+may use the existing `[base, #offset]` form for one preceding constant
+`ptr.offset` in the same machine block. Decode the index at its own width and
+signedness, then apply scale/direction; the exact displacement must fit `i64`
+and the access's signed-unscaled or unsigned-scaled immediate. Preserve kind,
+width, alignment, volatility and access position; when strict alignment can
+expand the access, every resulting byte displacement must fit too. Only
+constant materializations may intervene: do not select through an access, call,
+assembly, other computation or guard/CFG boundary, or combine offset chains.
+Pointer-validity/access checks and explicit continuation arguments remain;
+atomic operations are unchanged. Unmatched addresses retain their original
+register computation. Ordinary dead-computation removal may subsequently
+remove the now-unused address expression, without removing a memory operation.
 
 The UB predicates were absent from revision 0.1's table, which refused
 19,410 of 20,000 generated functions; they are ordinary boolean
@@ -1073,6 +1087,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.40 | 2026-09-26 | Select bounded same-block constant pointer offsets into existing ordinary load/store immediates, preserving access attributes, strict-alignment encodability, guards and effect boundaries. |
 | 0.39 | 2026-09-24 | Forward direct-edge identities through ordinary validated-SSA assembly without changing its effects; distinguish independent fixed input occurrences of the same value while preserving genuine tied-operand conflicts. |
 | 0.38 | 2026-09-24 | Remove only proven trivial block-argument transport during SSA destruction, including unchanged loop cycles; retain nontrivial merges, complete edges, original effects and deterministic physical allocation. |
 | 0.37 | 2026-09-24 | Select an adjacent single-use checked Boolean directly with its producer's flags and an inverted conditional trap branch; retain every guard, effect and continuation argument, with ordinary TBZ for unmatched forms. |

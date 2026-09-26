@@ -1,0 +1,57 @@
+2026-09-26 — TODO K02c; bounded constant field-address selection.
+
+RED: the CLI shape assertion expected load offset 16 for read_third but observed
+0, with zero Rust compilation errors; semantics already passed. An O0 negative
+index is still a guarded subtraction, not a direct constant: the targeted test
+correctly expects the original form there and tests -8 at O2 independently.
+
+EvoMIR 0.40 selects one same-block constant ptr.offset into an existing ordinary
+load/store immediate. Decode the index at its own width/signedness, apply exact
+scale/direction, and check the instruction and strict-align byte offset limits.
+Do not combine offset chains, cross guards/accesses/asm/calls, change access
+kind/alignment/volatility, or alter atomics. Existing dead-code removal can remove
+only an unused address computation. No validator or UB obligation was removed.
+
+Permanent tests:
+  crates/evocc/tests/memory_address_selection.rs: 2 PASS
+  crates/evocc-mir/tests/memory_address_selection.rs: 5 PASS
+O0/O2: C-HIR, EvoIR and pre-allocation MIR return zero; allocation verifies.
+12 index/encoding boundary rows, 16 width/alignment rows, observable-access and
+guard-continuation negative controls pass. 24 encoding/type functions assemble
+in normal and strict-align modes (48 checks), including fallback addresses.
+The MIR interpreter is not invoked on destroyed SSA: it explicitly implements
+block-local pre-allocation execution, not allocated machine execution.
+
+Sealed ARM64 native: GCC14, Clang19, EvoCC × O0/O2 × normal/strict-align:
+12/12 exit zero. Source unchanged; four value patterns, packed byte preservation,
+volatile stores/loads and negative indices. Image sha256:
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19 / Clang 19.1.7, network none, 2 CPUs / 2 GiB.
+
+Changed gate against b92cc58: 1008 PASS, 0 FAIL, 4 historical ignored,
+126 result groups; Clippy --all-targets -D warnings and fmt --check PASS.
+The first gate found manual_is_multiple_of; use the standard method, do not
+suppress its lint. The complete gate was rerun after that mechanical correction.
+Command: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+  CARGO_BUILD_JOBS=2 tools/gate-changed.sh b92cc58 --offline -j 2
+
+Original KVM commands/source/generated headers unchanged; both assembled with
+matching exported names and symbol kinds. This is the old configuration, not
+the new GCC configuration currently being built in the reference directory.
+virt/kvm/kvm_main.o: 6.569 s emit; text 187376 -> 176264, data/BSS 13933/168.
+arch/arm64/kvm/hyp/pgtable.o: 4.660 s emit; text 37328 -> 34996, data/BSS 1000/0.
+Nothing installed; Image unchanged; runtime NOT_RUN. K02/K03 remain OPEN.
+
+Local compact capture: .build/floating-targeted/memory-address-selection-20260926/
+prepare.py/native.py invoke existing compilers; kernel.py reuses substitute.py.
+No workspace/Linux/runtime-disk copy was created.
+
+SHA-256:
+C 90dc90bca9fc159fcd7675007c78d87a6fabd7d8bcbce024b1fbf93826814660
+debug 81dfa602627c5d2d1d322e010300570b4d7082e4a61298808a581cbeea264b45
+release e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f
+kvm_main object 3b281dc0608f391b7f685162e68f1233b2a552d94390ce509c47cb335062e4b3
+pgtable object f0cec8d444404c73ce82e17de65188e8a568419170ccbb692a8d68f3a7d8946d
+kernel.json 851fc712b41e5ee9da4317871e905f37b4412e97af4dd77936bfaa359f2015ed
+native.log 3231b07e383e2c1a7f0acbba453168c20eb527f94206da6759bbd83edb6d764a
+gate.log 2a8bfc49748cf8f41374562fdd8d41d9e9586d2ba565291e8ca29702f08505bd

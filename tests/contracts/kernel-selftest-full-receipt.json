@@ -31552,6 +31552,22 @@
       "objectRecord": ".build/floating-targeted/asm-value-transport-20260924/kernel.json",
       "objectRecordSha256": "6ee6049fdfac44d64bbc5473da15bb76a64aee0b13d5065d90a35ae1584a5151",
       "gate": {"passed": 1001, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
+    },
+    {
+      "id": "K02c",
+      "date": "2026-09-26",
+      "status": "TARGETED_PASS",
+      "scope": "Bounded constant memory displacements with access attributes and effect boundaries preserved; not an original KVM runtime pass",
+      "record": "tests/fixtures/memory-address-selection.out",
+      "changesFullRunTotals": false,
+      "installed": false,
+      "runtime": "NOT_RUN",
+      "compilerSha256": "e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f",
+      "objectRecord": ".build/floating-targeted/memory-address-selection-20260926/kernel.json",
+      "objectRecordSha256": "851fc712b41e5ee9da4317871e905f37b4412e97af4dd77936bfaa359f2015ed",
+      "nativeControlsPassed": 12,
+      "assemblerEncodingChecks": 48,
+      "gate": {"passed": 1008, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
     }
   ],
   "targetedKernelReplays": [

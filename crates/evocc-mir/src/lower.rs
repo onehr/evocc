@@ -797,9 +797,71 @@ struct AddressPreparation {
     extended: HashMap<(VReg, u16, evocc_evoir::IndexSignedness), VReg>,
     scaled: HashMap<(VReg, u64), VReg>,
     factors: HashMap<u64, VReg>,
+    memory: HashMap<u32, (VReg, i64, usize)>,
 }
 
 impl Lowerer {
+    fn immediate_pointer_delta(
+        &self,
+        index: &Value,
+        direction: evocc_evoir::OffsetDirection,
+        signedness: evocc_evoir::IndexSignedness,
+        scale: u64,
+    ) -> Option<i64> {
+        let EvoIRType::Bits(bits @ 1..=64) = index.ty else {
+            return None;
+        };
+        let raw = *self.constants.get(&index.id)? & (u64::MAX >> (64 - bits));
+        let value = match signedness {
+            evocc_evoir::IndexSignedness::Signed => {
+                i128::from(((raw << (64 - bits)) as i64) >> (64 - bits))
+            }
+            evocc_evoir::IndexSignedness::Unsigned => i128::from(raw),
+        };
+        let delta = value.checked_mul(i128::from(scale))?;
+        i64::try_from(match direction {
+            evocc_evoir::OffsetDirection::Add => delta,
+            evocc_evoir::OffsetDirection::Subtract => delta.checked_neg()?,
+        })
+        .ok()
+    }
+
+    fn memory_address(
+        &self,
+        insts: &[MInst],
+        address: &Value,
+        size: u64,
+        align: u32,
+    ) -> Result<(VReg, i64), String> {
+        let original = self.reg(address)?;
+        let Some(&(base, offset, after)) = self.address_preparation.memory.get(&address.id) else {
+            return Ok((original, 0));
+        };
+        // Select one already-computed ptr.offset, not an arbitrary integer
+        // expression or a chain of offsets. Do not move pointer formation over
+        // a call, access, asm, guard, or other potentially failing computation.
+        // AddressPreparation is also cleared on every machine-block boundary.
+        let uninterrupted = insts[after..]
+            .iter()
+            .all(|inst| matches!(inst, MInst::MovImm { .. }));
+        let encodable = (-256..=255).contains(&offset)
+            || (offset >= 0
+                && (offset as u64).is_multiple_of(size)
+                && offset as u64 / size <= 4095);
+        // Strict-align emission may expand the access to byte instructions.
+        // Every byte offset must fit too, even if the wide scaled offset fits.
+        let byte_safe = u64::from(align) >= size
+            || (offset >= -256
+                && offset
+                    .checked_add(size as i64 - 1)
+                    .is_some_and(|end| end <= 4095));
+        Ok(if uninterrupted && encodable && byte_safe {
+            (base, offset)
+        } else {
+            (original, 0)
+        })
+    }
+
     fn pointer_delta(
         &mut self,
         insts: &mut Vec<MInst>,
@@ -2923,6 +2985,14 @@ fn lower_inst(
                 rhs: delta,
                 width: Width::X,
             });
+            if let Some(offset) =
+                lowerer.immediate_pointer_delta(index, *direction, *signedness, *scale)
+            {
+                lowerer
+                    .address_preparation
+                    .memory
+                    .insert(result.id, (base, offset, insts.len()));
+            }
             lowerer.bind(result, dst);
         }
         Inst::Alloca {
@@ -3029,13 +3099,14 @@ fn lower_inst(
         } => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
             let kind = load_kind(&result.ty)?;
-            let base = lowerer.reg(address)?;
             let dst = lowerer.fresh(class);
             let align = lowerer
                 .access_alignments
                 .get(&mem_in.id)
                 .copied()
                 .unwrap_or(1);
+            let (base, offset) =
+                lowerer.memory_address(insts, address, kind.size_bytes(), align)?;
             insts.push(MInst::Load {
                 align: if u64::from(align) == kind.size_bytes() {
                     0
@@ -3044,7 +3115,7 @@ fn lower_inst(
                 },
                 dst,
                 base,
-                offset: 0,
+                offset,
                 kind,
                 volatile: *volatile,
             });
@@ -3058,13 +3129,14 @@ fn lower_inst(
             ..
         } => {
             let kind = store_kind(&value.ty)?;
-            let base = lowerer.reg(address)?;
             let src = lowerer.reg(value)?;
             let align = lowerer
                 .access_alignments
                 .get(&mem_in.id)
                 .copied()
                 .unwrap_or(1);
+            let (base, offset) =
+                lowerer.memory_address(insts, address, kind.size_bytes(), align)?;
             insts.push(MInst::Store {
                 align: if u64::from(align) == kind.size_bytes() {
                     0
@@ -3073,7 +3145,7 @@ fn lower_inst(
                 },
                 src,
                 base,
-                offset: 0,
+                offset,
                 kind,
                 volatile: *volatile,
             });
