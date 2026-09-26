@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.38** | **Authoritative reference** | **2026-09-24**
+**Revision 0.39** | **Authoritative reference** | **2026-09-24**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -676,8 +676,12 @@ definitions is not a trivial phi, even if their constant bits happen to agree.
 Counters, exchanged values and ordinary merges retain their parallel copies.
 Complete incoming edges are inspected, including different bindings from the
 same predecessor/target pair. Entry parameters remain caller bindings; entry
-backedges and functions containing inline assembly or indirect dispatch are
-initially excluded from this reduction. In particular, an indirect union-copy
+backedges and functions containing fixed-register assembly operands, `asm.goto`
+or indirect dispatch are initially excluded from this reduction. Ordinary
+assembly in validated SSA form admits input/address-use rewriting, without
+altering its outputs, constraints, clobbers, effects or position (revision 0.39).
+Read/write or tied forms that redefine a virtual register do not satisfy that
+SSA precondition. In particular, an indirect union-copy
 self-edge may overwrite the source needed by another target, whose independent
 receiving location must not be removed by a direct-edge identity argument.
 Remove only the proven transport
@@ -730,6 +734,13 @@ instruction, and `cc` clobbers the flags, which ends any `flags` value's
 adjacency. `memory` constrains nothing here; the maximal effects of the
 EvoIR instruction already order the `asm` against every other access.
 Defined at revision 0.6.
+
+**Fixed input occurrences (revision 0.39).** The same source value may supply
+independent operands bound to different physical registers. Materialize their
+distinct boundary copies before applying fixed locations; identical value and
+location requirements may share a copy. A tied input still shares its output's
+location, and contradictory fixed requirements within that tie remain invalid.
+This does not pin the original value's entire lifetime or change asm effects.
 
 For EvoIR 1.9.80, an `i` operand may instead be a symbol plus a signed
 64-bit addend. It occupies no register and allocates no object. Lowering
@@ -1062,6 +1073,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.39 | 2026-09-24 | Forward direct-edge identities through ordinary validated-SSA assembly without changing its effects; distinguish independent fixed input occurrences of the same value while preserving genuine tied-operand conflicts. |
 | 0.38 | 2026-09-24 | Remove only proven trivial block-argument transport during SSA destruction, including unchanged loop cycles; retain nontrivial merges, complete edges, original effects and deterministic physical allocation. |
 | 0.37 | 2026-09-24 | Select an adjacent single-use checked Boolean directly with its producer's flags and an inverted conditional trap branch; retain every guard, effect and continuation argument, with ordinary TBZ for unmatched forms. |
 | 0.36 | 2026-09-23 | Select the bounded, single-use full-width compared-value bit mux with existing adjacent CMP/CSEL. Preserve all prior evaluations, guards, effects and block bindings; unmatched chains retain ordinary lowering. |

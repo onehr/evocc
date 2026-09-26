@@ -31538,5 +31538,21 @@
       "probeRecordSha256": "46bd58d6f5a24862a7ce14aab7a780df15bbd7e57b8ba7c151a3875d0c352a0e"
     }
   ],
+  "targetedCompilerRepairs": [
+    {
+      "id": "K02b",
+      "date": "2026-09-26",
+      "status": "TARGETED_PASS",
+      "scope": "Ordinary assembly value transport and distinct fixed-input bindings; original KVM objects assemble with identical exports",
+      "record": "tests/fixtures/asm-value-transport.out",
+      "changesFullRunTotals": false,
+      "installed": false,
+      "runtime": "NOT_RUN",
+      "compilerSha256": "cd0c4b84306a3faac2473c27cfd005e391ba4ae1dd4ee8dbcbba2b039cb44891",
+      "objectRecord": ".build/floating-targeted/asm-value-transport-20260924/kernel.json",
+      "objectRecordSha256": "6ee6049fdfac44d64bbc5473da15bb76a64aee0b13d5065d90a35ae1584a5151",
+      "gate": {"passed": 1001, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
+    }
+  ],
   "regressions": []
 }

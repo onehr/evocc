@@ -1,0 +1,55 @@
+2026-09-26 — TODO K02b; assembly boundaries and distinct fixed input occurrences.
+
+Declared RED: ordinary-assembly transport shape failed with zero compilation
+errors. Separately, the C fixture exposed E0004 conflicting tied assembly
+register bindings for one source value in independent x19 and x20 inputs.
+The prior release reproduces that rejection; it is not a new forwarding bug.
+
+Repair: validated SSA permits ordinary asm input/address identity forwarding,
+without moving/removing asm or changing outputs, effects, constraints or clobbers.
+Fixed-register, asm.goto and indirect-dispatch functions remain excluded.
+The allocator separates independent fixed occurrences only when one value needs
+different locations. True ties remain shared and contradictory ties still reject.
+EvoMIR 0.39 states both rules; no validator or execution obligation is removed.
+
+Nine MIR regressions PASS, including 32 live inputs/call pressure and forced
+Gpr32/Gpr64/Simd64/Simd128 spills with independent allocation verification.
+The CLI fixture passes O0/O2 text/MIR/emission and unchanged asm metadata checks.
+Both interpreters still report E3021 on reaching asm; this is a negative control,
+not an interpreter execution PASS. The C program tests 72 loop/value combinations,
+earlyclobber, cc/memory clobbers, +m, +r, fixed inputs and a zero-trip null pointer.
+
+Native GCC 14.2.0-19, Clang 19.1.7 and EvoCC at O0/O2: six exit-zero PASS.
+Rerun 2026-09-26 after reboot: all six PASS again. Sealed linux/arm64 container,
+network none, two CPUs/two GiB; no machine kernel or runtime disk copied.
+Image digest 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+
+Changed gate against 568683e: 1001 PASS, zero FAIL, four historical ignored,
+124 result groups; Clippy --all-targets -D warnings and fmt --check PASS.
+Gate command: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+  CARGO_BUILD_JOBS=2 tools/gate-changed.sh 568683e --offline -j 2
+
+Original object replays use unchanged .o.cmd, source and installed generated
+headers; both assemble with identical exported names AND symbol kinds.
+virt/kvm/kvm_main.o: 6.846 s, text 238032 -> 187376; data/BSS 13933/168 unchanged.
+arch/arm64/kvm/hyp/pgtable.o: 4.467 s, text 41816 -> 37328; data/BSS 1000/0 unchanged.
+Comparison includes the preceding transport repair, not only this change.
+At this checkpoint objects are NOT INSTALLED, runtime NOT RUN, generated inputs
+unchanged. K02/K03 original 120-second all-mode acceptance remains OPEN.
+
+Capture .build/floating-targeted/asm-value-transport-20260924/ (~10 MiB).
+prepare.py/native.py are small diagnostic invocations of the existing compiler
+and native toolchain; kernel.py uses tools/k1/substitute.py, not a new runner.
+Current debug compiler emits byte-identical controls to the initial tested build.
+
+SHA-256:
+C 4b3770692c6ac10abdb111a455f6360f595131441dcfe65639a20c5bb31e23dc
+initial debug cdb979f809a2a632c26f073a79d97b2c0a07f05e7610edc9b0dac858150ac33b
+current debug d5562c742147f9604ec6373a4040af68bb59efd12da0d6c2d14ca5a69dc4e299
+release cd0c4b84306a3faac2473c27cfd005e391ba4ae1dd4ee8dbcbba2b039cb44891
+control O0 70fdbae0b89440c3df7a6f43acfeb1d867b313e4431699c67f40701b38789e19
+control O2 68a879d5f241c160d731e08dee440458760f721408f6af3eb15ba4eac3d4b8e8
+kvm_main object 34eda5d2c24e49d9803566b3f91f0c03c3c139037a71e5581079c3fe15302b03
+pgtable object b8f8ac561f0ead63009aaf2e557dbc06156452ceaa31a6fde88c67a075436023
+kernel.json 6ee6049fdfac44d64bbc5473da15bb76a64aee0b13d5065d90a35ae1584a5151
+gate.log 8f48a9e3dc2b82e8fae2aaf47b02ae71ba0284954a963925ea3fa1a2a16034a4

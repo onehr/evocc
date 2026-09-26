@@ -1,10 +1,34 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-24. This is a diagnosis ledger. The latest full pair is
+Updated 2026-09-26. This is a diagnosis ledger. The latest full pair is
 `.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
 and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
+
+### Assembly-aware value transport — 2026-09-26
+
+TODO K02b closes a bounded compiler repair, not the KVM runtime timeouts.
+Ordinary validated-SSA assembly retains its template, constraints, clobbers and
+effects while trivial direct-edge input transport is removed. Fixed bindings,
+asm-goto and indirect dispatch remain outside that optimization. A new minimal
+C control independently reproduced an allocator rejection when the same value
+supplied two different fixed input registers; per-occurrence boundary copies
+repair that case while real tied-register conflicts still reject.
+
+Nine MIR tests include forced spills in four register classes; the CLI case
+also verifies that both interpreters still reject reached assembly with E3021.
+GCC14, Clang19 and EvoCC native O0/O2 controls all pass. The affected gate is
+**1001 PASS, 0 FAIL, 4 historical ignored**, with Clippy and fmt green.
+After reboot, the current debug compiler emits byte-identical controls and
+the six native controls were rerun successfully in the sealed offline image.
+
+The unchanged original commands and generated headers produce both KVM objects
+with matching exported names/kinds. Against the previously installed composition,
+text falls **238032 → 187376** and **41816 → 37328** bytes; this includes the
+preceding direct-edge repair and is not a causal timing measurement. At this
+checkpoint they are **not installed**, and no Image or full-run total changed.
+[Fixture, binary identities and results](../../tests/fixtures/asm-value-transport.out).
 
 ### Original udmabuf HugeTLB workload — 2026-09-24
 

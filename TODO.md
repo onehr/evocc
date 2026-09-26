@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
-Updated **2026-09-24**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.38**. This is the Git-tracked execution backlog,
+Updated **2026-09-26**, initially audited against `a83d803`; current clauses are
+EvoIR **1.9.105** and EvoMIR **0.39**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -121,6 +121,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     text 243232 → 237968 bytes on controlled prior/current builds. The 1094-test
     affected gate, clippy and fmt pass. No Image was changed; K02 still needs its
     unchanged full-mode runtime replay after final rebuild. [Record](tests/fixtures/negated-truth-branch.out).
+
+  - [x] **K02b — Preserve assembly operands while removing trivial transport**, 2026-09-26.
+    Ordinary validated-SSA assembly now admits direct-edge identity forwarding;
+    fixed-register, asm-goto and indirect-dispatch boundaries remain excluded.
+    The [C reduction](tests/fixtures/asm-value-transport.c) also exposed an
+    independent allocator bug: one value bound to two separate fixed input
+    registers was rejected. Distinct operand copies repair it without relaxing
+    genuine tied-operand conflicts. Nine MIR tests, the CLI regression, six
+    native O0/O2 controls and the 1001-test changed gate pass. Both original KVM
+    objects assemble with identical exports; this alone is not a runtime PASS.
+    [Evidence and exact scope](tests/fixtures/asm-value-transport.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.

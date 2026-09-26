@@ -199,15 +199,22 @@ fn forwarded_parameters(function: &MFunction) -> BTreeMap<u32, VReg> {
     }
 
     // This is a pre-SSA-destruction analysis, so malformed/non-SSA test inputs
-    // must not receive an identity proof. Inline asm is deliberately excluded
-    // initially: its tied/read-write constraints require a separate audit.
+    // must not receive an identity proof. Ordinary asm can retain its effects
+    // and constraints while its input uses are rewritten. Read/write or tied
+    // forms which redefine a VReg do not pass this SSA validation. Fixed asm
+    // bindings remain excluded: two parameters can transport one value into
+    // different physical registers, so identifying their uses before pinning
+    // would incorrectly impose conflicting constraints on one VReg.
     // Indirect dispatch also stays unchanged. Its union copy can overwrite a
     // self-edge source even when a different target is selected; replacing that
     // target's saved binding with the source would observe the wrong value.
     if crate::validate::validate_function(function).is_err()
         || function.blocks.iter().any(|b| {
             matches!(b.term, MTerm::AsmGoto { .. } | MTerm::Indirect { .. })
-                || b.insts.iter().any(|i| matches!(i, MInst::Asm(_)))
+                || b.insts.iter().any(|i| {
+                    matches!(i, MInst::Asm(body)
+                        if body.numbered().iter().any(|operand| operand.fixed_register.is_some()))
+                })
         })
     {
         return BTreeMap::new();

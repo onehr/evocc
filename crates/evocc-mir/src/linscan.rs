@@ -449,6 +449,38 @@ fn pin_assembly(
     next: &mut u32,
     pins: &mut BTreeMap<u32, u8>,
 ) -> Result<(AsmBody, Vec<MInst>), String> {
+    // A value is not a physical operand occurrence: `a` may be supplied in
+    // both x19 and x20. Split independent fixed inputs only where their
+    // location requirements differ. Tied operands keep the output's identity
+    // and must still reject contradictory bindings. Equal (value, location)
+    // occurrences can share their boundary copy.
+    let mut locations: BTreeMap<u32, BTreeSet<u8>> = BTreeMap::new();
+    for operand in source.numbered() {
+        if let (Some(reg), Some(number)) = (operand.register(), operand.fixed_register) {
+            locations.entry(reg.id).or_default().insert(number);
+        }
+    }
+    let mut separated = source.clone();
+    let mut input_copies = BTreeMap::new();
+    for operand in &mut separated.inputs {
+        if matches!(operand.constraint, AsmConstraint::Tied(_)) {
+            continue;
+        }
+        if let (Some(reg), Some(number)) = (operand.register(), operand.fixed_register) {
+            if locations[&reg.id].len() > 1 {
+                let copy = *input_copies.entry((reg, number)).or_insert_with(|| {
+                    let copy = fresh(next, reg.class);
+                    before.push(MInst::Mov {
+                        dst: copy,
+                        src: reg,
+                    });
+                    copy
+                });
+                operand.value = AsmValue::Reg(copy);
+            }
+        }
+    }
+    let source = &separated;
     let mut requested = BTreeMap::new();
     for operand in source.numbered() {
         if let Some(number) = operand.fixed_register {
