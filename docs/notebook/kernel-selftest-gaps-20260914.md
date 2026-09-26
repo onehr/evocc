@@ -29,34 +29,55 @@ bounded selection contract. [Reproducer and measurements](../../tests/fixtures/m
 
 K06/K12 now proceeds beyond Kconfig-only diagnosis. The reviewed candidate
 `f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd`
-is being built with the frozen GCC14 toolchain, two jobs/eight GiB, network off,
-in the **existing** `case/bpf-config` tree. No Linux/workspace clone or runtime
-disk is created. The old reference Image `8fa43fb4…`, `.config` and `System.map`
+completed with the frozen GCC14 toolchain, two jobs/eight GiB, network off,
+in the **existing** `case/bpf-config` tree (3381.083 seconds, exit zero).
+No Linux/workspace clone or full runtime disk was created.
+The old reference Image `8fa43fb4…`, `.config` and `System.map`
 are retained with copy-on-write under
 `.build/floating-targeted/runtime-config-20260926/before-reference/`.
 Historical receipts are unchanged; that retained Image is the old flight subject,
 not whatever the mutable `case/bpf-config` directory produces next. Its matching
-old runtime disks remain available. The EvoCC output tree is not reseeded during
-this reference prerequisite.
-
-Live build identity: `.build/floating-targeted/runtime-config-20260926/reference.json`
-records the owner PID/state/argv; `reference.log` is the single build log. Do not
-infer liveness from this notebook. Next verify the six unchanged IOMMU cases on
-the new reference, then compile the new IOPF source paths with EvoCC and complete
-the audited subject composition. No new-config compiler or runtime PASS yet.
+old runtime disks remain available. New reference Image is `13bd4d0b…` (40,716,800
+bytes). `.build/floating-targeted/runtime-config-20260926/reference.json` and
+`reference.log` preserve the completed command and identity.
 
 Targeted compiler checkpoint: `io-pgfault.o`, `iommu-sva.o` and IOMMUFD's
 `selftest.o` now all emit and assemble with the final `aef1a3a` release binary,
 matching GCC exported names/kinds. Their original argv and generated-header
 hashes are in `runtime-config-20260926/iopf-objects.json`; nothing is installed.
 An unchanged iommufd ELF plus its original libc/loader/libcap form a **3 MiB**
-diagnostic payload, reusing the 64 MiB snapshot scratch disk. Runtime is NOT RUN.
+diagnostic payload, reusing the 64 MiB snapshot scratch disk. Its **GCC reference
+runtime now passes: 224 PASS / 0 FAIL / 5 SKIP**, versus 218/6/5 previously,
+with the unchanged 45-second program limit and actual boot/shutdown. The five
+skips are explicit `no_viommu` branches in the frozen upstream source. This runs
+the unchanged ELF directly, not the complete campaign's outer wrapper, and is
+not yet an EvoCC runtime claim. [Complete reference record](../../tests/fixtures/iopf-enabled-reference.out).
 
 The module-to-built-in transition also exposed stale generated `.mod.o.cmd`
 records surviving Kbuild. The [new inventory regression](../../tests/fixtures/kernel-stale-module-inventory.out)
 rejects such records outside current `modules.order`; it does not silently
 decrease the denominator. All 243 K1 tests pass, and the prior composition still
-enumerates 6,765 records. Reconcile the new reference only after its build ends.
+enumerates 6,765 records. After the new build completed, exactly one obsolete
+`iommufd.mod.o` record was reconciled: **7,040 raw → 7,039 current target-C**,
+including **847** current module metadata records. Five old generated files
+were recoverably moved into `runtime-config-20260926/obsolete-reference-module/`;
+the built-in object and reference Image remain unchanged.
+
+The existing `case/bpf/out` is now reseeded from this reference. Its prior Image
+`97d511d3…`, `.config` and `System.map` are retained under `before-subject/`.
+The checked transition replaced generated build products and retired eleven
+obsolete module/temporary-link files; it did not copy or delete source trees.
+**The reseeded output is GCC input, not an accepted EvoCC composition.**
+
+Uniform subject run launched at 2026-09-26 08:03 UTC through `tools/bench.py
+kernel-full`: owner PID **11928**, worker **11932**, two jobs, low-disk batches,
+release SHA `e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f`.
+Invocation and state: `.evidence/bench/20260926T080306.877549Z/summary.json`;
+unit journal and eventual link logs: `.evidence/k1/20260926T080306Z/`.
+This is RUNNING at launch, not a permanent liveness assertion. Actual-header
+convergence, all-object/module audits and boot must pass before the subject
+IOMMU replay. K13/K14 remain NOT RUN on this new configuration. Disk checkpoint:
+108 GiB host free, 30 GiB build-volume free; no new large runtime disk.
 
 ### Original KVM replay after assembly repair — 2026-09-26
 

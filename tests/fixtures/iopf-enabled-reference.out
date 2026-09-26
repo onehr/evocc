@@ -1,0 +1,43 @@
+2026-09-26 — TODO K06/K12 reference prerequisite; EvoCC runtime NOT RUN.
+
+Frozen source/config, original iommufd ELF and original 45-second program limit.
+Old paired result: each 218 PASS / 6 FAIL / 5 SKIP; six failures entered disabled
+IOPF stubs. The reviewed config enables ARM_SMMU_V3_SVA and hence IOMMU_IOPF.
+GCC14 reference Image/modules build exits 0 in 3381.083 seconds (two jobs).
+New reference direct-ELF replay: 224 PASS / 0 FAIL / 5 SKIP, exit 0, nonce-bound
+boot and orderly shutdown PASS. Raw population is 229, not 229 executed PASS.
+This is the original ELF without source, argument or test-selection changes;
+the thin runner is not the complete campaign's outer shell wrapper.
+
+Five upstream no_viommu skips, tools/testing/selftests/iommu/iommufd.c:
+vdevice_tombstone:2828; hw_queue:2863; vdevice_cache:2948;
+viommu_alloc_with_data:3111; viommu_alloc_nested_iopf:3170.
+
+EvoCC prerequisite: original io-pgfault.o, iommu-sva.o and iommufd/selftest.o
+emit/assemble with identical exported names AND kinds, actual generated headers
+unchanged. These three diagnostic objects are not installed and prove no runtime.
+Uniform new-config subject composition must precede the corresponding replay.
+
+Config SHA256 f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+GCC Image SHA256 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+EvoCC release SHA256 e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f
+Original ELF SHA256 643bdb50ec04181d608bbf3be29c0dfa197c85ea4e8e2eaca7e7810f0de188a6
+Initramfs SHA256 e0279425f14fe8c575198ea814e3777eac1a8a203cc80c4a23d2b36949e02183
+Scratch SHA256 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+QEMU SHA256 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Lane hvf-host; installed QEMU drift explicitly recorded; boot budget 120 seconds.
+Oracle image sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+Capture root .build/floating-targeted/runtime-config-20260926/
+reference.json SHA256 759b3cc0139bbb18e50dedf81ec57ecaec59f3f9023976d1fb4bea252a5a8635
+iopf-objects.json SHA256 b5c8bcf0472120725d1e8bce93330508717139d9011988765efd8ec6aeb974f6
+iommu-reference.json SHA256 b7ece61ba7bee82b73ff167adf20914d87b9885cd662c03fe60bd4d424648260
+iommu-runtime/reference/boot.log SHA256 dae70037e1b564d4ecdca359b81390d373812b5113e10fbb2d77ac152542157d
+inventory.json SHA256 994b121ed6c3d2d302dfaf92f913167893af7dccda3a2110612d375b24e71131
+
+Post-build inventory: 7040 raw records included obsolete iommufd.mod.o from the
+module-to-built-in transition. Exactly that record's five old generated files
+were archived recoverably; 7039 current target-C records / 847 modules remain.
+Reference Image and current built-in iommufd.o unchanged; no failing C removed.
+Thin payload ~3 MiB; reuse 64 MiB scratch through snapshot; scratch and retained
+full-runtime source disk hashes unchanged. No new Linux clone or runtime disk.

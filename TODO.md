@@ -202,15 +202,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   K14's fresh complete execution remains open.
 
 - [ ] **K06 — Build and run the IOPF-enabled configuration** — `OPEN`, P1.
-  September 26: the reviewed configuration is now building in the existing GCC
-  reference directory, without a new tree; its old Image/config are retained.
-  Active PID/log and artifact transition are in the [kernel ledger][kernel].
-  This prerequisite build is not yet EvoCC compilation or runtime acceptance.
-  IOMMU is 218 PASS / 6 FAIL / 5 SKIP on both kernels; the six failures reach the
-  disabled IOPF stub. The small Kconfig candidate resolves IOPF through
-  `CONFIG_ARM_SMMU_V3_SVA=y` but has not been built. Compile/link with actual
-  generated inputs, install matching modules, then replay unchanged
-  `iommu:iommufd` on both kernels. Close on runtime evidence, not `.config`. [Evidence][kernel].
+  September 26: the reviewed `CONFIG_ARM_SMMU_V3_SVA=y` configuration builds
+  and boots on GCC. The unchanged iommufd ELF improves **218 PASS / 6 FAIL /
+  5 SKIP → 224 PASS / 0 FAIL / 5 SKIP**, under the original 45-second limit;
+  the five skips explicitly exclude the upstream `no_viommu` variant.
+  Three new IOPF objects also compile/assemble with EvoCC and identical exports.
+  The uniform **7,039-target-C / 847-module** subject composition is now running
+  through the common bench, reusing the old build tree. EvoCC runtime is still
+  NOT RUN. Close only after its audited link/boot and unchanged paired replay;
+  do not count the reference result as compiler acceptance.
+  [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [live run][kernel].
 
 - [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `NEEDS_RULE`, P1.
   Filtered FORTIFY is 25/26 PASS with two assertions left; current §10.1.18 grants
@@ -332,7 +333,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
-  it is not built coverage. The four build gaps are now source-bound below.
+  the GCC reference now builds, but the uniform EvoCC composition and matching
+  new module runtime are not yet accepted. The four build gaps are source-bound below.
   Build runnable supported sets with matching payloads; give precise reasons
   for unavailable ones. Keep any changed population separate from the frozen 970. [Evidence][kernel].
 
@@ -679,8 +681,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     [Scope and field matrix](tests/fixtures/proof-semantic-metadata.out).
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
-  New scheduler code-size repairs are not installed, and existing kernel receipts
-  include audited incremental compositions. Before final acceptance, freeze the
+  The September 26 common bench is uniformly rebuilding the reviewed configuration
+  with release `e8bddc0a…`; previous receipts describe incremental compositions.
+  Its reused output currently starts from GCC seed objects, not an accepted
+  EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
   Image and module/runtime hashes. Use a uniform rebuild for any single-compiler
   claim; otherwise state incremental provenance. Close with link/boot and
@@ -692,7 +696,9 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     `modules.order`, rejecting rather than silently dropping them. Two RED
     regressions and all 243 K1 tests pass; Ruff passes. The retained prior
     composition still enumerates 6,765 records / 745 module metadata records.
-    New-build reconciliation and T04 acceptance remain pending.
+    The completed new reference reconciles exactly one obsolete IOMMUFD module
+    record: raw 7,040 → current 7,039, with five old generated files recoverably
+    archived and the built-in object untouched. T04 acceptance remains pending.
     [Minimal reproduction and boundary](tests/fixtures/kernel-stale-module-inventory.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
