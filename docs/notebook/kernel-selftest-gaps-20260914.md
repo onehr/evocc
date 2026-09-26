@@ -8,6 +8,20 @@ Targeted results and additional configurations use separate denominators.
 
 ### Concurrent instruction publication outside the kernel probe — 2026-09-26
 
+The follow-up corrects an important boundary: the first probe raced MOV stores
+with execution, outside Arm's special concurrent-replacement instruction set.
+Its old measurements remain but cannot independently establish an emulator bug.
+The corrected aligned direct-B probe, with cache maintenance, sync-core and
+the same retirement lock, still fails six concurrent variants on **both**
+kernels under MT-TCG. All six memory-gate/locked-MOV/handshake controls pass.
+HVF and diagnostic ST-TCG pass all 12 modes on each kernel; all six flights
+boot and shut down. These 72 program results add only a 2.3 MiB initramfs and
+reuse the scratch disk. There is no source-specific compiler workaround.
+The measured boundary is sharper, but the invalidation/retranslation hypothesis
+still needs instrumentation and the original sched_ext replay. K01 stays OPEN.
+[Corrected protocol, authority, counts and hashes](../../tests/fixtures/instruction-publish-alias.out).
+
+Historical first experiment (subject to the correction above):
 K01b now reproduces a narrower shared discrepancy in an ordinary userspace
 program built by GCC14 and Clang19, without kernel static keys, RCU or modules.
 An aligned AArch64 MOV/RET is published with cache maintenance and registered

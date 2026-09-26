@@ -1,3 +1,67 @@
+2026-09-26 follow-up — K01b: defined branch replacement and synchronization controls.
+
+Correction to the historical MOV experiment below: Arm's concurrent-instruction
+replacement guarantee covers specific instructions, including B/NOP, not arbitrary
+MOV replacement. A later sync-core call does not authorize a reader racing that
+MOV store. Therefore the old continuous-MOV results alone cannot establish an
+architecture-defined emulator failure. They remain historical observations.
+Arm's explanation and cited Arm ARM B2.2.5:
+https://developer.arm.com/community/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-self-modifying-code-working-with-threads
+
+The corrected source uses one aligned direct B to immutable MOV/RET pairs.
+It still publishes data before enabling, completes cache maintenance plus Linux
+PRIVATE_EXPEDITED_SYNC_CORE after disabling, waits for read-side rwlock users,
+then retires data. Readers need not stop while B is being replaced. Other modes
+use an atomic memory gate with the SAME rwlock and syscall protocol, or hold
+the write lock across MOV replacement. Handshake controls remain. Every
+continuous mode must actually observe the enabled value; an idle reader cannot
+produce PASS. GCC14/Clang19, O2/static/pthread, -Wall -Wextra -Werror, four CPUs,
+512 rounds, 20 seconds each. No kernel patch, original test or lane change.
+
+Six modes per compiler (12 programs), identical payload per flight:
+                              GCC kernel         EvoCC kernel
+MT TCG, Cortex-A72             6 PASS / 6 FAIL    6 PASS / 6 FAIL
+HVF, host                    12 PASS / 0 FAIL   12 PASS / 0 FAIL
+single-thread TCG, Cortex-A72 12 PASS / 0 FAIL   12 PASS / 0 FAIL
+All 72 programs complete; all six boots/shutdowns PASS. The sealed native
+container passes all 12. Only concurrent B replacement fails on MT-TCG:
+                                         GCC kernel / EvoCC kernel misses
+GCC single mapping                         964928 / 1189312
+GCC aliases                               1170880 / 974208
+GCC aliases plus ISB                        804736 / 641984
+Clang single mapping                       585280 / 1050816
+Clang aliases                              935552 / 1079680
+Clang aliases plus ISB                      581824 / 1437440
+Every first bad snapshot reads B encoding 14000001 (immutable return-zero
+path), but the call returned 1 after data retirement. All memory-gate,
+locked-MOV and handshake controls have zero misses on both kernels.
+The first compile attempt had two -Werror signedness errors in this new
+diagnostic; explicit result casts fix them. It is not a runtime RED or PASS.
+
+This now isolates a shared concurrent instruction-publication failure with
+architecture-appropriate instruction choices. It does not prove its exact QEMU
+implementation cause or fix the original sched_ext crash. K01/K01b remain OPEN.
+Versioned QEMU source suggests an invalidation/retranslation window worth
+instrumenting: notdirty_write invalidates before the eventual store, while
+tb_invalidate_phys_range_fast releases the page locks on return. This is a
+source-based HYPOTHESIS, not a validated patch or permission to replace QEMU.
+https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/cputlb.c
+https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/tb-maint.c
+
+Capture: .build/floating-targeted/instruction-branch-20260926/
+Build: build.sh in the same sealed offline image; replay.py reuses the same
+Images and snapshot scratch below. New payload is 2381312 bytes; no disk copy.
+SHA-256:
+source aea98940002005de23cd2071f61b0415d640a6d355b96c5a75d6534f9a3e576b
+GCC ELF 2ae439ae6ffca08b62ce4595ad67b53f9364ac52b9b3ca47e197295f5e015d1a
+Clang ELF f230b17d75c4365c7705cd681870a5e311928fced746c895aa5daf358218996c
+payload 47c4d3e765f49d77af774319b77065274a3ce2316d6c3235a5e7a45a713d5867
+result-tcg-cortex-a72-hvf-host-tcg-single.json b4ecca4cc9eafbeb787bb7c1ef550a6f8d689531cd5a734e5ab5affa29183fd5
+build-green.log 8278909c628ea5e13e10e63ce4567b5c0ccec2d16397b95746390335514d01f1
+Serial hashes are bound in that result; the disk hash is unchanged after every
+flight. The acceptance runtime and locked contracts were not modified.
+
+Historical first MOV experiment (source at 4e3e3d1; qualification above applies):
 2026-09-26 — K01b: userspace concurrent instruction-publication discrepancy.
 This is diagnostic infrastructure compiled by the fixed GCC/Clang oracles,
 NOT an EvoCC language-conformance test or an unchanged sched_ext acceptance.

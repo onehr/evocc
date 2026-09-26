@@ -106,11 +106,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   - [ ] **K01b — Resolve the concurrent instruction-publication runtime discrepancy** — `OPEN`, P1.
     The [userspace C reduction](tests/fixtures/instruction-publish-alias.c)
     removes kernel static keys, RCU, hotplug and EvoCC-generated test code.
-    GCC/Clang continuous-patching controls fail on both kernels under MT-TCG,
-    including single mappings and explicit reader ISB; each first bad snapshot
-    reads `mov w0, #0` but records return value 1. Handshake controls pass.
-    The identical payload passes all eight modes on HVF and diagnostic ST-TCG
-    on both kernels. This is a concrete shared runtime boundary, not yet a
+    The first MOV probe exceeded Arm's concurrent-modification boundary; its
+    evidence is explicitly qualified, not erased. The corrected direct-B probe
+    still fails all six concurrent modes on both kernels under MT-TCG, including
+    aliases and reader ISB. All six same-protocol memory-gate, locked-MOV and
+    handshake controls pass; all 12 modes pass on HVF and diagnostic ST-TCG.
+    First bad snapshots contain a branch to return zero but observe return one.
+    This is a concrete shared runtime boundary, not yet a
     localized QEMU fix or proof of the original sched_ext cause. Diagnose the
     publication/invalidation path, then replay the unchanged original. Do not
     silently change the locked lane or waive the failure. [Full matrix](tests/fixtures/instruction-publish-alias.out).
