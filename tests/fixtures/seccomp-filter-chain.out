@@ -1,0 +1,55 @@
+2026-09-26 — K11j: separate filter correctness from timing-model assertions.
+
+Historical original seccomp_benchmark: both kernels have 2 PASS / 2 FAIL /
+3 SKIP. Every measured getpid call returned the expected PID. The two FAILs
+are source lines 284-288: approx(per_filter1, per_filter2) and the one/two
+bitmap overhead comparison. approx permits ten percent or two nanoseconds.
+Historical reference costs [native, bitmap1, bitmap2, filter1, filter2] are
+[110,135,139,159,164] ns: per-filter estimates 5 versus 8, bitmap overheads
+25 versus 29. Subject costs [158,233,222,310,345] ns give 35 versus 25 and
+75 versus 64. These are the exact failed arithmetic comparisons, not syscall
+value mismatches. The remaining three SKIPs follow the failed bitmap-cost
+comparison; they do not independently establish missing bitmap support.
+
+Permanent C reduction uses the original two filter forms and installation
+sequence. Each stage checks 1024 real syscall return values, not a simulated
+filter. It additionally rejects an out-of-bounds filter load, then installs
+getpid->EPERM and verifies that previous ALLOW filters cannot bypass it while
+getppid remains allowed. GCC14 and Clang19 static O2 -Wall -Wextra -Werror
+ELFs each pass 14 assertions on each retained kernel: 28 PASS per Image.
+Both diagnostic boots and normal shutdowns PASS. This is not a concurrency,
+all-seccomp, bitmap-internals or complete security validation claim.
+
+Unchanged originals subsequently run once per Image on the historical HVF
+host/4-CPU/2-GiB lane with the original 180-second limit and no sample argument:
+  reference: 7 PASS / 0 FAIL / 0 SKIP; [108,133,133,153,161] ns;
+             normal shutdown at guest uptime 93.535173 s.
+  subject:   7 PASS / 0 FAIL / 0 SKIP; [155,212,212,305,334] ns;
+             normal shutdown at guest uptime 115.702473 s.
+No kernel/compiler/test/tolerance was changed. The source itself calls this a
+relative-performance benchmark; seccomp_run_filters promises action selection,
+not a linear/stable nanosecond cost. This closes classification of the observed
+failures as timing-model assertions. It does NOT establish a compiler repair,
+identify the physical cause of every timing variation, erase the historical
+FAILs, or guarantee the final K13 replay. The measured subject slowdown remains.
+
+Preparation: existing sealed ARM64 image, network none, GCC 14.2.0-19 and
+Clang 19.1.7; build.sh compiles the two ELF controls and reuses selftest-init.
+Execution: existing tools/k1/selftest.py.flight with snapshot=on. Tiny payload
+2201600 bytes; existing 64 MiB scratch and retained matched full runtime disks
+are hash-checked unchanged. No new runtime disk or kernel clone.
+Capture/scripts: .build/floating-targeted/seccomp-chain-20260926/
+  build.sh; replay.py; replay.py --original
+gate-changed bddac04 selects no Rust crate for this standalone diagnostic;
+renderer, JSON and diff checks PASS. No new Rust/workspace gate is claimed.
+
+SHA256:
+fixture ba76053df7d4a289128fc7ee852ed2b9f3db6b334ed4c1d209c0f8158d746261
+upstream seccomp_benchmark.c ac7aa0b72e2107bd8e25f4ac3f360e0771d781a79ae905d1540352db65ae8c20
+kernel/seccomp.c b1dcfea06e6c4665bbf362622949bd6485415724206e7ded1b2f8d9eb356f1fb
+payload 738db5836a142504240d66a4342e51c71bed865422f2def4ef42aac2942410bb
+result.json f5566dfd6ff2a2fbeaf1ea937209b98adb50e8580ee190dbb1cfb1f66f11c5d9
+original.json 9e841122595ca45fef1306a7d262c79290f10e773be7ed880a2433e05a099763
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Original serial hashes and matching payload/disk hashes remain in original.json.

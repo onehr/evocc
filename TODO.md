@@ -277,8 +277,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   Three new IOPF objects also compile/assemble with EvoCC and identical exports.
   The corrected inventory is **7,002 target-C / 847 modules** plus 37 separate
   HOSTCC objects. The first common-bench launch rejected the mixed-role inventory
-  before compilation (T04b); the corrected uniform run has verified its first
-  64 objects and is continuing (live identity in the ledger). EvoCC runtime
+  before compilation (T04b); the corrected uniform run verified all 7002 first-pass
+  objects and its recovered actual-header pass is continuing (identity in the ledger). EvoCC runtime
   is still NOT RUN. Close only after its audited link/boot and unchanged paired replay;
   do not count the reference result as compiler acceptance.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [live run][kernel].
@@ -450,6 +450,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     normal shutdown; none is relabeled PASS. This closes **architecture-boundary
     classification**, not dispatch support or K11/K13's full population.
     [Source, original replays and hashes](tests/fixtures/syscall-dispatch-unavailable.out).
+
+  - [x] **K11j — Separate seccomp values from timing-model assertions** — `DONE`, P1, 2026-09-26.
+    The [small filter-chain C case](tests/fixtures/seccomp-filter-chain.c) checks
+    the original four-filter sequence, invalid load rejection and enforced EPERM
+    beneath prior ALLOW filters. GCC/Clang controls pass 28 assertions per Image.
+    Historical original failures are exactly two nanosecond-cost comparisons,
+    not incorrect syscall values; the following SKIPs depend on those comparisons.
+    Fresh unchanged originals both pass 7/7 within 180 seconds. No repair or
+    stable-performance claim is inferred from this retry; historical FAILs and
+    the measured subject slowdown remain. Final K13 is still required.
+    [Arithmetic, source and paired evidence](tests/fixtures/seccomp-filter-chain.out).
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;

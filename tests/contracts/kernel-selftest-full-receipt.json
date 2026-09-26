@@ -31499,6 +31499,23 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K11j",
+      "date": "2026-09-26",
+      "status": "CLASSIFIED",
+      "program": "seccomp:seccomp_benchmark",
+      "changesFullRunTotals": false,
+      "compilerRepair": false,
+      "reason": "Observed failures are two approximate timing-model comparisons, not syscall value mismatches; dependent skips do not prove missing bitmap support",
+      "probeEachKernel": "28 PASS across GCC/Clang ELFs, including invalid-filter rejection and enforced denial",
+      "originalEachKernel": "Fresh unchanged original 7 PASS / 0 FAIL / 0 SKIP; historical 2 PASS / 2 FAIL / 3 SKIP retained; no repair inferred from retry",
+      "perProgramTimeoutSeconds": 180,
+      "record": "tests/fixtures/seccomp-filter-chain.out",
+      "probeRecord": ".build/floating-targeted/seccomp-chain-20260926/result.json",
+      "probeRecordSha256": "f5566dfd6ff2a2fbeaf1ea937209b98adb50e8580ee190dbb1cfb1f66f11c5d9",
+      "pairedRecord": ".build/floating-targeted/seccomp-chain-20260926/original.json",
+      "pairedRecordSha256": "9e841122595ca45fef1306a7d262c79290f10e773be7ed880a2433e05a099763"
+    },
+    {
       "id": "K11i",
       "date": "2026-09-26",
       "status": "CLASSIFIED",

@@ -6,6 +6,25 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Seccomp filter values versus cost estimates — 2026-09-26
+
+K11j isolates the two historical `seccomp_benchmark` failures: the per-filter
+linear-cost estimates and one/two bitmap overheads exceed the source's
+ten-percent-or-two-nanosecond comparator. Every original PID assertion passed;
+the three subsequent SKIPs are consequences of the timing comparison, not an
+independent feature probe. The new C case executes the identical filter forms
+and adds invalid-load rejection plus an enforced EPERM negative control. Both
+GCC/Clang ELFs pass **28 assertions per kernel**.
+
+Both unchanged original replays now pass **7/7**, within the same 180-second
+budget on the same HVF machine. Reference costs are **108/133/133/153/161 ns**;
+subject **155/212/212/305/334 ns**. The subject remains slower. No compiler,
+kernel, source or tolerance changed: this is timing-model classification and
+fresh targeted execution, not a repair or a change to historical totals. It
+does not prove every timing fluctuation's physical cause or final K13 success.
+All four boots/shutdowns pass and disk hashes are unchanged; only a tiny
+initramfs was added. [Source and full record](../../tests/fixtures/seccomp-filter-chain.out).
+
 ### Interrupted uniform build recovered — 2026-09-26
 
 At the next live inspection, neither original PID 13358 nor 13361 nor any
