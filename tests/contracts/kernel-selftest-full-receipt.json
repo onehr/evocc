@@ -31643,6 +31643,22 @@
   ],
   "targetedCompilerRepairs": [
     {
+      "id": "K02f",
+      "date": "2026-09-26",
+      "status": "TARGETED_PASS",
+      "scope": "Select existing scalar shift immediates for known in-range counts; retain source guards, extensions and dynamic/pair paths; not an original KVM runtime pass",
+      "record": "tests/fixtures/constant-shift-selection.out",
+      "changesFullRunTotals": false,
+      "installed": false,
+      "runtime": "NOT_RUN",
+      "compilerSha256": "a9081dec6f864eb09db4464e7bb6a5e614a8835b52985c97b2089e4265be1c03",
+      "objectRecord": ".build/floating-targeted/constant-shift-20260926/kernel.json",
+      "objectRecordSha256": "a3806769dc9b9f4cd746233f1180346603e1b98636c723068dcdd31e5ea45abd",
+      "nativeControlsPassed": 14,
+      "assemblerEncodingChecks": 60,
+      "gate": {"passed": 1022, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
+    },
+    {
       "id": "K02e",
       "date": "2026-09-26",
       "status": "TARGETED_PASS",

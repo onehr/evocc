@@ -1348,6 +1348,55 @@ impl Lowerer {
         });
         Ok(dst)
     }
+
+    fn shift(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        op: BinOp,
+        result: &Value,
+        value: VReg,
+        amount: &Value,
+    ) -> Result<(), String> {
+        let bits = significant_bits(&amount.ty);
+        // Decode the count at its own width. Never use the machine's modulo
+        // shift masking to justify selection or bypass the source UB guard.
+        // Pair shifts and counts remain on their existing lowering path.
+        let immediate = self
+            .constants
+            .get(&amount.id)
+            .copied()
+            .filter(|_| bits <= 64)
+            .map(|raw| {
+                if bits == 64 {
+                    raw
+                } else {
+                    raw & ((1_u64 << bits) - 1)
+                }
+            })
+            .filter(|count| *count < u64::from(significant_bits(&result.ty)));
+        let dst = self.fresh(value.class);
+        let width = width_of(value.class);
+        if let Some(imm) = immediate {
+            insts.push(MInst::BinaryImm {
+                op,
+                dst,
+                lhs: value,
+                imm,
+                width,
+            });
+        } else {
+            let rhs = self.shift_amount(insts, amount)?;
+            insts.push(MInst::Binary {
+                op,
+                dst,
+                lhs: value,
+                rhs,
+                width,
+            });
+        }
+        self.bind(result, dst);
+        Ok(())
+    }
 }
 
 /// Must-originate analysis for automatic addresses passed through local SSA
@@ -2796,19 +2845,8 @@ fn lower_inst(
         Inst::Or(result, lhs, rhs) => simple(lowerer, insts, BinOp::Orr, result, lhs, rhs)?,
         Inst::Xor(result, lhs, rhs) => simple(lowerer, insts, BinOp::Eor, result, lhs, rhs)?,
         Inst::Shl(result, lhs, rhs) => {
-            let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
-            let width = width_of(class);
             let value = lowerer.reg(lhs)?;
-            let amount = lowerer.shift_amount(insts, rhs)?;
-            let dst = lowerer.fresh(class);
-            insts.push(MInst::Binary {
-                op: BinOp::Lsl,
-                dst,
-                lhs: value,
-                rhs: amount,
-                width,
-            });
-            lowerer.bind(result, dst);
+            lowerer.shift(insts, BinOp::Lsl, result, value, rhs)?;
         }
         Inst::LShr(result, lhs, rhs) => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
@@ -2816,16 +2854,7 @@ fn lower_inst(
             let bits = significant_bits(&lhs.ty);
             let value = lowerer.reg(lhs)?;
             let value = lowerer.zero_extend(insts, value, bits, width);
-            let amount = lowerer.shift_amount(insts, rhs)?;
-            let dst = lowerer.fresh(class);
-            insts.push(MInst::Binary {
-                op: BinOp::Lsr,
-                dst,
-                lhs: value,
-                rhs: amount,
-                width,
-            });
-            lowerer.bind(result, dst);
+            lowerer.shift(insts, BinOp::Lsr, result, value, rhs)?;
         }
         Inst::AShr(result, lhs, rhs) => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
@@ -2833,16 +2862,7 @@ fn lower_inst(
             let bits = significant_bits(&lhs.ty);
             let value = lowerer.reg(lhs)?;
             let value = lowerer.sign_extend(insts, value, bits, width);
-            let amount = lowerer.shift_amount(insts, rhs)?;
-            let dst = lowerer.fresh(class);
-            insts.push(MInst::Binary {
-                op: BinOp::Asr,
-                dst,
-                lhs: value,
-                rhs: amount,
-                width,
-            });
-            lowerer.bind(result, dst);
+            lowerer.shift(insts, BinOp::Asr, result, value, rhs)?;
         }
         Inst::SDiv(result, lhs, rhs) => divide(lowerer, insts, true, false, result, lhs, rhs)?,
         Inst::UDiv(result, lhs, rhs) => divide(lowerer, insts, false, false, result, lhs, rhs)?,

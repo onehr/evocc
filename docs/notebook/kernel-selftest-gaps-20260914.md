@@ -6,6 +6,29 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Constant shift selection — 2026-09-26
+
+K02f's minimal C and IR assertions went RED → GREEN. Known scalar counts now
+select the existing immediate instructions only after decoding their own width
+and establishing an in-range amount. No source guard, extension, dynamic count
+or pair lowering is removed. Four MIR tests cover 450 exact comparisons,
+invalid-count traps and 60 assembler checks; the CLI fixture and 14 ARM64 native/
+mixed-link controls pass. The affected gate is **1022 PASS / 0 FAIL / 4 historical
+ignored**, with Clippy/fmt green. Original KVM objects keep all export names/kinds:
+87/25 shifts become immediate, but text changes only **166792 → 166792** and
+**33804 → 33748** bytes. This is a bounded code-selection repair, not a KVM timeout
+fix. Nothing is installed and the running frozen full build excludes it.
+[C case, commands and hashes](../../tests/fixtures/constant-shift-selection.out).
+
+Live build observation during this repair: owner **13358**, worker **13361**;
+first pass **6144/7002 assembled**, zero failures, two active compiler workers.
+The first-pass counter is not overall completion: preparation must still compile
+against the actual generated headers, verify their content fixed point, link
+all objects/modules, audit provenance and boot. The existing implementation
+recompiles all selected consumers, so a second full pass remains. K13/K14 are
+not running yet. Host/build-volume free space was **107/27 GiB**; no new runtime
+disk was created. This is a point-in-time observation, not perpetual monitoring.
+
 ### Dying-memcg control and reference tracing — 2026-09-26
 
 **K11h follow-up: the accounting bound is also classified.** A controlled

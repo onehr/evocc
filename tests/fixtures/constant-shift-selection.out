@@ -1,0 +1,49 @@
+2026-09-26 — K02f: select existing scalar shift immediates.
+
+RED: the MIR immediate-shape assertion and CLI assembly assertion fail, with
+zero compilation errors. The C program's numeric result already agrees.
+GREEN: decode a directly known count at its own bits<M> width (M <= 64), and
+select lsl/lsr/asr #imm only when it is below the shifted width N <= 64.
+All source UB guards, sign/zero extension and dynamic/pair paths remain intact.
+This is instruction selection, not a new EqSat rule or source-language policy.
+
+Four MIR tests: 90 defined selection cases, 450 exact EvoIR/MIR comparisons, 36 dynamic/
+out-of-range controls, four original E3005 traps and 60 Linux/Darwin assembler
+checks. The existing 28 lowering tests retain narrow operand extensions and
+now also explicitly check their dynamic count masks. One CLI test passes at
+O0/O2 through C-HIR, EvoIR, MIR and native assembly selection.
+During test development, canonical multi-function newline errors and two old
+register-form expectations failed; all were corrected without weakening the
+type/extension/error checks. Final affected gate against 5895fbb: 1022 PASS,
+0 FAIL, 4 historical ignored; Clippy -D warnings and fmt PASS. This is not a
+complete workspace/offline-replay claim.
+
+Sealed ARM64: 14 PASS — six whole-program controls (EvoCC/GCC14/Clang19 x
+O0/O2) and eight cross-compiler links (two oracles x two directions x O0/O2).
+Image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2,
+GCC 14.2.0-19, Clang 19.1.7, network none. The optimized compiler emits the same
+six fixture assemblies as the native-tested debug compiler.
+
+Two original new-config commands and all exported symbol names/kinds agree.
+virt/kvm/kvm_main.o: text 166792 -> 166792; data/BSS 13933/168 unchanged;
+87 register shifts become immediate; emission 6.742 seconds.
+arch/arm64/kvm/hyp/pgtable.o: text 33804 -> 33748; data/BSS 1000/0 unchanged;
+25 register shifts become immediate; emission 5.261 seconds.
+The original 60-second compile limits are unchanged. No objects installed;
+runtime NOT RUN. K02/K03 stay OPEN. The ongoing uniform run uses frozen release
+e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f and excludes
+K02d/K02e/this change. No timing or final-composition success is inferred.
+
+Commands: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+cargo test -p evocc-mir -p evocc --test constant_shift_selection --offline -j 2
+cargo test -p evocc-mir --test section5_lowering --offline -j 2
+tools/gate-changed.sh 5895fbb --offline -j 2
+Local scripts/results: .build/floating-targeted/constant-shift-20260926/
+
+SHA256:
+source 9f23b760821a73a3c0f7fba7f7367e9e20179e4a2b32a5839572aa381ebd2612
+optimized compiler a9081dec6f864eb09db4464e7bb6a5e614a8835b52985c97b2089e4265be1c03
+kernel.json a3806769dc9b9f4cd746233f1180346603e1b98636c723068dcdd31e5ea45abd
+native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+preparation.json 27a1f7c7309fd53636dfc825547b9802923ce46cbfa85be74ffaa359c6c0f9a8
+gate.log 76be5c073d16a5ca393d89f855e88f08a95b26f16adae5e0ce759bdc73aded51

@@ -236,12 +236,16 @@ func @main(%arg0: bits<13>, %arg1: mem<all>, %arg2: world) -> (bits<13>, mem<all
 fn lshr_on_a_narrow_value_zero_extends_first() {
     // Section 3: lshr needs its operand "zero-extended to the register width",
     // inserted as "and with the mask 2^N - 1".
-    // The shift amount is itself a narrow value, so Section 3's fourth row
-    // masks it too: "and with 2^M - 1 when M < 32".
+    // A known in-range count selects the immediate, without changing the
+    // value extension. Dynamic narrow counts still need the Section 3 mask.
     assert_eq!(
         mnemonics(&lower(UNSIGNED_NARROW)),
-        vec!["mov#", "and#", "and#", "lsr"]
+        vec!["mov#", "and#", "lsr#"]
     );
+    let dynamic = UNSIGNED_NARROW
+        .replace("    %v3 = const.bits<13> 3\n", "")
+        .replace("%v0, %v3", "%v0, %v0");
+    assert_eq!(mnemonics(&lower(&dynamic)), vec!["and#", "and#", "lsr"]);
 }
 
 const SIGNED_NARROW: &str = "\
@@ -260,8 +264,12 @@ fn ashr_on_a_narrow_value_sign_extends_first() {
     // Section 3: "sbfx from bit N - 1".
     assert_eq!(
         mnemonics(&lower(SIGNED_NARROW)),
-        vec!["mov#", "sbfx", "and#", "asr"]
+        vec!["mov#", "sbfx", "asr#"]
     );
+    let dynamic = SIGNED_NARROW
+        .replace("    %v3 = const.bits<13> 3\n", "")
+        .replace("%v0, %v3", "%v0, %v0");
+    assert_eq!(mnemonics(&lower(&dynamic)), vec!["sbfx", "and#", "asr"]);
 }
 
 const BYTE_NARROW: &str = "\

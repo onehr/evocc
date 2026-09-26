@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.42** | **Authoritative reference** | **2026-09-26**
+**Revision 0.43** | **Authoritative reference** | **2026-09-26**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -203,6 +203,14 @@ unobservable in a defined execution because the front end asserts
 `shift_count_defined` as an obligation before every shift (EvoIR Section
 6); the lowering therefore inserts nothing beyond the mask of the row above,
 and this is the first of the admissible differences Section 1 names.
+
+A directly known scalar constant count may select the existing immediate form
+of `lsl`, `lsr` or `asr` (revision 0.43). Decode it at its own `bits<M>` width,
+with `M <= 64`, and require the resulting amount to be below the shifted value's
+width `N <= 64`; do not mask a count modulo the machine width to select it.
+The source count obligation and the operand's zero/sign extension remain in
+place. Dynamic/out-of-range counts and 128-bit pair operations keep their
+existing paths. This is instruction selection, not an EqSat rewrite.
 
 `bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
 their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
@@ -1119,6 +1127,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |
 | 0.42 | 2026-09-26 | Select either adjacent conditional successor as fall-through after parameter-copy placement; invert only the emitted condition, retaining logical edges, labels and long-branch relaxation. |
 | 0.41 | 2026-09-26 | Errata: synchronize dynamic allocation/release forms, grammar and frame rules with the existing EvoIR Appendix D contract and implementation; fixed storage remains stable, only the top dynamic allocation can be popped, and function-lifetime allocations are not reclaimed at VLA scope exit. No new execution scope. |
 | 0.40 | 2026-09-26 | Select bounded same-block constant pointer offsets into existing ordinary load/store immediates, preserving access attributes, strict-alignment encodability, guards and effect boundaries. |
