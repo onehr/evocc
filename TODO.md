@@ -176,6 +176,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     does not include this change. K02/K03 and final-composition replay stay OPEN.
     [Exact evidence](tests/fixtures/automatic-zero-single-pass.out).
 
+  - [x] **K02e — Use either adjacent conditional successor as fall-through**, 2026-09-26.
+    Two MIR shape assertions first fail without compilation errors. Final
+    emission now inverts the condition when the taken block is physically next;
+    logical edges, argument copies, labels and relaxation remain unchanged.
+    Three MIR regressions, the CLI/interpreter reduction, 14 sealed native and
+    mixed-link controls and the 1017-test affected gate pass (Clippy/fmt green).
+    Original KVM objects retain exports; redundant adjacent branches fall from
+    1101/219 to zero and text shrinks by 4444/832 bytes. No objects are installed;
+    the running frozen survey excludes this change. K02/K03 remain OPEN.
+    [Source and evidence](tests/fixtures/conditional-fallthrough.out).
+
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
   Isolate this separately from K02 until a shared cause is demonstrated; retain

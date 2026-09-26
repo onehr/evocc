@@ -2771,6 +2771,16 @@ fn emit_term(
             let _ = writeln!(text, "    b {}", label(platform, function, target));
         }
     };
+    // Edge copies have already been resolved by out-of-SSA/allocation. Only
+    // select the physical branch spelling here: preserve block order, labels,
+    // and both logical edge bindings, including equal-target edges.
+    let layout = |taken: u32, untaken: u32| {
+        if next == Some(taken) && taken != untaken {
+            (true, untaken, taken)
+        } else {
+            (false, taken, untaken)
+        }
+    };
     // A relaxed conditional terminator is its own inverse jumping over an
     // unconditional `b` to the taken block: the short branch then spans two
     // instructions and always reaches, and the long one reaches the function.
@@ -2801,14 +2811,16 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let (invert, taken, untaken) = layout(*taken, *untaken);
+            let cond = if invert { cond.inverted() } else { *cond };
             let over = over(relaxations);
             let (cond, destination) = match &over {
                 Some(over) => (cond.inverted(), over.clone()),
-                None => (*cond, label(platform, function, *taken)),
+                None => (cond, label(platform, function, taken)),
             };
             let _ = writeln!(text, "    b.{} {destination}", cond.mnemonic());
-            close(text, over, *taken);
-            branch(text, *untaken);
+            close(text, over, taken);
+            branch(text, untaken);
         }
         MTerm::Cb {
             nonzero,
@@ -2817,10 +2829,12 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let (invert, taken, untaken) = layout(*taken, *untaken);
+            let nonzero = *nonzero ^ invert;
             let over = over(relaxations);
             let (nonzero, destination) = match &over {
-                Some(over) => (!*nonzero, over.clone()),
-                None => (*nonzero, label(platform, function, *taken)),
+                Some(over) => (!nonzero, over.clone()),
+                None => (nonzero, label(platform, function, taken)),
             };
             let _ = writeln!(
                 text,
@@ -2828,8 +2842,8 @@ fn emit_term(
                 if nonzero { "cbnz" } else { "cbz" },
                 name(*src)
             );
-            close(text, over, *taken);
-            branch(text, *untaken);
+            close(text, over, taken);
+            branch(text, untaken);
         }
         MTerm::Tb {
             nonzero,
@@ -2839,10 +2853,12 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let (invert, taken, untaken) = layout(*taken, *untaken);
+            let nonzero = *nonzero ^ invert;
             let over = over(relaxations);
             let (nonzero, destination) = match &over {
-                Some(over) => (!*nonzero, over.clone()),
-                None => (*nonzero, label(platform, function, *taken)),
+                Some(over) => (!nonzero, over.clone()),
+                None => (nonzero, label(platform, function, taken)),
             };
             let _ = writeln!(
                 text,
@@ -2850,8 +2866,8 @@ fn emit_term(
                 if nonzero { "tbnz" } else { "tbz" },
                 name(*src)
             );
-            close(text, over, *taken);
-            branch(text, *untaken);
+            close(text, over, taken);
+            branch(text, untaken);
         }
         // Section 8: the template first, then the branch its `%l[label]`
         // references did not take. A successor the template jumps to is the

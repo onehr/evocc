@@ -6,6 +6,20 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Conditional fall-through selection — 2026-09-26
+
+K02e closes a bounded emission inefficiency observed in both original KVM
+objects. When the taken block is adjacent, invert the emitted condition and
+branch to the other block; do not reorder blocks or change logical edge copies.
+EvoMIR 0.42 records this rule, including subsequent long-branch relaxation.
+Two shape REDs become GREEN; three MIR tests, the CLI/interpreter fixture,
+14 ARM64 native/mixed-link controls and the 1017-test affected gate pass.
+Clippy/fmt pass, with four historical tests still ignored. Original command
+replays retain exported symbols: text 171236 → 166792 and 34636 → 33804 bytes;
+1101/219 redundant adjacent branches become zero. Nothing is installed, and
+the ongoing full build still uses its frozen earlier compiler. This is not
+an original KVM runtime PASS. [Exact evidence](../../tests/fixtures/conditional-fallthrough.out).
+
 ### Concurrent instruction publication outside the kernel probe — 2026-09-26
 
 The follow-up corrects an important boundary: the first probe raced MOV stores

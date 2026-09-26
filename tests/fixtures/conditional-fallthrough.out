@@ -1,0 +1,47 @@
+2026-09-26 — K02e: select either adjacent conditional successor at emission.
+
+RED: two MIR shape assertions fail, zero Rust compilation errors. Short branch
+emits b.eq taken; b untaken; taken: instead of b.ne untaken; taken:.
+The relaxed case similarly retains an unnecessary unconditional branch.
+GREEN changes only final BCond/Cb/Tb spelling after out-of-SSA/allocation;
+logical CFG, edge arguments, copies, block order, labels and effects are intact.
+Long-branch relaxation follows orientation. Asm-goto/indirect branches unchanged.
+
+Permanent tests: three MIR tests cover 108 short shapes (14 conditions plus
+CB/TB senses, three layouts, Linux/Darwin), ten relaxed assembler checks and
+equal-target edges carrying different values. Four existing branch-relaxation
+tests also PASS. One CLI fixture executes at O0/O2 in C-HIR, EvoIR and MIR and
+checks independent allocation verification, effects, backedges and label identity.
+Changed gate against dee25b3: 1017 PASS, 0 FAIL, 4 existing ignored;
+Clippy -D warnings and fmt PASS. This is an affected gate, not a full-workspace run.
+
+Sealed ARM64 native: six whole-program controls (EvoCC/GCC14/Clang19 x O0/O2),
+eight cross-compiler links (two oracles x both caller directions x O0/O2): 14 PASS.
+Image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2,
+GCC 14.2.0-19, Clang 19.1.7, network none. Optimized probe compiler emits the
+same six fixture assemblies as the native-tested debug binary.
+
+Original new-config commands: exports/kinds match GCC and previous objects;
+no installation, input/config/argv unchanged, each within the original 60s cap.
+virt/kvm/kvm_main.o: text 171236 -> 166792; data/BSS 13933/168 unchanged;
+1101 adjacent-taken redundant branches -> 0; emission 6.539s.
+arch/arm64/kvm/hyp/pgtable.o: text 34636 -> 33804; data/BSS 1000/0 unchanged;
+219 adjacent-taken redundant branches -> 0; emission 4.896s.
+Runtime NOT RUN. K02/K03 remain OPEN. The active full survey's frozen release
+e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f is unchanged
+and excludes this fix and K02d. No speedup or final-composition PASS is inferred.
+
+Commands: CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+cargo test -p evocc-mir --test conditional_fallthrough --offline -j 2
+cargo test -p evocc --test conditional_fallthrough --offline -j 2
+tools/gate-changed.sh dee25b3 --offline -j 2
+Local original-unit/native scripts and results:
+.build/floating-targeted/conditional-fallthrough-20260926/{kernel.py,native.py}
+
+SHA256:
+source 9ec0d1b01f07ad66a50a04e39fdbe2df27b0292cf9937cd8f15bd6c820dd9456
+optimized compiler 8788470c063e03036dbd25fffeedd0a287c2679e4344cdca3caf397c8eaf5d61
+gate.log 6c60d5dae74a3887e667bed67204fd6772e630b834973c013fd0eb15c170ca22
+kernel.json 44d5d1edcfcfbef79f5df4d4d3df4dfbe527e450160e22bcbc6f30d9f490c24e
+native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+preparation.json 1e0caddd12647b50b5ca1830a6d9cd14573913f84b8fafcc1b14990885d1fb19

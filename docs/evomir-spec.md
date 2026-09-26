@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.41** | **Authoritative reference** | **2026-09-26**
+**Revision 0.42** | **Authoritative reference** | **2026-09-26**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -290,8 +290,14 @@ spelling chosen by the destination class.
 | `csel rd, rn, rm, cond` | `rd := cond ? rn : rm` |
 
 **Control.** Pre-allocation EvoMIR has no fall-through: every conditional
-form names both successors with their argument lists, and emission lays the
-second successor out as the fall-through where block order allows.
+form names both successors with their argument lists. After edge-copy placement
+and allocation, emission uses either physically adjacent successor as the
+fall-through: when only the taken successor is next, it inverts the condition
+and branches to the untaken successor instead (revision 0.42). This changes
+only instruction spelling, not block order, labels, arguments, effects or
+logical CFG edges. Equal-target edges retain their distinct parameter-copy
+routes. Long-branch relaxation applies after this layout choice, preserving
+the selected fall-through and the other edge's reachability.
 
 | Form | Semantics |
 |---|---|
@@ -1113,6 +1119,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.42 | 2026-09-26 | Select either adjacent conditional successor as fall-through after parameter-copy placement; invert only the emitted condition, retaining logical edges, labels and long-branch relaxation. |
 | 0.41 | 2026-09-26 | Errata: synchronize dynamic allocation/release forms, grammar and frame rules with the existing EvoIR Appendix D contract and implementation; fixed storage remains stable, only the top dynamic allocation can be popped, and function-lifetime allocations are not reclaimed at VLA scope exit. No new execution scope. |
 | 0.40 | 2026-09-26 | Select bounded same-block constant pointer offsets into existing ordinary load/store immediates, preserving access attributes, strict-alignment encodability, guards and effect boundaries. |
 | 0.39 | 2026-09-24 | Forward direct-edge identities through ordinary validated-SSA assembly without changing its effects; distinguish independent fixed input occurrences of the same value while preserving genuine tied-operand conflicts. |
