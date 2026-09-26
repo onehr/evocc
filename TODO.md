@@ -123,6 +123,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     Instruction-data API samples reread memory and are not decoded-opcode proof;
     the target witness avoids that inference. This localizes the reduced wrong
     control flow, not its exact invalidation race or the original NULL fault.
+    The store-window extension correlates **25792/8448** wrong-target executions
+    with translations observed during a pending patch store; both ST controls
+    still pass. It does not expose the internal decode/invalidation ordering,
+    so the next step is matching-version internal instrumentation, not a waiver.
 
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;

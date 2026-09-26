@@ -85,3 +85,35 @@ subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
 QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
 scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
 Serial hashes are bound in each result. No QEMU, kernel or compiler patch.
+
+2026-09-27 follow-up: optional storepc=400964 observes the fixed ELF's patching
+STR before execution and its completed memory callback. Each entry translation
+retains those counters; actual return-one witnesses report their originating
+entry via per-vCPU state (not host TLS, which would conflate ST-TCG guest CPUs).
+The existing five-argument observer remains valid. No guest modification.
+
+                             GCC kernel        EvoCC kernel
+Store-window observer MT     3 PASS / 3 FAIL   4 PASS / 2 FAIL
+Store-window observer ST     6 PASS / 0 FAIL   6 PASS / 0 FAIL
+All four boot/shutdown predicates pass; scratch and payload unchanged.
+MT target witnesses: 171904 / 222208. Of these, 25792 / 8448 point to entry
+translations whose callback occurred with a patch store pending. Both hosts
+observe all 4614 instrumented stores completed. ST witnesses are zero.
+This is a narrower correlation, NOT exact invalidation/decoding order proof.
+The instruction-data callback still rereads memory; do not infer its sampled
+word is the originally decoded word. K01/K01b remain OPEN.
+
+The matching upstream v11.1.1 source shows notdirty_write invalidating before
+the store, with the page-collection lock released inside the invalidation
+helper. Whether another translation survives that window is under diagnosis.
+The prior upstream fix to lock pages before translation is already present;
+this is not evidence that installing that old patch repairs the current case.
+  https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/cputlb.c
+  https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/tb-maint.c
+  https://raw.githubusercontent.com/qemu/qemu/v11.1.1/accel/tcg/translate-all.c
+
+clang -Wall -Wextra -Werror host-plugin build passes.
+replay.py window window-single uses the same existing bounded flight adapter.
+New source SHA a71862b64ae1b5ce124ab140384c77aa1fa3758c631512641bef6bb66c0ceb4a
+observer-window.dylib 98f5decd98915f36ed4e49efece13c3e50d074938c527658acb245768cb54db4
+result-window-window-single.json e1562fc4e2c9fcf39a1b9564384f365ee9af53181e188f7a8594d2dcecb8d9c1
