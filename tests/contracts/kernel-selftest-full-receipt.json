@@ -31554,5 +31554,26 @@
       "gate": {"passed": 1001, "failed": 0, "ignored": 4, "clippy": "PASS", "fmt": "PASS"}
     }
   ],
+  "targetedKernelReplays": [
+    {
+      "date": "2026-09-26",
+      "ids": ["K02", "K03"],
+      "status": "TIMEOUT",
+      "record": "tests/fixtures/kvm-transport-replay.out",
+      "changesFullRunTotals": false,
+      "subjectImageSha256": "97d511d3b32b8c85e0cd9c7ef4dc447e4b8407c4c764f4f5aebd804285f043d1",
+      "referenceImageSha256": "8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b",
+      "auditedTargetCRecords": 6765,
+      "changedObjects": 2,
+      "uniformCompilerRebuild": false,
+      "referenceEach": {"exitCode": 0, "completedModes": 10},
+      "subjectEach": {"exitCode": 124, "completedModes": 3},
+      "perProgramTimeoutSeconds": 120,
+      "bootsAndShutdownsPassed": 4,
+      "moduleLinkAndBtf": "PASS: 745 modules; module execution NOT_RUN",
+      "runtimeRecord": ".evidence/k1/kvm-transport-20260926/runtime.json",
+      "runtimeRecordSha256": "d5ef0bd1e5a5da1d9d258b74940918dc17ed309bff9c3d94111a8578dab70f31"
+    }
+  ],
   "regressions": []
 }

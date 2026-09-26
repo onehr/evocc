@@ -113,6 +113,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   [Integrated two-object replay](tests/fixtures/kvm-hotpath-original-replay.out):
   the repaired Image boots, but the original default workload still times out
   after three complete modes; GCC finishes all ten. K02 remains OPEN.
+  The September 26 [assembly-transport candidate](tests/fixtures/kvm-transport-replay.out)
+  again completes three modes before 120 seconds; GCC completes ten. All 6,765
+  installed objects and generated inputs survive linking. Smaller code in two
+  objects does not close a whole-kernel performance gap.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -147,6 +151,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   The [new linked candidate](tests/fixtures/kvm-hotpath-original-replay.out)
   installs the two gated KVM repairs but still times out in the fourth mode;
   GCC completes all ten. Both shutdowns pass; this is not K03 closure.
+  September 26's [new two-object replay](tests/fixtures/kvm-transport-replay.out)
+  has the same original-program timeout: three completed modes, ten for GCC.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -185,6 +191,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   K14's fresh complete execution remains open.
 
 - [ ] **K06 — Build and run the IOPF-enabled configuration** — `OPEN`, P1.
+  September 26: the reviewed configuration is now building in the existing GCC
+  reference directory, without a new tree; its old Image/config are retained.
+  Active PID/log and artifact transition are in the [kernel ledger][kernel].
+  This prerequisite build is not yet EvoCC compilation or runtime acceptance.
   IOMMU is 218 PASS / 6 FAIL / 5 SKIP on both kernels; the six failures reach the
   disabled IOPF stub. The small Kconfig candidate resolves IOPF through
   `CONFIG_ARM_SMMU_V3_SVA=y` but has not been built. Compile/link with actual

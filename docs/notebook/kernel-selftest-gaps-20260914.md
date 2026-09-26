@@ -6,6 +6,42 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Runtime configuration build and artifact transition — 2026-09-26
+
+K06/K12 now proceeds beyond Kconfig-only diagnosis. The reviewed candidate
+`f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd`
+is being built with the frozen GCC14 toolchain, two jobs/eight GiB, network off,
+in the **existing** `case/bpf-config` tree. No Linux/workspace clone or runtime
+disk is created. The old reference Image `8fa43fb4…`, `.config` and `System.map`
+are retained with copy-on-write under
+`.build/floating-targeted/runtime-config-20260926/before-reference/`.
+Historical receipts are unchanged; that retained Image is the old flight subject,
+not whatever the mutable `case/bpf-config` directory produces next. Its matching
+old runtime disks remain available. The EvoCC output tree is not reseeded during
+this reference prerequisite.
+
+Live build identity: `.build/floating-targeted/runtime-config-20260926/reference.json`
+records the owner PID/state/argv; `reference.log` is the single build log. Do not
+infer liveness from this notebook. Next verify the six unchanged IOMMU cases on
+the new reference, then compile the new IOPF source paths with EvoCC and complete
+the audited subject composition. No new-config compiler or runtime PASS yet.
+
+### Original KVM replay after assembly repair — 2026-09-26
+
+The two gated objects are now installed; **6,765/6,765** object hashes and all
+generated inputs survive full linking, and all **745** modules relink with the
+new BTF. This remains an incremental composition, not a uniform new-compiler
+survey. New Image: `97d511d3b32b8c85e0cd9c7ef4dc447e4b8407c4c764f4f5aebd804285f043d1`.
+
+Both unchanged original KVM programs were rerun serially with zero arguments,
+all ten modes, the same fixed EL2 machine and **120-second program limit**.
+GCC completes **10/10** for each; EvoCC completes **3/10**, enters mode four and
+times out for each. All four boot/shutdown predicates pass. Thus K02/K03 remain
+OPEN: this compiler repair does not solve the whole-kernel timing gap. The
+4 MiB payload and 64 MiB snapshot scratch disk are reused. New module runtime
+is NOT RUN; do not pair this Image with an older module payload.
+[Exact commands, composition and outcomes](../../tests/fixtures/kvm-transport-replay.out).
+
 ### Assembly-aware value transport — 2026-09-26
 
 TODO K02b closes a bounded compiler repair, not the KVM runtime timeouts.
@@ -26,8 +62,9 @@ the six native controls were rerun successfully in the sealed offline image.
 The unchanged original commands and generated headers produce both KVM objects
 with matching exported names/kinds. Against the previously installed composition,
 text falls **238032 → 187376** and **41816 → 37328** bytes; this includes the
-preceding direct-edge repair and is not a causal timing measurement. At this
-checkpoint they are **not installed**, and no Image or full-run total changed.
+preceding direct-edge repair and is not a causal timing measurement. At the
+compile checkpoint they were **not installed**; the subsequent integration above
+does not change any full-run total.
 [Fixture, binary identities and results](../../tests/fixtures/asm-value-transport.out).
 
 ### Original udmabuf HugeTLB workload — 2026-09-24

@@ -1,0 +1,72 @@
+2026-09-26 — K02/K03 unchanged original replay after assembly transport repair.
+
+Compiler repair c445863; release SHA-256
+cd0c4b84306a3faac2473c27cfd005e391ba4ae1dd4ee8dbcbba2b039cb44891.
+The two prepared objects from asm-value-transport.out are now installed:
+  virt/kvm/kvm_main.o
+    34eda5d2c24e49d9803566b3f91f0c03c3c139037a71e5581079c3fe15302b03
+  arch/arm64/kvm/hyp/pgtable.o
+    b8f8ac561f0ead63009aaf2e557dbc06156452ceaa31a6fde88c67a075436023
+Original commands, target flags and actual generated headers retained.
+All 6765 installed target-C records are audited before and after link; 6763
+remain from the parent composition. No reference-C substitution occurred.
+This is NOT a uniform fresh-compiler survey. All generated inputs remain
+byte-identical. The 176.207-second complete kernel relink succeeds, followed
+by all 745 module links/BTF. Signing, module installation and execution are
+NOT performed for this Image; older module payloads must not accompany it.
+
+Two unchanged original user ELFs; zero arguments, default 1 GiB, all ten modes.
+Serial flights, no concurrent build/benchmark VM; fixed tcg-neoverse-n2-el2.
+The existing init preserves each program's 120-second watchdog. The 240-second
+boot bound includes setup and shutdown and does not extend the test budget.
+
+program                         reference                 subject
+demand_paging_test               exit 0, 10/10 complete    exit 124, 3/10 complete
+memslot_modification_stress_test exit 0, 10/10 complete    exit 124, 3/10 complete
+Both subject programs enter the fourth mode. All four nonce-bound boot and
+normal-shutdown predicates PASS. These do NOT turn the two timeouts into PASS.
+K02/K03 remain OPEN. The code-size reduction does not close the whole-kernel
+timing gap; no historical K13 counters are replaced.
+
+Reuse the existing 4 MiB payload and 64 MiB snapshot scratch disk; its backing
+hash is unchanged after every flight. No full runtime/workspace/source copy.
+The parent candidate Image and two objects use copy-on-write retention under
+.build/floating-targeted/asm-value-transport-20260924/before-integration/.
+
+For each side/program:
+  K1_ALLOW_QEMU_DRIFT=1
+  K1_KERNEL_CONTRACT=contracts/kernel-selftest-kvm-target.json
+  K1_BOOT_LANE=tcg-neoverse-n2-el2 K1_KUNIT_AUTORUN=0 K1_BOOT_TIMEOUT=240
+  K1_SELFTEST_COLLECTION=PROGRAM
+  K1_INITRAMFS=.build/floating-targeted/kvm-hotpath-20260923/payload.cpio
+  K1_TEST_DISK=.build/k7-coverage/repair-runtime/scratch.img
+  tools/k1/boot.sh IMAGE RUN_DIRECTORY
+The commands and explicit source identities are unchanged from
+kvm-hotpath-original-replay.out; the new subject is the audited composition.
+
+SHA-256:
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+parent Image 2b87033b367eff31d0c88d9e212a5d3c4b75f5fc5a7d35f5b999ad3d5c06626c
+subject Image 97d511d3b32b8c85e0cd9c7ef4dc447e4b8407c4c764f4f5aebd804285f043d1
+vmlinux d3a294c4a824ca3781a855ab5eaec6f2ceff821164ab59d96070fa6c32414f64
+parent units 103b51a1e200b22beb848eee2801d6ce7859ad95183e457573ca371cd759115c
+inventory f91486ca6fe9a59a8523063370964da0d37b9cc26a47c45214f306dcd00213eb
+config 2f938cda8169ed22e90e46b4e43a9b3752daa6c457497fb13e14a3d66abdfa28
+payload b31c60595529ba1b92725c709b6590f80c7901a35d89d9512dbfc5f4e2e57df2
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+
+Evidence .evidence/k1/kvm-transport-20260926/:
+repair.json 3a3eed4dab7cbe0b2a47aef5a899fcb1a272ddf8356bf43ddaec5386ad24af48
+runtime.json d5ef0bd1e5a5da1d9d258b74940918dc17ed309bff9c3d94111a8578dab70f31
+Full composition = parent units plus two replacement rows; not another full
+20 MiB inventory copy. Serial hashes, reference then subject:
+demand 2489c5c0385817c91a6d096ac7c2649ec438505fe42e2e8f12f9021b5b406e4c
+       af0f3cf678111f547cfd02fd9b823005978dd86fe26357937a51491e8e1031d0
+memslot 2242b45cbd1dd0cf618b3172b292a09b92dd194e9de1569c56a30ae2a1ee4cfc
+        7ff7210a6d892efc95654e60ff48eb5202191d9f6e1bfe0ca8d84aa9e18f614f
+
+After these four flights ended, K06's reference configuration rebuild started.
+The exact old reference Image/config/System.map are retained under
+.build/floating-targeted/runtime-config-20260926/before-reference/.
+The old Image hash was checked after retention; mutable bpf-config paths now
+belong to that separate in-progress build, not this historical flight.
