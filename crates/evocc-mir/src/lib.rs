@@ -1,18 +1,17 @@
 //! EvoMIR: the machine-level intermediate representation of EvoCC.
 //!
-//! This crate implements Sections 2 to 5 and Appendix A of the EvoMIR
-//! specification (`docs/evomir-spec.md`, revision 0.1) for the pre-allocation
-//! form: the data model, the canonical textual form, the verifier of the
-//! Section 2 `flags` rule, the executable semantics of Section 4, and the
-//! Section 5 lowering from extracted EvoIR.
+//! The authoritative contract is `docs/evomir-spec.md`. This crate contains
+//! the pre-allocation data model, canonical text, validation and executable
+//! semantics, as well as lowering from validated EvoIR.
 //!
-//! Register allocation (Section 7), frame layout (Section 6) and emission
-//! (Section 8) are deliberately absent; nothing here assigns a physical
-//! register or a frame offset.
+//! Native compilation also includes explicit-edge SSA destruction, register
+//! allocation with independent verification, frame layout and AArch64 emission
+//! for the supported Darwin and Linux target profiles. The pre-allocation
+//! interpreter and native backend have separate supported-operation boundaries;
+//! successful parsing alone does not establish execution or ABI support.
 //!
-//! Where revision 0.1 is silent on a rule this crate needs, the gap is
-//! recorded in `GAPS.md`-style prose in the module that needs it and the
-//! choice is spelled out at the point of use rather than left implicit.
+//! Unsupported forms produce explicit refusals. See the specification and
+//! target-specific tests for numerical, relocation, assembly and ABI contracts.
 
 #![forbid(unsafe_code)]
 
