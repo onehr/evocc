@@ -341,6 +341,55 @@ fn zero_initialization_is_explicit_and_runs_at_each_declaration() {
 }
 
 #[test]
+fn automatic_zero_does_not_repeat_nonpointer_representation_stores() {
+    for (source, expected_stores, expected_nulls) in [
+        ("extern void observe(void *); void f(void) { struct { int x[4]; } r; observe(&r); }", 2, 0),
+        ("extern void observe(void *); void f(void) { struct { int x[2]; void *p; } r; observe(&r); }", 3, 1),
+        ("extern void observe(void *); void f(unsigned n) { long r[n]; observe(r); }", 8, 0),
+    ] {
+        let text = successful(run(&["--emit=evoir", "-ftrivial-auto-var-init=zero"], source));
+        assert_eq!(text.lines().filter(|line| line.contains(" = store ")).count(), expected_stores, "{text}");
+        assert_eq!(text.matches(" = ptr.null ").count(), expected_nulls, "{text}");
+    }
+}
+
+#[test]
+fn automatic_zero_single_pass_keeps_padding_values_and_pointer_provenance() {
+    let source = include_str!("../../../tests/fixtures/automatic-zero-single-pass.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        assert_eq!(
+            successful(run(&[mode, "-ftrivial-auto-var-init=zero"], source)).trim(),
+            "0"
+        );
+        for options in [
+            vec![mode],
+            vec![
+                mode,
+                "-ftrivial-auto-var-init=zero",
+                "-ftrivial-auto-var-init=uninitialized",
+            ],
+        ] {
+            let output = run(&options, source);
+            assert!(!output.status.success());
+            assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
+        }
+    }
+    successful(run(&["--emit=asm", "-ftrivial-auto-var-init=zero"], source));
+}
+
+#[test]
+fn prezeroed_bytes_do_not_admit_deferred_value_types() {
+    for ty in ["long double", "_Complex double"] {
+        let source =
+            format!("extern void observe(void *); void f(void) {{ {ty} r; observe(&r); }}");
+        let output = run(&["--emit=evoir", "-ftrivial-auto-var-init=zero"], &source);
+        assert!(!output.status.success());
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains("not-lowered:"), "{diagnostic}");
+    }
+}
+
+#[test]
 fn automatic_zero_initializes_constructor_padding_without_changing_members() {
     let source = include_str!("../../../tests/fixtures/automatic-initializer-padding.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

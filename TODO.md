@@ -151,6 +151,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     installed and no timing claim is inferred. K02/K03 remain OPEN.
     [Exact evidence](tests/fixtures/memory-address-selection.out).
 
+  - [x] **K02d — Avoid duplicate automatic-zero value stores**, 2026-09-26.
+    The [small C case](tests/fixtures/automatic-zero-single-pass.c) covers fixed
+    and dynamic records, pointer provenance, padding and admitted scalar/vector
+    types. After representation zeroing, the shared initializer only repairs
+    typed Null pointers; explicit initializers and rejection boundaries remain.
+    34 CLI tests, 12 native controls and the 1121-test affected gate pass.
+    Original new-config KVM objects retain their exports; text decreases by
+    4028/360 bytes. They are not installed, and the running frozen-release survey
+    does not include this change. K02/K03 and final-composition replay stay OPEN.
+    [Exact evidence](tests/fixtures/automatic-zero-single-pass.out).
+
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
   Isolate this separately from K02 until a shared cause is demonstrated; retain
@@ -723,6 +734,8 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
   The corrected launch is running; previous receipts describe incremental compositions.
+  Later K02d is independently tested but deliberately absent from that frozen
+  executable; its final integration must not be inferred from this run.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,

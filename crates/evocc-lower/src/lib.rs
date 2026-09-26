@@ -376,6 +376,14 @@ enum BlockRole {
     LoopStep,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ZeroInitializer {
+    Values,
+    /// Whole-object bytes (including padding) are already zero. Only typed
+    /// pointer stores remain necessary, to establish Null provenance.
+    PointerProvenance,
+}
+
 #[derive(Debug)]
 struct DraftBlock {
     id: BlockId,
@@ -7835,6 +7843,7 @@ impl<'a> FunctionLowerer<'a> {
             element,
             SubobjectPath::root(),
             &[],
+            ZeroInitializer::PointerProvenance,
             span,
             &mut body,
             layout.align_bytes,
@@ -7859,6 +7868,7 @@ impl<'a> FunctionLowerer<'a> {
         ty: TypeId,
         path: SubobjectPath,
         actions: &[InitAction<'a>],
+        mode: ZeroInitializer,
         span: SourceSpan,
         state: &mut State,
         alignment: u32,
@@ -7879,6 +7889,9 @@ impl<'a> FunctionLowerer<'a> {
         match kind {
             TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64) => {
                 let mut layout = self.access_layout(ty, span)?;
+                if mode == ZeroInitializer::PointerProvenance {
+                    return Ok(());
+                }
                 layout.align_bytes = layout.align_bytes.min(alignment);
                 let integer = if layout.size_bytes == 4 {
                     CIntegerType::UINT
@@ -7891,8 +7904,11 @@ impl<'a> FunctionLowerer<'a> {
             }
             TypeKind::TargetBuiltin(kind) if kind.polynomial_bits().is_some() => {
                 let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
-                let zero = self.constant(state, integer, 0)?;
                 let mut layout = self.access_layout(ty, span)?;
+                if mode == ZeroInitializer::PointerProvenance {
+                    return Ok(());
+                }
+                let zero = self.constant(state, integer, 0)?;
                 layout.align_bytes = layout.align_bytes.min(alignment);
                 self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
                 Ok(())
@@ -7903,6 +7919,12 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "target header type has no admitted value execution",
             }),
             TypeKind::Complex(evocc_types::ComplexBase::Integer(_)) => {
+                if mode == ZeroInitializer::PointerProvenance {
+                    let element = evocc_chir::complex::element(self.unit.types(), ty).unwrap();
+                    canonical_integer(self.unit.types(), self.target, element, span)?;
+                    self.access_layout(element, span)?;
+                    return Ok(());
+                }
                 self.emit_zero_complex(address, ty, span, state)
             }
             TypeKind::Vector { element, lanes, .. } => {
@@ -7918,6 +7940,7 @@ impl<'a> FunctionLowerer<'a> {
                         element,
                         path.clone().with_index(index),
                         actions,
+                        mode,
                         span,
                         state,
                         alignment.min(layout.align_bytes),
@@ -7931,6 +7954,7 @@ impl<'a> FunctionLowerer<'a> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_) => {
+                let mut layout = self.access_layout(ty, span)?;
                 let zero = match kind {
                     TypeKind::Pointer(_) => {
                         let pointer = self.fresh_value(self.c_value_type(ty, span)?.0);
@@ -7942,10 +7966,14 @@ impl<'a> FunctionLowerer<'a> {
                     }
                     _ => {
                         let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+                        // Validate value admission before omitting the store:
+                        // prezeroed bytes do not authorize deferred types.
+                        if mode == ZeroInitializer::PointerProvenance {
+                            return Ok(());
+                        }
                         self.constant(state, integer, 0)?
                     }
                 };
-                let mut layout = self.access_layout(ty, span)?;
                 layout.align_bytes = layout.align_bytes.min(alignment);
                 self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
                 Ok(())
@@ -7970,6 +7998,7 @@ impl<'a> FunctionLowerer<'a> {
                         element,
                         path.clone().with_index(index),
                         actions,
+                        mode,
                         span,
                         state,
                         alignment.min(element_layout.align_bytes),
@@ -8050,6 +8079,9 @@ impl<'a> FunctionLowerer<'a> {
                         });
                     };
                     if let Some(bit_field) = layout.bit_field {
+                        if mode == ZeroInitializer::PointerProvenance {
+                            continue;
+                        }
                         // Only bytes intersecting the field are initialized;
                         // a declared allocation unit may extend past a packed record.
                         let count = (bit_field.bit_offset % 8 + bit_field.width_bits).div_ceil(8);
@@ -8071,6 +8103,7 @@ impl<'a> FunctionLowerer<'a> {
                         field.ty,
                         path.clone().with_field(field_index),
                         actions,
+                        mode,
                         span,
                         state,
                         alignment.min(layout.layout.align_bytes),
@@ -8141,6 +8174,7 @@ impl<'a> FunctionLowerer<'a> {
                     object.ty,
                     SubobjectPath::root(),
                     &[],
+                    ZeroInitializer::PointerProvenance,
                     object.span,
                     state,
                     layout.align_bytes,
@@ -8283,6 +8317,7 @@ impl<'a> FunctionLowerer<'a> {
                 object_ty,
                 SubobjectPath::root(),
                 initializer.plan().actions(),
+                ZeroInitializer::Values,
                 object_span,
                 state,
                 self.access_layout(object_ty, object_span)?.align_bytes,
@@ -8406,6 +8441,7 @@ impl<'a> FunctionLowerer<'a> {
                             *destination_type,
                             SubobjectPath::root(),
                             &[],
+                            ZeroInitializer::Values,
                             action_span,
                             state,
                             action_layout.align_bytes,

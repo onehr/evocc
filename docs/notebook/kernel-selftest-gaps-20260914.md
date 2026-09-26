@@ -6,6 +6,19 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Single-pass automatic representation zeroing — 2026-09-26
+
+K02d removes redundant ordinary value stores after whole-object automatic
+zeroing, while retaining typed Null provenance and all admission checks.
+34 CLI tests, 12 sealed ARM64 native controls and the 1121-test affected gate
+pass, including Clippy/fmt. The original new-config KVM commands reassemble
+with matching exports: text 175264 → 171236 and 34996 → 34636 bytes.
+The debug compiler's first 60-second timeout remains recorded separately;
+the isolated optimized candidate completes both original commands within that
+unchanged limit. No objects are installed and no runtime improvement is claimed.
+The active uniform survey remains bound to its earlier release digest and
+does not inherit this change. [Source and evidence](../../tests/fixtures/automatic-zero-single-pass.out).
+
 ### rseq registration-precondition control — 2026-09-26
 
 K11e now has a real small C reduction and unchanged original pair, beyond the

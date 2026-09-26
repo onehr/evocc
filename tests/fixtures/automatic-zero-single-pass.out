@@ -1,0 +1,46 @@
+2026-09-26 — K02d: omit redundant ordinary stores after automatic byte zeroing.
+
+RED: the 16-byte integer-record test observed 6 stores instead of 2, with zero
+Rust compilation errors. Value/provenance controls already passed.
+The shared recursive initializer now distinguishes full value initialization
+from pointer-provenance repair after the entire representation is zeroed.
+Only the latter omits nonpointer stores; it still validates admitted value types.
+Typed Null stores, padding, explicit initializers, per-declaration activation,
+uninitialized exemptions and the last-option override remain unchanged.
+This is lowering of the existing auto-init contract, not an EqSat rewrite.
+
+CLI shape rows: integer record 6 -> 2 stores; mixed record 5 -> 3 including
+one typed Null; VLA long leaf 9 -> 8 byte stores. Permanent C covers fixed/VLA
+records, padding, bit-fields, pointer arrays, integer vectors/complex and f32/f64.
+Both interpreters return zero with the flag and E3001 without it or after the
+uninitialized override. Deferred long double/floating complex remain refused.
+compilation_options: 34 PASS. Changed gate against 5891d94: 1121 PASS, 0 FAIL,
+3 existing ignored tests across the affected crates; Clippy -D warnings/fmt PASS.
+
+Sealed ARM64 native: GCC14/Clang19/EvoCC x O0/O2 x normal/strict-align: 12 PASS.
+GCC's expected uninitialized-source warnings are retained. Initial -Werror
+control rejected those warnings before execution; it is not counted as PASS.
+Image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2;
+GCC 14.2.0-19, Clang 19.1.7, network none. Optimized candidate emits exactly
+the same four fixture assemblies as the native-tested debug compiler.
+
+Two original new-config KVM commands recompile/assemble with matching exported
+names/kinds and no installation. Config, command records and inputs unchanged.
+virt/kvm/kvm_main.o: text 175264 -> 171236 bytes, data/BSS 13933/168 unchanged.
+arch/arm64/kvm/hyp/pgtable.o: text 34996 -> 34636, data/BSS 1000/0 unchanged.
+Optimized candidate emits in 6.167/4.544 seconds, within the original 60s limit.
+The earlier debug kvm_main attempt timed out at 60s; preserve it as TIMEOUT.
+No timing benefit or original KVM-runtime PASS follows from smaller objects.
+
+The active 7002-object survey still uses frozen release e8bddc0a...; it does NOT
+include this change. The isolated probe-release build occupies 52 MiB, does not
+replace that executable, and creates no workspace/Linux/runtime-disk copy.
+Local scripts/results: .build/floating-targeted/automatic-zero-20260926/.
+
+SHA-256:
+C fa0487b1e5a017d7fa98a9256501f4d24b8bc9a091d23dc05ba9e27117fbb2f6
+debug 53e67cbe1b8769c061dfeeb2e7068e89ca7c5bf2137f61a617746f536d8952fc
+optimized candidate a088007ee50c853e79850eed08b6cb9babec02949573c6a10f7824f56f69b187
+native.log b99b14cdb774640a9a9dbb7c029ccd4c10548665d3d2909fd4b0fa67bc1db045
+gate.log bfd1c0419e373eeb46b8f24aea79ecf980f2b301c5fd1b0456ad11717b126067
+kernel.json fe56a2e447baf1048a6561d433abc3dbb5483a045083e9dcef0ef2817ac8a65d
