@@ -1,0 +1,47 @@
+2026-09-26 — K11h: classify frozen one-slot accounting tolerance.
+
+Minimal control creates 8 live child memcgs on each of 4 CPUs, pins each charge,
+touches/unmaps one page and waits for the child. Groups remain live while their
+parent's memory.current and complete memory.stat snapshot are read. This does
+not change the upstream test, increase its margin, or add a retry/sleep to it.
+Fixed sealed GCC14 static O2; standalone source -Wall -Wextra -Werror, existing
+cgroup_util helper. Same retained kernel pair and unchanged scratch as K11g.
+
+                         GCC           EvoCC
+memory.current          7327744       7430144
+anon+file+kernel+sock     421888        421888
+difference              6905856       7008256
+frozen one-slot bound   1048576       1048576
+seven-slot capacity     7340032       7340032
+
+Each measurement stays unchanged over four one-second charged observations
+and three after explicit memory.reclaim=1. Reclaim returns success but does not
+remove this difference: it is not a proposed fix. Both diagnostic assertions
+(reproduce a difference beyond the old bound), boots and shutdowns PASS.
+This is test-bound classification, not original kselftest acceptance.
+
+Source facts: mm/memcontrol.c NR_MEMCG_STOCK=7 and refill_stock retain separate
+64-page caches per CPU. Frozen test_kmem.c MAX_VMSTAT_ERROR assumes only
+4096*64*get_nprocs(). The existing original subject difference 1048576 is
+rejected by its strict < check; reference passes that case. Earlier original
+paired observations also exceed the one-slot bound transiently. A matched
+upstream review explicitly identifies the missing slot-count factor:
+https://lists.openwall.net/linux-kernel/2026/04/15/721
+No reviewed upstream patch is applied to the frozen kernel or test.
+
+Do not merge this with K11g's LRU folio references or test_percpu_basic's
+missing slab contribution. Original pair remains GCC inner 4 PASS/2 FAIL,
+EvoCC 3 PASS/3 FAIL; see cgroup-stock-displacement.out for original replay.
+No historical totals, final composition or broader memory-correctness claim.
+
+Local build.sh, existing diagnostic replay.py, results/captures:
+.build/floating-targeted/cgroup-capacity-20260926/
+Reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+QEMU11.1.1 acknowledged drift, MT-TCG Cortex-A72, 4 CPUs/2 GiB.
+Source a8f0a497af54ece389b667c21ada359c963971824dc1143c0459ffeb68ddb338
+ELF 5bb7d4c1ac1f2154d23a04c424189d88548629f392a3c3441099541fbb113bfd
+Payload aa5783a6bcca85e2fcdac9387f461269a386a15c4e36583ec341b67566466ab1
+Result 6ca9f9020d9e3db99f144f5d972715b6a092cca861d5f372027c83a1c7101267
+Reference capture d49333c22462614d6a1f7cc5eef3b008ee429bd8c1945216abe502e366474c13
+Subject capture 0973b08fdfbdb4e83f3ca16d1ab8044b2942f390cc6cd3062e58413639330d09

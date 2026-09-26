@@ -31499,6 +31499,23 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K11h",
+      "date": "2026-09-26",
+      "status": "CLASSIFIED",
+      "program": "cgroup:test_kmem/test_kmem_memcg_deletion",
+      "changesFullRunTotals": false,
+      "compilerRepair": false,
+      "reason": "Frozen selftest assumes one 64-page charge-cache slot per CPU; frozen kernel has seven. Controlled live groups show stable differences beyond the old bound on both kernels",
+      "oldMarginBytes": 1048576,
+      "sevenSlotCapacityBytes": 7340032,
+      "referenceDifferenceBytes": 6905856,
+      "subjectDifferenceBytes": 7008256,
+      "original": "Reference case PASS; subject case FAIL at exactly the old strict bound. Full original programs both FAIL; no tolerance changed",
+      "record": "tests/fixtures/cgroup-stock-capacity.out",
+      "probeRecord": ".build/floating-targeted/cgroup-capacity-20260926/result.json",
+      "probeRecordSha256": "6ca9f9020d9e3db99f144f5d972715b6a092cca861d5f372027c83a1c7101267"
+    },
+    {
       "id": "K11g",
       "date": "2026-09-26",
       "status": "CLASSIFIED",
@@ -31507,7 +31524,7 @@
       "compilerRepair": false,
       "reason": "Every delayed memcg's final reference is released by per-CPU LRU folio batches after page faults: 5/5 GCC and 8/8 EvoCC identities, complete no-loss css_release stack traces",
       "originalOutcomeBoth": "FAIL; reference inner 4 PASS/2 FAIL, subject 3 PASS/3 FAIL",
-      "remaining": "Immediate deletion-accounting difference remains K11h; original failure is not a PASS",
+      "remaining": "Immediate deletion-accounting difference separately classified in K11h; original failure is not a PASS",
       "record": "tests/fixtures/cgroup-stock-displacement.out",
       "traceRecord": ".build/floating-targeted/cgroup-release-trace-20260926/result.json",
       "traceRecordSha256": "e1b5b3534f44f24c02d0cb55d3314faf349023345555301258238f23b62cab25",

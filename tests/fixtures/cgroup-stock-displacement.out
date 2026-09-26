@@ -24,7 +24,8 @@ reference inner 4 PASS / 2 FAIL; subject inner 3 PASS / 3 FAIL. Both outer FAIL,
 both boot/shutdown PASS. Dead-group test still FAILs (3/2 dying at its last wait);
 missing-slab test still FAILs. Subject also fails deletion accounting:
 memory.current 5890048, sum 4841472, difference 1048576 == MAX_VMSTAT_ERROR,
-where the original requires strictly less. This separate K11h remains OPEN.
+where the original requires strictly less. This is separate from K11g; its
+subsequent seven-slot capacity classification is in cgroup-stock-capacity.out.
 No original assertion/flag/budget changed; no kernel patch or compiler workaround.
 K11g closes classification only, not original-test PASS or fresh full acceptance.
 

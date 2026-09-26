@@ -8,6 +8,17 @@ Targeted results and additional configurations use separate denominators.
 
 ### Dying-memcg control and reference tracing — 2026-09-26
 
+**K11h follow-up: the accounting bound is also classified.** A controlled
+32-group page-charge case on four CPUs holds the difference at **6,905,856 bytes
+(GCC)** / **7,008,256 (EvoCC)** across seven observations, including after explicit
+diagnostic reclaim. The one-slot 1,048,576-byte bound is not a valid upper bound
+for this kernel's seven per-CPU slots (7,340,032-byte capacity). This is the exact
+source mismatch discussed in the upstream
+[multi-memcg tolerance review](https://lists.openwall.net/linux-kernel/2026/04/15/721).
+Both diagnostic assertions and shutdowns pass. The original FAILs and frozen
+tolerance stay unchanged; no full-run numerator changes. This classifies the
+test bound, not every possible accounting defect. [Case and hashes](../../tests/fixtures/cgroup-stock-capacity.out).
+
 **Follow-up: K11g classification closed.** A `css_release` stack trace now binds
 each delayed memcg to its last reference. All **5/5 reference and 8/8 subject**
 identities release through `folio_batch_move_lru → folios_put_refs →
@@ -21,7 +32,7 @@ Unchanged original replay still FAILs: reference inner **4 PASS / 2 FAIL**,
 subject **3 PASS / 3 FAIL**. Both retain `test_kmem_dead_cgroups` and the known
 missing-slab `test_percpu_basic` failures. Subject's additional immediate
 deletion-accounting failure is exactly 1,048,576 bytes, equal to its strictly
-excluded margin; this remains the separate OPEN K11h, not a waived failure.
+excluded margin; K11h above supplies its separate bound analysis, not a waiver.
 No sleep, margin, source, timeout, kernel or original full-run total changed.
 K11g closes attribution only; K13 still retests the final composition.
 
@@ -2245,6 +2256,13 @@ ordinary drain skips zero-page slots: exactly the defect in the
 (`48863da10ba1`). Together these support a shared kernel-stock diagnosis;
 hotplug also drains object stocks, so the intervention alone is not exclusive
 reference-holder instrumentation. No frozen source or original FAIL changes.
+**September 26 qualification:** do not promote that historical hypothesis to
+an identified stock-reference cause. The K11g follow-up at this document's top
+traces every delayed reference on its pair to per-CPU **LRU folio batches**.
+Hotplug drains LRU batches too (`lru_add_drain_cpu`), while the earlier affinity
+control performs no deliberate page faults. New root-group fault activity and
+final-reference stacks separate those mechanisms. Historical counts remain;
+they do not independently establish that the empty-stock patch fixes this case.
 Commands, hashes and the unsuccessful pinned/HVF precursor are retained in
 `tests/fixtures/cgroup-dead-stock-observation.out`. The earlier page-ownership
 scan is explicitly **inconclusive**: `page_cgroup_ino` reports the closest online

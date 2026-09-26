@@ -402,14 +402,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     not a kernel patch, compiler repair, original PASS or K13 acceptance.
     [Measured controls and limits](tests/fixtures/cgroup-stock-displacement.out).
 
-  - [ ] **K11h — Bound immediate memcg-deletion accounting** — `OPEN`, P1.
-    Keep separate from K11g's dead-object references and the classified missing
-    slab in test_percpu_basic. The fresh original's EvoCC difference is exactly
-    1,048,576 bytes, rejected by the upstream strict `< MAX_VMSTAT_ERROR`;
-    GCC passes that case. Earlier paired observations also exceed that bound
-    before falling below it after one second. Quantify charge-stock and
-    asynchronous statistic contributions before a source-bound disposition;
-    do not widen the margin or insert a sleep in the original test.
+  - [x] **K11h — Bound immediate memcg-deletion accounting** — `DONE`, P1, 2026-09-26.
+    The [controlled page-charge case](tests/fixtures/cgroup-stock-capacity.c)
+    measures stable 6,905,856/7,008,256-byte current-vs-stat differences on
+    GCC/EvoCC. The frozen kernel has seven cache slots per CPU, but its selftest
+    allows only one batch (1,048,576 bytes). Both measurements fit the seven-slot
+    capacity; the upstream tolerance patch identifies this same source mismatch.
+    This closes **test-bound classification**, not a compiler repair. Original
+    EvoCC FAIL at exactly the strict one-batch margin remains FAIL; no new
+    tolerance or sleep is applied. Separate LRU/slab findings remain separate.
+    [Evidence, source and unchanged verdicts](tests/fixtures/cgroup-stock-capacity.out).
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;

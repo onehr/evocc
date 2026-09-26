@@ -1,5 +1,12 @@
 2026-09-20 diagnostic, not an upstream selftest PASS or a kernel patch.
 
+2026-09-26 qualification: the hotplug intervention below also drains per-CPU
+LRU folio batches and is not exclusive proof of the empty charge-stock cause.
+The later cgroup-stock-displacement.out binds all 5/5 GCC and 8/8 EvoCC delayed
+identities to LRU folio uncharging using final-reference stack traces. Retain
+these historical measurements, but read the stock explanation below as the
+then-current hypothesis, not a demonstrated fix for the measured population.
+
 Source SHA256 273f7e486723b7e3ea62bfe3a79a9a52ae9b0a800105a7b929bba6047d9a3997
 GCC-14 diagnostic ELF e32c06899be3aeff184f36a3b35288c78fc0c17721ffec7a60c9cc0b062dedff
 Initramfs caae0fc9825265b3e7f87fb9cf87b48bd3c45d66f174daed736e50124161b65b
