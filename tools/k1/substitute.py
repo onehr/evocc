@@ -272,6 +272,27 @@ def target_c_records(pristine: Path) -> list[tuple[str, Record]]:
             continue
         if is_target_c_compile(record):
             found.append((record.unit, record))
+    # Kbuild leaves old generated module metadata behind when a configuration
+    # changes a module to built-in. Counting that .mod.o command as current
+    # target-C would inflate the denominator and could feed an obsolete source
+    # to the compiler. Reject the dirty inventory; do not silently omit or
+    # delete it. The operator must reconcile/archive it after Kbuild finishes.
+    metadata = [unit for unit, record in found
+                if unit.endswith('.mod.o') and record.source_token.endswith('.mod.c')]
+    if metadata:
+        order = pristine / 'modules.order'
+        if not order.is_file():
+            raise ValueError('generated module metadata requires current modules.order')
+        modules = order.read_text().splitlines()
+        if (len(set(modules)) != len(modules)
+                or any(Path(name).is_absolute() or '..' in Path(name).parts
+                       or Path(name).suffix != '.o' for name in modules)):
+            raise ValueError('unsafe or duplicate module inventory in modules.order')
+        expected = {name[:-2] + '.mod.o' for name in modules}
+        stale = sorted(set(metadata) - expected)
+        if stale:
+            raise ValueError('stale module metadata outside current modules.order: '
+                             + ', '.join(stale))
     return found
 
 

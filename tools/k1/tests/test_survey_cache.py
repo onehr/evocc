@@ -25,6 +25,38 @@ SOURCE = "b" * 64
 
 
 class CacheKeyTest(unittest.TestCase):
+    def test_a_reconfigured_tree_cannot_count_stale_module_metadata_as_target_c(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ('live', 'former'):
+                (root / f'.{name}.mod.o.cmd').write_text(
+                    f'savedcmd_{name}.mod.o := gcc-14 -c -o {name}.mod.o {name}.mod.c\n'
+                    f'source_{name}.mod.o := {name}.mod.c\n')
+            # former became built-in. Its old generated .mod.c/.o.cmd files
+            # survive an in-place Kbuild but are not this configuration's input.
+            (root / 'modules.order').write_text('live.o\n')
+            with self.assertRaisesRegex(ValueError, 'stale module metadata.*former.mod.o'):
+                substitute.target_c_records(root)
+            self.assertTrue((root / '.former.mod.o.cmd').is_file(),
+                            'inventory checking must not silently delete evidence')
+            (root / '.former.mod.o.cmd').unlink()
+            self.assertEqual([unit for unit, _ in substitute.target_c_records(root)],
+                             ['live.mod.o'])
+
+    def test_generated_module_inventory_requires_an_unambiguous_current_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.live.mod.o.cmd').write_text(
+                'savedcmd_live.mod.o := gcc-14 -c -o live.mod.o live.mod.c\n'
+                'source_live.mod.o := live.mod.c\n')
+            with self.assertRaisesRegex(ValueError, 'modules.order'):
+                substitute.target_c_records(root)
+            for text in ('live.o\nlive.o\n', '../live.o\n', '/live.o\n', 'live.c\n'):
+                with self.subTest(text=text):
+                    (root / 'modules.order').write_text(text)
+                    with self.assertRaisesRegex(ValueError, 'module inventory'):
+                        substitute.target_c_records(root)
+
     def test_prepared_resume_requires_complete_matching_inputs_and_installed_objects(self):
         resume = getattr(substitute, 'resume_prepared_rows', None)
         self.assertTrue(callable(resume), 'resume must validate the completed first pass')

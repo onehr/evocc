@@ -45,6 +45,19 @@ infer liveness from this notebook. Next verify the six unchanged IOMMU cases on
 the new reference, then compile the new IOPF source paths with EvoCC and complete
 the audited subject composition. No new-config compiler or runtime PASS yet.
 
+Targeted compiler checkpoint: `io-pgfault.o`, `iommu-sva.o` and IOMMUFD's
+`selftest.o` now all emit and assemble with the final `aef1a3a` release binary,
+matching GCC exported names/kinds. Their original argv and generated-header
+hashes are in `runtime-config-20260926/iopf-objects.json`; nothing is installed.
+An unchanged iommufd ELF plus its original libc/loader/libcap form a **3 MiB**
+diagnostic payload, reusing the 64 MiB snapshot scratch disk. Runtime is NOT RUN.
+
+The module-to-built-in transition also exposed stale generated `.mod.o.cmd`
+records surviving Kbuild. The [new inventory regression](../../tests/fixtures/kernel-stale-module-inventory.out)
+rejects such records outside current `modules.order`; it does not silently
+decrease the denominator. All 243 K1 tests pass, and the prior composition still
+enumerates 6,765 records. Reconcile the new reference only after its build ends.
+
 ### Original KVM replay after assembly repair — 2026-09-26
 
 The two gated objects are now installed; **6,765/6,765** object hashes and all

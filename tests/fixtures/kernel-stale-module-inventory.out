@@ -1,0 +1,29 @@
+2026-09-26 — TODO T04a; in-place kernel configuration inventories.
+
+Observed source of drift: the reviewed IOPF configuration changes
+CONFIG_IOMMUFD=m to y. Kbuild leaves the prior generated
+drivers/iommu/iommufd/.iommufd.mod.o.cmd and iommufd.mod.o in the build tree.
+The old target_c_records() accepted that command as current target-C without
+checking modules.order. This is an inventory bug, not a compiler diagnostic.
+
+RED: two Python regressions fail (ValueError not raised), zero import errors.
+One reproduces a former module beside a live module. The other checks absent,
+duplicate and unsafe current module inventories. No failing record is silently
+removed or counted as a successful source compile.
+
+GREEN: generated .mod.c -> .mod.o records require a current, safe, unambiguous
+modules.order. Any generated module record outside that list is rejected with
+its exact identity. Reconciliation/archiving belongs after Kbuild completes;
+the inventory reader does not mutate the build or silently change a denominator.
+All 243 K1 Python regressions PASS; targeted Ruff and diff checks PASS.
+tools/gate-changed.sh aef1a3a: no Rust crate changed, no Cargo gate claimed.
+
+Original prior-config check: case/bpf/out still enumerates exactly 6,765 target-C
+records, including 745 generated module records, with this check enabled.
+The new reference configuration is still BUILD_RUNNING at this checkpoint;
+its final modules.order must be checked and stale metadata reconciled before
+any new survey. This does not close T04 or change historical kernel totals.
+
+Reproduction: python3 -m unittest discover -s tools/k1/tests -p test_survey_cache.py
+Full targeted gate: python3 -m unittest discover -s tools/k1/tests
+Capture: .build/floating-targeted/runtime-config-20260926/{inventory-red,k1-tests}.log

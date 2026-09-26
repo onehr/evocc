@@ -686,6 +686,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   claim; otherwise state incremental provenance. Close with link/boot and
   replacement-object audits, without inheriting stale runtime results. [Evidence][kernel].
 
+  - [x] **T04a — Reject obsolete generated-module survey records**, 2026-09-26.
+    An in-place module-to-built-in change leaves stale `.mod.o.cmd` files.
+    The inventory now checks those records against a safe, unique current
+    `modules.order`, rejecting rather than silently dropping them. Two RED
+    regressions and all 243 K1 tests pass; Ruff passes. The retained prior
+    composition still enumerates 6,765 records / 745 module metadata records.
+    New-build reconciliation and T04 acceptance remain pending.
+    [Minimal reproduction and boundary](tests/fixtures/kernel-stale-module-inventory.out).
+
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,
   relevant Ruff/Python checks, grammar/layout corpora and isolated offline replay.
