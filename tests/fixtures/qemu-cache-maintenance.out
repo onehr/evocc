@@ -1,0 +1,92 @@
+2026-09-28 — K01/K01b: cache-maintenance intervention and negative control.
+
+This is a private QEMU experiment, not a production-emulator update or K13.
+The matching upstream 11.1.1 source/build from qemu-instruction-publication.out
+is reused. All five earlier store/decode/plugin modifications were removed.
+An unmodified rebuild exactly reproduces the previous pristine binary hash:
+89444ea0967926a65da85fe622db334de2ea4ba496bf09af41832a66ffcb2acf.
+The old ordered-observer executable is preserved separately. No clone, new VM
+disk, installed-emulator change, compiler change or active-build edit occurred.
+
+Hypothesis and intervention:
+  System-mode AArch64 IC IVAU was ARM_CP_NOP. Following the guest's stores,
+  the candidate resolves an accessible RAM cache line through the current MMU
+  and invalidates its physical translation-block range. The existing access
+  checks remain; no address, instruction encoding or store width is singled out.
+  Aliases use the same physical RAM identity. The existing user-mode callback
+  is unchanged. This uses the existing QEMU invalidation mechanism; it does not
+  introduce a second translation cache or modify the kernel/test protocol.
+
+The guest's actual instruction-cache operation supplies the post-store boundary,
+not a second callback on just the four-byte slow store. This is a wider causal
+experiment, but NOT yet a complete cache-maintenance implementation. Inaccessible
+and non-RAM addresses retain the old no-op behavior; IALLU/IALLUIS, AArch32,
+CTR.DIC-elided maintenance, fault semantics and other machines are unaudited.
+The underlying generic pre-store invalidation race is not eliminated for code
+which does not execute this cache-maintenance operation. Do not deploy this as
+an all-target/all-path QEMU fix or silently replace the locked runtime lane.
+
+Negative control:
+  Same callback, MMU lookup, barrier and translation-block-ending shape, but
+  remove only tb_invalidate_phys_range. This distinguishes the invalidation
+  effect from merely adding a helper call, barrier or block boundary. No plugin,
+  diagnostic store predicate, guest assertion or timeout is changed in either.
+
+Unchanged existing reductions on BOTH retained Images:
+                                             reference       subject
+  Cache-maintenance candidate, userspace     6 PASS          6 PASS
+  Lookup/barrier-only control, userspace     3 PASS/3 FAIL   3 PASS/3 FAIL
+  Cache-maintenance candidate, static-key    3 PASS          3 PASS
+The three concurrent branch modes fail again only when invalidation is removed;
+memory-gate, locked-MOV and handshake controls still pass. Static-key coverage
+uses the previously signed module, including its memory-gate control. These
+results reproduce a required cache-publication effect, not the original NULL
+fault's complete cause.
+
+Unchanged COMPLETE sched_ext program, all 23 tests, no filter:
+                                             reference       subject
+  Pristine private QEMU                      23/23 PASS      TIMEOUT
+  Cache-maintenance candidate                23/23 PASS      TIMEOUT
+Both use the existing 120-second inner budget, 135-second cleanup watchdog and
+195-second boot watchdog. Both Images boot and shut down normally; that boot
+PASS is not the subject program's verdict. No kernel NULL fault is observed in
+these four flights. The old subject reaches reload_loop on the pristine run and
+prog_run on the candidate before timeout. This is not a timing-performance
+measurement: the uniform kernel build was concurrently using four host workers.
+These are the retained older Images, not the pending 7,002-object composition.
+Thus the original intermittent fault and full subject program are NOT CLOSED.
+
+Identities (SHA-256):
+  candidate patch       389356ebf9d498fd7e91559adee4eb5a55272107b49e02d791de0fc7d0ca6464
+  candidate executable  1e8e920aa54e939628e7601301e21c952c83a7638b048b80a3fffd583efe2c95
+  negative executable   42af5b9afc458f3c409e1b01589211f261ed6d26be69f91bfdec78c1eaf86a9d
+  reference Image       8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+  subject Image         f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Raw results under .build/floating-targeted/qemu-store-20260927/:
+  result-ordered-ic-line.json
+    6a1c2f44773da5e03c826b0e69d21c176409cd3fadaef126b2c1805cb0139a47
+  result-ordered-ic-line-static-key.json
+    9f986de91177f81f0d383b07dff3ffcf141eccd25d9f66dbc612a8e80168f5bb
+  result-ordered-ic-control.json
+    881611111eded067d431b8c57bca1e026d89cebaa91299c50b4de9a869f12fbe
+  ic-line-full-1/results.json
+    07af3fae225e774ac654d8210cb3eeea9aae3d318d1c1f3fc011be11baa3729f
+  pristine-full-1/results.json
+    d1349059e7f9325bbd5b4cfa106aef543ec572ec9b3736a231cb6551e6e4f55a
+Each result binds the actual emulator, Image, payload and nonce/serial log.
+Full runs audit matching module manifests and hash the existing runtime disks
+before AND after. The small reductions likewise hash their 64 MiB scratch disk.
+
+Replay: apply qemu-cache-maintenance.patch to pristine 11.1.1; ninja -j2
+qemu-system-aarch64 in the existing configured build. Retain named executables
+qemu-ic-line / qemu-ic-control / qemu-pristine-rebuilt. From repository root:
+  python3 .build/floating-targeted/qemu-store-20260927/replay.py ic-line probe qemu-ic-line
+  python3 .build/floating-targeted/qemu-store-20260927/replay.py ic-line static-key qemu-ic-line
+  python3 .build/floating-targeted/qemu-store-20260927/replay.py ic-control probe qemu-ic-control
+Full-replay.py uses the same selftest.flight and program_environment helpers,
+existing matched payloads and fresh result directories:
+  python3 .build/floating-targeted/qemu-store-20260927/full-replay.py NEW_LABEL qemu-ic-line
+  python3 .build/floating-targeted/qemu-store-20260927/full-replay.py OTHER_NEW_LABEL qemu-pristine-rebuilt
+The first candidate build lacked the arm_cpu_mmu_index spelling and did not
+compile; it was corrected before testing. Final candidate/control/pristine
+builds exit 0. K01/K01b/K13 remain open; installed QEMU is unchanged.

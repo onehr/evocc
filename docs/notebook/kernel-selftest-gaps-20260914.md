@@ -1,10 +1,33 @@
 # Kernel test closure: remaining concrete gaps
 
-Updated 2026-09-27. This is a diagnosis ledger. The latest full pair is
+Updated 2026-09-28. This is a diagnosis ledger. The latest full pair is
 `.evidence/kselftest-full/20260922T033617Z/summary.json`: all 970 programs started
 and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
+
+### Cache-maintenance intervention and full sched_ext controls — 2026-09-28
+
+The [new private experiment](../../tests/fixtures/qemu-cache-maintenance.out)
+reuses the existing QEMU build and disks; no installed emulator or active
+compiler/build is changed. All old store/decode/plugin modifications are removed.
+System-mode AArch64 IC IVAU now invalidates the corresponding physical RAM
+cache line after guest writes. There is no special guest address or store width.
+Both retained Images pass all six userspace and all three static-key cases.
+The negative control keeps the helper, MMU lookup, barrier and block boundary
+but omits invalidation: all three concurrent branch cases fail again on both
+Images while the other three controls pass. This isolates the cache-publication
+effect, not a generic all-path emulator repair. Other cache instructions, fault
+behavior, DIC-elided maintenance and other targets remain outside this experiment.
+
+The **complete unchanged 23-test sched_ext program** was then executed on both
+Images with both pristine and candidate private QEMU. GCC passes 23/23 in each;
+the old EvoCC Image times out in each under the unchanged 120-second program
+budget. All four flights shut down normally, and none reproduces the intermittent
+NULL fault. No repeated-success or boot-PASS inference closes K01. These are
+diagnostics on the retained Images while the new uniform composition builds,
+not K13 or a controlled performance comparison. Result/executable/input hashes
+are in the fixture record; K01/K01b remain OPEN.
 
 ### Counted KVM overhead and finite visitor substitution — 2026-09-27
 

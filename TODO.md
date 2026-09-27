@@ -143,6 +143,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     intermittent NULL fault is not yet causally closed. Production QEMU and
     full-run acceptance remain unchanged.
 
+    September 28's [cache-maintenance experiment](tests/fixtures/qemu-cache-maintenance.out)
+    removes the store-width/address intervention and invalidates physical RAM
+    lines at guest IC IVAU. Both Images pass 6/6 userspace and 3/3 static-key
+    cases; removing only invalidation restores three failures per Image despite
+    retaining the helper, lookup, barrier and block boundary. This is still a
+    private, incomplete cache-maintenance implementation, not a production
+    runtime change. The complete unchanged 23-test sched_ext program passes on
+    GCC but times out on the retained old EvoCC Image with BOTH pristine and
+    candidate QEMU; neither pair reproduces the NULL fault. New-composition
+    runtime validation and the remaining emulator paths are still required.
+
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;
   the reference completes. Profile the exact fixed-CPU/EL2 lane, isolate the hot

@@ -1,0 +1,54 @@
+--- a/target/arm/helper.c
++++ b/target/arm/helper.c
+@@ -35,6 +35,9 @@
+ #include "cpregs.h"
+ #include "target/arm/gtimer.h"
+ #include "qemu/plugin.h"
++#ifndef CONFIG_USER_ONLY
++#include "system/ramblock.h"
++#endif
+ 
+ static void switch_mode(CPUARMState *env, int mode);
+ #ifndef CONFIG_USER_ONLY
+@@ -3486,6 +3489,28 @@
+ 
+     mmap_unlock();
+ }
++#else
++/* Private K01 experiment: invalidate the physical cache line AFTER its guest
++ * stores, at the architectural IC boundary. This has no guest-address or store
++ * width predicate. It is not yet a full cache-maintenance/fault implementation:
++ * inaccessible/non-RAM addresses retain the old system-mode no-op behavior.
++ */
++static void ic_ivau_write(CPUARMState *env, const ARMCPRegInfo *ri,
++                          uint64_t value)
++{
++    const ARMCPU *cpu = env_archcpu(env);
++    uint64_t mask = (4ULL << extract32(cpu->ctr, 0, 4)) - 1;
++    uint64_t start = value & ~mask;
++    void *host = NULL;
++
++    probe_access_flags(env, start, mask + 1, MMU_DATA_LOAD,
++                       arm_cpu_mmu_index(env_cpu(env), false), true, &host, 0);
++    if (host) {
++        ram_addr_t physical = qemu_ram_addr_from_host_nofail(host);
++        smp_mb();
++        tb_invalidate_phys_range(env_cpu(env), physical, physical + mask);
++    }
++}
+ #endif
+ 
+ static const ARMCPRegInfo v8_cp_reginfo[] = {
+@@ -3546,12 +3571,8 @@
+       .access = PL0_W,
+       .fgt = FGT_ICIVAU,
+       .accessfn = access_tocu,
+-#ifdef CONFIG_USER_ONLY
+       .type = ARM_CP_NO_RAW,
+       .writefn = ic_ivau_write
+-#else
+-      .type = ARM_CP_NOP
+-#endif
+     },
+     /* Cache ops: all NOPs since we don't emulate caches */
+     { .name = "DC_IVAC", .state = ARM_CP_STATE_AA64,
