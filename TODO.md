@@ -548,6 +548,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     reference originals remain FAIL; subject replay waits for T04.
     [Commands, hashes and exact boundary](tests/fixtures/ovpn-base64-prefix.out).
 
+  - [x] **K11l — Attribute the shared BPF module hardening timeout**, 2026-09-28.
+    The [small C observer](tests/fixtures/bpf-module-harden-progress.c) reduces
+    the unchanged signed module to original case 851: its 98,787-instruction
+    program undergoes per-constant whole-array/branch rewriting only with
+    harden=2. Neighbor/disabled-blinding controls pass on both Images; bounded
+    kprobes prove advancing patch positions and counts, not an entropy wait.
+    The same single case completes uninstrumented in approximately 43.5/92.8s
+    (GCC/EvoCC). Both full original four-mode programs still TIMEOUT at 300s.
+    This closes **source-bound workload classification**, not an original PASS
+    or a compiler performance repair. No watchdog or kernel source is changed.
+    [Controls, exact source and limits](tests/fixtures/bpf-module-harden-progress.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the uniform 7,002-object composition now boots, and both new runtimes install

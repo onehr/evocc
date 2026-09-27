@@ -46,6 +46,22 @@ and preserved-input checks pass. All former six disabled-IOPF failures are
 gone; the five explicit `no_viommu` variants remain skipped. This closes K06
 for the reviewed configuration; it is not full K13/K14 acceptance.
 
+### BPF module hardening timeout isolated — 2026-09-28
+
+The [bounded original-module observer](../../tests/fixtures/bpf-module-harden-progress.out)
+localizes the shared timeout to exhaustive case 851. It generates 98,787 BPF
+instructions; harden=2 activates per-constant patching, array movement and two
+full branch scans above S16_MAX. Kprobe counters and advancing patch positions
+prove CPU progress. Neighbor case 850 and harden=1 controls pass on both kernels.
+With an explicitly separate single-case diagnostic budget, uninstrumented case
+851 completes in about 43.5/92.8 seconds (GCC/EvoCC), loads/unloads and shuts down.
+
+This establishes a source-bound quadratic-workload cause, not an entropy wait
+or an original PASS. Both unchanged complete test_kmod programs remain TIMEOUT
+at 300 seconds. The subject slowdown is retained, no kernel/timeout was changed,
+and no full-population credit is inferred. K11l classification is closed; K11
+and K13 remain open.
+
 ### New signed-module runtime pair — 2026-09-28
 
 The [matching runtime build and six-program replay](../../tests/fixtures/kernel-uniform-module-runtime.out)

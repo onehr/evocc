@@ -1,0 +1,85 @@
+K11l — source-bound BPF module hardening cost, 2026-09-28
+======================================================
+
+Original bpf:test_kmod.sh still TIMEOUTs at its unchanged 300-second watchdog
+on BOTH new matching Images. It completes earlier hardening modes, then starts
+JIT enabled=1 / hardened=2. The unchanged source/module/budgets are not patched,
+and a smaller test or longer diagnostic is never substituted for this verdict.
+Original pair: .evidence/kselftest-full/20260927T220816Z/{reference,subject}/bpf/test_kmod.sh.
+
+Reduction: the C observer loads the exact signed installed lib/test_bpf.ko with
+its original test_id parameter, captures child CPU state, and unloads only after
+successful initialization. The first 20-second observation of the full module
+stops after completed case 850. Then eight serial single-case controls establish:
+                        GCC                      EvoCC
+  test_id=850 harden=1  PASS, unload              PASS, unload
+  test_id=850 harden=2  PASS, unload              PASS, unload
+  test_id=851 harden=1  PASS, unload              PASS, unload
+  test_id=851 harden=2  TIMEOUT at 20s            TIMEOUT at 20s
+The child is RUNNING and consumes system CPU, not blocked waiting for entropy.
+Captures of get_random_u32 alone would not establish an entropy wait.
+
+Causal source path (frozen Linux 6.18.44):
+  lib/test_bpf.c: __bpf_fill_pattern and __bpf_fill_alu64_imm produce
+    (63 * 31 * 4) + (63 * 25 * 4) = 14,112 operand pairs;
+    each emits seven instructions, plus three head/tail instructions = 98,787.
+  include/linux/filter.h: harden=1 bypasses constant blinding for CAP_BPF;
+    harden=2 also blinds the privileged in-kernel module's program.
+  kernel/bpf/core.c: bpf_jit_blind_constants patches each constant separately;
+    bpf_patch_insn_single moves the remaining array and scans branch targets.
+    Above S16_MAX, it scans once before expanding and once afterwards. This is
+    quadratic rewriting work in these long generated patterns, before execution
+    of the actual tiny semantic checks. It is not one instruction spinning.
+
+A bounded optional kprobe observes bpf_patch_insn_single entry and its actual
+position/patch width, using a four-KiB per-CPU ring (no unbounded trace files).
+Independent aggregate probe counts, approximately 5s then 20s:
+  GCC    12,709 -> 39,742 entries, zero missed probes; system ticks 495 -> 1981.
+  EvoCC   5,827 -> 21,363 entries, zero missed probes; system ticks 466 -> 1958.
+Trace positions advance; old ring entries overwrite as expected, so no complete
+trace-population claim is made. Hardening=1 controls produce zero patch entries
+and finish. These are diagnostic observations, not fair optimized performance
+benchmarks; the EvoCC slowdown remains visible and is not waived.
+
+Finally the SAME single case, uninstrumented, gets a separately declared
+180-second observer limit (200-second init watchdog, 260-second boot bound).
+Both initialize, report "Summary: 1 PASSED, 0 FAILED, [1/1 JIT'ed]", unload and
+power off. Kernel timestamps from case entry to summary are approximately
+43.524s for GCC and 92.786s for EvoCC. These prove eventual completion of this
+one original case, not the full thousand-case/four-mode program within 300s.
+Changing that program's budget/source would require a separately labelled
+configuration. No compiler or kernel production patch follows from this test.
+
+Reproduction uses the existing selftest-init/boot/flight helpers, sealed GCC14
+-static -O2 -Wall -Wextra -Werror observer builds, original signed modules and
+the existing 64 MiB snapshot scratch disk. For single-case builds define
+TEST_PARAMETERS="test_id=850" or "test_id=851", TEST_HARDENING="1" or "2";
+TEST_PROFILE=1 enables bounded probes; TEST_BUDGET_SECONDS=180 selects only the
+explicit completion experiment. All inner verdicts and boot nonces are parsed.
+An initial missing collection selector correctly failed the parser because it
+ran two programs while expecting one; that setup attempt remains, not PASS.
+
+SHA256:
+  GCC Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  EvoCC Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+  config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+  lib/test_bpf.c df5dfe79b55ac9b8d9a8efe418530fe8723076badd7bae45c87b1632af164ec5
+  kernel/bpf/core.c 9268b5de47f8f77087ea472e9103bb301513605e19006a9af8801e69d2ca33e7
+  include/linux/filter.h 009b7a5b566e3fd8dccf4a420b7b0a9deb3feb53b19f043e50bc632adacabcb3
+  original 20s observer 524b8af69f82c0e2c15443d66a96c16ab79399700861f9702c177e9283917669
+  profiled observer 31fd9337cbac54864fc8a6a7ecf406d7fe1f35a966f58f06b1815f2b2a430aef
+  final observer ecf904e02b8e42d6026575f9c9b302ca583767d48c18a0abe3b3642a89958ec7
+  full diagnostic results 6c16dd961fe53cdee5e294e0129413240154bbdba486a43931593439c9cfd405
+  isolated results 76886f290b649b92631abdd4d30fbe4ec9daafc4827cd2d9639e8d94030ed6fd
+  profiled results f871b747db3c97fd89aa282b99f50a457b335ba8145254d3aa27de2a40c9e960
+  completion results a4901bd015ec1c10787ff7d0b4236a19278a2fe3e0b272ba51a96241fbe83e3e
+  GCC completion serial f29e702d38cfc376e87a3c2fd3e28397e61938f9fe173e192efffb79a58c1a08
+  EvoCC completion serial 7ca54ffc45836d22ceb16b16d21e061f38d3d25b1a4168099b84f23ad785159e
+Per-module signed body hashes, payloads, exact argv and all intermediate serial
+hashes are in .build/floating-targeted/module-uniform-20260928/:
+  harden/{build,runtime}.json, harden-isolated/runtime.json,
+  harden-profile/runtime.json, harden-completion/runtime.json.
+No large disk copies. This closes K11l's source-bound timeout classification,
+not the original test, K11 parent or K13. CPU/code-generation performance remains
+a separate compiler optimization task, not an excuse to mark the timeout PASS.
