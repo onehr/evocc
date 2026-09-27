@@ -61,3 +61,40 @@ Second checkpoint, compiler/source eaf23d1, EvoIR 1.9.112 / EvoMIR 0.48:
   523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa.
   This checkpoint does not replace those executable identities or close
   remaining TODO dependencies. No kernel campaign was run in this checkpoint.
+
+Third checkpoint, 2026-09-28, compiler/source 13082c6:
+  EvoIR 1.9.114 / EvoMIR 0.50. Subsequent cd41380 records private QEMU
+  diagnostics only; it does not change compiler implementation.
+  Same workspace command: exit 0; 2784 PASS / 0 FAIL / 4 historical ignored,
+  345 result groups. Clippy --workspace --all-targets -D warnings and fmt
+  --all -- --check both exit 0. K1 Python: 260 PASS; ladder Python: 303 PASS;
+  Ruff PASS. Grammar: 54/54 instruction shapes, zero differences.
+  Fresh layout build/observations: 128/128 + 22/22, zero mismatch against the
+  unchanged frozen oracle manifests. No new oracle execution is claimed.
+  Fresh empty /private/tmp/evocc-offline-20260928.9JezBs CARGO_HOME,
+  vendored --locked --offline, existing absolute target path and serial tests:
+  13 PASS / 0 FAIL / 0 ignored. No source/workspace clone or network fetch.
+  Post-workspace debug executable SHA256:
+  07f2a45e280f42dcb34633e8fcbf0db44731e501aa8fc0e66c612c2a140becf2
+  This rebuild identity does not replace the earlier targeted native receipt
+  or the frozen 65035621... kernel compiler; those retain their own hashes.
+  Raw logs under .build/floating-targeted/ (SHA256):
+    workspace-health-20260928.log
+      b1bae07ea4608f2b44658c4deddcf8dc08cfa4bef507a15585c074f045399cae
+    clippy-health-20260928.log
+      8b1fd2394f7b6f177ede882431154a419bd9f404f00add314c912e91a7fc0ec0
+    fmt-health-20260928.log (empty, exit 0)
+      e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    python-k1-health-20260928.log
+      f02ef9c1e02851ec931b5ffc964a4bd904c52206ed5ec121c3f90f4a302bb1e4
+    python-ladder-health-20260928.log
+      77f770e57d77625da0fa18e40233252b931479af233cd7f25d3aae6dda9cfdcc
+    ruff-health-20260928.log
+      82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18
+    layout-health-20260928.log
+      fa93919f7bc47e304c4033172666d144ef33c66b34e1c19724812ac1fdc02734
+    offline-health-20260928.log
+      226800e1490799c4e13c37887261a526eb2aa4ccaa86589a418da66b8a5f7352
+  All checkpoint commands exited successfully. The separately running uniform
+  kernel build, original runtime failures and remaining language/application
+  tasks are not accepted by this health checkpoint. T05 remains open.
