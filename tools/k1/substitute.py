@@ -411,12 +411,14 @@ def assemble_batch(
         # Includes/incbin may depend on files outside this text. They are cheap
         # exceptions: execute them afresh instead of inventing an asm parser.
         if not re.search(rb"\.(?:include|incbin)\b", assembly.read_bytes()):
-            keys[unit] = cache_key(unit, image, sha256_file(assembly), argv)
+            keys[unit] = cache_key(unit, 'assembler-verdict-v1:' + image, sha256_file(assembly), argv)
         previous = cache.get(keys.get(unit))
         obj = asm_root / unit
-        if previous and obj.is_file() and previous.get("objectSha256") == sha256_file(obj):
+        if (isinstance(previous, dict) and obj.is_file() and obj.stat().st_size > 0
+                and previous.get("objectSha256") == sha256_file(obj)):
             row.update(outcome="assembled", object=str(obj),
-                       objectSha256=previous["objectSha256"], assemblyFromCache=True)
+                       objectSha256=previous["objectSha256"], assemblyFromCache=True,
+                       assemblerExitCode=0)
         else:
             row["assemblyFromCache"] = False
             fresh.append(row)
@@ -452,21 +454,37 @@ def assemble_batch(
     )
     verify_image(image)
     verdicts = {}
+    duplicates = set()
     for line in completed.stdout.splitlines():
         parts = line.split(None, 1)
         if len(parts) == 2 and parts[0] in {"OK", "FAIL"}:
+            if parts[1] in verdicts:
+                duplicates.add(parts[1])
             verdicts[parts[1]] = parts[0]
+    requested = {row['unit'] for row in fresh}
+    protocol_error = None
+    if completed.returncode:
+        protocol_error = f'assembler container exited {completed.returncode}: {completed.stderr.strip()[:300]}'
+    elif duplicates or set(verdicts) != requested:
+        protocol_error = ('invalid assembler verdict population: '
+                          f'duplicate={sorted(duplicates)} '
+                          f'missing={sorted(requested - set(verdicts))} '
+                          f'unexpected={sorted(set(verdicts) - requested)}')
     for row in fresh:
         unit = row["unit"]
         verdict = verdicts.get(unit)
-        if verdict != "OK":
+        obj = asm_root / unit
+        row['assemblerExitCode'] = completed.returncode
+        if protocol_error or verdict != "OK" or not obj.is_file() or obj.stat().st_size == 0:
             error_file = asm_root / f"{unit}.aserr"
             row["outcome"] = "assembler-refused"
-            row["assemblerError"] = (
+            diagnostic = (
                 error_file.read_text(encoding="utf-8", errors="replace").strip()[:600]
                 if error_file.is_file()
-                else f"no verdict from the container run: {completed.stderr.strip()[:300]}"
+                else ''
             )
+            row["assemblerError"] = (protocol_error or diagnostic or
+                                     f"assembler did not produce a successful object: {unit}")[:600]
             continue
         row["outcome"] = "assembled"
         row["object"] = str(asm_root / unit)

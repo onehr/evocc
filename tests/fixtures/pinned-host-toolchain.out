@@ -61,3 +61,18 @@ gate.log 31550f1a14eb32bce77912d2d240cccd06d689ae049eb48aaa7df37150cf645c
 python.log 0ab76355e3f91366c10f31d2ce06298e26562ad8e93aa27a085afa7139730bff
 layout.log 2c114fbeb2e9304139718a80e9d14e0d6f57098bc13fc074548f778d41d6ffc5
 offline.log 10aa427c36783a7e324cb050f608eca1eb5455d92d223ebec00ccda3e55efa6a
+
+Follow-up release/native closure, same compiler sources:
+CARGO_PROFILE_RELEASE_DEBUG=0 cargo build --release --locked --offline -p evocc
+produces SHA256 cc9ac21e62b7ad5a652aafa723df39e50513a03cf406e4f0db6f74abef565871.
+All fourteen sealed native/mixed-link controls actually execute again and pass.
+After T05i integration, unchanged original KVM commands emit in 5.838 / 4.287
+seconds, assemble with recorded exit 0 and match all reference symbol names/kinds.
+The two object hashes equal the earlier 1.98.0-built compiler's outputs exactly:
+  kvm_main.o ed6d9229a10ac37520d33d7ef01292442085bb043b305316e506d40be153165b
+  pgtable.o 46faecbb9aa77622a2c4e014d6c15d86cbbd32c6877781ebfde0c4cb8dfa536c
+This is a two-object comparison, not all 7002 objects; none are installed.
+Additional SHA256:
+preparation.json 71a271c1084d6fdc70c1fec22abf47227bf690ef80ae808a0f8840f0549b1379
+native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+kernel.json eee3aa90ef8505b2438e75c504f3dcd37d79ec66c1462260122a611e83613005

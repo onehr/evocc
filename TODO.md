@@ -1554,17 +1554,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     This is bounded debug robustness, not a release-kernel miscompile or a
     guarantee for arbitrary AST depth. [Evidence](tests/fixtures/inline-deep-expression.out).
 
-  - [ ] **T05i — Reject incomplete assembler-container execution** — `RETEST`, P1.
+  - [x] **T05i — Reject incomplete assembler-container execution** — `DONE`, 2026-09-28.
     Actual exit-17 failure injection proves the current K1 assembler can accept
     preceding OK records. The [isolated patch](tests/fixtures/kernel-assembly-verdict.patch)
     rejects failed processes, duplicate/missing/foreign verdicts and missing or
     empty objects, records exit codes and separates legacy cache keys. All 53
     affected tests and actual exit-17, empty-object and normal-exit controls pass
-    on the candidate. Empty files cannot become verified cache hits. It is
-    deliberately **not applied** during live process 80898: that process later
-    fingerprints the on-disk script despite already running its old code.
-    Apply at the next safe run boundary, then run the full K1 gate. Existing
-    receipts and the live build do not inherit candidate hardening.
+    on the candidate. Empty files cannot become verified cache hits. Integration
+    waits until process 80898 exits, preserving its implementation identity.
+    The integrated path then passes all 270 K1 tests, Ruff, three actual native
+    failure/normal controls and two original KVM object replays with the pinned
+    compiler. Existing receipts and the completed kernel build do not inherit
+    this later hardening.
     [Exact reproducer, hashes and integration boundary](tests/fixtures/kernel-assembly-verdict.out).
 
   - [x] **T05j — Harden the other whole-application assembly verdict path**, 2026-09-28.

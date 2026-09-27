@@ -82,3 +82,17 @@ The three exit-17/normal-exit controls were then repeated against the updated
 candidate and all expected verdicts held. The original JSON is retained as
 native-initial.json with its original c9fae8e9... hash. The final native.json
 SHA256 is 148c5df4598f3d44be468007609fac9632209c849958539380cdaf2682c7b2b8.
+
+INTEGRATED after the kernel build exited successfully at its safe boundary:
+ps confirms owners 80895/80898 are absent; production substitute.py now exactly
+matches candidate 86c72b2a... . All 270 K1 tests and targeted Ruff pass. Actual
+production-path controls using the Rust-1.97.1-built compiler report:
+  assembler success followed by container exit 17 -> assembler-refused (17)
+  assembler success followed by zero-byte a.o, exit 0 -> assembler-refused (0)
+  normal assembler success -> assembled (0)
+The newly pinned compiler also replays both original KVM objects through this
+integrated path, with assemblerExitCode=0 and unchanged symbol parity; neither
+object is installed. This closes T05i. The completed kernel build used the old
+implementation and is not retroactively described as hardened.
+integrated.log SHA256 cacbc2450d81b7db5f7237801be039e7ea0fafb6ddd279fcd3a38788ae5f384e
+integrated-native/result.json SHA256 63a5e97c01b63f4f10a249000dc3b421a8e8d0a4830ba0fefcf6f77cffdc6927

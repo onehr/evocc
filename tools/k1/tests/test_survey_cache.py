@@ -878,6 +878,87 @@ class CacheFileTest(unittest.TestCase):
 
 
 class AssemblyReuseTest(unittest.TestCase):
+    def test_assembly_container_failure_cannot_publish_partial_success(self):
+        for code in (17, -9):
+            with self.subTest(code=code):
+                self._assembly_verdict_case("OK a.o\n", code, "assembler-refused")
+
+    def test_assembly_verdict_population_must_be_exact_and_unique(self):
+        for stdout in ("OK a.o\nOK a.o\n", "OK a.o\nFAIL a.o\n",
+                       "FAIL a.o\nOK a.o\n", "OK a.o\nOK foreign.o\n", ""):
+            with self.subTest(stdout=stdout):
+                self._assembly_verdict_case(stdout, 0, "assembler-refused")
+
+    def test_assembly_success_requires_a_real_object(self):
+        self._assembly_verdict_case("OK a.o\n", 0, "assembler-refused", object_exists=False)
+
+    def test_assembly_success_rejects_empty_object(self):
+        self._assembly_verdict_case("OK a.o\n", 0, "assembler-refused", object_bytes=b'')
+
+    def test_assembly_empty_object_cannot_be_a_verified_cache_hit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assembly, build = root / 'assembly', root / 'build'
+            assembly.mkdir()
+            build.mkdir()
+            path = build / '.a.o.cmd'
+            path.write_text('savedcmd_a.o := gcc-14 -c -o a.o /work/src/a.c\n')
+            (assembly / 'a.s').write_text('.text\n')
+            (assembly / 'a.o').write_bytes(b'')
+            record = substitute.parse_record(path)
+            argv = substitute.assemble_argv(record, substitute.TARGET_COMPILER,
+                                           '/work/asm/a.s', '/work/asm/a.o')
+            key = substitute.cache_key('a.o', 'assembler-verdict-v1:' + substitute.sealed_image(),
+                                       substitute.sha256_file(assembly / 'a.s'), argv)
+            substitute.save_cache(assembly / 'assembly-cache.json',
+                                  {key: {'objectSha256': substitute.sha256_file(assembly / 'a.o')}})
+            rows = [{'unit': 'a.o', 'outcome': 'emitted'}]
+            def assemble(*args, **kwargs):
+                (assembly / 'a.o').write_bytes(b'fresh-object')
+                return SimpleNamespace(stdout='OK a.o\n', stderr='', returncode=0)
+            with patch.object(substitute.subprocess, 'run', side_effect=assemble) as run, \
+                 patch.object(substitute, 'verify_image'):
+                substitute.assemble_batch(rows, {'a.o': record}, assembly, build)
+            run.assert_called_once()
+            self.assertFalse(rows[0]['assemblyFromCache'])
+            self.assertEqual(rows[0]['outcome'], 'assembled')
+
+    def test_assembly_failed_unit_retains_its_exact_diagnostic(self):
+        self._assembly_verdict_case("FAIL a.o\n", 0, "assembler-refused",
+                                    diagnostic="assembler: deliberate syntax error")
+
+    def test_assembly_exact_success_records_process_exit(self):
+        self._assembly_verdict_case("OK a.o\n", 0, "assembled")
+
+    def _assembly_verdict_case(self, stdout, code, expected, object_exists=True,
+                               diagnostic=None, object_bytes=b'object'):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assembly, build = root / 'assembly', root / 'build'
+            assembly.mkdir()
+            build.mkdir()
+            path = build / '.a.o.cmd'
+            path.write_text('savedcmd_a.o := gcc-14 -c -o a.o /work/src/a.c\n')
+            (assembly / 'a.s').write_text('.text\n')
+            if object_exists:
+                (assembly / 'a.o').write_bytes(object_bytes)
+            if diagnostic:
+                (assembly / 'a.o.aserr').write_text(diagnostic)
+            rows = [{'unit': 'a.o', 'outcome': 'emitted'}]
+            process = SimpleNamespace(stdout=stdout, stderr='container diagnostic', returncode=code)
+            with patch.object(substitute.subprocess, 'run', return_value=process), \
+                 patch.object(substitute, 'verify_image'):
+                substitute.assemble_batch(rows, {'a.o': substitute.parse_record(path)}, assembly, build)
+            self.assertEqual(rows[0]['outcome'], expected)
+            self.assertEqual(rows[0]['assemblerExitCode'], code)
+            cache = substitute.load_cache(assembly / 'assembly-cache.json')
+            self.assertEqual(len(cache), int(expected == 'assembled'))
+            if expected != 'assembled':
+                self.assertNotIn('objectSha256', rows[0])
+                self.assertTrue(rows[0]['assemblerError'])
+            if diagnostic:
+                self.assertEqual(rows[0]['assemblerError'], diagnostic)
+
     def test_frozen_source_date_survives_an_overnight_survey(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
