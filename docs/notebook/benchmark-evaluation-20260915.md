@@ -2620,3 +2620,17 @@ reference/mixed relink repetitions and the two actual unchanged executables
 pass; a deliberate timeout still fails after five seconds. All 296 ladder
 regressions pass. This resolves B08d6's environment defect; the historical full
 run remains a 17-failure receipt until the fresh campaign actually executes.
+
+### wordexp boundary reduction (September 27 UTC)
+
+The [fourteen-case reduction](../../tests/fixtures/musl-wordexp-boundaries.out)
+has identical stdout/stderr across GCC/Clang/EvoCC O0/O2 and both existing
+archives (168 completed observations, not correctness PASSes). The library
+never checks WRDE_UNDEF, its NOCMD scanner rejects valid parameter braces, and
+its late shell redirection leaks command-substitution stderr. Helper positional
+arguments are exposed; a direct dash 0.5.12-12 control independently reproduces
+the dollar-quote limitation. Special parameters and comments have distinct
+[POSIX allowances](https://pubs.opengroup.org/onlinepubs/9799919799.2024edition/functions/wordexp.html),
+so these results are not one blanket conformance or compiler-failure category.
+The unchanged originals still FAIL; nested grammar assertions are not all
+adjudicated by this small matrix. No dependency, shell or acceptance rule changed.

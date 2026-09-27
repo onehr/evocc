@@ -893,6 +893,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       timeout still fails. Ten wrapper tests on both hosts, all 296 ladder tests
       and Ruff pass. No full receipt is rewritten. [Evidence](tests/fixtures/descriptor-exit-filesystem.out).
 
+    - [x] **B08d7 — Separate wordexp's library and shell failure families**, 2026-09-27 UTC.
+      Fourteen small observations across three compilers, O0/O2 and both pinned
+      archives yield 168 identical completed executions, not 168 correctness
+      passes. The pinned library ignores WRDE_UNDEF, overrejects parameter braces
+      with NOCMD and leaks command-substitution stderr; its helper arguments are
+      visible. Direct dash controls explain dollar-quote behavior. Special-
+      parameter/comment allowances are not generalized to waive other failures.
+      Both unchanged originals still FAIL. Nested grammar assertions remain
+      individually unadjudicated; this closes bounded source/environment
+      attribution, not wordexp, B08d or full musl.
+      [Small cases and exact observations](tests/fixtures/musl-wordexp-boundaries.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

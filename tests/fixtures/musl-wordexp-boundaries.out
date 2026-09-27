@@ -1,0 +1,64 @@
+2026-09-27 UTC — pinned wordexp library/shell boundary (B08d7)
+
+Fourteen isolated observations, GCC14/Clang19/EvoCC at O0/O2, separately linked
+against the unchanged reference and 1,271-object mixed musl archives: 12 builds,
+168 completed executions. All fourteen stdout/stderr pairs are identical across
+the twelve combinations. Probe exit zero means observations completed, NOT that
+the observed library behavior satisfies the original test.
+
+Controls: ordinary words and variable expansion succeed; an unset variable
+without WRDE_UNDEF expands to zero words; simple command substitution with
+WRDE_NOCMD returns CMDSUB. Distinct failure families:
+
+  ${EVO_WORD_VALUE}, WRDE_NOCMD -> BADCHAR, versus two words without the flag.
+    The pinned scanner rejects every unquoted brace outside arithmetic nesting;
+    it has no parameter-expansion context. It is not an EvoCC parsing error.
+  $EVO_WORD_UNSET, WRDE_UNDEF -> success, zero words.
+    WRDE_UNDEF is never consulted anywhere in pinned wordexp.c.
+  Unterminated quote -> SYNTAX but writes stderr with or without SHOWERR.
+  $(printf diagnostic >&2) -> stderr "diagnostic" with or without SHOWERR.
+    The appended redirection belongs to the eval-created printf command; it
+    does not protect the earlier parse/command-substitution path. A parent
+    harness must not conceal this library error by discarding stderr.
+  $1 -> literal $1; $# -> 2.
+    The library supplies two helper positional parameters to sh -c. The nested
+    evaluation exposes them. Do not infer that POSIX requires a value for $#:
+    special-parameter expansion is unspecified. The numeric positional probe
+    is recorded separately, not covered by that blanket special-parameter rule.
+  $'x' -> $x.
+    /bin/sh resolves to dash 0.5.12-12. Direct execution of this shell, without
+    wordexp, also returns $x. This is a concrete shell capability boundary.
+  "one # two" -> one.
+    This is an allowed comment treatment, not by itself a library defect.
+
+Contract classification: undefined-variable detection, valid parameter braces
+and suppression of command-substitution utility stderr have explicit requirements
+in POSIX wordexp. Special parameters and comments have different allowances.
+The original suite also stresses nested/arithmetic/quote grammar: these fourteen
+reductions do not individually adjudicate every historical assertion. No blanket
+waiver, source/library/shell replacement, original-test PASS or B08d closure.
+Primary contract:
+https://pubs.opengroup.org/onlinepubs/9799919799.2024edition/functions/wordexp.html
+
+The retained unchanged-original reference/mixed outputs are also byte-identical
+after normalizing only the final executable path; both still FAIL. That earlier
+replay is reused, not counted as two fresh executions here. Its source remains
+libc-test 7b95dfa5f5d5ca4d949221e0228ccc290bacc14e with pinned musl 1.2.6.
+Correcting or updating those dependencies would be a declared new configuration,
+not an EvoCC compiler patch or an alteration to the locked acceptance result.
+
+SHA256:
+  compiler: e4614da3bbaa12edf3799c6c87d690c88ccb90f5e724b69a8ecc8509323e2604
+  fixture: aa6c15d248f08b8bf6f8e11f466b61ecd111afa82be51806aae9dedf238b05da
+  wordexp.c: 018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8
+  reference archive: e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+  mixed archive: 11e19ecf164d5ad20252e130c919478e37f9886f221eb75a4ff525f3e20d8975
+  original test: e3e310de1a73bc30273ac5f4711492817a2f26a5750795c9a3f0be42645871c9
+  dash: 367967c823a0c391e5049b15a67c6a0a629c88b9b6dcdca75ef13ac9d65334b1
+  identity.json: 5b9bbfcfdedd3f3abbcccb62583511ef4b56fccf89a1d782c2e70215639b25fb
+  results.json: bc317aaf73834ca99290d859b6cf0aee067fa2501318a46a2c5ae8d8802f251c
+  environment.json: 1e159e1dc6989cb9eeb03153afc329edfacd249c07bbdad0e9065faa1cfff620
+Artifacts: .build/floating-targeted/musl-wordexp-20260927/{capture.py,emissions.json,
+identity.json,results.json,environment.json,container.json}, exact maps/argv.
+Archive, source and compiler hashes are unchanged after execution. No disk image,
+clone or installed object was created or replaced.
