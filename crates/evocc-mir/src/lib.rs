@@ -18,6 +18,7 @@
 pub mod allocverify;
 pub mod emit;
 mod floating;
+mod immediate;
 pub mod interp;
 pub mod lane;
 pub mod linkage;

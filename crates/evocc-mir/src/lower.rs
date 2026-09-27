@@ -4168,12 +4168,22 @@ fn simple(
             .map(|raw| raw & width.mask())
             .filter(|raw| *raw <= 4095)
     };
+    let logical = |value: &Value| {
+        lowerer
+            .constants
+            .get(&value.id)
+            .map(|raw| raw & width.mask())
+            .filter(|raw| crate::immediate::logical_mask(*raw, width))
+    };
     let immediate = if matches!(result.ty, EvoIRType::Bits(32 | 64)) {
         match op {
             BinOp::Add => small(rhs)
                 .map(|imm| (left, imm))
                 .or_else(|| small(lhs).map(|imm| (right, imm))),
             BinOp::Sub => small(rhs).map(|imm| (left, imm)),
+            BinOp::And | BinOp::Orr | BinOp::Eor => logical(rhs)
+                .map(|imm| (left, imm))
+                .or_else(|| logical(lhs).map(|imm| (right, imm))),
             _ => None,
         }
     } else {
@@ -4195,6 +4205,26 @@ fn simple(
             rhs: right,
             width,
         });
+    }
+    // Retain exact facts for total, full-width bitwise constant expressions
+    // (including the XOR-with-all-ones spelling of C's complement). The
+    // computation still exists until normal dead-instruction removal; effects
+    // and source obligations are neither folded nor moved by this table.
+    if matches!(result.ty, EvoIRType::Bits(32 | 64)) {
+        if let (Some(a), Some(b)) = (
+            lowerer.constants.get(&lhs.id),
+            lowerer.constants.get(&rhs.id),
+        ) {
+            let known = match op {
+                BinOp::And => Some(a & b),
+                BinOp::Orr => Some(a | b),
+                BinOp::Eor => Some(a ^ b),
+                _ => None,
+            };
+            if let Some(raw) = known {
+                lowerer.constants.insert(result.id, raw & width.mask());
+            }
+        }
     }
     lowerer.bind(result, dst);
     Ok(())

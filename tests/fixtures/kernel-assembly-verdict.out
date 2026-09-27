@@ -78,3 +78,7 @@ Updated SHA256:
   empty-native/native.json: 32f6aaed15e8250bc0920d90c22bedd91a7ffbea3947368fe37d1f8b6fda44a4
 Additional records in the same artifact directory: empty-object-red.log,
 empty-object-final.log, native-empty.py, empty-native.log, empty-native/.
+The three exit-17/normal-exit controls were then repeated against the updated
+candidate and all expected verdicts held. The original JSON is retained as
+native-initial.json with its original c9fae8e9... hash. The final native.json
+SHA256 is 148c5df4598f3d44be468007609fac9632209c849958539380cdaf2682c7b2b8.

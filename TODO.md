@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.115** and EvoMIR **0.51**. This is the Git-tracked execution backlog,
+EvoIR **1.9.115** and EvoMIR **0.52**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -245,6 +245,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     objects keep exports and shrink by 732/128 text bytes. No objects installed,
     no runtime speedup claim; the frozen full build excludes this repair.
     K02/K03 stay OPEN. [Exact evidence](tests/fixtures/constant-addend-selection.out).
+
+  - [x] **K02h — Select and validate full-width logical immediates**, 2026-09-28.
+    Initial REDs expose missed mask selection and acceptance of unencodable
+    MIR operands; a second RED catches complement-expression constant facts.
+    The shared recognizer covers 6,636 encodings and 131,072 random controls;
+    narrow/pair and nonmatching operations retain their register paths.
+    Both interpreters/MIR, 240 assembler shape/target combinations, fourteen
+    native/cross-compiler controls and both original KVM object assemblies pass.
+    The local affected gate has 1,077 PASS, zero failures, four historical
+    ignores; Clippy/fmt pass. The active kernel's frozen compiler excludes this
+    repair. No objects were installed; K02/K03 and final pinned T05 remain OPEN.
+    [Exact scope, debug timeout and identities](tests/fixtures/logical-immediate-selection.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
@@ -1545,9 +1557,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   - [ ] **T05i — Reject incomplete assembler-container execution** — `RETEST`, P1.
     Actual exit-17 failure injection proves the current K1 assembler can accept
     preceding OK records. The [isolated patch](tests/fixtures/kernel-assembly-verdict.patch)
-    rejects failed processes, duplicate/missing/foreign verdicts and missing
-    objects, records exit codes and separates legacy cache keys. All 51 affected
-    tests and real exit-17/normal-exit controls pass on the candidate. It is
+    rejects failed processes, duplicate/missing/foreign verdicts and missing or
+    empty objects, records exit codes and separates legacy cache keys. All 53
+    affected tests and actual exit-17, empty-object and normal-exit controls pass
+    on the candidate. Empty files cannot become verified cache hits. It is
     deliberately **not applied** during live process 80898: that process later
     fingerprints the on-disk script despite already running its old code.
     Apply at the next safe run boundary, then run the full K1 gate. Existing

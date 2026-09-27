@@ -1,0 +1,68 @@
+2026-09-28 — K02h: full-width AArch64 logical-immediate selection and validation.
+
+RED: the initial four-test MIR run has two passes and two failures: known
+encodable masks still use register operands, and the validator accepts an
+unencodable zero logical immediate. The initial selection repair then exposes
+the separate C complement spelling (~4095UL): its XOR-with-all-ones result is
+not retained as a constant fact. The first affected gate records 1075 PASS,
+1 FAIL and 4 historical ignores. These are retained, not replaced by GREEN.
+
+Implementation: AND/ORR/EOR on full bits<32>/bits<64> select the existing
+immediate form only for a repeated power-of-two element with a nonempty,
+nonfull cyclic run of ones. Either already-evaluated constant SSA operand may
+be selected. Exact full-width constant bitwise expressions retain their facts;
+their computations remain until normal dead-instruction removal. Zero,
+all-ones, nonencoding masks, narrow/pair values and dynamic operands keep their
+existing paths. Source evaluation, guards, tokens and volatile effects do not
+change. MIR validation independently rejects malformed immediate operands.
+This does not add an EqSat rule or a new instruction family.
+
+The independent construction unit covers all 1302 W and 5334 X encodings,
+plus 65536 deterministic random candidates per width and invalid high bits.
+Five MIR integration tests cover 120 selected shapes, 600 exact EvoIR/MIR
+value comparisons, 27 nonmatching controls, three dynamic controls, two
+constant-expression chains and malformed-immediate rejection. The 120 shapes
+assemble for Linux and Darwin (240 shape/target combinations). The CLI fixture
+passes O0/O2 C-HIR, EvoIR, MIR and assembly assertions. All eleven targeted
+logical/addend integration tests pass.
+
+Sealed ARM64 native: fourteen controls pass, comprising six whole programs
+(EvoCC/GCC14/Clang19 x O0/O2) and eight crossed caller/callee combinations.
+Debug and optimized EvoCC produce byte-identical assembly for all six source
+variants. The initial direct digest-name invocation failed image resolution
+before executing any probe; native-image-resolution-error.log is retained.
+Successful execution uses the installed sealed image with pre/post digest
+verification and no guest network: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2.
+
+Original KVM replay: the debug compiler times out on kvm_main at the unchanged
+60-second limit. The explicitly optimized compiler then emits the two original
+objects in 6.463 and 4.917 seconds. Both assemble and match all reference symbol
+names/kinds. The actual outputs contain 938 and 307 logical-immediate
+instructions respectively; these are current counts, not an attributed delta.
+Original commands, configuration and installed objects remain unchanged.
+No objects are installed and no kernel timing or boot PASS is inferred.
+The active kernel build continues using frozen compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5,
+which does not include this repair. K02/K03 remain OPEN.
+
+Affected five-crate gate against fd40569: 1077 PASS, zero failures, four
+historical ignores; Clippy -D warnings and workspace fmt check PASS. The actual
+host Rust/Clippy is 1.98.0 (88d9e12ae), not the build-environment contract's
+1.97.1. This is a local affected-crate result, not the pinned final T05 gate.
+
+Commands:
+CARGO_TARGET_DIR=target/frontend CARGO_NET_OFFLINE=true
+cargo test -p evocc-mir -p evocc --test logical_immediate_selection --test constant_addend_selection --offline -j 2
+tools/gate-changed.sh fd40569 --offline -j 2
+cargo build -p evocc --profile probe-release --config 'profile.probe-release.inherits="release"' --config 'profile.probe-release.debug=false' --offline -j 2
+Local recipes and raw records: .build/floating-targeted/logical-immediate-20260928/.
+
+SHA256:
+fixture 4421c415e81ccc9d6eddb65a0e232990e2cab0c1f2e4088c29605ecd637212eb
+debug compiler 88e803a398acb81928e64dabd5d5fb20bf140b86ef013b35fa998b38baaa806a
+optimized compiler 9b3e773098bf1627e55217beeecb83851aaf56242834fe97c2671dd81cc6dc11
+preparation.json 56b9f312e8c2a81dc9f254f1b7cd8a1400646c8987a535f794f5e6b95b583b50
+native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+kernel.json c93c2ab84e52e0e88ee60eac8a510dc0f1fb71515570dd20284eeadb7b7fb10c
+gate-final.log 5482b7fcf62ccfcd56e0526944243ea1c8a643dc39cd4e3b423e37c5312c358a
+kvm_main.o ed6d9229a10ac37520d33d7ef01292442085bb043b305316e506d40be153165b
+pgtable.o 46faecbb9aa77622a2c4e014d6c15d86cbbd32c6877781ebfde0c4cb8dfa536c

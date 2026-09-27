@@ -253,6 +253,22 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
         }
     }
     match inst {
+        MInst::BinaryImm {
+            op: crate::BinOp::And | crate::BinOp::Orr | crate::BinOp::Eor,
+            dst,
+            lhs,
+            imm,
+            width,
+        } => {
+            expect_general(name, block, *dst, "a logical destination")?;
+            expect_general(name, block, *lhs, "a logical operand")?;
+            if !crate::immediate::logical_mask(*imm, *width) {
+                return Err(format!(
+                    "@{name} block {block}: unencodable logical immediate"
+                ));
+            }
+            Ok(())
+        }
         MInst::Floating {
             strict,
             integer_bits,

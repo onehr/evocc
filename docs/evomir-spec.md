@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.51** | **Authoritative reference** | **2026-09-28**
+**Revision 0.52** | **Authoritative reference** | **2026-09-28**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -323,6 +323,20 @@ operands to place such a constant on the right; subtraction may not. Preserve
 all source checked-arithmetic obligations and evaluations. Narrow/pair values,
 other operations, dynamic values and constants outside this bounded selection
 keep their established paths; this adds no EqSat rule or flag-setting form.
+
+For full-register `bits<32>`/`bits<64>` AND/OR/XOR (revision 0.52), a known
+operand may select the existing logical immediate form. A valid mask is a
+power-of-two element of 2..N bits, containing one nonempty, nonfull cyclic run
+of ones, repeated to the operation width N. Zero, all ones and bits above N
+are not encodable. The MIR validator independently rejects those invalid forms.
+Both operands have already been evaluated; these commutative operations may
+place either known operand on the immediate side. Facts come from literal
+constants and total full-width bitwise constant expressions, including C's
+complement represented by XOR with all ones. Keep the original computations
+until ordinary dead-instruction removal proves them unused. No access, effect,
+obligation or CFG binding is evaluated early or removed by constant tracking;
+narrow/pair and nonmatching operations retain their existing paths. This is
+machine instruction selection, not a new EvoIR or EqSat rule.
 
 `bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
 their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
@@ -1292,6 +1306,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.52 | 2026-09-28 | Select existing encodable full-width logical immediates, including exact bitwise constant expressions; reject malformed logical immediates in MIR validation without changing operand evaluation or effects. |
 | 0.51 | 2026-09-28 | Bound three GCC tuning option admissions to existing whole-function allocation, absent hoisting and nonduplicating block placement; preserve unsupported semantic requests through application projection. |
 | 0.50 | 2026-09-27 | Admit exact scalar f32/f64 SIMD assembly bindings through existing allocation, spills, selected edges and floating-environment invalidation. |
 | 0.49 | 2026-09-27 | Emit independently selected per-function/data ELF sections, preserving explicit placement, TLS/storage kind, aliases, lifecycle/patch roots and written option overrides. |
