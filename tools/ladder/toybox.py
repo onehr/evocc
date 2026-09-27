@@ -74,6 +74,20 @@ if ! @LINK_COMMAND@ > relink.log 2>&1 || [ ! -x generated/unstripped/toybox ]; t
 fi
 strip -s -R '.note*' -R .comment generated/unstripped/toybox -o toybox || exit 2
 chmod 555 toybox || exit 2
+binary_sha=$(sha256sum toybox | cut -d ' ' -f1) || exit 2
+# Upstream creates PREFIX under its current tree. /work is a host-backed FUSE
+# mount without FS_IOC_GETFLAGS; merely setting TESTDIR does not relocate it.
+# Copy only the unchanged runtime recipe/data, not target objects or sources.
+runtime=$(mktemp -d /tmp/evocc-toybox-tests.XXXXXX) || exit 2
+trap 'rm -rf -- "$runtime"' EXIT
+mkdir -p "$runtime/generated/unstripped" "$runtime/lib" || exit 2
+cp -a scripts tests configure .config toybox "$runtime/" || exit 2
+cp lib/toyflags.h "$runtime/lib/" || exit 2
+for header in generated/*.h; do
+  [ ! -f "$header" ] || cp "$header" "$runtime/generated/" || exit 2
+done
+cmp -s toybox "$runtime/toybox" || exit 2
+cd "$runtime" || exit 2
 # Same upstream test recipe, without asking make to rebuild substituted code.
 # Source it in a child shell: an early `exit` cannot print the completion marker.
 # A normal failing suite returns false at the end, which must still be recorded.
@@ -83,8 +97,13 @@ ASAN=1 VERBOSE=all bash -c '
   status=$?
   printf "\\nEVOCC_TOYBOX_TESTS_COMPLETE status=%s\\n" "$status"
   exit "$status"
-' > tests.log 2>&1
-exit $?
+' > {CONTAINER_ROOT}/tests.log 2>&1
+status=$?
+# A complete-looking log cannot authorize a replaced executable.
+printf '%s  %s\\n' "$binary_sha" toybox "$binary_sha" generated/testdir/toybox |
+  sha256sum -c - >/dev/null || exit 2
+cmp -s toybox {CONTAINER_ROOT}/toybox || exit 2
+exit "$status"
 """
 
 VERDICT = re.compile(r"^(PASS|FAIL|SKIP):[ \t]*(.*)$", re.M)
@@ -141,6 +160,11 @@ def test_summary(log: Path, verdict: str) -> dict:
         "failing": sorted(failures(log)),
         "logSha256": mixed.sha256(log) if log.is_file() else None,
         "binarySha256": mixed.sha256(log.parent / "toybox") if (log.parent / "toybox").is_file() else None,
+        "runtimePolicy": {
+            "workingDirectory": "ephemeral-container-local",
+            "addedCapabilities": ["CAP_LINUX_IMMUTABLE"],
+            "targetObjectsCopied": False,
+        },
     }
 
 
@@ -198,7 +222,10 @@ def relink_and_test(
     except (OSError, UnicodeError, ValueError):
         return "invalid-link-record", {}
     try:
-        done = mixed.container({MOUNT: tree}, TEST_SCRIPT.replace("@LINK_COMMAND@", shlex.join(command)), timeout=5400)
+        done = mixed.container(
+            {MOUNT: tree}, TEST_SCRIPT.replace("@LINK_COMMAND@", shlex.join(command)),
+            timeout=5400, capabilities=("CAP_LINUX_IMMUTABLE",),
+        )
     except subprocess.TimeoutExpired:
         return "test-timeout", {}
     if "relink-failed" in done.stdout:

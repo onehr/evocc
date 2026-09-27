@@ -28,6 +28,15 @@ def record(cwd: str, *argv: str) -> bytes:
 
 
 class ParseCommands(unittest.TestCase):
+    def test_container_capability_is_explicit_and_scoped(self):
+        with patch.object(mixed.subprocess, "run") as run:
+            mixed.container({}, "true")
+            self.assertNotIn("--cap-add", run.call_args.args[0])
+            mixed.container({}, "true", capabilities=("CAP_LINUX_IMMUTABLE",))
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[argv.index("--cap-add") + 1], "CAP_LINUX_IMMUTABLE")
+            self.assertNotIn("ALL", argv)
+
     def test_recorder_locks_the_entire_multi_write_record(self):
         # O_APPEND makes individual writes atomic, not a shell printf group.
         # The sealed image provides flock; the fd must span both writes.

@@ -622,6 +622,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     diagnosis, **not** those cases as PASS or B06's remaining full-suite work.
     [Record and limits](tests/fixtures/toybox-filesystem-flags.out).
 
+  - [x] **B06b — Run filesystem-sensitive tests on container-local storage**, 2026-09-27.
+    The [mutation reduction](tests/fixtures/toybox-filesystem-mutation.c) proves
+    both missing GETFLAGS on FUSE and missing immutable capability on local ext4.
+    The shared adapter stages only runtime inputs on local storage and adds only
+    `CAP_LINUX_IMMUTABLE`, retaining binary/object audits and original assertions.
+    Five compiler controls pass; unchanged chattr is **13 PASS / 0 FAIL / 2 SKIP**
+    on both historical audited binaries, versus 0/5/10. The conditional j/P skips
+    remain skips. All 253 ladder tests pass; no full campaign was run.
+    [Evidence and exact limits](tests/fixtures/toybox-filesystem-mutation.out).
+
 - [ ] **B07 — Finish jq's binary128 interface and original tests** — `OPEN`, P2, after L02.
   `src/builtin.c` calls `nexttoward(double, long double)`; 68/69 objects and mixed
   `make check` do not prove full EvoCC coverage. Compile/install the final object

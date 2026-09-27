@@ -1,0 +1,46 @@
+2026-09-27 B06b: fix the test filesystem, not the compiler or assertions.
+Source SHA256 2469e0ed96d9f97727c6dd999ef351583eb9e3ce440a387702a61088af1dce1e.
+EvoCC probe-release SHA256
+314b21866d89269e0efa7bec87f2ca458a14f24b81e34409549a76a010c2e3d8.
+The same sealed linux/arm64 network-none image as toybox-filesystem-flags.out.
+
+RED: FUSE /work returns GETFLAGS errno=25 (ENOTTY), exit 77.
+Container-local ext4 /tmp returns immutable SETFLAGS errno=1 (EPERM), exit 77.
+Neither is counted as PASS. The default CapEff is 00000000a80425fb.
+With only --cap-add CAP_LINUX_IMMUTABLE, CapEff is 00000000a80427fb.
+GCC-14 and Clang-19 -std=gnu11 -Wall -Wextra -Werror -O0/-O2, plus EvoCC
+--emit=asm --target=aarch64-unknown-linux-gnu with the original exported
+headers (GCC assembles/links), all exit 0 on /tmp. Each sees filesystem=ef53,
+rejects immutable truncation/unlink and append-only truncation, allows append,
+restores original flags and removes its one temporary file.
+
+Shared runner fix: copy unchanged scripts/tests, configure, .config,
+generated headers, lib/toyflags.h and linked toybox to a fresh container-local
+directory. Do not copy target objects or rebuild target C. Upstream test.sh
+hardcodes PREFIX under PWD, so setting TESTDIR alone was insufficient.
+Retain ASAN=1 VERBOSE=all, the original link command and object audits.
+After testing, check both the staged binary and the actual installed applet
+binary against the pre-run digest. The temporary tree disappears with the
+container; no host immutable files, full workspace or runtime disk is created.
+Only this lane requests the added capability; other lanes retain their defaults.
+
+Original unchanged chattr.test subset (15 occurrences), same previously audited
+reference/subject binaries as toybox-filesystem-flags.out, no relink here:
+reference SHA e4f4fbab0bb2b203ebbc948f14524268a76a4c9d599ae3f1866a932d5f7a9f22
+subject SHA d38e11ff93e67bd87822674727d04c78a4e2d1e6cd88a498ca8a7dd38e8a77d2
+Both binaries unchanged after replay. Staging uses the shared adapter fragment;
+only chattr.test retains its executable permission for this declared subset.
+Upstream test/recipe file contents and expectations are unchanged.
+Before per side: 0 PASS / 5 FAIL / 10 SKIP.
+After per side: 13 PASS / 0 FAIL / 2 SKIP, completed, exit 0.
+Remaining upstream skips: toggle j (data journaling) and P (project inheritance).
+These are filesystem/permission feature boundaries, not PASS and not compiler
+failures. No additional capability is requested to hide those conditional skips.
+Both logs SHA c8e38b77cca75ad9567b0e180cb19e6129d7ccc9c00380805c12aac44780c1cc.
+Raw small replay: .build/floating-targeted/toybox-local-runtime-20260927/.
+
+Adapter RED: 2 failed assertions / zero import errors; runtime remained on the
+mounted tree and contained target objects. GREEN: 24 toybox tests and all 253
+ladder Python tests; Ruff/diff and changed gate pass (no Rust crate selected).
+This closes the B06 environment subcase. It does not compile the two remaining
+FP objects or replace the historical incomplete full-suite result.

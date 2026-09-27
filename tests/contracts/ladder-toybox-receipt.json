@@ -55,6 +55,17 @@
   "-o": 203
  },
  "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z",
+ "targetedDiagnoses": [{
+  "id": "B06b",
+  "date": "2026-09-27",
+  "status": "ENVIRONMENT_REPAIRED",
+  "scope": "unchanged chattr subset; historical hash-audited reference and subject binaries",
+  "outcomesPerSide": {"PASS": 13, "FAIL": 0, "SKIP": 2},
+  "remainingSkips": ["chattr toggle j", "chattr toggle P"],
+  "changedAssertions": false,
+  "fullSuite": "NOT_RUN",
+  "evidence": "tests/fixtures/toybox-filesystem-mutation.out"
+ }],
  "acceptanceAudit": {
   "date": "2026-09-23",
   "status": "VALIDATION_GAP",

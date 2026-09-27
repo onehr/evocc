@@ -89,7 +89,8 @@ def load_ddmin():
 # --------------------------------------------------------------------------
 
 
-def container(mounts: dict[str, Path], script: str, timeout: int = 3600):
+def container(mounts: dict[str, Path], script: str, timeout: int = 3600, *,
+              capabilities: tuple[str, ...] = ()):
     """Run one ``bash -c`` script in the sealed image with ``mounts`` bound.
 
     ``mounts`` maps the name under ``/work`` to the host directory. The image
@@ -97,6 +98,8 @@ def container(mounts: dict[str, Path], script: str, timeout: int = 3600):
     outlives it is what the script wrote into a mounted directory.
     """
     argv = ["container", "run", "--rm", "--platform", "linux/arm64", "--network", "none"]
+    for capability in capabilities:
+        argv += ["--cap-add", capability]
     for name, host in mounts.items():
         argv += ["-v", f"{host}:/work/{name}"]
     argv += [IMAGE, "bash", "-c", script]

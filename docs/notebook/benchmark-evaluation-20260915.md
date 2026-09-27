@@ -4,6 +4,16 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+September 27 B06b repairs the shared toybox test environment: upstream `test.sh`
+creates its test directory under PWD, so tests on the host FUSE mount could not
+use file-attribute ioctls. A small mutation probe separates that from the missing
+immutable capability on local ext4. Runtime-only staging plus the single
+`CAP_LINUX_IMMUTABLE` capability changes the original 15-case chattr subset from
+**0 PASS / 5 FAIL / 10 SKIP** to **13 PASS / 0 FAIL / 2 SKIP** on both unchanged,
+previously audited binaries. j/P conditional skips remain; full toybox and its
+two FP objects remain open. No fresh full-suite numerator is implied.
+[Source, commands, identities and 253-test gate](../../tests/fixtures/toybox-filesystem-mutation.out).
+
 Current round (2026-09-20): the post-HFA-repair frozen release completed all
 15 application lanes serially. Torture has **zero compiler failures** in its
 five-way account; Csmith has **zero mismatches**, with 68 oracle-unusable cases

@@ -19,6 +19,11 @@ class ToyboxVerdicts(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.tree = Path(self.directory.name)
         (self.tree / "scripts").mkdir()
+        (self.tree / "tests").mkdir()
+        (self.tree / "lib").mkdir()
+        (self.tree / "lib/toyflags.h").write_text("/* fixture */\n")
+        (self.tree / "configure").write_text("# fixture\n")
+        (self.tree / ".config").write_text("# fixture\n")
         (self.tree / "generated/unstripped").mkdir(parents=True)
         executable = self.tree / "toybox"
         executable.write_text("#!/bin/sh\nexit 0\n")
@@ -29,10 +34,13 @@ class ToyboxVerdicts(unittest.TestCase):
         )
 
     def run_suite(self, source, *, link_status=0, expected=None, changed_object=False):
-        (self.tree / "scripts/test.sh").write_text(source)
+        (self.tree / "scripts/test.sh").write_text(
+            "mkdir -p generated/testdir\ncp toybox generated/testdir/toybox\n" + source,
+        )
 
-        def local_container(mounts, script, timeout):
+        def local_container(mounts, script, timeout, **kwargs):
             self.assertEqual(mounts, {toybox.MOUNT: self.tree})
+            self.runtime_options = kwargs
             # Exercise the real shell adapter, not a mock completion marker.
             prelude = f"""
 gcc-14() {{
@@ -111,6 +119,32 @@ else echo 'FAIL: recipe environment'; false; fi
         self.assertEqual(status, "tests-done")
         self.assertEqual(list(found.values()), ["PASS"])
 
+    def test_runtime_uses_private_filesystem_not_the_mounted_build(self):
+        status, found = self.run_suite(f"""
+if [ "$PWD" != {shlex.quote(str(self.tree))} ] && [ -f lib/toyflags.h ]; then
+  echo 'PASS: local runtime'
+else echo 'FAIL: local runtime'; false; fi
+""")
+        self.assertEqual(status, "tests-done")
+        self.assertEqual(list(found.values()), ["PASS"])
+        self.assertEqual(self.runtime_options, {"capabilities": ("CAP_LINUX_IMMUTABLE",)})
+
+    def test_runtime_excludes_target_objects_and_audits_the_executable(self):
+        (self.tree / "generated/obj").mkdir()
+        (self.tree / "generated/obj/one.o").write_bytes(b"compiler object")
+        status, found = self.run_suite("""
+if [ ! -e generated/obj ]; then echo 'PASS: no duplicate build'; else
+  echo 'FAIL: no duplicate build'; false; fi
+""")
+        self.assertEqual(status, "tests-done")
+        self.assertEqual(list(found.values()), ["PASS"])
+        status, _ = self.run_suite("echo damaged > toybox\necho 'PASS: misleading'\n")
+        self.assertNotEqual(status, "tests-done")
+        status, _ = self.run_suite(
+            "echo damaged > generated/testdir/toybox\necho 'PASS: misleading'\n",
+        )
+        self.assertNotEqual(status, "tests-done")
+
     def test_preexisting_log_is_erased_even_when_link_fails(self):
         log = self.tree / "tests.log"
         log.write_text("PASS: old\nEVOCC_TOYBOX_TESTS_COMPLETE status=0\n")
@@ -127,7 +161,9 @@ else echo 'FAIL: recipe environment'; false; fi
         obj = self.tree / "unit.o"
         obj.write_bytes(b"evocc")
         expected = {"unit.o": toybox.mixed.sha256(obj)}
-        status, _ = self.run_suite("echo gcc > unit.o\necho 'PASS: first'\n", expected=expected)
+        status, _ = self.run_suite(
+            f"echo gcc > {shlex.quote(str(obj))}\necho 'PASS: first'\n", expected=expected,
+        )
         self.assertEqual(status, "object-mismatch-after-test")
 
     def test_timeout_is_not_completion(self):
