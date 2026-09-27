@@ -1,0 +1,55 @@
+2026-09-27 — bounded recursive visitor substitution.
+
+RED: the existing five private-leaf regressions pass, but two added tests fail:
+the visitor stays out of line because its runtime call graph is cyclic, and
+ordinary inline substitution ignores an earlier noinline declaration.
+This is not a parser or validator suppression.
+
+Repair: distinguish runtime recursion from finite substitution. An unaddressed
+internal inline function with one source call in an ineligible, non-inline
+caller can be expanded without expanding its recursive call back to that
+caller. The existing C-HIR machinery retains parameter conversion, fresh local
+object identity, lifetimes, labels and effects. Admission is bounded at 1024
+unexpanded nodes and 256 bytes of fixed local objects; variadics, assembly,
+statics, address-taken labels, dynamic allocation and activation-sensitive
+builtins remain ordinary calls. No new IR, implicit state or EqSat rule.
+All optional substitution paths also honor noinline/noipa/noclone throughout
+the declaration chain; mandatory always_inline semantics remain unchanged.
+
+Nine CLI tests pass, including both interpreters and validated IR at O0/O2:
+  - recursive three-way visitor: 120 callbacks, before/after values and early
+    error return remain correct; visitor call/body removed, walker call retained;
+  - all three barriers before/after the definition retain the call;
+  - multiple callers, inline caller, taken address, static storage, >256 bytes,
+    VLA, alloca, frame address and >1024 nodes stay outside admission;
+  - actual inlining preserves lifetime E3010, uninitialized E3001 and division
+    by zero E3002 in both interpreters.
+The unchanged fixture exits zero in sealed GCC14/Clang19/EvoCC O0/O2: 6/6.
+
+Exact original arch/arm64/kvm/hyp/pgtable.o replay uses its .o.cmd and actual
+generated headers from the retained expanded configuration. Both before/after
+objects assemble and match all global symbol names/kinds. The visit definition
+and call disappear; the recursive walk remains. Text 33068 -> 32964 bytes;
+data remains 1000 bytes. Neither object was installed. This is not a measured
+runtime speedup and does not close K02/K03.
+
+The before compiler is a debug executable; the after is release. Their compile
+times are therefore NOT an inlining-speed comparison. The full-build launch
+using that debug executable was interrupted before completing its first batch
+or installing objects. Its INTERRUPTED receipt is retained; there is no claim
+that it passed. A verified frozen release is used for the next uniform build.
+
+Artifacts: .build/floating-targeted/kvm-instructions-20260927/:
+  original.json; before/; after/; replay.py; changed-gate.log.
+Sealed linux/arm64, network none, GCC 14.2.0-19, Clang 19.1.7:
+  evo-flight-lab:sealed descriptor
+  sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Compiler before e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+Compiler after 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+Assembly before e474639a75facb047b1fec3feb63ec383da5c7a29c83973b2d22d3d09150b72d
+Assembly after 1f080129136a390388e5eefc9de701145b28ee7ae7f0b374e03c357a8e6a8bfa
+
+Affected-crate gate against 7f8bbfd: 1868 PASS, zero failures, three historical
+ignored, 224 result groups across eight crates. Clippy --all-targets -D warnings,
+workspace fmt --check and diff checks pass. The 260 K1 Python tests and targeted
+Ruff checks also pass. This is not whole-kernel runtime acceptance.

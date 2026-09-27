@@ -985,21 +985,24 @@ pub(crate) fn substitute_for_execution<'a>(
             .iter()
             .map(|(&symbol, &body)| (symbol, body)),
     );
-    let eligible: BTreeMap<_, _> = candidates
-        .into_iter()
+    let mut eligible: BTreeMap<_, _> = candidates
+        .iter()
+        .map(|(&symbol, &function)| (symbol, function))
         .filter(|(_, f)| {
             f.body.is_some()
                 && (roles.always_inline.contains(&f.symbol)
-                    || constant_inline_return(unit, f, target).is_some()
-                    || private_leaf(f)
-                    || (!f.inline_spans.is_empty()
-                        && (f.has_internal_linkage(unit.symbols()) || !roles.is_definition(f))
-                        && !f
-                            .attributes
-                            .iter()
-                            .any(|a| a.semantic_name() == Some("noinline"))
-                        && bodies[&f.symbol].nodes <= 128
-                        && !sensitive_control_flow(f.symbol)))
+                    || (!no_optional_substitution.contains(&f.symbol)
+                        && (constant_inline_return(unit, f, target).is_some()
+                            || private_leaf(f)
+                            || (!f.inline_spans.is_empty()
+                                && (f.has_internal_linkage(unit.symbols())
+                                    || !roles.is_definition(f))
+                                && !f
+                                    .attributes
+                                    .iter()
+                                    .any(|a| a.semantic_name() == Some("noinline"))
+                                && bodies[&f.symbol].nodes <= 128
+                                && !sensitive_control_flow(f.symbol)))))
                 && (!uses.addresses.contains(&f.symbol) || roles.always_inline.contains(&f.symbol))
                 && !matches!(
                     f.parameters,
@@ -1007,6 +1010,76 @@ pub(crate) fn substitute_for_execution<'a>(
                 )
         })
         .collect();
+    // A runtime call-graph cycle need not be a substitution cycle: an inline
+    // visitor can call its non-inline walker without expanding that call.
+    // Admit only one source call site, in a caller that cannot itself enter
+    // either optional eligibility set. Thus no new substitution cycle or
+    // repeated code growth is possible; mandatory cycles keep E2932.
+    let mut callers = BTreeMap::<SymbolId, Vec<SymbolId>>::new();
+    for (&caller, body) in &bodies {
+        for &(callee, _) in &body.calls {
+            callers.entry(callee).or_default().push(caller);
+        }
+    }
+    let extra: Vec<_> = candidates
+        .iter()
+        .filter_map(|(&symbol, &function)| {
+            let body = &bodies[&symbol];
+            let [caller] = callers.get(&symbol)?.as_slice() else {
+                return None;
+            };
+            let caller_function = candidates.get(caller)?;
+            if function.inline_spans.is_empty()
+                || !function.has_internal_linkage(unit.symbols())
+                || no_optional_substitution.contains(&symbol)
+                || uses.addresses.contains(&symbol)
+                || !caller_function.inline_spans.is_empty()
+                || eligible.contains_key(caller)
+                || body.nodes > 1024
+                || body.activation_sensitive
+                || body.addressed_labels
+                || !body.assembly.is_empty()
+                || !body.statics.is_empty()
+                || matches!(
+                    function.parameters,
+                    ParameterSyntax::Prototype { variadic: true, .. }
+                )
+                || uses
+                    .calls
+                    .iter()
+                    .filter(|(callee, _)| *callee == symbol)
+                    .count()
+                    != 1
+            {
+                return None;
+            }
+            // Keep dynamic allocation/activation-sensitive storage outside
+            // this cost-model extension. Ordinary fixed objects still get a
+            // fresh identity and their existing lexical lifetime per call.
+            let mut local_bytes = Some(0_u64);
+            let mut stack_allocation = false;
+            inspect_with_visitors(
+                [Node::Stmt(function.body?)],
+                &mut |declaration| {
+                    if let CHirDecl::Object(object) = declaration {
+                        local_bytes = local_bytes.and_then(|total| {
+                            total.checked_add(
+                                target.layout_of(unit.types(), object.ty).ok()?.size_bytes,
+                            )
+                        });
+                    }
+                },
+                &mut |expression| {
+                    stack_allocation |= unit.stack_allocation_size(expression).is_some();
+                },
+            );
+            if stack_allocation || !local_bytes.is_some_and(|bytes| bytes <= 256) {
+                return None;
+            }
+            Some((symbol, function))
+        })
+        .collect();
+    eligible.extend(extra);
     let pure_constants = eligible
         .values()
         .filter_map(|f| pure_loop_result(unit, f, target).map(|value| (f.symbol, value)))

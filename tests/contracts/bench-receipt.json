@@ -1,26 +1,32 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T110109.864626Z",
-  "subject": "d0bd6d297d7114e0d1d72cb9f836080d8e36485b",
+  "run": "20260927T134751.379209Z",
+  "subject": "7f8bbfd85a264fa05339ee706a43c2f8b9800967",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-asm-ssa",
-  "driverSha256": "e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5",
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/kvm-instructions-20260927/evocc-inline-release",
+  "driverSha256": "65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "musl",
+    "kernel-full",
     "--evocc",
-    "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-asm-ssa",
+    ".build/floating-targeted/kvm-instructions-20260927/evocc-inline-release",
     "--jobs",
     "2",
-    "--budget",
-    "40"
+    "--allow-qemu-drift",
+    "--low-disk",
+    "--kernel-work-root",
+    ".build/k7-coverage/case/bpf",
+    "--kernel-source-root",
+    ".build/k7-coverage/case/linux-src",
+    "--kernel-full-receipt",
+    "tests/contracts/kernel-bpf-full-receipt.json"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "musl"
+    "kernel-full"
   ],
-  "status": "INCOMPLETE",
+  "status": "RUNNING",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -5419,46 +5425,8 @@
     },
     "kernel-full": {
       "rung": "K6",
+      "status": "RUNNING",
       "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
-      "outcomes": {
-        "rebuilt-by-kbuild": 13,
-        "substituted": 6989
-      },
-      "refusals": {},
-      "baselineFailures": 0,
-      "failingUnits": [],
-      "total": 7002,
-      "passed": 0,
-      "compiled": 6989,
-      "kind": "units",
-      "status": "ERROR",
-      "testVerdict": "NOT_RUN",
-      "evidence": ".evidence/k1/20260926T133321Z",
-      "run": null,
-      "receipt": "tests/contracts/kernel-bpf-full-receipt.json",
-      "error": "runner exit 1",
-      "errorTail": [
-        "        \"scope\": \"Module aggregate inputs for modpost; no final modules or BTF\"",
-        "      },",
-        "      \"producerExitCode\": 2",
-        "    }",
-        "  },",
-        "  \"installed\": true,",
-        "  \"allowSymbolDrift\": true,",
-        "  \"imageSha256\": \"13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388\",",
-        "  \"vmlinuxSha256\": \"e33d226ead8cbe6fca584ce96db9b918cd9bd68fef41779a9dd60a5ca8f50882\",",
-        "  \"unitsSha256\": \"d764a35e6952aae74931dbbea9a288b7fabac074cef75520e607d91de3e57cdc\",",
-        "  \"mode\": \"full-kernel\",",
-        "  \"completeComposition\": false,",
-        "  \"boot\": {",
-        "    \"verdict\": \"NOT_RUN\"",
-        "  },",
-        "  \"driverSha256\": \"e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f\",",
-        "  \"status\": \"INCOMPLETE\",",
-        "  \"evidence\": \".evidence/k1/20260926T133321Z\"",
-        "}",
-        "evidence: /Users/onehrxn/dev/30days/c30/.evidence/k1/20260926T133321Z"
-      ],
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py",
@@ -5466,7 +5434,7 @@
         "--require-all",
         "--boot",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/kvm-instructions-20260927/evocc-inline-release",
         "--jobs",
         "2",
         "--relink-jobs",
@@ -5477,35 +5445,8 @@
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/bpf",
         "--src-root",
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/linux-src",
-        "--low-disk",
-        "--resume-prepared-run",
-        "/Users/onehrxn/dev/30days/c30/.evidence/k1/20260926T080947Z"
-      ],
-      "exitCode": 1,
-      "seconds": 17544.6,
-      "previous": {
-        "rung": "K6",
-        "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
-        "outcomes": {
-          "substituted": 6765
-        },
-        "refusals": {},
-        "baselineFailures": 0,
-        "failingUnits": [],
-        "total": 6765,
-        "passed": 6765,
-        "compiled": 6765,
-        "kind": "units",
-        "status": "PASS",
-        "testVerdict": "PASS",
-        "evidence": ".evidence/k1/bpf-linkage-isolated-20260923",
-        "run": null
-      },
-      "measurement": {
-        "run": "20260926T133321.056520Z",
-        "subject": "c96d55f36a564aa4d167ffb24a29df740d629de0",
-        "driverSha256": "e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f"
-      }
+        "--low-disk"
+      ]
     },
     "kernel-selftest": {
       "rung": "K7",

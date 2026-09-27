@@ -1,0 +1,64 @@
+2026-09-27 — read-only KVM instruction-count diagnosis, NOT acceptance.
+
+Four diagnostic flights pass: demand/reference, demand/subject,
+memslot/reference, memslot/subject. Each reuses its matching retained
+Image/System.map, the existing 256-KiB one-mode ftrace payload, and the same
+64-MiB snapshot scratch disk. No installed object, Image, payload, production
+QEMU or kernel contract is changed. KASLR is disabled only in this diagnostic.
+The private matching-version QEMU's opt-in store intervention is disabled.
+
+The API-7 plugin instruments instruction entry, including a faulting
+instruction's entry, using per-vCPU counters. Nonoverlapping symbol ranges
+count aliases once and stop at every intervening symbol, including data.
+The recorded numbers are whole-boot totals in selected ranges, NOT elapsed
+time or workload-only counts. Inlining changes attribution: an absent GCC
+helper is not zero-cost execution, and different child call counts must not
+be normalized as if their paths were identical. Boot-time page-free totals
+are explicitly not evidence of the original KVM workload's cost.
+
+Each flight exits zero with the diagnostic TAP result and ordered nonce-bound
+boot/shutdown; all input hashes, including scratch, remain unchanged. Independent
+ftrace confirms 87 demand fault-handler entries on each kernel, and four
+stage-2 destructions plus two memslot invalidations on each memslot flight.
+The memslot runner enforces this independently. The earlier demand receipts
+predate that added assertion; its retained logs also satisfy the same check.
+
+                           demand: GCC       EvoCC     memslot: GCC      EvoCC
+__kvm_pgtable_walk insns          165950      121550           166140     129078
+                  entries           366         366              368        368
+__kvm_pgtable_visit insns        inlined      890711          inlined     960033
+                   entries                   3560                         3834
+kvm_handle_guest_abort insns      25797      119638            25797     119638
+                       entries       87          87               87         87
+stage2_free_walker insns           35840       84480            35840      84480
+                  entries          2560        2560             2560       2560
+kvm_free_stage2_pgd insns            136         440              136        440
+                   entries            4           4                4          4
+
+These measurements identify code-generation overhead for further reduction;
+they do not prove that visitor inlining alone closes the original 120-second,
+all-mode K02/K03 tests. The bounded compiler repair has its separate record in
+recursive-inline-visitor.out. A fresh complete Image and original tests remain
+required. Instrumented times must never be compared to acceptance times.
+
+Reproduce with tests/fixtures/kvm-instruction-count.py; each result.json retains
+the exact argv, nonce, input paths/hashes and serial/instruction-log hashes.
+Output root: .build/floating-targeted/kvm-instructions-20260927/.
+Existing input roots:
+  .build/floating-targeted/runtime-config-20260926/before-{reference,subject}
+  .build/k7-coverage/repair-runtime/{kvm-profile,kvm-memslot-profile}/payload.cpio
+Plugin compilation uses the retained QEMU include/plugins headers and host
+glib-2.0 flags: cc -shared -undefined dynamic_lookup -Wall -Wextra -Werror.
+It passes; all 260 K1 Python tests and targeted Ruff pass. Eight new tests cover
+alias/range boundaries, malformed extents and independently matched entry counts.
+
+SHA-256:
+reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+subject Image 97d511d3b32b8c85e0cd9c7ef4dc447e4b8407c4c764f4f5aebd804285f043d1
+reference System.map ae495d3f4679e8009730c69ee3c088c0e9e380a1439202fbcbe8056e0bc70d4f
+subject System.map e04d1f34e858fd8e0b688dd7e1ded7e6d8d57fdd718aff33da4ff2cb394e448a
+QEMU b22dbf98dceed431fdc2a8d4c13976bdd595cb05ccae22cda7dded66f8dd157b
+plugin 5257344b4989fc516f68109581e2e0d29f11ff3865e8d10586cd086db531952e
+demand payload d584b246cb2c1a56dec7870537898ef9525f01ebb6a41f1fca630c8293989e12
+memslot payload f6d12658d5cf23862b554fab634672c09d1b2daf414d6848a6c31eea23ad53a9
+scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb

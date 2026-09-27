@@ -261,6 +261,22 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     bytes; no runtime improvement is inferred. No Image changed: K03 remains
     OPEN. [Full result](tests/fixtures/private-leaf-substitution.out).
 
+  - [x] **K03b — Inline a single-site visitor without expanding runtime recursion**, 2026-09-27.
+    Read-only instruction counters independently match both KVM reductions'
+    ftrace entry counts and expose repeated out-of-line visitor overhead.
+    The [C reduction](tests/fixtures/recursive-inline-visitor.c) goes RED → GREEN:
+    the visitor expands into its out-of-line walker; the recursive call remains.
+    Existing object identity/lifetime/effect rules and explicit size/activation
+    boundaries are preserved. The repair also honors noinline/noipa/noclone on
+    the complete declaration chain for every optional substitution path.
+    Nine CLI regressions, six sealed native controls and the 1868-test affected
+    gate pass (Clippy/fmt green). The exact original
+    page-table object retains all exports, removes the visit call/definition and
+    changes text 33068 → 32964 bytes. No runtime speedup is inferred. K02/K03
+    still require the unchanged original tests on the rebuilt composition.
+    [Repair evidence](tests/fixtures/recursive-inline-visitor.out),
+    [instruction-count limits](tests/fixtures/kvm-instruction-count.out).
+
 - [ ] **K04 — ublk stress/shutdown stall** — `OPEN`, P1.
   `test_stress_04.sh` hits the 45-second wrapper limit and stalls in shutdown sync;
   a later diagnostic invocation passes in 4.983 seconds. Capture the blocked I/O
@@ -1139,6 +1155,13 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   13 target objects (T04d). No fresh link/boot occurred; no worker remains live.
   Later K02d/K02e/K02f/K02g are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
+  September 27's replacement bench `20260927T134751.379209Z` is live at
+  13:48 UTC (owner 78638 / worker 78641): frozen release `65035621…`, two jobs,
+  low-disk mode, same source/build trees. It includes K03b and the accumulated
+  compiler repairs; T04d runs through the common driver. Its initial input scan
+  is active, with no completed batch claimed. The preceding debug-binary launch
+  was explicitly interrupted before installing objects and is not a completed
+  survey. [Live log and identities][kernel].
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,

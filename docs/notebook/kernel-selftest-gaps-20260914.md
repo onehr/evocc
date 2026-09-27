@@ -6,6 +6,44 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Counted KVM overhead and finite visitor substitution — 2026-09-27
+
+Four read-only diagnostic flights complete with matching independent ftrace
+root counts and unchanged inputs/disks. The retained EvoCC Image executes
+890,711/960,033 instructions in `__kvm_pgtable_visit` during the demand/memslot
+flights; GCC has that visitor inlined. This is whole-boot symbol attribution,
+not elapsed time or a claim that every outlined instruction can disappear.
+Boot-time page-free counts are not attributed to the workload. [Exact counts,
+inputs, commands and limits](../../tests/fixtures/kvm-instruction-count.out).
+
+The bounded shared C-HIR repair now distinguishes a runtime call cycle from a
+finite substitution graph. It also repairs optional-inline declaration-chain
+barriers. Nine CLI tests and six native controls pass; original `pgtable.o`
+assembles with identical exports and no visit definition/call. Its text changes
+33068 → 32964 bytes. The Image is not patched from this object; the repairs will
+be integrated using a single uniform compiler. K02/K03 remain OPEN until the
+original all-mode 120-second programs pass. [Fixture and boundaries](../../tests/fixtures/recursive-inline-visitor.out).
+
+Run `20260927T131757Z` is **INTERRUPTED**, not live: its selected `evocc-asm-ssa`
+was a debug executable, not a release build. The first batch had not completed;
+no subject objects were installed. The owner 50081/worker 50084 were stopped
+through the runner's process-group interruption handling. This startup mistake
+is not a new compilation failure or a completed survey. The verified release
+for the replacement build is
+`.build/floating-targeted/kvm-instructions-20260927/evocc-inline-release`, SHA-256
+`65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5`.
+It includes the cumulative KVM repairs, bitmap fix and current visitor repair;
+the late-generator fix remains in the common build driver. The historical
+`target/frontend/release/evocc` is preserved separately and is not this subject.
+
+At 2026-09-27 13:48 UTC the replacement bench
+`20260927T134751.379209Z` is live: owner **78638**, worker **78641**,
+two-job low-disk policy, evidence under `.evidence/bench/20260927T134751.379209Z/`.
+The initial input scan is active; no completed object batch is claimed yet.
+Host free space is 70 GiB and the reused case-sensitive build volume has 26 GiB
+free. The affected gate is green: **1868 PASS / 0 FAIL / three historical ignored**,
+Clippy/fmt, 260 K1 Python tests and targeted Ruff. No new runtime disk or tree.
+
 ### Uniform build finished, two new closure gaps — 2026-09-27
 
 Run `20260926T133321Z` is **INCOMPLETE**, not running. Its 7,002 target-C second

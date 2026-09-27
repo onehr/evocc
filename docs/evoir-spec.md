@@ -4384,6 +4384,24 @@ passes a constant; the reference compilers see the constant only because
 they inline. This is the last construct between the front end and nearly
 every kernel unit, measured at the tenth survey.
 
+**Optional substitution and runtime recursion.** Optional inline selection
+reuses the same parameter conversion, fresh-object, lifetime, label-renaming,
+static-object and effect rules. It honors `noinline`, `noipa` and `noclone`
+barriers on the complete declaration chain. A runtime call-graph cycle is not
+itself an inline-substitution cycle: an inlined visitor may call an out-of-line
+walker which in turn executes the visitor. The expansion graph must remain
+finite, and the recursive runtime call must remain an ordinary call.
+The bounded single-site implementation admits only an unaddressed internal
+inline body with one source call in a non-inline caller which is not otherwise
+substituted. It bounds the unexpanded body at 1024 syntax nodes and fixed local
+storage at 256 bytes, and excludes variadics, activation-sensitive builtins,
+dynamic allocation, static locals, assembly and address-taken labels. These
+are optimization admission limits, not new C-language refusals or permission
+to change an object's identity or read uninitialized bytes. A nonmatching
+optional call remains a call; mandatory `always_inline` cycle handling is
+unchanged. No EvoIR instruction, EqSat rule or implicit cross-block state is
+introduced by this selection.
+
 **Diagnostics introduced.** Messages live in Section 6.3, the single authority;
 this table gives conditions only. `E2902`, which rejected compound literals as
 not covered, is retired by this revision: Section 10.1.13 covers them, and a
