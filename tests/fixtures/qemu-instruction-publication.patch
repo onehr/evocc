@@ -1,0 +1,177 @@
+--- a/accel/tcg/cputlb.c
++++ b/accel/tcg/cputlb.c
+@@ -92,6 +92,7 @@
+ QEMU_BUILD_BUG_ON(sizeof(vaddr) > sizeof(run_on_cpu_data));
+ 
+ #define ALL_MMUIDX_BITS ((1 << NB_MMU_MODES) - 1)
++static bool evocc_diag_post_store_code;
+ 
+ static inline size_t tlb_n_entries(CPUTLBDescFast *fast)
+ {
+@@ -323,6 +324,8 @@
+ {
+     int64_t now = get_clock_realtime();
+     int i;
++    const char *mode = getenv("EVOCC_QEMU_STORE_DIAGNOSTIC");
++    evocc_diag_post_store_code = mode && !strcmp(mode, "store4-code");
+ 
+     qemu_spin_init(&cpu->neg.tlb.c.lock);
+ 
+@@ -1334,6 +1337,10 @@
+     return false;
+ }
+ 
++/* Local K01 observation, only the fixed reduction's code word. */
++uint64_t evocc_diag_state;
++unsigned evocc_diag_value;
++
+ static void notdirty_write(CPUState *cpu, vaddr mem_vaddr, unsigned size,
+                            CPUTLBEntryFull *full, uintptr_t retaddr)
+ {
+@@ -1343,6 +1350,9 @@
+ 
+     if (!physical_memory_get_dirty_flag(ram_addr, DIRTY_MEMORY_CODE)) {
+         tb_invalidate_phys_range_fast(cpu, ram_addr, size, retaddr);
++        if (mem_vaddr == UINT64_C(0x3000000000)) {
++            qatomic_xchg(&evocc_diag_state, qatomic_read(&evocc_diag_state) | 1);
++        }
+     }
+ 
+     /*
+@@ -2731,10 +2741,37 @@
+     MMULookupLocals l;
+     bool crosspage;
+ 
++    if (addr == UINT64_C(0x3000000000)) {
++        qatomic_set(&evocc_diag_value, val);
++        qatomic_xchg(&evocc_diag_state,
++                     (qatomic_read(&evocc_diag_state) & ~UINT64_C(3)) + 4);
++    }
+     cpu_req_mo(cpu, TCG_MO_LD_ST | TCG_MO_ST_ST);
+     crosspage = mmu_lookup(cpu, addr, oi, ra, MMU_DATA_STORE, &l);
+     if (likely(!crosspage)) {
+         do_st_4(cpu, &l.page[0], val, l.mmu_idx, l.memop, ra);
++        /* Address-independent second experiment. Limited to this slow-path
++         * four-byte RAM store; not a complete all-width/atomic/DMA solution. */
++        if (evocc_diag_post_store_code &&
++            !(l.page[0].flags & (TLB_MMIO | TLB_DISCARD_WRITE))) {
++            ram_addr_t ram_addr = addr + l.page[0].full->xlat_offset;
++            smp_mb();
++            if (!physical_memory_get_dirty_flag(ram_addr, DIRTY_MEMORY_CODE)) {
++                tb_invalidate_phys_range_fast(cpu, ram_addr, 4, 0);
++            }
++        }
++        /* Local hypothesis experiment, NOT a general QEMU repair. The fixed
++         * probe address avoids changing unrelated guest code or data stores.
++         * No result, source condition or timeout is changed. */
++        if (addr == UINT64_C(0x3000000000)) {
++            qatomic_xchg(&evocc_diag_state,
++                         (qatomic_read(&evocc_diag_state) & ~UINT64_C(3)) | 2);
++            const char *mode = getenv("EVOCC_QEMU_STORE_DIAGNOSTIC");
++            if (mode && !strcmp(mode, "post-invalidate")) {
++                tb_invalidate_phys_range_fast(cpu,
++                    addr + l.page[0].full->xlat_offset, 4, 0);
++            }
++        }
+         return;
+     }
+ 
+--- a/accel/tcg/translator.c
++++ b/accel/tcg/translator.c
+@@ -20,6 +20,7 @@
+ #include "internal-common.h"
+ #include "disas/disas.h"
+ #include "tb-internal.h"
++#include "qemu/plugin.h"
+ 
+ static void set_can_do_io(DisasContextBase *db, bool val)
+ {
+@@ -491,16 +492,47 @@
+     return val;
+ }
+ 
++#ifndef CONFIG_USER_ONLY
++extern uint64_t evocc_diag_state;
++extern unsigned evocc_diag_value;
++static unsigned evocc_diag_witnesses;
++#endif
++
+ uint32_t translator_ldl_end(CPUArchState *env, DisasContextBase *db,
+                             vaddr pc, MemOp endian)
+ {
+     uint32_t val;
++#ifndef CONFIG_USER_ONLY
++    uint64_t diagnostic_state = 0;
++    if (pc == UINT64_C(0x3000000000) || pc == UINT64_C(0x3000100000)) {
++        diagnostic_state = qatomic_load_acquire(&evocc_diag_state);
++    }
++#endif
+ 
+     if (!translator_ld(env, db, &val, pc, sizeof(val))) {
+         MemOpIdx oi = make_memop_idx(MO_UL, db->code_mmuidx);
+         val = cpu_ldl_code_mmu(env, pc, oi, 0);
+         record_save(db, pc, &val, sizeof(val));
+     }
++#ifndef CONFIG_USER_ONLY
++    if ((diagnostic_state & 3) == 1 &&
++        diagnostic_state == qatomic_load_acquire(&evocc_diag_state) &&
++        val == UINT32_C(0x14000003) &&
++        qatomic_read(&evocc_diag_value) == UINT32_C(0x14000001) &&
++        qatomic_fetch_inc(&evocc_diag_witnesses) < 16) {
++        fprintf(stderr, "K01_DECODE_AFTER_INVALIDATE pc=%" PRIx64
++                " cycle=%" PRIu64 " decoded=%08x pending=%08x\n", (uint64_t)pc,
++                diagnostic_state >> 2, val, qatomic_read(&evocc_diag_value));
++    }
++#endif
++#ifdef CONFIG_PLUGIN
++    if (db->plugin_enabled &&
++        (pc == UINT64_C(0x3000000000) || pc == UINT64_C(0x3000100000)) &&
++        tcg_ctx->plugin_insn->vaddr == pc) {
++        tcg_ctx->plugin_insn->diagnostic_decoded = val;
++        tcg_ctx->plugin_insn->diagnostic_decoded_valid = true;
++    }
++#endif
+     if (endian & MO_BSWAP) {
+         val = bswap32(val);
+     }
+--- a/accel/tcg/plugin-gen.c
++++ b/accel/tcg/plugin-gen.c
+@@ -459,6 +459,7 @@
+     }
+ 
+     tcg_ctx->plugin_insn = insn;
++    insn->diagnostic_decoded_valid = false;
+     insn->calls_helpers = false;
+     insn->mem_helper = false;
+     if (insn->insn_cbs) {
+--- a/include/qemu/plugin.h
++++ b/include/qemu/plugin.h
+@@ -113,6 +113,9 @@
+ /* Internal context for instrumenting an instruction */
+ struct qemu_plugin_insn {
+     uint64_t vaddr;
++    /* Local K01 diagnostic only: preserve the actual four-byte decode fetch. */
++    uint32_t diagnostic_decoded;
++    bool diagnostic_decoded_valid;
+     GArray *insn_cbs;
+     GArray *mem_cbs;
+     uint8_t len;
+--- a/plugins/api.c
++++ b/plugins/api.c
+@@ -273,6 +273,11 @@
+ {
+     const DisasContextBase *db = tcg_ctx->plugin_db;
+ 
++    if (insn->diagnostic_decoded_valid) {
++        len = MIN(len, sizeof(insn->diagnostic_decoded));
++        memcpy(dest, &insn->diagnostic_decoded, len);
++        return len;
++    }
+     len = MIN(len, insn->len);
+     return translator_st(db, dest, insn->vaddr, len) ? len : 0;
+ }
+@@ -694,4 +699,3 @@
+     }
+     return total;
+ }
+-

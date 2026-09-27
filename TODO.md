@@ -126,7 +126,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     The store-window extension correlates **25792/8448** wrong-target executions
     with translations observed during a pending patch store; both ST controls
     still pass. It does not expose the internal decode/invalidation ordering,
-    so the next step is matching-version internal instrumentation, not a waiver.
+    so that observer alone was insufficient. The [matching-version internal
+    experiment](tests/fixtures/qemu-instruction-publication.out) now captures
+    actual old-instruction fetches after invalidation. A private, address-independent
+    four-byte-store intervention makes all six userspace and three static-key
+    cases pass on both Images. It is not a general emulator fix. Both baseline
+    and intervention pass the latest original hotplug/reload sequence, so that
+    intermittent NULL fault is not yet causally closed. Production QEMU and
+    full-run acceptance remain unchanged.
 
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;

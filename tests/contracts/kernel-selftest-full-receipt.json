@@ -31499,6 +31499,22 @@
   ],
   "targetedDiagnoses": [
     {
+      "id": "K01b",
+      "date": "2026-09-27",
+      "status": "OPEN",
+      "record": "tests/fixtures/qemu-instruction-publication.out",
+      "scope": "Private matching-version QEMU experiment identifies old-code translation after invalidation; not a production emulator repair or original sched_ext closure",
+      "changesFullRunTotals": false,
+      "qemuInstalled": false,
+      "diagnosticPatch": "tests/fixtures/qemu-instruction-publication.patch",
+      "diagnosticQemuSha256": "b22dbf98dceed431fdc2a8d4c13976bdd595cb05ccae22cda7dded66f8dd157b",
+      "userspaceBaselineEach": {"passed": 3, "failed": 3},
+      "userspaceInterventionEach": {"passed": 6, "failed": 0},
+      "staticKeyBaselineEach": {"passed": 1, "failed": 2},
+      "staticKeyInterventionEach": {"passed": 3, "failed": 0},
+      "originalSequence": "Both baseline and intervention passed hotplug/reload on each Image; intermittent original NULL fault not causally closed"
+    },
+    {
       "id": "K11j",
       "date": "2026-09-26",
       "status": "CLASSIFIED",

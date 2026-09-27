@@ -6,6 +6,24 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Internal instruction-publication race experiment — 2026-09-27
+
+The matching QEMU 11.1.1 build reproduces the six-case reduction at **3 PASS /
+3 FAIL on each kernel**. Internal instrumentation now retains the actual decode
+word and one atomic generation/phase observation: old branch decoding occurs
+after invalidation while the disabling store is pending. A private post-store
+invalidation experiment, then its address-independent four-byte RAM-store
+variant, yields **6/6 userspace and 3/3 static-key/RCU PASS on both kernels**.
+The latter module still fails 2/3 on the unmodified-behavior control.
+
+This narrows a real emulator failure, not a compiler repair or permission to
+waive it. The intervention is not complete for all widths/atomics/DMA. The
+unchanged original hotplug/reload sequence passes both baseline and intervention
+this time, so its intermittent NULL fault remains unclosed. K01/K01b/K13 remain
+OPEN. No installed QEMU or contract was changed; the source/build adds 1.2 GiB
+and reuses existing Images/payloads/snapshot disks. [Patch, source mechanism,
+commands and identities](../../tests/fixtures/qemu-instruction-publication.out).
+
 ### Prepared-input recovery without repeating completed work — 2026-09-27
 
 T04c fixes lost second-pass progress. Its interrupted 65-object C reduction now

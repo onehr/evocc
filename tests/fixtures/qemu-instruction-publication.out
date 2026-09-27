@@ -1,0 +1,79 @@
+2026-09-27 — K01/K01b: internal invalidation-window diagnosis, NOT closure.
+
+The matching upstream release is https://download.qemu.org/qemu-11.1.1.tar.xz
+SHA 079ffbff8a7111bbc89022107cbabf3bbfd614d5fc9d7cc675991196aca12482.
+One private aarch64-softmmu build occupies 1.2 GiB including source/archive;
+no installed emulator, locked contract, compiler, kernel or test disk changes.
+Configure with Python 3.11, --without-default-features --enable-tcg
+--enable-plugins --enable-fdt=system --disable-debug-info --disable-install-blobs
+--disable-download, and the existing Homebrew dtc include/library paths.
+ninja -j2 qemu-system-aarch64 builds; the final diagnostic rebuild has no warnings.
+The accompanying patch applies only to this upstream release; its QEMU source
+contexts retain the upstream GPL/LGPL terms. It is diagnostic, not a vendor fix.
+
+Source mechanism: notdirty_write invalidates translated code before the guest
+store. tb_invalidate_phys_range_fast unlocks the page collection before returning
+to the actual store. A second vCPU can translate the old branch in this window.
+QEMU's earlier lock-before-translation repair is present in this release.
+
+The final observer uses a SINGLE atomic generation/phase word, sequentially
+consistent phase transitions and acquire samples around the real instruction
+fetch. It records old branch 14000003 during the same post-invalidation,
+pre-completion phase of a pending 14000001 store. The plugin receives the actual
+fetched instruction at the two fixed diagnostic entry addresses, not a later
+reread. Both kernels produce these events and subsequently execute return-one
+after publication is retired. No delay or test assertion is inserted.
+
+Controlled results (GCC-built unchanged userspace probe on both kernels):
+                                         reference       subject
+Unmodified private QEMU, six modes        3 PASS/3 FAIL   3 PASS/3 FAIL
+Ordered decode observer, six modes        3 PASS/3 FAIL   3 PASS/3 FAIL
+Post-store invalidation, fixed address     6 PASS/0 FAIL   6 PASS/0 FAIL
+Post-store invalidation, no address test   6 PASS/0 FAIL   6 PASS/0 FAIL
+Independent static-key/RCU baseline        1 PASS/2 FAIL   1 PASS/2 FAIL
+Independent static-key/RCU intervention    3 PASS/0 FAIL   3 PASS/0 FAIL
+
+The address-independent intervention is ONLY a second invalidation after a
+slow-path, single-page four-byte RAM store whose page contains code. It excludes
+MMIO/discarded writes. It is not an all-width, atomic, fast-path, cross-page or
+DMA solution; no production adoption or complete emulator-correctness claim.
+The first fixed-address intervention is only a causal experiment, never a
+per-source/address acceptance workaround. All candidate modes remain private.
+
+The ordered decode run has 320192/561152 actual wrong-target witnesses; they
+match the entry decode observations exactly. The fixed-address intervention
+has zero wrong-target witnesses. The no-address intervention passes all modes
+without loading the plugin, and independently eliminates the module's missing
+pointer observations. The static-key experiment does not free/dereference the
+retired object; its sources, module, rounds, assertions and limits are unchanged.
+
+Original hotplug -> reload_loop sequence: all four baseline/intervention flights
+pass both the hotplug prefix and reload_loop, with no NULL fault. This sequence
+is intermittent; a baseline PASS prevents claiming its original fault repaired.
+It was run on the earlier 72dde6c3... diagnostic binary below, not silently
+credited to the later ordered observer. The complete 23-test suite is NOT_RUN.
+K01/K01b remain OPEN: general invalidation correctness and original-fault causal
+closure are still required. No historical full-run count or limit is rewritten.
+
+Final patch SHA 574b06f3d73f33f4f7786809a60fcd061e3fa6e1facb278702d0fc58782e40a9
+Unmodified private QEMU 89444ea0967926a65da85fe622db334de2ea4ba496bf09af41832a66ffcb2acf
+Initial instrumented QEMU e3d7c2f37e667eaad03dfdf57d174d2ea23f35bb302e935299c8c9d5294ce3f5
+Address-independent experiment QEMU 72dde6c3da61efe2ac69e65ddf66c1d1cb5fc92171a5ebb8d44c1bcd81488d1d
+Final ordered observer QEMU b22dbf98dceed431fdc2a8d4c13976bdd595cb05ccae22cda7dded66f8dd157b
+Images, payloads and original installed QEMU identities remain in the adjacent
+instruction-publication-observer.out and sched-static-key-phases.out records.
+
+Replay under .build/floating-targeted/qemu-store-20260927/ uses existing
+tools/k1/selftest.py.flight, with separate diagnostic contract and scratch
+snapshot. Small probes reuse the 64 MiB scratch; originals reuse the existing
+matched runtime disks, whose size/mtime remain unchanged (not a new full hash).
+Raw results retain each actual emulator/Image/payload/serial identity:
+  result-baseline.json
+  result-ordered-decoded.json
+  result-ordered-store4-code.json
+  result-baseline-static-key.json
+  result-ordered-store4-code-static-key.json
+  result-baseline-original.json
+  result-store4-code-original.json
+Final controls: git apply --check --reverse on the diagnostic source tree;
+host observer -Wall -Wextra -Werror; changed gate has no Rust crate changes.
