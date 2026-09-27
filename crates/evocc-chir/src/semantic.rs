@@ -1115,6 +1115,23 @@ pub enum UpdateOp {
 
 impl AssignmentOp {
     #[must_use]
+    pub fn binary_operation(self) -> Option<BinaryOp> {
+        Some(match self {
+            Self::Simple => return None,
+            Self::Add => BinaryOp::Add,
+            Self::Subtract => BinaryOp::Sub,
+            Self::Multiply => BinaryOp::Mul,
+            Self::Divide => BinaryOp::Div,
+            Self::Remainder => BinaryOp::Mod,
+            Self::ShiftLeft => BinaryOp::Shl,
+            Self::ShiftRight => BinaryOp::Shr,
+            Self::BitAnd => BinaryOp::BitAnd,
+            Self::BitOr => BinaryOp::BitOr,
+            Self::BitXor => BinaryOp::BitXor,
+        })
+    }
+
+    #[must_use]
     pub fn is_compound(self) -> bool {
         self != Self::Simple
     }

@@ -6,6 +6,30 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Uniform build finished, two new closure gaps — 2026-09-27
+
+Run `20260926T133321Z` is **INCOMPLETE**, not running. Its 7,002 target-C second
+pass has no compilation failures, and the prepare-only input check is stable.
+The subsequent modpost stage exits 2 on `lib/test_bitmap.ko` references
+`__compiletime_assert_583/584/585/586/589/590/591/592`. No new boot was attempted.
+The owner 93550 and worker 93553 have exited; the receipt/status now reflects
+the completed failure, not a stale live-job claim.
+
+The same stage regenerates ASN.1, CRC, consolemap, logo and RAID6 inputs and
+recompiles **13** target objects using GCC. Thus only 6,989 installed hashes
+survive; the provenance check correctly rejects full composition. The 15
+generated source/header files inspected afterward are byte-identical to
+pristine, but those observations do not waive the audit or prove that every
+possible input is stable. This is T04d: prepare the original producer graph
+before subject consumers, not touch stale objects or exempt generated C.
+
+K12b's scalar compound-assignment reduction is GREEN in both interpreters and
+native EvoCC/GCC-14/Clang-19. A fresh exact-argv original-object replay still
+contains all eight references: bitmap pointer/array helper knowledge remains
+an optimization gap. The compiler patch must not be reported as a full fix for
+that object. [Small source](../../tests/fixtures/bitmap-constant-mutation.c).
+Existing accepted Images and K6 history remain unchanged. K13/K14 are not run.
+
 ### Internal instruction-publication race experiment — 2026-09-27
 
 The matching QEMU 11.1.1 build reproduces the six-case reduction at **3 PASS /

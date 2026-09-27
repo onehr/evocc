@@ -493,6 +493,19 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     x86. No guards, build outcomes or 970-program denominator change; no test
     is counted as PASS. [Source-bound record](tests/fixtures/selftest-build-guards.out).
 
+  - [ ] **K12b — Prove bitmap helper results before constant queries** — `OPEN`, P1.
+    The 7,002-object prepared pass reaches modpost but `lib/test_bitmap.o` retains
+    eight `__compiletime_assert_*` references. The scalar compound-assignment
+    [reduction](tests/fixtures/bitmap-constant-mutation.c) is now GREEN in both
+    interpreters and all three AArch64 compiler controls. The original object
+    still has all eight references: address-based bitmap reads/writes and helper
+    results require shared propagation, not a test whitelist or missing-symbol
+    stub. The [pointer/array reduction](tests/fixtures/bitmap-constant-memory.c)
+    now reproduces the remaining link failure while both fixed -O2 oracles pass.
+    Finish its shared propagation, then replay the original. The scalar repair's
+    changed gate is 1837 PASS / 0 FAIL / 3 historical ignored, Clippy/fmt green.
+    [Exact evidence](tests/fixtures/bitmap-constant-mutation.out).
+
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
   cannot be transferred to repaired Images. Run the whole installed population
@@ -852,7 +865,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   configuration; its first launch stopped on the inventory-role defect T04b.
   The corrected launch completed its 7002-object first pass, then was found
   interrupted with a stale RUNNING summary. The verified prepared-input resume
-  is now running (`20260926T133321Z`); previous receipts describe incremental compositions.
+  completed (`20260926T133321Z`) but is **INCOMPLETE**: all 7,002 second-pass
+  compilations and the prepare fixed point succeeded; modpost finds eight
+  unresolved bitmap assertions (K12b), and late generators cause GCC to replace
+  13 target objects (T04d). No fresh link/boot occurred; no worker remains live.
   Later K02d/K02e/K02f/K02g are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
   Its reused output currently starts from GCC seed objects, not an accepted
@@ -891,6 +907,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     64 verified objects, compiles one, links and returns the new header value in
     all 65 functions. This is recovery validation, not kernel acceptance; the
     already-running worker loaded the old implementation and is unchanged.
+
+  - [ ] **T04d — Include late host-generated inputs in preparation** — `OPEN`, P1.
+    Modpost regenerated ASN.1 sources/headers, CRC tables, consolemap, logo and
+    RAID6 tables after the prepared-input pass, rebuilding 13 consumers with GCC.
+    Current generated contents match pristine, but that does not authorize a
+    provenance exemption or blind timestamp touch. Stabilize the original
+    producer recipes before subject consumers, then recheck inputs and all
+    installed object hashes after modpost. This defect is independent of K12b.
     [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.

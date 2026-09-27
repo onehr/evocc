@@ -30,16 +30,15 @@ APPLICATIONS - each lane keeps its own frozen measurement
   TU = translation unit. Mixed-link coverage and whole-program PASS are different claims.
 
 KERNEL - configurations and runtime populations remain separate
-  Attempt kernel-full: RUNNING; run=20260926T133321.056520Z
+  Attempt kernel-full: ERROR; run=20260926T133321.056520Z
     Retained compositions below are not this attempt's acceptance.
   K6 locked PASS        2,799/2,799 target-C; link=PASS; boot=PASS
     run=read-only-storage-20260913
-  K6 bpf    PASS        6,765/6,765 target-C; link=PASS; boot=PASS
-    run=bpf-linkage-isolated-20260923
-    incremental: 1 rebuilt / 6764 unchanged; not a fresh survey
-  BPF module link/BTF: PASS; 745 modules (not a load-every-driver claim)
+  K6 bpf    INCOMPLETE  6,989/7,002 target-C; link=NOT_VERIFIED; boot=NOT_VERIFIED
+    run=20260926T133321Z
+  BPF module link/BTF: NOT_RUN; 0 modules (not a load-every-driver claim)
   K7 selected PASS: 125 PASS / 0 FAIL / 0 SKIP; run=20260913T144437Z
-  K7 targeted replay INCOMPLETE; run=20260923T124453Z
+  K7 targeted replay STALE_IMAGE; run=20260923T124453Z
     1 selected; full inventory retained; not a new full campaign
   reference [----------------] 1/970 recorded (not PASS)
     0 PASS / 1 FAIL / 0 SKIP / 0 TIMEOUT / 0 INVALID_OUTPUT / 0 INCOMPLETE / 969 NOT_RUN

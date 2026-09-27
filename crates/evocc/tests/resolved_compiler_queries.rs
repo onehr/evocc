@@ -882,6 +882,54 @@ fn optimization_constant_queries_resolve_local_values_in_both_interpreters() {
 }
 
 #[test]
+fn optimization_queries_follow_proved_compound_assignments() {
+    let source = include_str!("../../../tests/fixtures/bitmap-constant-mutation.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @constant_assertion_failed"));
+}
+
+#[test]
+fn compound_query_facts_preserve_conversion_effects_and_unknown_paths() {
+    assert_constant_program(
+        r#"
+        int main(void) {
+            unsigned char x=250;
+            x+=10; if (!__builtin_constant_p(x) || x!=4) return 1;
+            x*=3; x-=2; x/=2; x%=4;
+            x<<=3; x>>=1; x|=2; x^=1; x&=6;
+            if (!__builtin_constant_p(x) || x!=6) return 2;
+            volatile int flag=1;
+            if(flag) x+=3;
+            if(x!=9) return 3;
+            unsigned y=1; unsigned *p=&y;
+            y|=4; *p=19;
+            if(y!=19) return 4;
+            unsigned z=1;
+            if((++z, 0)) z=90;
+            if(z!=2) return 5;
+            volatile unsigned v=1; v|=4;
+            if(v!=5 || __builtin_constant_p(v)) return 6;
+            return 0;
+        }
+    "#,
+    );
+    assert_constant_program(
+        r#"
+        int main(void) {
+            unsigned n=1;
+            goto enter;
+            n=5;
+        enter:
+            n|=2;
+            return n!=3;
+        }
+    "#,
+    );
+}
+
+#[test]
 fn optimization_queries_preserve_effects_and_resolve_kernel_request_values() {
     let source = include_str!("../../../tests/fixtures/optimization-query-effects.c");
     assert_constant_program(source);

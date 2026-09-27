@@ -2775,17 +2775,10 @@ impl<'a> Substitution<'a, '_> {
         &mut self,
         source: &CHirStmt<'a>,
         rewritten: &'a CHirStmt<'a>,
+        previous: Option<&'a CHirExpr<'a>>,
         c: &mut Context<'a>,
     ) {
-        let CHirStmt::Expr(
-            CHirExpr::Assign {
-                op: AssignmentOp::Simple,
-                place,
-                ..
-            },
-            _,
-        ) = source
-        else {
+        let CHirStmt::Expr(CHirExpr::Assign { op, place, .. }, _) = source else {
             return;
         };
         let symbol = place.symbol();
@@ -2822,6 +2815,12 @@ impl<'a> Substitution<'a, '_> {
         }
         // The real assignment remains. Later writes kill sequential facts
         // before rewriting the next statement; escaped objects are excluded.
+        let value = if let Some(binary) = op.binary_operation() {
+            let Some(previous) = previous else { return };
+            self.alloc(CHirExpr::Binary(binary, previous, value, value.span()))
+        } else {
+            value
+        };
         let converted = self.alloc(CHirExpr::Cast(ty, value, value.span()));
         if let Some(value) = self.value_after_execution(converted, ty) {
             if stable {
@@ -2883,14 +2882,7 @@ impl<'a> Substitution<'a, '_> {
                     // labels (including switch cases) that can enter an arm.
                     let live_item = match original_item {
                         CHirBlockItem::Statement(statement @ CHirStmt::If(test, yes, no, span))
-                            if !inspect([Node::Stmt(statement)]).entry_labels
-                                && crate::constant::eval_integer_constant(
-                                    test,
-                                    &self.unit.types,
-                                    &self.unit.symbols,
-                                    self.target,
-                                )
-                                .is_some() =>
+                            if !inspect([Node::Stmt(statement)]).entry_labels =>
                         {
                             // Optimization queries must first consume the
                             // substituted arguments and current path facts.
@@ -2919,6 +2911,20 @@ impl<'a> Substitution<'a, '_> {
                         _ => None,
                     };
                     let i = live_item.as_ref().unwrap_or(original_item);
+                    // Save a proved pre-write scalar value, not the storage
+                    // itself. Normal invalidation still happens before the
+                    // assignment is rewritten, including its target and RHS.
+                    // Only a top-level executed assignment can establish the
+                    // post-write fact; conditional/nested mutations cannot.
+                    let previous = match i {
+                        CHirBlockItem::Statement(CHirStmt::Expr(
+                            CHirExpr::Assign { op, place, .. },
+                            _,
+                        )) if op.is_compound() && !c.exposed_objects.contains(&place.symbol()) => {
+                            c.sequential_values.get(&place.symbol()).copied()
+                        }
+                        _ => None,
+                    };
                     if !c.sequential_values.is_empty() {
                         let uses = inspect([match i {
                             CHirBlockItem::Declaration(d) => Node::Decl(d),
@@ -2944,7 +2950,7 @@ impl<'a> Substitution<'a, '_> {
                             c.declaration_prefix = false;
                             let rewritten = self.stmt(s, c)?;
                             if !incoming {
-                                self.remember_assignment(s, rewritten, c);
+                                self.remember_assignment(s, rewritten, previous, c);
                             }
                             result.push(CHirBlockItem::Statement(rewritten));
                             if !incoming {

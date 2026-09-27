@@ -11377,19 +11377,7 @@ fn merge_memory_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
 }
 
 fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {
-    match operator {
-        AssignmentOp::Simple => None,
-        AssignmentOp::Add => Some(BinaryOp::Add),
-        AssignmentOp::Subtract => Some(BinaryOp::Sub),
-        AssignmentOp::Multiply => Some(BinaryOp::Mul),
-        AssignmentOp::Divide => Some(BinaryOp::Div),
-        AssignmentOp::Remainder => Some(BinaryOp::Mod),
-        AssignmentOp::ShiftLeft => Some(BinaryOp::Shl),
-        AssignmentOp::ShiftRight => Some(BinaryOp::Shr),
-        AssignmentOp::BitAnd => Some(BinaryOp::BitAnd),
-        AssignmentOp::BitOr => Some(BinaryOp::BitOr),
-        AssignmentOp::BitXor => Some(BinaryOp::BitXor),
-    }
+    operator.binary_operation()
 }
 
 fn function_parameters_match(

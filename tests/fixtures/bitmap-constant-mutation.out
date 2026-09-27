@@ -1,0 +1,37 @@
+2026-09-27 K12b scalar slice; original kernel object remains OPEN.
+Source SHA 511ae6662a336bea4c6b0dcd4375cb9f14177670ca4a79499d8a4f4eca0a3892.
+Current debug compiler SHA
+b6ae7333091c741946fd0b418efc4d242cf6337f3ce6816306a69304a57e5fc8.
+
+RED: optimization_queries_follow_proved_compound_assignments fails in C-HIR
+with E3039 at the constant-query assertion; zero compilation errors. The old
+native output retains two undefined constant_assertion_failed calls.
+GREEN: preserve a proved pre-assignment scalar value for an executed compound
+assignment, apply the ordinary integer operator/conversion, then retain only
+the post-assignment fact. The actual assignment and its obligations remain.
+Prune a pure proved condition before invalidating facts from its dead arm.
+No source ICE admission, unknown/volatile read, memory identity, or diagnostic
+is weakened. Assignment-operator mapping is shared with C-HIR execution.
+
+Both interpreters return 0. GCC 14.2.0-19 -O2 and Clang 19.1.7 -O2 compile/link
+the unchanged source with no assertion definition and execute exit 0. EvoCC
+--emit=asm --target=aarch64-unknown-linux-gnu, assembled/linked by GCC, exits 0
+in the same sealed network-none arm64 image. No stub supplies the assertion.
+Tests also cover all integer compound operators, narrow unsigned conversion,
+unknown branches, address escapes, actual effects, volatile access and gotos.
+77 query regressions pass. Changed gate: 1837 PASS / 0 FAIL / 3 historical
+ignored across evocc/chir/parser/lower/eqopt/policy/proofcheck/randgate;
+Clippy -D warnings and fmt pass. First gate's tests/Clippy passed but fmt
+reported layout differences; formatted code then passes the entire repeated
+gate. No ignored test is new and no full benchmark is claimed.
+
+Exact original replay: pristine/lib/.test_bitmap.o.cmd projected by the existing
+K1 path, source .build/k7-coverage/case/linux-src, actual prepared bpf/out inputs.
+Emits 1885711 bytes, SHA 6502c95859b3f1406379679a9a151a34f634379b240c7b0c662437239560a9fc,
+but still references assertions 583/584/585/586/589/590/591/592.
+The separate bitmap-constant-memory.c reduction is RED: both fixed -O2 oracles
+link/execute exit 0; EvoCC emits two unresolved bitmap_constant_required calls,
+GCC link exits 1, and EvoIR reaches E3039. This isolates helper-mediated pointer/
+array facts, not a generic rejection or floating-point issue. It is not closed
+by the scalar repair and is not added as an ignored passing gate test.
+Raw small artifacts: .build/floating-targeted/bitmap-constants-20260927/.
