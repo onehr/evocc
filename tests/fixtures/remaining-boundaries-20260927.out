@@ -1,0 +1,98 @@
+2026-09-27 bounded evidence capture, not feature or full-campaign acceptance.
+
+HEAD: 73d5ba3ff2f4e1fac9f0b04bd17831b8f22c892f; no compiler source edits in this capture.
+EvoCC SHA256: e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+EvoIR 1.9.114 / EvoMIR 0.50. Target aarch64-unknown-linux-gnu, LP64, little endian.
+Image descriptor: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Fixed GCC 14.2.0-19 / Clang 19.1.7; glibc 2.41. No network.
+
+Recipe and full argv/stdout/stderr/source/binary/spec identities:
+  .build/floating-targeted/closure-20260927/capture.py
+  .build/floating-targeted/closure-20260927/{cases,identity,target,subject,
+    reference,crossed,native,container}.json
+Portable allowlisted packet and payload hashes: same directory,
+  evocc-remaining-evidence-20260927.zip
+Tracked task/acceptance map:
+  docs/notebook/todo-closure-batch-20260927.md
+
+Commands (the recipe expands each argv; shell notation below is descriptive):
+  evocc-asm-ssa --target=aarch64-unknown-linux-gnu -std=gnu11 -O{0,2}
+    <case defines/flags> <unchanged exported sysroot include directories>
+    {--interpret-c-hir,--interpret-evoir,--emit=asm} <fixture.c>
+  {gcc-14,clang-19} -std=gnu11 -O{0,2} <case defines/flags>
+    <fixture.c> -o <case executable> <libraries>
+  gcc-14 <successful EvoCC assembly> -o <executable> <libraries>
+Every successful reference build and EvoCC native link is actually executed.
+37 cases x 2 optimization levels x 3 EvoCC modes = 222 commands.
+37 cases x 2 references x 2 optimization levels = 148 compile/run pairs.
+All 148 reference compiles succeed; 92 asserted executions pass, 56 are
+observation-only records (including intentional nonzero classification masks).
+No overall 148/148 feature PASS is asserted.
+
+L04 floating-complex-boundaries.c: KIND=32,64,128; CASE=0..4;
+  -frounding-math -ffp-contract=off; link -lm.
+  CASE=0 transport(3-4i), CASE=1 (9+7i)/(2+i)=5+i:
+    all 24 finite asserted reference executions pass.
+  CASE=2 __builtin_complex(-0,+inf): exact negative zero/+inf, flags=0.
+  CASE=3 huge equal complex operands divide to 1+0i, flags=0.
+  CASE=4 (1+i)/(0+0i): both parts +inf; flags=1 for f32, 3 for f64/f128.
+    Those 36 executions collect target bits/flags; no result was pre-authorized
+    by returning zero. Flags are captured BEFORE printf.
+  Both reference compilers and O0/O2 agree within each format on these probes.
+  Pair size/alignment: 8/4, 16/8, 32/16 respectively.
+  EvoCC component-store forms currently report E1003; constructor CASE=2 E2001.
+  This is the observed first-error boundary, not a claim that admitting the
+  syntax would already implement arithmetic, helpers or the public ABI.
+  Sealed libgcc.a exports __mulsc3/__muldc3/__multc3 and
+    __divsc3/__divdc3/__divtc3. Presence does not prove the helpers meet a new
+    rounding/status/NaN contract; crossed complex ABI was NOT RUN here.
+
+L03 floating-half-boundaries.c: KIND=0/1/2 for _Float16/__fp16/__bf16,
+  CASE=0 arithmetic/conversion, CASE=1 argument/return; link -lm.
+  All 24 reference controls exit 0. Size/alignment=2/2 in every case.
+  Input 1.5 representation: 3e00 / 3e00 / 3fc0; result 2 representation 4000.
+  sizeof(+input)=2 / 4 / 2, independently exposing __fp16 promotion.
+  EvoCC refuses all six cases in all modes/optimizations: _Float16 E2202 or
+    E1003; __fp16/__bf16 C-HIR E3007, EvoIR/native E3050 for CASE=0 and
+    E3101 (function value type is neither an integer nor object pointer) for
+    CASE=1. These named signature cases must not disappear into generic E3101.
+  No mixed-compiler half ABI, subnormal or rounding corpus is claimed.
+
+L05 floating-vector-boundaries.c: CASE=0..3; -ffp-contract=off.
+  All 16 reference assertions pass: float4/double2 arithmetic and full-width
+    comparison masks, shufflevector, convertvector truncation.
+  EvoCC C-HIR E3007; EvoIR/assembly E3050. All are pending support, not PASS.
+
+L11 atomic-scope-boundaries.c and atomic-cas-boundaries.c: CASE=0..2;
+  link -latomic. All 24 reference asserted executions pass.
+  CAS checks both failure writeback and success for scalar, pointer and a
+    16-byte-aligned pointer-bearing record. Its padding is initialized first.
+  EvoCC _Atomic E2702, other additional builtins E2001.
+  Single-thread values do not prove inter-thread ordering, arbitrary unknown
+    padding handling or a lock-free implementation.
+
+K07 fortify-nonliteral-strlen-ice.c: observation exit bitmask.
+  GCC O0=3/O2=7; Clang O0=7/O2=7; EvoCC both interpreters and native O0/O2=1.
+  Successful compiler exit is distinct from the program's classification mask.
+L07 integer-complex-profile.c: GCC divide=4/3, Clang divide=5/1 at O0/O2;
+  EvoCC E2948. Other printed layout/ABI observations remain in raw output.
+L08 variable-array-typeof-profile.c: pointer and pointer-statement counters
+  GCC=0, Clang=1 at O0/O2; array=1 and decayed=0 agree. EvoCC E2904.
+L09 ancestor-return-address.c:
+  With -fno-omit-frame-pointer -fno-optimize-sibling-calls, GCC exit1 and
+    Clang exit0 at O0/O2. EvoCC driver refuses -fno-omit-frame-pointer.
+  Separate language-only control with neither flag reaches E2913 in EvoCC.
+    It is NOT represented as an equal-flags ancestor ABI test.
+L10 llvm-vector-overflow-reduction.c, default widened defined branch:
+  Four references, both EvoCC interpreters at O0/O2 and two EvoCC native
+    builds return zero. Original vector UBSan was NOT rerun in this capture;
+    retained original/scalar evidence is llvm-vector-overflow-reduction.out.
+
+L06 integer-vector-small.c + integer-vector-small-driver.c:
+  At both O0/O2, GCC/GCC and Clang/Clang pass (4 total); GCC/Clang and
+    Clang/GCC fail exit1 (4 total). Every compile and link succeeds.
+  No EvoCC tiny-vector support/interoperability is inferred from these controls.
+
+There is no new kernel Image, benchmark receipt, spec permission or closed TODO
+item from this run. Full source identities, original records and next-stage
+negative tests remain required by the linked batch plan.

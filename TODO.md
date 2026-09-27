@@ -24,9 +24,17 @@ commands and measurements stay in the [kernel ledger][kernel],
 - `P1`: current correctness/runtime failures, verdict integrity and minimal
   reproductions. `P2`: remaining language/application coverage. `P3`: later
   research, portability and release gates. Dependencies take precedence.
-- For each fix: **RED → shared implementation → tailored tests → unchanged
-  affected original → changed gate → receipt → status → commit**. Use existing
-  fixtures and `tools/bench.py`; do not create another benchmark framework.
+- Work in **coherent repair batches**, not one full campaign per small patch:
+  enumerate the batch's REDs/decisions first; then shared implementation and
+  focused tests per fix, inexpensive unchanged-original replays, affected-crate
+  gates at integration points, receipts/status and bounded commits. Once all
+  batch prerequisites are green or explicitly dispositioned, freeze one subject
+  and run the complete acceptance campaigns serially. A new failure returns to
+  a small reproducer, not an automatic rerun of every already-green campaign.
+  Use existing fixtures and `tools/bench.py`; do not create another framework.
+  The [September 27 batch packet][closure-batch] indexes every open task, current
+  evidence, genuine decisions and required final gates. Ordinary implementation
+  steps do not require another user approval; new semantic authority does.
 - A small-case PASS is not an original-program PASS. A reference failure, source
   UB, unsupported feature, skip or timeout is not a PASS. An evidenced disposition
   can close a *classification* task, but cannot increase the PASS numerator.
@@ -905,6 +913,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   the approved scope and retain explicit refusals elsewhere. Close with
   bit-exact interpreter/native tests and unchanged affected programs, not type
   spelling or storage-only support. [Source classifications][apps].
+  The [fresh batch](tests/fixtures/remaining-boundaries-20260927.out) measures
+  `_Float16`, `__fp16` and `__bf16` separately: 24 fixed-reference executions
+  pass, including argument/return shapes. EvoCC still refuses all six cases;
+  half/bfloat function signatures expose E3101, and other paths report parser,
+  value or interpreter diagnostics. These are now named reproductions, not an
+  unexplained E3101 or an automatic generic-FP waiver.
 
 - [ ] **L04 — Floating complex execution** — `NEEDS_RULE`, P2.
   Torture retains 15 floating-complex originals. Specify complex arithmetic,
@@ -912,6 +926,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   fenv interactions. Implement shared semantics and close with tailored numerical
   and crossed-ABI tests plus original programs. Integer complex support does not
   close this task. [Brief][semantics], [classifications][apps].
+  The [batch probe](tests/fixtures/floating-complex-boundaries.c) separates
+  component stores, finite arithmetic, exact construction and exceptional
+  arithmetic for all three formats. Sixty reference executions are captured;
+  only 24 are asserted finite controls, 36 are bit/status observations. Division
+  by complex zero raises different flag sets between f32 and f64/f128 in the
+  sealed references. All 68 current musl refusals and their original argv/source
+  identities are indexed in the [batch packet][closure-batch]. Do not replace
+  this numerical/helper decision with merely enabling complex signatures.
 
 - [ ] **L05 — Floating vector execution and intrinsics** — `NEEDS_RULE`, P2.
   Six torture originals and other named LLVM paths remain deferred. Define lane
@@ -1278,3 +1300,4 @@ in the receipts/README so this index cannot independently drift.
 [kunit-receipt]: tests/contracts/kernel-expanded-kunit-receipt.json
 [strlen]: tests/fixtures/fortify-nonliteral-strlen-ice.c
 [strlen-out]: tests/fixtures/fortify-nonliteral-strlen-ice.out
+[closure-batch]: docs/notebook/todo-closure-batch-20260927.md

@@ -12,7 +12,26 @@ their sources, flags, seeds, workloads, or output tolerances.
 
 ## Current subject and what is already done
 
-### September 27 implementation refresh
+### September 27 current batch supersedes the early checkpoint
+
+Use [the current evidence packet](todo-closure-batch-20260927.md) and
+[focused complex/decision prompt](remaining-complex-research-prompt-20260927.md)
+for new work. Current specs are **EvoIR 1.9.114 / EvoMIR 0.50**; hashes:
+`5ece3b8f273a19e39871ed2f7e01761d8abc0e1319e4f12f41c26a82dd8cd5ec` /
+`6a0ffe0005b26d6eba71ffc78b609cda727a4da778c3a7e6fb5223332b387c4d`.
+Current tested compiler is
+`e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5`,
+at source checkpoint `73d5ba3`. Strict scalar FP, real binary128, and admitted
+scalar `w` assembly are implemented, with current musl **1271/1339** assembled,
+68 floating-complex refusals, two full mixed-library trials without additional
+failures and 17 still-failing reference cases. L01/L02 are closed for their
+explicit scopes. The earlier 0/1339 musl and 68/69 jq numbers below are historical.
+Sections A/B no longer request a new principles decision. The new packet includes
+37 current small cases, actual fixed-arm64 results and all remaining TODO IDs;
+its main external research need is L04 complex arithmetic and the consolidated
+decision annex. Kernel composition/K13/K14 remain independent unfinished work.
+
+### Early September 27 checkpoint (historical)
 
 The original handoff below is historical. Current clauses are EvoIR **1.9.105**
 and EvoMIR **0.44**; their SHA-256 values are respectively
