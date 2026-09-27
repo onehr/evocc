@@ -15,7 +15,7 @@ RED
 
 Repair and clause mapping
   Section 9 field sentinel: instantiate every current variant, including all
-  five VaAccess variants, nondefault assembly outputs/inputs/edges, byval call
+  four VaAccess variants, nondefault assembly outputs/inputs/edges, byval call
   marks, extern/declaration records and relative relocation metadata. Nested
   record destructuring is exhaustive. The manifest now checks 143/143 keys.
   The sentinel intentionally is not an executable validated module; it checks

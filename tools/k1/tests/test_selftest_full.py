@@ -1039,6 +1039,33 @@ class FullSelftest(unittest.TestCase):
         self.assertIn('keyutils', lane.RUNTIME_PACKAGES)
         self.assertIn('fsverity', lane.RUNTIME_PACKAGES)
 
+    def test_ovpn_runtime_installs_original_peer_tables_and_key(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, installed = Path(temp) / 'source', Path(temp) / 'installed'
+            (source / 'ublk/trace').mkdir(parents=True)
+            (source / 'ublk/test_common.sh').write_text('ublk helper\n')
+            (installed / 'ublk').mkdir(parents=True)
+            (source / 'net/ovpn').mkdir(parents=True)
+            (installed / 'net/ovpn').mkdir(parents=True)
+            program = installed / 'net/ovpn/test.sh'
+            program.write_bytes(b'original script\n')
+            files = {'udp_peers.txt': b'1 10.10.1.1 1 10.10.1.2 2\n',
+                     'tcp_peers.txt': b'1 5.5.5.2\n', 'data64.key': b'original key\n'}
+            for name, contents in files.items():
+                (source / 'net/ovpn' / name).write_bytes(contents)
+            helpers = lane.install_runtime_helpers(source, installed)
+            for name, contents in files.items():
+                target = installed / 'net/ovpn' / name
+                self.assertTrue(target.is_file(), f'missing OVPN helper {name}')
+                self.assertEqual(target.read_bytes(), contents)
+                self.assertIn('net/ovpn/' + name, helpers)
+            self.assertEqual(program.read_bytes(), b'original script\n')
+            # An installed suite cannot silently acquire an invented table/key
+            # if one of the frozen source inputs is absent.
+            (source / 'net/ovpn/data64.key').unlink()
+            with self.assertRaises(FileNotFoundError):
+                lane.install_runtime_helpers(source, installed)
+
     def test_tcp_selftests_have_a_real_netcat_dependency(self):
         self.assertIn('netcat-openbsd', lane.RUNTIME_PACKAGES,
                       'the original BPF TCP scripts execute nc, not socat')

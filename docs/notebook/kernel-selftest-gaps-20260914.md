@@ -6,6 +6,26 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### OVPN input restoration and source-bound follow-up — 2026-09-28
+
+The common runtime installer now restores the exact two peer tables and key
+omitted by the frozen net/ovpn Makefile. The new install test first fails;
+all **262 K1 tests** and Ruff pass after repair. The [bounded original replay](../../tests/fixtures/ovpn-base64-prefix.out)
+uses the matching new GCC Image and signed modules, extracted original
+userspace files, two approximately 29 MiB initramfs payloads and the existing
+64 MiB snapshot-only disk. No active subject build or retained disk is changed.
+
+The no-data control remains FAIL. All seven restored original scripts now
+create interfaces but fail in ovpn-cli's Base64 decoder: the frozen helper
+caps a 349-byte file at 256 bytes, leaving 253 symbols (one modulo four).
+Six GCC/Clang/EvoCC O0/O2 native controls pass **42/42** observations against
+the exact runtime library, including complete-file and aligned-prefix controls.
+This identifies a userspace source defect; it does not justify changing test
+data or lowering the dependency version to turn the original verdict green.
+All eight reference boots/shutdowns pass; the seven original verdicts remain
+FAIL. Subject execution awaits T04. K12d is packaging closure and K11k is
+classification only, not a new full-run or OVPN PASS.
+
 ### Virtual NCI prerequisite — 2026-09-28
 
 The old pair's eight nci_dev failures all stop at the missing device node.

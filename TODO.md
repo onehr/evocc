@@ -516,6 +516,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     the measured subject slowdown remain. Final K13 is still required.
     [Arithmetic, source and paired evidence](tests/fixtures/seccomp-filter-chain.out).
 
+  - [x] **K11k — Isolate OVPN's frozen key-prefix failure**, 2026-09-28.
+    Restoring missing inputs (K12d) exposes all seven original scripts failing
+    in ovpn-cli before traffic. Its 256-byte cap truncates the supplied 349-byte
+    Base64 file to 253 symbols, an incomplete quantum. The
+    [small C case](tests/fixtures/ovpn-base64-prefix.c) passes 42 observations
+    across GCC/Clang/EvoCC O0/O2 against the actual runtime library, including
+    complete-input and aligned-prefix controls. This closes **source-bound
+    classification**, not a helper patch or original PASS. All seven unchanged
+    reference originals remain FAIL; subject replay waits for T04.
+    [Commands, hashes and exact boundary](tests/fixtures/ovpn-base64-prefix.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the GCC reference now builds, but the uniform EvoCC composition and matching
@@ -562,6 +573,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     and Ruff pass. This closes reference prerequisite diagnosis/packaging,
     not subject-module acceptance. The new EvoCC pair remains queued after T04.
     [Small C and identity-bound result](tests/fixtures/nci-module-prerequisite.out).
+
+  - [x] **K12d — Install OVPN's omitted original peer tables and key**, 2026-09-28.
+    The install regression goes RED → GREEN using the common runtime helper
+    path; all 262 K1 tests and Ruff pass. Only the two original peer tables and
+    original key are restored, with missing-source rejection and unchanged
+    scripts/peer counts. Eight reference before/after flights boot and shut
+    down. The seven restored originals expose K11k and remain FAIL, not PASS;
+    no complete new runtime disk or subject Image is manufactured.
+    [Identity-bound record](tests/fixtures/ovpn-base64-prefix.out).
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts

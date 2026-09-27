@@ -503,10 +503,18 @@ def install_runtime_alsa(work, rootfs):
 
 
 def install_runtime_helpers(source, installed):
-    """Upstream ublk scripts source helpers omitted by their install target."""
+    """Preserve source helpers omitted by the frozen upstream install recipes."""
     shutil.copy2(source / 'ublk/test_common.sh', installed / 'ublk/test_common.sh')
     shutil.copytree(source / 'ublk/trace', installed / 'ublk/trace', dirs_exist_ok=True)
     helpers = ['ublk/test_common.sh', 'ublk/trace']
+    # net/ovpn's TEST_FILES lists common.sh but omits its two peer tables and
+    # key. Use exactly those original inputs, not generated substitutes or a
+    # reduced peer count. Only an actually installed collection needs them.
+    if (installed / 'net/ovpn').is_dir():
+        for name in ('udp_peers.txt', 'tcp_peers.txt', 'data64.key'):
+            relative = 'net/ovpn/' + name
+            shutil.copy2(source / relative, installed / relative)
+            helpers.append(relative)
     # test_progs changes into the selected flavor directory. Its upstream
     # install rule copies *.bpf.o there but omits TRUNNER_EXTRA_FILES. Reuse
     # the installed helpers, especially the modules rebuilt for this kernel,

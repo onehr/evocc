@@ -1,0 +1,76 @@
+K12d / K11k: OVPN install data and frozen base64-prefix defect, 2026-09-28
+
+Base 1557ac7. No kernel/compiler source, original script, helper executable,
+peer count, key bytes or program timeout is changed by this repair.
+
+RED / packaging repair
+  Historical 970-program pair: all seven net/ovpn scripts FAIL before useful
+  execution; common.sh cannot read udp_peers.txt or tcp_peers.txt. Its frozen
+  Makefile installs only common.sh as TEST_FILES and omits both tables and
+  data64.key. A new Python regression fails on missing udp_peers.txt.
+  install_runtime_helpers now copies exactly those three frozen inputs when
+  net/ovpn is actually installed, records their paths, and fails if a required
+  source file is absent. It does not invent key material or reduce the topology.
+  All 262 K1 regressions, targeted Ruff and git diff --check PASS.
+
+Original-program replay / newly exposed failure (NOT PASS)
+  Matching GCC reference Image:
+    13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  Config:
+    f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  Restore the exact source tables/key and use signed matching ovpn,
+  chacha20poly1305 and libpoly1305 modules. Extract only 53 userspace inputs
+  from the retained runtime, including its actual Mbed TLS 3.6.5 library;
+  original scripts and ovpn-cli are byte-identical to the frozen source build.
+  A direct wrapper only chdirs to their original collection and execs the
+  selected script. The existing init enforces the original 90-second limit.
+  The no-data control still FAILs. All seven data-restored scripts create
+  interfaces and then FAIL with Mbed TLS error -44 at ovpn_parse_key.
+  All eight isolated reference flights boot and shut down normally. The
+  new uniform EvoCC Image is still compiling: subject replay is NOT_RUN.
+  Neither the raw FAILs nor the full 970-program totals are rewritten.
+
+Source/dependency classification
+  Frozen tools/testing/selftests/net/ovpn/ovpn-cli.c:358-359 caps its read
+  at 256 bytes before calling mbedtls_base64_decode at line 374.
+  The original key is 349 bytes. The capped prefix has 253 base64 symbols
+  (the other three bytes are newlines): 253 mod 4 == 1, an incomplete quantum.
+  The complete file has 344 symbols and decodes to 256 bytes. A 255-byte
+  diagnostic prefix contains 252 symbols and decodes the identical first
+  189 bytes. That prefix is a control, NOT substituted test data.
+  The small C case removes all kernel/network activity. GCC14, Clang19 and
+  EvoCC at O0/O2 each pass all seven observations against the exact captured
+  libmbedcrypto: 42/42. The one-symbol string "A" independently produces -44.
+  This proves the newly exposed failure is in the frozen userspace helper's
+  input truncation, not EvoCC kernel code generation. No library downgrade,
+  changed key, patched original helper or accepted original PASS is inferred.
+  Original closure would require a separately identified upstream/helper fix;
+  the frozen-application verdict remains FAIL under the current contract.
+
+Commands / retained small records
+  python3 -m unittest tools/k1/tests/test_selftest_full.py -k ovpn
+  python3 -m unittest discover -s tools/k1/tests
+  ruff check tools/k1/selftest_full.py tools/k1/tests/test_selftest_full.py
+  Raw directory: .build/floating-targeted/ovpn-helpers-20260928/
+    prepare.py: read-only debugfs extraction, recursive ELF dependencies/hashes.
+    build.py: original module signing and depmod; actual common helper installer.
+    replay.py: existing selftest.flight, HVF, explicit installed-QEMU drift.
+    probe.py/native.py: exact EvoCC argv plus six sealed native compiler pairs.
+  Small initramfs payloads are about 29 MiB each. All VMs use the same existing
+  64 MiB snapshot-only scratch; its hash is verified unchanged after each run.
+  No source clone, full runtime disk, active build or frozen compiler changed.
+
+SHA256
+  fixture: eca15d4886e1cd1bb28468625aed3ddc43bd71837e296983d52634e0795de3f9
+  compiler: 07f2a45e280f42dcb34633e8fcbf0db44731e501aa8fc0e66c612c2a140becf2
+  dependency: a68a45fb67da16b2e9ecb34c9cb26366634e48ab77ce51867a4a2ab67dad0751
+  key: 20cf1390bc45fab71cd13f6e530c3941330d4ac67da19748a3bf34425cbef15f
+  original ovpn-cli: 581b96f1da2bf4175ae5ccede51ff49ee9c13fb55d63570afe70e6a041010fdf
+  inputs.json: 66b002edc7790c29d0f20e333c1344a0b75476086d969b6f186f48f768eb3de5
+  build.json: 04612aa02ddcc2cad48a373d63aa01fc68410b679c285eda5e3ecb6e339bdcec
+  results.json: 4238da8e0900ce71017161377fdba35cd0c03388f9ca7557e89368e800dc9c1c
+  native.json: 43355fb6577935c16f8625abc65b7a1237deb6a391bb6fc12b74b6542026d86e
+
+K12d closes the packaging repair. K11k closes source-bound classification of
+the newly exposed failure only. K11/K12/K13 and actual OVPN runtime acceptance
+remain separate; no throughput or full compiler-coverage claim.
