@@ -34,6 +34,8 @@ PASSED_THROUGH = (
     "-O", "-O0", "-O1", "-O2", "-O3", "-Os", "-Og",
     "-g", "-g0", "-gdwarf-4",
     "-mcmodel=tiny", "-mcmodel=small",
+    "-ffunction-sections", "-fno-function-sections",
+    "-fdata-sections", "-fno-data-sections",
     "-fasynchronous-unwind-tables", "-funwind-tables",
     "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
@@ -69,13 +71,16 @@ def omitted_option_class(option: str) -> str:
         return "source-semantics-option-must-be-forwarded"
     if option.startswith(("-fmin-function-alignment=", "-fpatchable-function-entry=")):
         return "function-entry-option-must-be-forwarded"
+    if option in ("-ffunction-sections", "-fno-function-sections",
+                  "-fdata-sections", "-fno-data-sections"):
+        return "section-placement-option-must-be-forwarded"
     if option.startswith("-femit-struct-debug-") or option == "-fno-var-tracking":
         return "debug-scope-hint-source-types-emitted-without-local-locations"
     if option in ("-fconserve-stack", "-fno-code-hoisting"):
         return "optimization-hint-no-transform-equivalence"
     if option in (
         "-mlittle-endian", "-mabi=lp64", "-ffixed-x18",
-        "-fno-common", "-fno-data-sections", "-fno-function-sections",
+        "-fno-common",
         "-fno-omit-frame-pointer",
         "-fno-optimize-sibling-calls", "-fno-strict-aliasing",
         "-fno-delete-null-pointer-checks", "-fno-allow-store-data-races",

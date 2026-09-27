@@ -1,0 +1,55 @@
+2026-09-27: per-symbol Linux ELF sections; EvoMIR 0.49.
+
+RED: compilation_options::individual_symbol_sections rejected
+  -ffunction-sections. Three application-projector tests dropped the positive
+  and negative options, and the Kbuild projector did likewise. The latter also
+  incorrectly treated a dropped disabling override as unconditionally inert.
+
+Repair: separate, last-option-wins native options, default off. Existing explicit
+sections win. Automatic function/data/rodata/PIC-relro/BSS/TLS sections preserve
+their flags, type, sizes, alignment, identity and relocations. Aliases share a
+target body, constructors/destructors retain registrations, and patch metadata
+remains link-ordered. No new IR memory model, retention rule or EqSat transform.
+Non-ELF use fails closed; disabled options reproduce baseline assembly exactly.
+
+Subject executable SHA256:
+  f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68
+driver-symbol-sections.c SHA256:
+  4d57620d436a57459c5cf856e8b827e6e78f06351f19ff11d3e3562a31e5e25d
+
+Native matrix in the existing sealed linux/arm64 image:
+  GCC14 / Clang19 x O0 / O2 x PIC / static / PIC+CFI+patchable-entry.
+  12 unchanged-source reference objects + 12 EvoCC objects, each inspected
+  through readelf: section type/flags/alignment, symbol size/TLS type, unique
+  placement, explicit overrides and alias identity. Patch records have
+  SHF_LINK_ORDER. Both ordinary and --gc-sections links execute: 48/48 PASS.
+  Dead external function/data/BSS/readonly/TLS symbols exist before linker GC
+  and disappear after GC. Live TLS, callback aliases, constructors/destructors
+  and static computed-goto relocations still execute correctly.
+  Run: python3 tests/acceptance/symbol-sections-native.py PREPARED_DIRECTORY
+  where six sections-evo-O{0,2}-{pic,static,patched}.s files come from the driver.
+
+The first matrix used a nonvolatile constructor-only variable. Clang O2 legally
+folded its initialization, so a presence assertion for INIT_ARRAY failed. The
+final source uses volatile lifecycle state; this is a test precondition repair,
+not a compiler failure or a relaxed assertion. The initial log is retained.
+
+Eight unchanged original musl commands now retain section switches and standard
+excess precision. __math_oflow, __math_uflow, frexp and scalbn emit and assemble,
+with symbol-named code sections. ceil/floor/rint/rintf still refuse E3021 at the
+explicitly excluded scalar-FP asm constraint. Remaining omitted options are
+listed in the replay. No original source/expectation changed; no full musl,
+libc-test or kernel acceptance is claimed by this small replay.
+
+Focused regressions: 38 CLI option tests, 264 ladder tests, 252 K1 tests PASS;
+Ruff PASS. Canonical IR and preprocessing are unchanged by placement options.
+Changed-crate gate against 5839dc8: 1051 PASS / zero FAIL / four historical
+ignored, 135 result groups; Clippy -D warnings and fmt PASS. No full-workspace
+or application result is inferred from the affected-crate count.
+Raw logs: .build/floating-targeted/strict-20260927/sections-*.log.
+Independent runtime identity remains contracts/build-environment.json's pinned
+image/toolchain, not the host assembler.
+
+Reference contract: GCC 14.2 Optimize Options, -ffunction-sections/-fdata-sections
+https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html#index-ffunction-sections
+The section flags and runtime claims above are measured, not inferred from docs.

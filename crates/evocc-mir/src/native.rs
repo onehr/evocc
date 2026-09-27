@@ -113,6 +113,11 @@ pub fn compile_module_with_options(
     relocation: RelocationModel,
     options: &crate::emit::CodegenOptions,
 ) -> Result<String, NativeStop> {
+    if target != Target::Linux && (options.function_sections || options.data_sections) {
+        return Err(NativeStop::Assembly(
+            "individual function/data sections require the Linux ELF target".into(),
+        ));
+    }
     if target != Target::Linux && module.functions.iter().any(|f| f.section.is_some()) {
         return Err(NativeStop::Assembly(
             "explicit function sections require the Linux ELF target".into(),

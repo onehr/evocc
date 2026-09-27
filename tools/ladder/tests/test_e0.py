@@ -16,6 +16,16 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_symbol_section_switches_reach_the_driver_in_written_order(self):
+        flags = ['-ffunction-sections', '-fno-function-sections',
+                 '-fdata-sections', '-fno-data-sections', '-ffunction-sections']
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'probe.c'
+            source.write_text('/* { dg-options "' + ' '.join(flags) + '" } */')
+            options = e0.program_options(source)
+        self.assertEqual(options['applied'], flags)
+        self.assertEqual(options['unhandled'], [])
+
     def test_fp_semantic_options_reach_the_driver_in_written_order(self):
         flags = ['-fexcess-precision=standard', '-ffp-contract=fast', '-ffp-contract=off',
                  '-frounding-math', '-fno-rounding-math', '-ffast-math']

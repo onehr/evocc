@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.112** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
+EvoIR **1.9.112** and EvoMIR **0.49**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -709,7 +709,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     Approval was requested; do not bypass the validator to clear E3021.
 
   - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
-    The targeted replay lists function/data sections, no-strict-aliasing and other omitted code-generation
+    The targeted replay lists no-strict-aliasing and other omitted code-generation
     options. Determine implemented equivalence versus a real missing contract,
     add driver/projector REDs and preserve effective option order. Diagnostic
     and optimizer-tuning omissions remain separately disclosed. No full musl
@@ -721,6 +721,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     Clippy/fmt/Ruff pass. Eight original musl commands have identical results
     with the option retained (four emit, four B08a refusals). This is not full
     option-fidelity or musl acceptance.
+    [Per-symbol section placement](tests/fixtures/driver-symbol-sections.out)
+    is also implemented in EvoMIR 0.49: explicit attributes override independent
+    last-option-wins switches; native ELF/TLS/storage flags, aliases, lifecycle
+    and patch roots survive. Twelve reference and twelve EvoCC objects pass
+    ordinary/GC linking (48 native executions). All four command projectors
+    retain the flags; 38 focused CLI, 264 ladder and 252 K1 tests pass. The same
+    eight musl commands retain sections: four assemble, four remain B08a.
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library

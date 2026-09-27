@@ -246,6 +246,13 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertEqual([flag for flag in argv if flag in flags], flags)
         self.assertEqual(omitted, [])
 
+    def test_symbol_section_switches_survive_projection(self) -> None:
+        flags = ['-ffunction-sections', '-fno-function-sections',
+                 '-fdata-sections', '-fno-data-sections', '-ffunction-sections']
+        argv, omitted = self.command(f"gcc {' '.join(flags)} -c -o a.o a.c\n")
+        self.assertEqual([flag for flag in argv if flag in flags], flags)
+        self.assertEqual(omitted, [])
+
     def test_unknown_options_remain_named_not_reinterpreted_as_supported(self) -> None:
         argv, omitted = self.command(
             "gcc -Ofast -fno-inline -fpermissive -std=gnu11 -c -o a.o a.c\n"

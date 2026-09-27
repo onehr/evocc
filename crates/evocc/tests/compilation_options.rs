@@ -39,6 +39,103 @@ fn check_preprocessed_program(source: &str) -> String {
 }
 
 #[test]
+fn individual_symbol_sections_preserve_storage_kinds_and_explicit_placement() {
+    let source = include_str!("../../../tests/fixtures/driver-symbol-sections.c");
+    for relocation in ["-fno-pic", "-fPIC"] {
+        let base = ["--emit=asm", relocation];
+        let baseline = successful(run(&base, source));
+        let mut arguments = base.to_vec();
+        arguments.extend(["-ffunction-sections", "-fdata-sections"]);
+        let text = successful(run(&arguments, source));
+        for (name, kind, flags, ty) in [
+            ("live_function", "text", "ax", "progbits"),
+            ("dead_function", "text", "ax", "progbits"),
+            ("initialized", "data", "aw", "progbits"),
+            ("zeroed", "bss", "aw", "nobits"),
+            ("readonly", "rodata", "a", "progbits"),
+            ("readonly_zero", "rodata", "a", "progbits"),
+            ("tls_data", "tdata", "awT", "progbits"),
+            ("tls_zero", "tbss", "awT", "nobits"),
+            ("dead_data", "data", "aw", "progbits"),
+            ("dead_zero", "bss", "aw", "nobits"),
+        ] {
+            let prefix = text.split_once(&format!("\n{name}:\n")).unwrap().0;
+            let section = prefix
+                .lines()
+                .rev()
+                .find(|l| l.starts_with(".section "))
+                .unwrap();
+            assert_eq!(
+                section,
+                format!(".section \".{kind}.{name}\",\"{flags}\",%{ty}")
+            );
+        }
+        let kind = if relocation == "-fPIC" {
+            "data.rel.ro"
+        } else {
+            "rodata"
+        };
+        assert!(text.contains(&format!(".section \".{kind}.relocation\"")));
+        for name in [
+            "text.selected",
+            "data.selected",
+            "bss.selected",
+            "tdata.selected",
+        ] {
+            assert!(text.contains(&format!(".section \".{name}\"")));
+        }
+        assert!(!text.contains(".text.selected_function"));
+        assert!(!text.contains(".data.explicit_data"));
+        assert!(!text.contains(".text.live_alias"));
+        assert!(text.contains(".set live_alias, live_function"));
+        assert!(text.contains(".init_array.00201"));
+        assert!(text.contains(".fini_array.00201"));
+        arguments.extend(["-fno-function-sections", "-fno-data-sections"]);
+        assert_eq!(successful(run(&arguments, source)), baseline);
+        arguments.extend(["-ffunction-sections", "-fdata-sections"]);
+        assert_eq!(successful(run(&arguments, source)), text);
+        for mode in ["-E", "--emit=evoir"] {
+            assert_eq!(
+                successful(run(&[mode, relocation], source)),
+                successful(run(
+                    &[mode, relocation, "-ffunction-sections", "-fdata-sections"],
+                    source
+                ))
+            );
+        }
+    }
+    // Neither switch enables the other class of placement.
+    let only_functions = successful(run(&["--emit=asm", "-ffunction-sections"], source));
+    assert!(only_functions.contains(".text.live_function"));
+    assert!(!only_functions.contains(".data.initialized"));
+    let only_data = successful(run(&["--emit=asm", "-fdata-sections"], source));
+    assert!(!only_data.contains(".text.live_function"));
+    assert!(only_data.contains(".data.initialized"));
+}
+
+#[test]
+fn individual_symbol_sections_are_not_silently_ignored_on_darwin() {
+    let text = successful(run(&["--emit=evoir"], "int main(void) { return 0; }"));
+    let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    for (function_sections, data_sections) in [(true, false), (false, true)] {
+        let error = evocc_mir::compile_module_with_options(
+            evocc_mir::Target::Darwin,
+            &module,
+            &|_| true,
+            evocc_mir::emit::RelocationModel::PositionIndependent,
+            &evocc_mir::emit::CodegenOptions {
+                function_sections,
+                data_sections,
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(error, evocc_mir::NativeStop::Assembly(message)
+            if message == "individual function/data sections require the Linux ELF target"));
+    }
+}
+
+#[test]
 fn standard_excess_precision_is_the_existing_source_format_profile() {
     let source = include_str!("../../../tests/fixtures/floating-standard-evaluation.c");
     for optimization in ["-O0", "-O2"] {

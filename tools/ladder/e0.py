@@ -72,6 +72,8 @@ SUPPORTED_OPTIONS = frozenset({
     "-mgeneral-regs-only", "-mno-general-regs-only",
     "-mstrict-align", "-mno-strict-align",
     "-mcmodel=tiny", "-mcmodel=small",
+    "-ffunction-sections", "-fno-function-sections",
+    "-fdata-sections", "-fno-data-sections",
     "-fasynchronous-unwind-tables", "-funwind-tables",
     "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
     "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",

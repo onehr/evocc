@@ -28,6 +28,8 @@ pub enum RelocationModel {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
     pub tiny_addresses: bool,
+    pub function_sections: bool,
+    pub data_sections: bool,
     pub unwind_tables: bool,
     pub strict_alignment: bool,
     pub sign_returns: bool,
@@ -756,24 +758,16 @@ fn emit_unit(
             .get(function.name.as_str())
             .copied()
             .unwrap_or((4, None, None));
+        let section = section.map(str::to_owned).or_else(|| {
+            options
+                .function_sections
+                .then(|| format!(".text.{}", function.name))
+        });
         // Every function selects its own placement; a preceding explicit
         // section must never capture an ordinary following function.
         if section.is_some() || current_section != section {
-            if let Some(section) = section {
-                let mut escaped = String::new();
-                for character in section.chars() {
-                    match character {
-                        '"' | '\\' => {
-                            escaped.push('\\');
-                            escaped.push(character);
-                        }
-                        // GNU as decodes octal section-name escapes while
-                        // LLVM's assembler retains them literally. Validated
-                        // UTF-8 must therefore remain UTF-8 in this directive.
-                        _ => escaped.push(character),
-                    }
-                }
-                let _ = writeln!(text, ".section \"{escaped}\",\"ax\",%progbits");
+            if let Some(section) = &section {
+                let _ = writeln!(text, "{}", elf_section(section, "ax", "progbits"));
             } else {
                 let _ = writeln!(text, "{}", target.text_section());
             }
@@ -836,6 +830,9 @@ fn emit_unit(
         let mut section = String::new();
         for global in ordered {
             let zero_filled = is_zero_filled(global);
+            let individual = |base: &str, flags: &str, kind: &str| {
+                elf_section(&format!("{base}.{}", global.symbol), flags, kind)
+            };
             let thread_local =
                 module.is_some_and(|m| m.tls.iter().any(|t| t.symbol == global.symbol));
             let wanted = if thread_local {
@@ -848,6 +845,12 @@ fn emit_unit(
                             "progbits"
                         }
                     )
+                } else if options.data_sections {
+                    if zero_filled {
+                        individual(".tbss", "awT", "nobits")
+                    } else {
+                        individual(".tdata", "awT", "progbits")
+                    }
                 } else if zero_filled {
                     ".section .tbss,\"awT\",%nobits".to_owned()
                 } else {
@@ -874,11 +877,22 @@ fn emit_unit(
                 // relies on these addresses belonging to its rodata range.
                 if !global.relocs.is_empty() && relocation == RelocationModel::PositionIndependent {
                     match target {
+                        Target::Linux if options.data_sections => {
+                            individual(".data.rel.ro", "aw", "progbits")
+                        }
                         Target::Linux => ".section .data.rel.ro,\"aw\",%progbits".to_owned(),
                         Target::Darwin => ".section __DATA_CONST,__const".to_owned(),
                     }
+                } else if options.data_sections {
+                    individual(".rodata", "a", "progbits")
                 } else {
                     target.read_only_section().to_owned()
+                }
+            } else if options.data_sections {
+                if zero_filled {
+                    individual(".bss", "aw", "nobits")
+                } else {
+                    individual(".data", "aw", "progbits")
                 }
             } else if zero_filled {
                 target.bss_section().to_owned()
@@ -927,7 +941,7 @@ fn emit_unit(
         // Leave the assembler where it was before the globals: the trailing
         // output of Section 8 belongs to the text section, and a unit whose
         // last global was zero-filled would otherwise leave it in `.bss`.
-        if section == target.bss_section() {
+        if section == target.bss_section() || options.data_sections {
             let _ = writeln!(text, "\n{}", target.text_section());
         }
     }
@@ -945,6 +959,13 @@ fn emit_unit(
         let _ = writeln!(text, "\n{ident}");
     }
     text
+}
+
+fn elf_section(name: &str, flags: &str, kind: &str) -> String {
+    // Keep validated UTF-8: GNU as decodes octal escapes whereas LLVM's
+    // assembler retains them literally. Only quote delimiters are escaped.
+    let escaped = name.replace('\\', "\\\\").replace('"', "\\\"");
+    format!(".section \"{escaped}\",\"{flags}\",%{kind}")
 }
 
 fn emit_definition_linkage(text: &mut String, target: Target, name: &str, weak: bool) {

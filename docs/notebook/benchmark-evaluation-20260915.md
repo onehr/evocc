@@ -4,6 +4,15 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+September 27's [per-symbol section regression](../../tests/fixtures/driver-symbol-sections.out)
+closes a further musl option-projection gap: real function/data sections now
+preserve ELF storage/TLS types, relocations, alias identity, lifecycle roots and
+patch-entry link order. Twelve reference and twelve EvoCC objects pass all 48
+ordinary/GC native executions. Eight unchanged musl commands retain both section
+options and standard excess precision: four assemble, four retain the unapproved
+scalar-FP asm refusal. This is a targeted command replay, not a musl/libc-test
+whole-program result; its historical full receipt remains historical.
+
 September 27 B06b repairs the shared toybox test environment: upstream `test.sh`
 creates its test directory under PWD, so tests on the host FUSE mount could not
 use file-attribute ioctls. A small mutation probe separates that from the missing

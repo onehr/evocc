@@ -27,6 +27,17 @@ RECORD = (
 
 
 class DecodeTest(unittest.TestCase):
+    def test_individual_sections_reach_emission_in_written_order(self):
+        options = ['-ffunction-sections', '-fno-function-sections',
+                   '-fdata-sections', '-fno-data-sections', '-ffunction-sections']
+        self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
+        argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
+        self.assertEqual([x for x in argv if x in options], options)
+        self.assertFalse(set(options) & set(omitted))
+        for option in options:
+            self.assertEqual(cmdrecord.omitted_option_class(option),
+                             'section-placement-option-must-be-forwarded')
+
     def test_minimum_function_alignment_reaches_codegen_in_written_order(self):
         options = ['-fmin-function-alignment=128', '-fmin-function-alignment=8']
         self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))

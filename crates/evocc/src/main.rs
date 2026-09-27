@@ -322,6 +322,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-g0" => debug_types = false,
             "-mcmodel=tiny" => codegen.tiny_addresses = true,
             "-mcmodel=small" => codegen.tiny_addresses = false,
+            "-ffunction-sections" => codegen.function_sections = true,
+            "-fno-function-sections" => codegen.function_sections = false,
+            "-fdata-sections" => codegen.data_sections = true,
+            "-fno-data-sections" => codegen.data_sections = false,
             "-fasynchronous-unwind-tables" | "-funwind-tables" => codegen.unwind_tables = true,
             "-fno-asynchronous-unwind-tables" | "-fno-unwind-tables" => {
                 codegen.unwind_tables = false

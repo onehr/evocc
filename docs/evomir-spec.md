@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.48** | **Authoritative reference** | **2026-09-27**
+**Revision 0.49** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -16,6 +16,34 @@ including the default, and strings are assembler-escaped rather than interpolate
 as directives. Unsupported non-ELF function placement is E4009. Linker scripts
 retain ownership of final placement/range checking; no warning suppression,
 source-specific section inference or invented relocation replaces this contract.
+
+Individual-section addendum (revision 0.49): Linux `-ffunction-sections` and
+`-fdata-sections` independently select symbol-named ELF sections for definitions
+without explicit placement. Each option and its `-fno-` form is reduced in written
+order, last occurrence winning. Both default off; explicit section attributes
+take precedence. These are native emission options, not new EvoIR object kinds
+or permission changes. The validated module and effective option values remain
+explicit emission inputs, including in any native artifact identity.
+
+Functions use `.text.<symbol>` (AX, PROGBITS), with all local labels, alignment,
+CFI, complete bodies and sizes in the same section. Automatic objects use
+`.data.<symbol>` (AW, PROGBITS), `.bss.<symbol>` (AW, NOBITS) for mutable zero-fill,
+or `.rodata.<symbol>` (A, PROGBITS) for read-only data, including all-zero
+read-only data. Read-only objects with PIC relocations use
+`.data.rel.ro.<symbol>` (AW, PROGBITS). TLS uses `.tdata.<symbol>` (AWT, PROGBITS)
+or `.tbss.<symbol>` (AWT, NOBITS). Symbol size, alignment, linkage, visibility,
+relocations and TLS type remain unchanged. Names use the existing assembler
+escaping, not arbitrary directive interpolation. Aliases allocate no extra
+section or body. Lifecycle registrations remain init/fini-array roots; patchable
+entries retain SHF_LINK_ORDER to the selected code section. Module assembly is
+still bracketed by default text selection, not rewritten to follow these flags.
+
+These options permit linker garbage collection; they do not guarantee retention
+of an unreferenced `used` symbol, reorder source effects, duplicate definitions
+or change the existing reference/retention analysis. The linker owns reachability
+and final layout. Unsupported non-ELF individual-section options fail E4009;
+they must not be silently ignored. The disabled/default path retains its previous
+assembly. No semantic or EqSat rule is added.
 
 Native command-option addendum (2026-09-13): validated EvoIR `stack_protect`
 marks select an extra private canary slot above local storage; emission loads
@@ -1211,8 +1239,10 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
-| 0.46 | 2026-09-27 | Preserve quiet relational predicate identity and use FCMP rather than the signaling FCMPE path. |
+| 0.49 | 2026-09-27 | Emit independently selected per-function/data ELF sections, preserving explicit placement, TLS/storage kind, aliases, lifecycle/patch roots and written option overrides. |
+| 0.48 | 2026-09-27 | Hosted Linux binary128 via qualified helpers; shared SIMD128 scalar/HFA/varargs ABI, exact strict status and conversion/NaN adapters. |
 | 0.47 | 2026-09-27 | Qualified Linux strict integer128 conversion calls, explicit strict admission and preserved helper semantics. |
+| 0.46 | 2026-09-27 | Preserve quiet relational predicate identity and use FCMP rather than the signaling FCMPE path. |
 | 0.45 | 2026-09-27 | Add strict FP operations, machine strictness and logical integer conversion widths, dynamic-rounding admission, FPSR effects and explicit FMA; retain the shared SIMD bank. |
 | 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
 | 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |
