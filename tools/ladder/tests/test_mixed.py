@@ -124,6 +124,7 @@ class TranslateCommand(unittest.TestCase):
 
     def test_supported_language_and_machine_options_keep_written_overrides(self):
         flags = [
+            '-fexcess-precision=standard',
             '-fPIC', '-fno-pic', '-fwrapv', '-fno-wrapv',
             '-std=gnu89', '-fno-gnu89-inline', '-fsigned-char', '-funsigned-char',
             '-fstack-protector-strong', '-fno-stack-protector',

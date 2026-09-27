@@ -39,6 +39,49 @@ fn check_preprocessed_program(source: &str) -> String {
 }
 
 #[test]
+fn standard_excess_precision_is_the_existing_source_format_profile() {
+    let source = include_str!("../../../tests/fixtures/floating-standard-evaluation.c");
+    for optimization in ["-O0", "-O2"] {
+        for mode in [
+            "-E",
+            "--interpret-c-hir",
+            "--interpret-evoir",
+            "--emit=evoir",
+            "--emit=asm",
+        ] {
+            for rounding in [None, Some("-frounding-math")] {
+                let mut args = vec!["--target=aarch64-unknown-linux-gnu", mode, optimization];
+                if let Some(rounding) = rounding {
+                    args.push(rounding);
+                }
+                let baseline = successful(run(&args, source));
+                args.push("-fexcess-precision=standard");
+                assert_eq!(successful(run(&args, source)), baseline);
+                args.push("-fexcess-precision=standard");
+                assert_eq!(successful(run(&args, source)), baseline);
+                if mode.starts_with("--interpret-") {
+                    assert_eq!(baseline.trim(), "0");
+                }
+            }
+        }
+    }
+    for flag in [
+        "-fexcess-precision=fast",
+        "-fexcess-precision=16",
+        "-fexcess-precision=unknown",
+    ] {
+        assert!(!run(&["--emit=asm", flag], source).status.success());
+    }
+    // Standard precision does not authorize a separately refused fast-math mode.
+    assert!(!run(
+        &["--emit=asm", "-fexcess-precision=standard", "-ffast-math"],
+        source
+    )
+    .status
+    .success());
+}
+
+#[test]
 fn pthread_predefinitions_precede_explicit_macro_actions_in_every_mode() {
     let source = include_str!("../../../tests/fixtures/driver-pthread.c");
     let cases: &[&[&str]] = &[

@@ -329,6 +329,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
             "-ffp-contract=off" | "-fno-fast-math" => {}
+            // FLT_EVAL_METHOD=0 already rounds every arithmetic operation,
+            // assignment and cast to its semantic source format. Preserve
+            // that contract without changing rounding/environment selection.
+            "-fexcess-precision=standard" => {}
             "-frounding-math" => dynamic_rounding = true,
             "-fno-rounding-math" => dynamic_rounding = false,
             "-ffast-math" | "-ffp-contract=fast" | "-ffp-contract=on" => {

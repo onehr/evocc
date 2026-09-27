@@ -17,7 +17,7 @@ spec.loader.exec_module(e0)
 
 class SourceIdentityTest(unittest.TestCase):
     def test_fp_semantic_options_reach_the_driver_in_written_order(self):
-        flags = ['-ffp-contract=fast', '-ffp-contract=off',
+        flags = ['-fexcess-precision=standard', '-ffp-contract=fast', '-ffp-contract=off',
                  '-frounding-math', '-fno-rounding-math', '-ffast-math']
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'probe.c'

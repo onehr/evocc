@@ -77,6 +77,7 @@ SUPPORTED_OPTIONS = frozenset({
     "-mstack-protector-guard=sysreg", "-mstack-protector-guard=global",
     "-fno-fast-math", "-ffast-math", "-fno-rounding-math", "-frounding-math",
     "-ffp-contract=off", "-ffp-contract=on", "-ffp-contract=fast",
+    "-fexcess-precision=standard",
 })
 SUPPORTED_OPTION_PREFIXES = (
     '-mstack-protector-guard-reg=', '-mstack-protector-guard-offset=',

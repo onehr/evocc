@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.111** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.112** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1395,6 +1395,13 @@ The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
 the corresponding `__STDC_IEC_*` and `__FP_FAST_FMA*` macros are absent and
 `__GCC_IEC_559{,_COMPLEX}` is zero, overriding the historical GCC macro census.
+`-fexcess-precision=standard` explicitly selects this existing source-format
+evaluation contract: each operation, assignment and cast rounds to its semantic
+format, with no hidden excess-precision carrier. It changes neither the
+selected rounding/environment policy nor contraction, and repetition is
+idempotent. It does not authorize `-ffast-math`, `-fexcess-precision=fast/16`,
+half formats or any other unsupported profile. This is equivalent option
+admission under `FLT_EVAL_METHOD=0`, not a new numerical rule.
 For f32/f64/f128, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
 the exact representation; truth results are 0/1 except `isinf_sign`, which
 returns -1/0/1. `fabs/fabsf/fabsl` clear the sign bit, and `copysign/copysignf/copysignl` copy it
@@ -6660,9 +6667,11 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
-| 1.9.108 | 2026-09-27 | Model the target fenv library through explicit memory/world snapshots, distinguish glibc/musl raise policies, and preserve fixed-profile admission after environment-changing calls. |
+| 1.9.112 | 2026-09-27 | Admit explicit standard excess precision as the existing source-format evaluation contract; preserve rounding/environment and unsupported-mode boundaries. |
+| 1.9.111 | 2026-09-27 | Preserve -pthread preprocessing semantics with _REENTRANT defined before explicit user macro actions; no new linker or thread-execution claim. |
 | 1.9.110 | 2026-09-27 | Extend the shared scalar source/IR contract to binary128, exact 128-bit constants and transport, qualified hosted NaN/status policy and quad HFA metadata. Native and application acceptance remain separate gates. |
 | 1.9.109 | 2026-09-27 | Preserve lexical FENV_ACCESS policy through preprocessing, C-HIR, inline substitution, control-flow entry/exit, return conversion and strict source lowering. |
+| 1.9.108 | 2026-09-27 | Model the target fenv library through explicit memory/world snapshots, distinguish glibc/musl raise policies, and preserve fixed-profile admission after environment-changing calls. |
 | 1.9.107 | 2026-09-27 | Define bounded source dynamic rounding and quiet relational predicates; distinguish executed automatic initialization and conditional conversion from RNE translation-time constants. |
 | 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |
 | 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |

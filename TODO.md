@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.111** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
+EvoIR **1.9.112** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -684,11 +684,37 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   [Receipt](tests/contracts/ladder-jq-receipt.json).
 
 - [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2, after L01.
-  Honoring `-frounding-math` currently leaves 0/1,339 units compiled; this is one missing
-  capability, not 1,339 independent bugs. Keep the original flag, implement the
-  required strict semantics, replay small original units, then build and run
-  libc-test. Classify any newly exposed non-fenv errors separately; do not assume
-  L01 alone guarantees full coverage. [Receipt](tests/contracts/ladder-musl-receipt.json).
+  The historical full receipt is 0/1,339 due to `-frounding-math`; it is not a
+  new measurement of the now-implemented strict-FP compiler. The eight-unit
+  targeted replay keeps that option: four emit, four expose B08a below. Its
+  command projection also retains explicit omissions (B08b), so these four
+  emissions are not faithful full-build acceptance. Close the prerequisites,
+  replay original commands, then build and run libc-test. Classify newly exposed
+  errors separately; L01 alone does not guarantee coverage.
+  [Receipt](tests/contracts/ladder-musl-receipt.json).
+
+  - [ ] **B08a — Admit scalar FP inline-assembly bindings** — `NEEDS_RULE`, P2.
+    Original ARM64 ceil/floor/rint/rintf reach `w`-constrained scalar f32/f64
+    operands, currently explicitly excluded by EvoIR §3.11 and Appendix D's
+    integer-SIMD approval. The strict-FP report does not silently repeal that
+    boundary. A bounded extension must preserve the shared SIMD bank, exact
+    scalar views, ties/early clobbers, world/fenv effects, spills and native
+    checks; opaque reached assembly must not become an interpreter PASS.
+    Approval was requested; do not bypass the validator to clear E3021.
+
+  - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
+    The targeted replay lists function/data sections, no-strict-aliasing and other omitted code-generation
+    options. Determine implemented equivalence versus a real missing contract,
+    add driver/projector REDs and preserve effective option order. Diagnostic
+    and optimizer-tuning omissions remain separately disclosed. No full musl
+    fidelity claim may be inferred from accepting `-frounding-math` alone.
+    The [standard-excess-precision subcase](tests/fixtures/floating-standard-evaluation.out)
+    is now repaired: the existing FLT_EVAL_METHOD=0 semantics satisfy the explicit
+    option, which survives shared command projection. Both interpreters, eight
+    reference and eight EvoCC native controls pass; 527 CLI and 262 ladder tests,
+    Clippy/fmt/Ruff pass. Eight original musl commands have identical results
+    with the option retained (four emit, four B08a refusals). This is not full
+    option-fidelity or musl acceptance.
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library

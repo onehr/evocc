@@ -1,0 +1,39 @@
+2026-09-27 B08b: standard excess precision uses existing source-format semantics.
+
+Authority: EvoIR 1.9.112 section 3.13, FLT_EVAL_METHOD=0.
+GCC 14.2's option description requires casts and assignments to round to their
+semantic types; it does not require an excess-precision carrier where none is
+used. https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html#index-fexcess-precision
+EvoCC already rounds each source operation as well as casts/assignments; this
+patch admits the explicit option without changing that numerical contract.
+It does not enable fast/16 modes, dynamic rounding, contraction or Annex F.
+
+Source SHA256 f83f0507f5eaf5e91b4e63ae4ad2ed04561df3d76c026113f41b50995c961fe1.
+Tested debug compiler SHA256
+5e5a5816af87ad0a53652fffe87ffe27d9f073ad412b8f0ba1ae4b6db15c3e3a.
+The benchmark frozen 523a6982 subject remains unchanged and does not inherit
+this later driver change. Numerical implementation is unchanged.
+
+RED: frozen driver rejects -fexcess-precision=standard before source execution.
+The projection RED fails its exact ordered-argv assertion because the option
+is dropped. GREEN retains the option in E0 and both mixed/subject projectors.
+
+The C case checks source-format cancellation for binary32/64/128, assignment
+and explicit narrowing casts, and the direct decimal-to-binary32 discriminator.
+GCC14/Clang19 O0/O2 with fixed/dynamic flags: eight sealed AArch64 native PASS.
+Actual EvoCC assembly at O0/O2 with both flags, assembled/linked by both fixed
+reference compilers: eight native PASS. Both interpreters return zero.
+For preprocess, both interpreters, canonical IR and assembly, each O0/O2 and
+fixed/dynamic combination is byte-identical with zero, one or two copies of
+the standard-precision option. Fast, 16, unknown and fast-math combinations
+remain explicit refusals. 527 CLI tests, Clippy and fmt pass; 262 ladder tests
+and Ruff pass. No second numerical path or metadata field is introduced.
+
+The same eight original musl commands are replayed with the new option:
+__math_oflow, __math_uflow, frexp and scalbn emit; ARM64 ceil/floor/rint/rintf
+still reject scalar FP w-constrained assembly with E3021. For every command,
+exit, stdout and stderr are identical with/without the option. The remaining
+listed omissions and scalar-assembly boundary are not waived. This closes
+one command-projection subcase, not B08, libc-test or faithful full musl build.
+
+Raw logs: .build/floating-targeted/strict-20260927/excess-*.log.

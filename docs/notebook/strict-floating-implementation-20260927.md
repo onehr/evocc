@@ -140,6 +140,15 @@ a requested decision, not a validator bypass. This replay uses the existing
 command projector and records its omitted flags (including function/data
 sections and excess-precision); it is not faithful full-build acceptance.
 
+The later [standard-excess-precision driver regression](../../tests/fixtures/floating-standard-evaluation.out)
+closes that particular omission under revision 1.9.112: FLT_EVAL_METHOD=0
+already uses semantic source precision for operations, assignments and casts.
+The explicit option now reaches the driver without changing numerical/rounding
+semantics. Eight oracle and eight EvoCC native controls pass; both interpreters,
+527 CLI regressions and 262 ladder regressions pass. The eight original musl
+commands still divide four emitted/four scalar-assembly refusals; their other
+option omissions and full-build acceptance remain open.
+
 At that checkpoint `FENV_ACCESS ON` lexical scoping was not yet advertised;
 the subsequently validated scope implementation is recorded below.
 Binary128, musl, jq and full campaigns remain separately tracked

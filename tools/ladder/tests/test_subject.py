@@ -240,6 +240,12 @@ class EvoccArgvTest(unittest.TestCase):
             self.assertEqual([flag for flag in argv if flag in flags], flags)
             self.assertEqual(omitted, [])
 
+    def test_standard_excess_precision_survives_projection(self) -> None:
+        flags = ['-frounding-math', '-fexcess-precision=standard', '-fno-rounding-math']
+        argv, omitted = self.command(f"gcc {' '.join(flags)} -c -o a.o a.c\n")
+        self.assertEqual([flag for flag in argv if flag in flags], flags)
+        self.assertEqual(omitted, [])
+
     def test_unknown_options_remain_named_not_reinterpreted_as_supported(self) -> None:
         argv, omitted = self.command(
             "gcc -Ofast -fno-inline -fpermissive -std=gnu11 -c -o a.o a.c\n"
