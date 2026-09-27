@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.47** | **Authoritative reference** | **2026-09-27**
+**Revision 0.48** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -131,7 +131,7 @@ Every virtual register has exactly one **register class**:
 | `gpr64` | `bits<N>` with `33 <= N <= 64`, every pointer | `x0` to `x30` |
 | `simd32` | f32 | `s0` to `s31` |
 | `simd64` | f64 or 8-byte integer vector | `d0` to `d31` |
-| `simd128` | 16-byte integer vector | `q0` to `q31` |
+| `simd128` | hosted Linux f128 or 16-byte integer vector | `q0` to `q31` |
 | `flags` | the result of a comparison or a flag-setting arithmetic form, consumed by the next conditional | `nzcv` |
 
 `gpr32` and `gpr64` name the same physical register file viewed at two
@@ -196,7 +196,44 @@ invalid case. No runtime helper is invoked outside its defined conversion domain
 The C E3063 guard is unchanged. Darwin strict wide helpers remain refused until
 their runtime is separately qualified. The Linux helper receipt is recorded in
 `docs/notebook/strict-floating-implementation-20260927.md`.
-Executable f128 and its audited hosted helper mapping are a separate milestone.
+**Hosted binary128 (0.48).** Linux `f128` uses the same SIMD128 bank, typed
+Q loads/stores, full-width spills and parallel copies as existing vectors.
+Constants, negation and representation conversion use exact two-word pack/
+extract operations. Arithmetic uses qualified `__addtf3`, `__subtf3`, `__multf3`
+and `__divtf3`; explicit IR FMA uses the audited hosted `fmal` contract. Format
+conversions use `__extend{sf,df}tf2` and `__trunctf{sf,df}2`; integer conversions
+use `__float[un]{si,di,ti}tf` and `__fix[uns]tf{si,di,ti}`. These are ordinary
+ABI calls with allocator-visible inputs, outputs and clobbers, never fictitious
+quad hardware opcodes. Source `fmal` remains an ordinary external library call;
+this does not authorize a new `__builtin_fmal` source spelling.
+
+Machine calls distinguish `bl.fixed_fp`, `bl.strict_fp` and ordinary `bl`.
+The first two require a qualified helper and exact signature. Fixed helpers
+implement pure IR under RNE admission and do not alter the interpreter's
+observable fenv; strict helpers observe dynamic rounding and accumulate status.
+Ordinary modeled runtime calls observe and update the actual environment;
+they must not inherit pure-IR semantics just because a symbol matches a helper.
+All three retain the same physical ABI and call clobbers. The mode survives
+text reconstruction and allocation. Fixed/strict helper calls require their
+respective admission even if an explicit check marker was omitted.
+
+Quad comparisons use the audited equality/unordered and ordered helper families,
+testing signs rather than assuming unordered +/-1 encodings. Quiet ordered
+predicates first establish unordered status through the signaling-NaN-only
+helper, replace unordered inputs with zero for the ordered helper, then mask
+the result false. C conversion definedness is a bit-only magnitude comparison;
+it must not signal on sNaN. Invalid raw conversions select zero before invoking
+a conversion helper, raising INVALID separately only in strict execution.
+Helpers are never invoked outside their defined integer-conversion domains.
+
+The existing AAPCS64 classifier assigns scalar quad arguments/results to q0..q7
+and aligned 16-byte stack slots, and HFA1..4 to whole-register groups or wholly
+to the shared stack. Quad varargs use the existing 16-byte SIMD save slots.
+Full 128-bit values may not rely on v8..v15 upper halves surviving calls.
+Darwin quad ABI/helpers and unqualified freestanding helper runtimes remain
+outside this hosted contract. Numerical qualification and crossed ABI results
+are recorded in the September 27 implementation notebook, not inferred from
+type admission or a successful link.
 
 A `flags` value may be consumed only by the instruction that immediately
 follows its producer in the same block, and nothing between them may write

@@ -1,0 +1,7 @@
+func @fused(%arg0: f128, %arg1: f128, %arg2: f128, %arg3: mem<all>, %arg4: world) -> (f128, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f128, %v1: f128, %v2: f128, %v3: mem<all>, %v4: world):
+    (%v5, %v6) = fp.strict.fma %v4, %v0, %v1, %v2 : f128
+    ret %v5, %v3, %v6
+}

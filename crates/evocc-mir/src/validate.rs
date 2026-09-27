@@ -386,13 +386,11 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             symbol,
             args,
             results,
-            strict_fp: true,
+            fp_mode: Some(_),
         } => {
-            let (from_integer, _, kind) = crate::floating::hosted_conversion(symbol)
+            let helper = crate::floating::helpers::qualified(symbol)
                 .ok_or("strict FP call requires a qualified numeric helper")?;
-            let pair = vec![RegClass::Gpr64, RegClass::Gpr64];
-            let fp = vec![crate::floating::class(kind)];
-            let (inputs, outputs) = if from_integer { (pair, fp) } else { (fp, pair) };
+            let (inputs, outputs) = helper.classes();
             if args.iter().map(|r| r.class).collect::<Vec<_>>() == inputs
                 && results.iter().map(|r| r.class).collect::<Vec<_>>() == outputs
             {

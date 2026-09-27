@@ -1,0 +1,13 @@
+struct Q2 { long double a, b; };
+struct Q3 { long double a[3]; };
+struct Q4 { struct Q2 a, b; };
+long double qa_mixed(int, float, long double, double, long);
+long double qa_nine(long double,long double,long double,long double,long double,long double,long double,long double,long double);
+struct Q2 qa_two(struct Q2);
+struct Q3 qa_three(long double,long double,long double,long double,long double,long double,struct Q3);
+struct Q4 qa_four(struct Q4);
+long double qa_stack(long,long double,long,long double,long,long double,long,long double,long,long double,long,long double,long,long double,long,long double,long,long double);
+long double qa_variadic(int,...);
+long double qa_pressure(long double,void (*)(void));
+void qa_clobber(void);
+int qa_caller(void);

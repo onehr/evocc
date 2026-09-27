@@ -4,6 +4,7 @@ use evocc_evoir::{EvoIRType, FloatingInst, FloatingOp, Value};
 use evocc_types::{floating::FloatBits, FloatKind};
 use std::collections::BTreeMap;
 use std::fmt::Write;
+pub(crate) mod helpers;
 
 pub(crate) fn hosted_conversion(symbol: &str) -> Option<(bool, bool, FloatKind)> {
     Some(match symbol {
@@ -22,8 +23,13 @@ pub(crate) fn hosted_conversion(symbol: &str) -> Option<(bool, bool, FloatKind)>
 fn needs_environment(inst: &MInst) -> u8 {
     match inst {
         MInst::Bl {
-            strict_fp: true, ..
+            fp_mode: Some(crate::FpCallMode::Strict),
+            ..
         } => 1,
+        MInst::Bl {
+            fp_mode: Some(crate::FpCallMode::Fixed),
+            ..
+        } => 2,
         MInst::FpEnvCheck { strict } => {
             if *strict {
                 1
@@ -142,17 +148,17 @@ pub(crate) fn guard_points(blocks: &[MBlock]) -> BTreeMap<(u32, usize), bool> {
 }
 
 pub(crate) fn class(kind: FloatKind) -> RegClass {
-    if kind == FloatKind::F32 {
-        RegClass::Simd32
-    } else {
-        RegClass::Simd64
+    match kind {
+        FloatKind::F32 => RegClass::Simd32,
+        FloatKind::F128 => RegClass::Simd128,
+        _ => RegClass::Simd64,
     }
 }
 fn ty(kind: FloatKind) -> EvoIRType {
-    if kind == FloatKind::F32 {
-        EvoIRType::F32
-    } else {
-        EvoIRType::F64
+    match kind {
+        FloatKind::F32 => EvoIRType::F32,
+        FloatKind::F128 => EvoIRType::F128,
+        _ => EvoIRType::F64,
     }
 }
 

@@ -373,7 +373,7 @@ pub fn interpret_module_with_fp_environment(
                     ref symbol,
                     ref args,
                     ref results,
-                    strict_fp,
+                    fp_mode,
                 } => {
                     let values = read_all(&frames[top], args)?;
                     let index = module
@@ -390,7 +390,7 @@ pub fn interpret_module_with_fp_environment(
                             results.clone(),
                         )?;
                     } else if let Some(outputs) =
-                        hosted_numeric_runtime(symbol, &values, &mut state.world, strict_fp)?
+                        hosted_numeric_runtime(symbol, &values, &mut state.world, fp_mode)?
                     {
                         if results.len() != outputs.len() {
                             return Err(MirError::Invalid {
@@ -574,69 +574,18 @@ pub fn interpret_module_with_fp_environment(
     }
 }
 
-/// Only the four pure hosted integer helpers have a model here. A module's
+mod hosted_fp;
+
+/// Only qualified hosted numeric helpers have a model here. A module's
 /// own definition is executed first; unrelated unresolved calls stay errors.
 fn hosted_numeric_runtime(
     symbol: &str,
     args: &[MirValue],
     world: &mut WorldState,
-    strict: bool,
+    fp_mode: Option<crate::FpCallMode>,
 ) -> Result<Option<Vec<MirValue>>, MirError> {
-    use evocc_types::{floating::FloatBits, FloatKind};
-    let conversion = crate::floating::hosted_conversion(symbol);
-    if let Some((from_integer, signed, kind)) = conversion {
-        let bytes = if kind == FloatKind::F32 { 4 } else { 8 };
-        let invalid = || MirError::Invalid {
-            detail: format!("invalid @{symbol} arguments"),
-        };
-        if from_integer {
-            let [MirValue::Int(lo), MirValue::Int(hi)] = args else {
-                return Err(invalid());
-            };
-            let raw = u128::from(*lo) | (u128::from(*hi) << 64);
-            let environment = world.fp_environment();
-            let rounding = if strict {
-                environment.rounding
-            } else {
-                evocc_types::floating::FpRounding::NearestEven
-            };
-            let result = if signed {
-                FloatBits::from_signed_round(kind, raw as i128, rounding)
-            } else {
-                FloatBits::from_unsigned_round(kind, raw, rounding)
-            };
-            if strict {
-                *world = world.with_fp_environment(environment.raised(result.status));
-            }
-            let mut repr = evocc_memory::ObjectRepresentation::uninitialized(bytes)
-                .map_err(|e| memory_error(&e))?;
-            repr.write_integer(
-                0,
-                bytes,
-                Some(result.value.bits()),
-                evocc_memory::ByteOrder::Little,
-            )
-            .map_err(|e| memory_error(&e))?;
-            return Ok(Some(vec![MirValue::Vector(repr)]));
-        }
-        let [MirValue::Vector(repr)] = args else {
-            return Err(invalid());
-        };
-        let raw = repr
-            .read_integer(0, bytes, evocc_memory::ByteOrder::Little)
-            .ok_or_else(invalid)?;
-        let result = FloatBits::from_bits(kind, raw)
-            .ok_or_else(invalid)?
-            .to_integer_status(128, signed)
-            .ok_or_else(invalid)?;
-        let value = result.value.ok_or_else(invalid)?;
-        if strict {
-            *world = world.with_fp_environment(world.fp_environment().raised(result.status));
-        }
-        return Ok(Some(vec![
-            MirValue::Int(value as u64),
-            MirValue::Int((value >> 64) as u64),
-        ]));
+    if let Some(values) = hosted_fp::execute(symbol, args, world, fp_mode)? {
+        return Ok(Some(values));
     }
     Ok(wide_division_runtime(symbol, args)?.map(Vec::from))
 }

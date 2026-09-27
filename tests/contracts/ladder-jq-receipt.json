@@ -3,17 +3,17 @@
  "rung": "E10",
  "subject": "jq",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260919T231539Z",
+ "run": "20260927T080457Z",
  "pin": "jq-1.8.2",
  "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz",
  "tarballSha256": "71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af",
  "tarball": "jq-1.8.2.tar.gz",
- "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "driverSha256": "b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 69,
  "unmeasuredBuildUnits": [],
- "unitsEvoccCompiled": 68,
- "unitsSubstituted": 68,
+ "unitsEvoccCompiled": 69,
+ "unitsSubstituted": 69,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
   "vendor/oniguruma/src/regcomp.o",
@@ -48,8 +48,8 @@
   "vendor/oniguruma/src/iso8859_4.o",
   "vendor/oniguruma/src/iso8859_5.o",
   "vendor/oniguruma/src/iso8859_6.o",
-  "vendor/oniguruma/src/iso8859_8.o",
   "vendor/oniguruma/src/iso8859_7.o",
+  "vendor/oniguruma/src/iso8859_8.o",
   "vendor/oniguruma/src/iso8859_9.o",
   "vendor/oniguruma/src/iso8859_10.o",
   "vendor/oniguruma/src/iso8859_11.o",
@@ -64,8 +64,9 @@
   "vendor/oniguruma/src/koi8_r.o",
   "vendor/oniguruma/src/cp1251.o",
   "vendor/oniguruma/src/onig_init.o",
-  "src/lexer.o",
   "src/parser.o",
+  "src/lexer.o",
+  "src/builtin.o",
   "src/bytecode.o",
   "src/compile.o",
   "src/execute.o",
@@ -86,22 +87,12 @@
   "vendor/decNumber/decNumber.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 68,
+ "unitsInPassingBuild": 69,
  "outcomes": {
-  "assembled": 68,
-  "refused": 1
+  "assembled": 69
  },
- "refusalsByCode": {
-  "E3049": 1
- },
- "refusals": [
-  {
-   "unit": "src/builtin.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "bits/mathcalls.h:297:1"
-  }
- ],
+ "refusalsByCode": {},
+ "refusals": [],
  "excludedUnits": [],
  "failingUnits": [],
  "baselineTest": {
@@ -126,7 +117,7 @@
    "status": 0,
    "relinkStatus": 0,
    "regeneratedInputs": [],
-   "unitCount": 68
+   "unitCount": 69
   }
  ],
  "adjustments": {
@@ -300,6 +291,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/jq/20260919T231539Z",
- "summaryLine": "jq: 68 of 69 units by EvoCC in a passing build; refused by code {'E3049': 1}"
+ "evidence": ".evidence/ladder/jq/20260927T080457Z",
+ "summaryLine": "jq: 69 of 69 units by EvoCC in a passing build; refused by code {}"
 }

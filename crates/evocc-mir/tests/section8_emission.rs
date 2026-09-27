@@ -434,7 +434,7 @@ fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
         (
             "external call",
             MInst::Bl {
-                strict_fp: false,
+                fp_mode: None,
                 symbol: "consume".to_owned(),
                 args: vec![g(0)],
                 results: vec![],
@@ -581,7 +581,7 @@ fn every_slot_lies_on_a_boundary_its_own_access_can_scale() {
                     align: 2,
                 },
                 MInst::Bl {
-                    strict_fp: false,
+                    fp_mode: None,
                     symbol: "helper".to_owned(),
                     args: vec![w(0)],
                     results: vec![w(4)],

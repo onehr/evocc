@@ -206,20 +206,7 @@ impl FloatBits {
 
     /// C truncation domain check, never the engine's invalid-conversion fallback.
     pub fn to_integer(self, width: u16, signed: bool) -> Option<u128> {
-        if !(1..=128).contains(&width) || !self.is_finite() {
-            return None;
-        }
-        let result = with_format!(self.kind, F, {
-            let value = F::from_bits(self.bits);
-            if signed {
-                value
-                    .to_i128_r(usize::from(width), Round::TowardZero, &mut false)
-                    .map(|result| result as u128)
-            } else {
-                value.to_u128_r(usize::from(width), Round::TowardZero, &mut false)
-            }
-        });
-        (!result.status.contains(Status::INVALID_OP)).then_some(result.value)
+        self.to_integer_status(width, signed)?.value
     }
 
     /// Numerical comparison. None is unordered or a mismatched format.

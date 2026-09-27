@@ -64,6 +64,14 @@ pub enum RegClass {
     Flags,
 }
 
+/// Distinguish compiler numerical helpers from ordinary runtime calls. Fixed
+/// helpers implement pure IR under admitted RNE; strict helpers carry fenv.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FpCallMode {
+    Fixed,
+    Strict,
+}
+
 impl RegClass {
     /// The canonical spelling of Appendix A.
     #[must_use]
@@ -940,8 +948,8 @@ pub enum MInst {
         symbol: String,
         args: Vec<VReg>,
         results: Vec<VReg>,
-        /// Audited numeric runtime call observes/updates the current FP world.
-        strict_fp: bool,
+        /// None is an ordinary call, including ordinary libm calls.
+        fp_mode: Option<FpCallMode>,
     },
     /// `blr rn(args) -> results`.
     Blr {

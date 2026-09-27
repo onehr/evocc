@@ -281,7 +281,7 @@ fn pin_boundaries(
                     symbol,
                     args,
                     results,
-                    strict_fp,
+                    fp_mode,
                 } => {
                     let (moved, outputs) = pin_call(
                         platform,
@@ -294,7 +294,7 @@ fn pin_boundaries(
                         std::mem::take(&mut indirect_call),
                     );
                     insts.push(MInst::Bl {
-                        strict_fp: *strict_fp,
+                        fp_mode: *fp_mode,
                         symbol: symbol.clone(),
                         args: moved,
                         results: outputs.iter().map(|(pinned, _)| *pinned).collect(),

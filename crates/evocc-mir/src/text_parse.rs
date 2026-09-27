@@ -912,13 +912,17 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 volatile,
             }));
         }
-        if matches!(mnemonic, "bl" | "bl.strict_fp") {
+        if matches!(mnemonic, "bl" | "bl.strict_fp" | "bl.fixed_fp") {
             let symbol = scan.symbol()?;
             let args = scan.use_list()?;
             let results = scan.result_list()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Bl {
-                strict_fp: mnemonic == "bl.strict_fp",
+                fp_mode: match mnemonic {
+                    "bl.strict_fp" => Some(crate::FpCallMode::Strict),
+                    "bl.fixed_fp" => Some(crate::FpCallMode::Fixed),
+                    _ => None,
+                },
                 symbol,
                 args,
                 results,

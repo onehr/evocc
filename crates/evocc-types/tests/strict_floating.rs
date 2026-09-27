@@ -138,3 +138,30 @@ fn conversions_keep_status_without_admitting_invalid_c_values() {
     assert!(f64(0).to_integer_status(129, false).is_none());
     assert!(FpStatus::from_bits(32).is_none());
 }
+#[test]
+fn signed_one_bit_conversion_uses_the_real_domain_without_engine_panic() {
+    use evocc_types::{
+        floating::{FloatBits, FpStatus},
+        FloatKind,
+    };
+    for kind in [FloatKind::F32, FloatKind::F64, FloatKind::F128] {
+        for (text, value, flags) in [
+            ("0", Some(0), FpStatus::NONE),
+            ("-1", Some(u128::MAX), FpStatus::NONE),
+            ("0.5", Some(0), FpStatus::INEXACT),
+            ("-1.5", Some(u128::MAX), FpStatus::INEXACT),
+            ("1", None, FpStatus::INVALID),
+            ("-2", None, FpStatus::INVALID),
+            ("1.5", None, FpStatus::INVALID),
+        ] {
+            let input = FloatBits::parse(kind, text).unwrap();
+            let actual = input.to_integer_status(1, true).unwrap();
+            assert_eq!(
+                (actual.value, actual.status),
+                (value, flags),
+                "{kind:?} {text}"
+            );
+            assert_eq!(input.to_integer(1, true), value);
+        }
+    }
+}

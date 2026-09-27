@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <stdio.h>
 typedef unsigned __int128 U;
+#ifdef EVO_QUAD_PREDICATES
+extern int quad_predicate(unsigned,long double,long double);
+#endif
 union quad { long double f; U u; };
 extern int __eqtf2(long double, long double), __netf2(long double, long double);
 extern int __letf2(long double, long double), __lttf2(long double, long double);
@@ -18,15 +21,20 @@ int main(void) {
     const U values[] = {0, sign, 1, sign | 1, one, sign | one, one + 1,
         one - 1, inf - 1, sign | (inf - 1), inf, sign | inf,
         inf | quiet | 1, inf | 2, sign | inf | quiet | 3, sign | inf | 4};
+#ifndef EVO_QUAD_PREDICATES
     int (*helpers[])(long double, long double) = {
         __eqtf2, __netf2, __letf2, __lttf2, __getf2, __gttf2, __unordtf2};
+    unsigned operations=7;
+#else
+    unsigned operations=10;
+#endif
     uint64_t oldc = control(), olds = status();
     unsigned checks = 0, failures = 0;
     for (unsigned mode=0; mode<4; ++mode)
     for (unsigned prior=0; prior<32; ++prior)
     for (unsigned i=0; i<16; ++i)
     for (unsigned j=0; j<16; ++j)
-    for (unsigned op=0; op<7; ++op) {
+    for (unsigned op=0; op<operations; ++op) {
         union quad a = {.u=values[i]}, b = {.u=values[j]};
         U ma=a.u & ~sign, mb=b.u & ~sign;
         int na=ma>inf, nb=mb>inf;
@@ -35,11 +43,21 @@ int main(void) {
         int less=(a.u & sign) ? ((b.u & sign) ? ma>mb : !equal)
                              : ((b.u & sign) ? 0 : ma<mb);
         int order=equal ? 0 : less ? -1 : 1;
+#ifdef EVO_QUAD_PREDICATES
+        unsigned pred=op>=6 ? op-4 : op;
+        int expected=pred==1 ? (!equal||na||nb) : !(na||nb) &&
+            (pred==0 ? equal : pred==2 ? less : pred==3 ? (less||equal) : pred==4 ? (!less&&!equal) : !less);
+#else
         int expected = op<2 ? (!equal || na || nb) : op==6 ? (na || nb)
             : (na || nb) ? (op<4 ? 2 : -2) : order;
+#endif
         unsigned raised=(op>=2 && op<6) ? (na || nb) : signaling;
         set((uint64_t)mode<<22, prior);
+#ifdef EVO_QUAD_PREDICATES
+        int actual=quad_predicate(op,a.f,b.f);
+#else
         int actual=helpers[op](a.f,b.f);
+#endif
         uint64_t flags=status(), controls=control();
         set(0,0);
         ++checks;

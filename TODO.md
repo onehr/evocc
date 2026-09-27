@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.110** and EvoMIR **0.47**. This is the Git-tracked execution backlog,
+EvoIR **1.9.110** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -657,10 +657,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     [Evidence and exact limits](tests/fixtures/toybox-filesystem-mutation.out).
 
 - [ ] **B07 — Finish jq's binary128 interface and original tests** — `OPEN`, P2, after L02.
-  `src/builtin.c` calls `nexttoward(double, long double)`; 68/69 objects and mixed
-  `make check` do not prove full EvoCC coverage. Compile/install the final object
-  with the real binary128 ABI, then replay unchanged `make check` and audit that
-  no target object falls back to the reference. [Receipt](tests/contracts/ladder-jq-receipt.json).
+  Run `20260927T080457Z` compiles/installs all **69/69** objects, including
+  `src/builtin.c`'s `nexttoward(double, long double)` call. Unchanged `make check`
+  passes nine jq scripts and 21 bundled Oniguruma programs; no target object was
+  excluded or replaced by make. The command audit discovered that the common
+  adapter still omits **`-pthread`**. A minimal driver test reproduces its
+  unsupported-option rejection; implement its target preprocessing semantics,
+  preserve the option in projection and rerun before closing faithful-command
+  acceptance. [Receipt](tests/contracts/ladder-jq-receipt.json).
 
 - [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2, after L01.
   Honoring `-frounding-math` currently leaves 0/1,339 units compiled; this is one missing
@@ -748,7 +752,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   exact-bit text, typed objects, both interpreters and quad HFA/vararg metadata.
   Arithmetic/NaN/dynamic-mode/vararg programs and E3001/E3063 negatives pass;
   independent proof mutation rejects changed bits, format and HFA role.
-  Native quad lowering/ABI and jq remain OPEN, not inherited from these results.
+  Hosted native quad lowering now passes eight EvoCC/reference numeric builds
+  (6,400 arithmetic, 32,000 library-FMA, 18,412 integer128, 9,256 integer32/64,
+  304 format conversions and 327,680 predicate checks per build). Sixteen crossed
+  ABI builds pass scalar/mixed/stack/HFA/vararg/callback tests, including a
+  callback that clobbers the unpreserved SIMD upper halves. The raw MIR matrix
+  also exposed and fixed an APFloat adapter panic at signed bits<1>; both pure
+  definedness and strict total conversion now have all-width/mode regressions.
+  Raw IR adds 5,376 total-conversion checks and 32,000 explicit FMA records in
+  each of four native builds. The changed-crate gate passes **2,416 tests / zero
+  failures / four retained ignores**, Clippy and fmt. jq's 69/69 original replay
+  passes, but its discovered `-pthread` projection gap must close in B07 before
+  promoting the final application claim.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

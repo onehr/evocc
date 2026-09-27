@@ -441,13 +441,23 @@ impl FloatBits {
             let value = F::from_bits(self.bits);
             if signed {
                 value
-                    .to_i128_r(usize::from(width), Round::TowardZero, &mut false)
+                    // APFloat's signed conversion delegates positive values
+                    // to an unsigned width-1 conversion; width zero panics.
+                    // Convert the singleton signed width through bits<2>,
+                    // then enforce its actual {-1, 0} domain below.
+                    .to_i128_r(usize::from(width.max(2)), Round::TowardZero, &mut false)
                     .map(|v| v as u128)
             } else {
                 value.to_u128_r(usize::from(width), Round::TowardZero, &mut false)
             }
         });
         let status = FpStatus::engine(result.status);
+        if signed && width == 1 && result.value != 0 && result.value != u128::MAX {
+            return Some(FpResult {
+                value: None,
+                status: FpStatus::INVALID,
+            });
+        }
         Some(FpResult {
             value: (!status.contains(FpStatus::INVALID)).then_some(result.value),
             status,

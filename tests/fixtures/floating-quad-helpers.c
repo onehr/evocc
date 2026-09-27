@@ -8,9 +8,13 @@ _Static_assert(sizeof(long double)==16 && __LDBL_MANT_DIG__==113, "binary128 tar
 static uint64_t read_control(void) { uint64_t v; __asm__ volatile("mrs %0,fpcr":"=r"(v)); return v; }
 static uint64_t read_status(void) { uint64_t v; __asm__ volatile("mrs %0,fpsr":"=r"(v)); return v; }
 static void set(uint64_t c,uint64_t s) { __asm__ volatile("msr fpcr,%0; msr fpsr,%1; isb"::"r"(c),"r"(s):"memory"); }
+#ifdef EVO_QUAD_SUBJECT
+extern long double arithmetic(unsigned,long double,long double);
+#else
 static __attribute__((noinline)) long double arithmetic(unsigned op,long double a,long double b) {
     switch(op) {case 0:return a+b; case 1:return a-b; case 2:return a*b; default:return a/b;}
 }
+#endif
 int main(void) {
     const U one=(U)0x3fff000000000000ULL<<64;
     const U sign=(U)1<<127;

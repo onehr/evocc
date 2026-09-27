@@ -11,9 +11,13 @@ static uint64_t status(void) { uint64_t x; __asm__ volatile("mrs %0,fpsr":"=r"(x
 static void set(uint64_t c, uint64_t s) {
     __asm__ volatile("msr fpcr,%0; msr fpsr,%1; isb"::"r"(c),"r"(s):"memory");
 }
+#ifdef EVO_QUAD_SUBJECT
+extern long double fused(long double,long double,long double);
+#else
 static __attribute__((noinline)) long double fused(long double a, long double b, long double c) {
     return fmal(a, b, c);
 }
+#endif
 int main(void) {
     const U one = (U)0x3fff000000000000ULL << 64;
     const U sign = (U)1 << 127, infinity = (U)0x7fff000000000000ULL << 64;

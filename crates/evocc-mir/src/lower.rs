@@ -11,6 +11,7 @@
 //! below reads a hash map in iteration order, a clock, or an address.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
+mod quad;
 
 use evocc_evoir::{
     call_argument_marks, inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly,
@@ -223,6 +224,7 @@ fn class_of(ty: &EvoIRType) -> Result<RegClass, (&'static str, &'static str)> {
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Ok(RegClass::Gpr64),
         EvoIRType::F32 => Ok(RegClass::Simd32),
         EvoIRType::F64 => Ok(RegClass::Simd64),
+        EvoIRType::F128 => Ok(RegClass::Simd128),
         EvoIRType::Vec { .. } => match vector_bytes(ty) {
             Some(1 | 2 | 4) => Ok(RegClass::Gpr32),
             Some(8) => Ok(RegClass::Simd64),
@@ -252,6 +254,7 @@ fn simd_argument_bytes(ty: &EvoIRType) -> Option<u64> {
     match ty {
         EvoIRType::F32 => Some(4),
         EvoIRType::F64 => Some(8),
+        EvoIRType::F128 => Some(16),
         _ => short_vector_bytes(ty),
     }
 }
@@ -302,6 +305,7 @@ fn significant_bits(ty: &EvoIRType) -> u16 {
     match ty {
         EvoIRType::Bits(width) => *width,
         EvoIRType::F32 => 32,
+        EvoIRType::F128 => 128,
         EvoIRType::Vec { .. } => vector_bytes(ty).map_or(64, |bytes| bytes as u16 * 8),
         _ => 64,
     }
@@ -379,6 +383,25 @@ fn scan_function(
         .map(|param| param.ty.clone())
         .collect();
     let marked = marked_types(&declared, &function.param_marks);
+    if target != Target::Linux
+        && (declared
+            .iter()
+            .chain(&function.ret_tys)
+            .any(|t| *t == EvoIRType::F128)
+            || function.param_marks.iter().any(|m| match m {
+                ParamMark::ByVal(s) | ParamMark::Sret(s) => s
+                    .floating
+                    .is_some_and(|f| f.kind == evocc_types::FloatKind::F128),
+                _ => false,
+            }))
+    {
+        report(
+            E4009,
+            entry_block,
+            0,
+            "binary128 ABI is qualified only for Linux".into(),
+        );
+    }
     let plan = record_plan(target, &marked, true);
     if plan.positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
         report(
@@ -495,6 +518,18 @@ fn scan_inst(
     report: &mut impl FnMut((&'static str, &'static str), u32, usize, String),
 ) {
     if target != Target::Linux {
+        if inst_results(inst)
+            .into_iter()
+            .chain(inst_uses(inst))
+            .any(|v| v.ty == EvoIRType::F128)
+        {
+            report(
+                E4009,
+                block,
+                index,
+                "binary128 is qualified only for Linux".into(),
+            );
+        }
         if let Inst::StrictFloating(op) = inst {
             if matches!(
                 op.instruction.op,
@@ -762,7 +797,11 @@ fn scan_inst(
 fn unsupported_access(ty: &EvoIRType) -> Option<String> {
     match ty {
         EvoIRType::Vec { .. } if matches!(vector_bytes(ty), Some(1 | 2 | 4 | 8 | 16)) => None,
-        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::F32 | EvoIRType::F64 => None,
+        EvoIRType::Ptr(_)
+        | EvoIRType::FnPtr { .. }
+        | EvoIRType::F32
+        | EvoIRType::F64
+        | EvoIRType::F128 => None,
         // Sixteen is the pair Section 5 accesses with `ldp`/`stp`.
         EvoIRType::Bits(width) if matches!(width.div_ceil(8), 1 | 2 | 4 | 8 | 16) => None,
         other => Some(format!("an access of type {other:?} has no matching width")),
@@ -3269,7 +3308,7 @@ fn lower_inst(
                 symbol: callee.clone(),
                 args: arguments,
                 results: outputs,
-                strict_fp: false,
+                fp_mode: None,
             });
             insts.extend(after);
         }
@@ -3611,6 +3650,7 @@ fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {
     Ok(match ty {
         EvoIRType::F32 => LoadKind::S,
         EvoIRType::F64 => LoadKind::D,
+        EvoIRType::F128 => LoadKind::Q,
         EvoIRType::Vec { .. } => match vector_bytes(ty) {
             Some(1) => LoadKind::B,
             Some(2) => LoadKind::H,
@@ -3636,6 +3676,7 @@ fn store_kind(ty: &EvoIRType) -> Result<StoreKind, String> {
     Ok(match ty {
         EvoIRType::F32 => StoreKind::S,
         EvoIRType::F64 => StoreKind::D,
+        EvoIRType::F128 => StoreKind::Q,
         EvoIRType::Vec { .. } => match vector_bytes(ty) {
             Some(1) => StoreKind::B,
             Some(2) => StoreKind::H,
@@ -3674,7 +3715,7 @@ fn lower_floating(
         .chain(std::iter::once(result))
         .any(|v| v.ty == EvoIRType::F128)
     {
-        return Err("binary128 native lowering is not yet qualified".into());
+        return quad::lower(lowerer, insts, operation, strict);
     }
     let kind = operation
         .arguments
@@ -3813,7 +3854,11 @@ fn lower_floating(
             symbol,
             args,
             results,
-            strict_fp: strict,
+            fp_mode: Some(if strict {
+                crate::FpCallMode::Strict
+            } else {
+                crate::FpCallMode::Fixed
+            }),
         });
         return Ok(());
     }
@@ -4179,7 +4224,7 @@ fn divide(
             symbol: symbol.to_owned(),
             args,
             results,
-            strict_fp: false,
+            fp_mode: None,
         });
         return Ok(());
     }
@@ -4610,7 +4655,7 @@ fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::F32 | EvoIRType::F64 => {
             Some((8, 8))
         }
-        EvoIRType::Bits(128) => Some((16, 16)),
+        EvoIRType::Bits(128) | EvoIRType::F128 => Some((16, 16)),
         EvoIRType::Bits(width) if *width <= 64 => Some((8, 8)),
         _ => None,
     }

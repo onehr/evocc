@@ -1,34 +1,24 @@
 {
   "schemaVersion": 1,
-  "run": "20260926T133321.056520Z",
-  "subject": "c96d55f36a564aa4d167ffb24a29df740d629de0",
+  "run": "20260927T080457.282019Z",
+  "subject": "9234f1521fcd99f6016864acdda92d7102225391",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "e8bddc0ac0fe8368c4534a2781a77d651ed2fedc8d4d33812e393d21686e312f",
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-quad-subject",
+  "driverSha256": "b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel-full",
+    "jq",
     "--evocc",
-    "target/frontend/release/evocc",
+    ".build/floating-targeted/strict-20260927/evocc-quad-subject",
     "--jobs",
-    "2",
-    "--allow-qemu-drift",
-    "--low-disk",
-    "--kernel-work-root",
-    ".build/k7-coverage/case/bpf",
-    "--kernel-source-root",
-    ".build/k7-coverage/case/linux-src",
-    "--kernel-full-receipt",
-    "tests/contracts/kernel-bpf-full-receipt.json",
-    "--resume-kernel-prepared",
-    ".evidence/k1/20260926T080947Z"
+    "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-full"
+    "jq"
   ],
-  "status": "ERROR",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -4729,15 +4719,13 @@
       "rung": "E10",
       "note": "original make check with bundled Oniguruma; mixed-object ramp",
       "outcomes": {},
-      "refusals": {
-        "E3049": 1
-      },
+      "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 69,
-      "passed": 68,
+      "passed": 69,
       "kind": "units",
-      "compiled": 68,
+      "compiled": 69,
       "excluded": 0,
       "testVerdict": {
         "passed": true,
@@ -4918,19 +4906,19 @@
           "vendor/decNumber/decNumber.lo"
         ]
       },
-      "status": "INCOMPLETE",
-      "run": "20260919T231539Z",
-      "evidence": ".evidence/ladder/jq/20260919T231539Z",
+      "status": "PASS",
+      "run": "20260927T080457Z",
+      "evidence": ".evidence/ladder/jq/20260927T080457Z",
       "receipt": "tests/contracts/ladder-jq-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/jq.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure"
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-quad-subject"
       ],
       "exitCode": 0,
-      "seconds": 54.6,
+      "seconds": 176.5,
       "previous": {
         "rung": "E10",
         "note": "original make check with bundled Oniguruma; mixed-object ramp",
@@ -4952,7 +4940,8 @@
           "stage": "pass",
           "signature": "",
           "regeneratedInputs": [],
-          "command": "make check V=1"
+          "command": "make check V=1",
+          "completedTrial": "attempt-1"
         },
         "adjustments": {
           "sysroot": {},
@@ -5124,13 +5113,13 @@
           ]
         },
         "status": "INCOMPLETE",
-        "run": "20260919T193126Z",
-        "evidence": ".evidence/ladder/jq/20260919T193126Z"
+        "run": "20260919T231539Z",
+        "evidence": ".evidence/ladder/jq/20260919T231539Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20260927T080457.282019Z",
+        "subject": "9234f1521fcd99f6016864acdda92d7102225391",
+        "driverSha256": "b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad"
       }
     },
     "lua": {

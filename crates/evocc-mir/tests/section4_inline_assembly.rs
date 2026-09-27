@@ -111,7 +111,7 @@ fn simd_assembly_goto_outputs_spill_all_lanes_after_the_selected_edge() {
         }
         let mut insts = vec![
             MInst::Bl {
-                strict_fp: false,
+                fp_mode: None,
                 symbol: "touch_simd".into(),
                 args: vec![],
                 results: vec![],
@@ -230,7 +230,7 @@ fn assembly_goto_outputs_survive_spilling_on_both_edges() {
         })
         .collect();
     let mut insts = vec![MInst::Bl {
-        strict_fp: false,
+        fp_mode: None,
         symbol: "touch".into(),
         args: vec![],
         results: vec![],

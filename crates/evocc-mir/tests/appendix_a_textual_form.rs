@@ -166,7 +166,7 @@ fn every_form() -> MModule {
                             align: 8,
                         },
                         MInst::Bl {
-                            strict_fp: false,
+                            fp_mode: None,
                             symbol: "helper".to_owned(),
                             args: vec![g(12), w(10)],
                             results: vec![w(13), g(20)],

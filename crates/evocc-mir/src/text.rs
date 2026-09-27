@@ -572,10 +572,14 @@ pub fn render_inst(inst: &MInst) -> String {
             symbol,
             args,
             results: outputs,
-            strict_fp,
+            fp_mode,
         } => format!(
             "{} @{symbol}({}){}",
-            if *strict_fp { "bl.strict_fp" } else { "bl" },
+            match fp_mode {
+                Some(crate::FpCallMode::Strict) => "bl.strict_fp",
+                Some(crate::FpCallMode::Fixed) => "bl.fixed_fp",
+                None => "bl",
+            },
             uses(args),
             results(outputs)
         ),

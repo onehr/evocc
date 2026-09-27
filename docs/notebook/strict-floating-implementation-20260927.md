@@ -1,7 +1,8 @@
 # Strict floating-point implementation checkpoint
 
-This extends the existing scalar profile; it is not a new FP implementation,
-a completed L01/L02 claim, or a kernel/application rerun.
+This extends the existing scalar profile; it is not a new FP implementation
+or a kernel rerun. Later sections record the hosted quad and jq replay; their
+acceptance boundaries do not retroactively strengthen earlier checkpoints.
 
 ## Numerical prerequisite
 
@@ -322,3 +323,72 @@ ignores, and one stale coverage-manifest sentinel failed. After updating that
 independent sentinel, its targeted rerun passes (2,412 distinct tests total).
 The full workspace Clippy/all-targets and formatting checks also pass. This is
 the source/IR checkpoint, not a completed native or application gate.
+
+## Hosted binary128 backend (EvoMIR 0.48)
+
+The original native source RED reported E4009. Linux lowering now uses the
+existing SIMD128 bank and qualified runtime calls. Typed loads/stores, HFA,
+stack arguments, varargs and allocator call preservation share the established
+paths. Darwin quad remains refused. Bit-only C conversion predicates neither
+quiet sNaNs nor change status; invalid raw IR inputs never reach a helper outside
+its integer-conversion domain.
+
+The raw MIR width matrix exposed an APFloat signed bits<1> panic: its signed
+conversion delegates to an unsigned width-zero operation. The shared adapter
+now converts through width two and applies the real {-1,0} domain, preserving
+inexact for valid fractional inputs and INVALID for out-of-domain inputs.
+All three admitted formats have an isolated regression. No vendored code or
+dependency pin changed.
+
+Native EvoCC O0/O2 subject objects pass with GCC14/Clang19 O0/O2 callers:
+
+- four core source programs;
+- 6,400 exact arithmetic records;
+- 32,000 ordinary-library FMA records, including unchanged errno;
+- 18,412 integer128 conversion records;
+- 9,256 integer32/64 conversion records;
+- 304 format-conversion records;
+- 327,680 equality/ordered/quiet comparison checks (all four modes and every
+  prior sticky-status mask).
+
+Each of those counts is **per one of eight builds**, not a new application
+numerator. Four reference-only ABI controls and sixteen crossed ABI builds
+pass both directions: mixed scalars, ninth quad argument, HFA2/3/4, HFA register
+exhaustion, one shared mixed stack, variadic quad/HFA and live values across a
+callback that changes v8..v15 upper halves. The source `fmal` remains a library
+call; a failed `__builtin_fmal` probe was not relabeled supported.
+
+Machine text distinguishes ordinary `bl`, `bl.fixed_fp` and `bl.strict_fp`.
+This avoids applying pure-IR RNE semantics to an ordinary libm call that reads
+the actual rounding mode and raises flags. Mode identity survives allocation
+and independent text checks; fixed admission must reject a dynamic mode even
+if an explicit admission marker is omitted.
+
+The final native matrix used frozen subject SHA-256
+`b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad`.
+Raw IR adds **5,376 total-conversion checks** and **32,000 explicit fused IR
+records** per GCC14/Clang19 O0/O2 caller. All pass, including invalid inputs
+without invalid C casts. `floating-quad-raw.evoir` and `floating-quad-fma.evoir`
+are emitted using the validated `evoir_assembly` bridge; the native matrix is
+retained in `tests/acceptance/quad-hosted-native.sh`. The changed-crate gate
+against `9234f15` passes **2,416 tests, zero failures, four retained ignores**,
+followed by Clippy/all-targets and fmt. Logs are `quad-native-frozen.log`,
+`quad-raw-fma-native.log` and `quad-native-gate.log` in the small local directory.
+
+## Original jq replay and discovered command gap
+
+Run `20260927T080457Z` uses that exact frozen subject and the existing
+case-sensitive sealed header export. All **69/69** target-C objects compile and
+are installed; there are no refusals, exclusions, unmeasured build units or
+make-rebuilt target objects. Original `make check V=1` passes all nine jq scripts,
+seven Oniguruma tests and fourteen Oniguruma samples. The earlier attempt
+`20260927T080351.108606Z` stopped at the case-sensitive-sysroot precondition,
+before compilation, and is not a test failure or a PASS.
+
+This establishes the real `nexttoward` quad interface and full-object execution
+under the recorded command projection. Audit then found `-pthread` among omitted
+flags: the driver currently rejects it, and the adapter drops it. B07 remains
+open until this behavior-affecting option is implemented and the original replay
+repeated. The pinned GCC14/Clang19 macro census shows `_REENTRANT=1` as its
+preprocessing effect; user `-U_REENTRANT` still overrides it. No source or test
+assertion is changed to compensate for the gap.
