@@ -57,3 +57,24 @@ isolated loader), native.py, native.json, native-setup-error.json,
 candidate-final.log. Initial RED log is
 .build/floating-targeted/codegen-options-20260927/k1-verdict-red.log.
 Only small scripts, logs, assembly and three objects were created; no image/tree.
+
+2026-09-28 follow-up, still isolated while PID 80898 runs:
+The first candidate also accepted a zero-byte object with exit 0. A new failing
+test reproduces that false success. The updated candidate requires nonempty
+objects both for new verdicts and cache reuse. All 53 survey-cache tests and
+Ruff pass. Three additional actual sealed-container controls assemble normally,
+then deliberately truncate only the isolated a.o before returning zero:
+  live implementation: assembled with the SHA256 of empty bytes (RED)
+  updated candidate: assembler-refused, assemblerExitCode 0
+  updated candidate without truncation: assembled, assemblerExitCode 0
+The candidate cache control also refuses an empty file even when its empty-file
+hash matches a cache entry. Original exit-17 evidence above remains historical;
+the tracked pending patch now includes both repairs, and git apply --check passes.
+No live production-script change or T05i closure is claimed.
+
+Updated SHA256:
+  candidate: 86c72b2a94ce5173cddef4dadf584f9010d9a9e5e42dbacdc32236d9d27dac14
+  pending patch: f071a74eb69ef255e956f5bf6cfe22d7e827043ea1183cab3c4e396deb484d17
+  empty-native/native.json: 32f6aaed15e8250bc0920d90c22bedd91a7ffbea3947368fe37d1f8b6fda44a4
+Additional records in the same artifact directory: empty-object-red.log,
+empty-object-final.log, native-empty.py, empty-native.log, empty-native/.
