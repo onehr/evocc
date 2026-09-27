@@ -6,6 +6,76 @@ use evocc_types::floating::{FpEnvironment, FpRounding, FpStatus};
 
 const ADD: &str = include_str!("../../../tests/fixtures/floating-strict-world.evoir");
 
+#[test]
+fn strict_hosted_wide_helpers_keep_mode_status_and_total_raw_conversion() {
+    let ir = parse_section9_module(include_bytes!(
+        "../../../tests/fixtures/floating-strict-wide.evoir"
+    ))
+    .unwrap();
+    let machine = evocc_mir::lower_module_for(Target::Linux, &ir, &|_| false).unwrap();
+    let text = render_module(&machine);
+    assert!(
+        text.contains("bl.strict_fp @__floatuntidf") && text.contains("fp.env.check.strict"),
+        "{text}"
+    );
+    assert_eq!(parse_module(&text).unwrap(), machine);
+    assert!(evocc_mir::validate_module(
+        &parse_module(&text.replace("__floatuntidf", "unqualified")).unwrap()
+    )
+    .is_err());
+    assert!(compile_module_for(Target::Darwin, &ir, &|_| true).is_err());
+    let asm = compile_module_for(Target::Linux, &ir, &|_| true).unwrap();
+    assert!(asm.contains("bl __floatuntidf") && asm.contains("bl __fixdfti"));
+    for rounding in [
+        FpRounding::NearestEven,
+        FpRounding::Upward,
+        FpRounding::Downward,
+        FpRounding::TowardZero,
+    ] {
+        let env = FpEnvironment {
+            rounding,
+            flags: FpStatus::DIV_BY_ZERO,
+        };
+        let result = evocc_mir::interp::interpret_module_with_fp_environment(
+            &machine,
+            "strict_wide_from",
+            &[MirValue::Int(1), MirValue::Int(1)],
+            MirLimits::new(1000),
+            env,
+        )
+        .unwrap();
+        assert_eq!(
+            result.results[0],
+            value(0x43f0000000000000 + u128::from(rounding == FpRounding::Upward))
+        );
+        assert_eq!(
+            result.world.fp_environment().flags,
+            FpStatus::DIV_BY_ZERO.union(FpStatus::INEXACT)
+        );
+        for (input, lo, hi, status) in [
+            (0x3ff8000000000000, 1, 0, FpStatus::INEXACT),
+            (0x43f0000000000000, 0, 1, FpStatus::NONE),
+            (0x7ff8000000000011, 0, 0, FpStatus::INVALID),
+            (0x7ff0000000000011, 0, 0, FpStatus::INVALID),
+            (0x47e0000000000000, 0, 0, FpStatus::INVALID),
+        ] {
+            let result = evocc_mir::interp::interpret_module_with_fp_environment(
+                &machine,
+                "strict_wide_to",
+                &[value(input)],
+                MirLimits::new(1000),
+                env,
+            )
+            .unwrap();
+            assert_eq!(result.results, vec![MirValue::Int(lo), MirValue::Int(hi)]);
+            assert_eq!(
+                result.world.fp_environment().flags,
+                FpStatus::DIV_BY_ZERO.union(status)
+            );
+        }
+    }
+}
+
 fn value(bits: u128) -> MirValue {
     let mut representation = evocc_memory::ObjectRepresentation::uninitialized(8).unwrap();
     representation

@@ -35,7 +35,7 @@ The pure conversion-definedness predicate first classifies NaNs as integer bits:
 an FCMP on an sNaN would otherwise introduce an undeclared INVALID effect.
 Strict raw invalid conversions return the specified total value and raise INVALID;
 C's separate E3063 guard remains mandatory. Strict 128-bit integer helper
-conversions still refuse pending their own status/rounding audit.
+conversions were initially refused; the qualified extension is recorded below.
 
 Historical sealed certificates are not rewritten. Their reader is explicitly
 selected (`--legacy-pre-fenv`); current parsing rejects a missing field. The
@@ -143,3 +143,32 @@ sections and excess-precision); it is not faithful full-build acceptance.
 Binary128, musl, jq and full campaigns remain separately tracked
 in `TODO.md`. No traps, Annex F, floating vectors/complex or half support is
 implied by this checkpoint.
+
+## Strict integer128 conversions (EvoMIR 0.47)
+
+The existing scalar formats now use qualified Linux hosted helpers for strict
+integer128 conversions. They do not acquire an f128 type. `bl.strict_fp`
+preserves the admitted helper identity, ABI signature and interpreter status
+contract; `fp.env.check.strict` is distinct from the fixed-mode check. C's
+E3063 guard remains. Raw IR invalid conversion yields zero plus INVALID without
+invoking a runtime helper on an out-of-domain input. Non-Linux strict helper
+lowering remains refused rather than assuming the same runtime behavior.
+
+`floating-wide-conversions.c` covers every integer exponent boundary with
+nearby values, 512 deterministic random inputs and defined fractional/wide
+FP-to-integer controls. Each of GCC14/Clang19 O0/O2 emits **36,784** records
+with SHA-256
+`ffa97d889c7b0d86b5d1ce25de2704c6e98f81f87934541bcaff072d1079ed90`.
+The independent APFloat adapter checks every value, status and unchanged FPCR.
+Actual EvoCC O0/O2 functions in `floating-wide-source.c`, called by all four
+reference compiler/optimization combinations, reproduce that same stream:
+**eight builds, 36,784 records per build, PASS**.
+
+`floating-strict-wide.evoir` and its native driver additionally exercise all
+32 prior flag masks under all four modes, including sNaN/qNaN/out-of-range raw
+conversion: **768 checks in each of four reference caller builds, PASS**.
+Both source interpreters agree across eight entry functions, four modes and
+both optimization settings. MIR tests cover typed-call validation, text,
+allocation, explicit environment/status and unsupported-target rejection.
+This closes the strict wide-conversion gap only, not lexical FENV_ACCESS,
+binary128 or either original application campaign.

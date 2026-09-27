@@ -417,6 +417,7 @@ fn bl_passes_arguments_and_returns_one_result() {
                     id: 0,
                     args: vec![w(0)],
                     insts: vec![MInst::Bl {
+                        strict_fp: false,
                         symbol: "twice".to_owned(),
                         args: vec![w(0)],
                         results: vec![w(1)],
@@ -728,6 +729,7 @@ fn a_call_binds_every_result_it_declares() {
                     id: 0,
                     args: vec![w(0)],
                     insts: vec![MInst::Bl {
+                        strict_fp: false,
                         symbol: "pair".to_owned(),
                         args: vec![w(0)],
                         results: vec![w(1), w(2)],

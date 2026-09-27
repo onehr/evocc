@@ -494,6 +494,25 @@ fn scan_inst(
     index: usize,
     report: &mut impl FnMut((&'static str, &'static str), u32, usize, String),
 ) {
+    if target != Target::Linux {
+        if let Inst::StrictFloating(op) = inst {
+            if matches!(
+                op.instruction.op,
+                evocc_evoir::FloatingOp::FromSigned
+                    | evocc_evoir::FloatingOp::FromUnsigned
+                    | evocc_evoir::FloatingOp::ToSigned
+                    | evocc_evoir::FloatingOp::ToUnsigned
+            ) && op
+                .instruction
+                .arguments
+                .iter()
+                .chain(std::iter::once(&op.instruction.result))
+                .any(|v| is_pair(&v.ty))
+            {
+                report(E4009,block,index,"strict integer128 floating helpers are qualified only for the Linux hosted runtime".into());
+            }
+        }
+    }
     if let Inst::Call { args, results, .. } | Inst::IndirectCall { args, results, .. } = inst {
         if args
             .iter()
@@ -3250,6 +3269,7 @@ fn lower_inst(
                 symbol: callee.clone(),
                 args: arguments,
                 results: outputs,
+                strict_fp: false,
             });
             insts.extend(after);
         }
@@ -3679,10 +3699,7 @@ fn lower_floating(
     let from_pair = matches!(op, FromSigned | FromUnsigned) && is_pair(&operation.arguments[0].ty);
     let to_pair = matches!(op, ToSigned | ToUnsigned) && is_pair(&result.ty);
     if from_pair || to_pair {
-        if strict {
-            return Err("E3065: strict 128-bit integer helper status is not yet qualified".into());
-        }
-        insts.push(MInst::FpEnvCheck);
+        insts.push(MInst::FpEnvCheck { strict });
         let mut args = call_args(lowerer, insts, &operation.arguments)?;
         if to_pair {
             // Do not call a C runtime helper outside its defined conversion
@@ -3700,6 +3717,56 @@ fn lower_floating(
                 kind,
                 args: vec![input],
             });
+            if strict {
+                // Raw IR conversion is total: invalid input yields zero and
+                // INVALID. The runtime helper only receives the selected zero;
+                // a strict NaN->integer conversion raises the missing flag.
+                let flags = lowerer.fresh(RegClass::Flags);
+                insts.push(MInst::CmpImm {
+                    dst: flags,
+                    lhs: defined,
+                    imm: 0,
+                    width: Width::W,
+                });
+                let invalid = lowerer.fresh(RegClass::Gpr32);
+                insts.push(MInst::Cset {
+                    dst: invalid,
+                    flags,
+                    cond: Cond::Eq,
+                });
+                let nan = lowerer.fresh(if kind == FloatKind::F32 {
+                    RegClass::Gpr32
+                } else {
+                    RegClass::Gpr64
+                });
+                insts.push(MInst::MovImm {
+                    dst: nan,
+                    imm: if kind == FloatKind::F32 {
+                        0x7fc00000
+                    } else {
+                        0x7ff8000000000000
+                    },
+                });
+                let bits = floating_select_zero(lowerer, insts, nan, invalid);
+                let input = lowerer.fresh(crate::floating::class(kind));
+                insts.push(MInst::Floating {
+                    strict: false,
+                    integer_bits: 0,
+                    dst: input,
+                    op: FromBits,
+                    kind,
+                    args: vec![bits],
+                });
+                let ignored = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Floating {
+                    strict: true,
+                    integer_bits: 64,
+                    dst: ignored,
+                    op: ToSigned,
+                    kind,
+                    args: vec![input],
+                });
+            }
             let raw = lowerer.fresh(if kind == FloatKind::F32 {
                 RegClass::Gpr32
             } else {
@@ -3738,6 +3805,7 @@ fn lower_floating(
             symbol,
             args,
             results,
+            strict_fp: strict,
         });
         return Ok(());
     }
@@ -4103,6 +4171,7 @@ fn divide(
             symbol: symbol.to_owned(),
             args,
             results,
+            strict_fp: false,
         });
         return Ok(());
     }

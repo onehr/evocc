@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.108](docs/evoir-spec.md) and [EvoMIR 0.46](docs/evomir-spec.md).
+[EvoIR 1.9.108](docs/evoir-spec.md) and [EvoMIR 0.47](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.

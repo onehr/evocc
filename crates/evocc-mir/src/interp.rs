@@ -373,6 +373,7 @@ pub fn interpret_module_with_fp_environment(
                     ref symbol,
                     ref args,
                     ref results,
+                    strict_fp,
                 } => {
                     let values = read_all(&frames[top], args)?;
                     let index = module
@@ -388,7 +389,9 @@ pub fn interpret_module_with_fp_environment(
                             values,
                             results.clone(),
                         )?;
-                    } else if let Some(outputs) = hosted_numeric_runtime(symbol, &values)? {
+                    } else if let Some(outputs) =
+                        hosted_numeric_runtime(symbol, &values, &mut state.world, strict_fp)?
+                    {
                         if results.len() != outputs.len() {
                             return Err(MirError::Invalid {
                                 detail: format!("@{symbol} has the wrong result register count"),
@@ -576,19 +579,11 @@ pub fn interpret_module_with_fp_environment(
 fn hosted_numeric_runtime(
     symbol: &str,
     args: &[MirValue],
+    world: &mut WorldState,
+    strict: bool,
 ) -> Result<Option<Vec<MirValue>>, MirError> {
     use evocc_types::{floating::FloatBits, FloatKind};
-    let conversion = match symbol {
-        "__floattisf" => Some((true, true, FloatKind::F32)),
-        "__floattidf" => Some((true, true, FloatKind::F64)),
-        "__floatuntisf" => Some((true, false, FloatKind::F32)),
-        "__floatuntidf" => Some((true, false, FloatKind::F64)),
-        "__fixsfti" => Some((false, true, FloatKind::F32)),
-        "__fixdfti" => Some((false, true, FloatKind::F64)),
-        "__fixunssfti" => Some((false, false, FloatKind::F32)),
-        "__fixunsdfti" => Some((false, false, FloatKind::F64)),
-        _ => None,
-    };
+    let conversion = crate::floating::hosted_conversion(symbol);
     if let Some((from_integer, signed, kind)) = conversion {
         let bytes = if kind == FloatKind::F32 { 4 } else { 8 };
         let invalid = || MirError::Invalid {
@@ -599,17 +594,26 @@ fn hosted_numeric_runtime(
                 return Err(invalid());
             };
             let raw = u128::from(*lo) | (u128::from(*hi) << 64);
-            let value = if signed {
-                FloatBits::from_signed(kind, raw as i128)
+            let environment = world.fp_environment();
+            let rounding = if strict {
+                environment.rounding
             } else {
-                FloatBits::from_unsigned(kind, raw)
+                evocc_types::floating::FpRounding::NearestEven
             };
+            let result = if signed {
+                FloatBits::from_signed_round(kind, raw as i128, rounding)
+            } else {
+                FloatBits::from_unsigned_round(kind, raw, rounding)
+            };
+            if strict {
+                *world = world.with_fp_environment(environment.raised(result.status));
+            }
             let mut repr = evocc_memory::ObjectRepresentation::uninitialized(bytes)
                 .map_err(|e| memory_error(&e))?;
             repr.write_integer(
                 0,
                 bytes,
-                Some(value.bits()),
+                Some(result.value.bits()),
                 evocc_memory::ByteOrder::Little,
             )
             .map_err(|e| memory_error(&e))?;
@@ -621,10 +625,14 @@ fn hosted_numeric_runtime(
         let raw = repr
             .read_integer(0, bytes, evocc_memory::ByteOrder::Little)
             .ok_or_else(invalid)?;
-        let value = FloatBits::from_bits(kind, raw)
+        let result = FloatBits::from_bits(kind, raw)
             .ok_or_else(invalid)?
-            .to_integer(128, signed)
+            .to_integer_status(128, signed)
             .ok_or_else(invalid)?;
+        let value = result.value.ok_or_else(invalid)?;
+        if strict {
+            *world = world.with_fp_environment(world.fp_environment().raised(result.status));
+        }
         return Ok(Some(vec![
             MirValue::Int(value as u64),
             MirValue::Int((value >> 64) as u64),
@@ -2002,10 +2010,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         // ordinary last argument, which is what the interpreter passes, so
         // there is nothing here to do.
         MInst::IndirectResult => {}
-        MInst::FpEnvCheck => state
-            .world
-            .check_fixed_fp_environment()
-            .map_err(|e| memory_error(&e))?,
+        MInst::FpEnvCheck { strict } => {
+            if !strict {
+                state
+                    .world
+                    .check_fixed_fp_environment()
+                    .map_err(|e| memory_error(&e))?;
+            }
+        }
         // Which arguments find no register is what allocation decides, so a
         // stack argument, like a spill, exists only after it.
         MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {

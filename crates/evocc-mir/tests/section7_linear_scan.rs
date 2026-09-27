@@ -99,6 +99,7 @@ fn a_value_live_across_a_call_is_callee_saved_or_spilled() {
             args: vec![w(0)],
             insts: vec![
                 MInst::Bl {
+                    strict_fp: false,
                     symbol: "other".to_owned(),
                     args: Vec::new(),
                     results: vec![w(1)],
@@ -159,6 +160,7 @@ fn disjoint_pressure_regions_reuse_spill_storage() {
             sum = dst;
         }
         insts.push(MInst::Bl {
+            strict_fp: false,
             symbol: "consume".into(),
             args: vec![sum],
             results: Vec::new(),
@@ -278,6 +280,7 @@ fn mutually_exclusive_spills_do_not_depend_on_block_layout() {
                 imm: u64::from(arm),
             });
             insts.push(MInst::Bl {
+                strict_fp: false,
                 symbol: "branch_pressure".into(),
                 args: vec![w(base)],
                 results: vec![w(base + 1)],
@@ -442,6 +445,7 @@ fn short_lived_values_do_not_accumulate_interference_history() {
             imm: u64::from(index),
         });
         insts.push(MInst::Bl {
+            strict_fp: false,
             symbol: "consume".to_owned(),
             args: vec![w(index)],
             results: Vec::new(),
@@ -660,12 +664,14 @@ fn a_value_carried_around_a_loop_keeps_its_register() {
             .find(|block| block.id == 1)
             .unwrap();
         header.insts.push(MInst::Bl {
+            strict_fp: false,
             symbol: "observe".into(),
             args: header.args.clone(),
             results: Vec::new(),
         });
         for args in carried.chunks(8) {
             header.insts.push(MInst::Bl {
+                strict_fp: false,
                 symbol: "observe".into(),
                 args: args.to_vec(),
                 results: Vec::new(),

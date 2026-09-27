@@ -715,8 +715,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   overflow/underflow raise also sets inexact, unlike the separate musl adapter.
   Both interpreters and eight native source/caller combinations pass the
   all-mask/all-rounding library probe. Two synchronized native threads preserve
-  opposite rounding modes. FENV_ACCESS lexical scope, strict wide-integer
-  helpers and full original musl replay remain OPEN. The eight-unit targeted
+  opposite rounding modes. Strict integer128 helpers now pass 36,784 exact
+  values/status/control records in each of eight source/caller builds, plus
+  768 raw-IR/prior-status checks in each of four reference callers; both source
+  interpreters pass all four modes. FENV_ACCESS lexical scope and full original
+  musl replay remain OPEN. The eight-unit targeted
   musl replay emits four; four ARM64 ceil/floor/rint/rintf units hit the
   explicitly excluded scalar-FP `w` asm constraint, for which approval was
   requested. No full musl receipt has been promoted.

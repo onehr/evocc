@@ -12,6 +12,101 @@ use evocc_types::{
 const SOURCE: &str = include_str!("../../../tests/fixtures/floating-dynamic-rounding.c");
 
 #[test]
+fn strict_wide_source_conversions_agree_in_both_interpreters() {
+    let source = concat!(
+        include_str!("../../../tests/fixtures/floating-wide-source.c"),
+        r#"
+typedef unsigned __int128 U;
+union F { float f; unsigned u; }; union D { double d; unsigned long u; };
+U probe_fs(void) { union F r={.f=wide_fs(((U)1<<64)+1)}; return r.u; }
+U probe_fu(void) { union F r={.f=wide_fu(((U)1<<64)+1)}; return r.u; }
+U probe_ds(void) { union D r={.d=wide_ds(((U)1<<64)+1)}; return r.u; }
+U probe_du(void) { union D r={.d=wide_du(((U)1<<64)+1)}; return r.u; }
+U probe_sf(void) { return wide_sf(-1.5f); }
+U probe_uf(void) { return wide_uf(1.5f); }
+U probe_sd(void) { return wide_sd(-1.5); }
+U probe_ud(void) { return wide_ud(1.5); }
+"#
+    );
+    let arena = Arena::default();
+    let file = FileId::new(194109);
+    let mut lexer = Lexer::new(file, source);
+    let mut parser = Parser::new(std::iter::from_fn(|| lexer.next()).collect(), file, source);
+    let mut unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    unit.set_dynamic_rounding(true);
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    for optimize in [false, true] {
+        let module = evocc_lower::lower_unit_with_optimization(&unit, &target, optimize).unwrap();
+        for rounding in [
+            FpRounding::NearestEven,
+            FpRounding::Upward,
+            FpRounding::Downward,
+            FpRounding::TowardZero,
+        ] {
+            let environment = FpEnvironment {
+                rounding,
+                flags: FpStatus::DIV_BY_ZERO,
+            };
+            for (entry, base, from_integer) in [
+                ("probe_fs", 0x5f800000, true),
+                ("probe_fu", 0x5f800000, true),
+                ("probe_ds", 0x43f0000000000000, true),
+                ("probe_du", 0x43f0000000000000, true),
+                ("probe_sf", u128::MAX, false),
+                ("probe_uf", 1, false),
+                ("probe_sd", u128::MAX, false),
+                ("probe_ud", 1, false),
+            ] {
+                let expected = base + u128::from(from_integer && rounding == FpRounding::Upward);
+                let result = interpret_module_with_fp_environment(
+                    &module,
+                    entry,
+                    &[
+                        RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+                        RuntimeValue::new(EvoIRType::World, 0),
+                    ],
+                    &target,
+                    InterpreterLimits::new(10000),
+                    environment,
+                )
+                .unwrap();
+                assert_eq!(
+                    result.return_values[0].value(),
+                    expected,
+                    "IR {entry} {rounding:?}"
+                );
+                let symbol = unit
+                    .symbols()
+                    .symbols_in_source_order()
+                    .iter()
+                    .find(|s| s.spelling() == entry)
+                    .unwrap()
+                    .id();
+                let chir = evocc_chir::interp::interpret_scalar_function_with_fp_environment(
+                    &unit,
+                    symbol,
+                    &target,
+                    evocc_chir::interp::InterpreterLimits::new(10000),
+                    environment,
+                )
+                .unwrap();
+                assert_eq!(
+                    chir.return_value.unwrap().raw_bits,
+                    expected,
+                    "C-HIR {entry} {rounding:?}"
+                );
+                assert_eq!(chir.world.fp_environment(), result.world.fp_environment());
+                assert_eq!(
+                    chir.world.fp_environment().flags,
+                    FpStatus::DIV_BY_ZERO.union(FpStatus::INEXACT)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn runtime_expressions_observe_rounding_but_static_bytes_do_not() {
     let arena = Arena::default();
     let file = FileId::new(194106);

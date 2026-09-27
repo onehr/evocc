@@ -5,9 +5,32 @@ use evocc_types::{floating::FloatBits, FloatKind};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+pub(crate) fn hosted_conversion(symbol: &str) -> Option<(bool, bool, FloatKind)> {
+    Some(match symbol {
+        "__floattisf" => (true, true, FloatKind::F32),
+        "__floattidf" => (true, true, FloatKind::F64),
+        "__floatuntisf" => (true, false, FloatKind::F32),
+        "__floatuntidf" => (true, false, FloatKind::F64),
+        "__fixsfti" => (false, true, FloatKind::F32),
+        "__fixdfti" => (false, true, FloatKind::F64),
+        "__fixunssfti" => (false, false, FloatKind::F32),
+        "__fixunsdfti" => (false, false, FloatKind::F64),
+        _ => return None,
+    })
+}
+
 fn needs_environment(inst: &MInst) -> u8 {
     match inst {
-        MInst::FpEnvCheck => 2,
+        MInst::Bl {
+            strict_fp: true, ..
+        } => 1,
+        MInst::FpEnvCheck { strict } => {
+            if *strict {
+                1
+            } else {
+                2
+            }
+        }
         MInst::Floating { op, strict, .. }
             if !matches!(
                 op,

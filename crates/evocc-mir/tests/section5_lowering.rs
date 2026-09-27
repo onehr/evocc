@@ -174,7 +174,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::IndirectResult => "indirect.result".to_owned(),
                     MInst::Aes { op, .. } => format!("crypto.{}", op.mnemonic()),
                     MInst::Floating { op, .. } => format!("fp.{}", op.mnemonic()),
-                    MInst::FpEnvCheck => "fp.env.check".to_owned(),
+                    MInst::FpEnvCheck { .. } => "fp.env.check".to_owned(),
                 });
             }
         }

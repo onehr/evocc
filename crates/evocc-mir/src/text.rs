@@ -572,7 +572,13 @@ pub fn render_inst(inst: &MInst) -> String {
             symbol,
             args,
             results: outputs,
-        } => format!("bl @{symbol}({}){}", uses(args), results(outputs)),
+            strict_fp,
+        } => format!(
+            "{} @{symbol}({}){}",
+            if *strict_fp { "bl.strict_fp" } else { "bl" },
+            uses(args),
+            results(outputs)
+        ),
         MInst::Blr {
             target,
             args,
@@ -665,7 +671,12 @@ pub fn render_inst(inst: &MInst) -> String {
         // is the destination a record result above sixteen bytes is written
         // through, and therefore travels in `x8`.
         MInst::IndirectResult => "indirect.result".to_owned(),
-        MInst::FpEnvCheck => "fp.env.check".to_owned(),
+        MInst::FpEnvCheck { strict } => if *strict {
+            "fp.env.check.strict"
+        } else {
+            "fp.env.check"
+        }
+        .to_owned(),
         MInst::IncomingArg { dst, slot } => {
             format!("{}arg.incoming [slot #{slot}]", defined(*dst))
         }

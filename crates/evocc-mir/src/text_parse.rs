@@ -912,12 +912,13 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 volatile,
             }));
         }
-        if mnemonic == "bl" {
+        if matches!(mnemonic, "bl" | "bl.strict_fp") {
             let symbol = scan.symbol()?;
             let args = scan.use_list()?;
             let results = scan.result_list()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Bl {
+                strict_fp: mnemonic == "bl.strict_fp",
                 symbol,
                 args,
                 results,
@@ -963,9 +964,11 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::IndirectResult));
         }
-        if mnemonic == "fp.env.check" {
+        if matches!(mnemonic, "fp.env.check" | "fp.env.check.strict") {
             scan.finish()?;
-            return Ok(Parsed::Inst(MInst::FpEnvCheck));
+            return Ok(Parsed::Inst(MInst::FpEnvCheck {
+                strict: mnemonic == "fp.env.check.strict",
+            }));
         }
         if mnemonic == "va.save" {
             scan.expect("[named=")?;

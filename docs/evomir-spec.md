@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.46** | **Authoritative reference** | **2026-09-27**
+**Revision 0.47** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -181,8 +181,21 @@ Strict integer destinations retain their semantic width as
 GPR container width. Invalid raw conversions return zero and raise invalid;
 narrow results are masked only after the checked conversion. Missing width
 means the physical register width, not an inferred C type.
-Strict 128-bit integer conversion helper execution remains refused until its
-rounding/status behavior is qualified; baseline helpers are not silently reused.
+Strict 128-bit integer conversions on hosted Linux use the qualified eight
+`__float[un]ti{sf,df}` / `__fix[uns]{sf,df}ti` helpers. `bl.strict_fp` preserves
+this semantic distinction through text, validation, interpretation and allocation;
+it admits the four rounding modes and accumulates flags in the current world.
+Validation requires a known helper name and its exact GPR-pair/SIMD signature.
+`fp.env.check.strict` admits dynamic rounding; ordinary `fp.env.check` still
+requires the fixed environment. Checks do not modify FPCR/FPSR. A strict helper
+call itself requires strict admission even if an explicit check is absent.
+The ordinary ABI call remains visible to allocation, including clobbers.
+Invalid raw FP-to-integer inputs are replaced with zero before the helper; a
+separate strict conversion of selected NaN/zero raises INVALID only for the
+invalid case. No runtime helper is invoked outside its defined conversion domain.
+The C E3063 guard is unchanged. Darwin strict wide helpers remain refused until
+their runtime is separately qualified. The Linux helper receipt is recorded in
+`docs/notebook/strict-floating-implementation-20260927.md`.
 Executable f128 and its audited hosted helper mapping are a separate milestone.
 
 A `flags` value may be consumed only by the instruction that immediately
@@ -1116,7 +1129,7 @@ terminator      := "b ^" ident "(" args ")"
                  | "ret" [" " reg ("," " " reg)*]
                  | "brk #" int
 indirect-edge   := "^" ident "(" args ")"
-call-form       := "bl @" ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
+call-form       := ("bl @" | "bl.strict_fp @") ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
 asm-form        := "%v" int ":" class " = asm" [".volatile"] " " string
                    " outputs [" asm-out ("," " " asm-out)* "]"
                    " inputs [" asm-in ("," " " asm-in)* "]"
@@ -1162,6 +1175,7 @@ entry:
 | Revision | Date | Change |
 |---|---|---|
 | 0.46 | 2026-09-27 | Preserve quiet relational predicate identity and use FCMP rather than the signaling FCMPE path. |
+| 0.47 | 2026-09-27 | Qualified Linux strict integer128 conversion calls, explicit strict admission and preserved helper semantics. |
 | 0.45 | 2026-09-27 | Add strict FP operations, machine strictness and logical integer conversion widths, dynamic-rounding admission, FPSR effects and explicit FMA; retain the shared SIMD bank. |
 | 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
 | 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |

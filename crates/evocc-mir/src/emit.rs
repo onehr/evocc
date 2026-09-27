@@ -2610,7 +2610,7 @@ fn emit_inst(
         MInst::IndirectResult => {}
         // emit_blocks places this check unless every incoming path already
         // checked FPCR without intervening opaque execution.
-        MInst::FpEnvCheck => {}
+        MInst::FpEnvCheck { .. } => {}
         // Section 6: "one slot per `frame.slot` (its declared size, rounded to
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {

@@ -940,6 +940,8 @@ pub enum MInst {
         symbol: String,
         args: Vec<VReg>,
         results: Vec<VReg>,
+        /// Audited numeric runtime call observes/updates the current FP world.
+        strict_fp: bool,
     },
     /// `blr rn(args) -> results`.
     Blr {
@@ -1054,7 +1056,9 @@ pub enum MInst {
     /// to know about `x8`.
     IndirectResult,
     /// Fail closed on a foreign FPCR before a hosted floating helper call.
-    FpEnvCheck,
+    FpEnvCheck {
+        strict: bool,
+    },
     /// The register save area of a variadic callee (Section 6): a marker the
     /// frame layout reads and the prologue expands.
     ///
@@ -1664,7 +1668,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::OutgoingArg { .. }
         | MInst::VaSaveArea { .. }
         | MInst::IndirectResult
-        | MInst::FpEnvCheck
+        | MInst::FpEnvCheck { .. }
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
         MInst::Asm(body) => body.defined(),
@@ -1709,7 +1713,7 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::FrameSlot { .. }
         | MInst::FrameAddress { .. }
         | MInst::IndirectResult
-        | MInst::FpEnvCheck
+        | MInst::FpEnvCheck { .. }
         | MInst::VaSaveArea { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
         MInst::StackRelease { address } => vec![*address],

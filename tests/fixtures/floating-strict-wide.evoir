@@ -1,0 +1,15 @@
+func @strict_wide_from(%arg0: bits<128>, %arg1: mem<all>, %arg2: world) -> (f64, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<128>, %v1: mem<all>, %v2: world):
+    (%v3, %v4) = fp.strict.from_unsigned %v2, %v0 : f64
+    ret %v3, %v1, %v4
+}
+
+func @strict_wide_to(%arg0: f64, %arg1: mem<all>, %arg2: world) -> (bits<128>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f64, %v1: mem<all>, %v2: world):
+    (%v3, %v4) = fp.strict.to_signed %v2, %v0 : bits<128>
+    ret %v3, %v1, %v4
+}

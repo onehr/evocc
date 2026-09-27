@@ -382,6 +382,25 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
                 Err("invalid SIMD store shape".into())
             }
         }
+        MInst::Bl {
+            symbol,
+            args,
+            results,
+            strict_fp: true,
+        } => {
+            let (from_integer, _, kind) = crate::floating::hosted_conversion(symbol)
+                .ok_or("strict FP call requires a qualified numeric helper")?;
+            let pair = vec![RegClass::Gpr64, RegClass::Gpr64];
+            let fp = vec![crate::floating::class(kind)];
+            let (inputs, outputs) = if from_integer { (pair, fp) } else { (fp, pair) };
+            if args.iter().map(|r| r.class).collect::<Vec<_>>() == inputs
+                && results.iter().map(|r| r.class).collect::<Vec<_>>() == outputs
+            {
+                Ok(())
+            } else {
+                Err("strict FP helper signature mismatch".into())
+            }
+        }
         MInst::Bl { args, results, .. } | MInst::Blr { args, results, .. } => {
             if args
                 .iter()

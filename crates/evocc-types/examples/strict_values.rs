@@ -11,6 +11,51 @@ use std::{
 #[path = "strict_values/testfloat.rs"]
 mod testfloat;
 
+fn check_wide(line: &str) -> Result<(), String> {
+    let fields = line.split_whitespace().collect::<Vec<_>>();
+    if fields.len() != 7 {
+        return Err("expected format/mode/op/input/result/status/control".into());
+    }
+    let kind = match fields[0] {
+        "32" => FloatKind::F32,
+        "64" => FloatKind::F64,
+        _ => return Err("unknown format".into()),
+    };
+    let (mode, rounding) = match fields[1] {
+        "0" => (0, FpRounding::NearestEven),
+        "1" => (1, FpRounding::Upward),
+        "2" => (2, FpRounding::Downward),
+        "3" => (3, FpRounding::TowardZero),
+        _ => return Err("unknown rounding".into()),
+    };
+    let values = fields[3..]
+        .iter()
+        .map(|v| u128::from_str_radix(v, 16).map_err(|_| "invalid hex".to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let (bits, status) = match fields[2] {
+        "from_s" | "from_u" => {
+            let r = if fields[2] == "from_s" {
+                FloatBits::from_signed_round(kind, values[0] as i128, rounding)
+            } else {
+                FloatBits::from_unsigned_round(kind, values[0], rounding)
+            };
+            (r.value.bits(), r.status.bits())
+        }
+        "to_s" | "to_u" => {
+            let r = FloatBits::from_bits(kind, values[0])
+                .ok_or("overwide input")?
+                .to_integer_status(128, fields[2] == "to_s")
+                .ok_or("unsupported conversion")?;
+            (r.value.ok_or("out-of-domain C probe")?, r.status.bits())
+        }
+        _ => return Err("unknown wide operation".into()),
+    };
+    if (bits, u128::from(status), values[3]) != (values[1], values[2], mode << 22) {
+        return Err(format!("{line}: adapter={bits:032x}/{status:02x}"));
+    }
+    Ok(())
+}
+
 fn check(line: &str) -> Result<(), String> {
     let fields = line.split_whitespace().collect::<Vec<_>>();
     if fields.len() != 8 {
@@ -73,9 +118,10 @@ fn check(line: &str) -> Result<(), String> {
 fn main() -> Result<(), String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let batch = args.as_slice() == ["--batch"];
+    let wide = args.as_slice() == ["--wide"];
     let reference = match args.as_slice() {
         [] => None,
-        [_] if batch => None,
+        [_] if batch || wide => None,
         [op, mode] => Some((
             op.as_str(),
             match mode.as_str() {
@@ -91,7 +137,9 @@ fn main() -> Result<(), String> {
     let mut count = 0;
     for line in io::stdin().lock().lines() {
         let line = line.map_err(|e| e.to_string())?;
-        if batch {
+        if wide {
+            check_wide(&line)?;
+        } else if batch {
             let mut fields = line.splitn(3, ' ');
             let op = fields.next().ok_or("missing batch operation")?;
             let mode = match fields.next() {

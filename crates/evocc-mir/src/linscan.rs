@@ -281,6 +281,7 @@ fn pin_boundaries(
                     symbol,
                     args,
                     results,
+                    strict_fp,
                 } => {
                     let (moved, outputs) = pin_call(
                         platform,
@@ -293,6 +294,7 @@ fn pin_boundaries(
                         std::mem::take(&mut indirect_call),
                     );
                     insts.push(MInst::Bl {
+                        strict_fp: *strict_fp,
                         symbol: symbol.clone(),
                         args: moved,
                         results: outputs.iter().map(|(pinned, _)| *pinned).collect(),
@@ -1582,7 +1584,7 @@ pub(crate) fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VRe
                 Vec::new()
             }
         }
-        MInst::VaSaveArea { .. } | MInst::IndirectResult | MInst::FpEnvCheck => Vec::new(),
+        MInst::VaSaveArea { .. } | MInst::IndirectResult | MInst::FpEnvCheck { .. } => Vec::new(),
         MInst::AddPageOff { dst, src, .. }
         | MInst::Extend { dst, src, .. }
         | MInst::Unary { dst, src, .. } => {

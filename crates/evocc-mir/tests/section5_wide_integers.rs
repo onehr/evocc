@@ -413,6 +413,7 @@ fn wide_division_and_remainder_use_verified_runtime_calls() {
                     symbol,
                     args,
                     results,
+                    ..
                 } = i
                 {
                     Some((symbol, args, results))
