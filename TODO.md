@@ -1315,6 +1315,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     cases; all 290 ladder tests and targeted Ruff pass. No benchmark result or
     compiler behavior was changed. [Failure and repair](tests/fixtures/benchmark-import-isolation.out).
 
+  - [x] **T05h — Avoid host-stack overflow on long arithmetic chains**, 2026-09-27.
+    The [600-addition C reduction](tests/fixtures/inline-deep-expression.c)
+    parses but aborts the debug compiler in both interpreters and assembly
+    lowering. Explicit continuations reuse the existing rewrite, task-machine
+    and binary-lowering paths; constant admission, selected effects and UB
+    guards remain. Eleven focused tests, twelve native controls and the
+    1,869-test affected gate pass, with Clippy/fmt. Original page-table assembly
+    is byte-identical; no running build's compiler or installed object changes.
+    This is bounded debug robustness, not a release-kernel miscompile or a
+    guarantee for arbitrary AST depth. [Evidence](tests/fixtures/inline-deep-expression.out).
+
 ## Later roadmap gates — not substitutes for runtime closure
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.

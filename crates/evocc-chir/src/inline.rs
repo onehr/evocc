@@ -2513,6 +2513,39 @@ impl<'a> Substitution<'a, '_> {
         e: &'a CHirExpr<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
+        // Long, left-associated arithmetic is common after preprocessing.
+        // Carry its continuation explicitly instead of nesting the large
+        // expression rewriter's host stack frame once per operator. Keep the
+        // original left-before-right traversal and per-node finish logic;
+        // short-circuit operators still use their branch-specific contexts.
+        let mut pending = Vec::new();
+        let mut next = e;
+        while !c
+            .memo
+            .contains_key(&(next as *const _ as usize, c.expand_calls))
+        {
+            let CHirExpr::Binary(op, left, _, _) = next else {
+                break;
+            };
+            if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                break;
+            }
+            pending.push(next);
+            next = left;
+        }
+        let mut value = self.expr_after_left(next, c, None)?;
+        while let Some(parent) = pending.pop() {
+            value = self.expr_after_left(parent, c, Some(value))?;
+        }
+        Ok(value)
+    }
+
+    fn expr_after_left(
+        &mut self,
+        e: &'a CHirExpr<'a>,
+        c: &mut Context<'a>,
+        rewritten_left: Option<&'a CHirExpr<'a>>,
+    ) -> Result<&'a CHirExpr<'a>, InlineError> {
         if matches!(
             e,
             CHirExpr::CheckedArithmetic { .. }
@@ -2700,7 +2733,10 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), a, b, _) => {
-                *a = self.expr(a, c)?;
+                *a = match rewritten_left {
+                    Some(value) => value,
+                    None => self.expr(a, c)?,
+                };
                 *b = self.expr(b, c)?;
                 if self.track_extents && c.expand_calls {
                     if crate::constant::integer_expression_type(
@@ -2753,7 +2789,10 @@ impl<'a> Substitution<'a, '_> {
             | CHirExpr::Index(a, b, _)
             | CHirExpr::Comma(a, b, _)
             | CHirExpr::BuiltinExpect(a, b, _) => {
-                *a = self.expr(a, c)?;
+                *a = match rewritten_left {
+                    Some(value) => value,
+                    None => self.expr(a, c)?,
+                };
                 *b = self.expr(b, c)?;
             }
             CHirExpr::Ternary(a, b, d, _) => {

@@ -4366,7 +4366,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         if !self.static_integer_evaluation
             && !self.memory_mode
-            && !expression_contains_call(expression)
+            // Composite scalar expressions must use the same explicit task
+            // machine as call-bearing/object expressions. The old no-call
+            // shortcut recursively evaluated arbitrarily deep arithmetic.
+            && matches!(
+                expression,
+                CHirExpr::Lit(..)
+                    | CHirExpr::CharLit(..)
+                    | CHirExpr::Ident { .. }
+                    | CHirExpr::SizeOf(..)
+                    | CHirExpr::SizeOfExpr(..)
+                    | CHirExpr::AlignOf(..)
+                    | CHirExpr::BuiltinTrap { .. }
+                    | CHirExpr::BuiltinUnreachable { .. }
+            )
         {
             values.push(CValue::Integer(
                 self.eval_expr(expression, allow_root_mutation)?,
@@ -9392,103 +9405,95 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<(), InterpreterError> {
-        match expression {
-            CHirExpr::Complex(access) => {
-                for operand in &access.operands {
-                    self.predeclare_expr(operand)?;
+        // Declaration discovery is structural, not expression execution. Keep
+        // source order with an explicit stack rather than consuming the host
+        // stack for every operator in a preprocessed arithmetic chain.
+        let mut pending = vec![expression];
+        while let Some(expression) = pending.pop() {
+            match expression {
+                CHirExpr::Complex(access) => {
+                    pending.extend(access.operands.iter().rev().copied());
                 }
-            }
-            CHirExpr::Floating(access) => {
-                for operand in &access.operands {
-                    self.predeclare_expr(operand)?;
+                CHirExpr::Floating(access) => {
+                    pending.extend(access.operands.iter().rev().copied());
                 }
-            }
-            CHirExpr::Vector(access) => {
-                for operand in &access.operands {
-                    self.predeclare_expr(operand)?;
+                CHirExpr::Vector(access) => {
+                    pending.extend(access.operands.iter().rev().copied());
                 }
-            }
-            CHirExpr::Atomic(access) => {
-                for operand in access.operands() {
-                    self.predeclare_expr(operand)?;
+                CHirExpr::Atomic(access) => {
+                    pending.extend(access.operands().rev());
                 }
-            }
-            CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
-            CHirExpr::Unary(_, operand, _)
-            | CHirExpr::EvaluateOnce(operand, _)
-            | CHirExpr::Cast(_, operand, _)
-            | CHirExpr::Member(operand, _, _)
-            | CHirExpr::PtrMember(operand, _, _) => self.predeclare_expr(operand)?,
-            CHirExpr::Binary(_, left, right, _)
-            | CHirExpr::Index(left, right, _)
-            | CHirExpr::Comma(left, right, _)
-            | CHirExpr::Elvis(left, right, _)
-            | CHirExpr::BuiltinExpect(left, right, _) => {
-                self.predeclare_expr(left)?;
-                self.predeclare_expr(right)?;
-            }
-            CHirExpr::Ternary(condition, when_true, when_false, _) => {
-                self.predeclare_expr(condition)?;
-                self.predeclare_expr(when_true)?;
-                self.predeclare_expr(when_false)?;
-            }
-            CHirExpr::Call(callee, arguments, _) => {
-                self.predeclare_expr(callee)?;
-                for argument in arguments {
-                    self.predeclare_expr(argument)?;
+                CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => {}
+                CHirExpr::Unary(_, operand, _)
+                | CHirExpr::EvaluateOnce(operand, _)
+                | CHirExpr::Cast(_, operand, _)
+                | CHirExpr::Member(operand, _, _)
+                | CHirExpr::PtrMember(operand, _, _) => pending.push(operand),
+                CHirExpr::Binary(_, left, right, _)
+                | CHirExpr::Index(left, right, _)
+                | CHirExpr::Comma(left, right, _)
+                | CHirExpr::Elvis(left, right, _)
+                | CHirExpr::BuiltinExpect(left, right, _) => {
+                    pending.push(right);
+                    pending.push(left);
                 }
-            }
-            CHirExpr::CheckedArithmetic {
-                lhs, rhs, target, ..
-            } => {
-                self.predeclare_expr(lhs)?;
-                self.predeclare_expr(rhs)?;
-                self.predeclare_expr(target)?;
-            }
-            CHirExpr::BitBuiltin { operand, .. } => self.predeclare_expr(operand)?,
-            CHirExpr::BuiltinVarArgs { first, second, .. } => {
-                self.predeclare_expr(first)?;
-                if let Some(second) = second {
-                    self.predeclare_expr(second)?;
+                CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                    pending.push(when_false);
+                    pending.push(when_true);
+                    pending.push(condition);
                 }
-            }
-            CHirExpr::Assign { target, value, .. } => {
-                self.predeclare_expr(target)?;
-                self.predeclare_expr(value)?;
-            }
-            CHirExpr::Update { target, .. } => self.predeclare_expr(target)?,
-            CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
-                for source in place.source_expressions() {
-                    self.predeclare_expr(source)?;
+                CHirExpr::Call(callee, arguments, _) => {
+                    pending.extend(arguments.iter().rev().copied());
+                    pending.push(callee);
                 }
-            }
-            CHirExpr::MemoryAssign { place, value, .. } => {
-                for source in place.source_expressions() {
-                    self.predeclare_expr(source)?;
+                CHirExpr::CheckedArithmetic {
+                    lhs, rhs, target, ..
+                } => {
+                    pending.push(target);
+                    pending.push(rhs);
+                    pending.push(lhs);
                 }
-                self.predeclare_expr(value)?;
-            }
-            CHirExpr::CompoundLit(_, initializer, _) => {
-                for action in initializer.plan().actions() {
-                    if let InitAction::StoreScalar { value, .. } = action {
-                        self.predeclare_expr(value)?;
+                CHirExpr::BitBuiltin { operand, .. } => pending.push(operand),
+                CHirExpr::BuiltinVarArgs { first, second, .. } => {
+                    if let Some(second) = second {
+                        pending.push(second);
+                    }
+                    pending.push(first);
+                }
+                CHirExpr::Assign { target, value, .. } => {
+                    pending.push(value);
+                    pending.push(target);
+                }
+                CHirExpr::Update { target, .. } => pending.push(target),
+                CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+                    pending.extend(place.source_expressions().rev());
+                }
+                CHirExpr::MemoryAssign { place, value, .. } => {
+                    pending.push(value);
+                    pending.extend(place.source_expressions().rev());
+                }
+                CHirExpr::CompoundLit(_, initializer, _) => {
+                    for action in initializer.plan().actions().iter().rev() {
+                        if let InitAction::StoreScalar { value, .. } = action {
+                            pending.push(value);
+                        }
                     }
                 }
+                CHirExpr::StatementExpr { body, .. } => self.predeclare_stmt(body)?,
+                CHirExpr::Lit(..)
+                | CHirExpr::FloatLit(..)
+                | CHirExpr::CharLit(..)
+                | CHirExpr::StringLit(..)
+                | CHirExpr::Ident { .. }
+                | CHirExpr::LabelAddress { .. }
+                | CHirExpr::SizeOf(..)
+                | CHirExpr::SizeOfExpr(..)
+                | CHirExpr::AlignOf(..)
+                | CHirExpr::BuiltinTrap { .. }
+                | CHirExpr::BuiltinUnreachable { .. }
+                | CHirExpr::BuiltinReturnAddress { .. }
+                | CHirExpr::BuiltinFrameAddress { .. } => {}
             }
-            CHirExpr::StatementExpr { body, .. } => self.predeclare_stmt(body)?,
-            CHirExpr::Lit(..)
-            | CHirExpr::FloatLit(..)
-            | CHirExpr::CharLit(..)
-            | CHirExpr::StringLit(..)
-            | CHirExpr::Ident { .. }
-            | CHirExpr::LabelAddress { .. }
-            | CHirExpr::SizeOf(..)
-            | CHirExpr::SizeOfExpr(..)
-            | CHirExpr::AlignOf(..)
-            | CHirExpr::BuiltinTrap { .. }
-            | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { .. } => {}
         }
         Ok(())
     }
@@ -11034,101 +11039,6 @@ fn find_storage_object_declaration<'arena>(
                 .find(|declaration| declaration.storage.base() != StorageClass::Extern)
         })
         .map(|object| (*object).clone())
-}
-
-fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
-    match expression {
-        CHirExpr::Complex(access) => access
-            .operands
-            .iter()
-            .any(|operand| expression_contains_call(operand)),
-        CHirExpr::Floating(access) => access
-            .operands
-            .iter()
-            .any(|operand| expression_contains_call(operand)),
-        CHirExpr::Vector(access) => access
-            .operands
-            .iter()
-            .any(|operand| expression_contains_call(operand)),
-        CHirExpr::Atomic(access) => access.operands().any(expression_contains_call),
-        // Comma needs the discarded-expression path for its left operand,
-        // which need not produce a scalar value even without a function call.
-        CHirExpr::Call(_, _, _)
-        | CHirExpr::Comma(_, _, _)
-        | CHirExpr::Binary(BinaryOp::Comma, _, _, _) => true,
-        CHirExpr::CheckedArithmetic {
-            lhs, rhs, target, ..
-        } => {
-            expression_contains_call(lhs)
-                || expression_contains_call(rhs)
-                || expression_contains_call(target)
-        }
-        CHirExpr::BuiltinVarArgs { first, second, .. } => {
-            expression_contains_call(first)
-                || second.is_some_and(|second| expression_contains_call(second))
-        }
-        CHirExpr::Unary(_, operand, _)
-        | CHirExpr::EvaluateOnce(operand, _)
-        | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
-        CHirExpr::Binary(_, left, right, _)
-        | CHirExpr::Index(left, right, _)
-        | CHirExpr::Elvis(left, right, _)
-        | CHirExpr::BuiltinExpect(left, right, _) => {
-            expression_contains_call(left) || expression_contains_call(right)
-        }
-        CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-            expression_contains_call(condition)
-                || expression_contains_call(then_expression)
-                || expression_contains_call(else_expression)
-        }
-        CHirExpr::Member(base, _, _) | CHirExpr::PtrMember(base, _, _) => {
-            expression_contains_call(base)
-        }
-        CHirExpr::Assign { target, value, .. } => {
-            expression_contains_call(target) || expression_contains_call(value)
-        }
-        CHirExpr::MemoryAssign { place, value, .. } => {
-            place.source_expressions().any(expression_contains_call)
-                || expression_contains_call(value)
-        }
-        CHirExpr::MemoryRead { place, .. } => {
-            place.source_expressions().any(expression_contains_call)
-        }
-        CHirExpr::Update { target, .. } => expression_contains_call(target),
-        CHirExpr::MemoryUpdate { place, .. } => {
-            place.source_expressions().any(expression_contains_call)
-        }
-        // Statement expressions require the iterative task machine even when
-        // their body contains no call, because control may leave the region.
-        CHirExpr::StatementExpr { .. } => true,
-        CHirExpr::CompoundLit(_, initializer, _) => {
-            initializer
-                .plan()
-                .actions()
-                .iter()
-                .any(|action| match action {
-                    InitAction::StoreScalar { value, .. }
-                    | InitAction::CopyAggregate { value, .. } => expression_contains_call(value),
-                    InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => false,
-                })
-        }
-        CHirExpr::Lit(_, _)
-        | CHirExpr::FloatLit(_, _)
-        | CHirExpr::CharLit(_, _)
-        | CHirExpr::StringLit(_, _)
-        | CHirExpr::Ident { .. }
-        | CHirExpr::LabelAddress { .. }
-        | CHirExpr::SizeOf(_, _)
-        | CHirExpr::SizeOfExpr(_, _, _)
-        | CHirExpr::BuiltinConstantP { .. }
-        | CHirExpr::BuiltinObjectSize { .. }
-        | CHirExpr::AlignOf(_, _)
-        | CHirExpr::BuiltinTrap { .. }
-        | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => false,
-    }
 }
 
 fn pop_machine_value(

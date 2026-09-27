@@ -38,6 +38,61 @@ fn ir(source: &str) -> String {
 const SOURCE: &str = include_str!("../../../tests/fixtures/private-leaf-substitution.c");
 
 #[test]
+fn long_arithmetic_spine_survives_optional_substitution() {
+    let source = include_str!("../../../tests/fixtures/inline-deep-expression.c");
+    for level in ["-O0", "-O2"] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+            let output = run(source, level, mode);
+            assert!(
+                output.status.success(),
+                "{level} {mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if mode.starts_with("--interpret") {
+                assert_eq!(output.stdout, b"0\n", "{level} {mode}");
+            }
+        }
+    }
+}
+
+#[test]
+fn arithmetic_continuations_preserve_selected_effects_and_ub_checks() {
+    let sum = std::iter::repeat_n("n", 600).collect::<Vec<_>>().join("+");
+    let source = format!(
+        "static unsigned check(unsigned n, unsigned gate) {{
+             unsigned calls = 7;
+             unsigned value = ({sum}) + (gate ? ++calls : --calls);
+             unsigned skipped = gate ? (0 && (1 / (n - n)))
+                                     : (1 || (1 / (n - n)));
+             return value != 600 * n + (gate ? 8 : 6)
+                 || calls != (gate ? 8 : 6) || skipped != !gate;
+         }}
+         int main(void) {{ return check(1, 0) || check(2, 1); }}"
+    );
+    for level in ["-O0", "-O2"] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+            let output = run(&source, level, mode);
+            assert!(output.status.success(), "{level} {mode}: {output:?}");
+            if mode.starts_with("--interpret") {
+                assert_eq!(output.stdout, b"0\n", "{level} {mode}");
+            }
+        }
+        let invalid = format!(
+            "static unsigned check(unsigned n) {{ return ({sum}) / (n - n); }}
+             int main(void) {{ return check(1); }}"
+        );
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(&invalid, level, mode);
+            assert!(!output.status.success(), "{level} {mode}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E3002"),
+                "{level} {mode}: {output:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn single_site_inline_visitor_can_call_its_out_of_line_caller() {
     let source = include_str!("../../../tests/fixtures/recursive-inline-visitor.c");
     let text = ir(source);

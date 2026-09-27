@@ -9957,6 +9957,55 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        // An arithmetic continuation does not need a native stack frame.
+        // Preserve preorder constant admission and left-before-right effects;
+        // the existing binary tail threads the saved left value through any
+        // CFG opened by the right operand.
+        let mut pending = Vec::new();
+        let mut next = expression;
+        let mut value = loop {
+            if let Some(value) = self.fold_expression(next, state) {
+                break value?;
+            }
+            if let CHirExpr::Binary(
+                op @ (BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::Shl
+                | BinaryOp::Shr
+                | BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge
+                | BinaryOp::Eq
+                | BinaryOp::Ne),
+                left,
+                right,
+                span,
+            ) = next
+            {
+                pending.push((*op, *left, *right, *span));
+                next = left;
+            } else {
+                break self.lower_unfolded_expr(next, state)?;
+            }
+        };
+        while let Some((operator, left, right, span)) = pending.pop() {
+            value = self.lower_binary_after_left(operator, (left, right), value, span, state)?;
+        }
+        Ok(value)
+    }
+
+    fn fold_expression(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Option<Result<ExprValue, LowerError>> {
         if self.optimize
             && !self.unit.runtime_floating_environment()
             && matches!(expression, CHirExpr::Binary(..) | CHirExpr::Unary(..))
@@ -9972,7 +10021,7 @@ impl<'a> FunctionLowerer<'a> {
                 // A numerically unselected arm can nevertheless contain a
                 // label entered by a goto or switch outside the expression.
                 if !self.expression_has_external_entry(expression) {
-                    return self.wide_constant(state, value.ty(), value.raw_bits());
+                    return Some(self.wide_constant(state, value.ty(), value.raw_bits()));
                 }
             }
         }
@@ -9983,7 +10032,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.unit.symbols(),
                 self.target,
             ) {
-                return self.floating_constant(value, state);
+                return Some(self.floating_constant(value, state));
             }
             if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
                 expression,
@@ -9991,7 +10040,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.unit.symbols(),
                 self.target,
             ) {
-                return self.wide_constant(state, value.ty(), value.raw_bits());
+                return Some(self.wide_constant(state, value.ty(), value.raw_bits()));
             }
         }
         if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
@@ -10000,8 +10049,16 @@ impl<'a> FunctionLowerer<'a> {
             self.unit.symbols(),
             self.target,
         ) {
-            return self.wide_constant(state, value.ty(), value.raw_bits());
+            return Some(self.wide_constant(state, value.ty(), value.raw_bits()));
         }
+        None
+    }
+
+    fn lower_unfolded_expr(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
         match expression {
             CHirExpr::Floating(operation) => self.lower_floating_builtin(operation, state),
             CHirExpr::Vector(operation) => self.lower_vector(operation, state),
@@ -10964,9 +11021,19 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "assignment must be represented by CHirExpr::Assign",
             });
         }
-        let left_expression = left;
-        let right_expression = right;
-        let left = self.lower_expr(left, state)?;
+        let value = self.lower_expr(left, state)?;
+        self.lower_binary_after_left(operator, (left, right), value, span, state)
+    }
+
+    fn lower_binary_after_left(
+        &mut self,
+        operator: BinaryOp,
+        expressions: (&'a CHirExpr<'a>, &'a CHirExpr<'a>),
+        left: ExprValue,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let (left_expression, right_expression) = expressions;
         let left_key = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         state.env.insert(
@@ -10976,7 +11043,7 @@ impl<'a> FunctionLowerer<'a> {
                 integer: Some(left.integer),
             },
         );
-        let right = self.lower_expr(right, state)?;
+        let right = self.lower_expr(right_expression, state)?;
         let left = state
             .env
             .remove(&left_key)

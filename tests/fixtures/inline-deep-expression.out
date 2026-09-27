@@ -1,0 +1,63 @@
+2026-09-27 — explicit continuations for long arithmetic expressions
+
+RED: inline-deep-expression.c expands to 600 left-associated additions inside
+the recursive visitor reduction. Parsing succeeds, but a normal debug driver
+aborts on host stack overflow in --interpret-c-hir, --interpret-evoir and
+--emit=asm. The release compiler already executes this bounded case; this is
+compiler/debug robustness, not a claim of a previously wrong kernel value.
+
+Successive macOS crash reports identify actual recursion, not a guessed stack
+limit: Substitution::expr, Interpreter::predeclare_expr, recursive scalar
+Interpreter::eval_expr/eval_binary, and FunctionLowerer::lower_expr/lower_binary.
+Reports are evocc-2026-09-27-213355/214538/214539/215217/215448/215630.ips in
+~/Library/Logs/DiagnosticReports. No debugger transcript is claimed.
+
+Repair:
+  * Carry ordinary binary left-spine rewrite/lowering continuations explicitly.
+    Preserve original constant admission, left-before-right traversal, memo
+    bookkeeping and the existing per-node binary/type/UB tail.
+  * Discover expression-local declarations using an explicit structural stack.
+  * Use the existing C-HIR task machine for composite scalar expressions instead
+    of the recursive no-call shortcut; retain only leaf fast paths.
+  * Keep logical operators' selected-path handling and existing explicit local
+    SSA transport when a right operand opens CFG edges.
+No stack-limit increase, source whitelist, new IR operation or UB suppression.
+This does not assert that all arbitrary AST nesting is now stack-independent.
+
+Focused CLI group: 11 PASS, O0/O2, both interpreters and assembly emission.
+The second long-chain test exercises a conditional RHS with ++/-- on a distinct
+local, selected effects, skipped divide-by-zero branches and an actually reached
+division by zero (E3002). Previous admission/lifetime/E3001/E3002 controls remain.
+No unsequenced multiple modifications are used as an oracle.
+
+Native: the unchanged long-expression and recursive-visitor fixtures both exit
+zero under GCC14 / Clang19 / EvoCC at O0/O2: 12 PASS. The later selected-effects
+control is a CLI/interpreter/assembly test, not an extra native execution.
+Sealed linux/arm64, network none, GCC 14.2.0-19 / Clang 19.1.7:
+  sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Debug driver SHA256:
+  1d3673454ab1804effce15ef2966fbee1271eeb40b0cead6000f46d0ebaa3c60
+
+Original arch/arm64/kvm/hyp/pgtable.o replay emits byte-identical assembly to
+frozen release 65035621... before this robustness repair:
+  1f080129136a390388e5eefc9de701145b28ee7ae7f0b374e03c357a8e6a8bfa
+Original argv and projection are retained; no installed object is changed.
+The live full-kernel campaign deliberately keeps its frozen release identity.
+
+Commands:
+  CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test -p evocc \
+    --test private_leaf_substitution --locked --offline
+  python3 .build/floating-targeted/deep-expression-20260927/replay.py
+  CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 \
+    tools/gate-changed.sh 94071fb --locked --offline
+
+Artifacts: .build/floating-targeted/deep-expression-20260927/
+  native.json SHA256 b3cc7907038569d411ae56fac8a65e983bdf5c0b7114e48eba09074e57f1f22d
+  original.json SHA256 0494c75d868d29ea94aabac70e890e1c70c29b1ac872d6364fe0d46ea542999e
+  changed-gate.log; replay.py; assembly/
+Affected gate: 1,869 PASS / 0 FAIL / three historical ignores across eight
+selected crates, followed by Clippy -D warnings and fmt: GREEN (exit 0).
+The later selected-effects regression was added after that test binary was
+built; its separate final focused suite passes 11/11. It is not added to the
+1,869 gate numerator. This closes the bounded robustness repair, not final
+workspace, kernel or roadmap acceptance.
