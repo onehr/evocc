@@ -482,6 +482,23 @@ class BenchmarkEntryTest(unittest.TestCase):
                                          "baselineTest": {"libcTestFailingCases": 1}})
             self.assertNotEqual(row["status"], "PASS")
 
+    def test_musl_requires_a_matching_genuine_shared_loader_result(self):
+        receipt = {'units': 5, 'unitsInPassingBuild': 5, 'testResult': 'libc-test-clean',
+                   'driverSha256': 'compiler', 'baselineTest': {'libcTestFailingCases': 0}}
+        self.assertEqual(bench.metrics('musl', receipt)['status'], 'INCOMPLETE')
+        receipt['sharedLoader'] = {'status': 'PASS', 'compilerSha256': 'compiler',
+                                   'compositionSha256': 'objects', 'executionsSha256': 'runs'}
+        self.assertEqual(bench.metrics('musl', receipt)['status'], 'PASS')
+        for field in ('compilerSha256', 'compositionSha256', 'executionsSha256'):
+            changed = copy.deepcopy(receipt)
+            changed['sharedLoader'].pop(field)
+            self.assertEqual(bench.metrics('musl', changed)['status'], 'VALIDATION_GAP')
+        for status, expected in [('FAIL', 'FAIL'), ('ERROR', 'VALIDATION_GAP'),
+                                 ('REFUSED', 'INCOMPLETE'), ('NOT_RUN', 'INCOMPLETE')]:
+            changed = copy.deepcopy(receipt)
+            changed['sharedLoader']['status'] = status
+            self.assertEqual(bench.metrics('musl', changed)['status'], expected)
+
     def test_fresh_receipt_and_compiler_identity_are_required(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

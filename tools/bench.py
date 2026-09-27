@@ -445,6 +445,21 @@ def metrics(name, data):
     if row["outcomes"] and sum(row["outcomes"].values()) != row["total"]:
         raise ValueError("outcome counts disagree with denominator")
     row.setdefault("status", "PASS" if row["passed"] == row["total"] and not row["baselineFailures"] else "INCOMPLETE")
+    if name == 'musl':
+        shared = data.get('sharedLoader', {})
+        row['sharedLoader'] = shared
+        if shared.get('status') == 'FAIL':
+            row['status'] = 'FAIL'
+        elif shared.get('status') == 'ERROR':
+            row['status'] = 'VALIDATION_GAP'
+        elif shared.get('status') == 'PASS' and (
+            not data.get('driverSha256')
+            or shared.get('compilerSha256') != data.get('driverSha256')
+            or not shared.get('compositionSha256') or not shared.get('executionsSha256')
+        ):
+            row['status'] = 'VALIDATION_GAP'
+        elif row['status'] == 'PASS' and shared.get('status') != 'PASS':
+            row['status'] = 'INCOMPLETE'
     row["run"] = data.get("run", data.get("generatedAt"))
     row["evidence"] = data.get("evidence", (
         data.get("survey", {}).get("runDirectory") if name == "kernel"

@@ -1,0 +1,62 @@
+B08d genuine shared-loader closure, 2026-09-27
+============================================
+
+The five unchanged libc-test programs are the minimal original consumers:
+functional/dlopen, functional/tls_align, functional/tls_align_dlopen,
+functional/tls_init_dlopen, regression/tls_get_new-dtv.
+The four original DSO fixture sources, test objects and libtest.a are GCC-built
+reference harness code, not claimed as EvoCC target-C coverage.
+
+Durable adapter: tools/ladder/musl_shared.py, invoked by tools/ladder/musl.py
+after restoring reference objects and validating a static candidate set.
+No second source clone, large disk, altered assertions, timeout increase or
+installed-archive replacement. The configured upstream Makefile provides exact
+shared-library recipes; only dlstart.c/dynlink.c are additional library compiles.
+Original ELF link arguments are preserved for the library. Test executables use
+the actual new loader as PT_INTERP, verified by readelf, and the original
+reference-built five-second supervisor. These are real dlopen/TLS executions.
+
+Compiler SHA256:
+e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+EvoIR 1.9.114 / EvoMIR 0.50; same sealed arm64 GCC14/Clang19 image as
+musl-reference-boundaries.out. Pinned musl 1.2.6 and libc-test
+7b95dfa5f5d5ca4d949221e0228ccc290bacc14e remain unchanged.
+
+First bounded prototype: five reference and five candidate programs PASS.
+The durable adapter independently repeats all ten executions: 10 PASS / 0 FAIL.
+Eight fixture DSOs compile/link; both new EvoCC loader TUs emit/assemble/link.
+
+Composition: 1351 linked library objects, independently recorded by path/hash.
+  1268 previously accepted EvoCC C objects (hash-verified, no recompilation)
+  + 2 newly EvoCC-compiled loader C objects
+  + 68 reference C objects (floating complex still refused; L04)
+  + 13 reference-assembled original AArch64 assembly sources.
+The three static CRT C objects are not DSO library inputs. Thus the separate
+shared target-C population is 1270 EvoCC / 1338, not a new 1339-unit static run.
+Every candidate input is rehashed after linking and after execution. Missing or
+extra accepted inputs, refused loader units, partial/duplicate test populations,
+wrong/static loader, missing object/binary identity and process failure cannot
+produce a shared PASS. The common bench also requires matching compiler,
+composition and execution identities before a future full musl PASS.
+
+Library SHA256:
+reference d6f868e2370b902c1a27ec8fdca044f655f3bbb722ad9f813cab5844646ea305
+candidate e9897d035b35148a15fa88de8e9a11bb9fca1efcd28f339359f92899a149ce7b
+
+Raw evidence:
+.build/floating-targeted/musl-common-20260927/shared-adapter/
+  original-commands.json, reference-build.json, loader-units.json,
+  candidate-build.json, executions.json, stage runner logs, summary.json.
+Hashes:
+loader-units.json 87f202e5ed22344befe0eeaae981ad65a85e2b8a1d6a4df54c2a8695499cc941
+candidate-build.json 0bf74655aab66c598d57b31ff132a04432197ecf54bf436bda2848be9e3d018f
+executions.json 288550086cd6ad06c0619d2081fedca2511a740499b6cc1e36845d0bacaf068a
+summary.json f34233099e153f4c73dc0ed1528dba6420992efe0a4422cd2f4c2e7669abc4b8
+
+Claim ceiling: this closes the five-case genuine shared-loader coverage gap for
+this mixed composition, not all-EvoCC musl, the remaining common library failures,
+all libc-test dynamically linked cases, or the final 15-lane campaign. Historical
+static failures and receipts remain unchanged. No full campaign was launched.
+
+Changed gate: 284 ladder tests PASS, including shared-population mutation and
+common-bench identity checks; changed-file Ruff and git diff --check PASS.

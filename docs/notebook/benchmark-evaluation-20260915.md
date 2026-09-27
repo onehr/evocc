@@ -2552,3 +2552,19 @@ The mixed assembler runner also had a real command-transport defect: it retained
 extraction plus JSON argv removes that loss; six real ELF controls verify stack
 flags, overrides and an absolute symbol. A failed container cannot contribute
 partial success verdicts. B08b still tracks the other tuning/diagnostic omissions.
+
+### Genuine shared-loader supplement (September 27)
+
+The [new supplement](../../tests/fixtures/musl-shared-loader.out) executes all
+five original DSO/TLS programs with actual musl PT_INTERP loaders: **5/5 reference
+and 5/5 candidate PASS**, repeated independently by the durable adapter. It
+reuses 1,268 verified EvoCC PIC objects and newly compiles the two loader TUs.
+The linked library still contains 68 reference-built floating-complex C objects
+and 13 original assembly objects: **1,270/1,338 target-C**, separately from the
+static lane's denominator. No source or installed static archive was changed.
+
+The shared-loader adapter is called by the existing musl lane after static
+validation/restoration and records its own composition, library hashes and exact
+paired population. The common bench cannot claim complete musl with absent,
+failed, or stale-compiler shared evidence. This closes the five-case static/DSO
+coverage gap, not the remaining reference-library failures or full musl.

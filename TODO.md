@@ -811,6 +811,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     historical five-second timeout. That intermittent failure stays open.
     [Cases, exact identities and observations](tests/fixtures/musl-reference-boundaries.out).
 
+    - [x] **B08d2 — Execute the five DSO/TLS subjects with a genuine loader** — `DONE`, 2026-09-27.
+      A separate shared composition reuses 1,268 hash-verified accepted EvoCC C
+      objects and compiles both loader C units with EvoCC. Its 68 complex C
+      objects remain reference-built; 13 assembly objects are separately
+      accounted. All five unchanged original programs pass on both reference
+      and candidate loaders, first in the reduction and then through the durable
+      adapter (10 + 10 executions). PT_INTERP, object/library hashes and complete
+      paired populations are checked. The existing musl/common-bench path now
+      includes this supplement; old static receipts are not rewritten. This is
+      **1,270/1,338 target-C** shared coverage, not full-musl PASS.
+      [Composition, hashes and exact scope](tests/fixtures/musl-shared-loader.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

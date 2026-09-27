@@ -20,6 +20,11 @@ of ``.o`` files rather than ``.o`` and ``.lo`` built from the same sources,
 and libc-test is linked ``-static`` for the same reason: what is measured
 should be the objects that were substituted.
 
+After the static candidate is validated, the shared-loader supplement reuses
+its accepted PIC objects and compiles the two additional loader TUs. Five
+original DSO/TLS subjects execute with a real musl ELF interpreter in both
+lanes. That separately audited composition does not erase static-lane failures.
+
 The timeout supervisor is retained from the reference build. Relinking it
 against the libc under test makes a broken fork/wait/signal implementation
 disable the watchdog that is supposed to report that very failure.
@@ -41,6 +46,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mixed  # noqa: E402
+import musl_shared  # noqa: E402
 
 PIN = {
     "subject": "musl",
@@ -339,6 +345,13 @@ def main() -> int:
         finally:
             subject.restore_all()
 
+    shared_loader = {'status': 'NOT_RUN', 'reason': 'no validated static candidate set'}
+    if substituted:
+        accepted = {unit: mixed.sha256(asm_dir / 'obj' / (mixed.flat_name(unit) + '.o'))
+                    for unit in substituted}
+        shared_loader = musl_shared.run(arguments.evocc, tree, tests, asm_dir,
+                                        accepted, evidence / 'shared-loader')
+
     refusals = mixed.refusal_table(rows)
     receipt = {
         "schemaVersion": 1,
@@ -361,6 +374,7 @@ def main() -> int:
         "refusalsByCode": refusals,
         "testResult": test_result,
         "trialAudits": trial_audits,
+        "sharedLoader": shared_loader,
         "failingUnits": failing,
         "excludedForSymbolParity": excluded,
         "symbolParity": {

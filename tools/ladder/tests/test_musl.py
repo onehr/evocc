@@ -163,6 +163,7 @@ class SupervisorTest(unittest.TestCase):
                         patch.object(musl.mixed, 'assemble', return_value={'a.lo': 'ok'}), \
                         patch.object(musl.mixed, 'symbol_parity', return_value={}), \
                         patch.object(musl.mixed, 'compatible_units', return_value=(['a.lo'], [])), \
+                        patch.object(musl.musl_shared, 'run', return_value={'status': 'PASS'}) as shared, \
                         patch.object(musl.mixed, 'narrow', return_value=cached), \
                         patch.object(musl.mixed, 'write_receipt', return_value=build / 'receipt') as publish:
                     self.assertEqual(musl.main(), 0)
@@ -171,6 +172,7 @@ class SupervisorTest(unittest.TestCase):
                 self.assertEqual(len(receipt['trialAudits']), 1)
                 self.assertEqual(receipt['trialAudits'][0]['units'], [] if mode == 'missing-object' else ['a.lo'])
                 self.assertEqual(len(calls), 1 if mode == 'missing-object' else 2)
+                self.assertEqual(shared.call_count, 1 if mode == 'pass' else 0)
                 self.assertEqual((tree / 'a.lo').read_bytes(), b'reference-object')
 
     def test_missing_report_is_not_an_empty_failure_set(self):
