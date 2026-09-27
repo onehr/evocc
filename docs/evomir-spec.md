@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.52** | **Authoritative reference** | **2026-09-28**
+**Revision 0.53** | **Authoritative reference** | **2026-09-28**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -337,6 +337,20 @@ until ordinary dead-instruction removal proves them unused. No access, effect,
 obligation or CFG binding is evaluated early or removed by constant tracking;
 narrow/pair and nonmatching operations retain their existing paths. This is
 machine instruction selection, not a new EvoIR or EqSat rule.
+
+For full-register `bits<32>`/`bits<64>` integer comparisons (revision 0.53),
+a known operand in `[0, 4095]` may select the existing `cmp rn, #imm12` form.
+If the left operand is selected as the immediate, reverse the comparison's
+relation: EQ/NE remain EQ/NE, SLT/SLE become GT/GE and ULT/ULE become HI/HS.
+This swaps already evaluated SSA values, not source evaluation. Preserve
+the existing adjacent flags consumer, branch fusion and checked obligations.
+Narrow/pair values, pointers, negative or otherwise unencodable constants and
+dynamic operands retain the established extension/register paths. Pure known
+definitions remain until ordinary unused-definition removal proves them dead;
+there is no new IR operation, effect permission or EqSat rewrite.
+The current immediate comparison form is unshifted: validation rejects operands
+outside `[0, 4095]`, even if an assembler could alias a larger number to a
+different shifted encoding. Raw MIR does not bypass this constraint.
 
 `bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
 their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
@@ -1306,6 +1320,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.53 | 2026-09-28 | Select unshifted immediate full-register comparisons with correct reversed relations; independently reject malformed imm12 values, preserving flags adjacency, source evaluation, guards and nonmatching paths. |
 | 0.52 | 2026-09-28 | Select existing encodable full-width logical immediates, including exact bitwise constant expressions; reject malformed logical immediates in MIR validation without changing operand evaluation or effects. |
 | 0.51 | 2026-09-28 | Bound three GCC tuning option admissions to existing whole-function allocation, absent hoisting and nonduplicating block placement; preserve unsupported semantic requests through application projection. |
 | 0.50 | 2026-09-27 | Admit exact scalar f32/f64 SIMD assembly bindings through existing allocation, spills, selected edges and floating-environment invalidation. |

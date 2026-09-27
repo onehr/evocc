@@ -1,0 +1,66 @@
+2026-09-28 — K02i: constant comparison selection and imm12 validation.
+
+The initial shape RED retains a constant in a general register instead of
+selecting CMP-immediate. Full bits<32>/bits<64> comparisons now select the
+existing unshifted imm12 form for a known operand in [0,4095]. Selecting the
+left operand reverses the relation, not its logical truth: SLT/SLE become
+GT/GE, ULT/ULE become HI/HS, and EQ/NE remain unchanged. Only already-evaluated
+SSA operands move; source evaluation, guards, effects and block arguments do
+not. Narrow/pair, pointer, dynamic and nonmatching constants retain old paths.
+
+A separate malformed-MIR RED shows the validator accepting 4096 in the
+unshifted imm12 form. Validation now rejects out-of-range operands, including
+4097 and UINT64_MAX; assembler aliases do not widen the declared MIR format.
+
+Five MIR tests and one CLI test PASS. The matrix covers 96 comparison shapes,
+1056 exact EvoIR/MIR value comparisons, 24 nonmatching controls, a dynamic
+control, branch fusion and three malformed operands. All 96 shapes assemble
+for each Linux/Darwin target (192 combinations). The C fixture passes O0/O2
+C-HIR, EvoIR and MIR execution, and native shape checks.
+
+Fourteen sealed ARM64 executions PASS: six whole-program controls across
+EvoCC/GCC14/Clang19 O0/O2, and eight crossed callers/callees. The first Clang
+compile rejected five signedness warnings in the test's expected-value
+comparisons under -Werror. Explicit unsigned expected-result casts fix the
+fixture without weakening warnings; native-warning-red.log is retained.
+Final pinned release produces the same six assembly byte streams as the
+successfully tested preparation. Sealed image identity is verified before
+and after, network disabled; no FP/ABI/source-profile change is involved.
+
+Original KVM object replay, unchanged argv/source/config, 60s per-unit budget:
+                                  before text     after text
+  virt/kvm/kvm_main.o              157984          153936
+  arch/arm64/kvm/hyp/pgtable.o       32324           31440
+Data/BSS sizes do not change. CMP-immediate occurrences increase 214 -> 1446
+and 47 -> 322. All four objects assemble and match the reference symbol names
+and kinds. Installed objects/config/Image hash identically before and after.
+Nothing is installed; smaller code is NOT a measured runtime speedup.
+The active kernel still uses frozen compiler 65035621..., excluding this fix.
+K02/K03 and final-current-compiler integration remain OPEN.
+
+The final serial affected five-crate gate against 3d5cd72 has 1083 PASS,
+zero FAIL, four historical ignored tests; Clippy -D warnings and fmt PASS.
+An earlier gate had an E0463 doctest artifact-resolution failure while a
+second build used the same target directory; its gate.log is retained,
+and it is not counted as a successful gate. Final source stayed fixed for the
+complete successful rerun. Rust/Cargo are the pinned 1.97.1, offline.
+
+Commands:
+  CARGO_TARGET_DIR=target/pinned-check CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0
+  CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_NET_OFFLINE=true
+  cargo test -p evocc-mir -p evocc --test constant_compare_selection
+  tools/gate-changed.sh 3d5cd72 --offline -j 1
+  CARGO_PROFILE_RELEASE_DEBUG=0 cargo build -p evocc --release
+Recipes/raw outputs: .build/floating-targeted/constant-compare-20260928/.
+
+SHA256:
+  source 1b82976ebf65c11001f992f988d4f0ce771e62c53de8fdac2560dd09ca64375d
+  before release cc9ac21e62b7ad5a652aafa723df39e50513a03cf406e4f0db6f74abef565871
+  final release ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+  preparation.json 3220f2317c60d11b1ca815b644a132314600cd935b7777fc573f3ac221c2bfd9
+  native.log e5fb353611bcf12ebdcc982259a8b5f26eea97c24a94cc83e4062dc01d62955d
+  kernel.json 1594bcbd3d07d641e52f68bc2b19ea20fb81a19f50a95f8b90c8411b3a2e1c30
+  size.log b5484fa041bbbe955d28a7b7141ad90ab47050e0d6cb4f06c85ec2e6e4fddfc8
+  gate-final.log 53f47dcae458538030a5a5b690d21ef19609621b2030b208eca68850bc27daf6
+  native.py cd797f27b6422d86229102e658ca35979cac1fb3aff889e91f84487d5fba27cf
+  sealed image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2

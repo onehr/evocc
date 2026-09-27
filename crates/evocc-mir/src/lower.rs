@@ -2562,6 +2562,45 @@ fn lower_compare(
     if is_pair(&lhs.ty) {
         return lower_pair_compare(lowerer, insts, operation, lhs, rhs);
     }
+    // The admitted immediate is nonnegative in both full-width signed and
+    // unsigned interpretations. Swapping already evaluated SSA operands needs
+    // the reversed relation, not its logical negation. Narrow/pair and pointer
+    // comparisons retain their established extension/provenance paths.
+    if matches!(lhs.ty, EvoIRType::Bits(32 | 64)) {
+        let literal = |value: &Value| {
+            lowerer
+                .constants
+                .get(&value.id)
+                .copied()
+                .filter(|v| *v <= 4095)
+        };
+        let selected = if let Some(imm) = literal(rhs) {
+            Some((lhs, imm, condition_of(operation)))
+        } else {
+            literal(lhs).map(|imm| {
+                let reversed = match operation {
+                    CmpOp::Eq => Cond::Eq,
+                    CmpOp::Ne => Cond::Ne,
+                    CmpOp::SLt => Cond::Gt,
+                    CmpOp::SLe => Cond::Ge,
+                    CmpOp::ULt => Cond::Hi,
+                    CmpOp::ULe => Cond::Hs,
+                };
+                (rhs, imm, reversed)
+            })
+        };
+        if let Some((value, imm, condition)) = selected {
+            let register = lowerer.reg(value)?;
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: register,
+                imm,
+                width: width_of(register.class),
+            });
+            return Ok((flags, condition));
+        }
+    }
     let left = lowerer.reg(lhs)?;
     let right = lowerer.reg(rhs)?;
     let cond = condition_of(operation);

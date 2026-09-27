@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.115** and EvoMIR **0.52**. This is the Git-tracked execution backlog,
+EvoIR **1.9.115** and EvoMIR **0.53**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -261,6 +261,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     ignores; Clippy/fmt pass. The active kernel's frozen compiler excludes this
     repair. No objects were installed; K02/K03 and final pinned T05 remain OPEN.
     [Exact scope, debug timeout and identities](tests/fixtures/logical-immediate-selection.out).
+
+  - [x] **K02i — Select and validate bounded immediate comparisons**, 2026-09-28.
+    Shape and malformed-imm12 REDs now pass. Full-width comparisons preserve
+    reversed relations, flags adjacency, source effects and unmatched paths.
+    Six MIR/CLI tests cover 96 shapes, 1,056 interpreter comparisons and 192
+    assembler combinations; fourteen sealed native/crossed controls pass.
+    Original KVM objects retain their exports and shrink by 4,048/884 text bytes.
+    The pinned Rust 1.97.1 affected gate has 1,083 PASS, zero FAIL and four
+    historical ignores, with Clippy/fmt PASS. No objects are installed and no
+    runtime speedup is inferred; K02/K03 remain OPEN.
+    [Exact result and retained failed attempts](tests/fixtures/constant-compare-selection.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.

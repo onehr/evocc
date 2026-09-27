@@ -467,9 +467,15 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_general(name, block, *lhs, "a cmp operand")?;
             expect_general(name, block, *rhs, "a cmp operand")
         }
-        MInst::CmpImm { dst, lhs, .. } => {
+        MInst::CmpImm { dst, lhs, imm, .. } => {
             expect_flags(name, block, *dst, "a cmp result")?;
-            expect_general(name, block, *lhs, "a cmp operand")
+            expect_general(name, block, *lhs, "a cmp operand")?;
+            if *imm > 4095 {
+                return Err(format!(
+                    "@{name} block {block}: compare immediate is not an unshifted imm12"
+                ));
+            }
+            Ok(())
         }
         MInst::Cset { dst, flags, .. } => {
             expect_general(name, block, *dst, "a cset result")?;
