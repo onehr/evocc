@@ -1,0 +1,59 @@
+2026-09-28 CST / September 27 UTC — K1 assembler completion integrity (T05i)
+
+RED: an actual sealed container successfully assembles the small
+conservative-codegen-options.c output, prints OK a.o, then exits 17. The current
+K1 assemble_batch accepts the object and can cache it despite the failed
+container. Synthetic controls also expose duplicate/contradictory or unexpected
+verdict acceptance; a reported success without an object raises FileNotFoundError
+instead of recording a failed unit. Five assertions and five error subcases
+fail in the initial 51-test survey-cache run.
+
+Candidate kernel-assembly-verdict.patch:
+  * Require zero container exit and exactly one OK/FAIL for every fresh unit.
+  * Reject duplicate, contradictory, unexpected and missing records.
+  * Require the actual object before hashing/publishing success.
+  * Preserve assembler errors and process exit; bound recorded errors to 600
+    characters. Do not populate successful cache entries on a failed batch.
+  * Give the assembler cache a distinct protocol key so old unchecked entries
+    cannot masquerade as newly checked success. Prepared checkpoints already
+    include the implementation hash and invalidate when the implementation changes.
+
+GREEN, ISOLATED CANDIDATE ONLY: all 51 survey-cache tests pass, candidate Ruff
+passes, and the patch applies cleanly. Three actual sealed-container controls,
+with cache disabled, produce:
+  current implementation + actual exit 17: incorrectly assembled (RED)
+  candidate + actual exit 17: assembler-refused, assemblerExitCode 17
+  candidate + normal exit 0: assembled, assemblerExitCode 0
+The successfully produced object hash is identical in the first and third cases.
+The first native attempt had overlapping rw/ro mounts and failed setup; it is
+retained as native-setup-error.json, not counted as acceptance evidence.
+
+NOT INTEGRATED: the live kernel process 80898 already loaded substitute.py and
+later reads that file again to fingerprint prepared checkpoints. Editing its
+on-disk implementation mid-run would bind old in-memory execution to new source
+bytes. Therefore the working production script remains byte-identical; only
+a small isolated copy was tested, and this patch is queued for the next safe
+run boundary. No live compiler, command projection, cache, object or process
+was changed. This is not T05i closure or proof of the ongoing run's exit status.
+
+At the safe boundary: apply the patch, run all K1 regressions and a real assembler
+control, then use the hardened path for subsequent acceptance. Do not label old
+receipts or the running 20260927T135325Z process as using this repair. No actual
+nonzero assembler-container exit in that ongoing run has been demonstrated by
+this separate failure-injection experiment.
+
+SHA256:
+  live production script: 55e62e9df0b42c795dd2c20bf7899127cc4b22d439e5c65e5af632c5bf38d1ad
+  candidate script: 140100da0011f829a0fd0bc82b1e29b52875a315cbd3f6463f265f025df007e9
+  pending patch: cbf2d04a190dcdc66ddb08f53c96858eaa2b3303c5007e22d2d8dccfedb853ac
+  native.json: c9fae8e9e74a112e2bb420c627fe924f98c806ff963deb65c0c1c8ca26bec468
+  emitted assembly: eb643637367ad5db04caba131eec4653c7792788a99d1b85ade00913ec9b8858
+  actual object: 538eaf88ea56eab64105cd6271d6242559695c7e199c757bc9d920e7071c4c61
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+Artifacts: .build/floating-targeted/k1-verdict-20260928/
+substitute.py (isolated candidate), test_survey_cache.py (same tests with an
+isolated loader), native.py, native.json, native-setup-error.json,
+candidate-final.log. Initial RED log is
+.build/floating-targeted/codegen-options-20260927/k1-verdict-red.log.
+Only small scripts, logs, assembly and three objects were created; no image/tree.

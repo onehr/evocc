@@ -1361,6 +1361,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     This is bounded debug robustness, not a release-kernel miscompile or a
     guarantee for arbitrary AST depth. [Evidence](tests/fixtures/inline-deep-expression.out).
 
+  - [ ] **T05i — Reject incomplete assembler-container execution** — `RETEST`, P1.
+    Actual exit-17 failure injection proves the current K1 assembler can accept
+    preceding OK records. The [isolated patch](tests/fixtures/kernel-assembly-verdict.patch)
+    rejects failed processes, duplicate/missing/foreign verdicts and missing
+    objects, records exit codes and separates legacy cache keys. All 51 affected
+    tests and real exit-17/normal-exit controls pass on the candidate. It is
+    deliberately **not applied** during live process 80898: that process later
+    fingerprints the on-disk script despite already running its old code.
+    Apply at the next safe run boundary, then run the full K1 gate. Existing
+    receipts and the live build do not inherit candidate hardening.
+    [Exact reproducer, hashes and integration boundary](tests/fixtures/kernel-assembly-verdict.out).
+
 ## Later roadmap gates — not substitutes for runtime closure
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.

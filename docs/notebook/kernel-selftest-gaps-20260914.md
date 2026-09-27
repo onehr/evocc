@@ -47,6 +47,21 @@ Host free space is 68 GiB and the reused case-sensitive build volume has 26 GiB
 free. The affected gate is green: **1868 PASS / 0 FAIL / three historical ignored**,
 Clippy/fmt, 260 K1 Python tests and targeted Ruff. No new runtime disk or tree.
 
+At **2026-09-27 16:45 UTC** (September 28 local), the same owner/worker and
+frozen compiler remain active. The checkpoint contains **2,944 assembled records**
+of the 6,966-unit current queue, plus the separate initial 36 reuse candidates.
+There is still no final generated-input/link/boot verdict. The last filesystem
+check has 59 GiB host and 26 GiB case-volume free. Source trees/disks are reused.
+
+During this run, a separate real-container failure injection exposes K1's
+acceptance of OK lines before nonzero container exit. The
+[T05i candidate](../../tests/fixtures/kernel-assembly-verdict.out) passes 51
+focused regressions and real container controls. It is staged as a patch, not
+applied to the live implementation, because its prepared phase fingerprints
+the on-disk file after code has already been loaded. Integrate at a safe boundary;
+the current run does not inherit the candidate's verdict hardening. This probe
+does not itself demonstrate that an assembler container failed in the live run.
+
 ### Uniform build finished, two new closure gaps — 2026-09-27
 
 Run `20260926T133321Z` is **INCOMPLETE**, not running. Its 7,002 target-C second
