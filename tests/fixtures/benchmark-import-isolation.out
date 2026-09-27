@@ -1,0 +1,41 @@
+2026-09-27 — benchmark/standard-library import isolation
+
+RED in a fresh macOS Python 3.9 process with tools/ladder on sys.path:
+  import e0 removes the caller's ladder search path;
+  import mixed fails with ModuleNotFoundError: subject;
+  import shutil, gzip fails because the imported zlib benchmark has no
+    Z_SYNC_FLUSH attribute.
+The existing CLI --help control passes. Preloading e0 and reinserting the
+directory merely hides the defect; it is not the repair.
+
+Cause: importing shutil can import zlib. The benchmark file is named zlib.py
+and used to execute its lane setup and permanently remove its directory even
+when imported as the standard codec. sys.modules['zlib'] then held the wrong
+module. Existing in-process unit tests had already imported stdlib consumers,
+which masked this fresh-process ordering failure.
+
+Repair: when resolved as module zlib, this entry point loads the actual codec
+outside its own real directory and replaces its module slot without changing
+the caller's search path. CLI execution and a distinctly named benchmark import
+retain the existing Subject, version, options and normal entry point. Real-path
+filtering also excludes a symlinked alias of the benchmark directory.
+
+Six fresh-process controls PASS on macOS Python 3.9 and sealed Linux Python:
+  e0 import/search path; mixed import; gzip and codec round trips;
+  symlinked path; named Subject import; legacy zlib CLI --help.
+The first Linux test attempt incorrectly required zlib.__file__; Linux's built-in
+codec has none. The final assertion checks module-spec origin plus actual byte
+round trips, admitting both built-in and extension codecs, not weaker behavior.
+
+All 290 ladder Python tests PASS, targeted Ruff and diff checks PASS. The final
+origin/gzip assertion adjustment was rerun in both six-case platform groups.
+No application receipt, source, compiler binary, test expectation or pin changes.
+This is harness closure, not a new zlib/application campaign PASS.
+
+Commands:
+  python3 -m unittest discover -s tools/ladder/tests -p test_import_isolation.py
+  python3 -m unittest discover -s tools/ladder/tests
+  container run --rm --platform linux/arm64 --network none \
+    -v /Users/onehrxn/dev/30days/c30:/work:ro -w /work evo-flight-lab:sealed \
+    python3 -m unittest discover -s tools/ladder/tests -p test_import_isolation.py
+The native container uses a read-only mount, not another checkout or disk image.

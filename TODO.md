@@ -850,6 +850,26 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       dependency-pin change remains a separately declared configuration.
       [Exact rounding argument and executions](tests/fixtures/musl-hex-tail-reduction.out).
 
+    - [x] **B08d4 — Localize powf's upward-overflow reference failure** — `DONE`, 2026-09-27.
+      The [source-bound stage reduction](tests/fixtures/musl-powf-rounding-reduction.c)
+      executes the pinned log/exp algorithm and a separate exact-conversion
+      control. All 12 GCC/Clang/EvoCC O0/O2/archive combinations agree: for
+      `powf(max_float, 1)` upward rounding, the pre-narrowing approximation is
+      69 binary64 ULPs above the exact input, producing infinity and flags 0x14.
+      The explicit early-overflow branch is not taken; exact conversion has no
+      flags. This closes **source-library attribution**, not the original test
+      or full musl. A library repair/pin change is a distinct configuration.
+      [Bit patterns, identities and observer limitation](tests/fixtures/musl-powf-rounding-reduction.out).
+
+    - [x] **B08d5 — Attribute the strptime and API/header baseline gaps** — `DONE`, 2026-09-27.
+      The pinned `%s` source deliberately only consumes digits; `%z` requires
+      four digits after its sign. The measured three-compiler/two-archive
+      controls agree with those paths. POSIX does not require this test's
+      particular `%s` tm value or `-06` input extension. Separately, the missing
+      API executable follows two names absent from pinned `unistd.h`, not a
+      runtime compiler error. All three original failures remain failures;
+      no header/test or denominator is changed. [Source hashes and contract](tests/fixtures/musl-reference-boundaries.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private
@@ -1155,11 +1175,13 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   13 target objects (T04d). No fresh link/boot occurred; no worker remains live.
   Later K02d/K02e/K02f/K02g are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
-  September 27's replacement bench `20260927T134751.379209Z` is live at
-  13:48 UTC (owner 78638 / worker 78641): frozen release `65035621…`, two jobs,
-  low-disk mode, same source/build trees. It includes K03b and the accumulated
-  compiler repairs; T04d runs through the common driver. Its initial input scan
-  is active, with no completed batch claimed. The preceding debug-binary launch
+  September 27's replacement bench `20260927T135325.342339Z` is live at
+  14:15 UTC (owner 80895 / worker 80898): frozen release `65035621…`, four jobs,
+  low-disk mode, same source/build trees. Its earlier two-job launch was
+  interrupted to use the measured 12-core/64-GiB host; verified cache entries
+  are reused, not relabeled as fresh compilation. The current run has 768
+  assembled records. It includes K03b and the accumulated compiler repairs;
+  T04d runs through the common driver. The preceding debug-binary launch
   was explicitly interrupted before installing objects and is not a completed
   survey. [Live log and identities][kernel].
   Its reused output currently starts from GCC seed objects, not an accepted
@@ -1283,6 +1305,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     objects and no make replacements. These harness checks do not promote the
     old musl receipt: its original full campaign remains NOT RUN after repair.
     [Regressions and scope](tests/fixtures/benchmark-relink-boundaries.out).
+
+  - [x] **T05g — Isolate the zlib benchmark from Python's standard codec**, 2026-09-27.
+    Three fresh-process REDs reproduce search-path mutation, missing `subject`
+    imports and a broken `gzip` import. The historical entry point now delegates
+    codec imports outside its own real directory, preserving the caller's
+    path; CLI and named benchmark loading retain their prior Subject. Six
+    controls pass on macOS and sealed Linux, including symlink and byte-roundtrip
+    cases; all 290 ladder tests and targeted Ruff pass. No benchmark result or
+    compiler behavior was changed. [Failure and repair](tests/fixtures/benchmark-import-isolation.out).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

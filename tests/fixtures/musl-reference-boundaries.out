@@ -71,3 +71,34 @@ no waiver of remaining library/reference failures, no full musl closure.
 
 Changed Python gate: 281 ladder tests PASS, changed-file Ruff PASS,
 git diff --check PASS. No Rust source changed and no compiler rebuild was made.
+
+Follow-up source-contract classification (2026-09-27)
+--------------------------------------------------
+strptime's two original programs each retain two failed assertions. The pinned
+implementation's case 's' validates/skips an optional minus and decimal digits
+without storing any tm field. Its case 'z' requires exactly four digits after
+the sign before writing the offset. Thus the observed unchanged tm, rejection
+of -06, and acceptance of -0600 follow the source, not an EvoCC miscompile.
+The original tests label these cases "Glibc". The completed CASE=0 native
+matrix already compares all three compilers, both levels and both archives;
+no new runtime numerator is introduced by this source review.
+
+POSIX Issue 8 specifies an unspecified tm effect for %s and a +hhmm/-hhmm
+input shape for %z. Neither requires these two particular test expectations:
+https://pubs.opengroup.org/onlinepubs/9799919799/functions/strptime.html
+This supports classification as a pinned test/library compatibility mismatch,
+not a blanket libc conformance claim or permission to mark the tests PASS.
+
+Pinned implementation SHA256:
+  9d3eb656b897a82c3b43a6ef973239a014ee9ee89361c1b308b0a2429a4766ff
+Original strptime test SHA256:
+  af24cbeb224b18937c7396ce38710df72f7e35ba896dc5603de2119d16cffe8c
+The separately recorded api/main failure is still a header-version gap:
+api/unistd.c asks for _PC_TIMESTAMP_RESOLUTION and _SC_XOPEN_UUCP, which the
+pinned include/unistd.h does not declare. No runtime main exists after that
+compile failure. It remains an original failure, not an executed test.
+Original API test SHA256:
+  f377b2604ef86f12f69d8a1a4af2f2c9821b1a464ef3b93dc30051401eb2fa76
+Pinned unistd.h SHA256:
+  ab2782955f7f5cd22b4feaa7dd48195a4e6d86c6d022bfd39e14ebb610b165e1
+No test, header, library pin or acceptance-policy disposition was changed.

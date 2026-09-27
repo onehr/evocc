@@ -36,11 +36,14 @@ It includes the cumulative KVM repairs, bitmap fix and current visitor repair;
 the late-generator fix remains in the common build driver. The historical
 `target/frontend/release/evocc` is preserved separately and is not this subject.
 
-At 2026-09-27 13:48 UTC the replacement bench
-`20260927T134751.379209Z` is live: owner **78638**, worker **78641**,
-two-job low-disk policy, evidence under `.evidence/bench/20260927T134751.379209Z/`.
-The initial input scan is active; no completed object batch is claimed yet.
-Host free space is 70 GiB and the reused case-sensitive build volume has 26 GiB
+The two-job replacement `20260927T134751.379209Z` was interrupted to increase
+workers after measuring the 12-core/64-GiB host and bounded worker memory.
+At 2026-09-27 14:15 UTC, bench `20260927T135325.342339Z` is live: owner
+**80895**, worker **80898**, four-job low-disk policy, evidence under
+`.evidence/k1/20260927T135325Z/`. It has **768 assembled records**, including
+verified cache reuse. The selected compiler is unchanged. No new final
+composition, link, boot or original KVM runtime result is claimed.
+Host free space is 68 GiB and the reused case-sensitive build volume has 26 GiB
 free. The affected gate is green: **1868 PASS / 0 FAIL / three historical ignored**,
 Clippy/fmt, 260 K1 Python tests and targeted Ruff. No new runtime disk or tree.
 

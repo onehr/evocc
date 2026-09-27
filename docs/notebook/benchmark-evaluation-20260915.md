@@ -2553,6 +2553,28 @@ extraction plus JSON argv removes that loss; six real ELF controls verify stack
 flags, overrides and an absolute symbol. A failed container cannot contribute
 partial success verdicts. B08b still tracks the other tuning/diagnostic omissions.
 
+### powf reference failure localized (September 27)
+
+Source review also closes strptime's attribution: its `%s` branch intentionally
+consumes digits without updating `tm`, and its `%z` branch requires four digits
+after a sign. These match the existing native controls. The pinned test's
+Glibc-specific expectations are not requirements of the corresponding
+[POSIX strptime contract](https://pubs.opengroup.org/onlinepubs/9799919799/functions/strptime.html).
+The two original programs and separate API/header failure remain FAIL, not
+compiler passes; exact source hashes are in the
+[existing reduction record](../../tests/fixtures/musl-reference-boundaries.out).
+
+The [source-bound reduction](../../tests/fixtures/musl-powf-rounding-reduction.out)
+compares the pinned log/exp stages with the actual library and an exact
+conversion control. Twelve native compiler/optimization/archive combinations
+have identical four-mode results. Upward's pre-narrowing polynomial value is
+`47efffffe0000045`, versus exact `47efffffe0000000`; conversion to float yields
+infinity with INEXACT|OVERFLOW. The explicit early-overflow branch is false.
+The exact conversion produces `7f7fffff` with no flags, while the library's
+log stage already sets INEXACT. Thus merely correcting the final value would
+not repair this test's flag contract. This is a pinned-library algorithm
+attribution, not a compiler change, modified benchmark or original PASS.
+
 ### Genuine shared-loader supplement (September 27)
 
 The [new supplement](../../tests/fixtures/musl-shared-loader.out) executes all

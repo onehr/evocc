@@ -1,0 +1,59 @@
+2026-09-27 — B08d source-bound powf failure disposition
+
+Original failure: libc-test src/math/ucb/powf.h:103, upward rounding,
+powf(0x1.fffffep127f, 1.0f), expected no exception; actual INEXACT|OVERFLOW.
+The unchanged program and its original failure remain in the full receipt.
+
+The C reduction includes pinned musl src/math/powf.c unchanged under a private
+function name, observes its existing log2/exp2 stages, and copies only the
+non-intrinsic exp2 polynomial to expose the value before float narrowing.
+Every arithmetic stage finishes before its flags are sampled; rendering occurs
+after snapshots. A volatile indirect call prevents reuse of the independently
+observed expansion. Real library powf is also called through a volatile pointer.
+No source, archive or installed benchmark object is replaced.
+
+GCC 14.2.0-19 / Clang 19.1.7 / EvoCC, O0/O2, reference and mixed archives:
+12 native executions, 48 rounding-mode observations, all exit 0 and have
+identical complete output. This PASS means the diagnostic controls agree,
+NOT that powf passes its unchanged upstream test.
+
+mode   log/product bits  pre-narrowing bits final float flags exact-control flags
+RNE    405fffffffa3aae2   47efffffdfffffeb   7f7fffff    10    7f7fffff       0
+up     405fffffffa3aae3   47efffffe0000045   7f800000    14    7f7fffff       0
+down   405fffffffa3aae0   47efffffdc2704ae   7f7ffffe    10    7f7fffff       0
+zero   405fffffffa3aae0   47efffffdc2704ae   7f7ffffe    10    7f7fffff       0
+
+Flags are hexadecimal: 0x10 INEXACT, 0x04 OVERFLOW. The exact binary64
+representation of the input float is 47efffffe0000000. Upward's polynomial
+result exceeds it by 0x45 binary64 ULPs. Narrowing this approximation to float
+under upward rounding produces infinity and flags 0x14. Narrowing the exact
+input representation produces the original finite float and no flags.
+The explicit early-overflow comparison is FALSE in all four modes: this failure
+is not that branch firing. log2 has already raised INEXACT, so adding a late
+identity-value correction alone would not repair the library's flag contract.
+
+The source has no y==1 bypass before its log/exp approximation. The reduction,
+three independent compiler paths and both archives localize the recorded test
+failure to that pinned numerical algorithm; no EvoCC instruction discrepancy
+was found. Repairing the library or updating its pin would be a distinct
+configuration, not unchanged-benchmark PASS. Other powf inputs are not closed.
+
+An intermediate inline observer let GCC O2 reuse exp2's earlier value across a
+flag reset, leaving zero observer flags; all actual powf calls still agreed.
+results-inline.json and identity-inline.json retain that experiment. The final
+volatile-call observation avoids relying on -frounding-math alone to prohibit
+such observer CSE. No broad GCC FENV_ACCESS claim follows from this diagnostic.
+
+Recipe: python3 .build/floating-targeted/musl-powf-20260927/capture.py
+Exact argv, source/header/archive identities, link maps and output:
+  .build/floating-targeted/musl-powf-20260927/
+  emissions.json, identity.json, results.json, container.json
+Sealed linux/arm64, network none:
+  sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Driver SHA256 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+Fixture SHA256 349b6f1b3b75d035be6477052cf761f7dcf85eae48654709633fe4cae6035808
+Pinned powf.c SHA256 74069b3a380cf954361e0243b38de2094ae680e2ecfb3e50af61ab576f13babf
+Reference archive e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+Mixed archive 11e19ecf164d5ad20252e130c919478e37f9886f221eb75a4ff525f3e20d8975
+Results SHA256 5f5a4150afb5f15ccfb7f6eb1f182ea57e2bceb61bcc606ce4889559b291735f
+All identity files are checked unchanged after execution.
