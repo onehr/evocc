@@ -2568,3 +2568,15 @@ validation/restoration and records its own composition, library hashes and exact
 paired population. The common bench cannot claim complete musl with absent,
 failed, or stale-compiler shared evidence. This closes the five-case static/DSO
 coverage gap, not the remaining reference-library failures or full musl.
+
+### Binary128 strtold source reduction (September 27)
+
+The [hex-tail reduction](../../tests/fixtures/musl-hex-tail-reduction.out) now
+explains both strtold failures: the pinned `hexfloat` captures 29 hexadecimal
+digits for 113-bit long double, then substitutes half a final digit for every
+nonzero remaining tail. With a leading 1 this creates two artificial ties;
+both round to even ...1112, although one exact input is above the midpoint
+(...1113 required) and the other below (...1111 required). An additional captured
+guard digit distinguishes these two inputs. Four interpreter and six native
+executions assert the old behavior and the diagnostic control. No pinned source
+was patched; the original failures remain FAIL, not compiler regression or PASS.

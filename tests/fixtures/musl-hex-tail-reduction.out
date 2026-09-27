@@ -1,0 +1,46 @@
+B08d strtold shared-failure source reduction, 2026-09-27
+====================================================
+
+Source: musl-hex-tail-reduction.c. This is a positive-normal-input reduction of
+musl 1.2.6 src/internal/floatscan.c:hexfloat, not a replacement parser or a
+patch to the pinned benchmark. It retains digit collection, sticky-tail update,
+normalization and the final rounded x+y sum; the final exact power-of-two scale
+does not require a library call.
+
+For binary128, 113/4+1 is 29. With a leading hexadecimal 1, 29 significant
+digits already occupy the full 113-bit significand. The source's later
+`y += 0.5 * scale` turns every nonzero remaining tail into a halfway case:
+  input ...111281: remaining 0x81/0x100 is above halfway, not exactly halfway;
+  input ...11111: remaining 0x1/0x10 is below halfway, not exactly halfway.
+Both artificial ties round to even, producing ...1112. Exact integer
+quotient/remainder rounding instead gives ...1113 and ...1111, respectively.
+Keeping one additional hexadecimal guard digit is a diagnostic control that
+distinguishes these two inputs correctly. It is not claimed as a complete
+parser repair across other signs, formats, directed modes or subnormals.
+
+At O0 and O2:
+  C-HIR interpreter: 2/2 PASS.
+  EvoIR interpreter: 2/2 PASS.
+  GCC14 native: 2/2 PASS.
+  Clang19 native: 2/2 PASS.
+  EvoCC native: 2/2 PASS.
+Each execution asserts all four results: both original incorrect values and
+both correct guard-digit controls. These are passes of the diagnostic model,
+not passes of the original strtold library tests.
+
+Compiler SHA256:
+e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+Same sealed AArch64 image as musl-reference-boundaries.out; GCC14.2/Clang19.1.7.
+Native references: -O0/-O2 -frounding-math -ffp-contract=off; EvoCC uses the
+existing no-contraction RNE profile. No host floating arithmetic supplies the
+expected results. Raw commands and outputs:
+.build/floating-targeted/musl-common-20260927/hex-tail-host.json
+  SHA256 1417adfdbdbde3933ed112f26e23d068dbe349db569ace94867a114fe5351da1
+.build/floating-targeted/musl-common-20260927/hex-tail-native.json
+  SHA256 349fb08480cc405d5b96c58b255372bdf106cc6ef045e5cd9eca0c9b1fe4c208
+
+Disposition: the two observed strtold failures are explained by the pinned
+library algorithm, not an EvoCC-only arithmetic/lowering defect. The unchanged
+original tests still FAIL on both archives. Changing library source/version or
+test expectations requires an explicitly declared new benchmark configuration;
+it must not rewrite the original FAIL as PASS. B08d full acceptance remains open.

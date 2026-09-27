@@ -823,6 +823,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       **1,270/1,338 target-C** shared coverage, not full-musl PASS.
       [Composition, hashes and exact scope](tests/fixtures/musl-shared-loader.out).
 
+    - [x] **B08d3 — Localize the two strtold binary128 reference failures** — `DONE`, 2026-09-27.
+      The [small source reduction](tests/fixtures/musl-hex-tail-reduction.c)
+      proves the pinned parser collapses both below-halfway and above-halfway
+      nonzero tails to a halfway value when 29 leading-1 hex digits fill all
+      113 significand bits. Both interpreters and GCC/Clang/EvoCC native O0/O2
+      reproduce ...1112 twice; an extra guard-digit control restores ...1113
+      and ...1111. This is a source-bound library defect disposition, **not**
+      a changed benchmark or original-test PASS. A general library repair or
+      dependency-pin change remains a separately declared configuration.
+      [Exact rounding argument and executions](tests/fixtures/musl-hex-tail-reduction.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private
