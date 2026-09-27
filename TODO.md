@@ -749,6 +749,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     outcomes remain identical, with this flag retained. Remaining tuning and
     diagnostic omissions are not silently reclassified as implemented options.
 
+    September 27 targeted repair also preserves `-Xassembler` operands, both
+    assembler spellings' written override order and literal argv boundaries;
+    failed container execution cannot publish partial assembly success. Five
+    harness REDs and six real ELF objects verify the fix. The old
+    `-Wa,--noexecstack` spelling was already transported to the assembler.
+    [Targeted evidence](tests/fixtures/musl-reference-boundaries.out).
+
   - [x] **B08c — Close original musl pthread runtime regressions** — `DONE`, P2, 2026-09-27.
     The fresh scalar-asm compiler assembles 1,271/1,339 original units, all with
     exact symbol parity; the 68 refusals are floating-complex interfaces (L04).
@@ -787,6 +794,22 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     relabel those static-lane failures as compiler passes. Diagnose the remaining
     common failures against pinned source and environment without weakening the
     original assertions or increasing watchdogs to conceal a progress defect.
+
+    - [x] **B08d1 — Supply the atfork limit test's unprivileged environment** — `DONE`, 2026-09-27.
+      The isolated fork probe and unchanged atfork program fail to induce a
+      fork error as root, but pass at uid 65534 with both reference and mixed
+      archives. The common adapter now installs a hashed case wrapper for
+      exactly the two upstream atfork variants; privilege-drop errors fail,
+      other cases retain their identity, and the reference supervisor's
+      five-second timeout/100 KiB stack are unchanged. Four native executions
+      through the actual wrapper pass. This does not change the historical
+      17-failure receipt or close B08d's full acceptance.
+    Source-bound probes also reproduce strptime/strtold/wordexp/powf differences
+    identically for GCC/Clang/EvoCC callers and both archives (96 records).
+    The original daemon test passes in this isolated replay; million-fd
+    exhaustion takes about 0.12 seconds, so fd count alone does not explain its
+    historical five-second timeout. That intermittent failure stays open.
+    [Cases, exact identities and observations](tests/fixtures/musl-reference-boundaries.out).
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library

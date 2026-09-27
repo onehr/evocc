@@ -1,0 +1,73 @@
+B08b/B08d targeted closure, 2026-09-27
+====================================
+
+Subject: tests/fixtures/musl-reference-boundaries.c, CASE=0..5 plus
+DROP_PRIVILEGE=1 (case 4) and TEST_NOFILE=1024 (case 5).
+These are observations, not replacements for upstream assertions.
+
+Compiler: evocc-asm-ssa
+SHA256 e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+Sealed arm64 image:
+sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19 / Clang 19.1.7; O0/O2; no network.
+Reference archive SHA256:
+e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+Mixed archive SHA256 (1271 EvoCC target-C units, 68 refused complex units):
+11e19ecf164d5ad20252e130c919478e37f9886f221eb75a4ff525f3e20d8975
+
+Capture recipes/raw argv/stdout/stderr/link maps:
+.build/floating-targeted/musl-common-20260927/
+  capture.py: host emission, --target for reference/EvoCC native execution
+  original_probe.py: six unchanged upstream programs, both explicit archives
+  wrapper_probe.py: actual installed runner on both original atfork variants
+  assembler_probe.py: actual mixed.assemble path plus readelf/nm inspection
+
+All 16 EvoCC assembly emissions and 96 target build/link/run records complete.
+All compiler/optimization/archive combinations give the same observations:
+  strptime %s: consumes input, leaves tm zero; -06 rejected, -0600 accepted.
+  strtold: expected ...1113 and ...1111, both actual ...1112 (binary128).
+  powf(max_finite_float,1), upward: infinity 7f800000, flags 0x14.
+  wordexp $#/$1/$2: [2], [$1], [2>/dev/null].
+  RLIMIT_NPROC=0: uid 0 forks successfully; uid 65534 fails with EAGAIN.
+  fd exhaustion: 1048573 dup calls reach EMFILE in approximately 0.12 seconds;
+    the 1024-limit control reaches EMFILE after 1021 dup calls.
+
+Original unchanged test replay: 12 default runs plus four environment controls.
+  strptime/strtold/wordexp/powf: both archives retain the original failures.
+  atfork: root fails, uid 65534 passes with both archives (no assertion change).
+  daemon-failure: both default and 1024-fd controls PASS with both archives;
+    default takes approximately 0.126 seconds. This does NOT close the earlier
+    intermittent timeout, and falsifies fd-count alone as its explanation.
+  Original reference-built supervisor, 5-second timeout, 100 KiB stack retained.
+  No descendant survives these targeted executions.
+
+Fix: tools/ladder/musl_case.py uses the upstream RUN_WRAP mechanism in both
+reference and candidate trials. Only the two exact atfork test paths drop root
+to uid/gid 65534 with supplementary groups cleared. All other cases keep their
+identity. Setup errors fail; no assertion or result is suppressed. Four actual
+installed-wrapper executions (two variants x two archives) PASS under the
+unchanged supervisor. Unit tests cover path boundaries, already-nonroot users,
+and failed privilege drop. The adapter records the wrapper hash and policy.
+
+Assembler REDs: omitted -Xassembler, lost ordering/argument boundaries, and
+acceptance of partial stdout after failed container execution. Fixed using
+ordered flag extraction and an exact JSON argv plan. Five regression tests pass,
+including executing the generated runner with literal spaces and shell text.
+Six native ELF objects pass: -Wa/--noexecstack and -Xassembler/--noexecstack
+produce non-executable GNU-stack notes; --execstack produces X; mixed-spelling
+last override wins in both orders; --defsym guard=37 appears as absolute 0x25.
+The historical -Wa,--noexecstack spelling already worked; do not claim it was
+previously ignored just because the C frontend omission table named it.
+
+Raw hashes:
+native.json 25e472db43eaec7da4166f3b65654c2000930cc693be6adef834e4a2ea4180d4
+original/results.json c59c98c2d063ad4b989ab7d351a2ed86e4886e6cd9bd6da07adfa8b62c31f285
+wrapper.json a4adbc2ad7ff669b79af158d3fabe2defc728a74157986d8e279077a2dfcea7e
+assembler/elf.json 5f4b2ed5824fd2f68829c9615c36d4ad4158bda9d80a090d3d1bf926de7d292f
+
+Claim boundary: targeted transport/environment repairs and source-bound
+diagnosis only. No fresh full libc-test numerator, no shared-loader PASS,
+no waiver of remaining library/reference failures, no full musl closure.
+
+Changed Python gate: 281 ladder tests PASS, changed-file Ruff PASS,
+git diff --check PASS. No Rust source changed and no compiler rebuild was made.

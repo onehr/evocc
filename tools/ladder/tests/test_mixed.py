@@ -10,6 +10,8 @@ build that does not pass.
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -153,6 +155,65 @@ class TranslateCommand(unittest.TestCase):
         self.assertNotIn("obj/a.o", command)
         self.assertNotIn("dep.d", command)
         self.assertEqual(omitted, ["-o", "-MF"])
+
+    def test_assembler_options_keep_both_spellings_and_written_override_order(self):
+        flags = ['-Xassembler', '--execstack', '-Wa,--noexecstack',
+                 '-Xassembler', '--defsym', '-Xassembler', 'guard=1']
+        unit = self.unit('-c', 'a.c', *flags, '-o', 'a.o')
+        self.assertEqual(mixed.assembler_flags(unit), flags)
+
+    def test_missing_assembler_operand_is_not_silently_discarded(self):
+        with self.assertRaises(ValueError):
+            mixed.assembler_flags(self.unit('-c', 'a.c', '-Xassembler'))
+
+    def test_assembly_plan_preserves_exact_arguments_without_shell_splitting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            flags = ['-Xassembler', '--defsym', '-Xassembler', 'label with space=1',
+                     '-Wa,--noexecstack']
+            unit = self.unit('-c', 'a.c', *flags)
+
+            def run(*args, **kwargs):
+                plan = json.loads((root / 'plan.json').read_text())
+                self.assertEqual(plan[0]['flags'], flags)
+                return subprocess.CompletedProcess([], 0, 'a.o ok\n', '')
+
+            with patch.object(mixed, 'container', side_effect=run):
+                result = mixed.assemble([{'unit': 'a.o', 'outcome': 'emitted',
+                                          'assembly': 'a.s'}], {'a.o': unit}, root)
+            self.assertEqual(result, {'a.o': 'ok'})
+
+    def test_failed_assembly_runner_cannot_publish_partial_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(mixed, 'container', return_value=
+                              subprocess.CompletedProcess([], 7, 'a.o ok\n', 'failed')):
+                result = mixed.assemble([{'unit': 'a.o', 'outcome': 'emitted',
+                                          'assembly': 'a.s'}], {'a.o': self.unit('-c', 'a.c')},
+                                        Path(directory))
+            self.assertEqual(result, {})
+
+    def test_assembly_runner_delivers_literal_argv_to_the_tool(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            flags = ['-Xassembler', 'label with space=1', '-Xassembler',
+                     '$(touch injected)', '-Wa,--noexecstack']
+            (root / 'plan.json').write_text(json.dumps([
+                {'unit': 'a.o', 'assembly': 'input file.s', 'object': 'a.o',
+                 'flags': flags}]))
+            tool = root / 'gcc-14'
+            tool.write_text(f'#!{sys.executable}\nimport json, sys\n'
+                            'from pathlib import Path\n'
+                            'Path("argv.json").write_text(json.dumps(sys.argv[1:]))\n')
+            tool.chmod(0o755)
+            script = mixed.ASSEMBLE.replace('cd /work/asm || exit 1', '')
+            done = subprocess.run(['sh', '-c', script], cwd=root,
+                                  env={**os.environ, 'PATH': directory + os.pathsep + os.environ['PATH']},
+                                  text=True, capture_output=True, timeout=10)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(json.loads((root / 'argv.json').read_text()),
+                             [*flags, '-c', '-x', 'assembler', 'input file.s', '-o', 'obj/a.o'])
+            self.assertEqual(mixed._assembly_verdicts(done.stdout), {'a.o': 'ok'})
+            self.assertFalse((root / 'injected').exists())
 
 
 def parity(added=(), missing=()):

@@ -63,6 +63,8 @@ PIN = {
 MOUNT = "musl"
 TEST_MOUNT = "libc-test"
 CONTAINER_ROOT = f"/work/{MOUNT}"
+CASE_RUNNER = Path(__file__).with_name('musl_case.py')
+CASE_WRAPPER = f'/work/{TEST_MOUNT}/evo-case-environment'
 
 CONFIG_MAK = """CC = /work/musl/sysroot/bin/musl-gcc
 CFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function
@@ -85,7 +87,7 @@ export EVO_CMDLOG=/dev/null
 cd /work/{TEST_MOUNT}
 cp {CONTAINER_ROOT}/libc-test-config.mak config.mak
 make -s debug > inventory.log
-make -j4 > build.log 2>&1
+make -j4 RUN_WRAP={CASE_WRAPPER} > build.log 2>&1
 cp src/common/runtest.exe reference-runtest
 echo reference-build-ok
 """
@@ -102,7 +104,7 @@ cd /work/{TEST_MOUNT}
 test -x /work/{TEST_MOUNT}/reference-runtest || exit 2
 rm -f src/*/*.exe src/*/*.err src/*/*.ld.err src/REPORT src/*/REPORT
 make -s debug > inventory.log
-make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w ''" > relink.log 2>&1
+make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w {CASE_WRAPPER}" > relink.log 2>&1
 echo tests-done
 """
 
@@ -172,6 +174,7 @@ def prepare(build: Path, source: Path, test_source: Path) -> tuple[Path, Path, d
 
 
 def reference_build(tree: Path, tests: Path) -> tuple[str, set[str]]:
+    install_case_environment(tests)
     done = mixed.container({MOUNT: tree, TEST_MOUNT: tests}, BUILD_SCRIPT, timeout=7200)
     if done.returncode != 0 or done.stdout.splitlines()[-1:] != ['reference-build-ok']:
         return f'runner-exit-{done.returncode}: {(done.stdout + done.stderr)[-600:]}', set()
@@ -190,6 +193,7 @@ def relink_and_test(tree: Path, tests: Path,
     if not supervisor.is_file():
         return 'missing-reference-supervisor', set()
     supervisor_hash = mixed.sha256(supervisor)
+    install_case_environment(tests)
     done = mixed.container({MOUNT: tree, TEST_MOUNT: tests}, RELINK_SCRIPT, timeout=7200)
     if done.returncode != 0:
         return f'runner-exit-{done.returncode}', set()
@@ -203,6 +207,12 @@ def relink_and_test(tree: Path, tests: Path,
         return "tests-done", completed_report(tree, tests)
     except (OSError, ValueError) as error:
         return f'incomplete-evidence: {error}', set()
+
+
+def install_case_environment(tests: Path) -> None:
+    wrapper = tests / 'evo-case-environment'
+    wrapper.write_bytes(CASE_RUNNER.read_bytes())
+    wrapper.chmod(0o755)
 
 
 def main() -> int:
@@ -364,6 +374,13 @@ def main() -> int:
             "configure": "--disable-shared, so the library is one set of objects",
             "libcTestConfig": CONFIG_MAK,
             "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged",
+            "caseEnvironment": {
+                "runnerSha256": mixed.sha256(CASE_RUNNER),
+                "unprivilegedUidGid": 65534,
+                "cases": ["src/regression/pthread_atfork-errno-clobber.exe",
+                          "src/regression/pthread_atfork-errno-clobber-static.exe"],
+                "policy": "drop root before the two RLIMIT_NPROC cases; other identities and cases unchanged; setup failure is not PASS",
+            },
         },
         "unconsumedGccOptions": mixed.omitted_table(rows),
         "evidence": str(evidence),

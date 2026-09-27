@@ -435,22 +435,38 @@ def flat_name(unit: str) -> str:
 
 
 def assembler_flags(unit: Unit) -> list[str]:
-    """The flags addressed to the assembler for this unit."""
-    return [a for a in unit.argv if a.startswith("-Wa,")]
+    """Both driver spellings, with their operands and written override order."""
+    flags: list[str] = []
+    index = 0
+    while index < len(unit.argv):
+        value = unit.argv[index]
+        if value == '-Xassembler':
+            if index + 1 == len(unit.argv):
+                raise ValueError(f'missing -Xassembler operand in {unit.name}')
+            flags.extend(unit.argv[index:index + 2])
+            index += 2
+            continue
+        if value.startswith('-Wa,'):
+            flags.append(value)
+        index += 1
+    return flags
 
 
 ASSEMBLE = r"""#!/bin/sh
 cd /work/asm || exit 1
-: > assemble.log
-while IFS='|' read -r unit obj asmfile flags; do
-  [ -n "$unit" ] || continue
-  if gcc-14 $flags -c -x assembler "$asmfile" -o "obj/$obj" 2>> assemble.log; then
-    echo "$unit ok"
-  else
-    echo "$unit assembler-refused"
-  fi
-done < plan.txt
-exit 0
+exec python3 - <<'PY'
+import json
+from pathlib import Path
+import subprocess
+
+with Path('assemble.log').open('w') as log:
+    for row in json.loads(Path('plan.json').read_text()):
+        command = ['gcc-14', *row['flags'], '-c', '-x', 'assembler',
+                   row['assembly'], '-o', 'obj/' + row['object']]
+        done = subprocess.run(command, stdout=log, stderr=log)
+        verdict = 'ok' if done.returncode == 0 else 'assembler-refused'
+        print(row['unit'], verdict, flush=True)
+PY
 """
 
 
@@ -466,13 +482,13 @@ def assemble(rows: list[dict], units: dict[str, Unit], asm_dir: Path) -> dict[st
     (asm_dir / "obj").mkdir(exist_ok=True)
     plan = []
     for row in emitted:
-        flags = " ".join(assembler_flags(units[row["unit"]]))
-        plan.append(
-            f"{row['unit']}|{flat_name(row['unit'])}.o|{row['assembly']}|{flags}"
-        )
-    (asm_dir / "plan.txt").write_text("\n".join(plan) + "\n", encoding="utf-8")
+        plan.append({'unit': row['unit'], 'object': flat_name(row['unit']) + '.o',
+                     'assembly': row['assembly'], 'flags': assembler_flags(units[row['unit']])})
+    (asm_dir / "plan.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
     (asm_dir / "assemble.sh").write_text(ASSEMBLE, encoding="utf-8")
     done = container({"asm": asm_dir}, "sh /work/asm/assemble.sh", timeout=3600)
+    if done.returncode != 0:
+        return {}
     return _assembly_verdicts(done.stdout)
 
 

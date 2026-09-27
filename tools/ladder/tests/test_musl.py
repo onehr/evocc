@@ -185,8 +185,17 @@ class SupervisorTest(unittest.TestCase):
         self.assertIn("cp src/common/runtest.exe reference-runtest", musl.BUILD_SCRIPT)
 
     def test_subject_cases_use_the_preserved_supervisor(self):
-        self.assertIn("RUN_TEST=\"/work/libc-test/reference-runtest -w ''\"", musl.RELINK_SCRIPT)
+        self.assertIn(f'RUN_TEST="/work/libc-test/reference-runtest -w {musl.CASE_WRAPPER}"', musl.RELINK_SCRIPT)
+        self.assertIn(f'RUN_WRAP={musl.CASE_WRAPPER}', musl.BUILD_SCRIPT)
         self.assertIn("test -x /work/libc-test/reference-runtest", musl.RELINK_SCRIPT)
+
+    def test_case_wrapper_is_installed_exactly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tests = Path(directory)
+            musl.install_case_environment(tests)
+            wrapper = tests / 'evo-case-environment'
+            self.assertEqual(wrapper.read_bytes(), musl.CASE_RUNNER.read_bytes())
+            self.assertTrue(os.access(wrapper, os.X_OK))
         # Only supervision changes; cases still relink against the subject libc.
         self.assertIn("make install", musl.RELINK_SCRIPT)
         self.assertIn("rm -f src/*/*.exe", musl.RELINK_SCRIPT)

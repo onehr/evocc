@@ -2527,3 +2527,28 @@ are not converted to PASS when an EvoCC mixed build reproduces them.
 
 These counts describe the recorded reference failures, not all possible libc
 defects. B08d tracks closure; no test source, assertion, or watchdog was changed.
+
+### Targeted environment and assembler repair (September 27)
+
+The [small native matrix](../../tests/fixtures/musl-reference-boundaries.out)
+contains 96 completed build/link/run records and 16 unchanged-program executions,
+not a new full campaign. It establishes root's RLIMIT_NPROC exemption as the
+atfork test failure's cause. The adapter now uses upstream RUN_WRAP to run just
+that regression's two variants as uid/gid 65534, identically in both compiler
+lanes. All four original-variant/archive combinations pass through the actual
+wrapper and unchanged reference supervisor; no assertion is removed.
+
+The isolated original daemon case passes against both archives in about 0.126
+seconds; million-fd exhaustion reaches EMFILE in about 0.12 seconds. The previous
+timeout remains unexplained, not waived. The other four library cases reproduce
+with both archives and all three callers: strptime's source deliberately ignores
+the parsed `%s` value and requires four `%z` digits; wordexp passes two helper
+arguments to `/bin/sh`, which its nested expansion exposes. Two strtold quad
+rounding errors and upward powf's infinity/overflow remain numerical-library
+investigations, not demonstrated EvoCC miscompilations.
+
+The mixed assembler runner also had a real command-transport defect: it retained
+`-Wa,` but dropped `-Xassembler`, then split its plan using the shell. Ordered
+extraction plus JSON argv removes that loss; six real ELF controls verify stack
+flags, overrides and an absolute symbol. A failed container cannot contribute
+partial success verdicts. B08b still tracks the other tuning/diagnostic omissions.
