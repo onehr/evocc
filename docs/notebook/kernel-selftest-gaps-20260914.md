@@ -39,6 +39,13 @@ All four boot/shutdown checks pass and protected inputs hash identically after
 execution. This is a retained failure of the cumulative candidate, not K02/K03
 closure and not an improvement inferred from smaller generated objects.
 
+The [unchanged IOMMU pair](../../tests/fixtures/iopf-enabled-reference.out)
+now runs on that complete composition: **224 PASS / 0 FAIL / 5 SKIP** on each
+Image, the same 229-case population and 45-second limit. Boot, nonce, shutdown
+and preserved-input checks pass. All former six disabled-IOPF failures are
+gone; the five explicit `no_viommu` variants remain skipped. This closes K06
+for the reviewed configuration; it is not full K13/K14 acceptance.
+
 ### Connector prerequisite omitted from fragment-only review — 2026-09-28
 
 The [small original-API probe](../../tests/fixtures/connector-configuration.out)

@@ -117,11 +117,11 @@ explicit timeout policies are recorded for both sides. KUnit executes in the
 kernel, with built-in and module results kept separate.
 
 Targeted repairs bring FORTIFY to **25/26 PASS** (failed assertions **96 → 2**),
-IOMMU to **218 PASS / 6 FAIL / 5 SKIP** on both kernels, and ALSA timer tests
+IOMMU on the new uniform pair to **224 PASS / 0 FAIL / 5 SKIP**, and ALSA timer tests
 to **2/2 PASS** on both. Three BPF variants each pass the selected 10 groups /
 51 module/BTF subtests. Remaining work includes the nonliteral `strlen`
 constant-expression rule, two KVM timeouts, intermittent `sched_ext` and `ublk`
-failures, PM runtime timing, shared breakpoint failures, IOPF/config coverage
+failures, PM runtime timing, shared breakpoint failures, remaining config coverage
 and the full BPF program. Not every shared failure is diagnosed. A fresh
 complete 970-program pair and 1,504-case KUnit run after those repairs remain
 outstanding.

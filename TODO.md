@@ -340,7 +340,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   that original as PASS or a compiler repair. [Paired record](tests/fixtures/pm-runtime-barrier-completion.out).
   K14's fresh complete execution remains open.
 
-- [ ] **K06 — Build and run the IOPF-enabled configuration** — `OPEN`, P1.
+- [x] **K06 — Build and run the IOPF-enabled configuration** — `DONE`, 2026-09-28.
   September 26: the reviewed `CONFIG_ARM_SMMU_V3_SVA=y` configuration builds
   and boots on GCC. The unchanged iommufd ELF improves **218 PASS / 6 FAIL /
   5 SKIP → 224 PASS / 0 FAIL / 5 SKIP**, under the original 45-second limit;
@@ -348,12 +348,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   Three new IOPF objects also compile/assemble with EvoCC and identical exports.
   The corrected inventory is **7,002 target-C / 847 modules** plus 37 separate
   HOSTCC objects. The first common-bench launch rejected the mixed-role inventory
-  before compilation (T04b); the corrected uniform run verified all 7002 first-pass
-  objects and all 7002 actual-header compilations. That run has now exited:
-  bitmap assertions stopped modpost and late generators replaced 13 objects.
-  Their targeted repairs are below; a new uniform composition and EvoCC runtime
-  are still NOT RUN. Close only after audited link/boot and unchanged paired replay;
-  do not count the reference result as compiler acceptance.
+  before compilation (T04b); the following attempt encountered bitmap assertions
+  and 13 GCC object replacements. After those repairs, uniform run
+  `20260927T135325Z` completes all 7,002 actual-header compilations, stable
+  generated inputs, link, zero replacement and boot. Both new Images then pass
+  the unchanged original executable: **224 PASS / 0 FAIL / 5 SKIP**, exit 0,
+  45-second limit unchanged, all 229 cases accounted. The five upstream
+  `no_viommu` skips remain SKIP. This closes this configuration/runtime gap,
+  not K13/K14 or untested IOMMU hardware.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [run ledger][kernel].
 
 - [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `NEEDS_RULE`, P1.

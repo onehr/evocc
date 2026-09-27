@@ -1,4 +1,29 @@
-2026-09-26 — TODO K06/K12 reference prerequisite; EvoCC runtime NOT RUN.
+2026-09-28 — TODO K06 paired original runtime closes on the uniform build.
+
+Following the 7002/7002 uniform composition, both current GCC and EvoCC Images
+run the unchanged iommufd ELF with no arguments and the original 45-second limit:
+  GCC   224 PASS / 0 FAIL / 5 SKIP, program exit 0, boot/shutdown PASS
+  EvoCC 224 PASS / 0 FAIL / 5 SKIP, program exit 0, boot/shutdown PASS
+Both enumerate the same 229 cases. The five skips are precisely the upstream
+no_viommu variants listed below, not remaining disabled-IOPF failures.
+They are not counted as executed PASS. This closes the six-failure IOPF config
+gap for this composition, not K13/K14 or every IOMMU hardware configuration.
+
+New compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+EvoCC Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+GCC Image, config, original ELF, payload, scratch and QEMU unchanged from below.
+The compiler/host-pin and QEMU-drift limits are in kernel-late-generator.out.
+No test source, selection or assertion change. The read-only kernels and scratch
+retain their hashes. A two-CPU module packager ran concurrently; these are
+functional outcomes, not a controlled timing/performance comparison.
+
+New record .build/floating-targeted/module-uniform-20260928/iommu.json
+SHA256 af4cf7a6984096afdbf44039a8a5f11b275113e50b5cb31ebadc9b80e4cc0e28
+Reference serial 0282555a325ec4578877456ae9597ee3f08440f638c11ce2e7cf3cca22704566
+Subject serial 23c765393d2a53bb50546fec6a92a6875973924e0634b5d15d873ef0d2042c61
+Nonces k1-20260927T220415Z-928dceaf / k1-20260927T220417Z-f4f7e4e4.
+
+Historical September 26 reference prerequisite (subject then NOT RUN):
 
 Frozen source/config, original iommufd ELF and original 45-second program limit.
 Old paired result: each 218 PASS / 6 FAIL / 5 SKIP; six failures entered disabled
