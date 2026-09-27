@@ -38,6 +38,20 @@ command also exits 0, but its already-regenerated tree is not original-failure
 closure. T04d remains RETEST for the next complete composition after K12b.
 [Commands and limits](../../tests/fixtures/kernel-late-generator.out).
 
+K12b's subsequent shared memory-fact repair now removes **all eight** assertion
+references from the exact original object; global symbol names/kinds still
+match. Both the GCC module and the repaired EvoCC object linked with matching
+reference metadata execute **390,447/390,447** original bitmap checks on the
+new reference Image, then unload. The seven observer checks and boot/shutdown
+pass. Three small fixtures also pass 15 native controls; 81 query regressions
+pass. The final repeated changed gate exits 0: **1841 PASS / 0 FAIL / three
+historical ignored**, Clippy and fmt green. After the Clippy-only condition
+cleanup, a fresh original replay has the identical assembly hash, preserving
+the executed module's code identity.
+This is a targeted module comparison, **not** a uniform new kernel or K13/K14.
+The payload is only 2.54 MiB and reuses the 64 MiB snapshot scratch disk.
+[Exact repair and module provenance](../../tests/fixtures/bitmap-constant-memory.out).
+
 ### Internal instruction-publication race experiment — 2026-09-27
 
 The matching QEMU 11.1.1 build reproduces the six-case reduction at **3 PASS /

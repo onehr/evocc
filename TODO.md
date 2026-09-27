@@ -289,10 +289,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   The corrected inventory is **7,002 target-C / 847 modules** plus 37 separate
   HOSTCC objects. The first common-bench launch rejected the mixed-role inventory
   before compilation (T04b); the corrected uniform run verified all 7002 first-pass
-  objects and its recovered actual-header pass is continuing (identity in the ledger). EvoCC runtime
-  is still NOT RUN. Close only after its audited link/boot and unchanged paired replay;
+  objects and all 7002 actual-header compilations. That run has now exited:
+  bitmap assertions stopped modpost and late generators replaced 13 objects.
+  Their targeted repairs are below; a new uniform composition and EvoCC runtime
+  are still NOT RUN. Close only after audited link/boot and unchanged paired replay;
   do not count the reference result as compiler acceptance.
-  [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [live run][kernel].
+  [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [run ledger][kernel].
 
 - [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `NEEDS_RULE`, P1.
   Filtered FORTIFY is 25/26 PASS with two assertions left; current §10.1.18 grants
@@ -493,18 +495,21 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     x86. No guards, build outcomes or 970-program denominator change; no test
     is counted as PASS. [Source-bound record](tests/fixtures/selftest-build-guards.out).
 
-  - [ ] **K12b — Prove bitmap helper results before constant queries** — `OPEN`, P1.
+  - [x] **K12b — Prove bitmap helper results before constant queries**, 2026-09-27.
     The 7,002-object prepared pass reaches modpost but `lib/test_bitmap.o` retains
     eight `__compiletime_assert_*` references. The scalar compound-assignment
     [reduction](tests/fixtures/bitmap-constant-mutation.c) is now GREEN in both
-    interpreters and all three AArch64 compiler controls. The original object
-    still has all eight references: address-based bitmap reads/writes and helper
-    results require shared propagation, not a test whitelist or missing-symbol
-    stub. The [pointer/array reduction](tests/fixtures/bitmap-constant-memory.c)
-    now reproduces the remaining link failure while both fixed -O2 oracles pass.
-    Finish its shared propagation, then replay the original. The scalar repair's
-    changed gate is 1837 PASS / 0 FAIL / 3 historical ignored, Clippy/fmt green.
-    [Exact evidence](tests/fixtures/bitmap-constant-mutation.out).
+    interpreters and all three AArch64 compiler controls. The subsequent
+    [pointer/array reduction](tests/fixtures/bitmap-constant-memory.c) drives
+    shared, bounded private-memory facts through inlining and constant queries;
+    executed accesses and UB checks remain. The original object now has **zero**
+    assertion references with unchanged exports. Its signed module and the GCC
+    control each execute **390447/390447** original checks on the matching GCC
+    Image and unload; seven observer checks pass. Three small fixtures pass 15
+    native controls; 81 query tests and the **1841-test** changed gate pass,
+    including Clippy/fmt (three historical ignored tests remain).
+    This closes the bitmap compiler/module defect, not uniform kernel composition,
+    full modpost or K13/K14. [Exact evidence](tests/fixtures/bitmap-constant-memory.out).
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
@@ -907,6 +912,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     64 verified objects, compiles one, links and returns the new header value in
     all 65 functions. This is recovery validation, not kernel acceptance; the
     already-running worker loaded the old implementation and is unchanged.
+    [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
   - [ ] **T04d — Include late host-generated inputs in preparation** — `RETEST`, P1.
     Modpost regenerated ASN.1 sources/headers, CRC tables, consolemap, logo and
@@ -919,7 +925,6 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     tests pass and the actual Kbuild preparation target exits 0. Fresh full
     composition must still prove no replacements after modpost, after K12b.
     [Exact scope and evidence](tests/fixtures/kernel-late-generator.out).
-    [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,

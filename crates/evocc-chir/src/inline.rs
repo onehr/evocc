@@ -11,6 +11,7 @@ use evocc_types::{TargetDataLayout, TypeId, TypeKind};
 use crate::*;
 
 mod literal_queries;
+mod memory_values;
 mod object_size;
 mod ranges;
 
@@ -1281,6 +1282,7 @@ fn pure_loop_result(
     (ty.bits() <= 64).then(|| crate::integer::CInteger::from_raw(value.raw_bits, ty))
 }
 
+#[derive(Clone)]
 struct Context<'a> {
     scope: ScopeId,
     replacements: BTreeMap<SymbolId, SymbolId>,
@@ -1294,6 +1296,7 @@ struct Context<'a> {
     allow_sequential_values: bool,
     object_bounds: BTreeMap<SymbolId, object_size::Bounds<'a>>,
     byte_objects: BTreeMap<SymbolId, literal_queries::Bytes<'a>>,
+    memory: memory_values::MemoryValues,
     single_mutations: BTreeSet<SymbolId>,
     mutable: BTreeSet<SymbolId>,
     exposed_objects: BTreeSet<SymbolId>,
@@ -1324,6 +1327,7 @@ impl Context<'_> {
             allow_sequential_values: false,
             object_bounds: BTreeMap::new(),
             byte_objects: BTreeMap::new(),
+            memory: Default::default(),
             single_mutations: BTreeSet::new(),
             mutable: BTreeSet::new(),
             exposed_objects: BTreeSet::new(),
@@ -1511,6 +1515,48 @@ impl<'a> Substitution<'a, '_> {
                 self.repeatable_value(converted, ty)
             }
             CHirExpr::Comma(_, value, _) => self.value_after_execution(value, ty),
+            CHirExpr::Binary(op, left, right, span) => {
+                let left = self.integer_value_after_execution(left)?;
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    let candidate = self.alloc(CHirExpr::Binary(*op, left, right, *span));
+                    if let Some(value) = self.repeatable_value(candidate, ty) {
+                        return Some(value);
+                    }
+                }
+                let right = self.integer_value_after_execution(right)?;
+                let expression = self.alloc(CHirExpr::Binary(*op, left, right, *span));
+                self.repeatable_value(expression, ty)
+            }
+            CHirExpr::Ternary(condition, yes, no, span) => {
+                let condition = self.known_condition_after_execution(condition)?;
+                let value = self.integer_value_after_execution(if condition { yes } else { no })?;
+                let converted = self.alloc(CHirExpr::Cast(ty, value, *span));
+                self.repeatable_value(converted, ty)
+            }
+            CHirExpr::Unary(
+                op @ (UnaryOp::Neg | UnaryOp::BitNot | UnaryOp::Plus),
+                operand,
+                span,
+            ) => {
+                let operand = self.integer_value_after_execution(operand)?;
+                let expression = self.alloc(CHirExpr::Unary(*op, operand, *span));
+                self.repeatable_value(expression, ty)
+            }
+            CHirExpr::BitBuiltin {
+                op,
+                operand,
+                facts,
+                span,
+            } => {
+                let operand = self.integer_value_after_execution(operand)?;
+                let expression = self.alloc(CHirExpr::BitBuiltin {
+                    op: *op,
+                    operand,
+                    facts: *facts,
+                    span: *span,
+                });
+                self.repeatable_value(expression, ty)
+            }
             CHirExpr::Unary(UnaryOp::Not, operand, span) => {
                 let operand_ty = self.unit.types.intern(evocc_types::CanonicalType {
                     kind: TypeKind::Int(evocc_types::IntRank::Bool),
@@ -1565,6 +1611,44 @@ impl<'a> Substitution<'a, '_> {
             constant(rhs)?,
             crate::constant::canonical_integer_type(&self.unit.types, *target_ty)?,
         ))
+    }
+
+    fn integer_value_after_execution(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+    ) -> Option<&'a CHirExpr<'a>> {
+        let integer = crate::constant::integer_expression_type(
+            expression,
+            &self.unit.types,
+            &self.unit.symbols,
+        )?;
+        let kind = crate::integer::rank_for_integer_type(integer)
+            .map(TypeKind::Int)
+            .unwrap_or(TypeKind::GnuInt128(if integer.is_signed() {
+                evocc_types::GnuInt128Signedness::Signed
+            } else {
+                evocc_types::GnuInt128Signedness::Unsigned
+            }));
+        let ty = self.unit.types.intern(evocc_types::CanonicalType {
+            kind,
+            qualifiers: Default::default(),
+        });
+        self.value_after_execution(expression, ty)
+    }
+
+    fn known_condition_after_execution(&mut self, expression: &'a CHirExpr<'a>) -> Option<bool> {
+        let uses = inspect([Node::Expr(expression, false)]);
+        if uses.constant_queries || uses.object_queries {
+            return None;
+        }
+        let value = self.integer_value_after_execution(expression)?;
+        crate::constant::eval_executable_integer_constant(
+            value,
+            &self.unit.types,
+            &self.unit.symbols,
+            self.target,
+        )
+        .map(|v| v.truth())
     }
 
     /// Only the root condition executes unconditionally here. Keep the real
@@ -2299,6 +2383,7 @@ impl<'a> Substitution<'a, '_> {
                 c.memo.clear();
             }
         }
+        self.register_memory_object(&o, c);
         Ok(vec![self.alloc(CHirDecl::Object(o))])
     }
     /// Instantiating a local type must rename its captured sizes as well as
@@ -2343,6 +2428,16 @@ impl<'a> Substitution<'a, '_> {
         e: &'a CHirExpr<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
+        if matches!(
+            e,
+            CHirExpr::CheckedArithmetic { .. }
+                | CHirExpr::Atomic(_)
+                | CHirExpr::Vector(_)
+                | CHirExpr::Complex(_)
+                | CHirExpr::BuiltinVarArgs { .. }
+        ) {
+            self.invalidate_memory_write(c);
+        }
         if c.expand_calls
             && !c.byte_objects.is_empty()
             && matches!(
@@ -2495,6 +2590,11 @@ impl<'a> Substitution<'a, '_> {
                 let rewritten = self.expr(operand, c);
                 c.expand_calls = expand;
                 *operand = rewritten?;
+                if !Self::memory_effects(operand) {
+                    if let Some(value) = self.integer_value_after_execution(operand) {
+                        *operand = value;
+                    }
+                }
                 if self
                     .possible_query_values(operand, c, false)
                     .is_some_and(|values| values.len() == 1)
@@ -2540,18 +2640,52 @@ impl<'a> Substitution<'a, '_> {
                     }
                 }
             }
+            CHirExpr::Binary(op @ (BinaryOp::And | BinaryOp::Or), a, b, _) => {
+                *a = self.expr(a, c)?;
+                let condition = self.known_condition_after_execution(a);
+                let incoming = c.memory.clone();
+                *b = self.expr(b, c)?;
+                match condition {
+                    Some(value) if value == (*op == BinaryOp::Or) => c.memory = incoming,
+                    Some(_) => {}
+                    None => c.memory.intersect(&incoming),
+                }
+                c.memo.clear();
+            }
+            CHirExpr::Elvis(a, b, _) => {
+                *a = self.expr(a, c)?;
+                let condition = self.known_condition_after_execution(a);
+                let incoming = c.memory.clone();
+                *b = self.expr(b, c)?;
+                match condition {
+                    Some(true) => c.memory = incoming,
+                    Some(false) => {}
+                    None => c.memory.intersect(&incoming),
+                }
+                c.memo.clear();
+            }
             CHirExpr::Binary(_, a, b, _)
             | CHirExpr::Index(a, b, _)
             | CHirExpr::Comma(a, b, _)
-            | CHirExpr::Elvis(a, b, _)
             | CHirExpr::BuiltinExpect(a, b, _) => {
                 *a = self.expr(a, c)?;
                 *b = self.expr(b, c)?;
             }
             CHirExpr::Ternary(a, b, d, _) => {
                 *a = self.expr(a, c)?;
+                let condition = self.known_condition_after_execution(a);
+                let incoming = c.memory.clone();
                 *b = self.expr(b, c)?;
+                let yes = c.memory.clone();
+                c.memory = incoming;
+                c.memo.clear();
                 *d = self.expr(d, c)?;
+                match condition {
+                    Some(true) => c.memory = yes,
+                    Some(false) => {}
+                    None => c.memory.intersect(&yes),
+                }
+                c.memo.clear();
                 if self.track_extents
                     && c.expand_calls
                     && self.pointer_bounds(b, c, 0).is_some()
@@ -2588,7 +2722,15 @@ impl<'a> Substitution<'a, '_> {
                             .iter()
                             .map(|arg| self.pointer_bounds(arg, c, 0))
                             .collect::<Vec<_>>();
-                        let result = self.call(callee, args, *span, c.scope, &argument_bounds)?;
+                        let result = self.call(
+                            callee,
+                            args,
+                            *span,
+                            c.scope,
+                            &argument_bounds,
+                            &mut c.memory,
+                        )?;
+                        c.memo.clear();
                         if let Some(bounds) = bounds {
                             self.extent_calls
                                 .insert(result as *const _ as usize, bounds);
@@ -2597,6 +2739,7 @@ impl<'a> Substitution<'a, '_> {
                         return Ok(result);
                     }
                 }
+                self.invalidate_memory_write(c);
                 *f = self.expr(f, c)?;
                 if let Some(bounds) = bounds {
                     let result = self.alloc(out);
@@ -2642,6 +2785,7 @@ impl<'a> Substitution<'a, '_> {
                 *target = self.expr(target, c)?;
                 *value = self.expr(value, c)?;
                 if let CHirExpr::MemoryRead { place, .. } = target {
+                    self.invalidate_memory_place(place, c);
                     out = CHirExpr::MemoryAssign {
                         op: *op,
                         place: place.clone(),
@@ -2652,6 +2796,7 @@ impl<'a> Substitution<'a, '_> {
                     };
                 } else {
                     *facts = facts.with_type(place.ty());
+                    self.invalidate_memory_scalar(place.symbol(), c);
                 }
             }
             CHirExpr::Update {
@@ -2669,6 +2814,7 @@ impl<'a> Substitution<'a, '_> {
                 .map_err(|err| self.error(e.span(), err))?;
                 *target = self.expr(target, c)?;
                 if let CHirExpr::MemoryRead { place, .. } = target {
+                    self.invalidate_memory_place(place, c);
                     out = CHirExpr::MemoryUpdate {
                         op: *op,
                         place: place.clone(),
@@ -2678,6 +2824,7 @@ impl<'a> Substitution<'a, '_> {
                     };
                 } else {
                     *facts = facts.with_type(place.ty());
+                    self.invalidate_memory_scalar(place.symbol(), c);
                 }
             }
             CHirExpr::MemoryAssign {
@@ -2690,6 +2837,7 @@ impl<'a> Substitution<'a, '_> {
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = self.expr(value, c)?;
                 self.invalidate_written_bytes(place, c);
+                self.invalidate_memory_place(place, c);
             }
             CHirExpr::MemoryRead { place, facts, .. }
             | CHirExpr::MemoryUpdate { place, facts, .. } => {
@@ -2697,6 +2845,7 @@ impl<'a> Substitution<'a, '_> {
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 if matches!(e, CHirExpr::MemoryUpdate { .. }) {
                     self.invalidate_written_bytes(place, c);
+                    self.invalidate_memory_place(place, c);
                 }
             }
             CHirExpr::StatementExpr {
@@ -2768,6 +2917,7 @@ impl<'a> Substitution<'a, '_> {
             }
         }
         let out = self.alloc(out);
+        self.remember_memory_read(out, c);
         c.memo.insert(key, out);
         Ok(out)
     }
@@ -2837,6 +2987,21 @@ impl<'a> Substitution<'a, '_> {
         s: &'a CHirStmt<'a>,
         c: &mut Context<'a>,
     ) -> Result<&'a CHirStmt<'a>, InlineError> {
+        let memory_before = c.memory.clone();
+        let one_trip_loop = if let CHirStmt::DoWhile(body, test, _) = s {
+            let uses = inspect([Node::Stmt(body)]);
+            !uses.jumps
+                && !uses.entry_labels
+                && crate::constant::eval_executable_integer_constant(
+                    test,
+                    &self.unit.types,
+                    &self.unit.symbols,
+                    self.target,
+                )
+                .is_some_and(|v| !v.truth())
+        } else {
+            false
+        };
         if matches!(
             s,
             CHirStmt::While(..)
@@ -2846,7 +3011,16 @@ impl<'a> Substitution<'a, '_> {
                 | CHirStmt::Goto(..)
                 | CHirStmt::ComputedGoto(..)
                 | CHirStmt::Asm(..)
+                | CHirStmt::Switch(..)
+                | CHirStmt::Case(..)
+                | CHirStmt::CaseRange(..)
+                | CHirStmt::Default(..)
+                | CHirStmt::Break(..)
+                | CHirStmt::Continue(..)
         ) {
+            if !one_trip_loop {
+                self.invalidate_memory_write(c);
+            }
             c.byte_objects.clear();
             c.memo.clear();
         }
@@ -2857,6 +3031,9 @@ impl<'a> Substitution<'a, '_> {
                 // Without one, each lexical initializer dominates later uses
                 // of its own immutable symbol, even after another statement.
                 let incoming = inspect([Node::Stmt(s)]).entry_labels;
+                if incoming {
+                    self.invalidate_memory_write(c);
+                }
                 let outer_prefix = c.declaration_prefix;
                 let outer_bytes = c.byte_objects.keys().copied().collect::<BTreeSet<_>>();
                 let outer_assignments = c.assignment_values.clone();
@@ -2876,13 +3053,19 @@ impl<'a> Substitution<'a, '_> {
                     c.declaration_prefix = true;
                 }
                 let mut result = Vec::new();
+                let mut unreachable: Option<Context<'a>> = None;
                 for original_item in items.iter() {
+                    // Retain unreachable declarations and their semantic
+                    // attributes, but do not let an unexecuted return/store
+                    // overwrite facts from an already completed inline path.
+                    let c = unreachable.as_mut().unwrap_or(&mut *c);
                     // A source-ICE branch cannot execute its unselected writes.
                     // Prune before invalidating sequential facts, but preserve
                     // labels (including switch cases) that can enter an arm.
                     let live_item = match original_item {
                         CHirBlockItem::Statement(statement @ CHirStmt::If(test, yes, no, span))
-                            if !inspect([Node::Stmt(statement)]).entry_labels =>
+                            if !inspect([Node::Stmt(statement)]).entry_labels
+                                && !Self::memory_effects(test) =>
                         {
                             // Optimization queries must first consume the
                             // substituted arguments and current path facts.
@@ -2955,11 +3138,22 @@ impl<'a> Substitution<'a, '_> {
                             result.push(CHirBlockItem::Statement(rewritten));
                             if !incoming {
                                 c.declaration_prefix = true;
+                                if definitely_returns(rewritten, c.end.as_ref()) {
+                                    unreachable = Some(c.clone());
+                                }
                             }
                         }
                     }
                 }
                 *items = result;
+                c.memory.retain_objects_from(&memory_before);
+                let mut cleanup = false;
+                inspect_with_declarations([Node::Stmt(s)], &mut |decl| {
+                    cleanup |= matches!(decl, CHirDecl::Object(object) if object.cleanup.is_some());
+                });
+                if cleanup {
+                    self.invalidate_memory_write(c);
+                }
                 c.declaration_prefix = outer_prefix;
                 c.byte_objects
                     .retain(|symbol, _| outer_bytes.contains(symbol));
@@ -3092,13 +3286,17 @@ impl<'a> Substitution<'a, '_> {
                     }
                 }
                 let incoming = c.path_ranges.clone();
+                let memory_incoming = c.memory.clone();
                 self.assume_range(e, true, c);
                 *a = self.stmt(a, c)?;
                 let yes = c.path_ranges.clone();
+                let memory_yes = c.memory.clone();
+                c.memory = memory_incoming;
                 c.path_ranges = incoming.clone();
                 c.memo.clear();
                 self.assume_range(e, false, c);
                 *b = b.map(|b| self.stmt(b, c)).transpose()?;
+                c.memory.intersect(&memory_yes);
                 c.path_ranges.retain(|symbol, range| {
                     incoming.get(symbol) == Some(range) && yes.get(symbol) == Some(range)
                 });
@@ -3185,7 +3383,25 @@ impl<'a> Substitution<'a, '_> {
             | CHirStmt::Null(_)
             | CHirStmt::AttributedNull(..) => {}
         }
-        Ok(self.alloc(out))
+        let out = self.alloc(out);
+        self.remember_memory_assignment(out, &memory_before, c);
+        if matches!(
+            s,
+            CHirStmt::While(..)
+                | CHirStmt::DoWhile(..)
+                | CHirStmt::For(..)
+                | CHirStmt::Switch(..)
+                | CHirStmt::Case(..)
+                | CHirStmt::CaseRange(..)
+                | CHirStmt::Default(..)
+                | CHirStmt::Asm(..)
+                | CHirStmt::Goto(..)
+                | CHirStmt::ComputedGoto(..)
+        ) && !one_trip_loop
+        {
+            self.invalidate_memory_write(c);
+        }
+        Ok(out)
     }
     fn call(
         &mut self,
@@ -3194,6 +3410,7 @@ impl<'a> Substitution<'a, '_> {
         span: SourceSpan,
         scope: ScopeId,
         argument_bounds: &[Option<object_size::Bounds<'a>>],
+        memory: &mut memory_values::MemoryValues,
     ) -> Result<&'a CHirExpr<'a>, InlineError> {
         if self.active.contains(&f.symbol) {
             return Err(InlineError {
@@ -3328,6 +3545,7 @@ impl<'a> Substitution<'a, '_> {
             .create_scope(scope, ScopeKind::Block, Some(span))
             .map_err(|e| self.error(span, e))?;
         let mut c = Context::new(inline_scope);
+        c.memory = memory.clone();
         c.single_mutations = uses.single_mutations();
         c.mutable = uses.mutable;
         c.exposed_objects = uses.exposed_objects;
@@ -3468,7 +3686,28 @@ impl<'a> Substitution<'a, '_> {
                     .insert(result as *const _ as usize, value);
             }
         }
+        if !uses.entry_labels && (!uses.jumps || single_final_return || one_reachable_final_return)
+        {
+            c.memory.retain_objects_from(memory);
+            *memory = c.memory;
+        } else {
+            memory.clear();
+        }
         Ok(result)
+    }
+}
+
+fn definitely_returns(statement: &CHirStmt<'_>, inline_end: Option<&SpannedName>) -> bool {
+    match statement {
+        CHirStmt::Return(..) => true,
+        CHirStmt::Goto(label, _) => inline_end.is_some_and(|end| end.spelling == label.spelling),
+        CHirStmt::Compound(items, _) => items.iter().any(
+            |item| matches!(item, CHirBlockItem::Statement(s) if definitely_returns(s, inline_end)),
+        ),
+        CHirStmt::If(_, yes, Some(no), _) => {
+            definitely_returns(yes, inline_end) && definitely_returns(no, inline_end)
+        }
+        _ => false,
     }
 }
 

@@ -1,0 +1,77 @@
+2026-09-27 K12b: isolated cases, original object/module and changed gate PASS.
+
+RED: bitmap-constant-memory.c reaches E3039 at bitmap_constant_required in
+both interpreters and leaves an undefined native symbol. The separate
+bitmap-constant-selection.c repeats the failure through constant-query
+dispatch between nonvolatile and volatile reads. Both RED tests compile;
+these are failed value/knowledge assertions, not Rust compilation errors.
+
+GREEN: the shared C-HIR substitution path tracks bounded, typed cells of
+fixed automatic integer objects/arrays by symbol and element offset. Definite
+stores update one cell; unknown/overlapping writes, calls, volatile/atomic
+accesses and unsupported control flow invalidate facts. Branches carry only
+the selected facts or their intersection. Scope exits discard local identities;
+cleanup invalidates the affected environment. No uninitialized bytes, record
+padding, pointer bits, or arbitrary memory value is invented.
+
+The original reads, writes and UB/access checks remain. Proved values are
+used only after retained execution or for unevaluated optimization queries;
+source ICE admission is unchanged. In particular a &= 0 can establish zero
+after completion but still reports E3001 on an uninitialized source. Signed
+overflow and out-of-bounds controls retain E3004/E3011 in both interpreters.
+Known local-address/null relations do not expose a numerical address, and
+truncating the address to 32 bits does not acquire a nonnull proof.
+
+Unreachable inline returns previously overwrote the known reachable return.
+Those statements/declarations remain (including attributes and symbol roles),
+but their facts are visited in a separate context. A literal do/while(0)
+without incoming labels or source jumps has one execution, not an unknown
+loop iteration. This is general control-flow handling, not a bitmap whitelist.
+
+81 query regressions pass, including alias/partial-byte writes, volatile reads,
+unknown calls, conditional/short-circuit effects, early returns, cleanup,
+loops, gotos, independent cells, narrow conversions and the negative checks.
+Three permanent C fixtures pass GCC14/Clang19 at -O2 and -Os, and native EvoCC:
+15 compile/link/execution controls, no assertion stub. Clang emits an ordinary
+unused-expression warning for the boundary fixture; it still executes exit 0.
+
+Exact original .test_bitmap.o.cmd replay against actual prepared bpf/out:
+15.341 s; all eight undefined __compiletime_assert_* references disappear.
+Assembly SHA 24800f79b76ee5a6d1e4141ff346a065f772ac22b604156fabe65c218cbaa68c
+Object SHA 238e12fe210670ab9d79bdb6154e973c6452f2df36d5a8b0346a17ba0094eb7a
+Both exported names/kinds match reference: T init_module, T cleanup_module.
+Diagnostic compiler SHA
+87c917d35a3b7a9570a3006609513e844c87aa0d65347ae68bb916338c55e903.
+After the Clippy-only cleanup, final compiler SHA
+eee2c03bc045d181b2f5aefb4f6047b90a7a7728f6fc90373bb1a9a228d0a9d8.
+Its fresh original replay takes 16.161 s and emits the identical assembly SHA
+above; native object/module evidence therefore retains the same code identity.
+
+Original module execution: use the existing matching new GCC reference Image,
+its module metadata, module linker script and signer. Link only the repaired
+EvoCC test_bitmap.o into the subject module; do not install it in any accepted
+kernel tree. The unchanged reference module and repaired subject module each
+load, execute all 390447 original tests with zero failure/skip, and unload.
+bitmap-module-load.c independently requires matching nonempty all-pass summaries.
+Its seven checks and boot/shutdown PASS. This is a module comparison on a GCC
+Image, not the new uniform EvoCC kernel, K13, K14 or full modpost acceptance.
+
+Flight uses existing selftest.py, hvf-host, explicit installed-QEMU drift,
+KUnit autorun off, 120 s diagnostic limit plus 60 s boot. Actual flight ends
+normally. Payload is 2664448 bytes; the existing 64 MiB snapshot disk is
+unchanged. No full runtime disk or source/workspace clone was created.
+Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+reference signed module d07f783865f10706967bc9a662cf8e2c97ba0838e398e54cc37148ab697432f4
+subject signed module 84a2381b7c80bbc1a29b6c39e5ff60bd6be315fa18a9f94686408a74da637ec5
+payload 7e16c5581c756bf31aa50e156f04cfd41eb3f59551c2ae0222ff22669eac0e44
+serial eeaaf7f9c5ab2a6fb099ebba293a662b2984b822f3c641ebdcf169e3b94e5597
+nonce k1-20260927T022537Z-24693e9c
+
+Changed gate first run: 1841 PASS / 0 FAIL / 3 historical ignored;
+Clippy rejected one nested condition. Only that condition was collapsed and
+the entire changed gate repeated: exit 0, 1841 PASS / 0 FAIL / 3 ignored,
+Clippy -D warnings and fmt PASS. This is the affected gate, not the later
+final full-workspace/offline acceptance (T05).
+Small raw artifacts: .build/floating-targeted/bitmap-constants-20260927/memory-repair/
+Gate logs: same parent memory-gate.log and memory-gate-green.log.

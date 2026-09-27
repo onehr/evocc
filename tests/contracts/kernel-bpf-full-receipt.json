@@ -1,5 +1,28 @@
 {
   "targetedRepairs": [{
+    "id": "K12b",
+    "status": "PASS",
+    "date": "2026-09-27",
+    "compilerSha256": "eee2c03bc045d181b2f5aefb4f6047b90a7a7728f6fc90373bb1a9a228d0a9d8",
+    "originalAssertionReferencesBefore": 8,
+    "originalAssertionReferencesAfter": 0,
+    "originalAssemblySha256": "24800f79b76ee5a6d1e4141ff346a065f772ac22b604156fabe65c218cbaa68c",
+    "originalObjectSha256": "238e12fe210670ab9d79bdb6154e973c6452f2df36d5a8b0346a17ba0094eb7a",
+    "originalSymbolParity": "PASS",
+    "nativeControlsPassed": 15,
+    "queryRegressionsPassed": 81,
+    "changedGate": {"passed": 1841, "failed": 0, "ignored": 3, "clippy": "PASS", "fmt": "PASS"},
+    "modulePair": {
+      "referencePassed": 390447,
+      "subjectPassed": 390447,
+      "observerPassed": 7,
+      "bootShutdown": "PASS",
+      "imageSha256": "13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388",
+      "scope": "Original modules on matching GCC Image; subject has EvoCC bitmap object and reference module metadata"
+    },
+    "freshCompleteComposition": "NOT_RUN",
+    "evidence": "tests/fixtures/bitmap-constant-memory.out"
+  }, {
     "id": "T04d",
     "status": "RETEST",
     "date": "2026-09-27",

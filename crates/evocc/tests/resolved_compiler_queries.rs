@@ -891,6 +891,79 @@ fn optimization_queries_follow_proved_compound_assignments() {
 }
 
 #[test]
+fn optimization_queries_follow_private_memory_through_inline_helpers() {
+    let source = include_str!("../../../tests/fixtures/bitmap-constant-memory.c");
+    assert_constant_program(source);
+    let output = run(source, "--emit=evoir");
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("call @bitmap_constant_required"));
+}
+
+#[test]
+fn optimization_queries_select_constant_memory_read_paths() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/bitmap-constant-selection.c"
+    ));
+}
+
+#[test]
+fn private_memory_facts_do_not_cross_unknown_writes_or_conditional_execution() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/bitmap-memory-boundaries.c"
+    ));
+    for source in [
+        "static inline __attribute__((always_inline)) void set(unsigned long*p){*p=7;} int main(void){unsigned long a[2]; a[0]=1;a[1]=2;set(a+1);int r=a[0]+a[1];return !__builtin_constant_p(r)||r!=8;}",
+        "__attribute__((noinline)) void change(unsigned long*p){*p=9;} int main(void){unsigned long a[1];a[0]=3;change(a);return a[0]!=9;}",
+        "int f(int x){unsigned long a[1];a[0]=3;if(x)a[0]=8;return a[0];} int main(void){return f(0)!=3||f(1)!=8;}",
+        "int main(void){unsigned long a[1];a[0]=3;volatile int c=0;c?({a[0]=8;0;}):({if(a[0]!=3)return 1;0;});return a[0]!=3;}",
+        "int main(void){unsigned long a[1];a[0]=3;volatile int c=0;c&&({a[0]=8;0;});return a[0]!=3;}",
+        "int main(void){unsigned long a[1];a[0]=3;unsigned char*p=(unsigned char*)a;*p=9;return a[0]!=9;}",
+        "int main(void){unsigned long a[1];a[0]=3;volatile unsigned long*p=a;*p=9;return a[0]!=9;}",
+        "int main(void){unsigned long a[1];a[0]=3;int k=__builtin_constant_p((a[0]=9));return k||a[0]!=3;}",
+        "int main(void){unsigned long a[1];a[0]=3;int k=__builtin_constant_p(&a[0]);return k||a[0]!=3;}",
+        "static inline __attribute__((always_inline)) void f(unsigned long*p,int c){if(c)return;*p=8;} int main(void){unsigned long a[1];a[0]=3;volatile int c=1;f(a,c);return a[0]!=3;}",
+        "int main(void){unsigned long a[1];a[0]=3;for(int i=0;i<4;i++)a[0]+=i;return a[0]!=9;}",
+        "int main(void){unsigned long a[1];a[0]=3;goto end;a[0]=9;end:return a[0]!=3;}",
+        "int main(void){unsigned long a[1];a[0]=3;do{a[0]|=8;}while(0);int x=a[0];return !__builtin_constant_p(x)||x!=11;}",
+        "int main(void){unsigned long a[1];a[0]=3;return __builtin_constant_p((unsigned int)a!=0);}",
+        "void cleanup(unsigned long **p){**p=9;} int main(void){unsigned long a[1];{unsigned long *p __attribute__((cleanup(cleanup)))=a;a[0]=3;}return a[0]!=9;}",
+        "static inline __attribute__((always_inline)) int f(unsigned long*p,int c){if(c)return *p;*p=8;return 9;} int main(void){unsigned long a[1];a[0]=3;int x=f(a,1);return !__builtin_constant_p(x)||x!=3||a[0]!=3;}",
+    ] { assert_constant_program(source); }
+}
+
+#[test]
+fn private_memory_proofs_keep_uninitialized_and_bounds_checks() {
+    for (source, code) in [
+        (
+            "int main(void){unsigned long a[1];a[0]&=0;return a[0];}",
+            "E3001",
+        ),
+        (
+            "int main(void){int a[1];a[0]=2147483647;a[0]+=1;return a[0];}",
+            "E3004",
+        ),
+        (
+            "int main(void){unsigned long a[2];a[0]=3;return a[1];}",
+            "E3001",
+        ),
+        (
+            "int main(void){unsigned long a[1];a[0]=3;return a[1];}",
+            "E3011",
+        ),
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(!output.status.success(), "{source} {mode}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains(code),
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn compound_query_facts_preserve_conversion_effects_and_unknown_paths() {
     assert_constant_program(
         r#"
