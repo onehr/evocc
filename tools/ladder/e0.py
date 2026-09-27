@@ -57,7 +57,7 @@ DISPOSITIONS = ('PASS', 'compiler-failure', 'FP-deferred', 'not-applicable', 'or
 SUPPORTED_OPTIONS = frozenset({
     "-O", "-O0", "-O1", "-O2", "-O3", "-Og", "-Os",
     "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
-    "-fbuiltin", "-fno-builtin", "-ffreestanding", "-fhosted",
+    "-fbuiltin", "-fno-builtin", "-ffreestanding", "-fhosted", "-pthread",
     "-fshort-wchar", "-fno-short-wchar", "-std=gnu89", "-std=gnu99", "-std=gnu11",
     "-std=c89", "-std=c90", "-ansi", "-std=c99", "-std=c11", "-std=gnu17",
     "-fgnu89-inline", "-fno-gnu89-inline",

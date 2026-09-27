@@ -229,6 +229,17 @@ class EvoccArgvTest(unittest.TestCase):
             self.assertEqual([flag for flag in argv if flag in flags], written)
             self.assertEqual(omitted, [])
 
+    def test_pthread_and_its_user_macro_overrides_survive_projection(self) -> None:
+        for flags in [
+            ['-pthread'],
+            ['-pthread', '-U_REENTRANT'],
+            ['-U_REENTRANT', '-pthread'],
+            ['-pthread', '-D_REENTRANT=7'],
+        ]:
+            argv, omitted = self.command(f"gcc {' '.join(flags)} -c -o a.o a.c\n")
+            self.assertEqual([flag for flag in argv if flag in flags], flags)
+            self.assertEqual(omitted, [])
+
     def test_unknown_options_remain_named_not_reinterpreted_as_supported(self) -> None:
         argv, omitted = self.command(
             "gcc -Ofast -fno-inline -fpermissive -std=gnu11 -c -o a.o a.c\n"

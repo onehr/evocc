@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.110** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
+EvoIR **1.9.111** and EvoMIR **0.48**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -656,15 +656,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     remain skips. All 253 ladder tests pass; no full campaign was run.
     [Evidence and exact limits](tests/fixtures/toybox-filesystem-mutation.out).
 
-- [ ] **B07 — Finish jq's binary128 interface and original tests** — `OPEN`, P2, after L02.
-  Run `20260927T080457Z` compiles/installs all **69/69** objects, including
+- [x] **B07 — Finish jq's binary128 interface and original tests** — `DONE`, P2, 2026-09-27.
+  Run `20260927T082205Z` compiles/installs all **69/69** objects, including
   `src/builtin.c`'s `nexttoward(double, long double)` call. Unchanged `make check`
   passes nine jq scripts and 21 bundled Oniguruma programs; no target object was
-  excluded or replaced by make. The command audit discovered that the common
-  adapter still omits **`-pthread`**. A minimal driver test reproduces its
-  unsupported-option rejection; implement its target preprocessing semantics,
-  preserve the option in projection and rerun before closing faithful-command
-  acceptance. [Receipt](tests/contracts/ladder-jq-receipt.json).
+  excluded or replaced by make. The prior run exposed omitted **`-pthread`**;
+  the minimal driver/projection RED now passes with `_REENTRANT=1` and ordered
+  user overrides, confirmed by fixed GCC14/Clang19 controls. This fresh replay
+  retains the option and passes again. All 526 driver regressions, 257 ladder
+  regressions, Clippy and fmt pass. B10's final unified campaign remains separate.
+  [Receipt](tests/contracts/ladder-jq-receipt.json).
 
 - [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2, after L01.
   Honoring `-frounding-math` currently leaves 0/1,339 units compiled; this is one missing
@@ -737,7 +738,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   exact bits/flags, all admitted rounding modes and original musl representatives;
   do not reset caller FP state or merely accept the flag. [Brief §A][semantics].
 
-- [ ] **L02 — Executable binary128 / long double** — `OPEN`, P2; blocks B07 and FP originals.
+- [x] **L02 — Executable binary128 / long double** — `DONE`, P2, 2026-09-27, hosted Linux profile.
   The September 27 report approves real f128, the existing shared ABI classifier
   and audited hosted helpers. Fixed-RNE and strict helper behavior are separate
   gates; approval does not itself establish implementation or original-program PASS.
@@ -761,9 +762,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   definedness and strict total conversion now have all-width/mode regressions.
   Raw IR adds 5,376 total-conversion checks and 32,000 explicit FMA records in
   each of four native builds. The changed-crate gate passes **2,416 tests / zero
-  failures / four retained ignores**, Clippy and fmt. jq's 69/69 original replay
-  passes, but its discovered `-pthread` projection gap must close in B07 before
-  promoting the final application claim.
+  failures / four retained ignores**, Clippy and fmt. jq's fresh 69/69 original
+  replay also closes the discovered `-pthread` projection gap (B07). This closes
+  the audited hosted Linux numerical/ABI profile, not freestanding helpers,
+  Darwin quad, Annex F, floating complex/vectors or the full B10 campaign.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

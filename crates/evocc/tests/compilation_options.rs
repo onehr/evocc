@@ -39,6 +39,32 @@ fn check_preprocessed_program(source: &str) -> String {
 }
 
 #[test]
+fn pthread_predefinitions_precede_explicit_macro_actions_in_every_mode() {
+    let source = include_str!("../../../tests/fixtures/driver-pthread.c");
+    let cases: &[&[&str]] = &[
+        &["-DEXPECT_REENTRANT=0"],
+        &["-pthread"],
+        &["-pthread", "-pthread"],
+        &["-pthread", "-U_REENTRANT", "-DEXPECT_REENTRANT=0"],
+        &["-U_REENTRANT", "-pthread", "-DEXPECT_REENTRANT=0"],
+        &["-pthread", "-D_REENTRANT=7", "-DEXPECT_REENTRANT=7"],
+        &["-D_REENTRANT=7", "-pthread", "-DEXPECT_REENTRANT=7"],
+    ];
+    for case in cases {
+        for optimization in ["-O0", "-O2"] {
+            for mode in ["-E", "--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+                let mut arguments = vec![mode, optimization];
+                arguments.extend_from_slice(case);
+                let text = successful(run(&arguments, source));
+                if mode.starts_with("--interpret-") {
+                    assert_eq!(text.trim(), "0");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn baseline_floating_profile_does_not_advertise_strict_environment_or_fma() {
     let source = "#if defined(__STDC_IEC_559__) || defined(__STDC_IEC_60559_BFP__) || defined(__STDC_IEC_559_COMPLEX__) || defined(__FP_FAST_FMA) || defined(__FP_FAST_FMAF)\n#error unsupported_floating_contract_advertised\n#endif\n#if __FLT_EVAL_METHOD__ != 0 || __GCC_IEC_559 != 0 || __GCC_IEC_559_COMPLEX != 0\n#error incorrect_numerical_profile\n#endif\nint main(void){return 0;}\n";
     successful(run(&["--parse-only"], source));

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.110** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.111** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -7677,6 +7677,7 @@ No diagnostic is allocated, and no additional kernel unit count is claimed for t
 `-ftrivial-auto-var-init=zero` adds a zero representation initializer, including padding, at each executed declaration of an otherwise uninitialized automatic object; typed pointer subobjects receive Null provenance, explicit member values are unchanged, and the declaration attribute `uninitialized` exempts that object.
 The final `-ftrivial-auto-var-init=uninitialized` restores ordinary uninitialized semantics; storage activation or merely transporting its address does not execute the implicit initializer.
 `-ffreestanding` sets `__STDC_HOSTED__=0` and disables ordinary-name library builtin substitution, `-fhosted` restores both, and later explicit `-fbuiltin`/`-fno-builtin` options override substitution independently; reserved `__builtin_*` spellings remain available.
+On the admitted AArch64 Linux target, `-pthread` predefines `_REENTRANT` to `1` before all explicit `-D`/`-U` actions, regardless of the option's position among those actions. Repetition is idempotent; without the option the macro is not predefined. User actions still apply in their written order and may undefine or replace it. This is the compile-time option contract; the assembly-only driver does not acquire a linker, and the final link must retain the target runtime's thread-link options. It does not create threads or expand interpreter concurrency coverage.
 Both sealed compilers at O0/O2 execute `tests/fixtures/automatic-zero.{c,out}` with exit zero; the option occurs in all 2,799 frozen commands, but this targeted measurement is not a full-kernel result and introduces no diagnostic.
 
 ### Automatic constructor padding

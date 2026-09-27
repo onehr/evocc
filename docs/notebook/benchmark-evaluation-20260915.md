@@ -2326,3 +2326,28 @@ The unchanged original LARGE Floyd workload still times out at 60 seconds,
 despite 108 → 102 core instructions. B02 is OPEN; no reduced workload, source
 change, unchecked policy or kernel runtime claim substitutes for that result.
 Release/debug emission is byte-identical for the replayed original.
+
+## 2026-09-27: hosted binary128 and complete jq replacement
+
+The existing common benchmark lane reruns unchanged jq 1.8.2 with the original
+bundled Oniguruma configuration. Final run `20260927T082205Z` compiles and installs
+**69/69 target-C units**, including `src/builtin.o`'s real `nexttoward` binary128
+interface. There are zero refusals, unmeasured units, exclusions or make-rebuilt
+target objects. Original `make check V=1` passes **9/9 jq scripts**, **7/7 Oniguruma
+test programs** and **14/14 sample programs**, with zero reported failures/skips.
+Those are program counts, not a claimed count of every internal assertion.
+
+Compiler SHA-256 is
+`523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa`.
+The prior successful run `20260927T080457Z` exposed an omitted semantic flag:
+`-pthread`. A minimal driver/projection RED and fixed ARM64 macro controls now
+establish `_REENTRANT=1` with explicit user override precedence; final replay
+retains the flag. Diagnostic/dependency-file/debug options still listed as
+omitted are not promoted into debug-information or warning-conformance claims.
+The hosted native quad numeric/ABI and both-interpreter tests are recorded in
+[the FP implementation ledger](strict-floating-implementation-20260927.md).
+
+This closes B07 and the admitted hosted Linux L02 profile. It does not rerun the
+other applications, kernel tests or B10's final frozen campaign. The original
+c-testsuite `00204.c` also passes a targeted expected-output replay, but the
+historical 219/220 full-suite receipt is unchanged until a fresh full run.

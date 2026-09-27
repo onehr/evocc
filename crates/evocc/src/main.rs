@@ -124,6 +124,7 @@ struct DriverOptions {
     dynamic_rounding: bool,
     standard_builtins: bool,
     hosted: bool,
+    pthread: bool,
     automatic_zero: bool,
     tls_model: evocc_types::TlsModel,
     stack_protector: bool,
@@ -285,6 +286,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut dynamic_rounding = false;
     let mut standard_builtins = true;
     let mut hosted = true;
+    let mut pthread = false;
     let mut automatic_zero = false;
     let mut tls_model = evocc_types::TlsModel::default();
     let mut stack_protector = false;
@@ -342,6 +344,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 hosted = true;
                 standard_builtins = true;
             }
+            "-pthread" => pthread = true,
             "-ftrivial-auto-var-init=zero" => automatic_zero = true,
             "-ftrivial-auto-var-init=uninitialized" => automatic_zero = false,
             _ if arg.starts_with("-ftls-model=") => {
@@ -531,6 +534,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         dynamic_rounding,
         standard_builtins,
         hosted,
+        pthread,
         automatic_zero,
         tls_model,
         stack_protector,
@@ -669,6 +673,7 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         ("__OPTIMIZE_SIZE__", options.optimization == 2, "1"),
         ("__NO_INLINE__", options.optimization == 0, "1"),
         ("__SSP_STRONG__", options.stack_protector, "3"),
+        ("_REENTRANT", options.pthread, "1"),
         (
             "__ARM_FEATURE_PAC_DEFAULT",
             options.codegen.sign_returns,

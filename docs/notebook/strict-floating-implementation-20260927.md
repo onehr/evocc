@@ -392,3 +392,21 @@ open until this behavior-affecting option is implemented and the original replay
 repeated. The pinned GCC14/Clang19 macro census shows `_REENTRANT=1` as its
 preprocessing effect; user `-U_REENTRANT` still overrides it. No source or test
 assertion is changed to compensate for the gap.
+
+The subsequent minimal driver and projection tests first fail, then pass after
+implementing the compile-time `-pthread` contract (EvoIR 1.9.111). Seven macro
+and `-D`/`-U` precedence cases pass under GCC14/Clang19 O0/O2; all seven also
+pass both EvoCC interpreters, preprocessing and assembly emission at O0/O2.
+The changed-driver gate is **526 PASS**, Clippy/fmt green; the ladder suite is
+**257 PASS**. A mistaken exploratory `-undef` compile-and-link control produced
+an invalid executable and was stopped; it is not among those seven admitted
+controls or part of the `-pthread` contract.
+
+Fresh original jq run **`20260927T082205Z`**, compiler SHA-256
+`523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa`,
+retains `-pthread` and again passes **69/69** installed units and all original
+tests, with no replacement/exclusion. B07 and the hosted Linux L02 profile can
+now close; this is not an Annex F, freestanding-runtime or full-roadmap claim.
+The unchanged c-testsuite `00204.c` quad-HFA/varargs program separately passes
+its complete original expected output with EvoCC O0/O2 and GCC14/Clang19 O0/O2
+controls (`ctest204-native.log`); the old 220-program receipt is not yet rerun.

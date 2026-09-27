@@ -1,69 +1,38 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T080457.282019Z",
-  "subject": "9234f1521fcd99f6016864acdda92d7102225391",
+  "run": "20260927T082713.077540Z",
+  "subject": "6624d98c9b9ac6af55584a7ebb278548b8ffedb2",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-quad-subject",
-  "driverSha256": "b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad",
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
+  "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "jq",
+    "ctest",
     "--evocc",
-    ".build/floating-targeted/strict-20260927/evocc-quad-subject",
+    ".build/floating-targeted/strict-20260927/evocc-pthread-subject",
     "--jobs",
     "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "jq"
+    "ctest"
   ],
-  "status": "PASS",
+  "status": "RUNNING",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
+      "status": "RUNNING",
       "note": "self-checking programs and expected stdout",
-      "outcomes": {
-        "pass": 219,
-        "refused": 1
-      },
-      "refusals": {
-        "E3049": 1
-      },
-      "baselineFailures": 0,
-      "failingUnits": [],
-      "total": 220,
-      "passed": 219,
-      "kind": "programs",
-      "runtimeDiagnostics": {},
-      "dispositions": {
-        "PASS": 219,
-        "compiler-failure": 0,
-        "FP-deferred": 1,
-        "not-applicable": 0,
-        "oracle-unusable": 0
-      },
-      "status": "PROFILE_CLEAN",
-      "run": "20260919T222250Z",
-      "evidence": ".evidence/ladder/e0/20260919T222250Z",
-      "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
         "--suite",
         "ctest"
-      ],
-      "exitCode": 0,
-      "seconds": 27.2,
-      "previous": null,
-      "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
-      }
+      ]
     },
     "torture": {
       "rung": "E0a",
@@ -4765,7 +4734,6 @@
           "-Woverlength-strings",
           "-Wstrict-prototypes",
           "-g",
-          "-pthread",
           ".deps/ascii.Tpo",
           ".deps/big5.Tpo",
           ".deps/cp1251.Tpo",
@@ -4907,31 +4875,29 @@
         ]
       },
       "status": "PASS",
-      "run": "20260927T080457Z",
-      "evidence": ".evidence/ladder/jq/20260927T080457Z",
+      "run": "20260927T082205Z",
+      "evidence": ".evidence/ladder/jq/20260927T082205Z",
       "receipt": "tests/contracts/ladder-jq-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/jq.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-quad-subject"
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject"
       ],
       "exitCode": 0,
-      "seconds": 176.5,
+      "seconds": 169.2,
       "previous": {
         "rung": "E10",
         "note": "original make check with bundled Oniguruma; mixed-object ramp",
         "outcomes": {},
-        "refusals": {
-          "E3049": 1
-        },
+        "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 69,
-        "passed": 68,
+        "passed": 69,
         "kind": "units",
-        "compiled": 68,
+        "compiled": 69,
         "excluded": 0,
         "testVerdict": {
           "passed": true,
@@ -5112,14 +5078,14 @@
             "vendor/decNumber/decNumber.lo"
           ]
         },
-        "status": "INCOMPLETE",
-        "run": "20260919T231539Z",
-        "evidence": ".evidence/ladder/jq/20260919T231539Z"
+        "status": "PASS",
+        "run": "20260927T080457Z",
+        "evidence": ".evidence/ladder/jq/20260927T080457Z"
       },
       "measurement": {
-        "run": "20260927T080457.282019Z",
-        "subject": "9234f1521fcd99f6016864acdda92d7102225391",
-        "driverSha256": "b107970071a9c1c199373774b237245b647aab76d8ca0eb6c509613b59345dad"
+        "run": "20260927T082205.797623Z",
+        "subject": "6624d98c9b9ac6af55584a7ebb278548b8ffedb2",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
       }
     },
     "lua": {

@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.110](docs/evoir-spec.md) and [EvoMIR 0.48](docs/evomir-spec.md).
+[EvoIR 1.9.111](docs/evoir-spec.md) and [EvoMIR 0.48](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -60,7 +60,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | musl + libc-test | FAIL | 0/1,339 TU | Original `-frounding-math` requires unsupported strict fenv; subject tests not run |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,014/1,735 programs PASS | Frozen account: 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; follow-ups below |
-| jq | INCOMPLETE | 69/69 TU; original `make check` PASS | Binary128 interface works; audit found omitted `-pthread`, so faithful-command replay remains open |
+| jq | PASS | 69/69 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
 | Lua | PASS | 34/34 TU | Matching official `all.lua`, without soft skips |
 | SQLite | PASS | 86/86 TU | Public Tcl `veryquick`: 329,803 assertions; not proprietary TH3 |
 
@@ -138,8 +138,8 @@ independent numerical checks across 32 operations. The strict FP adapter and
 world-threaded IR/backend, dynamic-rounding source mode and non-trapping lexical
 `FENV_ACCESS` now have [targeted value/status and native checks](docs/notebook/strict-floating-implementation-20260927.md).
 The original musl campaign is not yet closed. Binary128 source/IR, both
-interpreters and hosted native helpers/ABI now have targeted tests; jq closure remains
-open. Floating complex/vectors and other explicitly refused forms remain outside
+interpreters and hosted native helpers/ABI now have targeted tests; jq's fresh
+69/69-object original test replay also passes. Floating complex/vectors and other explicitly refused forms remain outside
 the current source profile. FP is not the only
 remaining application or kernel-test blocker.
 
