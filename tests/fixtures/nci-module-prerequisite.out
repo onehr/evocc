@@ -1,0 +1,60 @@
+2026-09-28 — NCI device prerequisite, reference control and shared runtime repair.
+
+Historical 970-program pair: nci:nci_dev fails all eight cases on BOTH Images
+at nci_dev.c:422, open("/dev/virtual_nci", O_RDWR). Those older configurations
+disable NFC_VIRTUAL_NCI. The reviewed new configuration includes its module,
+but the common runtime setup also needs to load it: without udev, opening an
+absent device node cannot request the driver. NFC/NCI protocol autoload alone
+does not register this virtual misc device.
+
+RED: new test_virtual_nci_device_is_created_without_udev_only_when_installed
+fails ([] rather than [virtual_ncidev]). The repair adds only the exact installed
+drivers/nfc/virtual_ncidev.ko to the existing prerequisite list. Generic modprobe
+resolves dependencies; disabled/built-in/absent module records do not invent a
+preload request. Existing signed-module installation and failure checks remain.
+261 K1 Python tests, targeted Ruff and git diff --check PASS. No Rust code changed.
+
+Actual matching GCC Image/control:
+  1. Load signed copies of rfkill, nfc and nci dependencies.
+  2. Observe ENOENT for /dev/virtual_nci. The unchanged original exits 1,
+     0/8 PASS, all eight assertions at the same missing-device line.
+  3. Load the matching signed virtual_ncidev.ko. The driver registers a real
+     character node; open and ioctl GET_NCIDEV_IDX succeed.
+  4. Re-run the SAME original executable, same 45-second program bound:
+     8/8 PASS, zero FAIL/SKIP, exit 0.
+  5. Close/unload the virtual driver and all dependencies. Device disappears.
+The 11 diagnostic assertions and nonce-bound boot/shutdown PASS. Parent TAP
+records the two original results separately in prefixed, complete transcripts;
+the expected negative original is not a PASS. The executable is byte-identical
+to the retained runtime-disk original extracted with read-only debugfs.
+
+This closes the prerequisite diagnosis and runtime packaging repair, NOT new
+EvoCC module execution. That paired original replay remains required after the
+uniform subject build. No old K13 totals or compiler credit are changed.
+
+No kernel/source/installed module/disk was modified. Only four module copies
+are signed using the existing matching reference key. A 13,104,640-byte
+initramfs and the existing 64 MiB snapshot scratch disk are used, no new disk.
+GCC14 -static -O2 -Wall -Wextra -Werror builds probe and existing selftest init
+in evo-flight-lab:sealed, network none, one CPU/1 GiB. Readelf confirms the
+unchanged original needs only the captured glibc/loader. Flight uses existing
+selftest.py, hvf-host, KUnit autorun off, explicit installed-QEMU drift.
+
+Two earlier invocations failed before starting any test because the diagnostic
+list used the wrong delimiter. Their MARKERS_MISSING captures are retained as
+setup-failed-*; they provide no test or boot-acceptance credit. The final list
+uses the verified existing `identifier timeout` contract.
+
+SHA256:
+  fixture abf36f369581d1d01907c6bbca8211407450c52fc337753a8acf93c5afa95173
+  probe aa2a5da0738f7a796faac207b09cd27e44629f34d741c8e495811445cf571973
+  original c80d4bb05e12928cf933482bd08f15c11caf81ef2cc98dad585f23e2f399861b
+  Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  payload 9957e0e612de1b643217afab7e716d7a6eb26ae427cd7c09bcb9a791d2c7648e
+  scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+  result 64341b2b5e40cebce06512fe6fef3e04c1ccf5a616f22c8fe4bccb97d9c6bc73
+  serial 5458d6d0143c790bf0ba5c96bed34943ee3dbabdc3ab5f9e49720344f7e02dc0
+Result includes every unsigned/signed module hash and nonce. Exact commands,
+result.json, build/replay logs and serial are under
+.build/floating-targeted/nci-module-20260928/. QEMU and diagnostic have exited.

@@ -128,6 +128,18 @@ class FullSelftest(unittest.TestCase):
             self.assertEqual(actual, ['fuse', 'snd_timer', 'ntsync', 'iommufd'])
             self.assertEqual((rootfs / 'tests/modules').read_text().splitlines(), actual)
 
+    def test_virtual_nci_device_is_created_without_udev_only_when_installed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            rootfs = Path(temp)
+            (rootfs / 'tests').mkdir()
+            modules = {'modules': [{'unit': 'net/nfc/nfc.ko'},
+                                   {'unit': 'net/nfc/nci/nci.ko'}]}
+            self.assertEqual(lane.install_runtime_module_prerequisites(rootfs, modules), [])
+            modules['modules'].append({'unit': 'drivers/nfc/virtual_ncidev.ko'})
+            self.assertEqual(lane.install_runtime_module_prerequisites(rootfs, modules),
+                             ['virtual_ncidev'])
+            self.assertEqual((rootfs / 'tests/modules').read_text(), 'virtual_ncidev\n')
+
     def test_installed_fuse_is_loaded_before_mounting_its_control_filesystem(self):
         prepare = getattr(lane, 'install_runtime_module_prerequisites', None)
         self.assertTrue(callable(prepare), 'fusectl sysfs mountpoint exists only after loading fuse')

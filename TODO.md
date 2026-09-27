@@ -552,6 +552,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     This closes the bitmap compiler/module defect, not uniform kernel composition,
     full modpost or K13/K14. [Exact evidence](tests/fixtures/bitmap-constant-memory.out).
 
+  - [x] **K12c — Register the installed virtual NCI device before tests**, 2026-09-28.
+    The old pair lacks NFC_VIRTUAL_NCI; the new configuration builds it, but
+    the udev-free runtime also omitted its preload. A new prerequisite-list
+    RED is repaired using the exact installed module inventory. On the matching
+    new GCC Image, signed dependency loads reproduce the original 0/8 failure;
+    loading virtual_ncidev makes the same executable pass **8/8**. Eleven
+    load/device/ioctl/unload controls and boot/shutdown pass; 261 K1 Python tests
+    and Ruff pass. This closes reference prerequisite diagnosis/packaging,
+    not subject-module acceptance. The new EvoCC pair remains queued after T04.
+    [Small C and identity-bound result](tests/fixtures/nci-module-prerequisite.out).
+
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
   cannot be transferred to repaired Images. Run the whole installed population

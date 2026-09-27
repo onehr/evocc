@@ -543,7 +543,8 @@ def install_runtime_module_prerequisites(rootfs, kernel_modules):
     # for this Image; a disabled driver is still a configuration coverage gap.
     required = (('fs/fuse/fuse.ko', 'fuse'), ('sound/core/snd-timer.ko', 'snd_timer'),
                 ('drivers/misc/ntsync.ko', 'ntsync'),
-                ('drivers/iommu/iommufd/iommufd.ko', 'iommufd'))
+                ('drivers/iommu/iommufd/iommufd.ko', 'iommufd'),
+                ('drivers/nfc/virtual_ncidev.ko', 'virtual_ncidev'))
     names = [name for unit, name in required if unit in installed]
     (rootfs / 'tests/modules').write_text(''.join(name + '\n' for name in names))
     return names

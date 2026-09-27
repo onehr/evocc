@@ -6,6 +6,21 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Virtual NCI prerequisite — 2026-09-28
+
+The old pair's eight nci_dev failures all stop at the missing device node.
+The reviewed new config enables NFC_VIRTUAL_NCI as a module, but the common
+udev-free runtime still needs to preload it. The exact installed-module list
+now includes virtual_ncidev; its absent-module negative remains empty.
+On the matching new GCC Image, the [small before/after observer](../../tests/fixtures/nci-module-prerequisite.out)
+loads signed dependencies, reproduces **0/8** on the unchanged original, then
+loads the virtual driver and obtains **8/8 PASS** with the same executable and
+45-second limit. The node/ioctl and complete unload controls pass, as do all
+11 observer assertions and boot/shutdown. All 261 K1 tests and Ruff pass.
+The new EvoCC Image/module pair is still being built; no subject execution,
+full kselftest total or compiler fix is inferred from this reference control.
+The small initramfs reuses the 64 MiB scratch disk; no runtime disk copy.
+
 ### Cache-maintenance intervention and full sched_ext controls — 2026-09-28
 
 The [new private experiment](../../tests/fixtures/qemu-cache-maintenance.out)
