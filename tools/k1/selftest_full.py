@@ -982,6 +982,28 @@ def program_case(ident, result):
             'bpfSummaries': row.get('bpfSummaries', [])}
 
 
+def regression_ids(reference, subject):
+    """Compare paired program verdicts without changing either observation."""
+    def index(collections):
+        cases, seen = {}, set()
+        for row in collections:
+            collection = row['id']
+            if collection in seen:
+                raise ValueError(f'duplicate regression collection: {collection}')
+            seen.add(collection)
+            for case in row['cases']:
+                ident = case['id']
+                if (not isinstance(ident, str) or not ident.startswith(collection + ':')
+                        or not ident[len(collection) + 1:] or ident in cases):
+                    raise ValueError(f'ambiguous or foreign regression program: {ident}')
+                cases[ident] = case['outcome']
+        return cases
+
+    previous, current = index(reference), index(subject)
+    return [ident for ident, outcome in previous.items()
+            if outcome == 'PASS' and current.get(ident) != 'PASS']
+
+
 def reusable_reference(previous, current):
     """Reuse a completed control measurement, never the old subject results."""
     if previous['status'] not in ('PASS', 'INCOMPLETE'):
@@ -1506,13 +1528,8 @@ def main():
     receipt['status'] = ('PASS' if all(e['summary']['status'] == 'PASS' for e in receipt['execution'].values())
                          else 'INCOMPLETE')
     receipt['referenceStatus'] = receipt['execution']['reference']['summary']['status']
-    previous = rows['reference']
-    receipt['regressions'] = []
-    for row in receipt['execution']['subject']['collections']:
-        old = previous[row['id']]
-        now = {c['number']: c['outcome'] for c in row['cases']}
-        receipt['regressions'].extend(f'{row["id"]}:{c["name"]}' for c in old['cases']
-                                      if c['outcome'] == 'PASS' and now.get(c['number']) != 'PASS')
+    receipt['regressions'] = regression_ids(receipt['execution']['reference']['collections'],
+                                            receipt['execution']['subject']['collections'])
     if (selftest.sha(subject) != receipt['kernelImageSha256']
             or selftest.sha(images['reference']) != receipt['referenceImageSha256']
             or any(selftest.sha(folder / name) != receipt['payloads'][label][key]

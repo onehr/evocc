@@ -24,6 +24,39 @@ if PATH.exists():
 
 
 class FullSelftest(unittest.TestCase):
+    def test_regression_ids_retain_the_canonical_program_identity(self):
+        old = [{'id': 'sched_ext', 'cases': [dict(id='sched_ext:runner', number=1,
+                name='sched_ext:runner', outcome='PASS')]}]
+        new = copy.deepcopy(old)
+        new[0]['cases'][0]['outcome'] = 'TIMEOUT'
+        self.assertEqual(lane.regression_ids(old, new), ['sched_ext:runner'])
+
+    def test_regression_ids_match_programs_not_display_ordinals(self):
+        old = [{'id': 'ublk', 'cases': [
+            dict(id='ublk:one.sh', name='ublk:one.sh', number=1, outcome='PASS'),
+            dict(id='ublk:two.sh', name='ublk:two.sh', number=2, outcome='FAIL')]}]
+        new = copy.deepcopy(old)
+        new[0]['cases'][0].update(number=2, outcome='TIMEOUT')
+        new[0]['cases'][1].update(number=1, outcome='PASS')
+        self.assertEqual(lane.regression_ids(old, new), ['ublk:one.sh'])
+        new[0]['cases'] = []
+        self.assertEqual(lane.regression_ids(old, new), ['ublk:one.sh'])
+        self.assertEqual(lane.regression_ids(old, old), [])
+
+    def test_regression_ids_reject_ambiguous_or_foreign_identity(self):
+        row = {'id': 'net/ovpn', 'cases': [dict(id='net/ovpn:test.sh', number=1,
+               name='net/ovpn:test.sh', outcome='PASS')]}
+        mutations = [
+            [row, row],
+            [dict(row, cases=row['cases'] * 2)],
+            [dict(row, cases=[dict(row['cases'][0], id='ublk:test.sh')])],
+        ]
+        for bad in mutations:
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                lane.regression_ids([row], bad)
+            with self.subTest(reference=bad), self.assertRaises(ValueError):
+                lane.regression_ids(bad, [row])
+
     def test_timer_runtime_dependency_requires_a_pinned_archive_and_explicit_patch(self):
         prepare = getattr(lane, 'prepare_runtime_alsa', None)
         self.assertTrue(callable(prepare), 'the timer dependency repair must survive runtime rebuilds')

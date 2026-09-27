@@ -1541,6 +1541,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   isolated offline replays. Four historical Rust ignores remain explicit.
   This verifies current code, not a last-semantic-change or final campaign claim;
   T05 stays OPEN until its remaining-task dependencies are actually closed.
+  The later [pinned checkpoint](tests/fixtures/kernel-regression-identity.out)
+  includes the compare-immediate repair and passes **2807 Rust tests**, four
+  historical ignores, **274 K1 + 315 ladder tests**, Clippy/fmt/Ruff, both layout
+  corpora, 54 grammar shapes and thirteen isolated offline replays. The same
+  final-campaign boundaries apply.
 
   - [x] **T05a — Preserve multiline benchmark command failures**.
     Six RED assertions showed that trailing newlines/comments detached log
@@ -1656,6 +1661,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     it is not retroactively called a pinned-host build. The final campaign must
     record its actual pinned compiler. This does not close the T05 parent.
     [Tool identities, REDs and exact scope](tests/fixtures/pinned-host-toolchain.out).
+
+  - [x] **T05l — Compare paired regressions by canonical program identity**, 2026-09-28.
+    Three small tests expose duplicated collection prefixes, ordinal-based
+    mispairing and ambiguous IDs. The shared comparison now indexes canonical
+    IDs and rejects duplicate/foreign inputs. All 274 K1 tests pass; the actual
+    retained selected receipt recomputes to `sched_ext:runner`. Historical
+    observations and verdicts remain unchanged. This is report integrity, not
+    a kernel repair. [RED, GREEN and health](tests/fixtures/kernel-regression-identity.out).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

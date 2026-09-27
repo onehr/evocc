@@ -1,0 +1,45 @@
+Kernel regression identity and pinned-health checkpoint — 2026-09-28
+
+Scope: paired-result accounting, not a changed kernel/program verdict.
+The retained selected receipt 20260927T223104Z contains the malformed
+regression name sched_ext:sched_ext:runner. The old comparison also keyed
+programs by display ordinals rather than their canonical identities.
+
+RED: the three new FullSelftest.test_regression_ids_* tests produced eight
+failed assertions with the original comparison logic extracted unchanged.
+They cover an already-prefixed program name, swapped display ordinals,
+missing programs, duplicate collections/cases and foreign collection IDs.
+GREEN: shared regression_ids compares canonical case IDs and rejects
+ambiguous/foreign identities. All three tests and Ruff pass. Read-only
+recomputation of the retained receipt yields ["sched_ext:runner"]. Neither
+its immutable summary nor either side's observed verdict is rewritten.
+
+Current compiler: ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+Rust 1.97.1; code includes 1b5870a's compare-immediate fix.
+Existing output root:
+  .build/floating-targeted/module-uniform-20260928/final-build/
+Gate: tools/gate-changed.sh 1a2bd09 --offline -j 2
+  17 crates, 2807 PASS, 0 FAIL, four historical ignores; Clippy/fmt PASS.
+Python: K1 274 PASS, ladder 315 PASS; Ruff PASS.
+Grammar: 54 shapes, no disagreement (not complete semantic coverage).
+Layout: frozen Day-5 128/128, attributed 22/22, zero mismatch.
+Offline: fresh empty CARGO_HOME with vendored dependencies, existing pinned
+target cache; 13/13 persistent-state/equivalence/proof/corpus tests PASS.
+This is not a clean-cache complete build.
+
+The first attributed comparison omitted C30_LAYOUT_CASE_SET=attributed and
+correctly failed the 128-case manifest check. Its log remains retained.
+With the correct 22-case profile, the same captured observations pass;
+no case, expected layout or compiler source was changed to obtain PASS.
+
+SHA-256:
+health.json       2b79ec23437e7d983bd8c2b88dea44837889380ccd4b21720d0220545ff08618
+health-extra.json 3ef9c2baad6df8967746ce15da4ce19a6a66b5ef5f20f017b77609a3c85fabf8
+health-0.log      2996841bf49dcec3bb4f61d3a4e7cc184958e6950067f6818b29301151aa804e
+health-1.log      c22c41002717e95d4496bc244bc5cfc9e9fbd7e32ce2ac69525601ec714059e7
+health-2.log      8947bdef07b2d79fe44ca553cfb2c12669ba520db849f87ccfdf9b2f38eb2042
+offline.log       6ed565c91b7150200644ac93a8f19e34a874bf30c8115b775337a1b66a745e41
+
+The current-code full kernel composition, module execution, complete paired
+kselftest and expanded KUnit remain separate acceptance tasks. This checkpoint
+does not close the T05 parent, B10, K13 or K14.

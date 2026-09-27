@@ -6,6 +6,32 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Current-code integration prerequisites complete — 2026-09-28
+
+The new `95853321…` reference finishes its 7,008-target-C/848-module build and
+nonce-bound HVF boot/shutdown. Image SHA-256 is
+`22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6`.
+`final-build/reference.json` SHA-256 is
+`139a6bc2ec511a330cec4961e1fc11998d28113edbf386f7e6ed0192f671ea85`.
+This is GCC control evidence, not an EvoCC pass.
+
+The existing subject output was reseeded from that reference under the common
+lock. It is now GCC seed material, requiring full EvoCC replacement and audit;
+the old receipt's mutable output paths must not be treated as the old Image.
+Old exact Images/configs/maps are retained under `final-build/before-*` and the
+previous receipt under `before-kernel-receipt.json`. Two removed generated
+symvers metadata files were retained before replacement. No source clone or
+large test disk was created; reuse recovered about 5 GiB (kernel volume 20 GiB
+free). Seed record SHA-256:
+`577d373d4e3a37e33f50181ddc7b41e6c0971a324be63e81907995b98d28d926`.
+
+The [pinned compiler-health checkpoint](../../tests/fixtures/kernel-regression-identity.out)
+passes 2,807 Rust tests, 589 Python tests, Clippy/fmt/Ruff, 128+22 layouts,
+54 grammar shapes and thirteen isolated offline replays. Four historical Rust
+ignores remain. It also fixes canonical paired-regression IDs without changing
+the selected receipt's observed failures. Current compiler `ab2eeb7b…` is frozen;
+its complete composition and new module/runtime acceptance are still required.
+
 ### Selected original pair completes; final config reference starts — 2026-09-28
 
 The [39-program paired replay](../../tests/fixtures/kernel-uniform-selected-runtime.out)
