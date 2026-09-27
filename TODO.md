@@ -259,6 +259,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   path and establish cause before changing anything. Close with the original
   workload and clean shutdown, or a source-bound non-compiler disposition;
   intermittency alone is not a fix. [Evidence][kernel].
+  September 27's [bounded blocked-stack observer](tests/fixtures/ublk-blocked-observer.out)
+  preserves the original workload/budget. Six new pairs all pass and shut down;
+  no invocation reaches the 25-second diagnostic or shows a blocked final task.
+  One initial reference capture is INVALID_OUTPUT from interleaved printk, not
+  PASS. The 835 KiB initramfs adds no full disk. The old stall remains unexplained;
+  retain K04 rather than attributing the successful retries to a compiler fix.
 
   - [x] **K04a — Preserve ublk worker failures beneath a successful wrapper**, 2026-09-23.
     The [small shell reduction](tests/fixtures/ublk-background-exit.sh) and

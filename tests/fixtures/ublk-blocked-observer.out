@@ -1,0 +1,39 @@
+2026-09-27: bounded K04 observation; the historical stall remains OPEN.
+
+ublk-blocked-observer.c includes the existing selftest-init.c and observes its
+wait loop at 25/40/46/58 seconds and before shutdown sync. It requests SysRq
+blocked-task stacks, reads the resulting kmsg records, memory/I/O pressure,
+and fio/ublk/bash/timeout process wait channels/stacks. It does not change the
+original program, workers, error assertions, 45-second upstream timeout or
+60-second outer bound. Observations are diagnostic, not a replacement test.
+
+The first subject flight passes. In the first reference flight the original
+workload finishes and the boot/shutdown predicate passes, but normal kernel
+printk interleaves EVO_BOOT_NONCE. The strict program parser rejects that
+capture: INVALID_OUTPUT, not a reference-program PASS. Its raw log is retained.
+For the next flights console loglevel is 4 rather than 7; explicit kmsg reads
+retain the requested diagnostic without parsing a reconstructed nonce.
+
+Six subsequent pairs on the retained matching Images pass the unchanged
+original workload and shutdown: 6/6 GCC and 6/6 EvoCC. Each final snapshot
+completes with no blocked tasks; no workload lasts until the 25-second sample.
+These observations do NOT reproduce/explain the old stall or repair the kernel.
+Do not change historical full-test outcomes or mark K04/K13 complete.
+
+Build in evo-flight-lab:sealed, linux/arm64, network none:
+  gcc-14 -static -O2 -Wall -Wextra -Werror -I/harness
+    /fixtures/ublk-blocked-observer.c -o /probe/init
+  /kernel/usr/gen_init_cpio -t 0 /probe/payload.spec > /probe/payload.cpio
+tools/k1/selftest.py flight: hvf-host, KUnit autorun off, explicit QEMU drift.
+Per-flight ext4 snapshot backing hashes remain unchanged. No full disk copy,
+Image rebuild or module replacement; final initramfs is only 854528 bytes.
+
+Reference Image 8fa43fb43db82b6f112d09dbf5fcdbd29de848c68e225719d3b92380e380337b
+Subject Image f2d59e05e2a3b15cadc56b3479574f81716be7a7a6a3dd280568e42b81124280
+Payload b25ef64f2cd941c942f3095770dbc21fb2269bae17cce98a9f5cac10903cfad3
+Init 8c2b28e6fd7b660ba8e1af8d6782b57e6c3a90b7afe77b70c1d5255c16edcbe8
+Result 18a474bd82725649f02ded2a16d55704b11eab683c5b71d5a59d0ae0efffbd04
+Capture .build/floating-targeted/ublk-blocked-20260927/result.json
+Exact per-flight nonce, serial, Image/disk identity and outcomes are in that
+small result record and flights/*/boot.json. The old workload hashes remain
+those in ublk-background-exit.out; the runtime backing is unmodified.

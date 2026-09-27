@@ -52,6 +52,16 @@ This is a targeted module comparison, **not** a uniform new kernel or K13/K14.
 The payload is only 2.54 MiB and reuses the 64 MiB snapshot scratch disk.
 [Exact repair and module provenance](../../tests/fixtures/bitmap-constant-memory.out).
 
+### Bounded ublk stalled-task observation — 2026-09-27
+
+The separate [ublk wait-loop observer](../../tests/fixtures/ublk-blocked-observer.out)
+also completes a bounded six-pair retry on retained matching kernels: all 12
+original runs and shutdowns pass, no blocked final tasks. It neither reproduces
+nor explains K04. A first reference capture has printk interleaving in its
+nonce and is INVALID_OUTPUT, not promoted to PASS; lower console verbosity
+plus explicit kmsg capture is used afterward. No full disk is copied (835 KiB
+initramfs). The observer is retained for the unresolved original stall.
+
 ### Internal instruction-publication race experiment — 2026-09-27
 
 The matching QEMU 11.1.1 build reproduces the six-case reduction at **3 PASS /
