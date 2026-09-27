@@ -633,13 +633,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   target-specific Makefile omissions remain omissions, not newly executed tests.
   [Receipt](tests/contracts/ladder-tinycc-receipt.json).
 
-- [ ] **B06 — Finish toybox compilation and chattr diagnosis** — `OPEN`, P2.
-  Historical compilation is 201/203 with two deferred FP objects, but both old
-  test logs stop after 57 occurrences at the first `chattr` failure; they are
-  not full-suite acceptance. The adapter now requires the recorded object link,
-  complete upstream execution, every duplicate occurrence and final object hashes.
-  Close with all objects installed and original applet results; the common score
-  is `VALIDATION_GAP`, not 201 validated units. [Receipt](tests/contracts/ladder-toybox-receipt.json).
+- [x] **B06 — Finish toybox compilation and chattr diagnosis** — `DONE`, P2, 2026-09-27.
+  Full run `20260927T084656Z` compiles/installs **203/203** frozen target units,
+  zero refusals/exclusions/rebuilt objects; generated applet-table main remains
+  reference-built outside that denominator. Both audited builds complete all
+  **1,669 occurrences: 1,648 PASS / 1 FAIL / 20 SKIP**, no subject regression.
+  The sole common tar FAIL is a demonstrated contradictory upstream expected
+  hash; all 20 skips retain source/config/runtime reasons. This closes full
+  execution and diagnosis, **not all-tests PASS**. The common score stays FAIL,
+  and B10 still requires its final campaign. [Receipt](tests/contracts/ladder-toybox-receipt.json).
 
   - [x] **B06a — Isolate chattr's filesystem requirement**, 2026-09-23.
     The [minimal ioctl probe](tests/fixtures/toybox-filesystem-flags.c) returns
@@ -659,6 +661,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     on both historical audited binaries, versus 0/5/10. The conditional j/P skips
     remain skips. All 253 ladder tests pass; no full campaign was run.
     [Evidence and exact limits](tests/fixtures/toybox-filesystem-mutation.out).
+
+  - [x] **B06c — Repair runtime prerequisites and classify the remaining tar failure**, 2026-09-27.
+    The [small C/shell cases](tests/fixtures/toybox-runtime-prerequisites.out)
+    reproduce missing USER, insufficient isolated hostname/mount capabilities
+    and a loop filename exceeding 64 bytes. The shared runtime fixes these six
+    failures without changing tests; eight native controls, the 157-occurrence
+    targeted pair and complete 1,669-occurrence pair agree. Both audited tar
+    binaries produce byte-identical owner/group-overridden archives before and
+    after chown, contradicting only the later upstream expected digest. That
+    FAIL is retained. All 261 ladder regressions and Ruff pass.
 
 - [x] **B07 — Finish jq's binary128 interface and original tests** — `DONE`, P2, 2026-09-27.
   Run `20260927T082205Z` compiles/installs all **69/69** objects, including
@@ -702,6 +714,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   deferrals/exclusions. These individual fresh lanes do not constitute the
   final 15-lane campaign. Historical binary128/strict-fenv waiver labels no
   longer excuse a new refusal under the now-implemented hosted profile.
+  Complete torture replay `20260927T084053Z` also closes all **18** former
+  binary128 refusals: **1,522 PASS / 0 compiler failures / 21 FP-deferred /
+  146 not-applicable / 3 oracle-unusable**, fixed population 1,692. The six
+  original raw execution failures retain their existing source-bound non-PASS
+  dispositions; no source, timeout, option or applicability predicate changes.
 
 ## Remaining numerical and language contracts
 

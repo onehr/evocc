@@ -2377,3 +2377,46 @@ and object-mutation negatives pass. The shared object audit reuses toybox's
 established check. **260 ladder tests and Ruff pass**. The receipt retains all
 eleven expected hashes, the final executable hash and per-trial log hashes;
 it is not based only on the phrase `ALL TESTS PASSED`.
+
+## 2026-09-27: complete torture binary128 replay
+
+Run `20260927T084053Z` uses the same frozen `523a6982...` compiler and all
+**1,692** unchanged source programs. It yields **1,522 PASS, zero compiler
+failures, 21 named FP deferrals, 146 not-applicable and three unusable oracles**.
+Exactly the eighteen historical binary128 refusals change to PASS; no other
+program changes its outcome or disposition from the prior complete run.
+
+The raw runner observes 1,523 successful exits, 102 refusals, 61 applicability
+exclusions and six failing executions. One successful exit still has a
+source-bound not-applicable disposition, so the accepted PASS numerator is
+1,522, not 1,523. The six raw failures remain the already-evidenced signed
+overflow cases, inactive-union-tail conflict and two wide-bitfield promotion
+conflicts. Their source hashes/evidence are rechecked; they are not relabeled
+PASS. Remaining named FP deferrals are floating complex/vector, not binary128.
+The original options, fixed time budgets and target predicates are unchanged.
+This closes the original torture quad population, not the other B10 lanes.
+
+## 2026-09-27: complete toybox execution and remaining non-passes
+
+Full run `20260927T084656Z` compiles and installs **203/203** frozen units with
+the same subject, zero refusals, symbol exclusions or rebuilt objects. Both
+reference and subject complete **1,669 occurrences: 1,648 PASS / 1 FAIL /
+20 SKIP**. Generated applet-table `main.c` stays reference-built outside the
+frozen denominator; this is not an all-C-object replacement claim.
+
+The [small prerequisite and tar reductions](../../tests/fixtures/toybox-runtime-prerequisites.out)
+repair six shared environment failures: absent USER, missing disposable-runtime
+hostname/mount permissions, and an overlong loop backing filename. The shared
+runner keeps original tests/flags, binary/object hashes and full occurrence
+accounting. Eight native prerequisite controls, the five-collection replay and
+the fresh full pair agree; 261 ladder regressions and Ruff pass.
+
+The sole remaining FAIL is `tar ownership`: a later expected digest differs
+from an earlier expectation for the same empty-file command, even though both
+commands explicitly override owner/group. Both audited executables produce
+byte-identical complete archives before/after the chown. No assertion is edited;
+the common bench still returns FAIL. Twenty skips are individually attributable
+to ten disabled applets, four explicit nonroot guards, two >5-CPU guards, one
+unconditional upstream performance skip, two unavailable filesystem flags and
+the absent dummy network module/device. The fixture record retains exact errors.
+This closes B06's compilation/full-execution/diagnosis task, not all-tests PASS.

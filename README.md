@@ -48,7 +48,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 
 | Benchmark | Status | Recorded result | Scope or remaining issue |
 |---|---|---:|---|
-| GCC torture | PROFILE_CLEAN | 1,504/1,692 programs PASS | 0 compiler failures; 39 FP-deferred, 146 not applicable, 3 oracle-unusable |
+| GCC torture | PROFILE_CLEAN | 1,522/1,692 programs PASS | 0 compiler failures; 21 FP-deferred, 146 not applicable, 3 oracle-unusable; September 27 full replay |
 | c-testsuite | PASS | 220/220 programs PASS | Fresh full population, zero exclusions or deferrals |
 | Csmith | INCOMPLETE | 932/1,000 checksum agreements | All 1,000 compile; 0 mismatches; 68 unusable-oracle cases are not passes |
 | zlib | PASS | 19/19 TU | Recorded original program tests |
@@ -56,7 +56,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | cJSON | PASS | 23/23 TU | Both libraries + all 21 Unity/private-helper programs; 161 cases PASS, 1 upstream IGNORE; public-API controls also pass |
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | PASS | 11/11 TU | Original `make test`; relink/test exits and installed objects audited |
-| toybox | VALIDATION_GAP | 201/203 TU compiled historically | Old tests stopped at `chattr`; complete tests and audited relink require replay; 2 FP objects remain |
+| toybox | FAIL (shared upstream assertion) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
 | musl + libc-test | FAIL | Historical 0/1,339 TU | Strict fenv now has targeted tests; original ARM64 math units expose the still-excluded scalar FP asm constraint |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,014/1,735 programs PASS | Frozen account: 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; follow-ups below |

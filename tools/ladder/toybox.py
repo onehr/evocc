@@ -78,7 +78,9 @@ binary_sha=$(sha256sum toybox | cut -d ' ' -f1) || exit 2
 # Upstream creates PREFIX under its current tree. /work is a host-backed FUSE
 # mount without FS_IOC_GETFLAGS; merely setting TESTDIR does not relocate it.
 # Copy only the unchanged runtime recipe/data, not target objects or sources.
-runtime=$(mktemp -d /tmp/evocc-toybox-tests.XXXXXX) || exit 2
+# LOOP_SET_STATUS64 has a 64-byte file-name field; the upstream losetup test
+# uses the full runtime/generated/testdir/testdir/blah.img path.
+runtime=$(mktemp -d /tmp/tb.XXXXXX) || exit 2
 trap 'rm -rf -- "$runtime"' EXIT
 mkdir -p "$runtime/generated/unstripped" "$runtime/lib" || exit 2
 cp -a scripts tests configure .config toybox "$runtime/" || exit 2
@@ -92,6 +94,8 @@ cd "$runtime" || exit 2
 # Source it in a child shell: an early `exit` cannot print the completion marker.
 # A normal failing suite returns false at the end, which must still be recorded.
 unset TEST_HOST TEST_ALL DEBUG SHOWPASS SHOWFAIL SHOWSKIP
+USER=$(id -un) || exit 2
+export USER
 ASAN=1 VERBOSE=all bash -c '
   . scripts/test.sh
   status=$?
@@ -159,7 +163,9 @@ def test_summary(log: Path, verdict: str) -> dict:
         "binarySha256": mixed.sha256(log.parent / "toybox") if (log.parent / "toybox").is_file() else None,
         "runtimePolicy": {
             "workingDirectory": "ephemeral-container-local",
-            "addedCapabilities": ["CAP_LINUX_IMMUTABLE"],
+            "addedCapabilities": ["CAP_LINUX_IMMUTABLE", "CAP_SYS_ADMIN"],
+            "user": "executing uid resolved by id -un",
+            "temporaryPathPolicy": "/tmp/tb.XXXXXX; original loop backing path fits 64-byte field",
             "targetObjectsCopied": False,
         },
     }
@@ -221,7 +227,7 @@ def relink_and_test(
     try:
         done = mixed.container(
             {MOUNT: tree}, TEST_SCRIPT.replace("@LINK_COMMAND@", shlex.join(command)),
-            timeout=5400, capabilities=("CAP_LINUX_IMMUTABLE",),
+            timeout=5400, capabilities=("CAP_LINUX_IMMUTABLE", "CAP_SYS_ADMIN"),
         )
     except subprocess.TimeoutExpired:
         return "test-timeout", {}

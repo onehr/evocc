@@ -127,7 +127,7 @@ else echo 'FAIL: local runtime'; false; fi
 """)
         self.assertEqual(status, "tests-done")
         self.assertEqual(list(found.values()), ["PASS"])
-        self.assertEqual(self.runtime_options, {"capabilities": ("CAP_LINUX_IMMUTABLE",)})
+        self.assertEqual(self.runtime_options, {"capabilities": ("CAP_LINUX_IMMUTABLE", "CAP_SYS_ADMIN")})
 
     def test_runtime_excludes_target_objects_and_audits_the_executable(self):
         (self.tree / "generated/obj").mkdir()
@@ -144,6 +144,17 @@ if [ ! -e generated/obj ]; then echo 'PASS: no duplicate build'; else
             "echo damaged > generated/testdir/toybox\necho 'PASS: misleading'\n",
         )
         self.assertNotEqual(status, "tests-done")
+
+    def test_runtime_has_real_user_and_loop_name_fits_the_kernel_field(self):
+        with patch.dict(os.environ, {"USER": "not-the-executing-user"}):
+            status, found = self.run_suite('''
+name="$PWD/generated/testdir/testdir/blah.img"
+if [ "$USER" = "$(id -un)" ] && [ ${#name} -lt 64 ]; then
+  echo 'PASS: runtime prerequisites'; true
+else echo 'FAIL: runtime prerequisites'; false; fi
+''')
+        self.assertEqual(status, "tests-done")
+        self.assertEqual(list(found.values()), ["PASS"])
 
     def test_preexisting_log_is_erased_even_when_link_fails(self):
         log = self.tree / "tests.log"

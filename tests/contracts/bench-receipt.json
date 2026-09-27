@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T083208.543023Z",
-  "subject": "a8b141943aebdca817ab9286d1b1b6ab672c82d3",
+  "run": "20260927T084656.017760Z",
+  "subject": "edc69054d72660ffbb9bde2ccec61333ef0d1748",
   "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
   "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
@@ -20,7 +20,7 @@
   "selected": [
     "toybox"
   ],
-  "status": "RUNNING",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -68,17 +68,16 @@
       "rung": "E0a",
       "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
       "outcomes": {
-        "pass": 1505,
+        "pass": 1523,
         "not-applicable": 61,
-        "refused": 120,
+        "refused": 102,
         "fail": 6
       },
       "refusals": {
         "E1205": 20,
-        "E3050": 15,
-        "E3049": 12,
         "E2001": 11,
         "E2203": 8,
+        "E3050": 8,
         "E0112": 8,
         "E2920": 7,
         "E2940": 5,
@@ -93,6 +92,7 @@
         "E2939": 2,
         "E2102": 2,
         "E2935": 1,
+        "E3049": 1,
         "E2948": 1,
         "E2202": 1,
         "other": 1,
@@ -103,7 +103,7 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1504,
+      "passed": 1522,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3008 interpreter-fuel-exhausted": 2,
@@ -112,32 +112,32 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "dispositions": {
-        "PASS": 1504,
+        "PASS": 1522,
         "compiler-failure": 0,
-        "FP-deferred": 39,
+        "FP-deferred": 21,
         "not-applicable": 146,
         "oracle-unusable": 3
       },
       "status": "PROFILE_CLEAN",
-      "run": "20260919T222317Z",
-      "evidence": ".evidence/ladder/e0/20260919T222317Z",
+      "run": "20260927T084053Z",
+      "evidence": ".evidence/ladder/e0/20260927T084053Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
         "--suite",
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 200.8,
+      "seconds": 333.0,
       "previous": null,
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20260927T084052.940199Z",
+        "subject": "edc69054d72660ffbb9bde2ccec61333ef0d1748",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
       }
     },
     "csmith": {
@@ -897,8 +897,43 @@
     },
     "toybox": {
       "rung": "E6",
-      "status": "RUNNING",
       "note": "mixed-link tests relative to baseline failures",
+      "outcomes": {},
+      "refusals": {},
+      "baselineFailures": 1,
+      "failingUnits": [],
+      "total": 203,
+      "passed": 203,
+      "kind": "units",
+      "compiled": 203,
+      "excluded": 0,
+      "testVerdict": "no-regression",
+      "adjustments": {
+        "sourcePageBreaksStripped": [],
+        "noreturnSpecifiersRemoved": [],
+        "highBytesReEscaped": [],
+        "sysroot": [],
+        "defines": [],
+        "unitsNotSubstitutable": [
+          "main.c: reference-built generated applet table, outside frozen population"
+        ]
+      },
+      "testOutcomes": {
+        "reference": {
+          "PASS": 1648,
+          "FAIL": 1,
+          "SKIP": 20
+        },
+        "subject": {
+          "PASS": 1648,
+          "FAIL": 1,
+          "SKIP": 20
+        }
+      },
+      "status": "INCOMPLETE",
+      "run": "20260927T084656Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260927T084656Z",
+      "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
@@ -909,7 +944,53 @@
         "2",
         "--budget",
         "1"
-      ]
+      ],
+      "exitCode": 0,
+      "seconds": 178.6,
+      "previous": {
+        "rung": "E6",
+        "note": "mixed-link tests relative to baseline failures",
+        "outcomes": {},
+        "refusals": {},
+        "baselineFailures": 7,
+        "failingUnits": [],
+        "total": 203,
+        "passed": 203,
+        "kind": "units",
+        "compiled": 203,
+        "excluded": 0,
+        "testVerdict": "no-regression",
+        "adjustments": {
+          "sourcePageBreaksStripped": [],
+          "noreturnSpecifiersRemoved": [],
+          "highBytesReEscaped": [],
+          "sysroot": [],
+          "defines": [],
+          "unitsNotSubstitutable": [
+            "main.c: reference-built generated applet table, outside frozen population"
+          ]
+        },
+        "testOutcomes": {
+          "reference": {
+            "PASS": 1642,
+            "FAIL": 7,
+            "SKIP": 20
+          },
+          "subject": {
+            "PASS": 1642,
+            "FAIL": 7,
+            "SKIP": 20
+          }
+        },
+        "status": "INCOMPLETE",
+        "run": "20260927T083208Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260927T083208Z"
+      },
+      "measurement": {
+        "run": "20260927T084656.017760Z",
+        "subject": "edc69054d72660ffbb9bde2ccec61333ef0d1748",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
+      }
     },
     "musl": {
       "rung": "E7",

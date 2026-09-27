@@ -1,0 +1,85 @@
+2026-09-27 B06: repair six runtime prerequisites, retain the seventh raw FAIL.
+
+Subject compiler SHA256
+523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa.
+Sealed Linux arm64 network-none image, GCC 14.2.0-19 / Clang 19.1.7.
+Probe source SHA256
+02399a5cb5a7d9cacbb775cc9832ad6987400830708a78b504a4a1612b03391d.
+Tar reduction SHA256
+adff95458414cda0e7b70136c5699280d6001e13a586ce7b06dce74d0a41e3f1.
+Raw diagnostic directory: .build/floating-targeted/strict-20260927/.
+
+Full initial replay 20260927T083208Z installs all 203/203 target-C objects.
+Both audited executables complete 1669 occurrences: 1642 PASS / 7 FAIL / 20 SKIP.
+Reference SHA256 e4f4fbab0bb2b203ebbc948f14524268a76a4c9d599ae3f1866a932d5f7a9f22.
+Subject SHA256   0e9daafe0549398da3a60a3d37550af9a632775a72a68e5c9057ddeeb86f6049.
+
+Six shared failures have explicit runtime causes:
+- find: USER is absent, so its -user argument becomes -exec.
+- hostname set and rm's read-only tmpfs: EPERM without CAP_SYS_ADMIN.
+- three losetup cases: the backing path exceeds loop_info64.lo_file_name's
+  64-byte field; the original xstrncpy reports the overflow, leaving later
+  enumeration/detach assertions without the expected filename.
+
+The small C prerequisite probe returns 77 (unavailable, not PASS) with unset
+USER and the original container capabilities in all four fixed reference
+builds. With USER=root and CAP_SYS_ADMIN, all four reference builds and four
+crossed EvoCC O0/O2 builds return zero. It sets the hostname to its existing
+value, mounts one read-only 4 KiB tmpfs, verifies missing-file stat/ENOENT,
+unmounts and removes its temporary directory. No host mount is touched.
+An initial fixture mistakenly expected unlink of a missing read-only file to
+return ENOENT; it returned EROFS. The corrected stat prerequisite and its new
+GREEN log supersede that failed diagnostic, not a compiler implementation.
+
+Shared adapter: USER=$(id -un), short /tmp/tb.XXXXXX runtime directory, and
+CAP_SYS_ADMIN only in this disposable container, alongside the already-needed
+CAP_LINUX_IMMUTABLE. No target object/source is copied into the runtime tree.
+Binary/object audits and the unmodified upstream assertions remain mandatory.
+261 Python ladder regressions and Ruff PASS; the new real-shell test verifies
+both an inherited wrong USER and the complete backing-file path length.
+
+Unchanged five-collection replay (find, hostname, losetup, rm, tar) selects only
+runtime test executable bits, not source contents: BOTH sides complete
+155 PASS / 1 FAIL / 1 SKIP. The only FAIL is tar ownership. An earlier attempt
+to pass collection names as test.sh arguments invoked upstream single.sh and
+could not build from the deliberately source-free staging tree; that setup
+ERROR with zero outcomes is not counted as test evidence.
+
+Remaining tar ownership is a source-bound contradictory expected hash:
+tests/tar.test SHA256
+6ac2f1515ff076211d30d4f1ab3012a3acd74271a5849ab77f10706599bb65e1.
+toys/posix/tar.c SHA256
+99d258976fc742c2b5fb595e7bb94b7c7f5cee19a9433ae670dd5261d2cad41f.
+The test's TAR command fixes --owner root --group sys --mtime @1234567890.
+Its first empty dir/file archive expects d9e7fb3884430d29e7eed0dc04a2593dd260df14;
+after chown nobody:nogroup, the identical overriding command instead expects
+2d7b96c7025987215f5a41f10eaa84311160afdb. Frozen tar.c overrides st_uid/st_gid
+before serializing the header. The small shell reduction invokes both audited
+binaries before/after the chown: cmp of COMPLETE archives succeeds, and the
+original 1536-byte digest is d9e7fb3884430d29e7eed0dc04a2593dd260df14 on both.
+No expected hash, assertion or test is edited. The raw original FAIL remains
+FAIL; this evidence classifies it, not converts it to PASS.
+
+Corrected complete replay 20260927T084656Z installs all 203/203 frozen units:
+zero refusals, symbol exclusions, missing/rebuilt target objects or subject
+regressions. BOTH complete 1669 occurrences: 1648 PASS / 1 FAIL / 20 SKIP.
+The executable hashes still match the two above. Baseline log SHA256
+790fbd075bee41dfe782f1b3fe3718284e8e20786421771d01215a010f6953e9;
+subject log 10b3f0c7542aa6a85895c00130916b0eb6399277d4f621375b0120da0ecdde9d.
+The common bench returns status 1, preserving the raw FAIL rather than calling
+relative no-regression ALL PASS. Reference-built generated main.c remains
+outside the frozen 203-unit population and is explicitly recorded.
+
+All twenty upstream skips are separately bounded:
+- 10 applets disabled in frozen defconfig: demo_number, expr, groupadd,
+  groupdel, hexdump, skeleton, tr, unzip, useradd, xzcat.
+- 3 cp inaccessible-path and 1 tar honor-umask tests explicitly require a
+  nonroot user; this lane must also run original privileged applet tests.
+- 2 taskset list tests require more than five CPUs; this runtime reports five.
+- 1 sed performance test has an unconditional upstream SKIP=1.
+- chattr j returns EPERM; chattr P returns EOPNOTSUPP on this filesystem.
+- ifconfig requires dummy0: frozen runtime modprobe reports no dummy module
+  for kernel 6.18.15, and the audited ifconfig ioctl returns ENODEV.
+These are not passes, and other kernel/configurations are not inferred. The
+small diagnostic also records that the unrelated ip utility is absent, but
+the unchanged upstream ifconfig script does not require that command.
