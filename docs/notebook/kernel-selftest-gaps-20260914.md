@@ -84,6 +84,15 @@ Host/case-volume free space is approximately 61/25 GiB. The frozen compiler
 and `substitute.py` hashes remain unchanged; September 28's interpreter and
 diagnostic repairs are tested separately and are not credited to this binary.
 
+At **2026-09-27 19:12 UTC**, the current first-pass queue is complete:
+**6,966/6,966 assembled**, plus 36 separately retained reuse candidates. The
+actual-generated-input second pass is active at **1,408/7,002** (worker 80898),
+with zero resumed compilations. Input snapshot SHA-256 is
+`4835df5d05d8762bfdf9e0f4a9922557bfc369983c5dde58984da4f2220b8423`;
+compiler SHA remains `65035621…`. Assembly-object cache reuse is distinct from
+resuming a compilation. Final fixed point, link, installed-object audit and
+boot remain pending. Host/case-volume free space is 59/26 GiB; no new tree/disk.
+
 During this run, a separate real-container failure injection exposes K1's
 acceptance of OK lines before nonzero container exit. The
 [T05i candidate](../../tests/fixtures/kernel-assembly-verdict.out) passes 51

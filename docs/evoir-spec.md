@@ -3201,6 +3201,8 @@ hex_byte      := hex_digit hex_digit
 hex_digit     := "0".."9" | "a".."f"
 hex8          := hex_byte hex_byte hex_byte hex_byte
 hex16         := hex8 hex8
+hex32         := hex16 hex16
+signed_integer := integer | "-" positive_int
 bit           := "0" | "1"
 newline       := the single byte "\n"
 ```
@@ -3234,7 +3236,7 @@ extern_seq      := extern_object+
 extern_object   := "extern " symbol " size=" (integer | "unknown")
                    " align=" integer [declaration_visibility] [" linkage=weak"] newline
 declare_seq     := declare+
-declare         := "declare " symbol "(" sig_param_list [", ..."] ")"
+declare         := "declare " symbol "(" sig_param_list ")"
                    " -> (" type_list ")" " cc = " ident [declaration_visibility] [" linkage=weak"] newline
 alias_seq       := alias+
 alias           := "alias " symbol " = " symbol [visibility_mark]
@@ -3252,10 +3254,12 @@ global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
                    [" linkage=weak"] " size=" integer " align=" integer
                    " bytes=" hex_byte+ " initialized=" bit+
+                   [" readonly=true"] [" section=" quoted_string]
                    [" relocs=[" reloc (", " reloc)* "]"] newline
-reloc           := "(" integer ", " reloc_target ", " integer ")"
+reloc           := "(" integer ", " reloc_target ", " signed_integer
+                   [", exposed" | ", diff=" reloc_target ", bits=" integer] ")"
 reloc_target    := symbol | symbol block_label
-global_kind     := "file" | "function_static" | "string_literal"
+global_kind     := "file" | "function_static" | "string_literal" | "compound_literal"
 visibility      := "external" | "internal" | "hidden" | "protected"
 visibility_mark := " visibility=" ("internal" | "hidden" | "protected")
 declaration_visibility := " visibility=" ("hidden" | "protected")
@@ -3269,15 +3273,17 @@ type            := "bits<" positive_int ">"
                  | "tuple<" type_list ">"
                  | "fnptr<" signature ">"
                  | "void"
-signature       := "(" sig_param_list [", ..."] ")->(" type_list ")"
-sig_param_list  := ε | sig_param ("," " " sig_param)*
+signature       := "(" sig_param_list ")->(" type_list ")"
+sig_param_list  := ε | sig_param_item (", " sig_param_item)*
+sig_param_item  := sig_param | "..."
 sig_param       := type [record_mark]
-record_mark     := (" byval(" | " sret(") integer ", " integer [hva_mark | hfa_mark] ")"
+record_mark     := byval_mark | " sret(" integer ", " integer [hva_mark | hfa_mark] ")"
+byval_mark      := " byval(" integer ", " integer [hva_mark | hfa_mark] ")"
 hfa_mark        := ", hfa=" integer "x" ("f32" | "f64" | "f128") [", abi_align=16"]
 hva_mark        := ", hva=" positive_int "xvec<" positive_int ", bits<" positive_int ">>"
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
-function        := "func " symbol "(" param_list [", ..."] ")"
+function        := "func " symbol "(" param_list ")"
                    " -> (" type_list ")"
                    " cc = " ident [visibility_mark] [" linkage=weak"]
                    [" align=" integer] [" stack_protect"]
@@ -3295,7 +3301,8 @@ effects_clause  := "effects { reads=" region_set ", writes=" region_set
 region_set      := "{}" | "{" region ("," " " region)* "}"
 region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
 bool            := "true" | "false"
-param_list      := ε | param ("," " " param)*
+param_list      := ε | param_item (", " param_item)*
+param_item      := param | "..."
 param           := param_name ": " type [record_mark]
 type_list       := ε | type ("," " " type)*
 
@@ -3317,6 +3324,7 @@ positive scale, `O` an origin ordinal.
 inst_body :=
     value_name " = const.f32 0x" hex8
   | value_name " = const.f64 0x" hex16
+  | value_name " = const.f128 0x" hex32
   | value_name " = fp." fp_op " " value_list " : " type
   | "(" value_name ", " value_name ") = fp.strict." strict_fp_op
         " " value_list " : " type
@@ -3339,6 +3347,9 @@ inst_body :=
   | "(" value_name ", " value_name ", " value_name ") = alloca "
         value_name ", " value_name
         " [origin=" integer ", size=" integer ", align=" integer "]"
+  | "(" value_name ", " value_name ", " value_name ") = alloca.dynamic "
+        value_name ", " value_name ", " value_name
+        " [origin=" integer ", align=" integer "]"
   | "(" value_name ", " value_name ") = lifetime.end "
         value_name ", " value_name ", " value_name
   | value_name " = pointer_valid " value_name ", " value_name
@@ -3352,19 +3363,25 @@ inst_body :=
         " " value_name ", " value_name ", " value_name " : " type
   | "(" value_name ", " value_name ") = atomic.store " atomic_order volatile_marker
         " " value_name ", " value_name ", " value_name ", " value_name
+  | "(" value_name ", " value_name ", " value_name ") = atomic.rmw." atomic_rmw_op
+        " " atomic_order volatile_marker " " value_name ", " value_name ", " value_name
+        ", " value_name [", " value_name] " : " type
   | "(" value_name ", " value_name ") = copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " "
         value_name ", " value_name ", " value_name ", " value_name
         " [size=" integer ", align=" integer "]"
   | value_name " = ptr.offset." direction "." index_signedness " "
+        value_name ", " value_name " [scale=" integer "]"
   | value_name " = ptr.to_int " value_name
   | value_name " = block_addr " block_label " : " type
   | value_name " = return_address : " type
   | value_name " = frame_address : " type
+  | value_name " = frame_address depth=" positive_int " : " type
   | value_name " = ptr.from_int." type " " value_name
-        value_name ", " value_name " [scale=" integer "]"
-  | "(" result_list ") = call " callee "(" arg_list ")"
+  | "(" result_list ") = call " callee "(" call_arg_list ")"
   | "(" result_list ") = va_start " value_name ", " value_name ", " value_name
   | "(" result_list ") = va_arg." type " " value_name ", " value_name ", " value_name
+  | "(" result_list ") = va_arg.byval " value_name ", " value_name ", " value_name
+        ", " value_name " [size=" integer ", align=" integer [hva_mark | hfa_mark] "]"
   | "(" result_list ") = va_end " value_name ", " value_name ", " value_name
   | "(" result_list ") = asm" volatile_marker " " asm_payload
 
@@ -3390,7 +3407,7 @@ fp_op            := "add" | "sub" | "mul" | "div" | "fma" | "neg"
                   | "quiet_olt" | "quiet_ole" | "quiet_ogt" | "quiet_oge"
                   | "convert" | "from_signed" | "from_unsigned"
                   | "to_signed" | "to_unsigned" | "to_bits" | "from_bits"
-                  | "to_int_defined." ("s" | "u") positive_integer
+                  | "to_int_defined." ("s" | "u") positive_int
 strict_fp_op     := "add" | "sub" | "mul" | "div" | "fma"
                   | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
                   | "quiet_olt" | "quiet_ole" | "quiet_ogt" | "quiet_oge"
@@ -3403,13 +3420,18 @@ shift_predicate  := "shift_count_defined" | "signed_shl_defined"
 ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "invalid_shift_count" | "invalid_signed_left_shift"
                   | "bit_builtin_zero_operand"
-trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached"
+                  | "floating_to_integer"
+trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached" | "builtin_trap"
 volatile_marker  := ε | " volatile"
-atomic_order     := "relaxed" | "consume" | "acquire" | "release" | "seq_cst"
+atomic_order     := "relaxed" | "consume" | "acquire" | "release" | "acq_rel" | "seq_cst"
+atomic_rmw_op    := "add" | "sub" | "and" | "or" | "xor" | "nand" | "exchange" | "cmpxchg"
 direction        := "add" | "sub"
 index_signedness := "signed" | "unsigned"
 result_list      := value_name ("," " " value_name)*
+value_list       := value_name (", " value_name)*
 arg_list         := ε | value_name ("," " " value_name)*
+call_arg_list    := ε | call_arg (", " call_arg)*
+call_arg         := value_name [byval_mark]
 callee           := symbol | value_name
 
 asm_payload      := quoted_string " " value_name ", " value_name
@@ -3430,6 +3452,17 @@ quote_byte       := the single byte 0x22
 backslash_byte   := the single byte 0x5c
 quoted_ascii     := a byte in 0x20..0x21, 0x23..0x5b, or 0x5d..0x7e
 ```
+
+The optional `...` occurs at most once in a parameter list, immediately before
+its final `mem<all>, world` pair, as required by §1.1; it is not a parameter
+binder and does not advance `%arg` numbering. Call-site `byval` marks apply only
+to anonymous arguments; fixed parameter marks come from the callee signature.
+The atomic instruction's order/type rules remain operation-specific: adding
+`acq_rel` to the spelling vocabulary does not make it legal for load/store.
+Only `cmpxchg` has the additional expected-value operand. Relative relocations
+require the existing same-function label/width rules, and cannot also be
+`exposed`. These are integrations of the already-approved Appendix D contracts,
+not new source-language admission or a change to canonical bytes.
 
 In an assembly payload the first two values are the input `mem<all>` and
 `world`. An output tuple is `(constraint, name, type, incoming)` and an input
@@ -3535,12 +3568,11 @@ form could not represent a legal module.
 #### 9.3.2 Shapes Not Yet Emitted
 
 A revision may lead its implementation. Any such shapes are listed in this
-block so the gap is declared rather than discovered. Revision 1.9.60 adds
-the two assembly shapes below; they remain pending until their implementation.
+block so the gap is declared rather than discovered. The historical 1.9.60
+assembly gap was closed by the Appendix D implementation; no current shape in
+this table is pending. This does not assert full source-language support.
 
 ```text
-(<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
-(<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 ```
 
 The empty `ret`, mandatory effects clause, `func_addr`, indirect callee, full
@@ -3616,7 +3648,8 @@ Rejected as **malformed**, meaning the bytes are not a module at all:
   Section 9.3 fixes.
 - A bare `ptr.offset` without both suffixes, or a `vload` or `vstore` mnemonic,
   neither of which exists.
-- A `volatile` marker anywhere other than immediately after `load` or `store`.
+- A `volatile` marker outside the positions specified for load/store, atomic
+  access and assembly. Volatile copies instead use their explicit suffix.
 - An effect region set with a duplicate or whose members are not in the
   canonical order `all, unknown, global, stack, heap, escaped`.
 - Any byte after the final newline.

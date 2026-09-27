@@ -1278,6 +1278,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     Clippy/fmt green. This closes an erratum, not a new compiler feature or T03.
     [Exact scope and commands](tests/fixtures/dynamic-stack-contract.out).
 
+  - [x] **T03e — Close missing instruction sentinels and main-grammar errata**, 2026-09-28.
+    An independent enum inventory goes RED at 52/59 instantiated variants;
+    the expanded non-executable field sentinel now covers all 59 and 143/143
+    registered fields, including nested assembly, declarations and relocations.
+    Ten added operand-remapping cases preserve edge identities. A valid byval
+    varargs proof replays, while four rehashed semantic forgeries are rejected.
+    Main grammar tests expose and repair stale pointer, f128, dynamic-stack,
+    varargs and other already-approved Appendix D spellings. Five text/field
+    tests, 17 checker tests and the 1,644-test affected gate pass; Clippy/fmt
+    pass. This closes verification gaps and errata, not new compiler features
+    or the entire spec audit. [Exact scope and evidence](tests/fixtures/section9-contract-audit.out).
+
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
@@ -1301,6 +1313,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   T04d runs through the common driver. The preceding debug-binary launch
   was explicitly interrupted before installing objects and is not a completed
   survey. [Live log and identities][kernel].
+  At **19:12 UTC**, all **6,966/6,966** first-pass queued records are assembled
+  with the 36 separate reuse candidates retained. The actual-generated-input
+  second pass is live at **1,408/7,002**, with zero resumed compilations;
+  assembly-object cache reuse is accounted separately. Final fixed point,
+  link/provenance and boot are still pending, not inferred from the first pass.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,

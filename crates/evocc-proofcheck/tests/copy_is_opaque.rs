@@ -88,6 +88,61 @@ const MODULE: &str = concat!(
 );
 
 #[test]
+fn scalar_proof_preserves_variadic_record_shape_and_destination() {
+    let source = MODULE
+        .replace("%arg3: mem<all>", "..., %arg3: mem<all>")
+        .replace(
+            "    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]",
+            concat!(
+            "    (%v10, %v11) = va_start %v1, %v3, %v4\n",
+            "    (%v12, %v13) = va_arg.byval %v1, %v10, %v11, %v2 [size=16, align=8, hfa=2xf64]\n",
+            "    (%v7, %v8) = va_end %v1, %v12, %v13",
+        ),
+        );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    assert!(Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+        .args([&files.before, &files.after, &files.proof])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    // Canonical renumbering has changed IDs; locate the destination from the
+    // reconstructed instruction instead of assuming the producer's old IDs.
+    let access = outcome.module.functions[0].blocks[0]
+        .insts
+        .iter()
+        .find_map(|inst| match inst {
+            evocc_evoir::Inst::VaAccess(access)
+                if matches!(access.op, evocc_evoir::VariadicOp::ArgRecord { .. }) =>
+            {
+                Some(access)
+            }
+            _ => None,
+        })
+        .unwrap();
+    let evocc_evoir::VariadicOp::ArgRecord { destination, .. } = &access.op else {
+        unreachable!()
+    };
+    for forged in [
+        after.replace("hfa=2xf64", "hfa=4xf32"),
+        after.replace(", hfa=2xf64", ""),
+        after.replace("align=8, hfa=2xf64", "align=16, hfa=2xf64, abi_align=16"),
+        after.replace(
+            &format!(", %v{} [size=16", destination.id),
+            &format!(", %v{} [size=16", access.list.id),
+        ),
+    ] {
+        files.reject_forged_output(&outcome.certificate, &forged);
+    }
+}
+
+#[test]
 fn scalar_proof_cannot_change_quad_payload_format_or_hfa_role() {
     let source = include_str!("../../../tests/fixtures/floating-quad-exact.evoir")
         .replace(

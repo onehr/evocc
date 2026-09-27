@@ -11,6 +11,41 @@ use evocc_types::{AddressSpace, EvoIRType, ParamMark, RecordShape, Region};
 
 const MANIFEST: &str = include_str!("../../../tests/contracts/day8-section9-coverage.txt");
 
+#[test]
+fn every_instruction_variant_is_actually_instantiated_by_the_field_manifest() {
+    // An exhaustive match does not establish coverage if no fixture reaches
+    // some arms. Read only the top-level variants of this deliberately simple
+    // enum; fail closed if its declaration changes rather than silently treating
+    // an empty inventory as complete.
+    let declaration = include_str!("../src/lib.rs")
+        .split_once("pub enum Inst {\n")
+        .unwrap()
+        .1
+        .split_once("\n}")
+        .unwrap()
+        .0;
+    let variants: BTreeSet<_> = declaration
+        .lines()
+        .filter_map(|line| line.strip_prefix("    "))
+        .filter(|line| line.starts_with(|c: char| c.is_ascii_uppercase()))
+        .map(|line| line.split(['(', '{', ',']).next().unwrap().trim())
+        .collect();
+    assert!(
+        variants.len() > 40,
+        "instruction inventory was not recognized"
+    );
+    let instantiated: BTreeSet<_> = sentinel_instructions()
+        .iter()
+        .map(inst_schema)
+        .map(|schema| schema.strip_prefix("Inst.").unwrap())
+        .map(|schema| schema.split(['(', '.']).next().unwrap())
+        .collect();
+    assert_eq!(
+        instantiated, variants,
+        "unexercised instruction schema arms"
+    );
+}
+
 fn value(id: u32, ty: EvoIRType) -> Value {
     Value { id, ty }
 }
@@ -101,6 +136,56 @@ fn sentinel_types() -> Vec<EvoIRType> {
 
 fn sentinel_instructions() -> Vec<Inst> {
     vec![
+        Inst::Asm(sentinel_assembly()),
+        Inst::AsmGoto {
+            assembly: sentinel_assembly(),
+            labels: vec![evocc_evoir::AssemblyLabel {
+                name: "sentinel_label".into(),
+                edge: evocc_evoir::AssemblyEdge {
+                    target: 4242,
+                    arguments: vec![bits(2014), mem(2015), world(2016)],
+                },
+            }],
+            fallthrough: evocc_evoir::AssemblyEdge {
+                target: 4343,
+                arguments: vec![bits(2017), mem(2015), world(2016)],
+            },
+        },
+        Inst::VaAccess(sentinel_varargs(evocc_evoir::VariadicOp::Start)),
+        Inst::VaAccess(sentinel_varargs(evocc_evoir::VariadicOp::Arg(value(
+            2025,
+            EvoIRType::F128,
+        )))),
+        Inst::VaAccess(sentinel_varargs(evocc_evoir::VariadicOp::ArgRecord {
+            destination: pointer(2026),
+            shape: RecordShape {
+                size: 32,
+                align: 16,
+                vector: None,
+                floating: Some(evocc_types::FloatAggregate {
+                    kind: evocc_types::FloatKind::F64,
+                    count: 4,
+                    abi_align: 16,
+                }),
+            },
+        })),
+        Inst::VaAccess(sentinel_varargs(evocc_evoir::VariadicOp::End)),
+        Inst::BitOperation {
+            result: bits(2030),
+            operand: bits(2031),
+            op: evocc_evoir::BitOp::ByteSwap,
+        },
+        Inst::BlockAddr {
+            result: pointer(2040),
+            block: 4242,
+        },
+        Inst::ReturnAddress {
+            result: pointer(2041),
+        },
+        Inst::FrameAddress {
+            result: pointer(2042),
+            depth: 3,
+        },
         Inst::Floating(evocc_evoir::FloatingInst {
             result: value(1970, EvoIRType::F64),
             op: evocc_evoir::FloatingOp::Constant(0xfff8000000000123),
@@ -218,6 +303,7 @@ fn sentinel_instructions() -> Vec<Inst> {
         Inst::UbAssume(bits(1202), UbReason::RemainderByZero),
         Inst::UbAssume(bits(1203), UbReason::SignedOverflow),
         Inst::UbAssume(bits(1204), UbReason::InvalidShiftCount),
+        Inst::UbAssume(bits(1205), UbReason::BitBuiltinZeroOperand),
         Inst::SDiv(bits(1210), bits(1211), bits(1212)),
         Inst::UDiv(bits(1220), bits(1221), bits(1222)),
         Inst::ICmp(bits(1230), CmpOp::Eq, bits(1231), bits(1232)),
@@ -330,7 +416,7 @@ fn sentinel_instructions() -> Vec<Inst> {
             scale: 67,
         },
         Inst::Call {
-            arg_marks: Vec::new(),
+            arg_marks: vec![ParamMark::None, ParamMark::ByVal(RecordShape::new(24, 8))],
             results: vec![bits(1380), bits(1381)],
             callee: "sentinel_direct_callee".to_owned(),
             args: vec![bits(1382), bits(1383)],
@@ -340,7 +426,7 @@ fn sentinel_instructions() -> Vec<Inst> {
             world_out: world(1387),
         },
         Inst::IndirectCall {
-            arg_marks: Vec::new(),
+            arg_marks: vec![ParamMark::None, ParamMark::ByVal(RecordShape::new(16, 16))],
             results: vec![bits(1390), bits(1391)],
             callee: function_pointer(1392),
             args: vec![bits(1393), bits(1394)],
@@ -365,6 +451,78 @@ fn sentinel_instructions() -> Vec<Inst> {
             EvoIRType::Bits(9),
         ),
     ]
+}
+
+fn sentinel_assembly() -> evocc_evoir::InlineAssembly {
+    evocc_evoir::InlineAssembly {
+        template: "sentinel %0, %[input]".into(),
+        volatile: true,
+        outputs: vec![evocc_evoir::AssemblyOutput {
+            constraint: "+&r@x7".into(),
+            name: "output".into(),
+            ty: EvoIRType::Bits(37),
+            incoming: Some(bits(2010)),
+        }],
+        inputs: vec![evocc_evoir::AssemblyInput {
+            constraint: "r@x9".into(),
+            name: "input".into(),
+            value: bits(2011),
+        }],
+        clobbers: vec!["memory".into(), "cc".into()],
+        results: vec![bits(2014)],
+        mem_in: mem(2012),
+        world_in: world(2013),
+        mem_out: mem(2015),
+        world_out: world(2016),
+    }
+}
+
+fn sentinel_varargs(op: evocc_evoir::VariadicOp) -> evocc_evoir::VariadicAccess {
+    evocc_evoir::VariadicAccess {
+        op,
+        list: pointer(2020),
+        mem_in: mem(2021),
+        world_in: world(2022),
+        mem_out: mem(2023),
+        world_out: world(2024),
+    }
+}
+
+#[test]
+fn newly_covered_instructions_keep_every_operand_when_remapped() {
+    // These expectations are independent of both traversal implementations.
+    // In particular asm.goto repeats its output tokens on mutually exclusive
+    // edges; occurrence/order must not be reduced to a set of Value IDs.
+    let cases: &[(&[u32], &[u32])] = &[
+        (&[2010, 2011, 2012, 2013], &[2014, 2015, 2016]),
+        (
+            &[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2015, 2016],
+            &[2014, 2015, 2016],
+        ),
+        (&[2020, 2021, 2022], &[2023, 2024]),
+        (&[2020, 2021, 2022], &[2025, 2023, 2024]),
+        (&[2020, 2021, 2022, 2026], &[2023, 2024]),
+        (&[2020, 2021, 2022], &[2023, 2024]),
+        (&[2031], &[2030]),
+        (&[], &[2040]),
+        (&[], &[2041]),
+        (&[], &[2042]),
+    ];
+    for (mut instruction, &(uses, results)) in sentinel_instructions().into_iter().zip(cases) {
+        let ids = |values: Vec<&Value>| values.into_iter().map(|v| v.id).collect::<Vec<_>>();
+        assert_eq!(ids(evocc_evoir::inst_uses(&instruction)), uses);
+        assert_eq!(ids(evocc_evoir::inst_results(&instruction)), results);
+        let aliases = evocc_evoir::inst_uses(&instruction)
+            .into_iter()
+            .map(|v| (v.id, value(v.id + 10_000, v.ty.clone())))
+            .collect();
+        evocc_evoir::remap_inst_uses(&mut instruction, &aliases);
+        assert_eq!(
+            ids(evocc_evoir::inst_uses(&instruction)),
+            uses.iter().map(|id| id + 10_000).collect::<Vec<_>>()
+        );
+        assert_eq!(ids(evocc_evoir::inst_results(&instruction)), results);
+    }
 }
 
 fn sentinel_module() -> Module {
@@ -408,8 +566,34 @@ fn sentinel_module() -> Module {
             visibility: GlobalVisibility::Protected,
             linkage: evocc_evoir::Linkage::Strong,
         }],
-        extern_objects: Vec::new(),
-        declares: Vec::new(),
+        extern_objects: vec![evocc_evoir::ExternalObject {
+            visibility: GlobalVisibility::Hidden,
+            linkage: evocc_evoir::Linkage::Weak,
+            symbol: "sentinel_external".into(),
+            size: Some(71),
+            align: 32,
+        }],
+        declares: vec![evocc_evoir::FunctionDeclaration {
+            visibility: GlobalVisibility::Protected,
+            linkage: evocc_evoir::Linkage::Weak,
+            name: "sentinel_decl".into(),
+            params: vec![
+                EvoIRType::Ptr(AddressSpace::Generic),
+                EvoIRType::Mem(Region::All),
+                EvoIRType::World,
+            ],
+            param_marks: vec![
+                ParamMark::ByVal(RecordShape::new(24, 8)),
+                ParamMark::None,
+                ParamMark::None,
+            ],
+            variadic: true,
+            ret_tys: vec![
+                EvoIRType::Bits(32),
+                EvoIRType::Mem(Region::All),
+                EvoIRType::World,
+            ],
+        }],
         globals: vec![
             GlobalObject {
                 read_only: false,
@@ -467,6 +651,28 @@ fn sentinel_module() -> Module {
                     addend: -3,
                     exposed: true,
                     difference: None,
+                }],
+            },
+            GlobalObject {
+                read_only: true,
+                section: None,
+                symbol: "__evocc.compound.7005".into(),
+                origin: 7005,
+                kind: GlobalKind::CompoundLiteral,
+                linkage: evocc_evoir::Linkage::Strong,
+                visibility: GlobalVisibility::Internal,
+                layout: AccessLayout::new(4, 4),
+                bytes: vec![0; 4],
+                initialized: vec![true; 4],
+                relocs: vec![evocc_evoir::Relocation {
+                    offset: 0,
+                    symbol: "sentinel_function^b4242".into(),
+                    addend: -13,
+                    exposed: false,
+                    difference: Some(evocc_evoir::BlockDifference {
+                        base: "sentinel_function^entry".into(),
+                        bits: 32,
+                    }),
                 }],
             },
         ],
@@ -575,8 +781,31 @@ fn inst_schema(inst: &Inst) -> &'static str {
             "Inst.BitOperation(result,operand,op)"
         }
         Inst::VaAccess(access) => {
-            let _ = access;
-            "Inst.VaAccess(access)"
+            let evocc_evoir::VariadicAccess {
+                op,
+                list,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+            } = access;
+            let _ = (list, mem_in, world_in, mem_out, world_out);
+            match op {
+                evocc_evoir::VariadicOp::Start => {
+                    "Inst.VaAccess.Start(list,mem_in,world_in,mem_out,world_out)"
+                }
+                evocc_evoir::VariadicOp::Arg(result) => {
+                    let _ = result;
+                    "Inst.VaAccess.Arg(result,list,mem_in,world_in,mem_out,world_out)"
+                }
+                evocc_evoir::VariadicOp::ArgRecord { destination, shape } => {
+                    let _ = (destination, shape);
+                    "Inst.VaAccess.ArgRecord(destination,shape,list,mem_in,world_in,mem_out,world_out)"
+                }
+                evocc_evoir::VariadicOp::End => {
+                    "Inst.VaAccess.End(list,mem_in,world_in,mem_out,world_out)"
+                }
+            }
         }
         Inst::Asm(assembly) => {
             let _ = assembly;
@@ -886,6 +1115,7 @@ fn inst_schema(inst: &Inst) -> &'static str {
             "Inst.PtrOffset(result,base,index,direction,signedness,scale)"
         }
         Inst::Call {
+            arg_marks,
             results,
             callee,
             args,
@@ -893,12 +1123,14 @@ fn inst_schema(inst: &Inst) -> &'static str {
             world_in,
             mem_out,
             world_out,
-            ..
         } => {
-            let _ = (results, callee, args, mem_in, world_in, mem_out, world_out);
-            "Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)"
+            let _ = (
+                results, callee, args, arg_marks, mem_in, world_in, mem_out, world_out,
+            );
+            "Inst.Call(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)"
         }
         Inst::IndirectCall {
+            arg_marks,
             results,
             callee,
             args,
@@ -906,10 +1138,11 @@ fn inst_schema(inst: &Inst) -> &'static str {
             world_in,
             mem_out,
             world_out,
-            ..
         } => {
-            let _ = (results, callee, args, mem_in, world_in, mem_out, world_out);
-            "Inst.IndirectCall(results,callee,args,mem_in,world_in,mem_out,world_out)"
+            let _ = (
+                results, callee, args, arg_marks, mem_in, world_in, mem_out, world_out,
+            );
+            "Inst.IndirectCall(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)"
         }
         Inst::SExt(result, source, target_ty) => {
             let _ = (result, source, target_ty);
@@ -976,10 +1209,44 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         declares,
         functions,
     } = module;
-    let _ = (assembly, extern_objects, declares, aliases);
+    let _ = assembly;
     let mut keys = BTreeSet::from([
         "Module(assembly,globals,extern_objects,declares,aliases,functions,tls,lifecycle)",
     ]);
+    for evocc_evoir::ExternalObject {
+        visibility,
+        linkage,
+        symbol,
+        size,
+        align,
+    } in extern_objects
+    {
+        let _ = (visibility, linkage, symbol, size, align);
+        keys.insert("ExternalObject(visibility,linkage,symbol,size,align)");
+    }
+    for evocc_evoir::FunctionDeclaration {
+        visibility,
+        linkage,
+        name,
+        params,
+        param_marks,
+        variadic,
+        ret_tys,
+    } in declares
+    {
+        let _ = (
+            visibility,
+            linkage,
+            name,
+            params,
+            param_marks,
+            variadic,
+            ret_tys,
+        );
+        keys.insert(
+            "FunctionDeclaration(visibility,linkage,name,params,param_marks,variadic,ret_tys)",
+        );
+    }
     for evocc_evoir::TlsSymbol { symbol, model } in tls {
         let _ = (symbol, model);
         keys.insert("TlsSymbol(symbol,model)");
@@ -1035,6 +1302,21 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         );
         keys.insert("GlobalObject.read_only");
         keys.insert("GlobalObject.section");
+        for evocc_evoir::Relocation {
+            offset,
+            symbol,
+            addend,
+            exposed,
+            difference,
+        } in relocs
+        {
+            let _ = (offset, symbol, addend, exposed);
+            keys.insert("Relocation(offset,symbol,addend,exposed,difference)");
+            if let Some(evocc_evoir::BlockDifference { base, bits }) = difference {
+                let _ = (base, bits);
+                keys.insert("BlockDifference(base,bits)");
+            }
+        }
         let AccessLayout {
             size_bytes,
             align_bytes,
@@ -1135,10 +1417,71 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             }
             for inst in insts.iter().chain(std::iter::once(terminator)) {
                 keys.insert(inst_schema(inst));
+                match inst {
+                    Inst::Asm(assembly) => assembly_schema(assembly, &mut keys),
+                    Inst::AsmGoto {
+                        assembly,
+                        labels,
+                        fallthrough,
+                    } => {
+                        assembly_schema(assembly, &mut keys);
+                        for evocc_evoir::AssemblyLabel { name, edge } in labels {
+                            let _ = name;
+                            keys.insert("AssemblyLabel(name,edge)");
+                            assembly_edge_schema(edge, &mut keys);
+                        }
+                        assembly_edge_schema(fallthrough, &mut keys);
+                    }
+                    _ => {}
+                }
             }
         }
     }
     keys
+}
+
+fn assembly_edge_schema(edge: &evocc_evoir::AssemblyEdge, keys: &mut BTreeSet<&'static str>) {
+    let evocc_evoir::AssemblyEdge { target, arguments } = edge;
+    let _ = (target, arguments);
+    keys.insert("AssemblyEdge(target,arguments)");
+}
+
+fn assembly_schema(assembly: &evocc_evoir::InlineAssembly, keys: &mut BTreeSet<&'static str>) {
+    let evocc_evoir::InlineAssembly {
+        template,
+        volatile,
+        outputs,
+        inputs,
+        clobbers,
+        results,
+        mem_in,
+        world_in,
+        mem_out,
+        world_out,
+    } = assembly;
+    let _ = (
+        template, volatile, clobbers, results, mem_in, world_in, mem_out, world_out,
+    );
+    keys.insert("InlineAssembly(template,volatile,outputs,inputs,clobbers,results,mem_in,world_in,mem_out,world_out)");
+    for evocc_evoir::AssemblyOutput {
+        constraint,
+        name,
+        ty,
+        incoming,
+    } in outputs
+    {
+        let _ = (constraint, name, ty, incoming);
+        keys.insert("AssemblyOutput(constraint,name,ty,incoming)");
+    }
+    for evocc_evoir::AssemblyInput {
+        constraint,
+        name,
+        value,
+    } in inputs
+    {
+        let _ = (constraint, name, value);
+        keys.insert("AssemblyInput(constraint,name,value)");
+    }
 }
 
 fn value_schema(value: &Value) -> &'static str {
@@ -1171,6 +1514,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         CmpOp::ULe,
     ];
     let ub_reasons = [
+        UbReason::BitBuiltinZeroOperand,
         UbReason::DivisionByZero,
         UbReason::RemainderByZero,
         UbReason::SignedOverflow,

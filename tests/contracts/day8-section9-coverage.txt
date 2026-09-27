@@ -1,6 +1,28 @@
 # Day 8 Section 9 field-completeness manifest.
 # Format: exhaustive-schema-key|non-default canonical-byte sentinel
 # The Rust test must enumerate exactly this key set and find every sentinel.
+# The renderer fixture is deliberately not a valid executable module. It tests
+# field retention, not interpreter semantics or complete language support.
+ExternalObject(visibility,linkage,symbol,size,align)|extern @sentinel_external size=71 align=32 visibility=hidden linkage=weak
+FunctionDeclaration(visibility,linkage,name,params,param_marks,variadic,ret_tys)|declare @sentinel_decl(ptr<generic> byval(24, 8), ..., mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default visibility=protected linkage=weak
+Relocation(offset,symbol,addend,exposed,difference)|(8, @sentinel_file, -3, exposed)
+BlockDifference(base,bits)|(0, @sentinel_function^b4242, -13, diff=@sentinel_function^entry, bits=32)
+InlineAssembly(template,volatile,outputs,inputs,clobbers,results,mem_in,world_in,mem_out,world_out)|(%v2014, %v2015, %v2016) = asm volatile "sentinel %0, %[input]" %v2012, %v2013 outputs [("+&r@x7", "output", bits<37>, %v2010)] inputs [("r@x9", "input", %v2011)] clobbers ["memory", "cc"]
+AssemblyOutput(constraint,name,ty,incoming)|("+&r@x7", "output", bits<37>, %v2010)
+AssemblyInput(constraint,name,value)|("r@x9", "input", %v2011)
+AssemblyLabel(name,edge)|("sentinel_label", ^b4242(%v2014, %v2015, %v2016))
+AssemblyEdge(target,arguments)|fallthrough ^b4343(%v2017, %v2015, %v2016)
+Inst.Asm(assembly)|(%v2014, %v2015, %v2016) = asm volatile "sentinel %0, %[input]" %v2012, %v2013 outputs [("+&r@x7", "output", bits<37>, %v2010)] inputs [("r@x9", "input", %v2011)] clobbers ["memory", "cc"]
+Inst.AsmGoto(assembly,labels,fallthrough)|(%v2014, %v2015, %v2016) = asm.goto volatile "sentinel %0, %[input]" %v2012, %v2013 outputs [("+&r@x7", "output", bits<37>, %v2010)] inputs [("r@x9", "input", %v2011)] clobbers ["memory", "cc"] labels [("sentinel_label", ^b4242(%v2014, %v2015, %v2016))] fallthrough ^b4343(%v2017, %v2015, %v2016)
+Inst.VaAccess.Start(list,mem_in,world_in,mem_out,world_out)|(%v2023, %v2024) = va_start %v2020, %v2021, %v2022
+Inst.VaAccess.Arg(result,list,mem_in,world_in,mem_out,world_out)|(%v2025, %v2023, %v2024) = va_arg.f128 %v2020, %v2021, %v2022
+Inst.VaAccess.ArgRecord(destination,shape,list,mem_in,world_in,mem_out,world_out)|(%v2023, %v2024) = va_arg.byval %v2020, %v2021, %v2022, %v2026 [size=32, align=16, hfa=4xf64, abi_align=16]
+Inst.VaAccess.End(list,mem_in,world_in,mem_out,world_out)|(%v2023, %v2024) = va_end %v2020, %v2021, %v2022
+Inst.BitOperation(result,operand,op)|%v2030 = bswap.bits<37> %v2031
+Inst.BlockAddr(result,block)|%v2040 = block_addr ^b4242 : ptr<stack>
+Inst.ReturnAddress(result)|%v2041 = return_address : ptr<stack>
+Inst.FrameAddress(result,depth)|%v2042 = frame_address depth=3 : ptr<stack>
+UbReason.BitBuiltinZeroOperand|ub.assume.bit_builtin_zero_operand %v1205
 Inst.Atomic.Load(result,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1920, %v1924, %v1925) = atomic.load consume volatile %v1922, %v1923, %v1921 : bits<32>
 Inst.Atomic.Rmw(result,operation,value,expected,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1960, %v1966, %v1967) = atomic.rmw.cmpxchg acq_rel volatile %v1964, %v1965, %v1963, %v1961, %v1962 : bits<16>
 Inst.Atomic.Store(value,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1934, %v1935) = atomic.store seq_cst %v1932, %v1933, %v1931, %v1930
@@ -54,7 +76,7 @@ Inst.Alloca(result,mem_in,world_in,mem_out,world_out,origin,layout)|(%v1310, %v1
 Inst.DynamicAlloca(result,mem_in,world_in,mem_out,world_out,origin,size,align)|(%v1900, %v1903, %v1904) = alloca.dynamic %v1901, %v1902, %v1905 [origin=1901901, align=32]
 Inst.And(result,lhs,rhs)|%v1100 = and.bits<37> %v1101, %v1102
 Inst.Br(target,args)|br ^b4242(%v1250, %v1251)
-Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383, %v1384, %v1385)
+Inst.Call(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383 byval(24, 8), %v1384, %v1385)
 Inst.CondBr(condition,true_target,true_args,false_target,false_args)|cond_br %v1260, ^b4242(%v1261), ^b4343(%v1262)
 Inst.IndirectBr(target,edges)|br.indirect %v1252 [^b4242(%v1253, %v1254, %v1255)]
 Inst.Const(result,immediate)|%v1000 = const.bits<37> 987654321
@@ -63,7 +85,7 @@ Inst.DivisorNonZero(result,divisor)|%v1160 = divisor_nonzero %v1161
 Inst.FuncAddr(result,symbol)|%v1300 = func_addr @sentinel_function_target : fnptr<(bits<37>, mem<all>, world)->(bits<37>, mem<all>, world)>
 Inst.GlobalAddr(result,symbol)|%v1290 = global_addr @sentinel_global_target : ptr<global>
 Inst.ICmp(result,operation,lhs,rhs)|%v1230 = icmp.eq %v1231, %v1232
-Inst.IndirectCall(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1390, %v1391, %v1397, %v1398) = call %v1392(%v1393, %v1394, %v1395, %v1396)
+Inst.IndirectCall(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)|(%v1390, %v1391, %v1397, %v1398) = call %v1392(%v1393, %v1394 byval(16, 16), %v1395, %v1396)
 Inst.LShr(result,lhs,rhs)|%v1090 = lshr.bits<37> %v1091, %v1092
 Inst.LifetimeEnd(mem_in,world_in,pointer,mem_out,world_out)|(%v1323, %v1324) = lifetime.end %v1320, %v1321, %v1322
 Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile)|(%v1350, %v1354, %v1355) = load volatile %v1352, %v1353, %v1351 : bits<37>

@@ -1,0 +1,66 @@
+T03e: bounded EvoIR text/field/proof audit, 2026-09-28
+
+Base: 703661d; EvoIR 1.9.114 / EvoMIR 0.50. This is an erratum and
+verification repair, not a new executable capability or full T03 closure.
+
+RED
+  section9_completeness.rs instantiated only 52 of the 59 current Inst
+  variants despite its exhaustive schema match. Asm, AsmGoto, BitOperation,
+  BlockAddr, FrameAddress, ReturnAddress and VaAccess were absent. A new
+  independent source-enum inventory test fails on that exact set.
+  Call/IndirectCall argument marks were hidden by `..`; external records,
+  relative relocations and nested assembly records lacked structural coverage.
+  Two new main-grammar tests fail: approved const.f128 is missing, and the
+  ptr.offset operand production is erroneously attached to ptr.from_int.
+
+Repair and clause mapping
+  Section 9 field sentinel: instantiate every current variant, including all
+  five VaAccess variants, nondefault assembly outputs/inputs/edges, byval call
+  marks, extern/declaration records and relative relocation metadata. Nested
+  record destructuring is exhaustive. The manifest now checks 143/143 keys.
+  The sentinel intentionally is not an executable validated module; it checks
+  serialization fields, not instruction execution or arbitrary semantic values.
+  Section 2.4 / operand traversal: ten added instruction representatives have
+  independently listed operand/result IDs and checked operand remapping. The
+  repeated tokens on mutually exclusive assembly edges remain repeated.
+  Sections 8/11 / Appendix D byval varargs: a valid scalar proof preserves a
+  va_arg record. Four independently mutated, well-typed canonical outputs have
+  recomputed output digests; checker exit 3 rejects changed HFA element/count,
+  erased HFA, changed ABI alignment and changed destination object address.
+  Section 9.3: integrate the existing approved f128, dynamic alloca, record
+  varargs, atomic RMW, frame depth, relocation, declaration/variadic and call
+  marker spellings. Repair ptr.offset and stale assembly-gap/volatile text.
+  These are Appendix D integrations; no new source admission or canonical
+  byte change. This does not assert the whole grammar is complete.
+
+GREEN (existing target/frontend, two jobs, --locked --offline)
+  cargo test -p evocc-evoir --test section9_completeness
+    --test spec_grammar_contract: 5 PASS.
+  cargo test -p evocc-proofcheck --test copy_is_opaque: 17 PASS,
+    including the new positive replay and four semantic forgery rejections.
+  tools/gate-changed.sh 703661d --locked --offline: exit 0,
+    1644 PASS / 0 FAIL / 4 historical ignored, 211 result groups; eight crates.
+  The final expanded sentinel was rerun after that gate, with both selected
+    suites and all 17 checker tests; Clippy for both crates with --tests and
+    -D warnings, cargo fmt --all -- --check, git diff --check all exit 0.
+  tools/check-textual-grammar.py: 54/54 shapes, no differences. This heuristic
+    is NOT evidence of complete grammar/semantic coverage.
+
+Raw logs under .build/floating-targeted/ (SHA256):
+  section9-inventory-red-20260928.log
+    66c225a2fba6dad2d48cba22df8387703a518d6ef7cc0f7326f23e6bf73c195b
+  spec-grammar-red-20260928.log
+    2d937e4adcc5932c22f63ed08c8c6243cda94e83b971758871735fe19c8a878c
+  section9-fields-final-20260928.log
+    18f2419d9426dff17d79a44f58883bb34f59234fd689e35d464bf1405e9d18f6
+  section9-varargs-proof-20260928.log
+    323719ee875f182cebebd2f97e45f3fc87a1d8e137ed1d77a1a59f62567b32c6
+  section9-audit-gate-20260928.log
+    41572eb751b83485030d43c0ce55f344afd67c01762d8c2b294b1dba9a04e405
+Current corrected spec SHA256:
+  575d1612cffa52c994a973a1c05d486769d3c906e97f1fc0d8787ca731cd5a49
+
+No production compiler/checker defect was demonstrated by these mutations.
+No kernel objects, live build driver, compiler executable, source population,
+language decision or application verdict was changed. Full T03 and final
+kernel/application acceptance retain their separate pending requirements.
