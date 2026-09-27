@@ -12,6 +12,31 @@ their sources, flags, seeds, workloads, or output tolerances.
 
 ## Current subject and what is already done
 
+### September 27 implementation refresh
+
+The original handoff below is historical. Current clauses are EvoIR **1.9.105**
+and EvoMIR **0.44**; their SHA-256 values are respectively
+`717e99625a1e3d8219de6d1728da9a168568f935d8053ca40911ff7d59e14ca1` and
+`75d481e3d36cd8ad1409d204dcc4d1e3add10c4b7916baa7d6a3f12427b6f9c0`.
+Compiler implementation commit `ab50a13` adds bounded private integer-memory
+facts through the existing C-HIR inliner; diagnostic commit `a82fde2` changes
+no compiler code. The checked debug executable is
+`eee2c03bc045d181b2f5aefb4f6047b90a7a7728f6fc90373bb1a9a228d0a9d8`.
+Do not substitute this identity for the retained release used by old campaigns.
+
+That repair removes all eight original bitmap compile-time assertion references;
+the resulting module and its reference each execute 390,447 checks successfully
+on a matching GCC Image. It **does not** broaden source ICE classification,
+resolve the nonliteral-strlen question below, or establish a new uniform kernel
+composition. The 7,002-object uniform attempt ended INCOMPLETE before boot;
+producer-ordering and bitmap fixes require fresh composition verification.
+K13/K14 and the final application campaign remain separate, not inherited PASS.
+All semantic questions below remain questions: the implementation refresh does
+not authorize new strict-fenv, binary128, atomic or dialect behavior. See the
+current [task ledger](../../TODO.md) for exact closed and remaining scopes.
+
+### Original September 21 handoff
+
 The working specifications at handoff are EvoIR **1.9.104** and EvoMIR **0.34**,
 on HEAD `9f571cac0e6be6d27915aa82b4c8866ae84eaf9a` with substantial working-tree
 changes. HEAD alone does not identify the implementation. Use the supplied current
@@ -164,9 +189,36 @@ specific EvoCC contract or a precisely bounded refusal, with compatibility costs
   NUL, cycles, invalid pointers and unevaluated contexts. This is not authority
   to fold arbitrary object reads or delete the existing call-effect regression.
 
-General _Atomic, generic aggregate atomics and additional __atomic RMW interfaces
-remain a separate scope from the implemented legacy __sync operations. Inventory
-actual benchmark demand; do not add an unbounded concurrency project to this report.
+## D. Bounded additional atomic contracts
+
+The inventory is now complete; do not repeat it as though it were implementation.
+`tests/fixtures/atomic-scope-boundaries.{c,out}` separates TinyCC's additional
+bounds-checking/C11-atomic configuration and zlib's optional dynamic CRC table
+from their current measured lanes. The three cases have 12 fixed-oracle controls
+and nine current CLI refusals. No additional target-object blocker was found in
+the current lanes; none of this establishes support for the requested interfaces.
+Keep TODO L11a/L11b/L11c distinct from supported scalar load/store and legacy
+`__sync`, and from a general-purpose concurrency model checker.
+
+Provide finite normative deltas and small native/interpreter tests for:
+
+* General `_Atomic` objects: initialization, implicit access/update order,
+  qualifiers, representation/alignment, lock-free widths and library fallback.
+  State exactly which ordinary C operators become atomic operations; do not
+  drop the qualifier after layout or treat every update as separate load/store.
+* Additional `__atomic` RMW/exchange/CAS: success/failure orders, invalid constant
+  orders, dynamic-order evaluation, weak/strong semantics, expected-value writes,
+  signed arithmetic and pointer scaling/provenance. Explain where GNU builtins
+  and C11 generic interfaces differ instead of mechanically aliasing their names.
+* Generic aggregate accesses: admitted sizes/alignment, representation/padding,
+  initializedness and pointer provenance, helper ABI and runtime dependency.
+  Specify comparison behavior and refusal boundaries without making uninitialized
+  padding zero or fabricating provenance from numeric bytes.
+
+For each, preserve explicit order/effect metadata through text, proof rebuilding
+and emission; give the shared-memory claim boundary of both interpreters.
+Require crossed-compiler native controls plus publication/SC/CAS cases appropriate
+to the admitted scope. A single-thread value test is not concurrent correctness.
 
 ## Evidence and deliverables
 

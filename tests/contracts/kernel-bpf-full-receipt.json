@@ -12,6 +12,20 @@
     "nativeControlsPassed": 15,
     "queryRegressionsPassed": 81,
     "changedGate": {"passed": 1841, "failed": 0, "ignored": 3, "clippy": "PASS", "fmt": "PASS"},
+    "healthCheckpoint": {
+      "workspacePassed": 2718,
+      "workspaceFailed": 0,
+      "workspaceIgnored": 4,
+      "clippy": "PASS",
+      "fmt": "PASS",
+      "pythonPassed": 504,
+      "ruff": "PASS",
+      "grammarShapeDifferences": 0,
+      "frozenLayoutCasesPassed": 150,
+      "isolatedOfflineTestsPassed": 13,
+      "evidence": "tests/fixtures/compiler-health-20260927.out",
+      "scope": "Post-repair checkpoint, not final TODO or kernel acceptance"
+    },
     "modulePair": {
       "referencePassed": 390447,
       "subjectPassed": 390447,

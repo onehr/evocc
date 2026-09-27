@@ -1,0 +1,42 @@
+2026-09-27 compiler-health checkpoint after ab50a13; not final TODO closure.
+
+Compiler code: ab50a13. Following a82fde2 adds a diagnostic-only C fixture.
+Debug compiler SHA256:
+eee2c03bc045d181b2f5aefb4f6047b90a7a7728f6fc90373bb1a9a228d0a9d8
+The retained historical release is not overwritten or credited with these fixes.
+
+CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2:
+  cargo test --workspace --no-fail-fast --locked --offline
+    exit 0; 2718 PASS / 0 FAIL / 4 historical ignored, 331 result groups.
+  cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+    exit 0.
+  cargo fmt --all -- --check
+    exit 0.
+python3 -m unittest discover -s tools/k1/tests
+  251 PASS.
+python3 -m unittest discover -s tools/ladder/tests
+  253 PASS. These tests use isolated fixture receipts, not a new real campaign.
+ruff check tools tests/acceptance
+  PASS.
+python3 tools/check-textual-grammar.py
+  53 renderer / 53 specified instruction shapes, zero differences. This tool
+  does not prove complete grammar or semantic specification coverage.
+
+Fresh cargo build --locked --offline -p evocc-parser --example day5_layout_probe
+uses the existing target. day5-layout-subject.py observations are checked by
+day5-layout-corpus.py compare-subject against both unchanged frozen manifests:
+  day5-layout-cases.json: 128/128, zero mismatch.
+  layout-attributed-cases.json, C30_LAYOUT_CASE_SET=attributed: 22/22, zero mismatch.
+The frozen oracle consensus is reused; no fresh oracle-layout measurement is claimed.
+
+An independently empty mktemp CARGO_HOME, vendored sources, existing absolute
+target path, --locked --offline, two build jobs and serial tests:
+  cargo test -p evocc-eqopt -p evocc-lower -p evocc-proofcheck
+    --test day8_persistent_state_contract --test day6_g1_equivalence_red
+    --test day8_corpus_replay --test day8_proof_contract -- --test-threads=1
+  13 PASS / 0 FAIL / 0 ignored. No workspace/source clone or network fetch.
+
+Raw logs: .build/floating-targeted/bitmap-constants-20260927/
+  workspace.log, python-health.log, layout-health.log, offline-health.log.
+All commands exited. This checkpoint does not resolve outstanding semantics,
+old runtime failures, T04 composition, K13/K14 or B10's final campaigns.

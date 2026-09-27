@@ -52,6 +52,12 @@ This is a targeted module comparison, **not** a uniform new kernel or K13/K14.
 The payload is only 2.54 MiB and reuses the 64 MiB snapshot scratch disk.
 [Exact repair and module provenance](../../tests/fixtures/bitmap-constant-memory.out).
 
+The subsequent [whole-workspace checkpoint](../../tests/fixtures/compiler-health-20260927.out)
+also passes: 2,718 tests, zero failures, four historical ignored; Clippy/fmt,
+504 Python tests, Ruff, 53 instruction shapes, 150 frozen layout observations
+and 13 isolated offline replays. No new source/workspace/runtime copy is made.
+This health result is not a full-kernel composition or K7/KUnit result.
+
 ### Bounded ublk stalled-task observation — 2026-09-27
 
 The separate [ublk wait-loop observer](../../tests/fixtures/ublk-blocked-observer.out)

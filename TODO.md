@@ -939,6 +939,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   `python3 tools/render-status.py`, update README/this tracker and commit the
   bounded result. Passing this gate alone does not close B10/K13/K14.
   [Workflow](README.md#layout-and-development).
+  September 27's [post-repair checkpoint](tests/fixtures/compiler-health-20260927.out)
+  passes **2718 workspace tests**, Clippy/fmt, **504 Python tests**, Ruff,
+  53/53 grammar shapes, both frozen layout corpora (**128 + 22**) and **13**
+  isolated offline replays. Four historical Rust ignores remain explicit.
+  This verifies current code, not a last-semantic-change or final campaign claim;
+  T05 stays OPEN until its remaining-task dependencies are actually closed.
 
   - [x] **T05a — Preserve multiline benchmark command failures**.
     Six RED assertions showed that trailing newlines/comments detached log
