@@ -4,6 +4,17 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+September 27's final musl replay **`20260927T110110Z`** attempts all **1,339**
+units, assembles **1,271** with exact symbol parity, and retains all 1,271 in
+two complete libc-test runs (482 runtime-result slots each). Both have exactly
+the reference's 17 failing cases, zero additional failures and zero replaced
+objects; the mandatory final replay exits normally. The original pthread
+regressions (B08c) and finite strict-FP profile (L01) now close. The application
+lane remains **INCOMPLETE**: 68 floating-complex E3049 refusals (L04), 17 shared
+failures (B08d), a static-only loader scope and explicit option omissions (B08b).
+This is a mixed-library result, not all-EvoCC musl or all-tests PASS.
+[Repair and exact candidate identity](../../tests/fixtures/assembly-exclusive-window.out).
+
 September 27's [approved scalar FP assembly extension](../../tests/fixtures/floating-assembly.out)
 closes B08a in EvoIR 1.9.114 / EvoMIR 0.50. It reuses the SIMD operand and
 allocation path for exact f32/f64 transport, without inventing an interpreter
@@ -2496,3 +2507,23 @@ zero FAIL, one upstream IGNORE**. Four disabled JSON-patch fixtures retain their
 skip notices, and Unity remains reference-built. This receipt predates the
 no-alias driver change above; identities are not conflated.
 [Regression and replay record](../../tests/fixtures/benchmark-relink-boundaries.out).
+
+## 2026-09-27: musl reference-failure ledger
+
+The fresh reference build in `.evidence/ladder/musl/20260927T104940Z` has
+**17 failing cases**. `baseline-REPORT` retains the actual diagnostics; they
+are not converted to PASS when an EvoCC mixed build reproduces them.
+
+| Cases | Count | Observed reason / remaining work |
+| --- | ---: | --- |
+| `api/main` | 1 | `api/unistd.c` requires `_PC_TIMESTAMP_RESOLUTION` and `_SC_XOPEN_UUCP`, absent from the pinned musl headers; its missing object prevents linking the test. Reconcile the pinned libc-test/API version, not compiler acceptance. |
+| `dlopen`, `tls_align`, `tls_align_dlopen`, `tls_init_dlopen`, `tls_get_new-dtv` | 5 | This lane configures `--disable-shared` and links statically. Logs explicitly report dynamic loading unsupported or attempted static link of a DSO; some tests continue after failed lookup and segfault. Genuine DSO/TLS validation needs a separate shared-loader build. |
+| `strptime` static/default | 2 | `%s` gives the wrong parsed date and `%z` rejects `-06` in the reference too. Source/library compatibility diagnosis remains open. |
+| `strtold` static/default | 2 | Two exact hexadecimal binary128 rounding expectations differ in the reference. Retain expected and actual bits; a library/compiler/root-cause attribution is not yet established. |
+| `wordexp` static/default | 2 | Reference results expose positional arguments and numerous shell syntax/error differences. The log identifies shell behavior; it does not by itself establish which library/shell contract is wrong. |
+| `powf` | 1 | Upward `powf(max_finite, 1)` reports INEXACT/OVERFLOW where the test expects no flags. Other `X`-prefixed math observations remain upstream expected-failure records, not extra compiler failures. |
+| `daemon-failure` static/default | 2 | Original five-second supervisor times out in the reference. Root cause remains unassigned; this is not a timing waiver. |
+| `pthread_atfork-errno-clobber` static/default | 2 | `fork` succeeds despite the test's resource-limit setup; the expected failure is not induced. The privilege/limit/environment cause still needs a focused probe. |
+
+These counts describe the recorded reference failures, not all possible libc
+defects. B08d tracks closure; no test source, assertion, or watchdog was changed.

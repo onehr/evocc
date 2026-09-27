@@ -1,24 +1,26 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T092953.274772Z",
-  "subject": "3343220b0aeb35a5860b97f19558cb076be459fd",
+  "run": "20260927T110109.864626Z",
+  "subject": "d0bd6d297d7114e0d1d72cb9f836080d8e36485b",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc",
-  "driverSha256": "f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68",
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-asm-ssa",
+  "driverSha256": "e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "cjson",
+    "musl",
     "--evocc",
-    "/Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc",
+    "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-asm-ssa",
     "--jobs",
-    "2"
+    "2",
+    "--budget",
+    "40"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "cjson"
+    "musl"
   ],
-  "status": "PASS",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -995,16 +997,16 @@
       "note": "libc-test relative to baseline failures",
       "outcomes": {},
       "refusals": {
-        "other": 1339
+        "E3049": 68
       },
       "baselineFailures": 17,
       "failingUnits": [],
       "total": 1339,
-      "passed": 0,
+      "passed": 1271,
       "kind": "units",
-      "compiled": 0,
+      "compiled": 1271,
       "excluded": 0,
-      "testVerdict": "not-run",
+      "testVerdict": "libc-test-clean",
       "adjustments": {
         "sourcePageBreaksStripped": [],
         "noreturnSpecifiersRemoved": [],
@@ -1014,42 +1016,38 @@
         "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
         "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
       },
-      "status": "FAIL",
-      "run": "20260919T231421Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260919T231421Z",
+      "status": "INCOMPLETE",
+      "run": "20260927T110110Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260927T110110Z",
       "receipt": "tests/contracts/ladder-musl-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/musl.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-asm-ssa",
         "--jobs",
         "2",
         "--budget",
-        "45"
+        "40"
       ],
       "exitCode": 0,
-      "seconds": 62.4,
+      "seconds": 733.3,
       "previous": {
         "rung": "E7",
         "note": "libc-test relative to baseline failures",
         "outcomes": {},
         "refusals": {
-          "E3049": 172,
-          "E1006": 84,
-          "E3101": 45,
-          "E2001": 11,
-          "E3050": 1
+          "E3049": 68
         },
         "baselineFailures": 17,
         "failingUnits": [],
         "total": 1339,
-        "passed": 1026,
+        "passed": 0,
         "kind": "units",
-        "compiled": 1026,
+        "compiled": 1271,
         "excluded": 0,
-        "testVerdict": "libc-test-clean",
+        "testVerdict": "final-replay-failed",
         "adjustments": {
           "sourcePageBreaksStripped": [],
           "noreturnSpecifiersRemoved": [],
@@ -1059,14 +1057,14 @@
           "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
           "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
         },
-        "status": "INCOMPLETE",
-        "run": "20260915T214246Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260915T214246Z"
+        "status": "FAIL",
+        "run": "20260927T104940Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260927T104940Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20260927T110109.864626Z",
+        "subject": "d0bd6d297d7114e0d1d72cb9f836080d8e36485b",
+        "driverSha256": "e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5"
       }
     },
     "kernel": {

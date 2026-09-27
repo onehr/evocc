@@ -689,14 +689,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   regressions, Clippy and fmt pass. B10's final unified campaign remains separate.
   [Receipt](tests/contracts/ladder-jq-receipt.json).
 
-- [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2, after L01.
-  The historical full receipt is 0/1,339 due to `-frounding-math`; it is not a
-  new measurement of the now-implemented strict-FP compiler. The eight-unit
-  targeted replay keeps that option: all eight now assemble after B08a. Its
-  command projection also retains explicit omissions (B08b), so these eight
-  emissions are not faithful full-build acceptance. Close the prerequisites,
-  replay original commands, then build and run libc-test. Classify newly exposed
-  errors separately; L01 alone does not guarantee coverage.
+- [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2.
+  Fresh run `20260927T110110Z` attempts all 1,339 records with `-frounding-math`:
+  1,271 compile/assemble with exact symbol parity and survive two complete
+  libc-test replays without additional failures or replaced objects. This
+  supersedes the old 0/1,339 flag refusal, but remains a mixed build. All 68
+  remaining refusals are floating-complex interfaces (E3049, L04). The 17
+  reference failures (B08d) and explicit command omissions (B08b) remain open;
+  no full-library or all-tests-PASS claim follows from the clean relative result.
   [Receipt](tests/contracts/ladder-musl-receipt.json).
 
   - [x] **B08a — Admit scalar FP inline-assembly bindings** — `DONE`, P2, 2026-09-27.
@@ -741,14 +741,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     outcomes remain identical, with this flag retained. Remaining tuning and
     diagnostic omissions are not silently reclassified as implemented options.
 
-  - [ ] **B08c — Close original musl pthread runtime regressions** — `OPEN`, P2.
+  - [x] **B08c — Close original musl pthread runtime regressions** — `DONE`, P2, 2026-09-27.
     The fresh scalar-asm compiler assembles 1,271/1,339 original units, all with
     exact symbol parity; the 68 refusals are floating-complex interfaces (L04).
     Its first complete mixed libc-test trial adds seven pthread failures or
     timeouts to the reference's 17 failures. Object-set bisection in
     `.evidence/ladder/musl/20260927T101243Z` isolates `pthread_barrier_wait` and
-    `pthread_cond_timedwait`; its final replay is still running. Neither
-    compilation nor a clean partial set closes this task. The isolated
+    `pthread_cond_timedwait`; its completed final replay accepts only the
+    1,269-object set excluding those two. Neither compilation nor that clean
+    partial set closes this task. The isolated
     [LL/SC probe](tests/fixtures/assembly-exclusive-window.c) exhibits failed
     progress with separated templates and compiler stack accesses; a joined
     template is a passing control. GCC O0 also fails some split cases, so this
@@ -758,8 +759,26 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     377 lowering and 52 asm integration tests pass. Five unchanged affected
     libc-test programs pass with the repaired object pair and the separate
     reference archive; the old pair reproduces four failures/timeouts there.
-    All scalar-w native/crossed/fenv controls remain green. A fresh full
-    candidate rebuild and libc-test replay are still required.
+    All scalar-w native/crossed/fenv controls remain green. Fresh run
+    `20260927T110110Z` rebuilds all original units with the repaired compiler:
+    all 1,271 candidates survive both complete replays (482 runtime-result slots
+    each), zero added failures, zero changed object hashes and no excluded
+    pthread objects. The final replay exits normally; its 17 failures exactly
+    match the reference. The changed gate has 1,153 PASS / 0 FAIL / three
+    historical ignores, plus Clippy/fmt; 271 ladder tests pass separately.
+    [Reduction and final acceptance](tests/fixtures/assembly-exclusive-window.out).
+
+  - [ ] **B08d — Resolve the reference libc-test failures and static/DSO coverage gap** — `OPEN`, P2.
+    The fresh reference baseline still has 17 failing cases, not waived PASS:
+    one API/header mismatch, five DSO/TLS cases in the static-only build, two
+    strptime cases, two strtold rounding cases, two shell/wordexp cases, one powf
+    exception case, two daemon timeouts and two fork/rlimit expectation failures.
+    The exact observations and unproven root causes are recorded in the
+    [benchmark notebook](docs/notebook/benchmark-evaluation-20260915.md#2026-09-27-musl-reference-failure-ledger).
+    Add a separate genuine shared-library/loader lane for DSO tests; do not
+    relabel those static-lane failures as compiler passes. Diagnose the remaining
+    common failures against pinned source and environment without weakening the
+    original assertions or increasing watchdogs to conceal a progress defect.
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
@@ -807,7 +826,7 @@ constructors/destructors, GNU inline or raw-byte lexing. Those shared capabiliti
 have implementations and targeted evidence. The following boundaries remain
 explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
-- [ ] **L01 — Strict floating environment** — `OPEN`, P2; blocks B08.
+- [x] **L01 — Strict floating environment** — `DONE`, P2, 2026-09-27, admitted non-trapping profile.
   The September 27 report approves strict world-threaded FP, a separate `fenv`
   effect, four rounding modes and five sticky flags; dynamic rounding precedes
   full non-trapping FENV_ACCESS. Traps and Annex F claims remain excluded.
@@ -833,16 +852,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   ON/OFF/DEFAULT across preprocessing, inline substitution, direct/indirect goto,
   switch, loop exits, statement expressions and return conversions. Eight source
   programs, including the unchanged fenv library probe, pass both interpreters
-  and eight native crossed builds; Clang19 O0/O2 controls also pass. Full original
-  musl replay remains OPEN. After explicit B08a approval, the eight-unit
+  and eight native crossed builds; Clang19 O0/O2 controls also pass. After B08a
+  approval, the eight-unit
   targeted replay now assembles all eight, including ARM64 ceil/floor/rint/rintf;
   the original four scalar-assembly objects also pass native value/status
-  checks with four reference callers. No full musl receipt has been promoted.
-  Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
-  calls and thread-owned explicit state. Implement it through constant evaluation,
-  both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with
-  exact bits/flags, all admitted rounding modes and original musl representatives;
-  do not reset caller FP state or merely accept the flag. [Brief §A][semantics].
+  checks with four reference callers. Fresh original run `20260927T110110Z`
+  now retains 1,271/1,339 objects in two complete libc-test replays, without
+  additional failures or replaced objects. That closes the original replay
+  requirement for this finite strict-FP implementation, not B08's full-library
+  claim: the 68 floating-complex refusals, 17 reference failures and option
+  accounting remain separate. No caller FP state is silently reset. Traps,
+  Annex F and floating-complex/vector execution are not authorized by this
+  closure. [Brief §A][semantics].
 
 - [x] **L02 — Executable binary128 / long double** — `DONE`, P2, 2026-09-27, hosted Linux profile.
   The September 27 report approves real f128, the existing shared ABI classifier

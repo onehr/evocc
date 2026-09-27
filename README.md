@@ -26,11 +26,11 @@ unsupported forms have explicit refusal boundaries.
 
 **Full kernel boot is working; full kernel testing and the complete application
 ladder are not yet closed.** The latest recorded application lanes contain
-**10 PASS, 1 PROFILE_CLEAN, 3 INCOMPLETE and 1 FAIL**.
+**10 PASS, 1 PROFILE_CLEAN and 4 INCOMPLETE**.
 
 This is an audit of existing measurements, not a new run of today's checkout.
 Unchanged-program September 27 replays cover torture, c-testsuite, TinyCC,
-toybox, LLVM SingleSource, jq and cJSON. Other lanes retain their earlier measurements;
+toybox, LLVM SingleSource, jq, cJSON and musl. Other lanes retain their earlier measurements;
 this is not a completed fresh 15-lane campaign or a kernel-test rerun.
 Each receipt retains its compiler and input identity. See the generated
 [status dashboard](docs/status.md), [pinned roadmap](docs/roadmap.md),
@@ -58,7 +58,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | PASS | 11/11 TU | Original `make test`; relink/test exits and installed objects audited |
 | toybox | INCOMPLETE (shared test FAIL retained) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
-| musl + libc-test | FAIL | Historical 0/1,339 TU | Strict fenv and scalar FP asm have targeted tests; eight original math units now assemble, but full libc-test replay is still required |
+| musl + libc-test | INCOMPLETE | 1,271/1,339 TU retained in the mixed build | Two complete runtime replays: zero added failures or replaced objects; 68 floating-complex refusals and 17 shared reference failures remain, with option omissions separately recorded |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,039/1,735 programs PASS | Fresh full run: 1 unresolved compiler failure, 30 FP-deferred, 664 not applicable, 1 oracle-unusable; no installed object rebuilt |
 | jq | PASS | 69/69 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
@@ -136,7 +136,10 @@ are implemented with targeted tests. The scalar FP engine has **661,848**
 independent numerical checks across 32 operations. The strict FP adapter and
 world-threaded IR/backend, dynamic-rounding source mode and non-trapping lexical
 `FENV_ACCESS` now have [targeted value/status and native checks](docs/notebook/strict-floating-implementation-20260927.md).
-The original musl campaign is not yet closed. Binary128 source/IR, both
+The September 27 musl replay retains 1,271 EvoCC objects through two complete
+libc-test runs with no added failures; it is still a mixed build, not full musl
+acceptance. The scalar `w` asm extension and its original pthread regressions
+are repaired. Binary128 source/IR, both
 interpreters and hosted native helpers/ABI now have targeted tests; jq's fresh
 69/69-object original test replay also passes. Floating complex/vectors and other explicitly refused forms remain outside
 the current source profile. FP is not the only

@@ -419,3 +419,25 @@ now close; this is not an Annex F, freestanding-runtime or full-roadmap claim.
 The unchanged c-testsuite `00204.c` quad-HFA/varargs program separately passes
 its complete original expected output with EvoCC O0/O2 and GCC14/Clang19 O0/O2
 controls (`ctest204-native.log`); the old 220-program receipt is not yet rerun.
+
+## Original musl replay after scalar asm approval
+
+EvoIR 1.9.114 / EvoMIR 0.50 admits scalar f32/f64 `w` bindings with conservative
+world/fenv effects; opaque assembly is still not interpreted. The eight original
+math representatives now assemble and the four scalar-asm objects pass their
+native value/status matrix. A subsequent full campaign exposed ordinary
+register-output stack writebacks interfering with split LL/SC sequences. The
+shared lowering now retains eligible scalar locals in SSA; it does not inspect
+or combine opaque templates. [Reduction and validation](../../tests/fixtures/assembly-exclusive-window.out).
+
+Fresh final run `20260927T110110Z`, compiler
+`e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5`, attempts all
+1,339 original records with dynamic-rounding flags preserved. Both complete
+libc-test replays retain 1,271 candidate objects with no replacement or additional
+failure relative to the 17 reference failures; all 482 runtime-result slots
+exist in each run and the final runner exits normally. Together with the
+value/status, interpreter, proof and native matrices above, this closes L01's
+admitted non-trapping strict-FP implementation. It does not close full musl:
+68 floating-complex E3049 refusals, the shared failures/static-loader gap and
+remaining option accounting retain separate TODO IDs. Traps and Annex F remain
+outside the claim. No prior kernel or application receipt inherits this result.

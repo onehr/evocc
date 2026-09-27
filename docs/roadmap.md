@@ -1965,18 +1965,25 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 ![The evaluation ladder](images/evocc-ladder.png)
 
 Latest application refresh: [2026-09-15 measurements and issue inventory](notebook/benchmark-evaluation-20260915.md).
-The September 20 refresh includes implemented protected ELF visibility, builtin
-side effects, integer vectors, VLA scope/bounds, SIMD asm and scalar f32/f64.
-The September 23 original-program follow-ups pass LLVM LARGE `lu` and `ludcmp`
-under their unchanged 60-second limit; `floyd-warshall` still times out. A
-vector-overflow applicability decision, deferred strict fenv, binary128,
-floating complex/vector execution and baseline-suite failures remain open.
-The last complete LLVM measurement remains 1,014/1,735; targeted repairs do
-not recompute that numerator. See the dated ledger for measured identities.
+The September 27 refresh adds implemented non-trapping strict fenv, hosted
+binary128 and scalar FP SIMD asm to the earlier protected ELF visibility,
+builtin side effects, integer vectors, VLA scope/bounds and scalar f32/f64 work.
+The full LLVM replay has 1,039/1,735 PASS, including LARGE `lu`, `ludcmp` and
+`floyd-warshall` under their unchanged 60-second limit. Its one remaining
+compiler-failure classification awaits the integer-vector source-definedness
+decision. jq's 69/69-object original tests pass. musl attempts all 1,339 records
+and retains 1,271 objects through two complete libc-test replays with no added
+failures or replaced objects; 68 floating-complex refusals, 17 shared reference
+failures, static-only loader scope and option accounting keep that lane open.
+Floating complex/vector execution and other explicit source boundaries remain
+separate tasks. See the dated ledger for measured identities.
 Kernel configurations and runtime tests retain their own separate receipts;
 this application run does not rerun them.
 
-**September 23 status audit:** all fifteen application lanes have measurements:
+**Current September 27 application checkpoint:** 10 PASS, 1 PROFILE_CLEAN and
+4 INCOMPLETE; this is not a fresh single-compiler campaign over all fifteen lanes.
+
+**Historical September 23 status audit:** all fifteen application lanes have measurements:
 7 PASS, 2 PROFILE_CLEAN, 5 INCOMPLETE and 1 FAIL. PROFILE_CLEAN is not all-originals
 PASS. Full kernel boot is verified for both the 2,799-target-C locked configuration
 and the 6,765-target-C BPF/module composition. The complete 970-program kselftest
@@ -2023,11 +2030,12 @@ Rules that hold for every rung:
 - **Mixed link is the ramp, not the goal.** The receipt reports both numbers:
   units compiled by EvoCC in a passing build, and units still supplied by the
   reference compiler with the diagnostic code that kept them out.
-- **Floating point is a separately measured rung.** EvoIR 1.9.103 / EvoMIR 0.33
-  now execute scalar `f32`/`f64` with the approved fixed-environment profile,
-  HFA and variadic ABI. Kernel `-mgeneral-regs-only` remains a separate boundary.
-  Binary128, floating complex/vectors and strict dynamic fenv are still deferred;
-  a passing scalar application does not admit those capabilities.
+- **Floating point is a separately measured rung.** The current EvoIR 1.9.114 /
+  EvoMIR 0.50 profile implements scalar `f32`/`f64`, non-trapping dynamic
+  rounding/FENV_ACCESS, hosted binary128, HFA and variadic ABI. Each has its own
+  numerical, interpreter, proof and native acceptance matrix. Kernel
+  `-mgeneral-regs-only` remains a separate boundary. Floating complex/vectors,
+  trap-enabled environments and Annex F claims are not admitted by those results.
 
 | Rung | Subject | Pinned release (date, source) | Size | Oracle | Needs |
 |---|---|---|---|---|---|
@@ -2041,7 +2049,7 @@ Rules that hold for every rung:
 | E5 | TinyCC | 0.9.27 (2017-12-17, download.savannah.gnu.org/releases/tinycc) with `mob` `0fb54300b565` for AArch64 fixes | ~30 TU | `make test`; tcc built by EvoCC builds and runs its own tests | a compiler compiling a compiler |
 | E6 | toybox | 0.8.14 (2026-06-22, github.com/landley/toybox) | ~400 TU | `make tests` per applet | `printf` FP paths disabled or after the FP rung |
 | E7 | musl + libc-test | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html); libc-test from git.musl-libc.org/git/libc-test at the HEAD recorded in the first receipt (no releases exist) | ~1,000 TU | libc-test | variadic callees, aggregate ABI, TLS; the bridge to the kernel ABI |
-| F1 **scalar slice implemented** | Floating-point backend rung | EvoIR 1.9.103 / EvoMIR 0.33 | f32/f64 | 661,848 exact independent numerical cases; mixed ABI and original applications measured separately | Strict fenv, binary128, complex/vector execution remain deferred; not full floating C conformance |
+| F1 **scalar/strict and hosted quad implemented** | Floating-point backend rung | EvoIR 1.9.114 / EvoMIR 0.50 | f32/f64; hosted f128 | Independent bit/status corpora, both interpreters and crossed ABI; [strict/quad ledger](notebook/strict-floating-implementation-20260927.md) | Floating complex/vector, trap-enabled fenv and Annex F remain outside the claim; application and full-library acceptance are separate |
 | E8 | PolyBench/C | 4.2.1-beta (2016-05-20, sourceforge.net/projects/polybench) | 30 kernels | reference outputs (`-DPOLYBENCH_DUMP_ARRAYS`) | FP; the loop-optimization reading for Q2 |
 | E9 | llvm-test-suite `SingleSource` | tag `llvmorg-23.1.0` (2026-07-14, github.com/llvm/llvm-test-suite) | ~500 programs | reference outputs | mixed integer and FP |
 | E10 | jq | jq-1.8.2 (2026-06-20, github.com/jqlang/jq) | ~40 TU | `make check` | FP (numbers are doubles), external libs |

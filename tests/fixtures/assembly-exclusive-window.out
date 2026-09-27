@@ -6,8 +6,10 @@ Original campaign: .evidence/ladder/musl/20260927T101243Z.
 All 1,339 units were attempted; 1,271 assemble with exact symbol parity and
 68 refuse floating-complex call interfaces (E3049). The first complete test
 trial has seven additional pthread failures/timeouts over 17 reference failures.
-Object bisection is still in progress; a microprobe is not causal attribution
-of all seven failures and is not acceptance of a partial libc.
+The completed object bisection isolates pthread_barrier_wait.lo and
+pthread_cond_timedwait.lo; its fresh final replay accepts 1,269 objects only
+after excluding those two. The reduction below is diagnostic evidence, not by
+itself causal attribution of all seven failures or acceptance of a partial libc.
 
 The bounded C reduction tries split and joined LL/SC sequences at 128 stack
 locations, with 100,000 attempts per location and a ten-second outer watchdog.
@@ -92,3 +94,49 @@ The 12-output goto/pressure fixtures still satisfy their actual spill assertions
 and independent allocation verification; no assertion was relaxed. See
 asm-output-ssa-fp-native.log. These checks do not promote full libc-test or
 kernel evidence.
+
+The standard changed-crate gate against 6562bb4 subsequently completes:
+1,153 PASS / 0 FAIL / 3 historical ignores in its six selected crates,
+all-target Clippy -D warnings and workspace fmt PASS. The fourth historical
+workspace ignore belongs outside this selected set. See asm-output-ssa-gate.log.
+
+Full retry record, not suppressed: campaign 20260927T104940Z compiles/assembles
+1,271 of all 1,339 records and its first complete 482-slot libc-test run has
+the same 17 failing cases as reference, no additional failures, zero changed
+installed objects. The final mandatory replay writes tests-done but its
+container fails to exit. A read-only exec probe returns No such process.
+The exact container c0119462-e7e8-4b31-a016-d4c8abf51ff7 is stopped only after
+saving its completion log/state. The runner records exit 137 and correctly
+publishes final-replay-failed with ZERO accepted objects, not a fabricated
+success. Raw incident files: musl-final-container.log/json. A fresh unchanged
+campaign is required; neither the first trial nor the marker overrides this
+failed final gate.
+
+Final acceptance: fresh unchanged campaign 20260927T110110Z, same candidate
+e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5, completes.
+All 1,339 original records are attempted; 1,271 assemble with exact symbol
+parity, and the remaining 68 E3049 refusals are entirely src/complex interfaces.
+Both actual libc-test trials finish normally with 482 runtime-result slots.
+Each installs all 1,271 candidates, verifies their individual object hashes
+before/after testing, and reports exactly the same 17 failures as reference.
+There are no additional failures, symbol exclusions, or excluded pthread units.
+The independent final replay reports failed=false, note=no-regression. Both
+trials use archive SHA256:
+11e19ecf164d5ad20252e130c919478e37f9886f221eb75a4ff525f3e20d8975
+All preserved trial-log hashes agree with the published receipt. The test
+sources/assertions and original five-second supervisor remain unchanged.
+
+The retry's containers exit normally without --init or any runtime/image
+change; no proposed container workaround was adopted. A separate sleep-child
+control exits normally both with and without --init (1.282s and 1.442s), so it
+does not reproduce or establish a cause for the earlier shutdown failure.
+That earlier final-replay failure remains in its immutable campaign record.
+
+271 ladder tests pass, including stale-runner, partial-inventory, object
+replacement and reference-supervisor mutations. B08c is now closed. B08 and
+the overall application lane remain INCOMPLETE, not PASS: the reference's
+17 failures, floating-complex refusal population, static-only loader scope and
+explicit option omissions are separately tracked. No kernel receipt changes.
+Latest receipt: tests/contracts/ladder-musl-receipt.json; immutable evidence:
+.evidence/ladder/musl/20260927T110110Z. The common bench exits 1 for INCOMPLETE;
+the musl adapter itself exits 0 after the completed, audited measurement.

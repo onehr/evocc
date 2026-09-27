@@ -306,7 +306,7 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         lines.append(f"  Rust/Lean model differential: {correspondence.get('compared', '?')} vectors; "
                      f"{correspondence.get('differences', '?')} differences")
     lines += [
-        "  FP: scalar/strict and hosted f128 targeted PASS; jq original PASS; musl and FP complex/vector open",
+        "  FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open",
         "  G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED",
         "  Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED",
         "  Q3 measured self-improvement benefit: NOT_ACCEPTED",
@@ -348,8 +348,9 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
     text += (
         "\n- Scalar f32/f64 execution, HFA and variadic ABI are implemented under the fixed-environment "
         "profile. Dynamic rounding and lexical non-trapping FENV_ACCESS have targeted source, "
-        "interpreter and native checks. Binary128 source/IR/native ABI has targeted checks; "
-        "jq's complete original replay passes; musl closure and floating "
+        "interpreter and native checks plus the original musl mixed-build replay. "
+        "Binary128 source/IR/native ABI has targeted checks; "
+        "jq's complete original replay passes; full musl closure and floating "
         "complex/vector execution remain separate open work; "
         "see the [FP scope in the roadmap](roadmap.md#milestone-ladder-for-end-to-end-evaluation-added-2026-09-06).\n"
         "- PolyBench's current lane is MINI_DATASET correctness, not an optimization-speed result. "
