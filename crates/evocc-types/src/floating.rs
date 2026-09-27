@@ -101,7 +101,8 @@ impl FloatBits {
             }
     }
 
-    fn is_signaling(self) -> bool {
+    /// Representation classification only; it neither quiets the NaN nor raises status.
+    pub fn is_signaling(self) -> bool {
         self.is_nan() && self.bits & self.quiet_bit() == 0
     }
 

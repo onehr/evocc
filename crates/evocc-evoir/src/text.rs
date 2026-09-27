@@ -258,7 +258,9 @@ pub fn render_pre_fenv_module(module: &Module) -> Result<String, String> {
         .flat_map(|b| &b.insts)
         .any(|inst| {
             matches!(inst, Inst::StrictFloating(_))
-                || matches!(inst, Inst::Floating(fp) if fp.op == crate::FloatingOp::Fma)
+                || matches!(inst, Inst::Floating(fp) if matches!(fp.op,
+                crate::FloatingOp::Fma | crate::FloatingOp::QuietOlt | crate::FloatingOp::QuietOle
+                | crate::FloatingOp::QuietOgt | crate::FloatingOp::QuietOge))
         })
     {
         return Err("strict FP and FMA have no pre-fenv text representation".into());

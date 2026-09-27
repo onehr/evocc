@@ -121,6 +121,7 @@ struct DriverOptions {
     optimization: u8,
     debug_types: bool,
     signed_wrapping: bool,
+    dynamic_rounding: bool,
     standard_builtins: bool,
     hosted: bool,
     automatic_zero: bool,
@@ -281,6 +282,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut optimization = 0;
     let mut debug_types = false;
     let mut signed_wrapping = false;
+    let mut dynamic_rounding = false;
     let mut standard_builtins = true;
     let mut hosted = true;
     let mut automatic_zero = false;
@@ -324,8 +326,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
-            "-ffp-contract=off" | "-fno-fast-math" | "-fno-rounding-math" => {}
-            "-ffast-math" | "-frounding-math" | "-ffp-contract=fast" | "-ffp-contract=on" => {
+            "-ffp-contract=off" | "-fno-fast-math" => {}
+            "-frounding-math" => dynamic_rounding = true,
+            "-fno-rounding-math" => dynamic_rounding = false,
+            "-ffast-math" | "-ffp-contract=fast" | "-ffp-contract=on" => {
                 return Err(format!("unsupported floating-point profile option `{arg}`"));
             }
             "-fno-builtin" => standard_builtins = false,
@@ -524,6 +528,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         optimization,
         debug_types,
         signed_wrapping,
+        dynamic_rounding,
         standard_builtins,
         hosted,
         automatic_zero,
@@ -1001,6 +1006,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     }
     let mut unit = parser.parse_translation_unit_in(&arena);
     unit.set_signed_wrapping(options.signed_wrapping);
+    unit.set_dynamic_rounding(options.dynamic_rounding);
     unit.set_automatic_zero(options.automatic_zero);
     unit.set_tls_model(options.tls_model);
     unit.set_stack_protector(options.stack_protector);

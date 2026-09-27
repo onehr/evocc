@@ -1,12 +1,14 @@
 //! The task machine shares exact target arithmetic with constant evaluation.
 use super::*;
-use evocc_types::floating::{FiniteOp, FloatBits};
+use evocc_types::floating::{FiniteOp, FloatBits, FpResult, FpStatus};
 use evocc_types::FloatKind;
 use std::cmp::Ordering;
 
 pub(super) fn builtin(
     expression: &crate::floating::FloatingExpr<'_>,
     values: &[CValue],
+    world: &mut WorldState,
+    strict: bool,
 ) -> Result<CValue, InterpreterError> {
     let span = expression.span;
     let arguments = values
@@ -20,6 +22,15 @@ pub(super) fn builtin(
             }),
         })
         .collect::<Result<Vec<_>, _>>()?;
+    if strict && expression.op.is_comparison() {
+        let result = arguments[0].target_compare(arguments[1], false).ok_or(
+            InterpreterError::UnsupportedExpression {
+                feature: "strict floating comparison format",
+                span,
+            },
+        )?;
+        *world = world.with_fp_environment(world.fp_environment().raised(result.status));
+    }
     let raw = crate::floating::evaluate(expression.op, &arguments).ok_or(
         InterpreterError::UnsupportedExpression {
             feature: "deferred floating builtin format",
@@ -64,11 +75,93 @@ pub(super) fn convert(
     }
 }
 
+pub(super) fn convert_runtime(
+    value: CValue,
+    kind: FloatKind,
+    span: SourceSpan,
+    world: &mut WorldState,
+    strict: bool,
+) -> Result<FloatBits, InterpreterError> {
+    if !strict {
+        return convert(value, kind, span);
+    }
+    if !matches!(kind, FloatKind::F32 | FloatKind::F64) {
+        return Err(InterpreterError::UnsupportedExpression {
+            feature: "strict floating format",
+            span,
+        });
+    }
+    let environment = world.fp_environment();
+    let result = match value {
+        CValue::Integer(value) => Some(if value.ty().is_signed() {
+            FloatBits::from_signed_round(kind, value.mathematical_value(), environment.rounding)
+        } else {
+            FloatBits::from_unsigned_round(kind, value.raw_bits(), environment.rounding)
+        }),
+        CValue::Floating(value) => value.target_convert_round(kind, environment.rounding),
+        CValue::Uninitialized(_) => return Err(InterpreterError::UninitializedValue { span }),
+        _ => None,
+    }
+    .ok_or(InterpreterError::UnsupportedExpression {
+        feature: "strict floating conversion",
+        span,
+    })?;
+    *world = world.with_fp_environment(environment.raised(result.status));
+    Ok(result.value)
+}
+
+pub(super) fn truth(value: FloatBits, world: &mut WorldState, strict: bool) -> bool {
+    if strict && value.is_signaling() {
+        *world = world.with_fp_environment(world.fp_environment().raised(FpStatus::INVALID));
+    }
+    !value.is_zero()
+}
+
+impl Interpreter<'_, '_> {
+    pub(super) fn strict_floating(&self) -> bool {
+        self.unit.dynamic_rounding() && !self.static_integer_evaluation
+    }
+
+    pub(super) fn cast_runtime_value(
+        &mut self,
+        value: CValue,
+        target: ValueType,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let strict = self.strict_floating();
+        match (value, target) {
+            (value, ValueType::Floating(kind)) => {
+                convert_runtime(value, kind, span, &mut self.world, strict).map(CValue::Floating)
+            }
+            (CValue::Floating(value), ValueType::Integer(target)) if strict => {
+                let raw = if target == CIntegerType::BOOL {
+                    u128::from(truth(value, &mut self.world, strict))
+                } else {
+                    let result = value
+                        .to_integer_status(u16::from(target.bits()), target.is_signed())
+                        .ok_or(InterpreterError::FloatingToInteger { span })?;
+                    let raw = result
+                        .value
+                        .ok_or(InterpreterError::FloatingToInteger { span })?;
+                    self.world = self
+                        .world
+                        .with_fp_environment(self.world.fp_environment().raised(result.status));
+                    raw
+                };
+                Ok(CValue::Integer(CInteger::from_raw(raw, target)))
+            }
+            _ => cast_machine_value(value, target, span, self.unit.types(), &mut self.memory),
+        }
+    }
+}
+
 pub(super) fn binary(
     op: BinaryOp,
     left: CValue,
     right: CValue,
     span: SourceSpan,
+    world: &mut WorldState,
+    strict: bool,
 ) -> Result<CValue, InterpreterError> {
     let kind = if [left, right]
         .iter()
@@ -78,8 +171,8 @@ pub(super) fn binary(
     } else {
         FloatKind::F32
     };
-    let a = convert(left, kind, span)?;
-    let b = convert(right, kind, span)?;
+    let a = convert_runtime(left, kind, span, world, strict)?;
+    let b = convert_runtime(right, kind, span, world, strict)?;
     let arithmetic = match op {
         BinaryOp::Add => Some(FiniteOp::Add),
         BinaryOp::Sub => Some(FiniteOp::Sub),
@@ -88,11 +181,30 @@ pub(super) fn binary(
         _ => None,
     };
     if let Some(op) = arithmetic {
+        if strict {
+            let result = a
+                .target_binary_round(b, op, world.fp_environment().rounding)
+                .expect("binary32/64 operands");
+            *world = world.with_fp_environment(world.fp_environment().raised(result.status));
+            return Ok(CValue::Floating(result.value));
+        }
         return Ok(CValue::Floating(
             a.target_binary(b, op).expect("binary32/64 operands"),
         ));
     }
-    let order = a.compare(b);
+    let FpResult {
+        value: order,
+        status,
+    } = if strict {
+        a.target_compare(b, !matches!(op, BinaryOp::Eq | BinaryOp::Ne))
+            .expect("binary32/64 operands")
+    } else {
+        FpResult {
+            value: a.compare(b),
+            status: FpStatus::NONE,
+        }
+    };
+    *world = world.with_fp_environment(world.fp_environment().raised(status));
     let result = match op {
         BinaryOp::Eq => order == Some(Ordering::Equal),
         BinaryOp::Ne => order != Some(Ordering::Equal),

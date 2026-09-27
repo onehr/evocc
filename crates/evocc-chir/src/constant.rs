@@ -4,6 +4,17 @@ mod floating;
 mod object_size;
 pub use object_size::builtin_object_size;
 
+/// Unevaluated scalar FP classification, including both conditional arms.
+/// This query never folds an executed expression or observes its FP state.
+pub fn floating_expression_kind(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<evocc_types::FloatKind> {
+    floating::expression_kind(expression, types, symbols, target)
+}
+
 /// Constant path selection must use the same source-width arithmetic as stores
 /// and integer projection, not a second evaluator in host double precision.
 pub fn floating_constant_truth(

@@ -172,7 +172,17 @@ pub(crate) fn operation(
         });
     }
     let result_ty = match op {
-        ToIntDefined { .. } | Oeq | Une | Olt | Ole | Ogt | Oge => {
+        ToIntDefined { .. }
+        | Oeq
+        | Une
+        | Olt
+        | Ole
+        | Ogt
+        | Oge
+        | QuietOlt
+        | QuietOle
+        | QuietOgt
+        | QuietOge => {
             if dst.class != RegClass::Gpr32 {
                 return Err("FP predicate result requires gpr32".into());
             }
@@ -324,20 +334,20 @@ pub(crate) fn emit(
         ToBits | FromBits => {
             let _ = writeln!(text, "    fmov {dest}, {}", name(args[0]));
         }
-        Oeq | Une | Olt | Ole | Ogt | Oge => {
+        Oeq | Une | Olt | Ole | Ogt | Oge | QuietOlt | QuietOle | QuietOgt | QuietOge => {
             let cond = match op {
                 Oeq => "eq",
                 Une => "ne",
-                Olt => "mi",
-                Ole => "ls",
-                Ogt => "gt",
-                Oge => "ge",
+                Olt | QuietOlt => "mi",
+                Ole | QuietOle => "ls",
+                Ogt | QuietOgt => "gt",
+                Oge | QuietOge => "ge",
                 _ => unreachable!(),
             };
             let _ = writeln!(
                 text,
                 "    fcmp{} {}, {}\n    cset {dest}, {cond}",
-                if strict && !matches!(op, Oeq | Une) {
+                if strict && matches!(op, Olt | Ole | Ogt | Oge) {
                     "e"
                 } else {
                     ""

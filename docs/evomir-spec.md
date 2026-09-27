@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.45** | **Authoritative reference** | **2026-09-27**
+**Revision 0.46** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -171,6 +171,9 @@ and never write FPCR/FPSR. Pure representation operations and the exact-domain
 predicate do not depend on rounding. Ordered strict comparisons use FCMPE;
 strict equality/inequality use FCMP. Explicit FMA uses FMADD; no multiply/add
 contraction is permitted. Hardware accumulates sticky status for executed ops.
+The `quiet_olt/quiet_ole/quiet_ogt/quiet_oge` variants also use FCMP, preserving
+the source comparison builtins' signaling-NaN-only invalid effect. Quietness
+survives canonical text and allocation; it is not inferred from result use.
 
 The interpreter carries explicit FP state in its existing world snapshot.
 Strict integer destinations retain their semantic width as
@@ -1158,6 +1161,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.46 | 2026-09-27 | Preserve quiet relational predicate identity and use FCMP rather than the signaling FCMPE path. |
 | 0.45 | 2026-09-27 | Add strict FP operations, machine strictness and logical integer conversion widths, dynamic-rounding admission, FPSR effects and explicit FMA; retain the shared SIMD bank. |
 | 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
 | 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |

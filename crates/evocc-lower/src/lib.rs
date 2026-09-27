@@ -4267,7 +4267,7 @@ impl<'a> FunctionLowerer<'a> {
                             integer: incoming.integer.expect("integer parameter"),
                         },
                         value_type.integer,
-                        &entry,
+                        &mut entry,
                     )?;
                     entry.env.insert(
                         EnvKey::Local(symbol),
@@ -5675,10 +5675,10 @@ impl<'a> FunctionLowerer<'a> {
                                     Some(expression),
                                     expected.source,
                                     *span,
-                                    &state,
+                                    &mut state,
                                 )?
                             } else {
-                                self.cast(lowered, expected.integer, &state)?
+                                self.cast(lowered, expected.integer, &mut state)?
                             };
                             returned.push(lowered.value);
                         }
@@ -7709,7 +7709,7 @@ impl<'a> FunctionLowerer<'a> {
         source: Option<&CHirExpr<'_>>,
         ty: TypeId,
         span: SourceSpan,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
             return self.cast(value, integer, state);
@@ -8369,7 +8369,9 @@ impl<'a> FunctionLowerer<'a> {
                         self.unit.types(),
                         self.unit.symbols(),
                         self.target,
-                    ) {
+                    )
+                    .filter(|_| !self.unit.dynamic_rounding())
+                    {
                         let value = self.wide_constant(state, bits.ty(), bits.raw_bits())?;
                         let volatile = self
                             .unit
@@ -9291,7 +9293,7 @@ impl<'a> FunctionLowerer<'a> {
         let selector = self.cast(
             selector.clone(),
             integer_promotion(selector.integer),
-            &state,
+            &mut state,
         )?;
         let known_selector = self.known_switch_selector(expression, body, selector.integer);
         let selector_key = self.retain_temporary(selector.value, &mut state);
@@ -9378,7 +9380,7 @@ impl<'a> FunctionLowerer<'a> {
         body: &CHirStmt<'_>,
         integer: CIntegerType,
     ) -> Option<CInteger> {
-        if self.contains_addressed_label(body) {
+        if self.unit.dynamic_rounding() || self.contains_addressed_label(body) {
             return None;
         }
         constant_integer(self.unit, self.target, expression).map(|v| v.cast(integer))
@@ -9565,7 +9567,7 @@ impl<'a> FunctionLowerer<'a> {
         let selector_type = integer_promotion(selector.integer);
         let known_selector = self.known_switch_selector(expression, body, selector_type);
         let already_promoted = selector.integer == selector_type;
-        let selector = self.cast(selector, selector_type, &state)?;
+        let selector = self.cast(selector, selector_type, &mut state)?;
         let selector_temporary = if matches!(expression, CHirExpr::Ident { symbol, .. }
             if already_promoted && !self.global_registers.contains_key(symbol))
         {
@@ -9873,7 +9875,10 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        if self.optimize && matches!(expression, CHirExpr::Binary(..) | CHirExpr::Unary(..)) {
+        if self.optimize
+            && !self.unit.dynamic_rounding()
+            && matches!(expression, CHirExpr::Binary(..) | CHirExpr::Unary(..))
+        {
             if let Some(value) = evocc_chir::constant::eval_executable_integer_constant(
                 expression,
                 self.unit.types(),
@@ -9889,21 +9894,23 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        if let Some(value) = evocc_chir::constant::floating_constant_cast(
-            expression,
-            self.unit.types(),
-            self.unit.symbols(),
-            self.target,
-        ) {
-            return self.floating_constant(value, state);
-        }
-        if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
-            expression,
-            self.unit.types(),
-            self.unit.symbols(),
-            self.target,
-        ) {
-            return self.wide_constant(state, value.ty(), value.raw_bits());
+        if !self.unit.dynamic_rounding() {
+            if let Some(value) = evocc_chir::constant::floating_constant_cast(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                self.target,
+            ) {
+                return self.floating_constant(value, state);
+            }
+            if let Some(value) = evocc_chir::constant::fold_floating_integer_arithmetic(
+                expression,
+                self.unit.types(),
+                self.unit.symbols(),
+                self.target,
+            ) {
+                return self.wide_constant(state, value.ty(), value.raw_bits());
+            }
         }
         if let Some(value) = evocc_chir::constant::fold_wrapping_integer_arithmetic(
             expression,
@@ -10055,13 +10062,14 @@ impl<'a> FunctionLowerer<'a> {
                 );
                 // Keep the first result in the ordinary edge environment if
                 // the hint contains control flow, just like a binary operand.
-                if evocc_chir::constant::eval_executable_integer_constant(
-                    expected,
-                    self.unit.types(),
-                    self.unit.symbols(),
-                    self.target,
-                )
-                .is_none()
+                if self.unit.dynamic_rounding()
+                    || evocc_chir::constant::eval_executable_integer_constant(
+                        expected,
+                        self.unit.types(),
+                        self.unit.symbols(),
+                        self.target,
+                    )
+                    .is_none()
                 {
                     self.lower_expr(expected, state)?;
                 }
@@ -10565,7 +10573,7 @@ impl<'a> FunctionLowerer<'a> {
                 *result = self.cast(
                     result.clone(),
                     canonical_integer(self.unit.types(), self.target, facts.ty(), span)?,
-                    &continued,
+                    &mut continued,
                 )?;
             }
             if result.value.ty != expected {
@@ -11562,7 +11570,7 @@ impl<'a> FunctionLowerer<'a> {
         left: ExprValue,
         right: ExprValue,
         destination: CIntegerType,
-        state: &State,
+        state: &mut State,
     ) -> Result<(ExprValue, Value), LowerError> {
         let (left, left_negative) = self.checked_magnitude(left, state)?;
         let (right, mut right_negative) = self.checked_magnitude(right, state)?;
@@ -11665,7 +11673,7 @@ impl<'a> FunctionLowerer<'a> {
     fn checked_magnitude(
         &mut self,
         input: ExprValue,
-        state: &State,
+        state: &mut State,
     ) -> Result<(Value, Value), LowerError> {
         let signed = input.integer.is_signed();
         let raw = self.cast(input, CIntegerType::UINT128, state)?.value;
@@ -11856,8 +11864,8 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         left: ExprValue,
         right: ExprValue,
-        left_state: &State,
-        right_state: &State,
+        left_state: &mut State,
+        right_state: &mut State,
     ) -> Result<(ExprValue, ExprValue, CIntegerType), LowerError> {
         if evocc_evoir::floating_kind(&left.value.ty).is_some()
             || evocc_evoir::floating_kind(&right.value.ty).is_some()
@@ -11965,6 +11973,9 @@ impl<'a> FunctionLowerer<'a> {
         &self,
         expression: &CHirExpr<'_>,
     ) -> Option<Vec<CInteger>> {
+        if self.unit.dynamic_rounding() {
+            return None;
+        }
         if let Some(value) = self
             .comparison_partition_result(expression)
             .or_else(|| self.floating_partition_result(expression))
@@ -12452,7 +12463,7 @@ impl<'a> FunctionLowerer<'a> {
         let then_value = self.lower_expr(then_expression, &mut then_state)?;
         let else_value = self.lower_expr(else_expression, &mut else_state)?;
         let (then_value, else_value, common) =
-            self.common_branch_values(then_value, else_value, &then_state, &else_state)?;
+            self.common_branch_values(then_value, else_value, &mut then_state, &mut else_state)?;
         let temporary = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         then_state.env.insert(
@@ -12573,7 +12584,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         let else_value = self.lower_expr(else_expression, &mut else_state)?;
         let (then_value, else_value, common) =
-            self.common_branch_values(then_value, else_value, &then_state, &else_state)?;
+            self.common_branch_values(then_value, else_value, &mut then_state, &mut else_state)?;
         let result_key = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         then_state.env.insert(
@@ -13119,6 +13130,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.unit.symbols(),
                 self.target,
             )
+            .filter(|_| !self.unit.dynamic_rounding())
         {
             if let PlaceRoot::Object { symbol } = place.root() {
                 if !self.memory_symbols.contains(symbol) && place.projections().is_empty() {
@@ -14093,7 +14105,7 @@ impl<'a> FunctionLowerer<'a> {
     fn lower_condition_value(
         &mut self,
         value: ExprValue,
-        state: &State,
+        state: &mut State,
     ) -> Result<Value, LowerError> {
         if evocc_evoir::floating_kind(&value.value.ty).is_some() {
             return self.floating_truth(value, state);
@@ -14129,7 +14141,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         value: ExprValue,
         target: CIntegerType,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         if target == CIntegerType::BOOL {
             let condition = self.lower_condition_value(value, state)?;
@@ -14779,6 +14791,9 @@ fn constant_truth(
     target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
+    if unit.dynamic_rounding() {
+        return None;
+    }
     if let CHirExpr::Comma(left, right, _) = expression {
         constant_truth(unit, target, left)?;
         return constant_truth(unit, target, right);

@@ -50,6 +50,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let b = self.complex_component_value(value, true, span)?;
             Ok(a.truth() || b.truth())
         } else {
+            if let CValue::Floating(value) = value {
+                let strict = self.strict_floating();
+                return Ok(floating::truth(value, &mut self.world, strict));
+            }
             machine_truth(value, span)
         }
     }

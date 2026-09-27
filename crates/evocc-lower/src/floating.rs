@@ -18,12 +18,19 @@ impl<'a> FunctionLowerer<'a> {
         value: FloatBits,
         state: &State,
     ) -> Result<ExprValue, LowerError> {
-        self.floating_instruction(
-            FloatingOp::Constant(value.bits() as u64),
-            vec![],
-            ir_type(value.kind()).expect("constant cast selected an executable format"),
+        let result = self.fresh_value(ir_type(value.kind()).expect("executable constant format"));
+        self.emit(
             state,
-        )
+            Inst::Floating(FloatingInst {
+                result: result.clone(),
+                op: FloatingOp::Constant(value.bits() as u64),
+                arguments: vec![],
+            }),
+        )?;
+        Ok(ExprValue {
+            value: result,
+            integer: CIntegerType::ULONG,
+        })
     }
 
     pub(super) fn lower_floating_builtin(
@@ -70,6 +77,16 @@ impl<'a> FunctionLowerer<'a> {
                 .collect::<Vec<_>>();
             let predicate = match expression.op {
                 IsUnordered => {
+                    if self.unit.dynamic_rounding() {
+                        // Quiet classification still consumes an sNaN. Keep
+                        // its status even though the equality value is unused.
+                        self.floating_instruction(
+                            FloatingOp::Oeq,
+                            arguments.clone(),
+                            EvoIRType::Bits(1),
+                            state,
+                        )?;
+                    }
                     let mask = self.constant(state, integer, sign - 1)?.value;
                     let exponent = self.constant(state, integer, exponent)?.value;
                     let mut unordered = Vec::new();
@@ -95,7 +112,11 @@ impl<'a> FunctionLowerer<'a> {
                 IsLessGreater => {
                     let less = self
                         .floating_instruction(
-                            FloatingOp::Olt,
+                            if self.unit.dynamic_rounding() {
+                                FloatingOp::QuietOlt
+                            } else {
+                                FloatingOp::Olt
+                            },
                             arguments.clone(),
                             EvoIRType::Bits(1),
                             state,
@@ -103,7 +124,11 @@ impl<'a> FunctionLowerer<'a> {
                         .value;
                     let greater = self
                         .floating_instruction(
-                            FloatingOp::Ogt,
+                            if self.unit.dynamic_rounding() {
+                                FloatingOp::QuietOgt
+                            } else {
+                                FloatingOp::Ogt
+                            },
                             arguments,
                             EvoIRType::Bits(1),
                             state,
@@ -118,6 +143,17 @@ impl<'a> FunctionLowerer<'a> {
                         IsLess => FloatingOp::Olt,
                         IsLessEqual => FloatingOp::Ole,
                         _ => unreachable!(),
+                    };
+                    let op = if self.unit.dynamic_rounding() {
+                        match op {
+                            FloatingOp::Olt => FloatingOp::QuietOlt,
+                            FloatingOp::Ole => FloatingOp::QuietOle,
+                            FloatingOp::Ogt => FloatingOp::QuietOgt,
+                            FloatingOp::Oge => FloatingOp::QuietOge,
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        op
                     };
                     self.floating_instruction(op, arguments, EvoIRType::Bits(1), state)?
                         .value
@@ -162,24 +198,24 @@ impl<'a> FunctionLowerer<'a> {
         }
         let exponent = self.constant(state, integer, exponent)?.value;
         let zero = self.constant(state, integer, 0)?.value;
-        let compare = |this: &mut Self, op, a, b| {
+        let compare = |this: &mut Self, state: &State, op, a, b| {
             let result = this.fresh_value(EvoIRType::Bits(1));
             this.emit(state, Inst::ICmp(result.clone(), op, a, b))?;
             Ok::<_, LowerError>(result)
         };
         let predicate = match expression.op {
-            IsNan => compare(self, CmpOp::ULt, exponent, magnitude)?,
-            IsInf | IsInfSign => compare(self, CmpOp::Eq, magnitude, exponent)?,
-            IsFinite => compare(self, CmpOp::ULt, magnitude, exponent)?,
+            IsNan => compare(self, state, CmpOp::ULt, exponent, magnitude)?,
+            IsInf | IsInfSign => compare(self, state, CmpOp::Eq, magnitude, exponent)?,
+            IsFinite => compare(self, state, CmpOp::ULt, magnitude, exponent)?,
             IsNormal => {
                 let field = self.emit_raw_binary(state, Inst::And, &magnitude, &exponent)?;
-                let nonzero = compare(self, CmpOp::Ne, field, zero.clone())?;
-                let finite = compare(self, CmpOp::ULt, magnitude, exponent)?;
+                let nonzero = compare(self, state, CmpOp::Ne, field, zero.clone())?;
+                let finite = compare(self, state, CmpOp::ULt, magnitude, exponent)?;
                 self.emit_raw_binary(state, Inst::And, &nonzero, &finite)?
             }
             SignBit => {
                 let field = self.emit_raw_binary(state, Inst::And, &raw, &sign_mask)?;
-                compare(self, CmpOp::Ne, field, zero.clone())?
+                compare(self, state, CmpOp::Ne, field, zero.clone())?
             }
             Abs | CopySign | IsGreater | IsGreaterEqual | IsLess | IsLessEqual | IsLessGreater
             | IsUnordered => unreachable!(),
@@ -194,7 +230,7 @@ impl<'a> FunctionLowerer<'a> {
         )?;
         if expression.op == IsInfSign {
             let sign = self.emit_raw_binary(state, Inst::And, &raw, &sign_mask)?;
-            let negative = compare(self, CmpOp::Ne, sign, zero)?;
+            let negative = compare(self, state, CmpOp::Ne, sign, zero)?;
             let minus = self
                 .constant(state, CIntegerType::INT, u64::from(u32::MAX))?
                 .value;
@@ -211,7 +247,7 @@ impl<'a> FunctionLowerer<'a> {
         op: FloatingOp,
         arguments: Vec<Value>,
         ty: EvoIRType,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let result = self.fresh_value(ty);
         let operation = FloatingInst {
@@ -222,7 +258,36 @@ impl<'a> FunctionLowerer<'a> {
         operation
             .validate()
             .map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
-        self.emit(state, Inst::Floating(operation))?;
+        if self.unit.dynamic_rounding()
+            && !matches!(
+                op,
+                FloatingOp::Constant(_)
+                    | FloatingOp::Neg
+                    | FloatingOp::ToBits
+                    | FloatingOp::FromBits
+                    | FloatingOp::ToIntDefined { .. }
+            )
+        {
+            let world_in = self.token(state, EnvKey::World)?.value;
+            let world_out = self.fresh_value(EvoIRType::World);
+            self.emit(
+                state,
+                Inst::StrictFloating(evocc_evoir::StrictFloatingInst {
+                    instruction: operation,
+                    world_in,
+                    world_out: world_out.clone(),
+                }),
+            )?;
+            state.env.insert(
+                EnvKey::World,
+                BoundValue {
+                    value: world_out,
+                    integer: None,
+                },
+            );
+        } else {
+            self.emit(state, Inst::Floating(operation))?;
+        }
         Ok(ExprValue {
             value: result,
             integer: CIntegerType::ULONG,
@@ -233,7 +298,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         literal: &evocc_chir::FloatLit,
         span: SourceSpan,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let kind = match literal.suffix {
             evocc_chir::FloatSuffix::F => FloatKind::F32,
@@ -265,7 +330,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         value: ExprValue,
         kind: FloatKind,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let ty = ir_type(kind).ok_or(LowerError::FloatingValue {
             span: self.info.span,
@@ -287,7 +352,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         value: ExprValue,
         target: CIntegerType,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let guard = self.floating_instruction(
             FloatingOp::ToIntDefined {
@@ -320,7 +385,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         operator: UnaryOp,
         operand: ExprValue,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         if operator == UnaryOp::Plus {
             return Ok(operand);
@@ -338,7 +403,7 @@ impl<'a> FunctionLowerer<'a> {
         op: BinaryOp,
         left: ExprValue,
         right: ExprValue,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let kind = if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
             FloatKind::F64
@@ -457,7 +522,7 @@ impl<'a> FunctionLowerer<'a> {
     pub(super) fn floating_truth(
         &mut self,
         value: ExprValue,
-        state: &State,
+        state: &mut State,
     ) -> Result<Value, LowerError> {
         let zero = self.floating_instruction(
             FloatingOp::Constant(0),
@@ -474,7 +539,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         value: ExprValue,
         operator: UpdateOp,
-        state: &State,
+        state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let kind = floating_kind(&value.value.ty).unwrap();
         let one = self.floating_instruction(

@@ -99,8 +99,18 @@ regressions). Ruff passes. The shape hint reports 54/54 shapes; it is not a
 grammar-completeness proof. These tests reuse `target/frontend` and retain the
 old release executable for historical measurements.
 
-Source `-frounding-math`, runtime constant-folding boundaries, C-HIR strict
-execution and complete fenv API models remain open. `FENV_ACCESS ON` is not
-advertised. Binary128, musl, jq and full campaigns remain separately tracked
+The subsequent 1.9.107/0.46 source batch implements last-option-wins
+`-frounding-math`, explicit C-HIR world execution and executed-expression
+folding boundaries. Automatic initializers and conditional conversions observe
+runtime rounding; static initializers retain RNE. Quiet GNU relational builtins
+signal only sNaNs; ordinary C relational operations signal all NaNs. Both
+interpreters check ten entries under four rounding modes at O0/O2, preserving
+prior flags. The native source fixture executes 40 checks in each of eight
+EvoCC O0/O2 and GCC14/Clang19 O0/O2 caller combinations, all PASS. The fixture
+and reference caller are `floating-dynamic-rounding{,-driver}.c`; no source
+substitution or host-FP constant evaluation is used.
+
+Complete fenv API models remain open. `FENV_ACCESS ON` is not advertised.
+Binary128, musl, jq and full campaigns remain separately tracked
 in `TODO.md`. No traps, Annex F, floating vectors/complex or half support is
 implied by this checkpoint.

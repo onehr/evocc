@@ -1876,6 +1876,7 @@ pub struct CHirUnit<'arena> {
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
+    dynamic_rounding: bool,
     gnu_inline: bool,
     automatic_zero: bool,
     tls_model: evocc_types::TlsModel,
@@ -1935,6 +1936,7 @@ impl<'arena> CHirUnit<'arena> {
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
+            dynamic_rounding: false,
             gnu_inline: false,
             automatic_zero: false,
             tls_model: evocc_types::TlsModel::default(),
@@ -1986,6 +1988,17 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn signed_wrapping(&self) -> bool {
         self.signed_wrapping
+    }
+
+    /// Runtime FP observes the execution thread's current rounding and status.
+    /// Translation-time literals and static object bytes remain RNE.
+    pub fn set_dynamic_rounding(&mut self, enabled: bool) {
+        self.dynamic_rounding = enabled;
+    }
+
+    #[must_use]
+    pub fn dynamic_rounding(&self) -> bool {
+        self.dynamic_rounding
     }
 
     /// Implicit initialization is a declaration operation, never a load fallback.

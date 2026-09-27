@@ -39,6 +39,10 @@ impl StrictFloatingInst {
                 | Ole
                 | Ogt
                 | Oge
+                | QuietOlt
+                | QuietOle
+                | QuietOgt
+                | QuietOge
                 | Convert
                 | FromSigned
                 | FromUnsigned
@@ -113,17 +117,21 @@ impl FloatingInst {
                     status: value.status,
                 }
             }
-            Oeq | Une | Olt | Ole | Ogt | Oge => {
+            Oeq | Une | Olt | Ole | Ogt | Oge | QuietOlt | QuietOle | QuietOgt | QuietOge => {
                 let result = float(0)
-                    .target_compare(float(1), !matches!(self.op, Oeq | Une))
+                    .target_compare(float(1), matches!(self.op, Olt | Ole | Ogt | Oge))
                     .unwrap();
                 let yes = match self.op {
                     Oeq => result.value == Some(Ordering::Equal),
                     Une => result.value != Some(Ordering::Equal),
-                    Olt => result.value == Some(Ordering::Less),
-                    Ole => matches!(result.value, Some(Ordering::Less | Ordering::Equal)),
-                    Ogt => result.value == Some(Ordering::Greater),
-                    Oge => matches!(result.value, Some(Ordering::Greater | Ordering::Equal)),
+                    Olt | QuietOlt => result.value == Some(Ordering::Less),
+                    Ole | QuietOle => {
+                        matches!(result.value, Some(Ordering::Less | Ordering::Equal))
+                    }
+                    Ogt | QuietOgt => result.value == Some(Ordering::Greater),
+                    Oge | QuietOge => {
+                        matches!(result.value, Some(Ordering::Greater | Ordering::Equal))
+                    }
                     _ => unreachable!(),
                 };
                 FpResult {

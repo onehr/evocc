@@ -707,8 +707,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   1.9.106/0.45. A reference caller of actual EvoCC-emitted strict IR passes
   62 checks in each of the four sealed native builds, including narrow integer
   conversion and a signaling-NaN definedness predicate that must not set flags.
-  Source option/lowering, complete fenv API models and original musl replay
-  remain OPEN; this is not source-level strict-FP acceptance.
+  The source 1.9.107/0.46 batch adds dynamic-rounding lowering and C-HIR
+  execution, including runtime constants, conditional conversions and quiet
+  comparison builtins. Native source checks pass 40/40 in each of eight
+  EvoCC/reference optimization combinations. Complete fenv API models,
+  strict wide-integer helpers and original musl replay remain OPEN.
   Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
   calls and thread-owned explicit state. Implement it through constant evaluation,
   both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.106** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.107** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1438,6 +1438,14 @@ Strict equality/inequality are quiet comparisons (invalid for signaling NaN);
 strict ordered comparisons signal invalid for any NaN. Classification and
 quiet source comparison builtins retain their separate contracts.
 
+Revision 1.9.107 supplies `quiet_olt/quiet_ole/quiet_ogt/quiet_oge` predicates
+with the same numeric results as the corresponding ordered predicates but
+invalid status only for signaling NaNs. Their strict forms explicitly carry
+world, including when the numeric result is discarded. Source GNU comparison
+builtins use these quiet predicates; ordinary C relational operators use the
+signaling ordered predicates. `isunordered` similarly records quiet comparison
+status before representation classification. Baseline forms remain pure.
+
 Integer conversions still truncate toward zero regardless of dynamic rounding;
 nonrepresentable C conversions retain E3063 and the distinct pure guard. An
 invalid raw conversion returns zero plus invalid status, never a defined C value.
@@ -1451,6 +1459,16 @@ functions own concrete fenv_t encoding; the IR does not encode libc structures.
 Missing external execution models fail closed. Baseline pure FP retains its
 environment-unobservable admission contract; it is not a substitute for a
 strict operation inside an observable-environment source region.
+
+The source `-frounding-math` option selects these strict forms for executed
+scalar arithmetic, numeric conversions, truth tests and comparisons; the last
+`-frounding-math`/`-fno-rounding-math` option wins. Runtime expressions are not
+folded under translation-time RNE merely because their operands are constant.
+This includes automatic initializers and selected conditional-arm conversions.
+Literal parsing and static object initialization remain translation-time RNE.
+Exact representation operations remain pure. Both C-HIR and EvoIR execution
+use the same explicit FP environment contract. This bounded option does not
+enable `STDC FENV_ACCESS ON`, unsupported formats, traps or fast math.
 
 ## 4. Effect Model
 
@@ -3224,11 +3242,13 @@ cmp_op           := "eq" | "ne" | "slt" | "sle" | "ult" | "ule"
 cast_op          := "sext" | "zext" | "trunc"
 fp_op            := "add" | "sub" | "mul" | "div" | "fma" | "neg"
                   | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
+                  | "quiet_olt" | "quiet_ole" | "quiet_ogt" | "quiet_oge"
                   | "convert" | "from_signed" | "from_unsigned"
                   | "to_signed" | "to_unsigned" | "to_bits" | "from_bits"
                   | "to_int_defined." ("s" | "u") positive_integer
 strict_fp_op     := "add" | "sub" | "mul" | "div" | "fma"
                   | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
+                  | "quiet_olt" | "quiet_ole" | "quiet_ogt" | "quiet_oge"
                   | "convert" | "from_signed" | "from_unsigned"
                   | "to_signed" | "to_unsigned"
 bit_op           := "ctlz" | "cttz" | "ctpop" | "bswap"
@@ -6540,6 +6560,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.107 | 2026-09-27 | Define bounded source dynamic rounding and quiet relational predicates; distinguish executed automatic initialization and conditional conversion from RNE translation-time constants. |
 | 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |
 | 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |
 | 1.9.104 | 2026-09-21 | Apply approved function-section placement through declaration merging, canonical IR/proof metadata and ELF emission, preserving linkage, alignment, aliases, labels and patchable entries. |

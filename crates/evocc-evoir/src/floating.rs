@@ -19,6 +19,10 @@ pub enum FloatingOp {
     Ole,
     Ogt,
     Oge,
+    QuietOlt,
+    QuietOle,
+    QuietOgt,
+    QuietOge,
     Convert,
     FromSigned,
     FromUnsigned,
@@ -45,6 +49,10 @@ impl FloatingOp {
             Self::Ole => "ole",
             Self::Ogt => "ogt",
             Self::Oge => "oge",
+            Self::QuietOlt => "quiet_olt",
+            Self::QuietOle => "quiet_ole",
+            Self::QuietOgt => "quiet_ogt",
+            Self::QuietOge => "quiet_oge",
             Self::Convert => "convert",
             Self::FromSigned => "from_signed",
             Self::FromUnsigned => "from_unsigned",
@@ -72,6 +80,10 @@ impl FloatingOp {
             "ole" => Self::Ole,
             "ogt" => Self::Ogt,
             "oge" => Self::Oge,
+            "quiet_olt" => Self::QuietOlt,
+            "quiet_ole" => Self::QuietOle,
+            "quiet_ogt" => Self::QuietOgt,
+            "quiet_oge" => Self::QuietOge,
             "convert" => Self::Convert,
             "from_signed" => Self::FromSigned,
             "from_unsigned" => Self::FromUnsigned,
@@ -139,7 +151,9 @@ impl FloatingInst {
             Add | Sub | Mul | Div => fp_binary && *result == args[0].ty,
             Fma => args.len() == 3 && fp_result && args.iter().all(|a| a.ty == *result),
             Neg => fp_unary && *result == args[0].ty,
-            Oeq | Une | Olt | Ole | Ogt | Oge => fp_binary && *result == EvoIRType::Bits(1),
+            Oeq | Une | Olt | Ole | Ogt | Oge | QuietOlt | QuietOle | QuietOgt | QuietOge => {
+                fp_binary && *result == EvoIRType::Bits(1)
+            }
             Convert => fp_unary && fp_result,
             FromSigned | FromUnsigned => unary && integer(&args[0].ty) && fp_result,
             ToSigned | ToUnsigned => fp_unary && integer(result),
@@ -211,15 +225,15 @@ impl FloatingInst {
                 u128::from(float(0).to_integer(width, signed).is_some())
             }
             ToBits | FromBits => inputs[0],
-            Oeq | Une | Olt | Ole | Ogt | Oge => {
+            Oeq | Une | Olt | Ole | Ogt | Oge | QuietOlt | QuietOle | QuietOgt | QuietOge => {
                 let order = float(0).compare(float(1));
                 u128::from(match self.op {
                     Oeq => order == Some(Ordering::Equal),
                     Une => order != Some(Ordering::Equal),
-                    Olt => order == Some(Ordering::Less),
-                    Ole => matches!(order, Some(Ordering::Less | Ordering::Equal)),
-                    Ogt => order == Some(Ordering::Greater),
-                    Oge => matches!(order, Some(Ordering::Greater | Ordering::Equal)),
+                    Olt | QuietOlt => order == Some(Ordering::Less),
+                    Ole | QuietOle => matches!(order, Some(Ordering::Less | Ordering::Equal)),
+                    Ogt | QuietOgt => order == Some(Ordering::Greater),
+                    Oge | QuietOge => matches!(order, Some(Ordering::Greater | Ordering::Equal)),
                     _ => unreachable!(),
                 })
             }

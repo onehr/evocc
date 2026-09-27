@@ -122,6 +122,24 @@ struct Folder<'a> {
     target: &'a TargetDataLayout,
 }
 
+pub(super) fn expression_kind(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Option<FloatKind> {
+    match (Folder {
+        types,
+        symbols,
+        target,
+    })
+    .ty(expression, 0)?
+    {
+        NumberType::Real(kind) => Some(kind),
+        NumberType::Integer(_) => None,
+    }
+}
+
 impl Folder<'_> {
     fn declared_type(&self, ty: TypeId) -> Option<NumberType> {
         match self.types.get(ty)?.kind {
@@ -144,6 +162,9 @@ impl Folder<'_> {
             CHirExpr::Cast(ty, ..) => self.declared_type(*ty),
             CHirExpr::Unary(UnaryOp::Plus | UnaryOp::Neg, operand, _)
             | CHirExpr::EvaluateOnce(operand, _) => self.ty(operand, depth + 1),
+            CHirExpr::Comma(_, value, _) | CHirExpr::Binary(BinaryOp::Comma, _, value, _) => {
+                self.ty(value, depth + 1)
+            }
             CHirExpr::Binary(op, left, right, _) => {
                 if matches!(
                     op,

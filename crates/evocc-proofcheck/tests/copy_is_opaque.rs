@@ -124,6 +124,25 @@ fn scalar_proof_cannot_rewrite_strict_fp_or_erase_its_observable_status() {
 }
 
 #[test]
+fn scalar_proof_cannot_change_quiet_comparison_exception_behavior() {
+    let source = include_str!("../../../tests/fixtures/floating-strict-world.evoir")
+        .replace("-> (f64, mem<all>, world)", "-> (bits<1>, mem<all>, world)")
+        .replace(
+            "fp.strict.add %v3, %v0, %v1 : f64",
+            "fp.strict.quiet_olt %v3, %v0, %v1 : bits<1>",
+        );
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.certificate.regions.is_empty());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    files.reject_forged_output(
+        &outcome.certificate,
+        &render_module(&outcome.module).replace("fp.strict.quiet_olt", "fp.strict.olt"),
+    );
+}
+
+#[test]
 fn scalar_proof_cannot_drop_or_relocate_a_patchable_function_entry() {
     let source = MODULE.replace(
         "cc = target_default",
