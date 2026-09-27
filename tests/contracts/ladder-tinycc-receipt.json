@@ -3,7 +3,7 @@
  "rung": "E5",
  "subject": "tinycc",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260920T000937Z",
+ "run": "20260927T083017Z",
  "pin": {
   "subject": "tinycc",
   "rung": "E5",
@@ -16,17 +16,58 @@
  "tarballSha256": {
   "tcc-0.9.27.tar.bz2": "not-fetched: savannah answered 504 during this run"
  },
- "driverSha256": "3d4dac628a655ccd1eacfd50ad200272e403151f2dfcd6295c3f03afdcc3b5e3",
+ "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": "tests-passed",
  "units": 11,
- "unitsCompiledByEvocc": 9,
- "unitsInPassingBuild": 9,
- "refusalsByCode": {
-  "E3049": 1,
-  "E3050": 1
- },
+ "unitsCompiledByEvocc": 11,
+ "unitsInPassingBuild": 11,
+ "refusalsByCode": {},
  "testResult": "tests-passed",
+ "trialAudits": [
+  {
+   "units": [
+    "arm64-asm.o",
+    "arm64-gen.o",
+    "arm64-link.o",
+    "libtcc.o",
+    "tcc.o",
+    "tccasm.o",
+    "tccdbg.o",
+    "tccelf.o",
+    "tccgen.o",
+    "tccpp.o",
+    "tccrun.o"
+   ],
+   "expectedObjectHashes": {
+    "arm64-asm.o": "30006cba29d462cbb6f5133778a66a29529c6b0ed425df1423f633dcca1217b4",
+    "arm64-gen.o": "a7d71b3513070fa002df93fe08dc86917ffd20f2812dbec7905341f3d3965ae7",
+    "arm64-link.o": "91f2ebffc8a9b56f61bb7ffeb6c4512d88ddc9a80955f2027a15f911074a7190",
+    "libtcc.o": "d085168449eac5e12dbc6ca44bd6a9576259281d11410d8b65824cd6ed1b498a",
+    "tcc.o": "713a1b710bd290c9db2057a9d60c9b0c188154fdaa75bb4db1a2e0f6b0684f99",
+    "tccasm.o": "251b46caa2c2901dd817721bab2b5d08051a2f2997c5993269a5cd8b98acd926",
+    "tccdbg.o": "d859c68217979ea603820fdf93c2e432cf3d918627b18620e18dc0ac3eed9633",
+    "tccelf.o": "2f0cbbb58ac3240d3f993bf8feff9cc41a3d41a58f6d981d5da48f1feb296fd7",
+    "tccgen.o": "c9470bcba794973b9e69ce934d42e252ef292d90540df482f25286232cbf37ca",
+    "tccpp.o": "c0d22a8782a7048085fda221cae3c0bea5b196a4ca5c44de0b383b6b076a1117",
+    "tccrun.o": "ee392baeea19187595fb1db8793aaf9cc37c27a595491dd81540f0a576a6c164"
+   },
+   "changedObjects": [],
+   "passed": true,
+   "verdict": "tests-passed",
+   "logs": {
+    "relink": {
+     "file": "relink-1.log",
+     "sha256": "8d08683b5c9e0095b2ec7f664607545288f4f2a1131b83d5396fe614ee3ac603"
+    },
+    "test": {
+     "file": "test-1.log",
+     "sha256": "d98de55e00209ce63687f05dc95ed5c4e22dd680b7889ca6b7fb1724d645daa9"
+    }
+   },
+   "binarySha256": "cb63a957639598475f4fb72c849387c7af3e342899a69f538f3a00cebda24cd2"
+  }
+ ],
  "failingUnits": [],
  "excludedForSymbolParity": {},
  "symbolParity": {},
@@ -43,5 +84,5 @@
   "-Wno-unused-result": 11,
   "-o": 11
  },
- "evidence": ".evidence/ladder/tinycc/20260920T000937Z"
+ "evidence": ".evidence/ladder/tinycc/20260927T083017Z"
 }

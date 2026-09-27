@@ -203,7 +203,7 @@ class AdditionalAdapterTests(unittest.TestCase):
             key = 'llvm-test-suite:SingleSource/example.c'
             rule = {'disposition': 'FP-deferred', 'sourceSha256': module.ladder.sha256_file(source),
                     'reason': 'source-specific reviewed requirement',
-                    'deferredFeatures': ['binary128'],
+                    'deferredFeatures': ['binary16'],
                     'evidence': ['docs/evoir-spec.md'],
                     'originalArguments': row['originalArguments']}
             self.assertEqual(module.program_disposition(row, source, {}, 'baseline.json')['disposition'],

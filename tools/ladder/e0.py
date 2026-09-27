@@ -577,18 +577,19 @@ def classify_program(row: dict, source: Path, reviewed: dict) -> dict:
             result['dispositionReason'] = (
                 f"current {row['outcome']} supersedes the former FP deferral: {rule['reason']}")
         elif rule['disposition'] == 'FP-deferred':
-            # Pre-execution FP reviews also covered f32/f64, now implemented.
+            # Historical reviews also covered scalar/quad and strict FP, now
+            # implemented in the admitted hosted profile. Such a label cannot
+            # waive a newly exposed refusal in a current campaign.
             # A surviving refusal needs a source-bound review of an actually
             # deferred feature, not just the presence of floating expressions.
             features = rule.get('deferredFeatures')
-            deferred = {'binary16', 'bfloat16', 'binary128', 'floating-complex',
-                        'floating-vector', 'strict-fenv'}
+            deferred = {'binary16', 'bfloat16', 'floating-complex', 'floating-vector'}
             if (not isinstance(features, list) or not features
                     or any(not isinstance(feature, str) or feature not in deferred
                            for feature in features)):
                 result['disposition'] = 'compiler-failure'
                 result['dispositionError'] = (
-                    'FP review predates scalar f32/f64 support or lacks a still-deferred feature')
+                    'FP review names an implemented feature or lacks a still-deferred feature')
         return result
     if row['outcome'] == 'not-applicable':
         return {'disposition': 'not-applicable',

@@ -623,11 +623,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   programs as PASS; no source, flag, historical numerator or ABI changed.
   [Measured record](tests/fixtures/hva-varargs-reference.out); tiny-vector ABI is L06.
 
-- [ ] **B05 — Replace TinyCC's final two reference-built FP objects** — `OPEN`, P2.
-  Current coverage is 9/11; the static-initializer E3101 is already repaired and
-  installed. Map the two named deferred FP paths to L02–L05, repair their shared
-  semantics, install the objects and run unchanged original tests. Close at
-  11/11 with no replacement rebuild/symbol exclusion. [Receipt](tests/contracts/ladder-tinycc-receipt.json).
+- [x] **B05 — Replace TinyCC's final two reference-built FP objects** — `DONE`, P2, 2026-09-27.
+  Shared binary128 support repairs `tccgen.o` and `tccpp.o`. Fresh run
+  `20260927T083017Z` installs **11/11**, no symbol exclusions or failures, and
+  original `make test` passes on the reference and full EvoCC build. The runner
+  now checks actual relink/test exit status, an exact upstream terminal marker
+  and unchanged installed-object hashes, with three false-positive REDs and
+  object-replacement negatives. **260** ladder regressions pass. The original
+  target-specific Makefile omissions remain omissions, not newly executed tests.
+  [Receipt](tests/contracts/ladder-tinycc-receipt.json).
 
 - [ ] **B06 — Finish toybox compilation and chattr diagnosis** — `OPEN`, P2.
   Historical compilation is 201/203 with two deferred FP objects, but both old
@@ -693,6 +697,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   and SQLite as well as repaired lanes. Close with fresh source-bound five-way
   accounting and zero unexplained compiler failures; deferrals/N/A/unusable
   oracles remain distinct from ALL PASS. [Current aggregate](tests/contracts/bench-receipt.json).
+  September 27 follow-ups with one frozen subject close jq 69/69, TinyCC 11/11
+  and the entire **220/220 c-testsuite** population, with zero c-testsuite
+  deferrals/exclusions. These individual fresh lanes do not constitute the
+  final 15-lane campaign. Historical binary128/strict-fenv waiver labels no
+  longer excuse a new refusal under the now-implemented hosted profile.
 
 ## Remaining numerical and language contracts
 

@@ -10,6 +10,7 @@ build that does not pass.
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -232,6 +233,61 @@ class PreparationPreservesSource(unittest.TestCase):
                         prepared = adapter.prepare(*args)[0]
                     self.assertEqual((prepared / "fixture.c").read_bytes(), contents)
                     self.assertEqual((source / "fixture.c").read_bytes(), contents)
+
+
+class TinyccVerdict(unittest.TestCase):
+    def test_rebuilt_or_missing_subject_objects_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            obj = root / 'compiler.o'
+            obj.write_bytes(b'subject')
+            expected = {'compiler.o': mixed.sha256(obj)}
+            done = subprocess.CompletedProcess([], 0, 'tests-passed\n', '')
+            with patch.object(mixed, 'container', return_value=done):
+                self.assertEqual(tinycc.run_tests(root, expected), (True, 'tests-passed'))
+
+            def rebuild(*args, **kwargs):
+                obj.write_bytes(b'reference')
+                return done
+
+            with patch.object(mixed, 'container', side_effect=rebuild):
+                self.assertEqual(tinycc.run_tests(root, expected), (False, 'object-mismatch-after-test'))
+            obj.unlink()
+            with patch.object(mixed, 'container') as run:
+                self.assertEqual(tinycc.run_tests(root, expected), (False, 'object-mismatch-before-test'))
+                run.assert_not_called()
+
+    def test_container_failure_overrides_a_successful_inner_marker(self):
+        done = subprocess.CompletedProcess([], 9, 'tests-passed\n', '')
+        with patch.object(mixed, 'container', return_value=done):
+            self.assertEqual(tinycc.run_tests(Path('/unused')), (False, 'runner-exit-9'))
+
+    def test_success_marker_does_not_override_relink_or_test_exit_status(self):
+        for relink_status, test_status, marker, passed in [
+            (0, 0, '------- ALL TESTS PASSED --------', True),
+            (2, 0, '------- ALL TESTS PASSED --------', False),
+            (0, 7, '------- ALL TESTS PASSED --------', False),
+            (0, 0, 'prefix ALL TESTS PASSED but truncated', False),
+            (0, 0, '', False),
+        ]:
+            with self.subTest(relink=relink_status, tests=test_status, marker=marker), \
+                    tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+
+                def local_container(mounts, script, timeout):
+                    stub = f'''make() {{
+                        if [ "$1" = tcc ]; then
+                            touch tcc; chmod +x tcc; return {relink_status}
+                        fi
+                        printf '%s\\n' '{marker}'
+                        return {test_status}
+                    }}
+                    '''
+                    return subprocess.run(['bash', '-c', stub + script.replace('/work/tinycc', str(root))],
+                                          capture_output=True, text=True, timeout=10, check=False)
+
+                with patch.object(mixed, 'container', side_effect=local_container):
+                    self.assertEqual(tinycc.run_tests(root)[0], passed)
 
 
 class Substitution(unittest.TestCase):

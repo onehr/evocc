@@ -88,7 +88,7 @@ class ProgramDispositionTest(unittest.TestCase):
         row, _ = self.measure()
         self.assertEqual(row['disposition'], 'compiler-failure')
         row, summary = self.measure({'disposition': 'FP-deferred', 'reason': 'executed arithmetic proved by separate probe',
-                                     'deferredFeatures': ['binary128']}, emission='refused')
+                                     'deferredFeatures': ['binary16']}, emission='refused')
         self.assertEqual(row['outcome'], 'refused')
         self.assertEqual(row['disposition'], 'FP-deferred')
         self.assertEqual(summary['dispositionCounts']['FP-deferred'], 1)
@@ -122,8 +122,9 @@ class ProgramDispositionTest(unittest.TestCase):
                 self.assertEqual(row['disposition'], 'compiler-failure')
                 self.assertEqual(summary['dispositionCounts']['compiler-failure'], 1)
 
-    def test_pre_scalar_fp_refusal_reviews_must_name_a_still_deferred_feature(self):
-        for features in [None, [], ['binary64'], ['binary128', 'unknown']]:
+    def test_fp_refusal_reviews_must_name_a_still_deferred_feature(self):
+        for features in [None, [], ['binary64'], ['binary128'], ['strict-fenv'],
+                         ['binary16', 'unknown']]:
             with self.subTest(features=features):
                 row, _ = self.measure({'disposition': 'FP-deferred',
                                        'deferredFeatures': features}, emission='refused')

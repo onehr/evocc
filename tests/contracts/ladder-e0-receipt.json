@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260919T222317Z",
-  "subject": "9f571ca",
-  "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+  "run": "20260927T082713Z",
+  "subject": "6624d98",
+  "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -56,79 +56,32 @@
    "timeoutPolicy": "multiply only by the original dg-timeout-factor"
   },
   "suites": {
-   "torture": {
+   "ctest": {
     "pin": {
-     "repo": "https://github.com/gcc-mirror/gcc.git",
-     "ref": "releases/gcc-16.2.0",
-     "subdir": "gcc/testsuite/gcc.c-torture/execute"
+     "repo": "https://github.com/c-testsuite/c-testsuite.git",
+     "commit": "5c7275656d75",
+     "subdir": "tests/single-exec"
     },
-    "sourceDirectory": ".build/ladder/torture/gcc/testsuite/gcc.c-torture/execute",
-    "sourceCommit": "78d4ac73dd391005b895a6148cd9831e28e1208b",
-    "programs": 1692,
+    "sourceDirectory": ".build/ladder/ctest/tests/single-exec",
+    "sourceCommit": "5c7275656d751de0e68b2d340a95b5681858ed07",
+    "programs": 220,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1505,
-     "not-applicable": 61,
-     "refused": 120,
-     "fail": 6
+     "pass": 220
     },
     "dispositionCounts": {
-     "PASS": 1504,
+     "PASS": 220,
      "compiler-failure": 0,
-     "FP-deferred": 39,
-     "not-applicable": 146,
-     "oracle-unusable": 3
+     "FP-deferred": 0,
+     "not-applicable": 0,
+     "oracle-unusable": 0
     },
-    "refusalsByCode": {
-     "E1205": 20,
-     "E3050": 15,
-     "E3049": 12,
-     "E2001": 11,
-     "E2203": 8,
-     "E0112": 8,
-     "E2920": 7,
-     "E2940": 5,
-     "E1003": 4,
-     "E3051": 4,
-     "E2933": 3,
-     "E2903": 3,
-     "E1001": 3,
-     "E2913": 2,
-     "E2101": 2,
-     "E3101": 2,
-     "E2939": 2,
-     "E2102": 2,
-     "E2935": 1,
-     "E2948": 1,
-     "E2202": 1,
-     "other": 1,
-     "E4002": 1,
-     "E2204": 1,
-     "E2929": 1
-    },
-    "failuresByInterpreterVerdict": {
-     "E3008 interpreter-fuel-exhausted": 2,
-     "E3039 external-call-not-executable": 2,
-     "E3004 signed-integer-overflow": 1,
-     "E3001 read-of-uninitialized-object": 1
-    },
-    "appliedOptions": {
-     "-std=gnu89": 75,
-     "-fgnu89-inline": 12,
-     "-std=gnu17": 13,
-     "-std=c99": 1,
-     "-fwrapv": 12,
-     "-ffast-math": 1,
-     "-fno-strict-overflow": 1,
-     "-O": 1,
-     "-O2": 2,
-     "-fpic": 1,
-     "-std=c89": 1,
-     "-Og": 1
-    },
-    "programsWithUnhandledRequirements": 60
+    "refusalsByCode": {},
+    "failuresByInterpreterVerdict": {},
+    "appliedOptions": {},
+    "programsWithUnhandledRequirements": 0
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20260919T222317Z"
+ "evidence": ".evidence/ladder/e0/20260927T082713Z"
 }

@@ -59,12 +59,17 @@ echo reference-build-ok
 """
 
 RELINK_AND_TEST = f"""
-cd {CONTAINER_ROOT}
-rm -f tcc libtcc.a
-make tcc libtcc.a > relink.log 2>&1
-if [ ! -x tcc ]; then echo relink-failed; tail -40 relink.log; exit 0; fi
-make test > test.log 2>&1
-if grep -q 'ALL TESTS PASSED' test.log; then echo tests-passed; else echo tests-failed; fi
+cd {CONTAINER_ROOT} || exit 1
+rm -f tcc libtcc.a || exit 1
+if ! make tcc libtcc.a > relink.log 2>&1; then
+    echo relink-failed; tail -40 relink.log; exit 1
+fi
+if [ ! -x tcc ]; then echo relink-failed; exit 1; fi
+if make test > test.log 2>&1 && grep -Fxq -- '------- ALL TESTS PASSED --------' test.log; then
+    echo tests-passed
+else
+    echo tests-failed; exit 1
+fi
 """
 
 
@@ -90,10 +95,18 @@ def reference_build(tree: Path) -> str:
     return "ok" if "reference-build-ok" in done.stdout else (done.stdout + done.stderr)[-400:]
 
 
-def run_tests(tree: Path) -> tuple[bool, str]:
+def run_tests(tree: Path, expected_objects: dict[str, str] | None = None) -> tuple[bool, str]:
+    expected_objects = expected_objects or {}
+    if mixed.audit_objects(tree, expected_objects):
+        return False, "object-mismatch-before-test"
     done = mixed.container({MOUNT: tree}, RELINK_AND_TEST, timeout=5400)
-    for verdict in ("tests-passed", "tests-failed", "relink-failed"):
-        if verdict in done.stdout:
+    if mixed.audit_objects(tree, expected_objects):
+        return False, "object-mismatch-after-test"
+    lines = done.stdout.splitlines()
+    for verdict in ("tests-failed", "relink-failed", "tests-passed"):
+        if verdict in lines:
+            if verdict == "tests-passed" and done.returncode != 0:
+                return False, f"runner-exit-{done.returncode}"
             return verdict == "tests-passed", verdict
     return False, "no-verdict"
 
@@ -125,6 +138,9 @@ def main() -> int:
             print(f"tinycc: reference build failed: {status}", file=sys.stderr)
             return 1
         passed, note = run_tests(tree)
+        for name in ('relink', 'test'):
+            if (tree / f'{name}.log').is_file():
+                shutil.copyfile(tree / f'{name}.log', evidence / f'{name}-baseline.log')
         print(f"tinycc: baseline {note}")
         baseline = note
         if not passed:
@@ -156,14 +172,34 @@ def main() -> int:
     failing: list[str] = []
     test_result = "not-run"
     bisection: dict = {}
+    trial_audits: list[dict] = []
 
     if candidates:
         subject_tree = mixed.Tree(tree, build / "tinycc-pristine")
         journal = evidence / "bisect.jsonl"
 
         def fails(candidate: list[str]) -> tuple[bool, str]:
-            mixed.substitute(subject_tree, candidate, asm_dir)
-            ok, why = run_tests(subject_tree.root)
+            installed = mixed.substitute(subject_tree, candidate, asm_dir)
+            expected = {unit: mixed.sha256(asm_dir / 'obj' / (mixed.flat_name(unit) + '.o'))
+                        for unit in installed}
+            if installed != candidate:
+                ok, why = False, 'incomplete-install'
+            else:
+                ok, why = run_tests(subject_tree.root, expected)
+            tag = str(len(trial_audits) + 1)
+            logs = {}
+            for name in ('relink', 'test'):
+                source = tree / f'{name}.log'
+                if source.is_file():
+                    destination = evidence / f'{name}-{tag}.log'
+                    shutil.copyfile(source, destination)
+                    logs[name] = {'file': destination.name, 'sha256': mixed.sha256(destination)}
+            trial_audits.append({
+                'units': installed, 'expectedObjectHashes': expected,
+                'changedObjects': mixed.audit_objects(tree, expected),
+                'passed': ok, 'verdict': why, 'logs': logs,
+                'binarySha256': mixed.sha256(tree / 'tcc') if (tree / 'tcc').is_file() else None,
+            })
             return (not ok), why
 
         bisection = mixed.narrow(candidates, fails, journal)
@@ -196,6 +232,7 @@ def main() -> int:
         "unitsInPassingBuild": len(substituted),
         "refusalsByCode": refusals,
         "testResult": test_result,
+        "trialAudits": trial_audits,
         "failingUnits": failing,
         "excludedForSymbolParity": excluded,
         "symbolParity": {

@@ -579,6 +579,12 @@ def compatible_units(parity: dict[str, dict]) -> tuple[list[str], dict[str, str]
 # --------------------------------------------------------------------------
 
 
+def audit_objects(tree: Path, expected: dict[str, str]) -> list[str]:
+    """An installed target object may not be replaced by a reference rebuild."""
+    return [unit for unit, digest in expected.items()
+            if not (tree / unit).is_file() or sha256(tree / unit) != digest]
+
+
 class Tree:
     """One subject tree, with the reference objects kept aside.
 

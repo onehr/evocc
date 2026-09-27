@@ -2351,3 +2351,29 @@ This closes B07 and the admitted hosted Linux L02 profile. It does not rerun the
 other applications, kernel tests or B10's final frozen campaign. The original
 c-testsuite `00204.c` also passes a targeted expected-output replay, but the
 historical 219/220 full-suite receipt is unchanged until a fresh full run.
+
+The follow-up full **c-testsuite run `20260927T082713Z` is 220/220 PASS**,
+zero deferrals, exclusions, unknown outcomes or adjusted source parameter lists.
+The targeted `00204.c` source SHA-256 is
+`cfa12d12c391f845fbc18176b14ae8f169cd680e1971902b10a4ac6f556530ea`;
+its upstream expected-output hash is
+`6197bddf75d156ab3ff383a78c6476de788c973f91a2ee6d411a99d32b34e940`.
+Old FP disposition records stay historical, but binary128 and strict-fenv are
+removed from the current refusal-waiver set; a fresh failure cannot be hidden
+behind an implemented capability. Mutation tests enforce that distinction.
+
+**TinyCC run `20260927T083017Z` reaches 11/11 installed units**, no refusals,
+symbol exclusions or unchanged-object audit failures. `tccgen.o` and `tccpp.o`
+now use real quad support. Reference and complete EvoCC builds pass unchanged
+upstream `make test`. The original target-selected Makefile still excludes
+some architecture-inapplicable tests; this does not claim every TinyCC target.
+
+Before replay, a five-case local-shell reduction exposed three false successes
+in the old runner: relink failure with a surviving executable, nonzero test exit
+with a success marker, and a malformed marker. The runner now requires both
+zero exits and the exact upstream completion line; it also rejects a changed
+or missing installed object before/after execution. Separate container-exit
+and object-mutation negatives pass. The shared object audit reuses toybox's
+established check. **260 ladder tests and Ruff pass**. The receipt retains all
+eleven expected hashes, the final executable hash and per-trial log hashes;
+it is not based only on the phrase `ALL TESTS PASSED`.

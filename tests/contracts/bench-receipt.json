@@ -1,29 +1,51 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T082713.077540Z",
-  "subject": "6624d98c9b9ac6af55584a7ebb278548b8ffedb2",
+  "run": "20260927T083208.543023Z",
+  "subject": "a8b141943aebdca817ab9286d1b1b6ab672c82d3",
   "dirty": true,
   "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
   "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "ctest",
+    "toybox",
     "--evocc",
     ".build/floating-targeted/strict-20260927/evocc-pthread-subject",
     "--jobs",
-    "2"
+    "2",
+    "--budget",
+    "1"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest"
+    "toybox"
   ],
   "status": "RUNNING",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
-      "status": "RUNNING",
       "note": "self-checking programs and expected stdout",
+      "outcomes": {
+        "pass": 220
+      },
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 220,
+      "passed": 220,
+      "kind": "programs",
+      "runtimeDiagnostics": {},
+      "dispositions": {
+        "PASS": 220,
+        "compiler-failure": 0,
+        "FP-deferred": 0,
+        "not-applicable": 0,
+        "oracle-unusable": 0
+      },
+      "status": "PASS",
+      "run": "20260927T082713Z",
+      "evidence": ".evidence/ladder/e0/20260927T082713Z",
+      "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
@@ -32,7 +54,15 @@
         "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
         "--suite",
         "ctest"
-      ]
+      ],
+      "exitCode": 0,
+      "seconds": 27.3,
+      "previous": null,
+      "measurement": {
+        "run": "20260927T082713.077540Z",
+        "subject": "6624d98c9b9ac6af55584a7ebb278548b8ffedb2",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
+      }
     },
     "torture": {
       "rung": "E0a",
@@ -801,16 +831,13 @@
       "rung": "E5",
       "note": "mixed-link compiler tests",
       "outcomes": {},
-      "refusals": {
-        "E3049": 1,
-        "E3050": 1
-      },
+      "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 11,
-      "passed": 9,
+      "passed": 11,
       "kind": "units",
-      "compiled": 9,
+      "compiled": 11,
       "excluded": 0,
       "testVerdict": "tests-passed",
       "adjustments": {
@@ -820,36 +847,35 @@
         "sysroot": [],
         "defines": []
       },
-      "status": "INCOMPLETE",
-      "run": "20260920T000937Z",
-      "evidence": ".evidence/ladder/tinycc/20260920T000937Z",
+      "status": "PASS",
+      "run": "20260927T083017Z",
+      "evidence": ".evidence/ladder/tinycc/20260927T083017Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/tinycc.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
         "--jobs",
         "2"
       ],
       "exitCode": 0,
-      "seconds": 34.1,
+      "seconds": 41.9,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
         "outcomes": {},
         "refusals": {
           "E3049": 1,
-          "E3050": 1,
-          "E3101": 1
+          "E3050": 1
         },
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 11,
-        "passed": 8,
+        "passed": 9,
         "kind": "units",
-        "compiled": 8,
+        "compiled": 9,
         "excluded": 0,
         "testVerdict": "tests-passed",
         "adjustments": {
@@ -860,99 +886,30 @@
           "defines": []
         },
         "status": "INCOMPLETE",
-        "run": "20260919T231249Z",
-        "evidence": ".evidence/ladder/tinycc/20260919T231249Z"
+        "run": "20260920T000937Z",
+        "evidence": ".evidence/ladder/tinycc/20260920T000937Z"
       },
       "measurement": {
-        "run": "20260920T000937.504004Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "3d4dac628a655ccd1eacfd50ad200272e403151f2dfcd6295c3f03afdcc3b5e3"
+        "run": "20260927T083017.521986Z",
+        "subject": "a8b141943aebdca817ab9286d1b1b6ab672c82d3",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
       }
     },
     "toybox": {
       "rung": "E6",
-      "note": "201/203 compiled historically; test logs stop after 57 occurrences at chattr. Complete test population and actual relink/object audit require fresh replay.",
-      "outcomes": {},
-      "refusals": {
-        "E3049": 1,
-        "E3050": 1
-      },
-      "baselineFailures": 1,
-      "failingUnits": [],
-      "total": 203,
-      "passed": 0,
-      "historicallyInstalled": 201,
-      "kind": "units",
-      "compiled": 201,
-      "excluded": 0,
-      "testVerdict": "historical-prefix-only",
-      "adjustments": {
-        "sourcePageBreaksStripped": [],
-        "noreturnSpecifiersRemoved": [],
-        "highBytesReEscaped": [],
-        "sysroot": [],
-        "defines": [],
-        "unitsNotSubstitutable": [
-          "the object built from main.c"
-        ]
-      },
-      "status": "VALIDATION_GAP",
-      "acceptanceAudit": {
-        "date": "2026-09-23",
-        "evidence": "tests/fixtures/toybox-filesystem-flags.out",
-        "freshFullReplay": "NOT_RUN"
-      },
-      "run": "20260919T231320Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260919T231320Z",
-      "receipt": "tests/contracts/ladder-toybox-receipt.json",
+      "status": "RUNNING",
+      "note": "mixed-link tests relative to baseline failures",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/toybox.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
         "--jobs",
         "2",
         "--budget",
-        "45"
-      ],
-      "exitCode": 0,
-      "seconds": 60.7,
-      "previous": {
-        "rung": "E6",
-        "note": "mixed-link tests relative to baseline failures",
-        "outcomes": {},
-        "refusals": {
-          "E3049": 7,
-          "E3050": 1
-        },
-        "baselineFailures": 1,
-        "failingUnits": [],
-        "total": 203,
-        "passed": 195,
-        "kind": "units",
-        "compiled": 195,
-        "excluded": 0,
-        "testVerdict": "no-regression",
-        "adjustments": {
-          "sourcePageBreaksStripped": [],
-          "noreturnSpecifiersRemoved": [],
-          "highBytesReEscaped": [],
-          "sysroot": [],
-          "defines": [],
-          "unitsNotSubstitutable": [
-            "the object built from main.c"
-          ]
-        },
-        "status": "INCOMPLETE",
-        "run": "20260915T214147Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260915T214147Z"
-      },
-      "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
-      }
+        "1"
+      ]
     },
     "musl": {
       "rung": "E7",

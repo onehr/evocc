@@ -144,10 +144,7 @@ def regressions(baseline: dict[OutcomeId, str], found: dict[OutcomeId, str]) -> 
 
 
 def audit_objects(tree: Path, expected: dict[str, str]) -> list[str]:
-    return [
-        unit for unit, digest in expected.items()
-        if not (tree / unit).is_file() or mixed.sha256(tree / unit) != digest
-    ]
+    return mixed.audit_objects(tree, expected)
 
 
 def test_summary(log: Path, verdict: str) -> dict:
