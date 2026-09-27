@@ -53,6 +53,14 @@ of the 6,966-unit current queue, plus the separate initial 36 reuse candidates.
 There is still no final generated-input/link/boot verdict. The last filesystem
 check has 59 GiB host and 26 GiB case-volume free. Source trees/disks are reused.
 
+At **2026-09-27 18:11 UTC**, the same run has **5,440/6,966 assembled** records
+in its first-pass queue (36 initial reuse candidates are separately retained).
+There are no recorded refused/failed units at this checkpoint. It still has
+not reached prepared-input convergence, final link, new boot or K13/K14.
+Host/case-volume free space is approximately 61/25 GiB. The frozen compiler
+and `substitute.py` hashes remain unchanged; September 28's interpreter and
+diagnostic repairs are tested separately and are not credited to this binary.
+
 During this run, a separate real-container failure injection exposes K1's
 acceptance of OK lines before nonzero container exit. The
 [T05i candidate](../../tests/fixtures/kernel-assembly-verdict.out) passes 51

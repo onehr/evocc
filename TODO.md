@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
+Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.114** and EvoMIR **0.50**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -1075,9 +1075,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The [fresh batch](tests/fixtures/remaining-boundaries-20260927.out) measures
   `_Float16`, `__fp16` and `__bf16` separately: 24 fixed-reference executions
   pass, including argument/return shapes. EvoCC still refuses all six cases;
-  half/bfloat function signatures expose E3101, and other paths report parser,
+  half/bfloat function signatures originally exposed E3101, and other paths report parser,
   value or interpreter diagnostics. These are now named reproductions, not an
   unexplained E3101 or an automatic generic-FP waiver.
+  September 28's [T01b repair](tests/fixtures/typed-call-requirements.out) gives
+  those signatures the existing E3049 classification; all eight original
+  command replays retain refusal. This does not implement L03.
 
 - [ ] **L04 — Floating complex execution** — `NEEDS_RULE`, P2.
   Torture retains 15 floating-complex originals. Specify complex arithmetic,
@@ -1184,6 +1187,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     Both interpreters and all GCC/Clang/EvoCC O0/O2 native controls pass; validator
     and initializer rules are unchanged. [Measured record](tests/fixtures/private-leaf-substitution.out).
 
+  - [x] **T01b — Select the typed call machine from reached signatures**, 2026-09-28.
+    An independent positive control exposes E3007 for unused pointer/FP
+    parameters whose actual arguments are integer constants. The shared C-HIR
+    reachability scan now includes call signatures, preserving alias/transitive
+    calls, unevaluated sizeof and uninitialized-read checks. Both interpreters
+    and 54 fixed native controls pass. Nominal floating signatures now use the
+    existing E3049 rather than generic E3101; no new numeric type is executable.
+    All eight original half-interface replays retain named refusal. The 1,876
+    affected tests pass with three historical ignores; Clippy/fmt and the
+    changed gate against `1160db6` pass. No kernel/native acceptance is inherited.
+    [Minimal cases, negative attempts and identity](tests/fixtures/typed-call-requirements.out).
+
 - [ ] **T02 — Put expanded KUnit behind the common bench entry point** — `OPEN`, P1.
   The `kernel-kunit` adapter now wraps the existing boot/init workflow and
   pinned upstream parser, with separate 1,504 built-in / 31-module, 765-case
@@ -1257,7 +1272,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   low-disk mode, same source/build trees. Its earlier two-job launch was
   interrupted to use the measured 12-core/64-GiB host; verified cache entries
   are reused, not relabeled as fresh compilation. The current run has 768
-  assembled records. It includes K03b and the accumulated compiler repairs;
+  assembled records at that historical checkpoint. At **18:11 UTC** the same
+  owner/worker and frozen compiler remain live with **5,440/6,966 assembled**
+  in the current queue, plus 36 separately retained reuse candidates. No new
+  generated-input, link or boot verdict exists yet. It includes K03b and the accumulated compiler repairs;
   T04d runs through the common driver. The preceding debug-binary launch
   was explicitly interrupted before installing objects and is not a completed
   survey. [Live log and identities][kernel].

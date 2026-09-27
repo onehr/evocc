@@ -3465,7 +3465,19 @@ fn function_value_type(
             ir: EvoIRType::Ptr(AddressSpace::Generic),
             integer: CIntegerType::ULONG,
         }),
-        Some(TypeKind::Complex(_)) => Err(LowerError::FloatingCallInterface { span }),
+        Some(
+            TypeKind::Complex(_)
+            | TypeKind::TargetBuiltin(
+                evocc_types::TargetBuiltinType::GnuFloat16
+                | evocc_types::TargetBuiltinType::GnuFloat32
+                | evocc_types::TargetBuiltinType::GnuFloat64
+                | evocc_types::TargetBuiltinType::GnuFloat128
+                | evocc_types::TargetBuiltinType::GnuFloat32x
+                | evocc_types::TargetBuiltinType::GnuFloat64x
+                | evocc_types::TargetBuiltinType::ArmFp16
+                | evocc_types::TargetBuiltinType::ArmBf16,
+            ),
+        ) => Err(LowerError::FloatingCallInterface { span }),
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,

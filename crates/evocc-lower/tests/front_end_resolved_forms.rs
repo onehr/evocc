@@ -182,8 +182,10 @@ fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_alias
         let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
             .expect_err("header admission must not invent execution support");
         let code = match spelling {
+            "_Float16" | "_Float32" | "_Float64" | "_Float128" | "_Float32x" | "_Float64x"
+            | "__fp16" | "__bf16" => "E3049", // nominal floating call interface
             "__Float32x4_t" => "E3050", // real vector with a floating element
-            _ => "E3101",               // declaration-only extended/sizeless target types
+            _ => "E3101",               // other declaration-only/sizeless target types
         };
         assert_eq!(error.code(), code, "{source}: {error}");
     }

@@ -31,6 +31,28 @@ fn check_with_args(fixture: &str, modes: &[&str], options: &[&str]) {
 const EXECUTION: &[&str] = &["--interpret-c-hir", "--interpret-evoir", "--emit=asm"];
 
 #[test]
+fn unused_call_parameters_and_returns_still_require_typed_conversions() {
+    for case in 0..7 {
+        check_with_args(
+            "unused-typed-call.c",
+            EXECUTION,
+            &[&format!("-DCASE={case}")],
+        );
+    }
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/unused-typed-call.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let out = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .args([mode, "-DCASE=7"])
+            .arg(&source)
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("E3001"));
+    }
+}
+
+#[test]
 fn benchmark_frontier_floating_absolute_calls() {
     check_with_args("floating-absolute-calls.c", EXECUTION, &["-O2"]);
     let module = lower_source("extern double fabs(double); extern void impossible(void); void f(double x){double y=fabs(x); if(y<0.0)impossible();}").unwrap();
@@ -297,6 +319,36 @@ fn floating_complex_value_refusal_is_not_an_unclassified_integer_error() {
                 .code(),
             "E3050",
             "{source}",
+        );
+    }
+}
+
+#[test]
+fn target_floating_call_refusals_survive_the_cli_without_affecting_storage() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/floating-target-call-refusal.c");
+    for kind in ["__fp16", "__bf16"] {
+        for case in 0..5 {
+            for mode in ["--emit=evoir", "--emit=asm", "--interpret-evoir"] {
+                for opt in ["-O0", "-O2"] {
+                    let out = Command::new(env!("CARGO_BIN_EXE_evocc"))
+                        .args(["--target=aarch64-unknown-linux-gnu", mode, opt])
+                        .arg(format!("-DFLOAT_TYPE={kind}"))
+                        .arg(format!("-DCASE={case}"))
+                        .arg(&source)
+                        .output()
+                        .unwrap();
+                    let diagnostic = String::from_utf8_lossy(&out.stderr);
+                    assert!(!out.status.success(), "{kind} {case} {mode} {opt}");
+                    assert!(diagnostic.contains("E3049"), "{diagnostic}");
+                    assert!(!diagnostic.contains("E3101"), "{diagnostic}");
+                }
+            }
+        }
+        check_with_args(
+            "floating-target-call-refusal.c",
+            EXECUTION,
+            &[&format!("-DFLOAT_TYPE={kind}"), "-DCASE=5"],
         );
     }
 }

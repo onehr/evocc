@@ -10377,7 +10377,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 /// memory mode and still has to be allocated before execution starts.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct MemoryRequirements {
-    /// Some reachable body needs the object-memory machine.
+    /// Some reachable body or call signature needs the typed object-memory machine.
     requires_memory: bool,
     /// Every object symbol named by a reachable body, closed over the
     /// initializers of the objects already collected. `initialize_static_objects`
@@ -10442,10 +10442,36 @@ fn reachable_memory_requirements(
             if !visited_functions.insert(function) {
                 continue;
             }
-            let Some(body) = reachable_function_body(unit, function) else {
+            let Some(definition) = reachable_function_definition(unit, function) else {
                 continue;
             };
-            if statement_requires_memory(unit, body) {
+            let body = definition.body.expect("reachable definition has a body");
+            // Calls bind converted arguments even when the body never reads
+            // them (or mentions them only in sizeof). The integer-only slot
+            // machine cannot hold a null pointer or an ignored FP parameter.
+            // Inspect the reached definition, not every prototype in the unit;
+            // unsupported unrelated declarations must remain harmless.
+            let signature_requires_memory = unit.types().get(definition.ty).is_some_and(|ty| {
+                let TypeKind::Function {
+                    return_type,
+                    parameters,
+                } = &ty.kind
+                else {
+                    return false;
+                };
+                let result = unit.types().get(*return_type).is_some_and(|ty| {
+                    !matches!(ty.kind, TypeKind::Void)
+                        && type_requires_memory(unit.types(), *return_type)
+                });
+                result
+                    || match parameters {
+                        FunctionParameters::Prototype { types, .. } => types
+                            .iter()
+                            .any(|ty| type_requires_memory(unit.types(), *ty)),
+                        FunctionParameters::Unspecified => false,
+                    }
+            });
+            if signature_requires_memory || statement_requires_memory(unit, body) {
                 requires_memory = true;
             }
             let mut referenced = ReferencedSymbols::default();
@@ -10548,13 +10574,17 @@ fn linked_library_definition(unit: &CHirUnit<'_>, function: SymbolId) -> SymbolI
         .unwrap_or(function)
 }
 
-fn reachable_function_body<'arena>(
+fn reachable_function_definition<'arena>(
     unit: &CHirUnit<'arena>,
     function: SymbolId,
-) -> Option<&'arena CHirStmt<'arena>> {
+) -> Option<&'arena FunctionDecl<'arena>> {
     let function = linked_library_definition(unit, function);
     unit.iter().find_map(|declaration| match declaration {
-        CHirDecl::Function(FunctionDecl { symbol, body, .. }) if *symbol == function => *body,
+        CHirDecl::Function(definition)
+            if definition.symbol == function && definition.body.is_some() =>
+        {
+            Some(definition)
+        }
         CHirDecl::Function(_)
         | CHirDecl::Object(_)
         | CHirDecl::Asm(_)

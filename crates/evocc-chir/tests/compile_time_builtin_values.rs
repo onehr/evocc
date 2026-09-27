@@ -50,6 +50,35 @@ fn evaluate(source: &str) -> Result<i128, String> {
 }
 
 #[test]
+fn unevaluated_size_queries_do_not_hide_typed_call_bindings() {
+    for kind in ["int", "float", "double", "__fp16", "__bf16"] {
+        let source = format!(
+            "unsigned size(const {kind} *p) {{ return sizeof(*p); }} \
+             int main(void) {{ return size(0) != sizeof({kind}); }}"
+        );
+        assert_eq!(evaluate(&source).unwrap(), 0, "{source}");
+    }
+    // An unsupported, unreachable signature does not select or execute that
+    // function; whole-unit signature admission would violate this boundary.
+    assert_eq!(
+        evaluate("__fp16 unused(__fp16 value) { return value; } int main(void) { return 0; }")
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn typed_call_requirements_follow_aliases_and_transitive_calls() {
+    for source in [
+        "int leaf(double unused) { return 0; } int middle(void) { return leaf(1); } int main(void) { return middle(); }",
+        "int leaf(void *unused) { return 0; } extern int alias(void *) __attribute__((alias(\"leaf\"))); int main(void) { return alias(0); }",
+        "void leaf(int *unused) {} int main(void) { leaf(0); return 0; }",
+    ] {
+        assert_eq!(evaluate(source).unwrap(), 0, "{source}");
+    }
+}
+
+#[test]
 fn bit_builtins_match_the_frozen_oracle_values_at_runtime() {
     let cases = [
         ("int x = 8; return __builtin_ffs(x);", 4),

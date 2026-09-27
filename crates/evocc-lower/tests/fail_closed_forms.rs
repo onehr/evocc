@@ -93,6 +93,36 @@ fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
     }
 }
 
+#[test]
+fn target_floating_call_interfaces_use_the_named_refusal() {
+    for spelling in [
+        "_Float16",
+        "_Float32",
+        "_Float64",
+        "_Float128",
+        "_Float32x",
+        "_Float64x",
+        "__fp16",
+        "__bf16",
+    ] {
+        for source in [
+            format!("{spelling} identity({spelling} value) {{ return value; }}"),
+            format!("int ignore({spelling} value) {{ return 0; }}"),
+            format!("extern {spelling} external(void); int main(void) {{ external(); return 0; }}"),
+            format!("int callback({spelling} (*function)({spelling})) {{ return 0; }}"),
+            format!("typedef {spelling} signature({spelling}); signature *address(void) {{ return 0; }}"),
+        ] {
+            assert_lowering_error(&source, 310, "E3049", "not-lowered: floating-call-interface");
+        }
+        // Equal-sized nominal types are not scalar aliases; pointer and layout
+        // use does not justify refusing the containing ordinary function.
+        asm_binding_ir(
+            &format!("unsigned size(const {spelling} *p) {{ return sizeof(*p); }}"),
+            false,
+        );
+    }
+}
+
 fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) {
     let arena = Arena::default();
     let file = FileId::new(9_610 + ordinal);

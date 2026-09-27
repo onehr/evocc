@@ -1,0 +1,57 @@
+2026-09-28 — typed call-mode selection and named floating-interface refusals.
+
+RED 1: floating-target-call-refusal.c CASE=0 reports E3101 on the preceding
+compiler, not the existing E3049 contract. TargetBuiltin nominal floating
+types missed function_value_type's Float branch and fell through to its
+generic unsupported-type error. The shared function-interface classifier now
+names the eight nominal GNU/Arm scalar floating types explicitly. It does NOT
+alias them to equal-size float/double types, enable half/bfloat execution,
+reclassify sizeless SVE types, or refuse pointers to ordinary object storage.
+
+RED 2: the positive storage-pointer control independently exposes E3007 in the
+C-HIR interpreter. The isolated unused-typed-call.c fails CASE=0,2,5,6 before
+the repair: int*, double, adjusted array and function-pointer parameters.
+The bodies do not read these parameters, and the actual arguments are integer
+constants, so the old body-only scan wrongly selects the integer slot machine.
+Call argument conversion/binding still needs a typed value. Requirements now
+inspect reached definitions' canonical signatures as well as their bodies.
+Aliases, transitive calls, void results and unreachable unsupported functions
+are covered. Passing an uninitialized actual argument still reports E3001.
+
+Focused lowering and CLI integration: 75 tests pass before the additional
+reachability controls. Five signature forms x eight target float spellings
+exercise the named refusal; the CLI exercises __fp16/__bf16 x five forms x
+three modes x O0/O2. Pointer/layout controls pass both interpreters and emit.
+Seven ordinary typed-call controls pass both interpreters; native GCC14,
+Clang19 and EvoCC at O0/O2 give 42/42 passes. Two target-float pointer/layout
+controls add 12/12 native passes, for 54/54 total.
+
+Eight unchanged original floating-half-boundaries.c commands (KIND=1/2,
+CASE=1, O0/O2, EvoIR/native emission) now refuse with E3049, not E3101.
+This closes the diagnostic leak, NOT L03 execution or the larger campaign.
+Existing source, options and exported sysroot paths are retained.
+
+The first native attempt executed all 54 cases successfully but its final
+compiler-identity guard FAILED because an overlapping Cargo rebuild replaced
+the debug binary. It is retained under typed-call-20260928 and is not accepted.
+The final attempt starts after binary construction, executes all 54 cases and
+passes the before/after identity guard. The frozen kernel compiler is separate
+and unchanged; no kernel or library objects were installed by these tests.
+
+Final artifacts: .build/floating-targeted/typed-call-final-20260928/
+Recipe: .build/floating-targeted/typed-call-20260928/replay.py <fresh-output>
+Compiler SHA256 35f83622a75ad2ed41ab1ce82dc5c20ec6bc341dde89a49edaba3df695f148e9
+Image descriptor 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19, Clang 19.1.7, AArch64 Linux, no network.
+identity.json 7a0e58e23f47d4be67aa8c1417ece7c23eae2f8285f91a49bc416f84b8465cd8
+native.json 282cb0ed8f751b742cc33f70b99f594302a2ae1b7a0588ea47d5d0e570ce097e
+originals.json 3fe54130e0596482bc589e8cc8243505527f6876cb028bf32f87c1c9e93b26e9
+container.json 6b7afd2f20e78feb10356fc61ab7d34a3f32aab8eda67e81e2b9de92ae1c0490
+
+Affected integration gate against 1160db6: 1,876 PASS / 0 FAIL / three historical
+ignores in 224 groups, Clippy --all-targets -D warnings and workspace fmt PASS.
+The first gate had 1,875 PASS / 1 FAIL / three ignores: an older test expected
+generic E3101 for _Float32. That assertion has been synchronized to the existing
+E3049 contract, not converted to acceptance. The complete changed gate reran.
+Final log: .build/floating-targeted/typed-call-final-gate-20260928.log
+SHA256 56677639cd610d61c880c0f6517ee8c5832b1e215f18bc958cdedd87ff987bb3

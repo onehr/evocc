@@ -4,6 +4,61 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+### September 28: explicitly patched musl dependency supplement
+
+The user approved a **separate patched-dependency lane**, not replacement of
+the frozen musl baseline or its failures. `tools/ladder/musl_patched.py` copies
+only hash-pinned affected inputs, applies tracked patches and links explicit
+replacement objects before each original reference/mixed archive. It audits
+the link map and before/after input hashes. GCC14, Clang19 and EvoCC each run
+at O0/O2 against both archives; original test source and retained test objects
+are not rewritten to match the proposed fixes.
+
+| Repair scope | Focused checks | Original entry replays | Disposition |
+| --- | --- | --- | --- |
+| strtold guard digits, directed subnormal rounding, powf(x,1) | 71,040/71,040 PASS | 180/180 PASS (15 entry names, eight distinct programs) | B08d8 bounded repair closed |
+| strptime `%s` / `%z` compatibility | 540/540 PASS | 24/24 PASS | B08d9 extension closed for the stated profile |
+| wordexp child stderr and helper positional parameters | 576/576 PASS | 24/24 FAIL | Transport repaired; parser/UNDEF/shell gaps remain B08d10 |
+| Missing unistd names and bounded configuration queries | 324/324 PASS | 12/12 API main PASS | B08d11 closed for the stated tmpfs/UUCP profile |
+
+The numerical patch includes the upstream guard-digit repair plus independently
+reproduced rounding/status cases. The time/API patches are explicit library
+compatibility extensions, not EvoCC defects. Timestamp resolution is measured
+only for the pinned Linux tmpfs; unknown filesystems return EINVAL, not a guessed
+resolution. The API replay rebuilds `unistd.c` and links 78 retained reference
+API objects, not 79 newly EvoCC-compiled objects. Its Clang control needs the
+separately recorded strict-prototype diagnostic adjustment; the GCC gate is
+unchanged. Static/dynamic loader and environment prerequisites remain separately
+accounted, and no new combined full-musl campaign or all-tests-PASS is claimed.
+
+Wordexp's original transcripts decrease from 107 to 71 assertion diagnostics
+per replay, but that is **not** 36 distinct compiler fixes or a passing program.
+Remaining command-substitution/parameter grammar and WRDE_UNDEF require a real
+parser/runtime protocol; pinned dash's dollar-quoting gap also remains. Neither
+blindly allowing braces nor mapping every shell failure to BADVAL is acceptable.
+
+Tracked patches, original commands, identities and retained negative results:
+[numerics](../../tests/fixtures/musl-patched-numerics.out),
+[time](../../tests/fixtures/musl-patched-time.out),
+[wordexp](../../tests/fixtures/musl-patched-wordexp.out),
+[configuration APIs](../../tests/fixtures/musl-patched-conf.out).
+All 303 ladder regressions and targeted Ruff pass after this batch. These
+supplements do not change the historical receipt or the 1,271/1,339 denominator.
+
+### September 28: reached call signatures and refusal classification
+
+[T01b](../../tests/fixtures/typed-call-requirements.out) repairs the independent
+C-HIR execution-mode defect exposed by the storage-only half-pointer control:
+an unused pointer/FP parameter still requires typed call conversion/binding,
+even when the body only queries sizeof and the argument is an integer constant.
+Both interpreters and 54 GCC/Clang/EvoCC native controls pass; the affected
+gate is 1,876 PASS / 0 FAIL / three historical ignores, Clippy/fmt green.
+The shared lowering classifier also replaces nominal floating-interface E3101
+leaks with the existing E3049. Eight unchanged original half-interface commands
+now give that named refusal, not executable half support. L03 remains open.
+
+### September 27: scalar assembly and original musl replay
+
 September 27's final musl replay **`20260927T110110Z`** attempts all **1,339**
 units, assembles **1,271** with exact symbol parity, and retains all 1,271 in
 two complete libc-test runs (482 runtime-result slots each). Both have exactly
