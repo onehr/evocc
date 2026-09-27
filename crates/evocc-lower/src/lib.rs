@@ -421,6 +421,15 @@ enum AssemblyInputSource {
     Temporary(EnvKey),
 }
 
+enum AssemblyWriteback {
+    Local(SymbolId),
+    Memory {
+        address: EnvKey,
+        layout: AccessLayout,
+        volatile: bool,
+    },
+}
+
 struct FunctionLowerer<'a> {
     unit: &'a CHirUnit<'a>,
     target: &'a TargetDataLayout,
@@ -1354,13 +1363,15 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn statement(unit: &CHirUnit<'_>, stmt: &CHirStmt<'_>, out: &mut BTreeSet<SymbolId>) {
         match stmt {
             CHirStmt::Asm(assembly) => {
-                for operand in
-                    assembly
-                        .outputs
-                        .iter()
-                        .chain(assembly.inputs.iter().filter(|operand| {
-                            evocc_evoir::assembly_memory_constraint(&operand.constraint)
-                        }))
+                // A register output does not take the variable's address.
+                // Addressed, qualified and aggregate locals are collected by
+                // their ordinary uses/declarations; only memory constraints
+                // independently require storage at the asm boundary.
+                for operand in assembly
+                    .outputs
+                    .iter()
+                    .chain(&assembly.inputs)
+                    .filter(|operand| evocc_evoir::assembly_memory_constraint(&operand.constraint))
                 {
                     if let CHirExpr::Ident { symbol, .. } = operand.expression {
                         out.insert(*symbol);
@@ -5231,51 +5242,79 @@ impl<'a> FunctionLowerer<'a> {
             ) {
                 return Err(refuse(operand.constraint.clone()));
             }
-            let address = self
-                .lower_unary(
-                    UnaryOp::AddrOf,
-                    operand.expression,
-                    operand.span,
-                    &mut state,
-                )?
-                .value;
-            let incoming = if evocc_evoir::assembly_memory_constraint(constraint) {
-                Some(address.clone())
-            } else {
-                let ty = match operand.expression {
-                    CHirExpr::Ident { facts, .. } | CHirExpr::MemoryRead { facts, .. } => {
-                        facts.ty()
-                    }
-                    CHirExpr::Unary(UnaryOp::Deref, pointer, span) => {
-                        self.pointer_pointee_type(pointer, *span)?
-                    }
-                    _ => return Err(refuse(format!("{} output place", operand.constraint))),
-                };
+            let local = match operand.expression {
+                CHirExpr::Ident { symbol, facts, .. }
+                    if !evocc_evoir::assembly_memory_constraint(constraint)
+                        && !self.memory_symbols.contains(symbol)
+                        && !self.global_registers.contains_key(symbol) =>
+                {
+                    Some((*symbol, facts.ty()))
+                }
+                _ => None,
+            };
+            let incoming = if let Some((symbol, ty)) = local {
                 let (ir, integer) = self.assembly_register_value_type(ty, operand.span)?;
-                let layout = match operand.expression {
-                    CHirExpr::MemoryRead { place, .. } => {
-                        self.place_access_layout(place, operand.span)?
-                    }
-                    _ => self.access_layout(ty, operand.span)?,
-                };
-                let volatile = self
-                    .unit
-                    .types()
-                    .get(ty)
-                    .is_some_and(|ty| ty.qualifiers.is_volatile);
-                let address_key = self.retain_temporary(address.clone(), &mut state);
-                temporary_keys.push(address_key);
-                result_types.push(ir.clone());
-                writebacks.push((address_key, layout, integer, volatile));
+                result_types.push(ir);
+                writebacks.push((AssemblyWriteback::Local(symbol), integer));
                 if constraint.starts_with('+') {
-                    Some(
-                        self.emit_typed_memory_load(
-                            address, ir, integer, volatile, &mut state, layout,
-                        )?
-                        .value,
-                    )
+                    Some(self.local(&mut state, symbol, operand.span)?.value)
                 } else {
                     None
+                }
+            } else {
+                let address = self
+                    .lower_unary(
+                        UnaryOp::AddrOf,
+                        operand.expression,
+                        operand.span,
+                        &mut state,
+                    )?
+                    .value;
+                if evocc_evoir::assembly_memory_constraint(constraint) {
+                    Some(address)
+                } else {
+                    let ty = match operand.expression {
+                        CHirExpr::Ident { facts, .. } | CHirExpr::MemoryRead { facts, .. } => {
+                            facts.ty()
+                        }
+                        CHirExpr::Unary(UnaryOp::Deref, pointer, span) => {
+                            self.pointer_pointee_type(pointer, *span)?
+                        }
+                        _ => return Err(refuse(format!("{} output place", operand.constraint))),
+                    };
+                    let (ir, integer) = self.assembly_register_value_type(ty, operand.span)?;
+                    let layout = match operand.expression {
+                        CHirExpr::MemoryRead { place, .. } => {
+                            self.place_access_layout(place, operand.span)?
+                        }
+                        _ => self.access_layout(ty, operand.span)?,
+                    };
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(ty)
+                        .is_some_and(|ty| ty.qualifiers.is_volatile);
+                    let address_key = self.retain_temporary(address.clone(), &mut state);
+                    temporary_keys.push(address_key);
+                    result_types.push(ir.clone());
+                    writebacks.push((
+                        AssemblyWriteback::Memory {
+                            address: address_key,
+                            layout,
+                            volatile,
+                        },
+                        integer,
+                    ));
+                    if constraint.starts_with('+') {
+                        Some(
+                            self.emit_typed_memory_load(
+                                address, ir, integer, volatile, &mut state, layout,
+                            )?
+                            .value,
+                        )
+                    } else {
+                        None
+                    }
                 }
             };
             let ty = if evocc_evoir::assembly_memory_constraint(constraint) {
@@ -5526,21 +5565,30 @@ impl<'a> FunctionLowerer<'a> {
         }
         let mut normal = Vec::new();
         for (label, mut successor) in successors {
-            for ((address, layout, integer, volatile), result) in
-                writebacks.iter().zip(&result_keys)
-            {
-                let address = self.token(&successor, *address)?.value;
+            for ((destination, integer), result) in writebacks.iter().zip(&result_keys) {
                 let value = ExprValue {
                     value: self.token(&successor, *result)?.value,
                     integer: *integer,
                 };
-                self.emit_memory_store_with_layout(
-                    address,
-                    value,
-                    *layout,
-                    *volatile,
-                    &mut successor,
-                )?;
+                match destination {
+                    AssemblyWriteback::Local(symbol) => {
+                        self.store_local(*symbol, value, source.span, &mut successor)?;
+                    }
+                    AssemblyWriteback::Memory {
+                        address,
+                        layout,
+                        volatile,
+                    } => {
+                        let address = self.token(&successor, *address)?.value;
+                        self.emit_memory_store_with_layout(
+                            address,
+                            value,
+                            *layout,
+                            *volatile,
+                            &mut successor,
+                        )?;
+                    }
+                }
             }
             for key in &temporary_keys {
                 successor.env.remove(key);

@@ -1161,8 +1161,12 @@ rule. Neither may infer a successor choice by reading the opaque template.
 Lowering evaluates output places and inputs once before the assembly.
 Register output writeback is performed on every successor, using explicit
 edge blocks where necessary, before entering the source label or continuing
-with the next source statement. Those stores consume the assembly's new
-tokens, not its input tokens. `+` preserves its incoming value on an execution
+with the next source statement. For an ordinary unaddressed automatic scalar,
+writeback updates its existing local SSA binding; a register constraint does
+not itself require an addressable object or a store. When the destination
+requires object storage (including addressed or volatile objects), its stores
+consume the assembly's new tokens, not its input tokens. `+` preserves its
+incoming value on an execution
 path where the template does not write it; a write-only output makes no such
 promise. The compiler does not inspect assembler instructions to infer which
 path writes an output. Label entries retain the source label name alongside

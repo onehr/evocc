@@ -39,6 +39,28 @@ int main(void) { return read_memory(7) != 7; }
 "#;
 
 #[test]
+fn register_outputs_keep_unaddressed_scalar_locals_in_ssa() {
+    for source in [
+        "int f(int x){int y; asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "int f(int x){asm(\"add %w0,%w0,#1\" : \"+r\"(x)); return x;}",
+        "double f(double x){asm(\"fneg %d0,%d0\" : \"+w\"(x)); return x;}",
+        "int f(int x){int y; asm goto(\"mov %w0,%w1; cbnz %w1,%l[L]\" : \"=r\"(y) : \"r\"(x) : : L); return y+1; L:return y;}",
+    ] {
+        let ir = emits(source);
+        assert!(!ir.contains(" = alloca "), "{ir}");
+        assert!(!ir.contains(" = load "), "{ir}");
+        assert!(!ir.contains(" = store "), "{ir}");
+    }
+    for source in [
+        "int f(int x){volatile int y; asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "extern void escape(int *); int f(int x){int y; escape(&y); asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "int f(int x){int y; asm(\"str %w1,%0\" : \"=Q\"(y) : \"r\"(x)); return y;}",
+    ] {
+        assert!(emits(source).contains(" = alloca "));
+    }
+}
+
+#[test]
 fn patchable_static_keys_preserve_polarity_and_explicit_successor_bindings() {
     let ir = emits(STATIC_KEY_TOGGLE);
     assert_eq!(ir.matches(" = asm.goto ").count(), 2, "{ir}");

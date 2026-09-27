@@ -8,6 +8,60 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 #[test]
+fn asm_scalar_result_bindings_do_not_require_addressable_objects() {
+    for source in [
+        "int f(int x){int y; asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "int f(int x){asm(\"add %w0,%w0,#1\" : \"+r\"(x)); return x;}",
+        "double f(double x){asm(\"fneg %d0,%d0\" : \"+w\"(x)); return x;}",
+        "int f(int x){int y; asm goto(\"mov %w0,%w1; cbnz %w1,%l[L]\" : \"=r\"(y) : \"r\"(x) : : L); return y+1; L:return y;}",
+        "int *f(int *x){int *y; asm(\"mov %0,%1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "unsigned char f(unsigned char x){asm(\"add %w0,%w0,#1\" : \"+r\"(x)); return x;}",
+        "int f(int x){register int y asm(\"x19\")=x; asm(\"add %w0,%w0,#1\" : \"+r\"(y)); return y;}",
+        "int f(int x){while(x){asm(\"sub %w0,%w0,#1\" : \"+r\"(x));} return x;}",
+    ] {
+        for optimize in [false, true] {
+            let text = asm_binding_ir(source, optimize);
+            assert!(!text.contains(" = alloca "), "{text}");
+            assert!(!text.contains(" = load "), "{text}");
+            assert!(!text.contains(" = store "), "{text}");
+        }
+    }
+}
+
+#[test]
+fn asm_result_bindings_preserve_required_object_storage() {
+    for source in [
+        "int f(int x){volatile int y; asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "extern void escape(int *); int f(int x){int y; escape(&y); asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); return y;}",
+        "int f(int x){int y; asm(\"str %w1,%0\" : \"=Q\"(y) : \"r\"(x)); return y;}",
+        "int f(int x){int y; asm(\"mov %w0,%w1\" : \"=r\"(y) : \"r\"(x)); void *p=&&L; goto *p; L:return y;}",
+    ] {
+        for optimize in [false, true] {
+            let text = asm_binding_ir(source, optimize);
+            assert!(text.contains(" = alloca "), "{text}");
+        }
+    }
+}
+
+fn asm_binding_ir(source: &str, optimize: bool) -> String {
+    let arena = Arena::default();
+    let file = FileId::new(9_999);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(&arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    let module = evocc_lower::lower_unit_with_optimization(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        optimize,
+    )
+    .unwrap();
+    evocc_evoir::validate_module(&module).unwrap();
+    evocc_evoir::render_module(&module)
+}
+
+#[test]
 fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
     for (ordinal, source, code, message) in [
         (

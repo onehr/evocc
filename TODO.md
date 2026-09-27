@@ -741,6 +741,26 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     outcomes remain identical, with this flag retained. Remaining tuning and
     diagnostic omissions are not silently reclassified as implemented options.
 
+  - [ ] **B08c — Close original musl pthread runtime regressions** — `OPEN`, P2.
+    The fresh scalar-asm compiler assembles 1,271/1,339 original units, all with
+    exact symbol parity; the 68 refusals are floating-complex interfaces (L04).
+    Its first complete mixed libc-test trial adds seven pthread failures or
+    timeouts to the reference's 17 failures. Object-set bisection in
+    `.evidence/ladder/musl/20260927T101243Z` isolates `pthread_barrier_wait` and
+    `pthread_cond_timedwait`; its final replay is still running. Neither
+    compilation nor a clean partial set closes this task. The isolated
+    [LL/SC probe](tests/fixtures/assembly-exclusive-window.c) exhibits failed
+    progress with separated templates and compiler stack accesses; a joined
+    template is a passing control. GCC O0 also fails some split cases, so this
+    is not evidence that arbitrary separate asm blocks guarantee adjacency.
+    Ordinary scalar asm outputs now stay in SSA when no object is required.
+    The same probe improves from eight failed split locations to zero;
+    377 lowering and 52 asm integration tests pass. Five unchanged affected
+    libc-test programs pass with the repaired object pair and the separate
+    reference archive; the old pair reproduces four failures/timeouts there.
+    All scalar-w native/crossed/fenv controls remain green. A fresh full
+    candidate rebuild and libc-test replay are still required.
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

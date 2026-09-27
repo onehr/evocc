@@ -1,0 +1,94 @@
+2026-09-27: diagnostic RED from the first strict musl libc-test trial.
+
+Frozen compiler SHA256:
+953e9b4ac17522f8baf13315fed70aadaf7480ffdfde30539d146cca0d3f2d86
+Original campaign: .evidence/ladder/musl/20260927T101243Z.
+All 1,339 units were attempted; 1,271 assemble with exact symbol parity and
+68 refuse floating-complex call interfaces (E3049). The first complete test
+trial has seven additional pthread failures/timeouts over 17 reference failures.
+Object bisection is still in progress; a microprobe is not causal attribution
+of all seven failures and is not acceptance of a partial libc.
+
+The bounded C reduction tries split and joined LL/SC sequences at 128 stack
+locations, with 100,000 attempts per location and a ten-second outer watchdog.
+There is no competing thread. In the sealed ARM64 lane (same image identity as
+floating-assembly.out), measured failed locations are:
+                    split   joined
+  GCC14 O0              6        0
+  GCC14 O2              0        0
+  Clang19 O0            0        0
+  Clang19 O2            0        0
+  EvoCC O2              8        0
+All executions completed. These are measurements, not guaranteed counts on
+another stack layout/CPU. The program's exit status checks only the joined
+control; its printed split count is deliberately not concealed by exit zero.
+
+Commands: reference -std=gnu11 -O0/-O2 source; subject --emit=asm
+--target=aarch64-unknown-linux-gnu -std=gnu11 -O2 source, then GCC14 link.
+Log and generated assembly:
+.build/floating-targeted/strict-20260927/exclusive-window-*.
+
+GCC's asm contract does not promise consecutive separate volatile statements:
+https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Extended-Asm.html#AssemblerTemplate
+Arm's exclusive-loop forward-progress conditions exclude intervening explicit
+memory effects, including compiler-generated accesses:
+https://documentation-service.arm.com/static/644c18cbaa78c007af74fa2c?token=
+GCC PR92692 likewise keeps its own atomic operations bundled until after
+prologue/epilogue generation; that fix is not an authorization to interpret or
+combine arbitrary opaque asm strings in EvoCC:
+https://gcc.gnu.org/legacy-ml/gcc-bugs/2020-01/msg02988.html
+
+The identified lowering issue is independent of recognizing instructions:
+every register output formerly forced addressable storage, even for an
+unqualified automatic scalar with no address use. New SSA-result binding uses
+the existing ordinary-local contract instead. Memory constraints, volatile,
+addressed and aggregate objects retain their existing storage and writebacks.
+The original CLI SSA-shape RED is captured in asm-output-ssa-red.log. The
+first repaired lower-crate run passes 376 tests, including both optimization
+modes and selected goto-edge binding. Native and original-program closure of
+this additional repair is recorded below; scalar w support is separately GREEN.
+
+SSA repair checkpoint (not full musl acceptance):
+candidate compiler e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5
+built from 6562bb4 plus the scoped lowering/test diff. Cargo rustc's explicit
+--emit=link output keeps the campaign compiler at its original hash above.
+The reduction now prints split=0 joined=0 on the same sealed lane. The original
+52-test inline_assembly_lowering integration source also passes against the
+candidate (direct rustc --test with the same current EvoIR/MIR libraries and
+CARGO_BIN_EXE_evocc bound to the candidate, while the campaign is frozen).
+The lower-only boundary matrix checks eight SSA cases and four object-storage
+controls at both optimization levels; Clippy -D warnings passes.
+
+Original pthread_barrier_wait and pthread_cond_timedwait commands both emit.
+A separate reference archive is reconstructed from the original 1,349-member
+ar command, using the preserved reference objects, not the archive that the
+ongoing bisection mutates. The unchanged libc-test objects are linked with
+either reference code, both old EvoCC objects, or both repaired objects.
+The reference-built five-second supervisor is unchanged. Native results:
+                                       reference   old pair    repaired pair
+functional/pthread_cond                     PASS    timeout       PASS
+functional/pthread_robust                   PASS       PASS       PASS
+regression/pthread-robust-detach             PASS    timeout       PASS
+regression/pthread_cond-smasher              PASS       FAIL       PASS
+regression/pthread_cond_wait-cancel_ignored  PASS    timeout       PASS
+The isolated old robust run passing does not erase its failures in the full
+bisection; stack layout and scheduling affect this progress defect.
+Link maps record the actual separate archive and candidate objects. No source,
+test expectation, timeout, or opaque template is changed. The full 1,339-unit
+candidate rebuild/runtime replay remains pending at this checkpoint.
+Logs: asm-output-ssa-cli.log, asm-output-ssa-boundaries.log,
+asm-output-ssa-clippy.log, exclusive-window-ssa-native.log,
+musl-thread-ssa-replay.log and musl-thread-ssa-native.log under the same directory.
+Repaired original object hashes (barrier_wait, cond_timedwait):
+ff9d6f00be662774d1900b32d08bbc169addb6121c402127c343f9e3f9b717db
+d1e72321de967e92329923fd8219fa69dbba38d63409318e1fc7cd97a4bda27a
+Independent reconstructed reference archive:
+e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+
+The shared change also replays all scalar-w native fixtures with this candidate:
+eight whole-fixture builds, eight 58-check environment executions and sixteen
+crossed GCC14/Clang19 calls pass at subject/reference O0/O2 combinations.
+The 12-output goto/pressure fixtures still satisfy their actual spill assertions
+and independent allocation verification; no assertion was relaxed. See
+asm-output-ssa-fp-native.log. These checks do not promote full libc-test or
+kernel evidence.
