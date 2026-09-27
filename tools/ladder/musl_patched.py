@@ -38,6 +38,10 @@ SUITES = {
         '9d3eb656b897a82c3b43a6ef973239a014ee9ee89361c1b308b0a2429a4766ff'},
         subjects=('functional/strptime', 'functional/strptime-static'),
         fixture='musl-patched-time.c', checks=45),
+    'wordexp': dict(sources={'src/misc/wordexp.c':
+        '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
+        subjects=('functional/wordexp', 'functional/wordexp-static'),
+        fixture='musl-patched-wordexp.c', checks=48),
 }
 
 

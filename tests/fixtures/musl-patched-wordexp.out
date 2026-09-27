@@ -1,0 +1,51 @@
+B08d10 — partial wordexp transport repair, 2026-09-28
+===================================================
+
+This patch is part of the separately approved musl dependency supplement. It
+does not replace the original source/archive or claim a complete wordexp fix.
+
+The existing shell redirect was appended to printf inside eval. Syntax errors
+and command substitutions happen before that redirect takes effect. The patch
+redirects the CHILD's stderr descriptor before execl, leaving the parent's
+descriptor untouched; WRDE_SHOWERR still exposes errors. The evaluated program
+also clears positional arguments before expanding user words, so the helper's
+source-string and redirection arguments no longer become $1, $2, $*, $@ or $#.
+No environment-variable scratch slot is introduced. The same /bin/sh (dash)
+and sealed image are retained, not upgraded to hide shell incompatibilities.
+
+Sixteen small inputs check return values, word lists and stderr visibility:
+  original: 10/48 checks fail in each of 12 compiler/opt/archive combinations;
+  patched: 48/48 pass in each combination, 576/576 total checks.
+GCC14/Clang19/EvoCC, O0/O2, reference/mixed base archives. Exact link maps verify
+the replacement object; input/library hashes remain unchanged. 302 ladder
+tests and Ruff pass. Compiler/image identities match musl-patched-numerics.out.
+
+The unchanged full original programs were also replayed:
+  24/24 still FAIL; no timeouts or skips, and every diagnostic transcript is
+  identical after normalizing only the final executable pathname.
+  Each transcript has 71 assertion diagnostics, down from 107 in the original
+  control. This is a diagnostic count, not 36 distinct tests/bugs closed.
+  Overall supplement result correctly remains FAIL (12 focused PASS, 24 FAIL).
+
+Remaining failure families include parameter-expansion brace/quote contexts,
+arithmetic-vs-command-substitution grammar and comments under WRDE_NOCMD,
+ignored WRDE_UNDEF, and dollar quoting unsupported by pinned dash 0.5.12.
+The NOCMD scanner cannot be made correct by simply permitting braces or ignoring
+quotes: those contexts determine whether a command substitution may execute.
+Likewise mapping every failing shell process to BADVAL under WRDE_UNDEF would
+misclassify syntax errors. A grammar-aware repair or a shell protocol that
+distinguishes these errors is still required. No such repair is claimed here.
+
+Recipe (nonzero result is expected while original failures remain):
+  python3 tools/ladder/musl_patched.py --suite wordexp \
+    --evocc target/frontend/debug/evocc --output .build/floating-targeted/WORD-NEW
+Add --unpatched-control for the retained original-library reproduction.
+
+Raw evidence: .build/floating-targeted/musl-patched-wordexp-green-20260928/
+plan.json SHA256 c2ce858982a5e4cc7d6423da748e577b93c92675dc7511f1b01e36ab5ad53bfa
+executions.json SHA256 3b74d6248839a7dec8db58d4fa23b407bc472a0c5f77a8908f21c42fe0a6edc2
+fixture SHA256 f99ecf87584f0c8886c82709728065bdd692ed612456c2d03302e137477ad4e9
+patch SHA256 3cf343909edb31545ab0ca08db6c9acaa719105e935d00bd37b76bf95e97dab6
+Original control: musl-patched-wordexp-red-20260928, all 36 executions FAIL.
+Claim ceiling: repaired and tested stderr/argument transport only; wordexp and
+full B08d remain OPEN.

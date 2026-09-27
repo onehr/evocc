@@ -1,0 +1,32 @@
+diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
+--- a/src/misc/wordexp.c
++++ b/src/misc/wordexp.c
+@@ -30,7 +30,6 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+ 	int sq=0, dq=0;
+ 	size_t np=0;
+ 	char *w, **tmp;
+-	char *redir = (flags & WRDE_SHOWERR) ? "" : "2>/dev/null";
+ 	int err = 0;
+ 	FILE *f;
+ 	size_t wc = 0;
+@@ -106,8 +105,18 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+ 	if (!pid) {
+ 		if (p[1] == 1) fcntl(1, F_SETFD, 0);
+ 		else dup2(p[1], 1);
++		/* Redirect before the shell parses or expands the expression, not
++		   just on printf after command substitutions have already run. */
++		if (!(flags & WRDE_SHOWERR)) {
++			int fd = open("/dev/null", O_WRONLY);
++			if (fd < 0) _exit(1);
++			if (fd != 2) {
++				if (dup2(fd, 2) < 0) _exit(1);
++				close(fd);
++			}
++		}
+ 		execl("/bin/sh", "sh", "-c",
+-			"eval \"printf %s\\\\\\\\0 x $1 $2\"",
+-			"sh", s, redir, (char *)0);
++			"eval \"set --; printf %s\\\\\\\\0 x $1\"",
++			"sh", s, (char *)0);
+ 		_exit(1);
+ 	}

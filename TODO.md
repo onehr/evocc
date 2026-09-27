@@ -926,6 +926,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       PASS. The numerical supplement's 192 executions remain green after sharing
       suite selection. [Bounded contract and evidence](tests/fixtures/musl-patched-time.out).
 
+    - [ ] **B08d10 — Complete patched wordexp behavior** — `OPEN`, P2.
+      Child stderr is now redirected before shell parsing/expansion, and helper
+      positional arguments are cleared before expanding user words. These two
+      repairs pass **576/576** focused checks across the paired 12-way matrix.
+      Unchanged original-entry replays still **FAIL 24/24**, with 71 diagnostics
+      per transcript versus 107 before repair. Nested NOCMD grammar, ignored
+      UNDEF and pinned dash dollar-quote compatibility remain; the overall
+      supplement deliberately reports FAIL. No parser safety is inferred from
+      transport tests. [Patch and exact remaining boundary](tests/fixtures/musl-patched-wordexp.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private
