@@ -45,10 +45,11 @@ pub struct FloatingExpr<'arena> {
 }
 
 /// Representation masks are shared by constant, interpreted and IR lowering.
-pub fn masks(kind: FloatKind) -> Option<(u64, u64)> {
+pub fn masks(kind: FloatKind) -> Option<(u128, u128)> {
     match kind {
         FloatKind::F32 => Some((0x80000000, 0x7f800000)),
         FloatKind::F64 => Some((0x8000000000000000, 0x7ff0000000000000)),
+        FloatKind::F128 => Some((1 << 127, 0x7fff << 112)),
         _ => None,
     }
 }
@@ -74,7 +75,7 @@ pub fn evaluate(op: FloatingBuiltin, arguments: &[FloatBits]) -> Option<u128> {
             _ => unreachable!(),
         }));
     }
-    let bits = a.bits() as u64;
+    let bits = a.bits();
     let magnitude = bits & !sign;
     Some(match op {
         IsNan => u128::from(magnitude > exponent),
@@ -93,13 +94,13 @@ pub fn evaluate(op: FloatingBuiltin, arguments: &[FloatBits]) -> Option<u128> {
         IsFinite => u128::from(magnitude < exponent),
         IsNormal => u128::from(magnitude & exponent != 0 && magnitude < exponent),
         SignBit => u128::from(bits & sign != 0),
-        Abs => u128::from(magnitude),
+        Abs => magnitude,
         CopySign => {
             let b = *arguments.get(1)?;
             if a.kind() != b.kind() {
                 return None;
             }
-            u128::from(magnitude | (b.bits() as u64 & sign))
+            magnitude | (b.bits() & sign)
         }
         IsGreater | IsGreaterEqual | IsLess | IsLessEqual | IsLessGreater | IsUnordered => {
             unreachable!()

@@ -164,12 +164,14 @@ fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_alias
         let mut parser = Parser::new(tokens, file, &source);
         let unit = parser.parse_translation_unit_in(&arena);
         assert!(!parser.had_error(), "{:?}", parser.diagnostic());
-        if matches!(spelling, "float" | "double") {
+        if matches!(spelling, "float" | "double" | "long double") {
             let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
                 .expect("approved scalar floating execution");
             validate_module(&module).unwrap();
             let expected = if spelling == "float" {
                 evocc_evoir::EvoIRType::F32
+            } else if spelling == "long double" {
+                evocc_evoir::EvoIRType::F128
             } else {
                 evocc_evoir::EvoIRType::F64
             };
@@ -180,7 +182,6 @@ fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_alias
         let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
             .expect_err("header admission must not invent execution support");
         let code = match spelling {
-            "long double" => "E3049",
             "__Float32x4_t" => "E3050", // real vector with a floating element
             _ => "E3101",               // declaration-only extended/sizeless target types
         };
@@ -191,6 +192,13 @@ fn used_target_header_values_are_not_silently_lowered_as_integer_or_scalar_alias
 #[test]
 fn scalar_floating_values_use_typed_ir_in_previously_deferred_contexts() {
     for (ordinal, source, ty) in [
+        (301, "long double f(long double x) { return x; }", "f128"),
+        (302, "struct h { long double x; }; struct h f(struct h x) { return x; }", "hfa=1xf128, abi_align=16"),
+        (303, "int f(void) { extern long double x; return x > 0; }", "f128"),
+        (304, "int f(void) { long double *p = 0; return *p > 0; }", "f128"),
+        (305, "void f(int n) { long double a[1]; a[0] = n; }", "f128"),
+        (306, "struct S { long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }", "hfa=1xf128, abi_align=16"),
+        (307, "struct S { long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }", "hfa=1xf128, abi_align=16"),
         (1, "double f(double x) { return x; }", "f64"),
         (
             2,

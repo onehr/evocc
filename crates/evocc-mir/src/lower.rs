@@ -3668,6 +3668,14 @@ fn lower_floating(
     use evocc_types::FloatKind;
     let result = &operation.result;
     let op = operation.op;
+    if operation
+        .arguments
+        .iter()
+        .chain(std::iter::once(result))
+        .any(|v| v.ty == EvoIRType::F128)
+    {
+        return Err("binary128 native lowering is not yet qualified".into());
+    }
     let kind = operation
         .arguments
         .first()
@@ -3682,7 +3690,7 @@ fn lower_floating(
         });
         insts.push(MInst::MovImm {
             dst: raw,
-            imm: bits,
+            imm: bits as u64,
         });
         let dst = lowerer.fresh(crate::floating::class(kind));
         insts.push(MInst::Floating {

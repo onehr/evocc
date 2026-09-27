@@ -114,7 +114,9 @@ pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
         && homogeneous_floating_aggregate(types, ty).is_none_or(|f| {
             matches!(
                 f.kind,
-                evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                evocc_types::FloatKind::F32
+                    | evocc_types::FloatKind::F64
+                    | evocc_types::FloatKind::F128
             )
         })
 }

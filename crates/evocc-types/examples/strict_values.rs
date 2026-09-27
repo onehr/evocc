@@ -11,6 +11,46 @@ use std::{
 #[path = "strict_values/testfloat.rs"]
 mod testfloat;
 
+fn check_formats(line: &str) -> Result<(), String> {
+    let fields = line.split_whitespace().collect::<Vec<_>>();
+    if fields.len() != 7 {
+        return Err("expected destination/source/mode/input/result/status/control".into());
+    }
+    let kind = |s| match s {
+        "32" => Ok(FloatKind::F32),
+        "64" => Ok(FloatKind::F64),
+        "128" => Ok(FloatKind::F128),
+        _ => Err("unknown format".to_string()),
+    };
+    let destination = kind(fields[0])?;
+    let source = kind(fields[1])?;
+    let (mode, rounding) = match fields[2] {
+        "0" => (0, FpRounding::NearestEven),
+        "1" => (1, FpRounding::Upward),
+        "2" => (2, FpRounding::Downward),
+        "3" => (3, FpRounding::TowardZero),
+        _ => return Err("unknown rounding".into()),
+    };
+    let values = fields[3..]
+        .iter()
+        .map(|s| u128::from_str_radix(s, 16).map_err(|_| "invalid hex".to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let r = FloatBits::from_bits(source, values[0])
+        .ok_or("overwide input")?
+        .target_convert_round(destination, rounding)
+        .ok_or("unsupported conversion")?;
+    if (r.value.bits(), u128::from(r.status.bits()), values[3])
+        != (values[1], values[2], mode << 22)
+    {
+        return Err(format!(
+            "{line}: adapter={:032x}/{:02x}",
+            r.value.bits(),
+            r.status.bits()
+        ));
+    }
+    Ok(())
+}
+
 fn check_quad(line: &str) -> Result<(), String> {
     let fields = line.split_whitespace().collect::<Vec<_>>();
     if fields.len() != 8 || fields[0] != "128" {
@@ -162,9 +202,10 @@ fn main() -> Result<(), String> {
     let batch = args.as_slice() == ["--batch"];
     let wide = args.as_slice() == ["--wide"];
     let quad = args.as_slice() == ["--quad"];
+    let formats = args.as_slice() == ["--formats"];
     let reference = match args.as_slice() {
         [] => None,
-        [_] if batch || wide || quad => None,
+        [_] if batch || wide || quad || formats => None,
         [op, mode] => Some((
             op.as_str(),
             match mode.as_str() {
@@ -180,7 +221,9 @@ fn main() -> Result<(), String> {
     let mut count = 0;
     for line in io::stdin().lock().lines() {
         let line = line.map_err(|e| e.to_string())?;
-        if quad {
+        if formats {
+            check_formats(&line)?;
+        } else if quad {
             check_quad(&line)?;
         } else if wide {
             check_wide(&line)?;
@@ -212,6 +255,16 @@ fn main() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn format_oracle_rejects_result_status_control_and_width_mutations() {
+        let record = "64 128 1 3fff0000000000000800000000000000 3ff0000000000001 10 00400000";
+        assert!(check_formats(record).is_ok());
+        assert!(check_formats(&record.replace("3ff0000000000001", "3ff0000000000000")).is_err());
+        assert!(check_formats(&record.replace(" 10 ", " 00 ")).is_err());
+        assert!(check_formats(&record.replace("00400000", "00000000")).is_err());
+        assert!(check_formats(&record.replace("64 128", "64 64")).is_err());
+        assert!(check_formats(&record.replace("64 128", "16 128")).is_err());
+    }
     #[test]
     fn detects_independent_result_status_and_mode_mutations() {
         assert!(check("32 0 2 00800000 3f7fffff 00000000 00800000 18").is_ok());

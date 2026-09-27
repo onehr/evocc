@@ -27,7 +27,7 @@ impl Number {
     }
 
     fn real(self, kind: FloatKind) -> Option<FloatBits> {
-        if !matches!(kind, FloatKind::F32 | FloatKind::F64) {
+        if !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128) {
             return None;
         }
         let value = match (self, kind) {
@@ -35,16 +35,7 @@ impl Number {
                 FloatBits::from_signed(kind, value.mathematical_value())
             }
             (Self::Integer(value), _) => FloatBits::from_unsigned(kind, value.raw_bits()),
-            (Self::Real(value), _) => {
-                // Target headers spell binary64 limits as a cast of an exact
-                // binary128 literal. Convert its already-rounded source bits;
-                // this does not admit binary128 arithmetic or object reads.
-                if matches!(value.kind(), FloatKind::F32 | FloatKind::F64) {
-                    value.target_convert(kind)?
-                } else {
-                    value.convert(kind)?
-                }
-            }
+            (Self::Real(value), _) => value.target_convert(kind)?,
             (
                 Self::QuietNaN {
                     payload,
@@ -56,13 +47,14 @@ impl Number {
                 let (sign, exponent) = crate::floating::masks(source)?;
                 let quiet = if source == FloatKind::F32 {
                     0x400000
+                } else if source == FloatKind::F128 {
+                    1 << 111
                 } else {
                     0x8000000000000
                 };
                 FloatBits::from_bits(
                     source,
-                    u128::from(exponent | quiet | if negative { sign } else { 0 })
-                        | (payload & u128::from(quiet - 1)),
+                    (exponent | quiet | if negative { sign } else { 0 }) | (payload & (quiet - 1)),
                 )?
                 .target_convert(kind)?
             }
@@ -80,8 +72,8 @@ enum NumberType {
 fn common(left: NumberType, right: NumberType) -> Option<NumberType> {
     use NumberType::{Integer, Real};
     match (left, right) {
-        (Real(FloatKind::F128 | FloatKind::F16), _)
-        | (_, Real(FloatKind::F128 | FloatKind::F16)) => None,
+        (Real(FloatKind::F16), _) | (_, Real(FloatKind::F16)) => None,
+        (Real(FloatKind::F128), _) | (_, Real(FloatKind::F128)) => Some(Real(FloatKind::F128)),
         (Real(FloatKind::F64), _) | (_, Real(FloatKind::F64)) => Some(Real(FloatKind::F64)),
         (Real(FloatKind::F32), _) | (_, Real(FloatKind::F32)) => Some(Real(FloatKind::F32)),
         (Integer(left), Integer(right)) => Some(Integer(usual_arithmetic_type(
@@ -282,11 +274,12 @@ impl Folder<'_> {
                 if [left, right].iter().any(|operand| {
                     matches!(
                         self.ty(operand, depth + 1),
-                        Some(NumberType::Real(FloatKind::F16 | FloatKind::F128))
+                        Some(NumberType::Real(FloatKind::F16))
                     )
                 }) {
                     return None;
                 }
+                let operand_type = common(self.ty(left, depth + 1)?, self.ty(right, depth + 1)?)?;
                 let left = self.eval(left, depth + 1)?;
                 if (*op == BinaryOp::And && !left.truth()) || (*op == BinaryOp::Or && left.truth())
                 {
@@ -305,25 +298,8 @@ impl Folder<'_> {
                     .ok()
                     .map(Number::Integer);
                 }
-                let kind = if matches!(left, Number::Real(v) if v.kind() == FloatKind::F64)
-                    || matches!(right, Number::Real(v) if v.kind() == FloatKind::F64)
-                    || matches!(
-                        left,
-                        Number::QuietNaN {
-                            kind: FloatKind::F64,
-                            ..
-                        }
-                    )
-                    || matches!(
-                        right,
-                        Number::QuietNaN {
-                            kind: FloatKind::F64,
-                            ..
-                        }
-                    ) {
-                    FloatKind::F64
-                } else {
-                    FloatKind::F32
+                let NumberType::Real(kind) = operand_type else {
+                    return None;
                 };
                 let a = left.real(kind)?;
                 let b = right.real(kind)?;
@@ -483,6 +459,7 @@ pub(super) fn representation(
     Some(match kind {
         FloatKind::F32 => CInteger::from_raw(value.bits(), CIntegerType::UINT),
         FloatKind::F64 => CInteger::from_raw(value.bits(), CIntegerType::ULONG),
+        FloatKind::F128 => CInteger::from_raw(value.bits(), CIntegerType::UINT128),
         _ => unreachable!("representation kind was checked"),
     })
 }

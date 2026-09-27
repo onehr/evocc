@@ -95,6 +95,7 @@ fn sentinel_types() -> Vec<EvoIRType> {
         EvoIRType::World,
         EvoIRType::Tuple(vec![EvoIRType::Bits(5), EvoIRType::F64]),
         EvoIRType::Void,
+        EvoIRType::F128,
     ]
 }
 
@@ -933,6 +934,7 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
         }
         EvoIRType::F32 => "EvoIRType.F32",
         EvoIRType::F64 => "EvoIRType.F64",
+        EvoIRType::F128 => "EvoIRType.F128",
         EvoIRType::Ptr(address_space) => {
             let _ = address_space;
             "EvoIRType.Ptr(address_space)"

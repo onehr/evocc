@@ -568,6 +568,7 @@ fn render_type(ty: &EvoIRType) -> String {
         EvoIRType::Bits(width) => format!("bits<{width}>"),
         EvoIRType::F32 => "f32".to_owned(),
         EvoIRType::F64 => "f64".to_owned(),
+        EvoIRType::F128 => "f128".to_owned(),
         EvoIRType::Ptr(space) => format!(
             "ptr<{}>",
             match space {

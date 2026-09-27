@@ -3391,7 +3391,9 @@ fn function_value_type(
     if evocc_chir::homogeneous_floating_aggregate(types, ty).is_some_and(|f| {
         !matches!(
             f.kind,
-            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+            evocc_types::FloatKind::F32
+                | evocc_types::FloatKind::F64
+                | evocc_types::FloatKind::F128
         )
     }) {
         return Err(LowerError::FloatingCallInterface { span });
@@ -5691,6 +5693,7 @@ impl<'a> FunctionLowerer<'a> {
                                     | EvoIRType::Vec(..)
                                     | EvoIRType::F32
                                     | EvoIRType::F64
+                                    | EvoIRType::F128
                             ) {
                                 self.coerce_to_object_type(
                                     lowered,
@@ -7911,7 +7914,11 @@ impl<'a> FunctionLowerer<'a> {
             .kind
             .clone();
         match kind {
-            TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64) => {
+            TypeKind::Float(
+                evocc_types::FloatKind::F32
+                | evocc_types::FloatKind::F64
+                | evocc_types::FloatKind::F128,
+            ) => {
                 let mut layout = self.access_layout(ty, span)?;
                 if mode == ZeroInitializer::PointerProvenance {
                     return Ok(());
@@ -8459,7 +8466,9 @@ impl<'a> FunctionLowerer<'a> {
                     if matches!(
                         self.unit.types().get(*destination_type).map(|ty| &ty.kind),
                         Some(TypeKind::Float(
-                            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                            evocc_types::FloatKind::F32
+                                | evocc_types::FloatKind::F64
+                                | evocc_types::FloatKind::F128
                         ))
                     ) {
                         self.emit_zero_initializer_at(
@@ -11912,7 +11921,9 @@ impl<'a> FunctionLowerer<'a> {
         if evocc_evoir::floating_kind(&left.value.ty).is_some()
             || evocc_evoir::floating_kind(&right.value.ty).is_some()
         {
-            let kind = if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
+            let kind = if left.value.ty == EvoIRType::F128 || right.value.ty == EvoIRType::F128 {
+                evocc_types::FloatKind::F128
+            } else if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
                 evocc_types::FloatKind::F64
             } else {
                 evocc_types::FloatKind::F32
@@ -12974,6 +12985,7 @@ impl<'a> FunctionLowerer<'a> {
                         | EvoIRType::Vec(..)
                         | EvoIRType::F32
                         | EvoIRType::F64
+                        | EvoIRType::F128
                 ) {
                     self.coerce_to_object_type(
                         value,

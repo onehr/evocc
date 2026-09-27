@@ -273,3 +273,52 @@ dynamic rounding; an additional entry retains the uninitialized-read negative.
 GCC14/Clang19 O0/O2 pass all three defined entries. NaN inputs are volatile:
 the initial nonvolatile GCC O2 control folded the expression with a different
 payload choice; it was not misreported as a target-runtime result.
+
+## Binary128 source/IR semantics (EvoIR 1.9.110)
+
+`f128` extends the existing scalar instruction family and exact-bit runtime
+carrier. Constants now retain all 128 bits with exactly 32 hexadecimal digits.
+Typed loads/stores, initializedness, block arguments, strict world effects and
+E3063 conversion guards use the existing paths. No helper symbol is embedded
+in EvoIR. Quad HFA and anonymous arguments retain explicit type/shape metadata.
+
+The source RED now passes four defined entry programs (core precision/objects/
+calls, runtime NaNs, dynamic rounding, nine anonymous quad arguments) plus
+E3001 and E3063 negatives in both interpreters at O0/O2. A separate prefix
+without any FENV_ACCESS directive tests ordinary constant folding. Exact IR
+tests cover raw high/low payload bits, malformed widths, all four rounding
+modes with prior flags, and mandatory quad HFA alignment. The independent
+checker accepts unchanged reconstruction and rejects well-typed forgeries of
+quad payload, operation, format and HFA role even with recomputed output hashes.
+Former scalar-quad refusal cases move to positive typed-IR tests; floating
+complex and target-header-only type negatives remain. Native quad lowering
+still refuses explicitly in this semantic checkpoint.
+
+The hosted comparison audit adds **229,376 checks per GCC14/Clang19 O0/O2
+build**, including all 32 prior flag masks and four control modes. All pass.
+Its initial hypothesis of unordered +/-1 was wrong: the pinned helpers return
+**+2/-2** for le/lt and ge/gt families. The retained initial log records this
+qualification finding; equality/unordered helpers signal invalid only for
+sNaNs, while ordered helpers signal for any NaN. The
+[GCC14 runtime interface](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gccint/Soft-float-library-routines.html)
+specifies sign-based comparison contracts; native lowering must not assume an
+unmeasured exact unordered encoding. This is runtime qualification, not an
+EvoCC native comparison PASS.
+
+The format-conversion fixture adds **304 records per reference build** for
+quad/single/double narrowing and widening, including subnormal/overflow,
+midpoint and signaling-NaN boundaries. All four streams have SHA-256
+`3a88df43ef470215f33d5f02e5eb1ba2ded1649d3d7cd9540588b281fc873f43`;
+the independent adapter checker matches every bit, flag and control. Its
+negative tests independently alter result, status, control and input width.
+The 32/64-bit integer conversion fixture adds **9,256 records per reference
+build**, hash `d5d5be476c703acc0d353e3faf9cd8272e1bc7992f5976647c798505b8900d07`.
+The adapter agrees on all records. These fixtures retain separately compilable
+subject functions for later crossed EvoCC/native execution; current results
+qualify the target runtime only.
+
+Changed-crate validation ran all 308 test groups: 2,411 passed, four retained
+ignores, and one stale coverage-manifest sentinel failed. After updating that
+independent sentinel, its targeted rerun passes (2,412 distinct tests total).
+The full workspace Clippy/all-targets and formatting checks also pass. This is
+the source/IR checkpoint, not a completed native or application gate.

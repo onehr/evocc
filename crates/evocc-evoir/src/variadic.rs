@@ -106,6 +106,7 @@ pub(crate) fn promoted_type(ty: &EvoIRType) -> bool {
             ty,
             EvoIRType::Bits(32 | 64 | 128)
                 | EvoIRType::F64
+                | EvoIRType::F128
                 | EvoIRType::Ptr(_)
                 | EvoIRType::FnPtr { .. }
         )

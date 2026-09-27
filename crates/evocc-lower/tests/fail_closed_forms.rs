@@ -11,36 +11,6 @@ use evocc_types::TargetDataLayout;
 fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
     for (ordinal, source, code, message) in [
         (
-            301,
-            "long double f(long double x) { return x; }",
-            "E3049",
-            "not-lowered: floating-call-interface",
-        ),
-        (
-            302,
-            "struct h { long double x; }; struct h f(struct h x) { return x; }",
-            "E3049",
-            "not-lowered: floating-call-interface",
-        ),
-        (
-            303,
-            "int f(void) { extern long double x; return x > 0; }",
-            "E3050",
-            "not-lowered: floating-value",
-        ),
-        (
-            304,
-            "int f(void) { long double *p = 0; return *p > 0; }",
-            "E3050",
-            "not-lowered: floating-value",
-        ),
-        (
-            305,
-            "void f(int n) { long double a[1]; a[0] = n; }",
-            "E3050",
-            "not-lowered: floating-value",
-        ),
-        (
             306,
             "int f() { return 1; } int main(void) { return f(1); }",
             "E3051",
@@ -216,17 +186,17 @@ fn function_pointer_arithmetic_uses_exposed_address_instructions() {
 }
 
 #[test]
-fn binary128_record_variable_arguments_remain_outside_the_executable_abi() {
+fn floating_complex_record_variable_arguments_remain_outside_the_executable_abi() {
     for (ordinal, source, code, message) in [
         (
             5,
-            "struct S { long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
-            "E3049",
-            "not-lowered: floating-call-interface",
+            "struct S { _Complex long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+            "E3030",
+            "not-lowered: varargs",
         ),
         (
             6,
-            "struct S { long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
+            "struct S { _Complex long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
             "E3030",
             "not-lowered: varargs",
         ),

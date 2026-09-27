@@ -100,7 +100,7 @@ pub(super) fn convert_runtime(
         }
         return convert(value, kind, span);
     }
-    if !matches!(kind, FloatKind::F32 | FloatKind::F64) {
+    if !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128) {
         return Err(InterpreterError::UnsupportedExpression {
             feature: "strict floating format",
             span,
@@ -192,6 +192,11 @@ pub(super) fn binary(
 ) -> Result<CValue, InterpreterError> {
     admit(world, strict, span)?;
     let kind = if [left, right]
+        .iter()
+        .any(|v| matches!(v, CValue::Floating(v) if v.kind() == FloatKind::F128))
+    {
+        FloatKind::F128
+    } else if [left, right]
         .iter()
         .any(|v| matches!(v, CValue::Floating(v) if v.kind() == FloatKind::F64))
     {

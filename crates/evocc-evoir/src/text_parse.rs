@@ -935,7 +935,7 @@ fn parse_instruction(
             let operation = crate::FloatingInst {
                 result: Value { id: result_id, ty },
                 op: crate::FloatingOp::Constant(
-                    u64::from_str_radix(bits, 16).map_err(|_| "invalid floating constant bits")?,
+                    u128::from_str_radix(bits, 16).map_err(|_| "invalid floating constant bits")?,
                 ),
                 arguments: vec![],
             };
@@ -2486,6 +2486,7 @@ impl<'a> Cursor<'a> {
         for (name, ty) in [
             ("f32", EvoIRType::F32),
             ("f64", EvoIRType::F64),
+            ("f128", EvoIRType::F128),
             ("world", EvoIRType::World),
             ("void", EvoIRType::Void),
         ] {

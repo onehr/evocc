@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.109** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.110** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -34,7 +34,7 @@ Every EvoIR value has a statically known type drawn from the following grammar:
 ```text
 Type ::=
     bits<N>          -- unsigned bit-vector of width N (arbitrary positive integer)
-  | f32 | f64        -- IEEE 754 binary32 and binary64
+  | f32 | f64 | f128 -- IEEE 754 binary32, binary64 and binary128
   | ptr<AS>          -- typed pointer in address space AS
   | mem<R>           -- memory snapshot for region R
   | world            -- global ordering token for volatile/IO effects
@@ -1350,7 +1350,8 @@ transition to stack arguments. The procedure itself is EvoMIR's to state
 
 ### 3.13 Scalar Floating Operations (revision 1.9.103)
 
-The approved initial execution profile admits binary32/binary64 only: RNE,
+The approved scalar execution profile admits binary32/binary64 and, since
+revision 1.9.110, binary128 for the Linux GNU target: RNE,
 gradual underflow, source-format evaluation, no implicit contraction, and IEEE
 exceptional arithmetic results rather than integer-style division/overflow UB.
 An arithmetic NaN selects the first signaling operand (left before right),
@@ -1363,21 +1364,22 @@ NaN is not poison, and numerical equality does not identify object representatio
 ```text
 %v = const.f32 0x3f800000
 %v = const.f64 0x3ff0000000000000
+%v = const.f128 0x3fff0000000000000000000000000000
 %v = fp.OP %a, %b : T
 %v = fp.OP %a : T
 ```
 
-Constants have exactly 8/16 lowercase hexadecimal digits. Binary `add/sub/mul/div`
+Constants have exactly 8/16/32 lowercase hexadecimal digits. Binary `add/sub/mul/div`
 require matching FP operands/results; `oeq/une/olt/ole/ogt/oge` require matching FP
 operands and return `bits<1>` (only `une` is true for unordered operands).
-Unary `neg` preserves the format; `convert` changes f32/f64 format; `from_signed`
+Unary `neg` preserves the format; `convert` changes admitted scalar format; `from_signed`
 and `from_unsigned` convert full-width `bits<1..128>` to FP, rounding once.
 `to_signed/to_unsigned` truncate toward zero into `bits<1..128>`; the raw IR
 operation is total with zero for nonrepresentable input, but C lowering must
 first emit `fp.to_int_defined.sN/uN %a : bits<1>` and
 `ub.assume.floating_to_integer`, reporting **E3063** on false, including NaN
 and infinity. `to_bits/from_bits` are exact representation conversions between
-f32/bits<32> or f64/bits<64>, not numerical casts.
+f32/bits<32>, f64/bits<64> or f128/bits<128>, not numerical casts.
 
 These baseline operations are pure and excluded from P0 roots/witnesses; all
 operands still obey local SSA, initializedness, text/proof reconstruction and
@@ -1385,7 +1387,7 @@ existing call/edge rules. Native **E3064** denotes an incompatible FP environmen
 not C UB; no hidden FPCR reset is permitted. Revision 1.9.109 admits the bounded
 non-trapping `STDC FENV_ACCESS` profile below. Unsupported or malformed requests
 retain **E3065**; unsupported strict/fast/contraction options are not ignored.
-Executable binary128 and FP complex/vectors remain deferred. Strict IR is
+FP complex/vectors remain deferred. Strict IR is
 specified below; source-option and environment-library acceptance require the
 separate L01 gates, not merely the presence of these opcodes.
 
@@ -1393,15 +1395,15 @@ The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
 the corresponding `__STDC_IEC_*` and `__FP_FAST_FMA*` macros are absent and
 `__GCC_IEC_559{,_COMPLEX}` is zero, overriding the historical GCC macro census.
-For f32/f64, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
+For f32/f64/f128, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
 the exact representation; truth results are 0/1 except `isinf_sign`, which
-returns -1/0/1. `fabs/fabsf` clear the sign bit, and `copysign/copysignf` copy it
+returns -1/0/1. `fabs/fabsf/fabsl` clear the sign bit, and `copysign/copysignf/copysignl` copy it
 after their prototype conversions, preserving payloads and signaling bits.
 These builtin operands are evaluated once in source order; infinity/huge-value
 builtins are exact constants. Ordinary library calls retain their external
 effects and are not replaced by these builtins merely because names resemble.
 
-HFA records of one to four equal f32/f64 members carry `hfa=Cxf32/f64` in
+HFA records of one to four equal f32/f64/f128 members carry `hfa=Cxf32/f64/f128` in
 byval/sret marks, distinct from `hva`; the same shape survives `va_arg.byval`
 attributes. Classification follows completed layout: size must equal member
 count times the base size; alignment-induced padding uses the composite ABI.
@@ -1412,9 +1414,9 @@ private scalarized external ABI is authorized.
 
 #### 3.13.1 Strict world operations and explicit FMA (revision 1.9.106)
 
-`fp.fma %a, %b, %c : T` accepts three identical f32/f64 operands and returns
+`fp.fma %a, %b, %c : T` accepts three identical f32/f64/f128 operands and returns
 their product-plus-addend rounded once to T. It is never introduced implicitly
-from multiply/add. Its target NaN order is addend, a, b (signaling first);
+from multiply/add. For f32/f64 its target NaN order is addend, a, b (signaling first);
 a quiet addend does not hide invalid zero*infinity, which yields default NaN.
 
 ```text
@@ -1538,7 +1540,33 @@ unchecked producer annotations authorizing a fold.
 
 This gate covers the four rounding modes, five sticky flags and §3.13.2's
 non-trapping environment library on admitted scalar formats. It does not add
-binary128, FP vectors/complex, enabled traps, Annex F or a concurrent interpreter.
+FP vectors/complex, enabled traps, Annex F or a concurrent interpreter.
+
+#### 3.13.4 Binary128 extension (revision 1.9.110)
+
+The Linux GNU `long double` type is real IEEE binary128: size 16, alignment 16,
+113 significand bits. It uses the same scalar instructions, typed memory,
+initializedness, strict world ordering, C E3063 guards and block-local SSA as
+the smaller formats. Literal/static evaluation is RNE directly to binary128;
+numeric casts never narrow through binary64. Representation constants, memory,
+negation and sign-only builtins preserve all 128 bits, including signaling NaNs.
+
+The qualified hosted AArch64 libgcc profile uses positive all-one-fraction NaN
+(`0x7fffffffffffffffffffffffffffffff`) for invalid non-NaN arithmetic. Binary
+arithmetic still selects signaling operands before quiet operands, left first.
+Quad fused arithmetic selects signaling NaNs in addend/a/b order, then quiet
+NaNs in a/b/addend order. Its zero-times-infinity condition still raises invalid.
+This is distinct from scalar hardware FMADD quiet-NaN selection. Four rounding
+modes, before-rounding tininess and five sticky flags use the shared adapter.
+
+Quad HFA members use the existing homogeneous classifier and require ABI
+alignment 16. Native quad operations may use audited hosted runtime helpers
+behind EvoMIR; helper names are not EvoIR semantics. Native helper behavior,
+crossed calls, HFA/stack/varargs and application replay are separate acceptance
+gates. A source/IR/interpreter implementation does not satisfy them. Other
+targets and freestanding helper availability remain fail-closed until qualified.
+No `_Float128` spelling, binary16, FP vector/complex, traps, contraction or
+Annex F claim is implied by this extension. All FP remains excluded from P0.
 Placement follows C11 7.6.1 and is corroborated by the
 [Clang 19.1 floating-environment documentation](https://releases.llvm.org/19.1.0/tools/clang/docs/UsersManual.html#accessing-the-floating-point-environment).
 
@@ -3188,7 +3216,7 @@ visibility_mark := " visibility=" ("internal" | "hidden" | "protected")
 declaration_visibility := " visibility=" ("hidden" | "protected")
 
 type            := "bits<" positive_int ">"
-                 | "f32" | "f64"
+                 | "f32" | "f64" | "f128"
                  | "ptr<" address_space ">"
                  | "mem<" region ">"
                  | "world"
@@ -3200,7 +3228,7 @@ signature       := "(" sig_param_list [", ..."] ")->(" type_list ")"
 sig_param_list  := ε | sig_param ("," " " sig_param)*
 sig_param       := type [record_mark]
 record_mark     := (" byval(" | " sret(") integer ", " integer [hva_mark | hfa_mark] ")"
-hfa_mark        := ", hfa=" integer "x" ("f32" | "f64") [", abi_align=16"]
+hfa_mark        := ", hfa=" integer "x" ("f32" | "f64" | "f128") [", abi_align=16"]
 hva_mark        := ", hva=" positive_int "xvec<" positive_int ", bits<" positive_int ">>"
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
@@ -6605,7 +6633,7 @@ the stated coverage, with the stated axioms"; it is not a verified compiler.
 
 ```
 Type       := "bits" "<" Integer ">"
-            | "f32" | "f64"
+            | "f32" | "f64" | "f128"
             | "ptr" "<" AddressSpace ">"
             | "mem" "<" Region ">"
             | "world"
@@ -6633,6 +6661,7 @@ Integer    := [1-9] [0-9]*
 | Revision | Date | Changes |
 |---|---|---|
 | 1.9.108 | 2026-09-27 | Model the target fenv library through explicit memory/world snapshots, distinguish glibc/musl raise policies, and preserve fixed-profile admission after environment-changing calls. |
+| 1.9.110 | 2026-09-27 | Extend the shared scalar source/IR contract to binary128, exact 128-bit constants and transport, qualified hosted NaN/status policy and quad HFA metadata. Native and application acceptance remain separate gates. |
 | 1.9.109 | 2026-09-27 | Preserve lexical FENV_ACCESS policy through preprocessing, C-HIR, inline substitution, control-flow entry/exit, return conversion and strict source lowering. |
 | 1.9.107 | 2026-09-27 | Define bounded source dynamic rounding and quiet relational predicates; distinguish executed automatic initialization and conditional conversion from RNE translation-time constants. |
 | 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |

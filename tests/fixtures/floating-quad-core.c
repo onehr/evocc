@@ -66,3 +66,20 @@ int quad_uninitialized(void) {
     long double x;
     return x == 0.0L;
 }
+int quad_invalid_conversion(void) {
+    volatile long double x = __builtin_nanl("3");
+    return (int)x;
+}
+static long double quad_variadic(int count, ...) {
+    __builtin_va_list ap;
+    __builtin_va_start(ap, count);
+    long double sum = 0;
+    for (int i=0; i<count; ++i) sum += __builtin_va_arg(ap, long double);
+    __builtin_va_end(ap);
+    return sum;
+}
+int quad_varargs(void) {
+    return quad_variadic(9, 1.L, 2.L, 3.L, 4.L, 5.L, 6.L, 7.L, 8.L,
+                         0x1.0000000000000000000000000001p0L)
+        != 0x1.2800000000000000000000000000p5L;
+}

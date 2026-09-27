@@ -240,7 +240,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
     let lowering = TempSource::new(
         "lowering",
-        "struct S { long double x; }; int f(int, ...); int pass(struct S s) { return f(1, s); }\n",
+        "_Complex long double f(_Complex long double x) { return x; }\n",
     );
     let runtime = TempSource::new(
         "runtime",

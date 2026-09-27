@@ -88,6 +88,46 @@ const MODULE: &str = concat!(
 );
 
 #[test]
+fn scalar_proof_cannot_change_quad_payload_format_or_hfa_role() {
+    let source = include_str!("../../../tests/fixtures/floating-quad-exact.evoir")
+        .replace(
+            "@quad_exact()",
+            "@quad_exact(%arg0: ptr<generic> byval(32, 16, hfa=2xf128, abi_align=16))",
+        )
+        .replace("^entry()", "^entry(%v4: ptr<generic>)");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.certificate.regions.is_empty());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    assert!(Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+        .args([&files.before, &files.after, &files.proof])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    for forged in [
+        after.replace(
+            "0xffff0000000000000000000000000022",
+            "0xffff0000000000000000000000000023",
+        ),
+        after.replace("fp.add", "fp.sub"),
+        after.replace("hfa=2xf128", "hfa=4xf64"),
+        after
+            .replace("hfa=2xf128", "hfa=4xf64")
+            .replace("f128", "f64")
+            .replace("bits<128>", "bits<64>")
+            .replace("0x7fff8000000000000000000000000011", "0x7ff8000000000011")
+            .replace("0xffff0000000000000000000000000022", "0xfff0000000000022"),
+    ] {
+        files.reject_forged_output(&outcome.certificate, &forged);
+    }
+}
+
+#[test]
 fn scalar_proof_cannot_rewrite_strict_fp_or_erase_its_observable_status() {
     let source = include_str!("../../../tests/fixtures/floating-strict-world.evoir");
     let before = parse_section9_module(source.as_bytes()).unwrap();

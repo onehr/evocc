@@ -8,6 +8,7 @@ pub(super) fn ir_type(kind: FloatKind) -> Option<EvoIRType> {
     match kind {
         FloatKind::F32 => Some(EvoIRType::F32),
         FloatKind::F64 => Some(EvoIRType::F64),
+        FloatKind::F128 => Some(EvoIRType::F128),
         _ => None,
     }
 }
@@ -23,7 +24,7 @@ impl<'a> FunctionLowerer<'a> {
             state,
             Inst::Floating(FloatingInst {
                 result: result.clone(),
-                op: FloatingOp::Constant(value.bits() as u64),
+                op: FloatingOp::Constant(value.bits()),
                 arguments: vec![],
             }),
         )?;
@@ -67,6 +68,8 @@ impl<'a> FunctionLowerer<'a> {
         let (sign, exponent) = evocc_chir::floating::masks(kind).unwrap();
         let integer = if kind == FloatKind::F32 {
             CIntegerType::UINT
+        } else if kind == FloatKind::F128 {
+            CIntegerType::UINT128
         } else {
             CIntegerType::ULONG
         };
@@ -87,8 +90,8 @@ impl<'a> FunctionLowerer<'a> {
                             state,
                         )?;
                     }
-                    let mask = self.constant(state, integer, sign - 1)?.value;
-                    let exponent = self.constant(state, integer, exponent)?.value;
+                    let mask = self.wide_constant(state, integer, sign - 1)?.value;
+                    let exponent = self.wide_constant(state, integer, exponent)?.value;
                     let mut unordered = Vec::new();
                     for argument in arguments {
                         let raw = self
@@ -176,8 +179,8 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?
             .value;
-        let sign_mask = self.constant(state, integer, sign)?.value;
-        let magnitude_mask = self.constant(state, integer, sign - 1)?.value;
+        let sign_mask = self.wide_constant(state, integer, sign)?.value;
+        let magnitude_mask = self.wide_constant(state, integer, sign - 1)?.value;
         let magnitude = self.emit_raw_binary(state, Inst::And, &raw, &magnitude_mask)?;
         if matches!(expression.op, Abs | CopySign) {
             let result = if expression.op == CopySign {
@@ -196,7 +199,7 @@ impl<'a> FunctionLowerer<'a> {
             };
             return self.floating_instruction(FloatingOp::FromBits, vec![result], fp, state);
         }
-        let exponent = self.constant(state, integer, exponent)?.value;
+        let exponent = self.wide_constant(state, integer, exponent)?.value;
         let zero = self.constant(state, integer, 0)?.value;
         let compare = |this: &mut Self, state: &State, op, a, b| {
             let result = this.fresh_value(EvoIRType::Bits(1));
@@ -303,7 +306,7 @@ impl<'a> FunctionLowerer<'a> {
         let kind = match literal.suffix {
             evocc_chir::FloatSuffix::F => FloatKind::F32,
             evocc_chir::FloatSuffix::None => FloatKind::F64,
-            _ => return Err(LowerError::FloatingValue { span }),
+            evocc_chir::FloatSuffix::L => FloatKind::F128,
         };
         let raw = match literal.value {
             evocc_chir::FloatConstant::Real(value) => value
@@ -313,13 +316,15 @@ impl<'a> FunctionLowerer<'a> {
             evocc_chir::FloatConstant::QuietNaN(payload) => {
                 if kind == FloatKind::F32 {
                     0x7fc00000 | (payload & 0x3fffff)
+                } else if kind == FloatKind::F128 {
+                    (0x7fff8u128 << 108) | (payload & ((1 << 111) - 1))
                 } else {
                     0x7ff8000000000000 | (payload & 0x7ffffffffffff)
                 }
             }
         };
         self.floating_instruction(
-            FloatingOp::Constant(raw as u64),
+            FloatingOp::Constant(raw),
             vec![],
             ir_type(kind).unwrap(),
             state,
@@ -405,7 +410,9 @@ impl<'a> FunctionLowerer<'a> {
         right: ExprValue,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        let kind = if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
+        let kind = if left.value.ty == EvoIRType::F128 || right.value.ty == EvoIRType::F128 {
+            FloatKind::F128
+        } else if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
             FloatKind::F64
         } else {
             FloatKind::F32
@@ -479,9 +486,11 @@ impl<'a> FunctionLowerer<'a> {
             })
         };
         let sign = if kind == FloatKind::F32 {
-            1u64 << 31
+            1u128 << 31
+        } else if kind == FloatKind::F128 {
+            1u128 << 127
         } else {
-            1u64 << 63
+            1u128 << 63
         };
         let mut zero_id = zero.id;
         for _ in 0..8 {
@@ -516,7 +525,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         [left, right]
             .into_iter()
-            .any(|v| matches!(definition(v.id), Some(Inst::Const(_, mask)) if mask & sign == 0))
+            .any(|v| matches!(definition(v.id), Some(Inst::Const(_, mask)) if u128::from(*mask) & sign == 0))
     }
 
     pub(super) fn floating_truth(
@@ -543,7 +552,7 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         let kind = floating_kind(&value.value.ty).unwrap();
         let one = self.floating_instruction(
-            FloatingOp::Constant(FloatBits::from_unsigned(kind, 1).bits() as u64),
+            FloatingOp::Constant(FloatBits::from_unsigned(kind, 1).bits()),
             vec![],
             value.value.ty.clone(),
             state,

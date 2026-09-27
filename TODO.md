@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.109** and EvoMIR **0.47**. This is the Git-tracked execution backlog,
+EvoIR **1.9.110** and EvoMIR **0.47**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -744,7 +744,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   Quad FMA adds 24,532,992 independent records and 32,000 native bit/flag/control/
   errno records in each of four builds. Runtime default NaN and FMA payload
   selection differ from scalar hardware and have explicit regressions. This
-  qualifies numerical prerequisites, not executable f128 IR/source/ABI or jq.
+  qualifies numerical prerequisites. The 1.9.110 batch adds actual f128 source/IR,
+  exact-bit text, typed objects, both interpreters and quad HFA/vararg metadata.
+  Arithmetic/NaN/dynamic-mode/vararg programs and E3001/E3063 negatives pass;
+  independent proof mutation rejects changed bits, format and HFA role.
+  Native quad lowering/ABI and jq remain OPEN, not inherited from these results.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

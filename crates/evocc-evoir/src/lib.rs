@@ -1723,6 +1723,7 @@ pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, Strin
         EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),
         EvoIRType::F32 => 4,
         EvoIRType::F64 => 8,
+        EvoIRType::F128 => 16,
         // Pointer size/alignment is target data, so target-independent module
         // validation checks only pointer identity. Lowering and interpretation
         // use the explicit guard layout produced from TargetDataLayout.
@@ -5844,7 +5845,7 @@ fn execute_instruction(
                     state.world = world;
                     state.save_vector(representation)
                 }
-                EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 => {
+                EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
                     let raw = if *volatile {
                         let (raw, world) = state
                             .memory
@@ -6438,7 +6439,7 @@ fn normalize_runtime_input(
         });
     }
     match expected {
-        EvoIRType::F32 | EvoIRType::F64 => {
+        EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
             let kind = floating_kind(expected).unwrap();
             evocc_types::floating::FloatBits::from_bits(kind, value.value()).ok_or_else(|| {
                 InterpreterError::InvalidEntryArgument {

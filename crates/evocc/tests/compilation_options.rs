@@ -379,7 +379,7 @@ fn automatic_zero_single_pass_keeps_padding_values_and_pointer_provenance() {
 
 #[test]
 fn prezeroed_bytes_do_not_admit_deferred_value_types() {
-    for ty in ["long double", "_Complex double"] {
+    for ty in ["_Complex long double", "_Complex double"] {
         let source =
             format!("extern void observe(void *); void f(void) {{ {ty} r; observe(&r); }}");
         let output = run(&["--emit=evoir", "-ftrivial-auto-var-init=zero"], &source);

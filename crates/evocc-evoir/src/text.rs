@@ -281,6 +281,7 @@ fn render_type(ty: &EvoIRType) -> String {
         EvoIRType::Bits(width) => format!("bits<{width}>"),
         EvoIRType::F32 => "f32".to_owned(),
         EvoIRType::F64 => "f64".to_owned(),
+        EvoIRType::F128 => "f128".to_owned(),
         EvoIRType::Ptr(space) => format!(
             "ptr<{}>",
             match space {
@@ -481,6 +482,8 @@ impl FunctionRenderer {
                         bits,
                         width = if operation.result.ty == EvoIRType::F32 {
                             8
+                        } else if operation.result.ty == EvoIRType::F128 {
+                            32
                         } else {
                             16
                         }
@@ -1017,6 +1020,8 @@ fn render_mark(mark: ParamMark) -> String {
                     f.count,
                     if f.kind == evocc_types::FloatKind::F32 {
                         "f32"
+                    } else if f.kind == evocc_types::FloatKind::F128 {
+                        "f128"
                     } else {
                         "f64"
                     }

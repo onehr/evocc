@@ -1388,12 +1388,12 @@ impl RecordShape {
         self.align.is_power_of_two()
             && !(self.vector.is_some() && self.floating.is_some())
             && self.floating.is_none_or(|f| {
-                matches!(f.kind, FloatKind::F32 | FloatKind::F64)
+                matches!(f.kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
                     && (1..=4).contains(&f.count)
                     && matches!(f.abi_align, 8 | 16)
                     && (f.abi_align == 8 || self.align >= 16)
-                    && self.size
-                        == u64::from(f.count) * if f.kind == FloatKind::F32 { 4 } else { 8 }
+                    && (f.kind != FloatKind::F128 || f.abi_align == 16)
+                    && self.size == u64::from(f.count) * float_layout(f.kind).size_bytes
             })
             && self.vector.is_none_or(|v| {
                 matches!(v.bits, 8 | 16 | 32 | 64 | 128)
@@ -1406,7 +1406,7 @@ impl RecordShape {
 
     pub fn simd_members(self) -> Option<(u8, u64)> {
         self.floating
-            .map(|f| (f.count, if f.kind == FloatKind::F32 { 4 } else { 8 }))
+            .map(|f| (f.count, float_layout(f.kind).size_bytes))
             .or_else(|| {
                 self.vector
                     .map(|v| (v.count, u64::from(v.lanes) * u64::from(v.bits) / 8))
@@ -1485,9 +1485,10 @@ pub fn canonical_marks(marks: Vec<ParamMark>, count: usize) -> Vec<ParamMark> {
 pub enum EvoIRType {
     /// Unsigned/signed bit-vector of statically known width `N`.
     Bits(u16),
-    /// IEEE 754 binary32 / binary64.
+    /// IEEE 754 binary32 / binary64 / binary128.
     F32,
     F64,
+    F128,
     /// Typed pointer into one address space.
     Ptr(AddressSpace),
     /// Pointer to one complete lowered function interface. The final

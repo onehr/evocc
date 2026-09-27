@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FloatingOp {
-    Constant(u64),
+    Constant(u128),
     Add,
     Sub,
     Mul,
@@ -118,6 +118,7 @@ pub fn floating_kind(ty: &EvoIRType) -> Option<FloatKind> {
     match ty {
         EvoIRType::F32 => Some(FloatKind::F32),
         EvoIRType::F64 => Some(FloatKind::F64),
+        EvoIRType::F128 => Some(FloatKind::F128),
         _ => None,
     }
 }
@@ -152,13 +153,15 @@ impl FloatingInst {
         let integer = |ty: &EvoIRType| matches!(ty, EvoIRType::Bits(1..=128));
         let bits = |ty: &EvoIRType| match ty {
             EvoIRType::F32 => EvoIRType::Bits(32),
+            EvoIRType::F128 => EvoIRType::Bits(128),
             _ => EvoIRType::Bits(64),
         };
         let valid = match self.op {
             Constant(raw) => {
                 fp_result
                     && args.is_empty()
-                    && (*result != EvoIRType::F32 || raw <= u64::from(u32::MAX))
+                    && (*result != EvoIRType::F32 || raw <= u128::from(u32::MAX))
+                    && (*result != EvoIRType::F64 || raw <= u128::from(u64::MAX))
             }
             Add | Sub | Mul | Div => fp_binary && *result == args[0].ty,
             Fma => args.len() == 3 && fp_result && args.iter().all(|a| a.ty == *result),
@@ -188,7 +191,7 @@ impl FloatingInst {
     pub fn evaluate(&self, inputs: &[u128]) -> u128 {
         use FloatingOp::*;
         if let Constant(bits) = self.op {
-            return u128::from(bits);
+            return bits;
         }
         let float = |i: usize| {
             FloatBits::from_bits(floating_kind(&self.arguments[i].ty).unwrap(), inputs[i]).unwrap()

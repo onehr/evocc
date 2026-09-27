@@ -68,12 +68,10 @@ fn scalar_floating_execution_keeps_the_conversion_obligation() {
             inst,
             evocc_evoir::Inst::UbAssume(_, evocc_evoir::UbReason::FloatingToInteger)
         )));
-    let deferred = run(
-        "int f(long double x) { return (int)(x * 2.0L); }",
-        "--emit=evoir",
+    agrees(
+        "int f(long double x) { return (int)(x * 2.0L); } int main(void) { return f(2.75L); }",
+        5,
     );
-    assert!(!deferred.status.success());
-    assert!(String::from_utf8_lossy(&deferred.stderr).contains("E3049"));
 }
 
 #[test]

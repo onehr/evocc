@@ -50,7 +50,11 @@ pub fn floating_constant_cast(
     };
     if !matches!(
         types.get(*ty)?.kind,
-        TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64)
+        TypeKind::Float(
+            evocc_types::FloatKind::F32
+                | evocc_types::FloatKind::F64
+                | evocc_types::FloatKind::F128
+        )
     ) {
         return None;
     }

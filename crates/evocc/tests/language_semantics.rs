@@ -157,12 +157,8 @@ fn benchmark_frontier_floating_comparisons() {
         let _unit = parser.parse_translation_unit_in(&arena);
         assert_eq!(parser.diagnostic().map(|d| d.code), Some(code), "{source}");
     }
-    assert_eq!(
-        lower_source("int f(long double x){return __builtin_isless(x, 0.0L);}")
-            .expect_err("binary128 call interfaces are still deferred")
-            .code(),
-        "E3049"
-    );
+    let module = lower_source("int f(long double x){return __builtin_isless(x, 0.0L);}").unwrap();
+    assert!(evocc_evoir::render_module(&module).contains("f128"));
 }
 
 #[test]
@@ -273,12 +269,21 @@ fn floating_hfa_varargs_preserve_member_alignment_separately_from_object_alignme
 #[test]
 fn floating_target_header_constants_narrow_their_exact_source_representation() {
     check("floating-header-constants.c", EXECUTION);
-    assert_eq!(
-        lower_source("double f(void){return (double)(1.0L + 0x1p-100L);}")
-            .expect_err("binary128 arithmetic remains deferred")
-            .code(),
-        "E3050"
-    );
+    let module = lower_source("double f(void){return (double)(1.0L + 0x1p-100L);}").unwrap();
+    let result = evocc_evoir::interpret_module(
+        &module,
+        "f",
+        &[
+            evocc_evoir::RuntimeValue::new(
+                evocc_types::EvoIRType::Mem(evocc_types::Region::All),
+                0,
+            ),
+            evocc_evoir::RuntimeValue::new(evocc_types::EvoIRType::World, 0),
+        ],
+        evocc_evoir::InterpreterLimits::new(100),
+    )
+    .unwrap();
+    assert_eq!(result.return_values[0].value(), 0x3ff0000000000000);
 }
 
 #[test]

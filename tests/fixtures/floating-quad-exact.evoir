@@ -1,0 +1,10 @@
+func @quad_exact() -> (bits<128>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry():
+    %v0 = const.f128 0x7fff8000000000000000000000000011
+    %v1 = const.f128 0xffff0000000000000000000000000022
+    %v2 = fp.add %v0, %v1 : f128
+    %v3 = fp.to_bits %v2 : bits<128>
+    ret %v3
+}

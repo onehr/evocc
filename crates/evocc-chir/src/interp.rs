@@ -1480,7 +1480,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     if matches!(
                         self.unit.types().get(*destination_type).map(|ty| &ty.kind),
                         Some(TypeKind::Float(
-                            evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                            evocc_types::FloatKind::F32
+                                | evocc_types::FloatKind::F64
+                                | evocc_types::FloatKind::F128
                         ))
                     ) {
                         self.store_constant_representation(
@@ -3580,7 +3582,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if matches!(
                     self.unit.types().get(ty).map(|ty| &ty.kind),
                     Some(TypeKind::Float(
-                        evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64
+                        evocc_types::FloatKind::F32
+                            | evocc_types::FloatKind::F64
+                            | evocc_types::FloatKind::F128
                     ))
                 ) {
                     self.store_constant_representation(
@@ -4968,12 +4972,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let kind = match literal.suffix {
                     crate::FloatSuffix::F => evocc_types::FloatKind::F32,
                     crate::FloatSuffix::None => evocc_types::FloatKind::F64,
-                    _ => {
-                        return Err(InterpreterError::UnsupportedExpression {
-                            feature: "deferred floating format",
-                            span,
-                        })
-                    }
+                    crate::FloatSuffix::L => evocc_types::FloatKind::F128,
                 };
                 let value = match literal.value {
                     crate::FloatConstant::Real(value) => value.target_convert(kind).ok_or(
@@ -4987,6 +4986,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             kind,
                             if kind == evocc_types::FloatKind::F32 {
                                 0x7fc00000 | (payload & 0x3fffff)
+                            } else if kind == evocc_types::FloatKind::F128 {
+                                (0x7fff8u128 << 108) | (payload & ((1 << 111) - 1))
                             } else {
                                 0x7ff8000000000000 | (payload & 0x7ffffffffffff)
                             },
@@ -6187,7 +6188,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
             Some(TypeKind::Float(
-                kind @ (evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64),
+                kind @ (evocc_types::FloatKind::F32
+                | evocc_types::FloatKind::F64
+                | evocc_types::FloatKind::F128),
             )) => Ok(ValueType::Floating(*kind)),
             Some(
                 TypeKind::Struct(_)
@@ -6564,14 +6567,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .kind
             .clone();
         match kind {
-            TypeKind::Float(evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64) => self
-                .store_constant_representation(
-                    address,
-                    ty,
-                    CInteger::new(0, CIntegerType::ULONG),
-                    false,
-                    span,
-                ),
+            TypeKind::Float(
+                evocc_types::FloatKind::F32
+                | evocc_types::FloatKind::F64
+                | evocc_types::FloatKind::F128,
+            ) => self.store_constant_representation(
+                address,
+                ty,
+                CInteger::new(0, CIntegerType::ULONG),
+                false,
+                span,
+            ),
             TypeKind::Int(_)
             | TypeKind::Enum(_)
             | TypeKind::GnuInt128(_)

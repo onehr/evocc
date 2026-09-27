@@ -142,7 +142,9 @@ impl FunctionLowerer<'_> {
                 if ty.qualifiers.is_volatile || ty.qualifiers.is_atomic {
                     return None;
                 }
-                let TypeKind::Float(kind @ (FloatKind::F32 | FloatKind::F64)) = ty.kind else {
+                let TypeKind::Float(kind @ (FloatKind::F32 | FloatKind::F64 | FloatKind::F128)) =
+                    ty.kind
+                else {
                     return None;
                 };
                 Some((*symbol, kind))
