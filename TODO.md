@@ -696,14 +696,20 @@ constructors/destructors, GNU inline or raw-byte lexing. Those shared capabiliti
 have implementations and targeted evidence. The following boundaries remain
 explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
-- [ ] **L01 — Strict floating environment** — `NEEDS_RULE`, P2; blocks B08.
-  Define the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
+- [ ] **L01 — Strict floating environment** — `OPEN`, P2; blocks B08.
+  The September 27 report approves strict world-threaded FP, a separate `fenv`
+  effect, four rounding modes and five sticky flags; dynamic rounding precedes
+  full non-trapping FENV_ACCESS. Traps and Annex F claims remain excluded.
+  Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
   calls and thread-owned explicit state. Implement it through constant evaluation,
   both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with
   exact bits/flags, all admitted rounding modes and original musl representatives;
   do not reset caller FP state or merely accept the flag. [Brief §A][semantics].
 
-- [ ] **L02 — Executable binary128 / long double** — `NEEDS_RULE`, P2; blocks B07 and FP originals.
+- [ ] **L02 — Executable binary128 / long double** — `OPEN`, P2; blocks B07 and FP originals.
+  The September 27 report approves real f128, the existing shared ABI classifier
+  and audited hosted helpers. Fixed-RNE and strict helper behavior are separate
+  gates; approval does not itself establish implementation or original-program PASS.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

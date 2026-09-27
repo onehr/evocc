@@ -48,6 +48,9 @@ macro_rules! with_format {
     };
 }
 
+mod environment;
+pub use environment::{FpEnvironment, FpResult, FpRounding, FpStatus};
+
 impl FloatBits {
     pub fn from_bits(kind: FloatKind, bits: u128) -> Option<Self> {
         let width = match kind {
@@ -112,37 +115,8 @@ impl FloatBits {
     /// Operand order is semantic: signaling NaNs first, then the first quiet
     /// NaN. Invalid non-NaN arithmetic produces the positive default NaN.
     pub fn target_binary(self, other: Self, op: FiniteOp) -> Option<Self> {
-        if self.kind != other.kind || !matches!(self.kind, FloatKind::F32 | FloatKind::F64) {
-            return None;
-        }
-        for signaling in [true, false] {
-            for operand in [self, other] {
-                if operand.is_nan() && (!signaling || operand.is_signaling()) {
-                    return Some(operand.quieted());
-                }
-            }
-        }
-        let bits = with_format!(self.kind, F, {
-            let a = F::from_bits(self.bits);
-            let b = F::from_bits(other.bits);
-            match op {
-                FiniteOp::Add => a.add_r(b, ROUND),
-                FiniteOp::Sub => a.sub_r(b, ROUND),
-                FiniteOp::Mul => a.mul_r(b, ROUND),
-                FiniteOp::Div => a.div_r(b, ROUND),
-            }
-            .value
-            .to_bits()
-        });
-        let mut result = Self { bits, ..self };
-        if result.is_nan() {
-            result.bits = match self.kind {
-                FloatKind::F32 => 0x7fc00000,
-                FloatKind::F64 => 0x7ff8000000000000,
-                _ => unreachable!(),
-            };
-        }
-        Some(result)
+        self.target_binary_round(other, op, FpRounding::NearestEven)
+            .map(|result| result.value)
     }
 
     /// Numerical format conversion (not object copying). Widening/narrowing a

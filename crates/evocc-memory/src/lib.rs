@@ -2843,6 +2843,7 @@ pub struct WorldState {
     next_sequence: Option<u64>,
     volatile_trace: Vec<VolatileEvent>,
     atomic_trace: Vec<AtomicEvent>,
+    fp_environment: evocc_types::floating::FpEnvironment,
 }
 
 impl WorldState {
@@ -2853,6 +2854,7 @@ impl WorldState {
             next_sequence: Some(0),
             volatile_trace: Vec::new(),
             atomic_trace: Vec::new(),
+            fp_environment: evocc_types::floating::FpEnvironment::default(),
         }
     }
 
@@ -2868,6 +2870,19 @@ impl WorldState {
 
     pub fn atomic_trace(&self) -> &[AtomicEvent] {
         &self.atomic_trace
+    }
+
+    pub fn fp_environment(&self) -> evocc_types::floating::FpEnvironment {
+        self.fp_environment
+    }
+
+    /// A new world snapshot, not a mutation of a process-global environment.
+    /// FP effects append no memory/volatile/atomic event.
+    pub fn with_fp_environment(&self, environment: evocc_types::floating::FpEnvironment) -> Self {
+        Self {
+            fp_environment: environment,
+            ..self.clone()
+        }
     }
 
     fn append(

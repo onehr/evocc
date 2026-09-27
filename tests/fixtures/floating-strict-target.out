@@ -1,0 +1,49 @@
+September 27, 2026: strict numeric-engine prerequisite, not L01 completion.
+
+Existing sealed ARM64 image identity, re-read with container image inspect:
+sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC (Debian 14.2.0-19) 14.2.0; Clang 19.1.7 (3+b1); uname aarch64.
+Each oracle: -std=gnu11 -O0/-O2 -Wall -Wextra -Werror
+-frounding-math -ffp-contract=off tests/fixtures/floating-strict-target.c.
+All four outputs: 22,568 rows / 1,399,216 bytes, identical SHA-256:
+a9b2612bea820e5c1916aef16cfad6804030a1caba55b8c8dcc78d5448a7134e
+The production adapter's strict_values example consumes every row, exact bits
+and low-five FPSR flags: 22,568 PASS, zero mismatches. These are ordered
+instruction probes, not source-lowering tests. Caller FPCR/FPSR are restored.
+
+Important reductions (format, FPCR-round mode, opcode, a,b,c,result,FPSR):
+32 0 2 00800000 3f7fffff 00800001 00800000 18
+64 0 2 0010000000000000 3fefffffffffffff 0010000000000001 0010000000000000 18
+32 1 3 3f7fffff 80000001 7fc00011 ff7fffff 14
+32 0 4 00000000 7f800000 7fc00055 7fc00000 01
+32 0 4 7fc00011 7fc00022 7fc00033 7fc00033 00
+Modes 0/1/2/3 = nearest-even/up/down/zero; operations 2/3/4 = mul/div/FMA.
+The third reduction was RED (adapter status 10 rather than 14), then GREEN:
+the pinned APFloat overflow_result omits OVERFLOW on finite saturation.
+Tininess is detected before rounding on this target. FMADD processes NaNs
+in addend/a/b order, with the invalid zero*infinity override for a quiet addend.
+No baseline binary-operation NaN policy is changed by these FMA rules.
+
+Independent SoftFloat/TestFloat 3e sources and archive hashes are the retained
+unmodified copies from floating-testfloat.out; ARM-VFPv2 specialization.
+testfloat_gen -seed 1 -level 1 -tininessbefore ROUND OP
+ROUND=-rnear_even/-rmax/-rmin/-rminMag, for each of:
+f32/f64 add/sub/mul/div/eq/lt/le; f32_to_f64/f64_to_f32;
+i32/ui32/i64/ui64_to_f32/f64.
+FP-to-i32/ui32/i64/ui64: -rminMag -exact, both source formats.
+Each stream is checked by strict_values --batch (OP MODE fields), with
+independent value AND status comparisons and explicit invalid-C-domain checks.
+2,630,976 cases PASS; no tolerance, filtering, or corpus files. FMA is NOT in
+this TestFloat total: that specialization's mulAdd NaN operand order differs
+from target FMADD; FMA is covered by the separate native matrix above.
+
+Hosted helper inventory (availability only, execution NOT RUN):
+/usr/lib/gcc/aarch64-linux-gnu/14/libgcc.a
+SHA256 60dbf748e1c310aa50300a33f30bf4ee070061071aee74a52cf115a7b8765e50
+Found __addtf3/__subtf3/__multf3/__divtf3, comparisons, negation,
+f32/f64-to/from-tf2, signed/unsigned 32/64/128-bit integer conversions.
+Availability does not establish f128 value, fenv or public-ABI correctness.
+
+Source strict options, strict EvoIR/proof, native scheduling, fenv API models,
+binary128 execution and original musl/jq remain pending. No K7 or Annex F claim.
+Local small streams/logs: .build/floating-targeted/strict-20260927/.

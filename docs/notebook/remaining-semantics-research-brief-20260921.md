@@ -31,9 +31,15 @@ resolve the nonliteral-strlen question below, or establish a new uniform kernel
 composition. The 7,002-object uniform attempt ended INCOMPLETE before boot;
 producer-ordering and bitmap fixes require fresh composition verification.
 K13/K14 and the final application campaign remain separate, not inherited PASS.
-All semantic questions below remain questions: the implementation refresh does
-not authorize new strict-fenv, binary128, atomic or dialect behavior. See the
-current [task ledger](../../TODO.md) for exact closed and remaining scopes.
+The subsequent September 27 user-supplied architecture report approves A/B:
+strict FP through explicit world state plus a `fenv` effect; four rounding modes,
+five sticky flags, explicit FMA without implicit contraction; real binary128
+through the existing type/ABI path and audited hosted helpers. Preserve the
+working scalar baseline and pinned APFloat. Dynamic rounding, complete
+non-trapping fenv, fixed-RNE binary128 and strict binary128 remain distinct
+implementation/acceptance gates. No traps, Annex F, half, complex or floating
+vector support is inferred. Sections C/D's atomic and dialect questions are not
+adjudicated by this FP report. See the current [task ledger](../../TODO.md).
 
 ### Original September 21 handoff
 

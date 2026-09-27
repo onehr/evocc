@@ -7867,3 +7867,30 @@ The code is recorded in the adjacent output; no original kernel unit requiring t
 Source function-section names preserve decoded UTF-8 bytes, rather than encoding each byte as a separate Unicode character; invalid UTF-8 and control bytes are E2943.
 `tests/fixtures/function-section-utf8.c` agrees under sealed GCC-14/Clang-19 at O0/O2 for raw and adjacent UTF-8 literals, whereas `NUMERIC_SECTION_ESCAPE` is accepted by GCC and rejected by Clang as an invalid escape in an unevaluated string literal, so that numeric-escape spelling is E2943.
 `tests/fixtures/function-section-boundaries.out` retains both observations; no original kernel unit requiring the rejected numeric-escape spelling is currently identified, and existing object-section rules are unchanged.
+
+### Approved strict floating and binary128 extension (2026-09-27)
+
+The reviewed extension preserves Section 3.13's fixed scalar profile and pins
+the existing host-independent APFloat engine. Strict arithmetic is a separate
+world-consuming/producing instruction family, with a distinct `fenv` effect
+and four rounding modes plus five sticky exception flags in each logical
+thread's world snapshot. It accesses no memory and is neither volatile, atomic
+nor I/O. External calls conservatively include fenv effects. Translation-time
+literal/static initialization remains RNE; executed strict operations cannot
+be folded or reordered across observable environment changes. Masked exceptions
+only are approved; traps, Annex F claims and implicit contraction are not.
+
+Explicit FMA computes a*b+c with one rounding. The admitted Arm scalar profile
+detects tininess before rounding. FMADD NaN selection examines addend, a, b,
+signaling operands first; a quiet addend does not suppress invalid zero*infinity,
+which produces default NaN. `floating-strict-target.c` measures these boundaries
+and quiet versus signaling comparison status independently of source optimization.
+This supplements, rather than changes, binary add/sub/mul/div NaN operand order.
+
+Real binary128 is approved through the existing object, ABI and SIMD register
+paths, with audited hosted helpers selected in EvoMIR rather than in EvoIR.
+Fixed-RNE helper execution and dynamic-rounding/status helper execution require
+separate acceptance. Half, floating vectors/complex and the unrelated dialect
+questions remain outside this approval. These are approved implementation
+contracts, not a claim that strict source options or executable f128 are already
+accepted; L01/L02 track their staged IR/text/proof/native/original-program closure.
