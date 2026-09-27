@@ -376,6 +376,54 @@ class FullSelftest(unittest.TestCase):
                              .get('architectureFragments'), [],
                              'arm64-only audit must not apply its fragment to another target')
 
+    def test_configuration_audit_records_reviewed_prerequisites_without_a_fragment(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            source = base / 'source'
+            source.mkdir()
+            kconfig = source / 'connector.Kconfig'
+            kconfig.write_text('config PROC_EVENTS\n\tdepends on CONNECTOR=y\n')
+            test_source = source / 'proc_filter.c'
+            test_source.write_text('socket(AF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);\n')
+            pins = {p.name: lane.file_sha256(p) for p in (kconfig, test_source)}
+            review = {'connector': {
+                'sources': pins, 'requirements': {'CONFIG_CONNECTOR': 'y', 'CONFIG_PROC_EVENTS': 'y'},
+                'reason': 'process events require built-in connector',
+            }}
+            config = base / '.config'
+            builds = [{'id': 'connector', 'available': ['connector:proc_filter']}]
+            unchanged = copy.deepcopy(builds)
+            with patch.object(lane, 'REVIEWED_CONFIG_PREREQUISITES', review, create=True):
+                for connector in ('n', 'm', 'y'):
+                    config.write_text(f'CONFIG_CONNECTOR={connector}\nCONFIG_PROC_EVENTS=n\n')
+                    result = lane.configuration_gaps(source, config, builds)
+                    self.assertEqual(result['missingFragments'], ['connector'])
+                    entries = result.get('reviewedPrerequisites', [])
+                    self.assertEqual(len(entries), 1, 'missing upstream fragment hides known requirements')
+                    entry = entries[0]
+                    self.assertEqual(entry['status'], 'VERIFIED_SOURCE')
+                    self.assertEqual(entry['sourceSha256'], pins)
+                    differences = entry['differences']
+                    self.assertEqual(len(differences), 1 if connector == 'y' else 2)
+                    self.assertEqual(differences[-1]['option'], 'CONFIG_PROC_EVENTS')
+                    self.assertEqual(differences[-1]['kind'], 'disabled')
+                    if connector == 'm':
+                        self.assertEqual(differences[0]['kind'], 'module')
+                config.write_text('CONFIG_CONNECTOR=y\nCONFIG_PROC_EVENTS=y\n')
+                self.assertEqual(lane.configuration_gaps(source, config, builds)
+                                 ['reviewedPrerequisites'][0]['differences'], [])
+                kconfig.write_text('changed dependency\n')
+                entry = lane.configuration_gaps(source, config, builds)['reviewedPrerequisites'][0]
+                self.assertEqual(entry['status'], 'SOURCE_CHANGED')
+                self.assertNotIn('differences', entry, 'unreviewed sources must not inherit the conclusion')
+                test_source.unlink()
+                entry = lane.configuration_gaps(source, config, builds)['reviewedPrerequisites'][0]
+                self.assertEqual(entry['status'], 'SOURCE_CHANGED')
+                self.assertIsNone(entry['sourceSha256']['proc_filter.c'])
+                self.assertEqual(lane.configuration_gaps(source, config, [{'id': 'unrelated'}])
+                                 ['reviewedPrerequisites'], [])
+            self.assertEqual(builds, unchanged, 'prerequisites never rewrite runtime outcomes')
+
     def test_module_installation_preserves_the_linked_body_and_records_the_payload(self):
         install = getattr(lane, 'install_kernel_modules', None)
         self.assertTrue(callable(install), 'a new Image must not silently reuse reference modules')

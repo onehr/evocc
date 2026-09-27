@@ -6,6 +6,23 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Connector prerequisite omitted from fragment-only review — 2026-09-28
+
+The [small original-API probe](../../tests/fixtures/connector-configuration.out)
+confirms that the new reference still lacks NETLINK_CONNECTOR: GCC and Clang
+controls pass all 12 absence checks while unchanged proc_filter fails with
+EPROTONOSUPPORT. Both live/new configs disable CONNECTOR. The frozen Kconfig
+requires CONNECTOR=y for PROC_EVENTS, so a cn module cannot fix this case.
+
+The collection has no upstream config fragment; the previous fragment-only
+audit therefore did not enumerate this requirement. The shared audit now
+separately records source-pinned reviews, refusing to inherit them when source
+bytes change. Its RED closes with all 263 K1 tests and Ruff passing. This is an
+accounting repair, not enabled configuration/runtime acceptance. K12e remains
+OPEN for the next config batch after the live frozen composition; no active
+build input is changed. The diagnostic uses a 4 MiB payload and existing scratch
+disk. An initial non-TAP output failure is preserved, not counted as PASS.
+
 ### OVPN input restoration and source-bound follow-up — 2026-09-28
 
 The common runtime installer now restores the exact two peer tables and key

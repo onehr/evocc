@@ -583,6 +583,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     no complete new runtime disk or subject Image is manufactured.
     [Identity-bound record](tests/fixtures/ovpn-base64-prefix.out).
 
+  - [ ] **K12e — Enable the missing connector process-event configuration** — `OPEN`, P2.
+    The new configuration still disables CONNECTOR; the collection has no
+    upstream config fragment. Two reference controls pass 12/12 absence checks,
+    while unchanged proc_filter still fails EPROTONOSUPPORT. PROC_EVENTS needs
+    CONNECTOR=y, not a separately loaded module. The shared configuration audit
+    now records these source-pinned prerequisites and invalidates changed-source
+    reviews; 263 K1 tests and Ruff pass. After the active frozen composition,
+    batch both built-in options into a separately identified configuration and
+    replay the original on its matching pair. No active config or historical
+    outcome changes. [Exact evidence](tests/fixtures/connector-configuration.out).
+
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
   cannot be transferred to repaired Images. Run the whole installed population

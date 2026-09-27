@@ -197,8 +197,26 @@ def boot_policies():
     return result
 
 
+# Some frozen collections have no config fragment. These requirements were
+# reviewed against their actual test and Kconfig, not inferred from test names.
+# Do not carry that conclusion onto changed sources without another review.
+REVIEWED_CONFIG_PREREQUISITES = {
+    'connector': {
+        'sources': {
+            'drivers/connector/Kconfig':
+                '7c3fe70e97018a96684297d5bbf5184b77ebe1dfa7ebe0022651c263b84d61e6',
+            'tools/testing/selftests/connector/proc_filter.c':
+                'b4b3f1b2d3c6a1d9fc7eeedf35064ab84d96f035cfa1f4a79cfd89a15fe39f82',
+        },
+        'requirements': {'CONFIG_CONNECTOR': 'y', 'CONFIG_PROC_EVENTS': 'y'},
+        'reason': 'proc_filter uses NETLINK_CONNECTOR process events; PROC_EVENTS depends on '
+                  'CONNECTOR=y, so loading cn.ko alone cannot supply this test prerequisite.',
+    },
+}
+
+
 def configuration_gaps(source, config, builds):
-    """Report literal upstream config differences, never waive a runtime result."""
+    """Report upstream fragments and pinned reviews, never waive runtime results."""
     def values(path):
         result = {}
         for line in path.read_text().splitlines():
@@ -210,15 +228,16 @@ def configuration_gaps(source, config, builds):
 
     effective = values(config)
     result = {'configSha256': file_sha256(config), 'collections': [], 'missingFragments': [],
-              'architectureFragments': [],
+              'architectureFragments': [], 'reviewedPrerequisites': [],
               'scope': 'Literal per-collection config and arm64 config.aarch64 fragments, '
                        'reported separately without hiding conflicting requests. '
-                       'Kconfig dependency solving and unlisted prerequisites need separate review. '
+                       'Pinned source-reviewed prerequisites are recorded separately; changed sources '
+                       'invalidate that review. Kconfig solving and other prerequisites need review. '
                        'Differences are evidence, not test outcomes or inapplicability decisions.'}
 
-    def differences(fragment):
+    def differences(requests):
         differences = []
-        for option, requested in values(fragment).items():
+        for option, requested in requests.items():
             actual = effective.get(option, 'n')
             if actual == requested:
                 continue
@@ -234,7 +253,7 @@ def configuration_gaps(source, config, builds):
         if fragment.is_file():
             result['collections'].append({'id': build['id'],
                                           'fragmentSha256': file_sha256(fragment),
-                                          'differences': differences(fragment)})
+                                          'differences': differences(values(fragment))})
         else:
             result['missingFragments'].append(build['id'])
         arch_fragment = directory / 'config.aarch64'
@@ -242,7 +261,17 @@ def configuration_gaps(source, config, builds):
             result['architectureFragments'].append({
                 'id': build['id'], 'path': str(arch_fragment.relative_to(source)),
                 'fragmentSha256': file_sha256(arch_fragment),
-                'differences': differences(arch_fragment)})
+                'differences': differences(values(arch_fragment))})
+        if review := REVIEWED_CONFIG_PREREQUISITES.get(build['id']):
+            actual = {name: file_sha256(source / name) if (source / name).is_file() else None
+                      for name in review['sources']}
+            verified = actual == review['sources']
+            entry = {'id': build['id'], 'sourceSha256': actual,
+                     'reviewedSourceSha256': dict(review['sources']), 'reason': review['reason'],
+                     'status': 'VERIFIED_SOURCE' if verified else 'SOURCE_CHANGED'}
+            if verified:
+                entry['differences'] = differences(review['requirements'])
+            result['reviewedPrerequisites'].append(entry)
     return result
 
 

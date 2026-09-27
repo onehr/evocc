@@ -1,0 +1,60 @@
+K12e — connector prerequisites hidden by an absent upstream fragment, 2026-09-28
+============================================================================
+
+The frozen connector collection has no config file. Both the historical
+970-program Images and the newly reviewed build configuration disable
+CONFIG_CONNECTOR; CONFIG_PROC_EVENTS is consequently absent. The unchanged
+proc_filter executable fails socket(AF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR)
+with EPROTONOSUPPORT before subscribing to any process events. Its old paired
+FAIL is not a compiler regression, and it is not a runtime PASS.
+
+The source's drivers/connector/Kconfig explicitly requires CONNECTOR=y for
+PROC_EVENTS. Loading a separately built cn.ko cannot supply process events.
+The next separately identified configuration must enable BOTH options as
+built-ins, rebuild the matching pair, then execute the unchanged original.
+No live config, object, Image or receipt is changed in this diagnosis.
+
+Shared tooling repair:
+  A new configuration-audit RED found that the report only listed connector
+  under missingFragments, hiding the now-known prerequisite from follow-up.
+  It now reports pinned source-reviewed requirements separately from original
+  fragments. Changed/missing test or Kconfig bytes yield SOURCE_CHANGED and
+  no inherited conclusion. Disabled/module/built-in distinctions remain;
+  results are never rewritten and other collections are not silently inferred.
+  All 263 K1 Python tests, targeted Ruff and git diff --check PASS. The actual
+  current source/config audit reports both disabled options, source verified.
+
+Reference runtime control:
+  GCC14 and Clang19 each compile the C fixture -static -O2 -Wall -Wextra -Werror
+  in evo-flight-lab:sealed (network none, one CPU/1 GiB). Each probe passes six
+  checks: ordinary ROUTE and GENERIC sockets open/close, connector socket fails,
+  and errno equals EPROTONOSUPPORT. Combined 12/12 diagnostic checks PASS.
+  The SAME flight runs the unchanged original proc_filter: FAIL, exit 1,
+  "socket failed: Protocol not supported". Boot and normal shutdown PASS.
+  hvf-host; KUnit autorun disabled; installed QEMU drift explicitly recorded.
+  These are absence controls, not enabled-connector or new EvoCC acceptance.
+
+An earlier flight emitted plain diagnostic lines rather than TAP. Both probes
+returned zero but the runner correctly classified them INVALID_OUTPUT; that
+flight remains recorded. Only output framing changed before the final replay,
+not its checks or expected values. The original failed in both flights.
+
+The final payload is 4,191,744 bytes, reuses the existing 64 MiB snapshot scratch
+disk, and creates no large disk copy. Original executable, config, Image and
+scratch hashes were checked before/after; all flights and containers exited.
+
+SHA256:
+  fixture aa27a78d6e69d9cbaf006fa36a0415fc2f7d8a71d45857d0ae72bdc27e539c20
+  original 69dc2eaa6f6b6ebc38a99dcf336bf02a3fdd7eaa0cc68076cb390ab70d77d317
+  Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  payload d439b5103a3a86ede4a0ae5b1ad43a4c1671dfbb61d73d03be022947d22474d4
+  scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+  result 9990fca85fe76428b53634fdc361f39a291fcc150ed0ca8f4c4d9f11f37c2da9
+  serial 9960d41b7ebcd92c5f8b3cf2d0c7c1d4b158f81d11bc5fa7d53d22dab2e9fecd
+  invalid-output serial c04266d16a3dac1038df2f8a4846930ae8ff3cc0ba651db632bc000db8ef09f2
+Raw commands, probes, audit, results and serial:
+  .build/floating-targeted/connector-config-20260928/
+  final flight: tap/flights/reference; result: tap/result.json.
+Source pins are also enforced by tools/k1/selftest_full.py. K12e stays OPEN
+until the enabled configuration is actually built and tested on both sides.
