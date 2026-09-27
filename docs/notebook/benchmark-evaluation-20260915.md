@@ -2539,8 +2539,9 @@ lanes. All four original-variant/archive combinations pass through the actual
 wrapper and unchanged reference supervisor; no assertion is removed.
 
 The isolated original daemon case passes against both archives in about 0.126
-seconds; million-fd exhaustion reaches EMFILE in about 0.12 seconds. The previous
-timeout remains unexplained, not waived. The other four library cases reproduce
+seconds; million-fd exhaustion reaches EMFILE in about 0.12 seconds. At that
+checkpoint the timeout remained unexplained; the later filesystem-controlled
+reduction below resolves the environment subcase. The other four library cases reproduce
 with both archives and all three callers: strptime's source deliberately ignores
 the parsed `%s` value and requires four `%z` digits; wordexp passes two helper
 arguments to `/bin/sh`, which its nested expansion exposes. Two strtold quad
@@ -2602,3 +2603,20 @@ both round to even ...1112, although one exact input is above the midpoint
 guard digit distinguishes these two inputs. Four interpreter and six native
 executions assert the old behavior and the diagnostic control. No pinned source
 was patched; the original failures remain FAIL, not compiler regression or PASS.
+
+### Descriptor-exhaustion timeout repair (September 27)
+
+The [small fork/dup/exit case](../../tests/fixtures/descriptor-exit-filesystem.out)
+reproduces the original daemon timeout without calling daemon: stdout duplicated
+to the unchanged million-FD limit exits promptly on guest-local storage but
+waits in exit_group/filesystem requests on the host virtiofs mount. The same
+destination-only difference is reproducible in both original archive lanes.
+Earlier pipe captures did not reproduce Make's mounted `.err` destination.
+
+The existing case-environment adapter now stages stdout for exactly those two
+supervisors in a guest-local regular file, then copies exact bytes/status. The
+reference watchdog and child stack/FD limits are unchanged. Twelve retained
+reference/mixed relink repetitions and the two actual unchanged executables
+pass; a deliberate timeout still fails after five seconds. All 296 ladder
+regressions pass. This resolves B08d6's environment defect; the historical full
+run remains a 17-failure receipt until the fresh campaign actually executes.

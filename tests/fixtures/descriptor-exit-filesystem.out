@@ -1,0 +1,67 @@
+2026-09-27 — musl daemon-failure stdout filesystem boundary (B08d6)
+
+RED: retained original daemon-failure binaries linked separately against the
+reference and 1,271-object mixed archives, unchanged reference runtest, unchanged
+five-second watchdog. Two runs per archive/destination:
+  stdout pipe:             4/4 exit 0
+  guest-local regular file:4/4 exit 0
+  host-mounted file:       4/4 watchdog FAIL [timed out], about 5.02--5.06 s
+The passing observations sample completion at 0.25-second intervals; they are
+not precise performance measurements. Previously isolated pipe runs did not
+reproduce the actual Make recipe's `> case.err` on the virtiofs mount.
+
+Small C reduction: fork, duplicate stdout until EMFILE, report that boundary,
+then _Exit. No daemon, chdir, libc replacement or changed RLIMIT_NOFILE.
+Both destinations reach 1,048,573 duplicates and EMFILE before exit. Guest-local
+stdout passes; mounted stdout times out. The remaining child is in syscall 94
+(AArch64 exit_group), repeatedly observed in request_wait_answer, not dup or
+daemon. Kernel stack access was denied; no stack trace is claimed. Container
+kernel is Linux 6.18.15, not the separately compiled EvoCC test kernel.
+
+This is a reproducible execution-environment cause of these two timeouts, not
+an inferred compiler arithmetic defect. The local Linux 6.18.44 source shows
+close_files -> filp_close -> f_op->flush per descriptor and a FUSE_FLUSH request
+path. That is corroborative source analysis, not an exact kernel/virtiofs trace
+or a claim that a particular host-runtime implementation bug has been fixed.
+
+Repair in the existing musl_case adapter:
+  * For exactly the two daemon case paths, and only at the outer supervisor
+    invocation, use an unlinked guest-/tmp regular stdout file.
+  * Keep the original supervisor argv, five-second deadline, 100 KiB child stack,
+    inner exec path, descriptor limit, library, source and assertions unchanged.
+  * Copy output as exact bytes afterward; retain failure status, stderr and
+    terminating signals. Setup/output errors fail rather than produce PASS.
+  * Do not spool other tests or silently enlarge watchdogs. Record wrapper hash
+    and the output policy in the next musl receipt for both compiler lanes.
+
+GREEN: the reference/mixed retained original relinks, under both exact variant
+paths, pass three repetitions each: 12 executions, about 0.19--0.23 seconds.
+Those variant-path repetitions reuse each archive's one retained static relink;
+they are not twelve independent builds. The two actual retained libc-test
+executables additionally pass without relinking or changed hashes, at about
+0.19/0.20 seconds. A deliberate twenty-second child still returns watchdog
+failure after five seconds through the adapter; no timeout is converted to PASS.
+Ten wrapper tests pass on macOS and sealed Linux: binary output (NUL/FF), exact
+selection, setup failure, original argv, nonzero exit, signal and unaffected
+cases. All 296 ladder Python tests and targeted Ruff/diff checks pass.
+
+No full libc-test campaign receipt is replaced; historical 17 failures remain
+historical. This closes the daemon environment subcase, not B08d or full musl.
+
+Identities (SHA256):
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  C reduction: 5bfadc753c1066a0e1573127fdab1d06a342af0a3a72da8935e0a46469f903f5
+  wrapper: d2b1e8e2c25fd58c2872570f4619a6b8c483c0f5ab6305d4a07c8e5c9c025ad7
+  reference supervisor: 7f679cb3ec12c5c0b304601af75e1903345d08246c85702c11fadda72723cedc
+  original reference relink: e0f8c30d34b3bce4a935fb04a8da8da26c235964f6da39415561ec9916779ec1
+  original mixed relink: 0b6977b9da5bb2a4d08b4ca0bd6efc204deac1f3fd37f7186cc53aac3637e7ae
+  both retained actual variants: 58246699abfa06e14aecaefc23e03b032c9d4f9b3f3c4d78e7429931fa841fd9
+
+Bounded artifacts: .build/floating-targeted/musl-daemon-20260927/
+  results.json: 172303f8d919e88ce5e3d8389ebf0ee36a1c82078993356ee10054ec08e7997c
+  reduction.json: af3449432f6b9fd04ab075cd1bda9241c01ec62e129909ceae8a82849c776140
+  green.json: 63f32e8a1c95a091924247fcd6d6136d44dc3fe3393f4c768f9e455bc40faaaa
+  live.json: f7ba267e728d3e984d87d446a791c4ed9e7c4b1eb672cf987ceb445402ea8360
+  capture.py, reduce.py, green.py, live.py; raw argv/stderr/proc observations;
+  wrapper-red.log (three failed assertions), ladder-tests.log.
+No large image, clone, evidence archive or installed library was created.

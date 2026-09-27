@@ -110,7 +110,7 @@ cd /work/{TEST_MOUNT}
 test -x /work/{TEST_MOUNT}/reference-runtest || exit 2
 rm -f src/*/*.exe src/*/*.err src/*/*.ld.err src/REPORT src/*/REPORT
 make -s debug > inventory.log
-make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w {CASE_WRAPPER}" > relink.log 2>&1
+make -j4 RUN_TEST="{CASE_WRAPPER} /work/{TEST_MOUNT}/reference-runtest -w {CASE_WRAPPER}" > relink.log 2>&1
 echo tests-done
 """
 
@@ -393,7 +393,10 @@ def main() -> int:
                 "unprivilegedUidGid": 65534,
                 "cases": ["src/regression/pthread_atfork-errno-clobber.exe",
                           "src/regression/pthread_atfork-errno-clobber-static.exe"],
-                "policy": "drop root before the two RLIMIT_NPROC cases; other identities and cases unchanged; setup failure is not PASS",
+                "policy": "drop root before the two RLIMIT_NPROC cases; other identities unchanged; setup failure is not PASS",
+                "guestLocalStdoutCases": ["src/regression/daemon-failure.exe",
+                                          "src/regression/daemon-failure-static.exe"],
+                "stdoutPolicy": "only the two descriptor-exhaustion supervisors receive a guest-local regular stdout file; copy exact bytes and propagate status after the unchanged watchdog; no descriptor-limit change",
             },
         },
         "unconsumedGccOptions": mixed.omitted_table(rows),

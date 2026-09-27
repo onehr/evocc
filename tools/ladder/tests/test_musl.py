@@ -187,7 +187,7 @@ class SupervisorTest(unittest.TestCase):
         self.assertIn("cp src/common/runtest.exe reference-runtest", musl.BUILD_SCRIPT)
 
     def test_subject_cases_use_the_preserved_supervisor(self):
-        self.assertIn(f'RUN_TEST="/work/libc-test/reference-runtest -w {musl.CASE_WRAPPER}"', musl.RELINK_SCRIPT)
+        self.assertIn(f'RUN_TEST="{musl.CASE_WRAPPER} /work/libc-test/reference-runtest -w {musl.CASE_WRAPPER}"', musl.RELINK_SCRIPT)
         self.assertIn(f'RUN_WRAP={musl.CASE_WRAPPER}', musl.BUILD_SCRIPT)
         self.assertIn("test -x /work/libc-test/reference-runtest", musl.RELINK_SCRIPT)
 

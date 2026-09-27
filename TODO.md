@@ -824,7 +824,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     identically for GCC/Clang/EvoCC callers and both archives (96 records).
     The original daemon test passes in this isolated replay; million-fd
     exhaustion takes about 0.12 seconds, so fd count alone does not explain its
-    historical five-second timeout. That intermittent failure stays open.
+    historical five-second timeout. The later B08d6 filesystem-controlled
+    reduction below closes that previously unexplained timeout subcase.
     [Cases, exact identities and observations](tests/fixtures/musl-reference-boundaries.out).
 
     - [x] **B08d2 — Execute the five DSO/TLS subjects with a genuine loader** — `DONE`, 2026-09-27.
@@ -869,6 +870,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       API executable follows two names absent from pinned `unistd.h`, not a
       runtime compiler error. All three original failures remain failures;
       no header/test or denominator is changed. [Source hashes and contract](tests/fixtures/musl-reference-boundaries.out).
+
+    - [x] **B08d6 — Isolate descriptor-exhaustion output from host virtiofs**, 2026-09-27.
+      The [fork/dup/exit reduction](tests/fixtures/descriptor-exit-filesystem.c)
+      and unchanged daemon program fail only with mounted-file stdout; pipe and
+      guest-local regular-file controls pass in both archive lanes. Children
+      finish descriptor exhaustion and wait in exit_group/filesystem requests.
+      The existing wrapper now spools just these two supervisors to a guest
+      regular file, preserving exact logs/status/signals and the original
+      five-second watchdog, 100 KiB stack and FD limit. Twelve archive/variant-path
+      repetitions plus both actual retained executables pass; a deliberate
+      timeout still fails. Ten wrapper tests on both hosts, all 296 ladder tests
+      and Ruff pass. No full receipt is rewritten. [Evidence](tests/fixtures/descriptor-exit-filesystem.out).
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
