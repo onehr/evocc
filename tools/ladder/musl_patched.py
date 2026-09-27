@@ -42,6 +42,12 @@ SUITES = {
         '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
         subjects=('functional/wordexp', 'functional/wordexp-static'),
         fixture='musl-patched-wordexp.c', checks=48),
+    'wordexp-memory': dict(sources={'src/misc/wordexp.c':
+        '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
+        subjects=(), fixture='musl-wordexp-memory.c', checks=192,
+        patch='musl-patched-wordexp.patch', source_flags={'src/misc/wordexp.c': (
+            '-Dgetdelim=evo_getdelim', '-Drealloc=evo_realloc',
+            '-Dcalloc=evo_calloc', '-Dfree=evo_free')}),
     'conf': dict(sources={
         'src/conf/fpathconf.c': '301cf7c0ecd13a12fd090ee8f6fa6de90af2c1bcea85df2e387a48b7d7baf4f9',
         'src/conf/pathconf.c': 'ede2994972d93f1951dbddf4194d6764f9e4f1c5ac9bfa56dbdd4f8d64455848',
@@ -127,7 +133,8 @@ def inside(output: Path) -> int:
                 path = sources / source if source in suite['sources'] else Path('/work/fixtures') / source
                 argv = (['gcc-14', '-c', str(output / f'{name}-{opt}.s'), '-o', str(obj)]
                         if cc == 'evocc' else
-                        [cc, *FLAGS, '-O' + opt, *includes, '-c', str(path), '-o', str(obj)])
+                        [cc, *FLAGS, '-O' + opt, *suite.get('source_flags', {}).get(source, ()),
+                         *includes, '-c', str(path), '-o', str(obj)])
                 built = execute(argv)
                 builds.append(built)
                 objects.append(obj)
@@ -207,7 +214,7 @@ def main() -> int:
     tree = ROOT / '.build/ladder/musl-work'
     tests = ROOT / '.build/ladder/libc-test-work'
     reference = ROOT / '.build/floating-targeted/strict-20260927/musl-thread-ssa'
-    patch = ROOT / 'tests/fixtures' / Path(suite['fixture']).with_suffix('.patch')
+    patch = ROOT / 'tests/fixtures' / suite.get('patch', Path(suite['fixture']).with_suffix('.patch'))
     compiler = args.evocc.resolve()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -251,7 +258,8 @@ def main() -> int:
                 path = tests / 'src' / source
                 includes.append('-I' + str(tests / 'src/common'))
             argv = [str(compiler), '--target=aarch64-unknown-linux-gnu', '--emit=asm',
-                    *FLAGS, '-O' + opt, *includes, str(path)]
+                    *FLAGS, '-O' + opt, *suite.get('source_flags', {}).get(source, ()),
+                    *includes, str(path)]
             row = execute(argv)
             (out / (Path(source).stem + '-' + opt + '.s')).write_text(row.pop('stdout'))
             emissions.append(row)

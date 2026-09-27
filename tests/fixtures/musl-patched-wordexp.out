@@ -49,3 +49,10 @@ patch SHA256 3cf343909edb31545ab0ca08db6c9acaa719105e935d00bd37b76bf95e97dab6
 Original control: musl-patched-wordexp-red-20260928, all 36 executions FAIL.
 Claim ceiling: repaired and tested stderr/argument transport only; wordexp and
 full B08d remain OPEN.
+
+Follow-up, 2026-09-28: musl-wordexp-memory.out records four additional allocation
+ownership/error repairs in this same patch. The expanded patch passes 2304/2304
+allocation-fault checks and repeats the uninstrumented 576/576 transport checks.
+Original entries still fail 24/24 with 71 assertion diagnostics each. The hashes
+above identify the historical transport-only result; the follow-up record binds
+the expanded patch and newer compiler binary without rewriting that history.

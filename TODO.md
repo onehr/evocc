@@ -958,6 +958,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       original headers/archives/receipts are untouched; 303 ladder tests pass.
       [Exact scope, patch and evidence](tests/fixtures/musl-patched-conf.out).
 
+    - [x] **B08d12 — Repair wordexp allocation ownership and error handling**, 2026-09-28.
+      The previous supplement loses getdelim buffers on EOF/error and a word
+      on vector-growth failure; it can also report success after sentinel-read
+      or empty-vector allocation failure. Source-only fault injection reproduces
+      **34/192 failures per build**, then **2304/2304 checks pass** across twelve
+      patched GCC/Clang/EvoCC O0/O2 and reference/mixed-library executions.
+      APPEND/DOOFFS, partial results and freeing are checked. The uninstrumented
+      transport regression remains 576/576 PASS, but all 24 unchanged original
+      wordexp entries still FAIL; B08d10's grammar boundary remains OPEN.
+      All 304 ladder tests and targeted Ruff pass. [Exact evidence](tests/fixtures/musl-wordexp-memory.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

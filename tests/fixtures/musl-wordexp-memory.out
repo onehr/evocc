@@ -1,0 +1,73 @@
+B08d12 — wordexp allocation ownership and error propagation, 2026-09-28
+=====================================================================
+
+Separate, explicitly patched musl dependency supplement. This does not modify
+the pinned original source or either archive, and does not close the remaining
+wordexp grammar failures or increase the frozen benchmark PASS numerator.
+
+Four source defects are repaired in the copied wordexp.c:
+  - getdelim can allocate a buffer even when it returns -1 at EOF; getword must
+    free that caller-owned buffer rather than losing it through the ternary.
+  - a failed vector realloc must free the newly read, not-yet-inserted word.
+  - failure reading the initial sentinel must distinguish EOF/syntax from a
+    non-EOF allocation/read error; the latter must not become success.
+  - failure allocating an empty result vector must return WRDE_NOSPACE.
+
+The vector-growth leak is independently described by an upstream proposed
+patch, not asserted here to be merged:
+  https://www.openwall.com/lists/musl/2026/08/05/14
+  https://www.openwall.com/lists/musl/2026/08/05/18
+
+The fixture injects failures only into the copied wordexp translation unit via
+four macro-renamed libc calls. Neither the test TU nor the rest of libc receives
+these definitions. The wrappers call real getdelim/realloc/calloc/free, track
+owned allocations, and force sentinel read, first word read, first/second vector
+growth or empty-vector allocation failure. Normal EOF is a sixth control. Each
+mode runs with all four APPEND/DOOFFS combinations. Eight checks per combination
+cover status, partial count, offset, vector presence, contents/terminators,
+actual fault execution, leaks after wordfree, and foreign/double free.
+
+RED: previous transport-only patch, 12 native executions, each 192 checks with
+34 failures. All builds/links succeeded; these are executed semantic failures.
+GREEN: repaired patch, 12 executions, 192/192 each: 2304/2304 assertions PASS.
+The matrix is GCC14/Clang19/EvoCC x O0/O2 x reference/mixed base archives.
+All replacement-object link maps verify; both input archives remain unchanged.
+
+Uninstrumented original replay was separate, with the same repair patch:
+  existing transport fixture: 12 x 48/48 = 576/576 PASS;
+  original functional/wordexp and functional/wordexp-static: 24/24 FAIL,
+  still 71 assertion diagnostics each. The full supplement correctly returns
+  FAIL. No new original-entry PASS or shell/parser repair is claimed.
+
+Compiler SHA256:
+  07f2a45e280f42dcb34633e8fcbf0db44731e501aa8fc0e66c612c2a140becf2
+Sealed image digest:
+  2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Fixture SHA256:
+  b1bb9d48fa803cafcf6c78b1b3aa8724d0001afb2f54ddbe6baedf237acd4c98
+Patch SHA256:
+  9466ac75fb8085107d890a670497a1cd3a10ca8e2e67e2f6ff17f41187d01ff4
+
+Raw paths below .build/floating-targeted/:
+  musl-wordexp-memory-red-20260928/
+    plan.json 054c3f4bf77fb5dff747bbcd4f5a3e83074e00ba6e09563c102652128f63740e
+    executions.json e0753cebd195b523b0db7013ebc7791cf4e5dbb28e1df9789bc3d2bae8be829c
+  musl-wordexp-memory-green-20260928/
+    plan.json d30c3b3e367b48406ef8d86b298c171106b96f10891f5cd6c23bdb8bd3f1436e
+    executions.json 82e97ed8234ac2ebc08663f039181599172bdbebbbfff56467cc1e477c387b6e
+  musl-wordexp-memory-original-20260928/
+    plan.json d2a43098c5535643c9446ec1cdbf0b867b9a16dbaad930f815aa65d21f80ff90
+    executions.json 8b101aec1fde4b04b3a3993e752ce1473f2d3c45621033420838122e72f2dccb
+
+Recipe:
+  python3 tools/ladder/musl_patched.py --suite wordexp-memory \
+    --evocc target/frontend/debug/evocc --output .build/floating-targeted/NEW
+  python3 tools/ladder/musl_patched.py --suite wordexp \
+    --evocc target/frontend/debug/evocc --output .build/floating-targeted/OTHER
+
+The second command is expected to remain nonzero until B08d10 closes. The RED
+used the retained previous patch/source, not --unpatched-control (that mode
+deliberately does not link injected replacement objects). All 304 ladder Python
+tests and targeted Ruff pass; a new negative verdict test rejects relabeling
+the 12 allocation probes as full wordexp acceptance. No compiler source changed
+in this batch, so the prior full Rust health checkpoint is not a new run here.

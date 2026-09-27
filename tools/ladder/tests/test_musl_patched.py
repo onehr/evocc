@@ -40,6 +40,30 @@ class SupplementVerdict(unittest.TestCase):
         data['rows'][0]['run']['stdout'] = 'checks=5920 failures=0\n'
         self.assertFalse(module.passed(data))
 
+    def test_memory_fault_suite_is_twelve_instrumented_probes_not_original_acceptance(self):
+        suite = module.SUITES['wordexp-memory']
+        self.assertEqual(suite['subjects'], ())
+        self.assertEqual(suite['patch'], 'musl-patched-wordexp.patch')
+        self.assertEqual(suite['source_flags']['src/misc/wordexp.c'], (
+            '-Dgetdelim=evo_getdelim', '-Drealloc=evo_realloc',
+            '-Dcalloc=evo_calloc', '-Dfree=evo_free'))
+        self.assertNotIn(suite['fixture'], suite['source_flags'])
+        data = {'inputsUnchanged': True, 'patched': True, 'suite': 'wordexp-memory',
+            'rows': [dict(compiler=cc, opt=opt, library=lib, subject='probe',
+                build={'exit': 0}, link={'exit': 0}, run={'exit': 0,
+                    'stdout': 'checks=192 failures=0\n'},
+                binarySha256='binary', objectSha256='object', linkMapVerified=True,
+                replacementObjects={'wordexp': 'object'})
+                for cc in ('gcc-14', 'clang-19', 'evocc') for opt in ('0', '2')
+                for lib in ('reference', 'mixed')]}
+        self.assertEqual(len(data['rows']), 12)
+        self.assertTrue(module.passed(data))
+        data['suite'] = 'wordexp'
+        self.assertFalse(module.passed(data))
+        data['suite'] = 'wordexp-memory'
+        data['rows'][0]['run']['stdout'] = 'checks=192 failures=1\n'
+        self.assertFalse(module.passed(data))
+
     def test_missing_duplicate_failing_or_changed_inputs_never_pass(self):
         for change in ('missing', 'duplicate', 'extra', 'build', 'link', 'run',
                        'timeout', 'missing-hash', 'inputs-changed', 'probe-count', 'probe-errors',

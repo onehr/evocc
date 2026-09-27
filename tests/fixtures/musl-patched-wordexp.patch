@@ -1,6 +1,19 @@
 diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
 --- a/src/misc/wordexp.c
 +++ b/src/misc/wordexp.c
+@@ -21,7 +21,11 @@ static void reap(pid_t pid)
+ static char *getword(FILE *f)
+ {
+ 	char *s = 0;
+-	return getdelim(&s, (size_t [1]){0}, 0, f) < 0 ? 0 : s;
++	if (getdelim(&s, (size_t [1]){0}, 0, f) < 0) {
++		free(s);
++		return 0;
++	}
++	return s;
+ }
+ 
+ static int do_wordexp(const char *s, wordexp_t *we, int flags)
 @@ -30,7 +30,6 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
  	int sq=0, dq=0;
  	size_t np=0;
@@ -30,3 +43,42 @@ diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
 +			"sh", s, (char *)0);
  		_exit(1);
  	}
+@@ -125,12 +138,15 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+ 
+ 	l = wv ? i+1 : 0;
+ 
+-	free(getword(f));
+-	if (feof(f)) {
++	w = getword(f);
++	if (!w) {
++		int end = feof(f);
+ 		fclose(f);
+ 		reap(pid);
+-		return WRDE_SYNTAX;
++		if (end) return WRDE_SYNTAX;
++		goto nospace;
+ 	}
++	free(w);
+ 
+ 	while ((w = getword(f))) {
+ 		if (i+1 >= l) {
+@@ -138,7 +154,10 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+ 			l += l/2+10;
+ 			tmp = realloc(wv, l*sizeof(char *));
+-			if (!tmp) break;
++			if (!tmp) {
++				free(w);
++				break;
++			}
+ 			wv = tmp;
+ 		}
+ 		wv[i++] = w;
+ 		wv[i] = 0;
+@@ -152,6 +171,7 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+ 	reap(pid);
+ 
+ 	if (!wv) wv = calloc(i+1, sizeof *wv);
++	if (!wv) err = WRDE_NOSPACE;
+ 
+ 	we->we_wordv = wv;
+ 	we->we_wordc = i;
