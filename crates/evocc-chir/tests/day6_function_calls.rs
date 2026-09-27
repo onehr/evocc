@@ -509,6 +509,7 @@ fn program_with_options(
                 CHirBlockItem::Statement(add_return),
             ],
             span(19, 40),
+            None,
         ),
     );
 
@@ -549,6 +550,7 @@ fn program_with_options(
                 CHirBlockItem::Statement(recursive_return),
             ],
             span(51, 108),
+            None,
         ),
     );
 
@@ -638,6 +640,7 @@ fn program_with_options(
                 CHirBlockItem::Statement(linear_return),
             ],
             span(617, 670),
+            None,
         ),
     );
     let call_linear_body = alloc(
@@ -1253,6 +1256,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(default_break),
             ],
             span(334, 392),
+            None,
         ),
     );
     let switch_statement = alloc(
@@ -1357,6 +1361,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(break_default),
             ],
             span(487, 518),
+            None,
         ),
     );
     let unwind_switch = alloc(
@@ -1384,6 +1389,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(add_after_switch_statement),
             ],
             span(470, 524),
+            None,
         ),
     );
     let unwind_loop = alloc(
@@ -1456,6 +1462,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(retry_if),
             ],
             span(531, 572),
+            None,
         ),
     );
     let retry_label = alloc(
@@ -1514,6 +1521,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(return_statement),
             ],
             span(579, 622),
+            None,
         ),
     );
     let main_body = alloc(
@@ -1538,6 +1546,7 @@ fn composition_program_with_signature(
                 CHirBlockItem::Statement(nested_return),
             ],
             span(245, 623),
+            None,
         ),
     );
 
@@ -1754,7 +1763,11 @@ fn nested_label_program(arena: &Arena) -> CompositionProgram<'_> {
     );
     let nested = alloc(
         arena,
-        CHirStmt::Compound(vec![CHirBlockItem::Statement(labelled)], span(889, 906)),
+        CHirStmt::Compound(
+            vec![CHirBlockItem::Statement(labelled)],
+            span(889, 906),
+            None,
+        ),
     );
     let condition_call = call(
         arena,
@@ -1783,6 +1796,7 @@ fn nested_label_program(arena: &Arena) -> CompositionProgram<'_> {
                 CHirBlockItem::Statement(result),
             ],
             span(845, 917),
+            None,
         ),
     );
 
@@ -1935,7 +1949,10 @@ fn call_free_nested_while_goto_program(
         arena,
         CHirStmt::Break(span(1_130, 1_136)),
     )));
-    let while_body = alloc(arena, CHirStmt::Compound(while_items, span(1_088, 1_138)));
+    let while_body = alloc(
+        arena,
+        CHirStmt::Compound(while_items, span(1_088, 1_138), None),
+    );
     let nested_while = alloc(
         arena,
         CHirStmt::While(
@@ -1961,6 +1978,7 @@ fn call_free_nested_while_goto_program(
                 CHirBlockItem::Statement(result),
             ],
             span(1_055, 1_149),
+            None,
         ),
     );
     let main_declaration = function_declaration(
@@ -2164,6 +2182,7 @@ fn switch_case_conversion_program(arena: &Arena, with_call: bool) -> Composition
                 CHirBlockItem::Statement(default_statement),
             ],
             span(1_305, 1_360),
+            None,
         ),
     );
     let switch_statement = alloc(
@@ -2193,6 +2212,7 @@ fn switch_case_conversion_program(arena: &Arena, with_call: bool) -> Composition
                 CHirBlockItem::Statement(return_statement),
             ],
             span(1_245, 1_376),
+            None,
         ),
     );
 
@@ -2298,6 +2318,7 @@ fn void_call_program(arena: &Arena) -> CompositionProgram<'_> {
                 )),
             ],
             span(995, 1021),
+            None,
         ),
     );
 
@@ -2447,6 +2468,7 @@ fn void_calls_in_for_clauses_program(arena: &Arena) -> CompositionProgram<'_> {
                 CHirBlockItem::Statement(return_statement),
             ],
             span(1_435, 1_488),
+            None,
         ),
     );
 
@@ -2529,6 +2551,7 @@ fn unreachable_missing_label_program(arena: &Arena) -> CompositionProgram<'_> {
                 CHirBlockItem::Statement(goto_statement),
             ],
             span(1_525, 1_557),
+            None,
         ),
     );
 

@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.106** and EvoMIR **0.45**. This is the Git-tracked execution backlog,
+EvoIR **1.9.109** and EvoMIR **0.47**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -718,8 +718,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   opposite rounding modes. Strict integer128 helpers now pass 36,784 exact
   values/status/control records in each of eight source/caller builds, plus
   768 raw-IR/prior-status checks in each of four reference callers; both source
-  interpreters pass all four modes. FENV_ACCESS lexical scope and full original
-  musl replay remain OPEN. The eight-unit targeted
+  interpreters pass all four modes. FENV_ACCESS lexical scope now preserves
+  ON/OFF/DEFAULT across preprocessing, inline substitution, direct/indirect goto,
+  switch, loop exits, statement expressions and return conversions. Eight source
+  programs, including the unchanged fenv library probe, pass both interpreters
+  and eight native crossed builds; Clang19 O0/O2 controls also pass. Full original
+  musl replay remains OPEN. The eight-unit targeted
   musl replay emits four; four ARM64 ceil/floor/rint/rintf units hit the
   explicitly excluded scalar-FP `w` asm constraint, for which approval was
   requested. No full musl receipt has been promoted.
@@ -735,8 +739,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   gates; approval does not itself establish implementation or original-program PASS.
   The sealed hosted runtime exports the required TFmode helper families. A
   new 6,400-record binary128 arithmetic/FPCR/FPSR probe agrees byte-for-byte
-  under GCC14/Clang19 O0/O2. This establishes a target observation, not EvoCC
-  f128 execution or independently qualified helper acceptance.
+  under GCC14/Clang19 O0/O2. The shared APFloat adapter now independently matches
+  those records and 908,544 TestFloat arithmetic/comparison/conversion records.
+  Quad FMA adds 24,532,992 independent records and 32,000 native bit/flag/control/
+  errno records in each of four builds. Runtime default NaN and FMA payload
+  selection differ from scalar hardware and have explicit regressions. This
+  qualifies numerical prerequisites, not executable f128 IR/source/ABI or jq.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

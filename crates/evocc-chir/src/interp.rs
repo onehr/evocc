@@ -685,6 +685,7 @@ enum MachineTask<'arena> {
     },
     RestoreFuelAnchor(Option<SourceSpan>),
     RestoreNestedMutationDepth(usize),
+    RestoreFenvAccess(bool),
     ExecDeclaration(&'arena CHirDecl<'arena>),
     ExecStatement(&'arena CHirStmt<'arena>),
     SwitchEnd,
@@ -1054,6 +1055,7 @@ struct Interpreter<'unit, 'arena> {
     fuel_anchor: Option<SourceSpan>,
     nested_mutation_depth: usize,
     static_integer_evaluation: bool,
+    fenv_access: bool,
     integer_expression_types: HashMap<usize, CIntegerType>,
     temporary_origin_site: u64,
 }
@@ -1109,6 +1111,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             fuel_anchor: None,
             nested_mutation_depth: 0,
             static_integer_evaluation: false,
+            fenv_access: false,
             integer_expression_types: HashMap::new(),
             temporary_origin_site: 0,
         })
@@ -2049,6 +2052,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.nested_mutation_depth = previous;
                     None
                 }
+                MachineTask::RestoreFenvAccess(previous) => {
+                    self.fenv_access = previous;
+                    None
+                }
                 MachineTask::ExecDeclaration(declaration) => {
                     self.schedule_machine_declaration(declaration, &mut tasks)?;
                     None
@@ -2387,6 +2394,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::FinishReturnValue(span) => {
                     let value = pop_machine_value(&mut values, span)?;
+                    let target = tasks
+                        .iter()
+                        .rev()
+                        .find_map(|task| match task {
+                            MachineTask::FunctionEnd(end) => Some(end.return_value_type),
+                            _ => None,
+                        })
+                        .ok_or(InterpreterError::UnsupportedStatement {
+                            feature: "missing return continuation",
+                            span,
+                        })?;
+                    // Convert under the return statement's policy before unwinding.
+                    let value = match value {
+                        CValue::Uninitialized(source) if source == target => value,
+                        _ => self.cast_runtime_value(value, target, span)?,
+                    };
                     let end = self.pop_function_end(&mut tasks, span)?;
                     self.finish_function(end, FunctionExit::Explicit(Some(value)), &mut values)?
                 }
@@ -3057,6 +3080,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok((None, values))
     }
 
+    fn enter_fenv_scope(&mut self, policy: Option<bool>, tasks: &mut Vec<MachineTask<'arena>>) {
+        if let Some(enabled) = policy {
+            tasks.push(MachineTask::RestoreFenvAccess(std::mem::replace(
+                &mut self.fenv_access,
+                enabled,
+            )));
+        }
+    }
+
     fn exec_machine_statement(
         &mut self,
         statement: &'arena CHirStmt<'arena>,
@@ -3089,7 +3121,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let end = self.pop_function_end(tasks, *span)?;
                 self.finish_function(end, FunctionExit::Explicit(None), values)
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, policy) => {
+                self.enter_fenv_scope(*policy, tasks);
                 let saved = self.activate_block_items(items)?;
                 tasks.push(MachineTask::RestoreSlots(saved));
                 if let Some(exit) = self.enter_memory_scope(statement.span())? {
@@ -3499,7 +3532,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unit.symbols(),
                 &self.target,
             )
-            .filter(|_| !self.strict_floating())
+            .filter(|_| !self.unit.runtime_floating_environment())
             {
                 let (address, actual_ty, bit_field) =
                     self.subobject_address(target.binding, path, *span)?;
@@ -3699,6 +3732,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 // individual lexical exits must not destroy it first.
                 MachineTask::ExitMemoryScope(_) => {}
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreFenvAccess(previous) => self.fenv_access = previous,
                 MachineTask::RestoreNestedMutationDepth(previous) => {
                     self.nested_mutation_depth = previous;
                 }
@@ -3725,6 +3759,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreFenvAccess(previous) => self.fenv_access = previous,
                 MachineTask::RestoreNestedMutationDepth(previous) => {
                     self.nested_mutation_depth = previous;
                 }
@@ -3757,6 +3792,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreFenvAccess(previous) => self.fenv_access = previous,
                 MachineTask::RestoreNestedMutationDepth(previous) => {
                     self.nested_mutation_depth = previous;
                 }
@@ -3807,6 +3843,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreFenvAccess(previous) => self.fenv_access = previous,
                 MachineTask::RestoreNestedMutationDepth(previous) => {
                     self.nested_mutation_depth = previous;
                 }
@@ -3943,7 +3980,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirStmt::Label(_, child, _) => {
                 self.schedule_goto_in_statement(child, destination, tasks)
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, policy) => {
+                self.enter_fenv_scope(*policy, tasks);
                 let saved = self.activate_block_items(items)?;
                 tasks.push(MachineTask::RestoreSlots(saved));
                 if let Some(exit) = self.enter_memory_scope(statement.span())? {
@@ -4054,7 +4092,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unit.symbols(),
                 &self.target,
             )
-            .filter(|_| !self.strict_floating())
+            .filter(|_| !self.unit.runtime_floating_environment())
             {
                 tasks.push(MachineTask::BeginConstantRepresentationStore { place, bits, span });
                 return Ok(());
@@ -4129,12 +4167,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
-        let CHirStmt::Compound(items, _) = body else {
+        let CHirStmt::Compound(items, _, policy) = body else {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "statement expression body is not compound",
                 span,
             });
         };
+        self.enter_fenv_scope(*policy, tasks);
         let result_matches = match (value, items.last()) {
             (None, _) => true,
             (Some(value), Some(CHirBlockItem::Statement(statement))) => {
@@ -4301,7 +4340,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
-        if !self.strict_floating() {
+        if !self.unit.runtime_floating_environment() || self.static_integer_evaluation {
             if let Some(value) = crate::constant::floating_constant_cast(
                 expression,
                 self.unit.types(),
@@ -5974,13 +6013,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let mut return_value = match (exit, end.return_value_type) {
-            (FunctionExit::Explicit(Some(value)), ValueType::Floating(kind)) => {
-                Some(self.cast_runtime_value(value, ValueType::Floating(kind), end.body_span)?)
-            }
             (FunctionExit::Explicit(Some(CValue::Uninitialized(source))), target)
                 if source == target =>
             {
                 Some(CValue::Uninitialized(target))
+            }
+            (FunctionExit::Explicit(Some(value)), ValueType::Floating(kind)) => {
+                Some(self.cast_runtime_value(value, ValueType::Floating(kind), end.body_span)?)
             }
             (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => Some(
                 self.cast_runtime_value(value, ValueType::Integer(return_integer), end.body_span)?,
@@ -9321,7 +9360,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 self.predeclare_stmt(body)?;
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items {
                     match item {
                         CHirBlockItem::Declaration(declaration) => {
@@ -10644,7 +10683,7 @@ fn collect_statement_symbols<'arena>(
             }
             collect_statement_symbols(body, output);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -10821,7 +10860,7 @@ pub fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) 
         CHirStmt::Return(expression, _) => {
             expression.is_some_and(|expression| expression_requires_memory(unit, expression))
         }
-        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| match item {
             CHirBlockItem::Declaration(declaration) => {
                 declaration_requires_memory(unit, declaration)
             }
@@ -11575,7 +11614,7 @@ fn collect_switch_labels<'a>(statement: &'a CHirStmt<'a>, labels: &mut Vec<&'a C
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Label(_, body, _) => collect_switch_labels(body, labels),
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     collect_switch_labels(statement, labels);
@@ -11608,7 +11647,7 @@ fn statement_contains_destination(
         | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => statement_contains_destination(body, destination),
         CHirStmt::DoWhile(body, _, _) => statement_contains_destination(body, destination),
-        CHirStmt::Compound(items, _) => items.iter().any(|item| {
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| {
             matches!(
                 item,
                 CHirBlockItem::Statement(statement)
@@ -11645,7 +11684,7 @@ fn validate_function_labels(
         | CHirStmt::Case(_, body, _)
         | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => validate_function_labels(body, labels)?,
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     validate_function_labels(statement, labels)?;
@@ -11699,7 +11738,7 @@ fn validate_function_gotos(
         | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _)
         | CHirStmt::Label(_, body, _) => validate_function_gotos(body, labels)?,
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     validate_function_gotos(statement, labels)?;
@@ -11837,7 +11876,7 @@ mod tests {
         } else {
             vec![CHirBlockItem::Statement(returned)]
         };
-        let body = alloc(arena, CHirStmt::Compound(items, span(4, 23)));
+        let body = alloc(arena, CHirStmt::Compound(items, span(4, 23), None));
         let declaration = alloc(
             arena,
             CHirDecl::Function(FunctionDecl {
@@ -12087,6 +12126,7 @@ mod tests {
                     CHirStmt::Return(Some(read_counter), span(18, 28)),
                 ))],
                 span(16, 29),
+                None,
             ),
         );
         let bump_decl = alloc(
@@ -12119,6 +12159,7 @@ mod tests {
                     CHirStmt::Return(Some(call), span(38, 47)),
                 ))],
                 span(36, 48),
+                None,
             ),
         );
         let main_decl = alloc(
@@ -12455,6 +12496,7 @@ mod tests {
                     CHirStmt::Return(Some(read_deep), span(38, 45)),
                 ))],
                 span(36, 46),
+                None,
             ),
         );
         let main_decl = alloc(

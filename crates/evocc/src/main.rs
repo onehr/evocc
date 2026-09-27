@@ -878,6 +878,18 @@ fn render_preprocessed(tokens: &[evocc_lex::Token], source: &[u8]) -> Result<Str
     for token in tokens.iter().filter(|token| token.kind != TokenKind::Eof) {
         // Semantic directives cross the internal token boundary as markers,
         // but -E must emit their source form for the next parser invocation.
+        if let Some(enabled) = evocc_cpp::pragma_fenv_access(token) {
+            if !rendered.is_empty() && !rendered.ends_with('\n') {
+                rendered.push('\n');
+            }
+            rendered.push_str(if enabled {
+                "#pragma STDC FENV_ACCESS ON\n"
+            } else {
+                "#pragma STDC FENV_ACCESS OFF\n"
+            });
+            unseparated.clear();
+            continue;
+        }
         if let Some(action) = pragma_pack_action(token) {
             if !rendered.is_empty() && !rendered.ends_with('\n') {
                 rendered.push('\n');

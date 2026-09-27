@@ -123,32 +123,35 @@ impl FloatBits {
     /// Numerical format conversion (not object copying). Widening/narrowing a
     /// NaN preserves sign and the most significant payload bits and quiets it.
     pub fn target_convert(self, kind: FloatKind) -> Option<Self> {
-        if !matches!(self.kind, FloatKind::F32 | FloatKind::F64)
-            || !matches!(kind, FloatKind::F32 | FloatKind::F64)
+        if !matches!(self.kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
+            || !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
         {
             return None;
         }
         if kind == self.kind || self.is_finite() {
             return self.convert(kind);
         }
-        let nan = self.is_nan();
-        let bits = if kind == FloatKind::F32 {
-            ((self.bits >> 32) & 0x80000000)
-                | 0x7f800000
-                | if nan {
-                    ((self.bits >> 29) & 0x7fffff) | 0x400000
-                } else {
-                    0
-                }
-        } else {
-            ((self.bits & 0x80000000) << 32)
-                | 0x7ff0000000000000
-                | if nan {
-                    ((self.bits & 0x7fffff) << 29) | 0x8000000000000
-                } else {
-                    0
-                }
+        let layout = |kind| match kind {
+            FloatKind::F32 => (31, 23, 0x7f800000),
+            FloatKind::F64 => (63, 52, 0x7ff0000000000000),
+            FloatKind::F128 => (127, 112, 0x7fff0000000000000000000000000000),
+            _ => unreachable!("admitted scalar format"),
         };
+        let (source_sign, source_fraction, _) = layout(self.kind);
+        let (sign, fraction, exponent) = layout(kind);
+        let mut payload = self.bits & ((1u128 << source_fraction) - 1);
+        if fraction >= source_fraction {
+            payload <<= fraction - source_fraction;
+        } else {
+            payload >>= source_fraction - fraction;
+        }
+        let bits = ((self.bits >> source_sign) << sign)
+            | exponent
+            | if self.is_nan() {
+                payload | (1u128 << (fraction - 1))
+            } else {
+                0
+            };
         Some(Self { kind, bits })
     }
 

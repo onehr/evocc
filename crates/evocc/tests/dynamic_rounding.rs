@@ -43,11 +43,11 @@ fn effective_rounding_option_selects_executed_semantics() {
 }
 
 #[test]
-fn rounding_support_does_not_silently_enable_fenv_or_fast_math() {
+fn invalid_fenv_requests_and_fast_math_remain_refused() {
     for (options, source, diagnostic) in [
         (
             vec!["-frounding-math", "--emit=evoir"],
-            "#pragma STDC FENV_ACCESS ON\ndouble f(void){return 1.0;}",
+            "#pragma STDC FENV_ACCESS INVALID\ndouble f(void){return 1.0;}",
             "E3065",
         ),
         (
@@ -64,4 +64,34 @@ fn rounding_support_does_not_silently_enable_fenv_or_fast_math() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+#[test]
+fn fenv_preprocess_roundtrip_and_effective_region_are_preserved() {
+    let source = "#pragma STDC FENV_ACCESS ON\ndouble on(double x){return x+0x1p-53;}\n#pragma STDC FENV_ACCESS DEFAULT\ndouble off(double x){return x+0x1p-53;}\n";
+    let preprocessed = run(&["-E"], source);
+    assert!(preprocessed.status.success());
+    let printed = String::from_utf8(preprocessed.stdout).unwrap();
+    assert!(
+        printed.contains("#pragma STDC FENV_ACCESS ON")
+            && printed.contains("#pragma STDC FENV_ACCESS OFF")
+    );
+    let output = run(&["--emit=evoir"], &printed);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(text.matches("fp.strict.add ").count(), 1);
+    assert_eq!(text.matches(" = fp.add ").count(), 1);
+    let dynamic = run(&["--emit=evoir", "-frounding-math"], &printed);
+    assert!(dynamic.status.success());
+    assert_eq!(
+        String::from_utf8(dynamic.stdout)
+            .unwrap()
+            .matches("fp.strict.add ")
+            .count(),
+        2
+    );
 }

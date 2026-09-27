@@ -1,6 +1,6 @@
 //! Independent SoftFloat result/status stream. NaN policy and tininess must
-//! match the target specialization; FMA uses the native corpus separately
-//! because SoftFloat ARM-VFPv2 mulAdd uses a different NaN operand priority.
+//! match the target specialization. Scalar hardware FMA uses the native corpus
+//! separately; binary128's hosted FMA priority agrees with this specialization.
 use super::*;
 use evocc_types::floating::{FpResult, FpStatus};
 
@@ -8,6 +8,7 @@ fn fp(name: &str) -> Option<FloatKind> {
     match name {
         "f32" => Some(FloatKind::F32),
         "f64" => Some(FloatKind::F64),
+        "f128" => Some(FloatKind::F128),
         _ => None,
     }
 }
@@ -84,6 +85,28 @@ pub fn check(operation: &str, rounding: FpRounding, line: &str) -> Result<(), St
         let expected = (!(integer(to).is_some() && expected_status.contains(FpStatus::INVALID)))
             .then_some(fields[1]);
         (actual, expected, expected_status)
+    } else if operation == "f128_mulAdd" {
+        if fields.len() != 5 {
+            return Err("fused operation requires five fields".into());
+        }
+        let a = FloatBits::from_bits(FloatKind::F128, fields[0]).unwrap();
+        let b = FloatBits::from_bits(FloatKind::F128, fields[1]).unwrap();
+        let c = FloatBits::from_bits(FloatKind::F128, fields[2]).unwrap();
+        let flags = status(fields[4])?;
+        let expected = if !a.is_nan()
+            && !b.is_nan()
+            && fields[3] == 0x7fff8000000000000000000000000000
+            && flags == FpStatus::INVALID
+        {
+            0x7fffffffffffffffffffffffffffffff
+        } else {
+            fields[3]
+        };
+        (
+            result(a.target_fma_round(b, c, rounding).unwrap()),
+            Some(expected),
+            flags,
+        )
     } else {
         if fields.len() != 4 {
             return Err("binary operation requires four fields".into());
@@ -120,7 +143,22 @@ pub fn check(operation: &str, rounding: FpRounding, line: &str) -> Result<(), St
             }
             _ => return Err("unsupported strict reference operation".into()),
         };
-        (actual, Some(fields[2]), status(fields[3])?)
+        // SoftFloat ARM-VFPv2 and the hosted AArch64 TFmode runtime differ
+        // only in the default NaN fraction for invalid non-NaN arithmetic.
+        // Adapt precisely that profile choice, not arbitrary NaN mismatches.
+        // Native helper probes independently check this representation.
+        let expected = if kind == FloatKind::F128
+            && matches!(op, "add" | "sub" | "mul" | "div")
+            && !a.is_nan()
+            && !b.is_nan()
+            && fields[2] == 0x7fff8000000000000000000000000000
+            && status(fields[3])? == FpStatus::INVALID
+        {
+            0x7fffffffffffffffffffffffffffffff
+        } else {
+            fields[2]
+        };
+        (actual, Some(expected), status(fields[3])?)
     };
     if actual.value != expected || actual.status != expected_status {
         return Err(format!(
@@ -141,5 +179,24 @@ mod tests {
         assert!(check("f32_to_i32", r, "7fc00000 80000000 10").is_ok());
         assert!(check("f32_to_i32", r, "7fc00000 80000000 00").is_err());
         assert!(check("f32_add", r, "00000000 00000000 00000000 20").is_err());
+    }
+    #[test]
+    fn quad_default_nan_adaptation_does_not_hide_other_bit_or_status_changes() {
+        let r = FpRounding::NearestEven;
+        assert!(check("f128_div", r, "0 0 7fff8000000000000000000000000000 10").is_ok());
+        assert!(check("f128_div", r, "0 0 7fff8000000000000000000000000001 10").is_err());
+        assert!(check("f128_div", r, "0 0 7fff8000000000000000000000000000 00").is_err());
+        assert!(check(
+            "f128_add",
+            r,
+            "7fff8000000000000000000000000011 0 7fff8000000000000000000000000011 00"
+        )
+        .is_ok());
+        assert!(check(
+            "f128_add",
+            r,
+            "7fff8000000000000000000000000011 0 7fff8000000000000000000000000000 00"
+        )
+        .is_err());
     }
 }

@@ -390,6 +390,7 @@ pub struct Parser<'src, 'arena> {
     pack_alignment: Option<u32>,
     pack_stack: Vec<Option<u32>>,
     visibility_stack: Vec<(&'static str, SourceSpan)>,
+    fenv_access: bool,
     /// True only while normalizing an initializer attached to a file-scope
     /// object.  It admits the final flexible member without changing the
     /// record type itself.
@@ -600,6 +601,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             pack_alignment: None,
             pack_stack: Vec::new(),
             visibility_stack: Vec::new(),
+            fenv_access: false,
             flexible_initializer_allowed: false,
             flexible_initializer_extent: None,
         }
@@ -660,7 +662,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 decls.append(&mut self.builtin_declarations);
                 continue;
             }
-            if self.consume_pragma_pack_marker() || self.consume_visibility_marker() {
+            if self.consume_pragma_pack_marker()
+                || self.consume_visibility_marker()
+                || self.consume_fenv_marker(true)
+            {
                 continue;
             }
             if let Some((code, message)) = misplaced_statement_diagnostic(self.peek_kind()) {
@@ -4833,13 +4838,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some((_, function_name_declaration)) = implicit_function_name else {
             return parsed_body;
         };
-        let CHirStmt::Compound(items, span) = parsed_body else {
+        let CHirStmt::Compound(items, span, fenv) = parsed_body else {
             unreachable!("a function body is one compound statement")
         };
         let mut with_function_name = Vec::with_capacity(items.len() + 1);
         with_function_name.push(CHirBlockItem::Declaration(function_name_declaration));
         with_function_name.extend(items.iter().cloned());
-        self.alloc_node(CHirStmt::Compound(with_function_name, *span))
+        self.alloc_node(CHirStmt::Compound(with_function_name, *span, *fenv))
     }
 
     fn prepend_parameter_bounds(
@@ -4854,7 +4859,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if entry_bounds.is_empty() {
             return body;
         }
-        let CHirStmt::Compound(items, span) = body else {
+        let CHirStmt::Compound(items, span, fenv) = body else {
             unreachable!("a function definition has a compound body")
         };
         // Array adjustment removes only the parameter's outer array type.
@@ -4863,7 +4868,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut with_bounds = Vec::with_capacity(entry_bounds.len() + items.len());
         with_bounds.extend(entry_bounds.iter().copied().map(CHirBlockItem::Declaration));
         with_bounds.extend(items.iter().cloned());
-        self.alloc_node(CHirStmt::Compound(with_bounds, *span))
+        self.alloc_node(CHirStmt::Compound(with_bounds, *span, *fenv))
     }
 
     fn function_body_mentions_implicit_name(&self) -> bool {
@@ -9112,6 +9117,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_compound_statement(&mut self, create_block_scope: bool) -> &'arena CHirStmt<'arena> {
+        let outer_fenv = self.fenv_access;
         let lbrace = self.expect(TokenKind::LBrace).unwrap();
         let start_span = lbrace.span;
         let outer_scope = self.current_scope;
@@ -9122,6 +9128,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut items = Vec::new();
         let mut at_block_start = true;
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
+            if self.consume_fenv_marker(at_block_start) {
+                continue;
+            }
             if self.consume_visibility_marker() {
                 continue;
             }
@@ -9184,7 +9193,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if create_block_scope {
             self.current_scope = outer_scope;
         }
-        self.alloc_node(CHirStmt::Compound(items, span))
+        let fenv = std::mem::replace(&mut self.fenv_access, outer_fenv);
+        self.alloc_node(CHirStmt::Compound(items, span, Some(fenv)))
+    }
+
+    fn consume_fenv_marker(&mut self, allowed: bool) -> bool {
+        let Some(setting) = self.peek().and_then(evocc_cpp::pragma_fenv_access) else {
+            return false;
+        };
+        let span = self.advance().unwrap().span;
+        if allowed {
+            self.fenv_access = setting;
+        } else {
+            self.report("E3065", "misplaced-floating-environment-pragma", span);
+        }
+        true
     }
 
     fn parse_local_label_declaration(&mut self) -> Option<()> {
@@ -12446,12 +12469,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let body = self.parse_compound_statement(true);
                     let close = self.expect(TokenKind::RParen)?;
                     let value = match body {
-                        CHirStmt::Compound(items, _) => items.last().and_then(|item| match item {
-                            CHirBlockItem::Statement(statement) => {
-                                statement_expression_value(statement)
-                            }
-                            CHirBlockItem::Declaration(_) => None,
-                        }),
+                        CHirStmt::Compound(items, _, _) => {
+                            items.last().and_then(|item| match item {
+                                CHirBlockItem::Statement(statement) => {
+                                    statement_expression_value(statement)
+                                }
+                                CHirBlockItem::Declaration(_) => None,
+                            })
+                        }
                         _ => unreachable!("statement expression parses one compound statement"),
                     };
                     let ty = if let Some(expression) = value {
@@ -14759,7 +14784,7 @@ fn collect_asm_goto_labels(
         | CHirStmt::Case(_, body, _)
         | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => collect_asm_goto_labels(body, defined, referenced),
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     collect_asm_goto_labels(statement, defined, referenced);
@@ -14924,7 +14949,7 @@ fn collect_jump_regions_stmt(
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
             regions.truncate(depth);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             let depth = regions.len();
             for item in items {
                 match item {
@@ -15199,7 +15224,7 @@ fn statement_references_symbol(statement: &CHirStmt<'_>, symbol: SymbolId) -> bo
             expression.is_some_and(|expression| expression_references_symbol(expression, symbol))
         }
         CHirStmt::ComputedGoto(target, _) => expression_references_symbol(target, symbol),
-        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| match item {
             CHirBlockItem::Declaration(declaration) => {
                 declaration_references_symbol(declaration, symbol)
             }
@@ -16532,7 +16557,7 @@ mod tests {
                     Some(TypeKind::Int(IntRank::Int))
                 ));
                 match function.body.expect("expected function body") {
-                    CHirStmt::Compound(stmts, _) => {
+                    CHirStmt::Compound(stmts, _, _) => {
                         assert!(!stmts.is_empty());
                         assert!(matches!(
                             stmts[0],
@@ -16592,7 +16617,7 @@ mod tests {
         let CHirDecl::Function(function) = unit.declarations()[1] else {
             panic!("expected function")
         };
-        let CHirStmt::Compound(items, _) = function.body.expect("expected function body") else {
+        let CHirStmt::Compound(items, _, _) = function.body.expect("expected function body") else {
             panic!("expected compound body")
         };
         let CHirBlockItem::Statement(CHirStmt::Expr(expr, _)) = items[0] else {
@@ -16622,7 +16647,7 @@ mod tests {
         assert_eq!(unit.len(), 1);
         match unit.declarations()[0] {
             CHirDecl::Function(function) => match function.body.expect("expected body") {
-                CHirStmt::Compound(stmts, _) => {
+                CHirStmt::Compound(stmts, _, _) => {
                     assert_eq!(stmts.len(), 2);
                     assert!(matches!(
                         stmts[0],

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.108** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.109** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1382,8 +1382,9 @@ f32/bits<32> or f64/bits<64>, not numerical casts.
 These baseline operations are pure and excluded from P0 roots/witnesses; all
 operands still obey local SSA, initializedness, text/proof reconstruction and
 existing call/edge rules. Native **E3064** denotes an incompatible FP environment,
-not C UB; no hidden FPCR reset is permitted. `STDC FENV_ACCESS ON` is refused
-with **E3065**; unsupported strict/fast/contraction options are not ignored.
+not C UB; no hidden FPCR reset is permitted. Revision 1.9.109 admits the bounded
+non-trapping `STDC FENV_ACCESS` profile below. Unsupported or malformed requests
+retain **E3065**; unsupported strict/fast/contraction options are not ignored.
 Executable binary128 and FP complex/vectors remain deferred. Strict IR is
 specified below; source-option and environment-library acceptance require the
 separate L01 gates, not merely the presence of these opcodes.
@@ -1467,8 +1468,9 @@ folded under translation-time RNE merely because their operands are constant.
 This includes automatic initializers and selected conditional-arm conversions.
 Literal parsing and static object initialization remain translation-time RNE.
 Exact representation operations remain pure. Both C-HIR and EvoIR execution
-use the same explicit FP environment contract. This bounded option does not
-enable `STDC FENV_ACCESS ON`, unsupported formats, traps or fast math.
+use the same explicit FP environment contract. The option and the separately
+specified `STDC FENV_ACCESS` pragma do not enable unsupported formats, traps or
+fast math.
 
 #### 3.13.2 Target floating-environment library boundary (revision 1.9.108)
 
@@ -1494,12 +1496,51 @@ runtime adapter uses its direct requested-bit raise policy; sharing the object
 encoding does not make these library behaviors identical. The source/EvoIR
 GNU interpreter entry uses the GNU/glibc binding, not a runtime-name guess.
 Native calls use the actual linked runtime. This is not a pthread/loader
-interpreter or an Annex F claim; FENV_ACCESS pragma scope remains a separate gate.
+interpreter or an Annex F claim.
 
 After a modeled library changes rounding, executing baseline pure numeric FP
 under a non-RNE world fails E3064 in the interpreters as it does natively.
 Exact representation transports and the pure conversion-domain predicate do
 not depend on rounding. Strict operations continue from the returned world.
+
+#### 3.13.3 Lexical environment access (revision 1.9.109)
+
+On the AArch64 Linux GNU profile, `#pragma STDC FENV_ACCESS ON`, `OFF` and
+`DEFAULT` are admitted; the implementation default is OFF. The pragma occurs
+outside external declarations or before all explicit declarations/statements
+of a compound statement. Misplaced block directives are E3065. File-scope
+settings govern following function bodies; a compound's setting is restored
+to its enclosing lexical setting at its end. `_Pragma` and included source
+use the same ordered directive path. Preprocessed source preserves equivalent
+directives rather than exposing internal tokens or dropping them.
+
+C-HIR compounds retain their effective lexical policy. Synthesized blocks may
+inherit the enclosing policy; copied/inlined source blocks retain their own.
+This metadata determines instruction selection, not the hardware environment:
+entering/exiting a source region never writes FPCR/FPSR or implicitly invokes
+`fesetenv`. Calls bind arguments under the caller's policy, body arithmetic and
+return conversions use their own lexical policies, and returning restores the
+caller's compilation policy without restoring its runtime FP state. Goto,
+computed goto, switch dispatch, loop exits and statement expressions preserve
+the policy of code actually executed, including entrances that bypass the
+beginning of a compound.
+
+Executed rounding/exception-sensitive operations in ON regions lower to strict
+world operations, even with constant operands or discarded numeric results.
+The independent `-frounding-math` option likewise selects strict execution in
+OFF regions; OFF does not cancel that option. Without either request, baseline
+pure operations retain their existing fixed-environment contract. Literal
+conversion and static initialization remain translation-time RNE. Source
+constant-result substitution must not erase executed FP effects or substitute
+RNE values into these runtime regions. Derived unit summaries conservatively
+disable such substitution when lexical FP access is present; they are not
+unchecked producer annotations authorizing a fold.
+
+This gate covers the four rounding modes, five sticky flags and §3.13.2's
+non-trapping environment library on admitted scalar formats. It does not add
+binary128, FP vectors/complex, enabled traps, Annex F or a concurrent interpreter.
+Placement follows C11 7.6.1 and is corroborated by the
+[Clang 19.1 floating-environment documentation](https://releases.llvm.org/19.1.0/tools/clang/docs/UsersManual.html#accessing-the-floating-point-environment).
 
 ## 4. Effect Model
 
@@ -6592,6 +6633,7 @@ Integer    := [1-9] [0-9]*
 | Revision | Date | Changes |
 |---|---|---|
 | 1.9.108 | 2026-09-27 | Model the target fenv library through explicit memory/world snapshots, distinguish glibc/musl raise policies, and preserve fixed-profile admission after environment-changing calls. |
+| 1.9.109 | 2026-09-27 | Preserve lexical FENV_ACCESS policy through preprocessing, C-HIR, inline substitution, control-flow entry/exit, return conversion and strict source lowering. |
 | 1.9.107 | 2026-09-27 | Define bounded source dynamic rounding and quiet relational predicates; distinguish executed automatic initialization and conditional conversion from RNE translation-time constants. |
 | 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |
 | 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |
@@ -7928,7 +7970,7 @@ Tied inputs share their output's location, while early-clobber outputs cannot ov
 
 The 2026-09-20 approval selects round-to-nearest-ties-to-even with gradual underflow and target NaN propagation for initial executable binary32/binary64, with exact-bit transport, no implicit contraction and no source UB obligation for IEEE exceptional arithmetic results.
 Native execution must verify compatible FPCR state before admitted operations, including after opaque or external execution that may change it; an incompatible environment is an unsupported execution environment, not C UB, and the compiler must not silently reset its caller's FPCR.
-Dynamic strict-fenv, executable binary128, floating complex and floating vectors remain deferred, and the software arithmetic adapter must match measured target NaN handling rather than blindly inherit its dependency's policy.
+At that approval, dynamic strict-fenv, executable binary128, floating complex and floating vectors were deferred; revisions 1.9.106–1.9.109 subsequently add the bounded strict scalar contract in §3.13. The software arithmetic adapter must match measured target NaN handling rather than blindly inherit its dependency's policy.
 `floating-target-environment.c` and `floating-constants.out` are the existing environment counterexamples; runtime IR, native checks and ABI acceptance remain implementation work, not results implied by this approval.
 
 ### Finite literal narrowing in target headers
@@ -8015,5 +8057,7 @@ paths, with audited hosted helpers selected in EvoMIR rather than in EvoIR.
 Fixed-RNE helper execution and dynamic-rounding/status helper execution require
 separate acceptance. Half, floating vectors/complex and the unrelated dialect
 questions remain outside this approval. These are approved implementation
-contracts, not a claim that strict source options or executable f128 are already
-accepted; L01/L02 track their staged IR/text/proof/native/original-program closure.
+contracts, not acceptance results by themselves. Revisions 1.9.107–1.9.109 add
+dynamic-rounding source and lexical non-trapping environment access; executable
+f128 remains a separate implementation gate. L01/L02 track their staged
+IR/text/proof/native/original-program closure.

@@ -270,7 +270,7 @@ fn multiline_statement_label_and_expression_spans_are_exact() {
         3,
         "{\nentry:\n    return value + 1;\n}",
     );
-    let CHirStmt::Compound(items, _) = body else {
+    let CHirStmt::Compound(items, _, _) = body else {
         panic!("function body must be compound")
     };
     assert_eq!(items.len(), 1);

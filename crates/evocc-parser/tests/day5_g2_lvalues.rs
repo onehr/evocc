@@ -369,7 +369,7 @@ fn function<'arena>(
 
 fn items<'arena>(function: &'arena FunctionDecl<'arena>) -> &'arena [CHirBlockItem<'arena>] {
     match function.body.expect("function body") {
-        CHirStmt::Compound(items, _) => items,
+        CHirStmt::Compound(items, _, _) => items,
         other => panic!("expected compound body, got {other:?}"),
     }
 }

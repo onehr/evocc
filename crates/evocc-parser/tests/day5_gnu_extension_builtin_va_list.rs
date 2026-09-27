@@ -138,7 +138,7 @@ fn repeated_gnu_extension_prefixes_are_trivia_on_file_and_block_declarations() {
         panic!("expected function")
     };
     assert_eq!(function.gnu_extension_spans.len(), 1);
-    let CHirStmt::Compound(items, _) = function.body.expect("function body") else {
+    let CHirStmt::Compound(items, _, _) = function.body.expect("function body") else {
         panic!("expected compound body")
     };
     let CHirBlockItem::Declaration(CHirDecl::Object(local)) = items[0] else {

@@ -1342,7 +1342,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirStmt::Goto(_, _)
             | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => {}
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items.iter().rev() {
                     match item {
                         CHirBlockItem::Declaration(declaration) => {
@@ -2350,6 +2350,7 @@ mod tests {
                     )),
                 ],
                 span(10),
+                None,
             ),
         );
         let definition = arena_alloc(
@@ -2851,7 +2852,7 @@ mod tests {
             );
             let body = arena_alloc(
                 &arena,
-                CHirStmt::Compound(vec![CHirBlockItem::Declaration(local_decl)], span(5)),
+                CHirStmt::Compound(vec![CHirBlockItem::Declaration(local_decl)], span(5), None),
             );
             let definition = arena_alloc(
                 &arena,
@@ -2904,6 +2905,7 @@ mod tests {
                         CHirBlockItem::Declaration(duplicate),
                     ],
                     span(5),
+                    None,
                 ),
             );
             let definition = arena_alloc(
@@ -3146,7 +3148,7 @@ mod tests {
         let first_body = arena_alloc(&arena, CHirStmt::Null(span(5)));
         let second_body = arena_alloc(
             &arena,
-            CHirStmt::Compound(vec![CHirBlockItem::Declaration(misplaced)], span(15)),
+            CHirStmt::Compound(vec![CHirBlockItem::Declaration(misplaced)], span(15), None),
         );
         let first = arena_alloc(
             &arena,
@@ -3239,6 +3241,7 @@ mod tests {
                         CHirBlockItem::Declaration(declaration),
                     ],
                     span(4),
+                    None,
                 ),
             );
             let definition = arena_alloc(&arena, function(f, "f", ty, Vec::new(), Some(body), 1));
@@ -3370,6 +3373,7 @@ mod tests {
             CHirStmt::Compound(
                 vec![CHirBlockItem::Declaration(local_declaration)],
                 span(19),
+                None,
             ),
         );
         let first = arena_alloc(

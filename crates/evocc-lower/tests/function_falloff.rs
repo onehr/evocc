@@ -59,6 +59,7 @@ fn discarded(chir: bool) {
     for source in [
         "int f(void){} int main(void){f(); return 0;}",
         "int f(void){} int g(void){return f();} int main(void){g(); return 0;}",
+        "double f(void){} double g(void){return f();} int main(void){g(); return 0;}",
         "struct s {int x;}; struct s f(void){} int main(void){f(); return 0;}",
         "int count; int f(void){count++;} int main(void){(void)f(); f(); return count-2;}",
         "int *f(void){} int main(void){f(); return 0;}",
@@ -75,6 +76,7 @@ fn consumed(chir: bool) {
         "int f(void){} int main(void){return f()+1;}",
         "int f(void){} int main(void){if(f())return 1; return 0;}",
         "int f(void){} int main(void){return f();}",
+        "double f(void){} double g(void){return f();} int main(void){return g()!=0.0;}",
     ] {
         check(source, Err("E3001"), chir);
     }

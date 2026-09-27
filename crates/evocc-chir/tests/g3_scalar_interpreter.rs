@@ -314,6 +314,7 @@ fn scalar_plan_and_root_compound_assignment_execute_once() {
             CHirBlockItem::Statement(return_statement),
         ],
         span(5, 42),
+        None,
     ));
     let int = fixture.int;
     let (unit, function) = fixture.finish(body);
@@ -353,6 +354,7 @@ fn uninitialized_reads_fail_at_the_identifier() {
             CHirBlockItem::Statement(return_statement),
         ],
         span(5, 31),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -394,7 +396,7 @@ fn loop_fuel_exhaustion_is_anchored_to_the_loop() {
     let arena = Arena::default();
     let fixture = Fixture::new(&arena);
     let loop_span = span(5, 19);
-    let empty = fixture.statement(CHirStmt::Compound(Vec::new(), span(14, 17)));
+    let empty = fixture.statement(CHirStmt::Compound(Vec::new(), span(14, 17), None));
     let body = fixture.statement(CHirStmt::For(
         CHirForInit::Empty,
         None,
@@ -533,6 +535,7 @@ fn structured_control_uses_private_program_counters_and_switch_fallthrough() {
             CHirBlockItem::Statement(fixture.statement(CHirStmt::Break(span(162, 168)))),
         ],
         span(152, 169),
+        None,
     ));
     let case_three = fixture.statement(CHirStmt::Case(
         fixture.literal(3, span(150, 151)),
@@ -557,6 +560,7 @@ fn structured_control_uses_private_program_counters_and_switch_fallthrough() {
             CHirBlockItem::Statement(default),
         ],
         span(119, 184),
+        None,
     ));
     let switch_statement = fixture.statement(CHirStmt::Switch(
         fixture.literal(2, span(187, 188)),
@@ -590,6 +594,7 @@ fn structured_control_uses_private_program_counters_and_switch_fallthrough() {
             CHirBlockItem::Statement(return_statement),
         ],
         span(5, 217),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -652,6 +657,7 @@ fn sizeof_expression_is_unevaluated_and_uses_the_operand_type() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 38),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -663,7 +669,7 @@ fn sizeof_expression_is_unevaluated_and_uses_the_operand_type() {
 fn main_fallthrough_returns_zero_and_void_return_has_no_scalar_value() {
     let arena = Arena::default();
     let fixture = Fixture::new(&arena);
-    let body = fixture.statement(CHirStmt::Compound(Vec::new(), span(5, 7)));
+    let body = fixture.statement(CHirStmt::Compound(Vec::new(), span(5, 7), None));
     let (unit, function) = fixture.finish(body);
     let outcome = interpret_scalar_function(&unit, function, InterpreterLimits::default()).unwrap();
     assert_eq!(outcome.return_value.unwrap().raw_bits, 0);
@@ -710,6 +716,7 @@ fn goto_past_initializer_leaves_the_automatic_object_uninitialized() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 48),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -746,6 +753,7 @@ fn parenthesized_unary_overflow_is_anchored_to_operator_and_operand() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 48),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -771,6 +779,7 @@ fn forged_object_identity_fails_before_execution() {
     let body = fixture.statement(CHirStmt::Compound(
         vec![CHirBlockItem::Declaration(declaration)],
         span(5, 18),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -826,6 +835,7 @@ fn forged_scalar_place_spelling_fails_closed() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 44),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -852,6 +862,7 @@ fn return_update_is_a_full_expression_root() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 32),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -891,6 +902,7 @@ fn if_assignment_is_a_full_expression_root() {
             CHirBlockItem::Statement(conditional),
         ],
         span(5, 52),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -915,6 +927,7 @@ fn malformed_initializer_plan_in_a_dead_branch_fails_prevalidation() {
     let dead_body = fixture.statement(CHirStmt::Compound(
         vec![CHirBlockItem::Declaration(malformed)],
         span(16, 27),
+        None,
     ));
     let dead_branch = fixture.statement(CHirStmt::If(
         fixture.literal(0, span(9, 10)),
@@ -932,6 +945,7 @@ fn malformed_initializer_plan_in_a_dead_branch_fails_prevalidation() {
             CHirBlockItem::Statement(returned),
         ],
         span(5, 38),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 
@@ -956,6 +970,7 @@ fn inner_compound_slot_is_inactive_after_scope_exit() {
     let inner = fixture.statement(CHirStmt::Compound(
         vec![CHirBlockItem::Declaration(declaration)],
         span(5, 21),
+        None,
     ));
     let read_span = span(29, 35);
     let returned = fixture.statement(CHirStmt::Return(
@@ -968,6 +983,7 @@ fn inner_compound_slot_is_inactive_after_scope_exit() {
             CHirBlockItem::Statement(returned),
         ],
         span(4, 37),
+        None,
     ));
     let (unit, function) = fixture.finish(body);
 

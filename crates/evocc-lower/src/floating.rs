@@ -77,7 +77,7 @@ impl<'a> FunctionLowerer<'a> {
                 .collect::<Vec<_>>();
             let predicate = match expression.op {
                 IsUnordered => {
-                    if self.unit.dynamic_rounding() {
+                    if self.strict_floating() {
                         // Quiet classification still consumes an sNaN. Keep
                         // its status even though the equality value is unused.
                         self.floating_instruction(
@@ -112,7 +112,7 @@ impl<'a> FunctionLowerer<'a> {
                 IsLessGreater => {
                     let less = self
                         .floating_instruction(
-                            if self.unit.dynamic_rounding() {
+                            if self.strict_floating() {
                                 FloatingOp::QuietOlt
                             } else {
                                 FloatingOp::Olt
@@ -124,7 +124,7 @@ impl<'a> FunctionLowerer<'a> {
                         .value;
                     let greater = self
                         .floating_instruction(
-                            if self.unit.dynamic_rounding() {
+                            if self.strict_floating() {
                                 FloatingOp::QuietOgt
                             } else {
                                 FloatingOp::Ogt
@@ -144,7 +144,7 @@ impl<'a> FunctionLowerer<'a> {
                         IsLessEqual => FloatingOp::Ole,
                         _ => unreachable!(),
                     };
-                    let op = if self.unit.dynamic_rounding() {
+                    let op = if self.strict_floating() {
                         match op {
                             FloatingOp::Olt => FloatingOp::QuietOlt,
                             FloatingOp::Ole => FloatingOp::QuietOle,
@@ -258,7 +258,7 @@ impl<'a> FunctionLowerer<'a> {
         operation
             .validate()
             .map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
-        if self.unit.dynamic_rounding()
+        if self.strict_floating()
             && !matches!(
                 op,
                 FloatingOp::Constant(_)

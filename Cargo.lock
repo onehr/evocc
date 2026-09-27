@@ -90,6 +90,7 @@ version = "0.0.0"
 dependencies = [
  "evocc-chir",
  "evocc-common",
+ "evocc-cpp",
  "evocc-eqopt",
  "evocc-evoir",
  "evocc-lex",

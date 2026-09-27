@@ -221,7 +221,7 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
                 assert_expr_owned(arena, value);
             }
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {

@@ -617,6 +617,23 @@ pub enum PragmaVisibilityAction {
 
 const PRAGMA_VISIBILITY_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-visibility:";
 const PRAGMA_ARM_NEON_MARKER: &str = "\u{1e}evocc-pragma-arm-neon";
+const PRAGMA_FENV_MARKER: &str = "\u{1e}evocc-pragma-fenv:";
+
+/// Preserve lexical FENV_ACCESS changes, including expanded `_Pragma`, until
+/// the parser can enforce declaration/block placement and scope restoration.
+pub fn pragma_fenv_access(token: &Token) -> Option<bool> {
+    if token.kind != TokenKind::Identifier {
+        return None;
+    }
+    let TokenText::Decoded(text) = &token.text else {
+        return None;
+    };
+    match text.strip_prefix(PRAGMA_FENV_MARKER)? {
+        "ON" => Some(true),
+        "OFF" | "DEFAULT" => Some(false),
+        _ => None,
+    }
+}
 
 /// GCC's target-header pragma injects declarations and is not ignored-safe.
 pub fn is_arm_neon_header_marker(token: &Token) -> bool {
@@ -2039,8 +2056,15 @@ impl Preprocessor {
             .unwrap_or_default();
 
         if first == "STDC" && second == "FENV_ACCESS" {
-            if tokens.len() == 3 && token_lexeme(&tokens[2], source) == "OFF" {
-                return None;
+            if tokens.len() == 3 {
+                let setting = token_lexeme(&tokens[2], source);
+                if matches!(setting, "ON" | "OFF" | "DEFAULT") {
+                    return Some(Token::new(
+                        TokenKind::Identifier,
+                        span,
+                        TokenText::Decoded(format!("{PRAGMA_FENV_MARKER}{setting}")),
+                    ));
+                }
             }
             self.errors.push(PreprocessError {
                 code: "E3065",

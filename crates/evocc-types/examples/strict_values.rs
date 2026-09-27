@@ -11,6 +11,46 @@ use std::{
 #[path = "strict_values/testfloat.rs"]
 mod testfloat;
 
+fn check_quad(line: &str) -> Result<(), String> {
+    let fields = line.split_whitespace().collect::<Vec<_>>();
+    if fields.len() != 8 || fields[0] != "128" {
+        return Err("expected quad format/mode/op/a/b/result/status/control".into());
+    }
+    let (mode, rounding) = match fields[1] {
+        "0" => (0, FpRounding::NearestEven),
+        "1" => (1, FpRounding::Upward),
+        "2" => (2, FpRounding::Downward),
+        "3" => (3, FpRounding::TowardZero),
+        _ => return Err("unknown rounding".into()),
+    };
+    let op = match fields[2] {
+        "0" => FiniteOp::Add,
+        "1" => FiniteOp::Sub,
+        "2" => FiniteOp::Mul,
+        "3" => FiniteOp::Div,
+        _ => return Err("unknown quad operation".into()),
+    };
+    let values = fields[3..]
+        .iter()
+        .map(|s| u128::from_str_radix(s, 16).map_err(|_| "invalid hex".to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let a = FloatBits::from_bits(FloatKind::F128, values[0]).unwrap();
+    let b = FloatBits::from_bits(FloatKind::F128, values[1]).unwrap();
+    let r = a
+        .target_binary_round(b, op, rounding)
+        .ok_or("unsupported quad")?;
+    if (r.value.bits(), u128::from(r.status.bits()), values[4])
+        != (values[2], values[3], mode << 22)
+    {
+        return Err(format!(
+            "{line}: adapter={:032x}/{:02x}",
+            r.value.bits(),
+            r.status.bits()
+        ));
+    }
+    Ok(())
+}
+
 fn check_wide(line: &str) -> Result<(), String> {
     let fields = line.split_whitespace().collect::<Vec<_>>();
     if fields.len() != 7 {
@@ -19,6 +59,7 @@ fn check_wide(line: &str) -> Result<(), String> {
     let kind = match fields[0] {
         "32" => FloatKind::F32,
         "64" => FloatKind::F64,
+        "128" => FloatKind::F128,
         _ => return Err("unknown format".into()),
     };
     let (mode, rounding) = match fields[1] {
@@ -64,6 +105,7 @@ fn check(line: &str) -> Result<(), String> {
     let kind = match fields[0] {
         "32" => FloatKind::F32,
         "64" => FloatKind::F64,
+        "128" => FloatKind::F128,
         _ => return Err("unknown format".into()),
     };
     let rounding = match fields[1] {
@@ -119,9 +161,10 @@ fn main() -> Result<(), String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let batch = args.as_slice() == ["--batch"];
     let wide = args.as_slice() == ["--wide"];
+    let quad = args.as_slice() == ["--quad"];
     let reference = match args.as_slice() {
         [] => None,
-        [_] if batch || wide => None,
+        [_] if batch || wide || quad => None,
         [op, mode] => Some((
             op.as_str(),
             match mode.as_str() {
@@ -137,7 +180,9 @@ fn main() -> Result<(), String> {
     let mut count = 0;
     for line in io::stdin().lock().lines() {
         let line = line.map_err(|e| e.to_string())?;
-        if wide {
+        if quad {
+            check_quad(&line)?;
+        } else if wide {
             check_wide(&line)?;
         } else if batch {
             let mut fields = line.splitn(3, ' ');
@@ -175,5 +220,17 @@ mod tests {
         assert!(check("32 3 2 00800000 3f7fffff 00000000 00800000 18").is_err());
         assert!(check("32 0 2 00800000 3f7fffff 00000000 00800000 98").is_err());
         assert!(check("32 0 2 00800000 3f7fffff 00000000 00800000").is_err());
+    }
+    #[test]
+    fn quad_oracle_checks_all_bits_flags_and_controls() {
+        let record = "128 0 3 0 0 7fffffffffffffffffffffffffffffff 01 00000000";
+        assert!(check_quad(record).is_ok());
+        assert!(check_quad(&record.replace(
+            "7fffffffffffffffffffffffffffffff",
+            "7fff8000000000000000000000000000"
+        ))
+        .is_err());
+        assert!(check_quad(&record.replace("01 00000000", "00 00000000")).is_err());
+        assert!(check_quad(&record.replace("01 00000000", "01 00400000")).is_err());
     }
 }

@@ -646,7 +646,7 @@ fn expression_precedence_and_associativity_matrix() {
         else {
             panic!("case {} did not produce one probe function", case.id);
         };
-        let CHirStmt::Compound(items, _) = function.body.expect("probe definition") else {
+        let CHirStmt::Compound(items, _, _) = function.body.expect("probe definition") else {
             panic!("case {} probe body was not compound", case.id);
         };
         let Some(CHirBlockItem::Statement(statement)) = items.first() else {

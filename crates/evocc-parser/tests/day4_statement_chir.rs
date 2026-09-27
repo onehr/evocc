@@ -354,7 +354,7 @@ fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
                 assert_expression_owned(arena, value);
             }
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -492,7 +492,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
         | CHirStmt::Case(_, body, _)
         | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => collect_statement_spans(body, facts),
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     collect_statement_spans(statement, facts);
@@ -564,7 +564,7 @@ fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
         CHirStmt::Return(value, _) => {
             format!("return({})", optional_expression(*value))
         }
-        CHirStmt::Compound(items, _) => format!(
+        CHirStmt::Compound(items, _, _) => format!(
             "block[{}]",
             items
                 .iter()
@@ -668,7 +668,7 @@ fn for_declaration_initializer_preserves_every_declaration_event() {
     let CHirDecl::Function(function) = unit.declarations()[0] else {
         panic!("expected outer function")
     };
-    let CHirStmt::Compound(items, _) = function.body.expect("outer body") else {
+    let CHirStmt::Compound(items, _, _) = function.body.expect("outer body") else {
         panic!("expected compound body")
     };
     let CHirBlockItem::Statement(CHirStmt::For(initializer, _, _, _, _)) = items[0] else {

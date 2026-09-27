@@ -139,7 +139,8 @@ a requested decision, not a validator bypass. This replay uses the existing
 command projector and records its omitted flags (including function/data
 sections and excess-precision); it is not faithful full-build acceptance.
 
-`FENV_ACCESS ON` lexical scoping is not yet advertised.
+At that checkpoint `FENV_ACCESS ON` lexical scoping was not yet advertised;
+the subsequently validated scope implementation is recorded below.
 Binary128, musl, jq and full campaigns remain separately tracked
 in `TODO.md`. No traps, Annex F, floating vectors/complex or half support is
 implied by this checkpoint.
@@ -172,3 +173,103 @@ both optimization settings. MIR tests cover typed-call validation, text,
 allocation, explicit environment/status and unsupported-target rejection.
 This closes the strict wide-conversion gap only, not lexical FENV_ACCESS,
 binary128 or either original application campaign.
+
+## Lexical non-trapping FENV_ACCESS (EvoIR 1.9.109)
+
+The retained RED was E3065 on `floating-fenv-scope.c`. Preprocessing now carries
+ON/OFF/DEFAULT changes to the parser, including `_Pragma` and included source;
+`-E` emits equivalent directives. Compound C-HIR nodes carry their effective
+lexical policy, and the unit's optimization guard is independently derived by
+walking that syntax. Inlining copies this policy rather than adopting the
+caller's mode. No source-scope entry/exit changes runtime FPCR/FPSR.
+
+Both interpreters and native code preserve policy through nested scopes,
+function return conversion, switch dispatch, direct/computed goto, break,
+continue and statement expressions. Static bytes remain RNE. Discarded
+arithmetic and conversions still accumulate all five sticky flags. OFF retains
+baseline semantics unless the independent `-frounding-math` option is active.
+Malformed or misplaced directives remain errors.
+
+The fixture includes the unchanged environment-library probe under ON.
+**Eight entry programs pass in both interpreters at both optimization settings**;
+**eight EvoCC/reference native combinations each pass all eight programs**.
+Clang19 compiles/runs the same whole-source fixture at O0 and O2, also PASS.
+Its constant-int-to-FP warning is retained in the native log; it does not change
+the measured upward-rounded runtime result. GCC14 is used as a crossed caller,
+not as evidence that GCC implements the FENV_ACCESS pragma.
+
+The preceding strict-wide commit's complete workspace test exits 0 with
+**2,745 PASS / 0 FAIL / 4 historical ignored**, 340 result groups.
+The current combined scope/numerical prerequisite workspace run has
+**2,753 PASS / 0 FAIL / 4 historical ignored**, 342 result groups. It retains a
+regression found by the first full run: return conversion must transport a
+same-type uninitialized result without consuming it merely because the return
+scope is being exited. Integer and floating falloff/forward/discard controls
+now pass. A separate overlapping-build attempt invalidated rustdoc dependency
+metadata; the final run uses one Cargo invocation and includes every doctest.
+The final changed gate also passes all-target Clippy and workspace formatting.
+Original musl replay, scalar-FP assembly, binary128/jq and remaining TODO items
+are still separate gates; no benchmark or kernel receipt was promoted.
+
+## Binary128 numerical adapter prerequisite
+
+The shared adapter now computes binary128 arithmetic, format/integer conversions,
+comparisons and explicit FMA without host floating arithmetic. A private
+113-bit-precision, extended-exponent APFloat format checks directed overflow;
+using ordinary Quad as its own wider intermediate would miss overflow. This
+format is never exposed as a C/IR type or serialized. The original parser already
+rounds long-double literal representations directly to Quad.
+
+The existing TestFloat 3e generator was rebuilt with `-DFLOAT64 -DFLOAT128
+-DSOFTFLOAT_FAST_INT64`, using the retained ARM-VFPv2 SoftFloat 3e specialization.
+Seed **20260927**, level **1**, `-tininessbefore -exact`: **908,544** independent
+value/status records pass across four arithmetic operations, f32/f64-to/from-quad,
+32/64-bit signed/unsigned integer-to-quad in all four modes, the reverse integer
+conversions toward zero, and three comparisons. Explicit quad FMA in all four
+modes passes another **24,532,992** records. All records were streamed, not saved
+as a large corpus. Repeating f32/f64 arithmetic, comparison and conversion
+controls with the extended adapter passes **1,794,624** independent records.
+
+The previously captured **6,400** native arithmetic tuples now also pass the
+independent adapter. The new `floating-quad-fma.c` gives **32,000** tuples in
+each GCC14/Clang19 O0/O2 build, with identical SHA-256
+`fa4d988ebd7866531935ab5179170cb11d85a2348e3416c9145c7963a73310fd`.
+It checks unchanged FPCR and unchanged sentinel errno as well as exact result
+bits and five flags. The adapter agrees on every tuple.
+The measured runtime is glibc **2.41**; `/lib/aarch64-linux-gnu/libm.so.6`
+has SHA-256 `a8afb2d1f4a0c5e14c0fc82f794ec839eafe29738907aa92895410f57630bbe2`,
+with `fmal@@GLIBC_2.17`. The libgcc archive identity is recorded above. These
+observations do not authorize arbitrary libm substitution on other runtimes.
+
+Two target-specific representation facts must survive subsequent f128 lowering:
+
+- Invalid non-NaN quad arithmetic returns positive NaN with all-one fraction,
+  unlike scalar hardware's default zero payload. The
+  [pinned GCC14 AArch64 runtime source](https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/libgcc/config/aarch64/sfp-machine.h)
+  corroborates the measured default, payload selection, four rounding directions
+  and tininess-before-rounding policy. TestFloat adapts only this precise default
+  encoding; unrelated payload/status mutations must still fail.
+- Hosted quad FMA prioritizes signaling addend, then signaling multiplicands;
+  among quiet NaNs the multiplicands precede the addend. Scalar FMADD instead
+  prioritizes a quiet addend. The native matrix caught this difference before
+  f128 source/IR admission. Zero-times-infinity remains invalid even with a quiet
+  addend.
+
+Five small adapter tests retain rounding, payload, narrowing, tininess, overflow
+and FMA regressions. Independent-checker mutation tests reject altered result
+bits, flags and FPCR. This is numerical/runtime qualification, **not executable
+f128 source, IR, MIR, public ABI or jq acceptance**. Those L02/B07 tasks remain.
+
+The wide integer/quad conversion fixture adds **18,412** defined-domain records
+per GCC14/Clang19 O0/O2 build, all with SHA-256
+`c2c11d77795bb8bcc6fbc38a6c7ff7fd18603ecf60257d4475439b6e0a1d9c3c`.
+The adapter agrees on every value, status and unchanged FPCR. The final types
+all-target test run also executes the independent-checker mutation negatives.
+
+`floating-quad-core.c` is the next source RED: EvoCC reports E3049 on the real
+quad function interface. Three source programs cover arithmetic beyond binary64
+precision, constants, objects, HFA transport, conversions, runtime NaNs and
+dynamic rounding; an additional entry retains the uninitialized-read negative.
+GCC14/Clang19 O0/O2 pass all three defined entries. NaN inputs are volatile:
+the initial nonvolatile GCC O2 control folded the expression with a different
+payload choice; it was not misreported as a target-runtime result.

@@ -455,6 +455,7 @@ struct FunctionLowerer<'a> {
     optimize: bool,
     size_symbols: &'a BTreeSet<SymbolId>,
     active_control: ControlTargets,
+    fenv_access: bool,
 }
 
 /// Lower a complete C-HIR translation unit into one validated EvoIR module.
@@ -1413,7 +1414,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 }
                 statement(unit, body, out);
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items {
                     match item {
                         CHirBlockItem::Declaration(item) => declaration(unit, item, out),
@@ -2635,7 +2636,7 @@ fn prevalidate_stmt_for_lowering(
             }
             prevalidate_stmt_for_lowering(unit, target, body, labels, global_register_symbols)
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -4052,6 +4053,7 @@ impl<'a> FunctionLowerer<'a> {
             optimize: false,
             size_symbols,
             active_control: ControlTargets::default(),
+            fenv_access: false,
         }
     }
 
@@ -5581,8 +5583,12 @@ impl<'a> FunctionLowerer<'a> {
         result
     }
 
+    fn strict_floating(&self) -> bool {
+        self.unit.dynamic_rounding() || self.fenv_access
+    }
+
     fn record_constant_prefix(&mut self, body: &CHirStmt<'_>) {
-        let CHirStmt::Compound(items, _) = body else {
+        let CHirStmt::Compound(items, _, _) = body else {
             return;
         };
         let mut candidates = Vec::new();
@@ -5625,6 +5631,22 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn lower_stmt_active(
+        &mut self,
+        statement: &'a CHirStmt<'a>,
+        state: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let previous = self.fenv_access;
+        if let CHirStmt::Compound(_, _, Some(enabled)) = statement {
+            self.fenv_access = *enabled;
+        }
+        let result = self.lower_stmt_in_policy(statement, state, live_after, control);
+        self.fenv_access = previous;
+        result
+    }
+
+    fn lower_stmt_in_policy(
         &mut self,
         statement: &'a CHirStmt<'a>,
         mut state: State,
@@ -5735,7 +5757,9 @@ impl<'a> FunctionLowerer<'a> {
                 self.terminate(&state, Inst::Ret(returned))?;
                 Ok(Flow::default())
             }
-            CHirStmt::Compound(items, _) => self.lower_compound(items, state, live_after, control),
+            CHirStmt::Compound(items, _, _) => {
+                self.lower_compound(items, state, live_after, control)
+            }
             CHirStmt::If(condition, then_branch, else_branch, _) => self.lower_if(
                 condition,
                 then_branch,
@@ -8370,7 +8394,7 @@ impl<'a> FunctionLowerer<'a> {
                         self.unit.symbols(),
                         self.target,
                     )
-                    .filter(|_| !self.unit.dynamic_rounding())
+                    .filter(|_| !self.unit.runtime_floating_environment())
                     {
                         let value = self.wide_constant(state, bits.ty(), bits.raw_bits())?;
                         let volatile = self
@@ -9380,7 +9404,7 @@ impl<'a> FunctionLowerer<'a> {
         body: &CHirStmt<'_>,
         integer: CIntegerType,
     ) -> Option<CInteger> {
-        if self.unit.dynamic_rounding() || self.contains_addressed_label(body) {
+        if self.unit.runtime_floating_environment() || self.contains_addressed_label(body) {
             return None;
         }
         constant_integer(self.unit, self.target, expression).map(|v| v.cast(integer))
@@ -9555,8 +9579,9 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         outer: &ControlTargets,
     ) -> Result<Flow, LowerError> {
-        if !switch_has_flat_labels(body)
-            || matches!(body, CHirStmt::Compound(items, _) if items.iter().any(|item| {
+        if self.unit.runtime_floating_environment()
+            || !switch_has_flat_labels(body)
+            || matches!(body, CHirStmt::Compound(items, _, _) if items.iter().any(|item| {
                 matches!(item, CHirBlockItem::Declaration(CHirDecl::Object(object))
                     if self.memory_symbols.contains(&object.symbol))
             }))
@@ -9876,7 +9901,7 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         if self.optimize
-            && !self.unit.dynamic_rounding()
+            && !self.unit.runtime_floating_environment()
             && matches!(expression, CHirExpr::Binary(..) | CHirExpr::Unary(..))
         {
             if let Some(value) = evocc_chir::constant::eval_executable_integer_constant(
@@ -9894,7 +9919,7 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        if !self.unit.dynamic_rounding() {
+        if !self.unit.runtime_floating_environment() {
             if let Some(value) = evocc_chir::constant::floating_constant_cast(
                 expression,
                 self.unit.types(),
@@ -10062,7 +10087,7 @@ impl<'a> FunctionLowerer<'a> {
                 );
                 // Keep the first result in the ordinary edge environment if
                 // the hint contains control flow, just like a binary operand.
-                if self.unit.dynamic_rounding()
+                if self.unit.runtime_floating_environment()
                     || evocc_chir::constant::eval_executable_integer_constant(
                         expected,
                         self.unit.types(),
@@ -10439,8 +10464,25 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
+        let previous = self.fenv_access;
+        if let CHirStmt::Compound(_, _, Some(enabled)) = body {
+            self.fenv_access = *enabled;
+        }
+        let result = self.lower_statement_expression_active(body, value, facts, span, state);
+        self.fenv_access = previous;
+        result
+    }
+
+    fn lower_statement_expression_active(
+        &mut self,
+        body: &'a CHirStmt<'a>,
+        value: Option<&'a CHirExpr<'a>>,
+        facts: ExprFacts,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
         self.record_constant_prefix(body);
-        let CHirStmt::Compound(items, _) = body else {
+        let CHirStmt::Compound(items, _, _) = body else {
             return Err(LowerError::UnsupportedExpression {
                 span,
                 feature: "statement expression body is not a compound statement",
@@ -11973,7 +12015,7 @@ impl<'a> FunctionLowerer<'a> {
         &self,
         expression: &CHirExpr<'_>,
     ) -> Option<Vec<CInteger>> {
-        if self.unit.dynamic_rounding() {
+        if self.unit.runtime_floating_environment() {
             return None;
         }
         if let Some(value) = self
@@ -13130,7 +13172,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.unit.symbols(),
                 self.target,
             )
-            .filter(|_| !self.unit.dynamic_rounding())
+            .filter(|_| !self.unit.runtime_floating_environment())
         {
             if let PlaceRoot::Object { symbol } = place.root() {
                 if !self.memory_symbols.contains(symbol) && place.projections().is_empty() {
@@ -14577,7 +14619,7 @@ fn collect_nested_switch_labels<'a>(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Label(_, body, _) => collect_nested_switch_labels(body, labels),
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 if let CHirBlockItem::Statement(statement) = item {
                     collect_nested_switch_labels(statement, labels);
@@ -14590,7 +14632,7 @@ fn collect_nested_switch_labels<'a>(
 }
 
 fn switch_has_flat_labels(body: &CHirStmt<'_>) -> bool {
-    let CHirStmt::Compound(items, _) = body else {
+    let CHirStmt::Compound(items, _, _) = body else {
         return false;
     };
     items.iter().all(|item| {
@@ -14615,7 +14657,7 @@ fn switch_segments<'a>(
     target: &TargetDataLayout,
     selector_type: CIntegerType,
 ) -> Result<(&'a [CHirBlockItem<'a>], Vec<SwitchSegment<'a>>), LowerError> {
-    let CHirStmt::Compound(items, _) = body else {
+    let CHirStmt::Compound(items, _, _) = body else {
         return Err(LowerError::UnsupportedStatement {
             span: body.span(),
             feature: "switch body must be a compound statement",
@@ -14791,7 +14833,7 @@ fn constant_truth(
     target: &TargetDataLayout,
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
-    if unit.dynamic_rounding() {
+    if unit.runtime_floating_environment() {
         return None;
     }
     if let CHirExpr::Comma(left, right, _) = expression {
@@ -14936,7 +14978,7 @@ fn contains_targeted_label(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::Default(body, _) => contains_targeted_label(body, names, cases),
         CHirStmt::For(_, _, _, body, _) => contains_targeted_label(body, names, cases),
-        CHirStmt::Compound(items, _) => items.iter().any(|item| {
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| {
             matches!(item, CHirBlockItem::Statement(statement) if contains_targeted_label(statement, names, cases))
         }),
         CHirStmt::Expr(_, _)
@@ -15054,7 +15096,7 @@ fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferen
             }
             collect_references_stmt(body, calls);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -15292,7 +15334,7 @@ fn live_before_stmt(
             live_after.clear();
             live_before_expr(expression, &mut live_after);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items.iter().rev() {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -15622,7 +15664,7 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
             }
             collect_symbols_stmt(body, symbols);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 collect_symbols_item(item, symbols);
             }
@@ -15802,7 +15844,7 @@ fn indirect_storage_symbols(body: &CHirStmt<'_>, names: &BTreeSet<String>) -> BT
     ) -> Live {
         let mut live = after.clone();
         match statement {
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items.iter().rev() {
                     match item {
                         CHirBlockItem::Statement(statement) => {

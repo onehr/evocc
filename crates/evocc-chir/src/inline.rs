@@ -30,6 +30,7 @@ enum Node<'a> {
 
 #[derive(Default)]
 struct Uses<'a> {
+    fenv_access: bool,
     nodes: usize,
     addressed_labels: bool,
     constant_queries: bool,
@@ -149,6 +150,10 @@ fn inspect<'a>(nodes: impl IntoIterator<Item = Node<'a>>) -> Uses<'a> {
     inspect_with_declarations(nodes, &mut |_| {})
 }
 
+pub(crate) fn declarations_have_fenv<'a>(declarations: &[&'a CHirDecl<'a>]) -> bool {
+    inspect(declarations.iter().copied().map(Node::Decl)).fenv_access
+}
+
 /// Visit declarations once through their executable syntax, including locals.
 /// Written initializer mirrors are not separate declaration occurrences.
 pub fn for_each_declaration<'a>(unit: &CHirUnit<'a>, mut visit: impl FnMut(&'a CHirDecl<'a>)) {
@@ -249,7 +254,8 @@ fn inspect_ordered<'a>(
                         | CHirStmt::Continue(..)
                 ) || matches!(s, CHirStmt::Asm(a) if !a.labels.is_empty());
                 match s {
-                    CHirStmt::Compound(items, _) => {
+                    CHirStmt::Compound(items, _, policy) => {
+                        uses.fenv_access |= *policy == Some(true);
                         for i in items {
                             work.push(match i {
                                 CHirBlockItem::Declaration(d) => Node::Decl(d),
@@ -1155,11 +1161,11 @@ pub(crate) fn substitute_for_execution<'a>(
                         .into_iter()
                         .map(CHirBlockItem::Declaration)
                         .collect();
-                    let CHirStmt::Compound(body_items, span) = rewritten else {
+                    let CHirStmt::Compound(body_items, span, policy) = rewritten else {
                         return Err(pass.error(f.span, "function body is not compound"));
                     };
                     items.extend(body_items.iter().cloned());
-                    rewritten = pass.alloc(CHirStmt::Compound(items, *span));
+                    rewritten = pass.alloc(CHirStmt::Compound(items, *span, *policy));
                 }
                 let mut f = f.clone();
                 f.body = Some(rewritten);
@@ -1431,6 +1437,9 @@ impl<'a> Substitution<'a, '_> {
         expression: &'a CHirExpr<'a>,
         ty: TypeId,
     ) -> Option<&'a CHirExpr<'a>> {
+        if self.unit.runtime_floating_environment() {
+            return None;
+        }
         if let Some(value) = crate::constant::eval_executable_integer_constant(
             expression,
             &self.unit.types,
@@ -1487,6 +1496,9 @@ impl<'a> Substitution<'a, '_> {
         expression: &'a CHirExpr<'a>,
         ty: TypeId,
     ) -> Option<&'a CHirExpr<'a>> {
+        if self.unit.runtime_floating_environment() {
+            return None;
+        }
         if let Some(value) = self
             .inline_values
             .get(&(expression as *const _ as usize))
@@ -1678,7 +1690,7 @@ impl<'a> Substitution<'a, '_> {
                 return;
             }
             CHirExpr::StatementExpr {
-                body: CHirStmt::Compound(items, _),
+                body: CHirStmt::Compound(items, _, _),
                 ..
             } => {
                 // An expanded call evaluates its argument declarations before
@@ -2854,7 +2866,7 @@ impl<'a> Substitution<'a, '_> {
                 *body = self.stmt(body, c)?;
                 *facts = facts.with_type(self.substituted_type(facts.ty(), c));
                 *value = match body {
-                    CHirStmt::Compound(items, _) => items.last().and_then(|item| match item {
+                    CHirStmt::Compound(items, _, _) => items.last().and_then(|item| match item {
                         CHirBlockItem::Statement(statement) => {
                             statement_expression_value(statement)
                         }
@@ -3026,7 +3038,7 @@ impl<'a> Substitution<'a, '_> {
         }
         let mut out = s.clone();
         match &mut out {
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 // An entry label can bypass a declaration's initialization.
                 // Without one, each lexical initializer dominates later uses
                 // of its own immutable symbol, even after another statement.
@@ -3245,7 +3257,7 @@ impl<'a> Substitution<'a, '_> {
                 items.push(CHirBlockItem::Statement(
                     self.alloc(CHirStmt::Goto(c.end.clone().unwrap(), *span)),
                 ));
-                return Ok(self.alloc(CHirStmt::Compound(items, *span)));
+                return Ok(self.alloc(CHirStmt::Compound(items, *span, None)));
             }
             CHirStmt::Expr(e, _) | CHirStmt::ComputedGoto(e, _) => *e = self.expr(e, c)?,
             CHirStmt::Return(e, _) => *e = e.map(|e| self.expr(e, c)).transpose()?,
@@ -3282,6 +3294,7 @@ impl<'a> Substitution<'a, '_> {
                                 CHirBlockItem::Statement(selected),
                             ],
                             s.span(),
+                            None,
                         )));
                     }
                 }
@@ -3433,7 +3446,7 @@ impl<'a> Substitution<'a, '_> {
         // A literal call to a single-return leaf has no parameter addresses,
         // local lifetime or body effects. Fold its substituted return value
         // without introducing a result object that hides the constant again.
-        if let CHirStmt::Compound(items, _) = f.body.unwrap() {
+        if let CHirStmt::Compound(items, _, _) = f.body.unwrap() {
             if let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() {
                 let mut constants = Context::new(scope);
                 constants.expand_calls = false;
@@ -3515,7 +3528,7 @@ impl<'a> Substitution<'a, '_> {
         let body = f.body.unwrap();
         let uses = inspect([Node::Stmt(body)]);
         let single_final_return = match body {
-            CHirStmt::Compound(items, _) => match items.split_last() {
+            CHirStmt::Compound(items, _, _) => match items.split_last() {
                 Some((CHirBlockItem::Statement(CHirStmt::Return(Some(value), _)), prefix)) => {
                     !inspect(
                         prefix
@@ -3648,7 +3661,7 @@ impl<'a> Substitution<'a, '_> {
         // the last visited source return is never a function-wide promise.
         let one_reachable_final_return = c.return_count == 1
             && !uses.entry_labels
-            && matches!(f.body.unwrap(), CHirStmt::Compound(items, _)
+            && matches!(f.body.unwrap(), CHirStmt::Compound(items, _, _)
                 if matches!(items.last(), Some(CHirBlockItem::Statement(CHirStmt::Return(Some(_), _)))));
         let return_extent = if single_final_return || one_reachable_final_return {
             c.return_extent
@@ -3669,7 +3682,7 @@ impl<'a> Substitution<'a, '_> {
                 self.alloc(CHirStmt::Expr(value, span)),
             ));
         }
-        let body = self.alloc(CHirStmt::Compound(items, span));
+        let body = self.alloc(CHirStmt::Compound(items, span, None));
         let result = self.alloc(CHirExpr::StatementExpr {
             body,
             value,
@@ -3701,7 +3714,7 @@ fn definitely_returns(statement: &CHirStmt<'_>, inline_end: Option<&SpannedName>
     match statement {
         CHirStmt::Return(..) => true,
         CHirStmt::Goto(label, _) => inline_end.is_some_and(|end| end.spelling == label.spelling),
-        CHirStmt::Compound(items, _) => items.iter().any(
+        CHirStmt::Compound(items, _, _) => items.iter().any(
             |item| matches!(item, CHirBlockItem::Statement(s) if definitely_returns(s, inline_end)),
         ),
         CHirStmt::If(_, yes, Some(no), _) => {

@@ -38,7 +38,11 @@ fn statement_expression_pointer_facts_must_match_its_final_value() {
     );
     let final_value = CHirExpr::Cast(int_pointer, &zero, span());
     let final_statement = CHirStmt::Expr(&final_value, span());
-    let body = CHirStmt::Compound(vec![CHirBlockItem::Statement(&final_statement)], span());
+    let body = CHirStmt::Compound(
+        vec![CHirBlockItem::Statement(&final_statement)],
+        span(),
+        None,
+    );
     let forged = CHirExpr::StatementExpr {
         body: &body,
         value: Some(&final_value),

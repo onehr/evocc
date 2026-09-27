@@ -114,7 +114,7 @@ fn asm_reaches_chir_losslessly() {
     let CHirDecl::Function(function) = unit.declarations()[0] else {
         panic!("fixture must contain a function")
     };
-    let CHirStmt::Compound(items, _) = function.body.expect("function body") else {
+    let CHirStmt::Compound(items, _, _) = function.body.expect("function body") else {
         panic!("function body must be compound")
     };
     let CHirBlockItem::Statement(CHirStmt::Asm(assembly)) = &items[0] else {

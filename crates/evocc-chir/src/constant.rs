@@ -190,7 +190,8 @@ pub fn internal_constant_result<'a>(
     function: &crate::FunctionDecl<'a>,
     target: &TargetDataLayout,
 ) -> Option<(&'a CHirExpr<'a>, CInteger)> {
-    if !function.has_internal_linkage(unit.symbols())
+    if unit.runtime_floating_environment()
+        || !function.has_internal_linkage(unit.symbols())
         || function
             .attributes
             .iter()
@@ -209,7 +210,7 @@ pub fn internal_constant_result<'a>(
         return None;
     };
     let integer = canonical_integer_type(unit.types(), return_type)?;
-    let CHirStmt::Compound(items, _) = function.body? else {
+    let CHirStmt::Compound(items, _, _) = function.body? else {
         return None;
     };
     let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() else {
@@ -560,7 +561,7 @@ fn statement_contains_declaration(
                 })
                 || statement_contains_declaration(body, target, attribute)
         }
-        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| match item {
             CHirBlockItem::Declaration(declaration) => {
                 declaration_has_attribute(declaration, target, attribute)
             }

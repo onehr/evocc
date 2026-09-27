@@ -1130,7 +1130,9 @@ pub enum CHirStmt<'arena> {
         SourceSpan,
     ),
     Return(Option<&'arena CHirExpr<'arena>>, SourceSpan),
-    Compound(Vec<CHirBlockItem<'arena>>, SourceSpan),
+    /// Lexical FENV_ACCESS policy. Parsed blocks carry their effective setting;
+    /// synthetic blocks may inherit it. This is code metadata, not runtime state.
+    Compound(Vec<CHirBlockItem<'arena>>, SourceSpan, Option<bool>),
     Break(SourceSpan),
     Continue(SourceSpan),
     Goto(SpannedName, SourceSpan),
@@ -1171,7 +1173,7 @@ impl CHirStmt<'_> {
             | Self::DoWhile(_, _, span)
             | Self::For(_, _, _, _, span)
             | Self::Return(_, span)
-            | Self::Compound(_, span)
+            | Self::Compound(_, span, _)
             | Self::Break(span)
             | Self::Continue(span)
             | Self::Goto(_, span)
@@ -1877,6 +1879,7 @@ pub struct CHirUnit<'arena> {
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
     dynamic_rounding: bool,
+    has_fenv_access: bool,
     gnu_inline: bool,
     automatic_zero: bool,
     tls_model: evocc_types::TlsModel,
@@ -1927,6 +1930,7 @@ impl<'arena> CHirUnit<'arena> {
         types: TypeInterner,
         symbols: SymbolTable,
     ) -> Self {
+        let has_fenv_access = inline::declarations_have_fenv(&declarations);
         Self {
             declarations,
             types,
@@ -1937,6 +1941,7 @@ impl<'arena> CHirUnit<'arena> {
             unprototyped_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
             dynamic_rounding: false,
+            has_fenv_access,
             gnu_inline: false,
             automatic_zero: false,
             tls_model: evocc_types::TlsModel::default(),
@@ -1999,6 +2004,12 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn dynamic_rounding(&self) -> bool {
         self.dynamic_rounding
+    }
+
+    /// Conservative guard for source-level value folding and substitution.
+    /// Executed arithmetic separately consults each block's lexical policy.
+    pub fn runtime_floating_environment(&self) -> bool {
+        self.dynamic_rounding || self.has_fenv_access
     }
 
     /// Implicit initialization is a declaration operation, never a load fallback.
@@ -2299,7 +2310,7 @@ fn inventory_of_statement(statement: &CHirStmt<'_>, inventory: &mut AttributeInv
             }
             inventory_of_statement(body, inventory);
         }
-        CHirStmt::Compound(items, _) => {
+        CHirStmt::Compound(items, _, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
@@ -2787,7 +2798,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 }
                 checked_statement(body, out, seen);
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items {
                     match item {
                         CHirBlockItem::Declaration(declaration) => {
@@ -3264,6 +3275,7 @@ mod tests {
                 CHirStmt::Compound(
                     vec![CHirBlockItem::Declaration(dc), CHirBlockItem::Statement(st)],
                     s,
+                    None,
                 ),
             ),
             arena_stmt(&arena, CHirStmt::Break(s)),
@@ -3390,7 +3402,7 @@ mod tests {
         let st = arena_stmt(&arena, CHirStmt::Expr(id, s));
         let compound = arena_stmt(
             &arena,
-            CHirStmt::Compound(vec![CHirBlockItem::Statement(st)], s),
+            CHirStmt::Compound(vec![CHirBlockItem::Statement(st)], s, None),
         );
         let return_stmt = arena_stmt(&arena, CHirStmt::Return(None, s));
         let nested = arena_stmt(&arena, CHirStmt::If(id, compound, Some(return_stmt), s));

@@ -159,7 +159,7 @@ impl<'a> Substitution<'a, '_> {
             return None;
         }
         match statement {
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 for item in items {
                     match item {
                         CHirBlockItem::Declaration(CHirDecl::Object(object)) => {

@@ -245,7 +245,7 @@ fn compound_items<'unit, 'arena>(
     statement: &'unit CHirStmt<'arena>,
 ) -> &'unit [CHirBlockItem<'arena>] {
     match statement {
-        CHirStmt::Compound(items, _) => items,
+        CHirStmt::Compound(items, _, _) => items,
         other => panic!("expected compound statement, got {other:?}"),
     }
 }

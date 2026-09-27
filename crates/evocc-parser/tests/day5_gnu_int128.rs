@@ -378,7 +378,7 @@ fn gnu_int128_front_end_values_stop_at_the_execution_boundary() {
     let CHirDecl::Function(function) = unit.declarations()[0] else {
         panic!("expected function")
     };
-    let CHirStmt::Compound(items, _) = function.body.expect("function body") else {
+    let CHirStmt::Compound(items, _, _) = function.body.expect("function body") else {
         panic!("expected compound body")
     };
     let CHirBlockItem::Declaration(CHirDecl::Object(wide)) = items[0] else {

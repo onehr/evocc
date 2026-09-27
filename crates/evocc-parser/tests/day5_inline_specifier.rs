@@ -188,7 +188,7 @@ fn bare_inline_starts_a_block_scope_function_declaration() {
     let CHirDecl::Function(outer) = unit.declarations()[0] else {
         panic!("expected outer function definition")
     };
-    let CHirStmt::Compound(items, _) = outer.body.expect("outer function body") else {
+    let CHirStmt::Compound(items, _, _) = outer.body.expect("outer function body") else {
         panic!("expected compound function body")
     };
     let CHirBlockItem::Declaration(CHirDecl::Function(nested)) = items[0] else {

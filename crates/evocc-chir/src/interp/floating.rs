@@ -140,7 +140,7 @@ pub(super) fn truth(
 
 impl Interpreter<'_, '_> {
     pub(super) fn strict_floating(&self) -> bool {
-        self.unit.dynamic_rounding() && !self.static_integer_evaluation
+        (self.unit.dynamic_rounding() || self.fenv_access) && !self.static_integer_evaluation
     }
 
     pub(super) fn cast_runtime_value(

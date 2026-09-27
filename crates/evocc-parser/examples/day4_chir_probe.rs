@@ -537,7 +537,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 });
                 format!("return({value})")
             }
-            CHirStmt::Compound(items, _) => {
+            CHirStmt::Compound(items, _, _) => {
                 let items = items
                     .iter()
                     .enumerate()

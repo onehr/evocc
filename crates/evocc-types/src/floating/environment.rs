@@ -1,6 +1,21 @@
 //! Explicit, host-independent floating state and target status adaptation.
 //! This API does not by itself enable source strict-FP or binary128 execution.
 use super::*;
+use rustc_apfloat::ieee::{IeeeFloat, Semantics};
+
+// An internal arithmetic range check, never an interchange format. Preserve
+// Quad's 113-bit precision, but admit the exponent of any product or quotient
+// of two binary128 values. In particular Quad itself is not wide enough to
+// diagnose directed overflow at its own maximum exponent. No value of this
+// type is parsed from or serialized to representation bits.
+struct ExtendedExponentQuad;
+impl Semantics for ExtendedExponentQuad {
+    const BITS: usize = 128;
+    const EXP_BITS: usize = 15;
+    const MIN_EXP: i32 = -65534;
+    const MAX_EXP: i32 = 65535;
+}
+type RangeQuad = IeeeFloat<ExtendedExponentQuad>;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum FpRounding {
@@ -106,7 +121,7 @@ impl FpEnvironment {
 
 impl FloatBits {
     fn executable_scalar(self) -> bool {
-        matches!(self.kind, FloatKind::F32 | FloatKind::F64)
+        matches!(self.kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
     }
 
     fn default_nan(self) -> Self {
@@ -114,6 +129,9 @@ impl FloatBits {
             bits: match self.kind {
                 FloatKind::F32 => 0x7fc00000,
                 FloatKind::F64 => 0x7ff8000000000000,
+                // The qualified AArch64 hosted TFmode runtime uses all-one
+                // fraction bits for an invalid operation without NaN inputs.
+                FloatKind::F128 => 0x7fffffffffffffffffffffffffffffff,
                 _ => unreachable!("admitted scalar format"),
             },
             ..self
@@ -156,6 +174,11 @@ impl FloatBits {
         let (sign, minimum, largest) = match self.kind {
             FloatKind::F32 => (1u128 << 31, 1u128 << 23, 0x7f7fffff),
             FloatKind::F64 => (1u128 << 63, 1u128 << 52, 0x7fefffffffffffff),
+            FloatKind::F128 => (
+                1u128 << 127,
+                1u128 << 112,
+                0x7ffeffffffffffffffffffffffffffff,
+            ),
             _ => unreachable!("admitted scalar format"),
         };
         if status.contains(FpStatus::INEXACT)
@@ -210,8 +233,8 @@ impl FloatBits {
             evaluate(rounding.engine()),
             || evaluate(Round::TowardZero).value,
             || {
-                let a = self.as_quad();
-                let b = other.as_quad();
+                let a = self.as_range_quad();
+                let b = other.as_range_quad();
                 let result = match op {
                     FiniteOp::Add => a.add_r(b, Round::TowardZero),
                     FiniteOp::Sub => a.sub_r(b, Round::TowardZero),
@@ -224,8 +247,9 @@ impl FloatBits {
     }
 
     /// Explicit a*b+c, one rounding. Arm FMADD examines NaNs in addend, a, b
-    /// order. A quiet addend does not hide invalid zero*infinity; that case
-    /// returns the default NaN. Signaling operands take priority over it.
+    /// order. The qualified hosted binary128 fmal has the same signaling
+    /// priority, but quiet multiplicand NaNs precede a quiet addend. A quiet
+    /// addend does not hide invalid zero*infinity in either implementation.
     pub fn target_fma_round(
         self,
         multiplier: Self,
@@ -235,7 +259,10 @@ impl FloatBits {
         if self.kind != multiplier.kind || self.kind != addend.kind || !self.executable_scalar() {
             return None;
         }
-        if let Some(nan) = Self::target_nan(&[addend, self, multiplier]) {
+        if let Some(mut nan) = Self::target_nan(&[addend, self, multiplier]) {
+            if self.kind == FloatKind::F128 && nan.status == FpStatus::NONE {
+                nan = Self::target_nan(&[self, multiplier, addend]).unwrap();
+            }
             let infinity = |v: Self| !v.is_finite() && !v.is_nan();
             if !nan.status.contains(FpStatus::INVALID)
                 && ((self.is_zero() && infinity(multiplier))
@@ -266,28 +293,33 @@ impl FloatBits {
             || evaluate(Round::TowardZero).value,
             || {
                 self.beyond_range(
-                    self.as_quad()
-                        .mul_add_r(multiplier.as_quad(), addend.as_quad(), Round::TowardZero)
+                    self.as_range_quad()
+                        .mul_add_r(
+                            multiplier.as_range_quad(),
+                            addend.as_range_quad(),
+                            Round::TowardZero,
+                        )
                         .value,
                 )
             },
         ))
     }
 
-    fn as_quad(self) -> Quad {
-        fn convert<F: FloatConvert<Quad>>(value: F) -> Quad {
+    fn as_range_quad(self) -> RangeQuad {
+        fn convert<F: FloatConvert<RangeQuad>>(value: F) -> RangeQuad {
             value.convert_r(Round::TowardZero, &mut false).value
         }
         with_format!(self.kind, F, convert(F::from_bits(self.bits)))
     }
 
-    fn beyond_range(self, value: Quad) -> bool {
+    fn beyond_range(self, value: RangeQuad) -> bool {
         let threshold = match self.kind {
             FloatKind::F32 => 128,
             FloatKind::F64 => 1024,
+            FloatKind::F128 => 16384,
             _ => unreachable!(),
         };
-        value.abs() >= Quad::from_u128(1).value.scalbn(threshold)
+        value.abs() >= RangeQuad::from_u128(1).value.scalbn(threshold)
     }
 
     /// `signaling` distinguishes FCMP-like quiet predicates from FCMPE-like
@@ -318,7 +350,9 @@ impl FloatBits {
         kind: FloatKind,
         rounding: FpRounding,
     ) -> Option<FpResult<Self>> {
-        if !self.executable_scalar() || !matches!(kind, FloatKind::F32 | FloatKind::F64) {
+        if !self.executable_scalar()
+            || !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
+        {
             return None;
         }
         if self.kind == kind {
@@ -337,7 +371,7 @@ impl FloatBits {
                 },
             });
         }
-        fn convert<F: Float + FloatConvert<Single> + FloatConvert<Double>>(
+        fn convert<F: Float + FloatConvert<Single> + FloatConvert<Double> + FloatConvert<Quad>>(
             value: F,
             kind: FloatKind,
             round: Round,
@@ -345,8 +379,11 @@ impl FloatBits {
             if kind == FloatKind::F32 {
                 let result: rustc_apfloat::StatusAnd<Single> = value.convert_r(round, &mut false);
                 result.map(Float::to_bits)
-            } else {
+            } else if kind == FloatKind::F64 {
                 let result: rustc_apfloat::StatusAnd<Double> = value.convert_r(round, &mut false);
+                result.map(Float::to_bits)
+            } else {
+                let result: rustc_apfloat::StatusAnd<Quad> = value.convert_r(round, &mut false);
                 result.map(Float::to_bits)
             }
         }
@@ -356,7 +393,7 @@ impl FloatBits {
         Some(target.target_result(
             evaluate(rounding.engine()),
             || evaluate(Round::TowardZero).value,
-            || target.beyond_range(self.as_quad()),
+            || target.beyond_range(self.as_range_quad()),
         ))
     }
 

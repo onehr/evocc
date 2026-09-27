@@ -36,18 +36,34 @@ fn preprocess(source: &str) -> (Vec<Token>, Vec<PreprocessError>, u64) {
 }
 
 #[test]
-fn strict_floating_environment_requests_are_not_ignored() {
+fn strict_floating_environment_requests_preserve_ordered_markers() {
     for source in [
         "#pragma STDC FENV_ACCESS ON\nint x;",
         "_Pragma(\"STDC FENV_ACCESS ON\") int x;",
     ] {
-        let (_, errors, ignored) = preprocess(source);
-        assert_eq!(errors.iter().map(|e| e.code).collect::<Vec<_>>(), ["E3065"]);
+        let (output, errors, ignored) = preprocess(source);
+        assert!(errors.is_empty());
+        assert_eq!(
+            output
+                .iter()
+                .filter_map(evocc_cpp::pragma_fenv_access)
+                .collect::<Vec<_>>(),
+            [true]
+        );
         assert_eq!(ignored, 0);
     }
-    let (_, errors, ignored) = preprocess("#pragma STDC FENV_ACCESS OFF\nint x;");
+    let (output, errors, ignored) = preprocess("#pragma STDC FENV_ACCESS OFF\nint x;");
+    assert_eq!(
+        output
+            .iter()
+            .filter_map(evocc_cpp::pragma_fenv_access)
+            .collect::<Vec<_>>(),
+        [false]
+    );
     assert!(errors.is_empty());
     assert_eq!(ignored, 0);
+    let (_, errors, _) = preprocess("#pragma STDC FENV_ACCESS INVALID\nint x;");
+    assert_eq!(errors.iter().map(|e| e.code).collect::<Vec<_>>(), ["E3065"]);
 }
 
 #[test]
