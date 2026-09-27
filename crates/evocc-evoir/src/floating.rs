@@ -123,6 +123,18 @@ pub fn floating_kind(ty: &EvoIRType) -> Option<FloatKind> {
 }
 
 impl FloatingInst {
+    /// Exact representation transport is independent of FP controls; numeric
+    /// operations retain the fixed-profile admission rule when not strict.
+    pub fn needs_environment(&self) -> bool {
+        !matches!(
+            self.op,
+            FloatingOp::Constant(_)
+                | FloatingOp::Neg
+                | FloatingOp::ToBits
+                | FloatingOp::FromBits
+                | FloatingOp::ToIntDefined { .. }
+        )
+    }
     pub fn values_mut(&mut self) -> Vec<&mut Value> {
         std::iter::once(&mut self.result)
             .chain(self.arguments.iter_mut())

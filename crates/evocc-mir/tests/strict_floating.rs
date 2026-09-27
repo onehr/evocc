@@ -120,6 +120,22 @@ fn dynamic_rounding_admission_is_not_reused_as_a_fixed_environment_check() {
         "    %v6 = fp.add %v4, %v1 : f64\n    ret %v6,",
     );
     let ir = parse_section9_module(strict_first.as_bytes()).unwrap();
+    let machine = lower_module(&ir).unwrap();
+    let error = evocc_mir::interp::interpret_module_with_fp_environment(
+        &machine,
+        "strict_add",
+        &[value(0x3ff0000000000000), value(0x3ca0000000000000)],
+        MirLimits::new(100),
+        FpEnvironment {
+            rounding: FpRounding::Upward,
+            flags: FpStatus::NONE,
+        },
+    )
+    .unwrap_err();
+    assert!(
+        matches!(error, evocc_mir::MirError::Memory { code: "E3064", .. }),
+        "{error:?}"
+    );
     let assembly = compile_module_for(Target::Linux, &ir, &|_| true).unwrap();
     assert_eq!(assembly.matches("mrs x16, fpcr").count(), 2);
     assert_eq!(assembly.matches("bic x16, x16, #0xc00000").count(), 1);

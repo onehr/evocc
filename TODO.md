@@ -710,8 +710,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The source 1.9.107/0.46 batch adds dynamic-rounding lowering and C-HIR
   execution, including runtime constants, conditional conversions and quiet
   comparison builtins. Native source checks pass 40/40 in each of eight
-  EvoCC/reference optimization combinations. Complete fenv API models,
-  strict wide-integer helpers and original musl replay remain OPEN.
+  EvoCC/reference optimization combinations. The explicit target fenv resolver
+  now covers the eleven get/set/clear/raise/save/hold/update functions; glibc's
+  overflow/underflow raise also sets inexact, unlike the separate musl adapter.
+  Both interpreters and eight native source/caller combinations pass the
+  all-mask/all-rounding library probe. Two synchronized native threads preserve
+  opposite rounding modes. FENV_ACCESS lexical scope, strict wide-integer
+  helpers and full original musl replay remain OPEN. The eight-unit targeted
+  musl replay emits four; four ARM64 ceil/floor/rint/rintf units hit the
+  explicitly excluded scalar-FP `w` asm constraint, for which approval was
+  requested. No full musl receipt has been promoted.
   Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
   calls and thread-owned explicit state. Implement it through constant evaluation,
   both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with

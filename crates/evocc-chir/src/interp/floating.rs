@@ -4,6 +4,15 @@ use evocc_types::floating::{FiniteOp, FloatBits, FpResult, FpStatus};
 use evocc_types::FloatKind;
 use std::cmp::Ordering;
 
+fn admit(world: &WorldState, strict: bool, span: SourceSpan) -> Result<(), InterpreterError> {
+    if !strict {
+        world
+            .check_fixed_fp_environment()
+            .map_err(|error| InterpreterError::Memory { span, error })?;
+    }
+    Ok(())
+}
+
 pub(super) fn builtin(
     expression: &crate::floating::FloatingExpr<'_>,
     values: &[CValue],
@@ -11,6 +20,9 @@ pub(super) fn builtin(
     strict: bool,
 ) -> Result<CValue, InterpreterError> {
     let span = expression.span;
+    if expression.op.is_comparison() {
+        admit(world, strict, span)?;
+    }
     let arguments = values
         .iter()
         .map(|v| match v {
@@ -83,6 +95,9 @@ pub(super) fn convert_runtime(
     strict: bool,
 ) -> Result<FloatBits, InterpreterError> {
     if !strict {
+        if !matches!(value, CValue::Floating(value) if value.kind() == kind) {
+            admit(world, strict, span)?;
+        }
         return convert(value, kind, span);
     }
     if !matches!(kind, FloatKind::F32 | FloatKind::F64) {
@@ -110,11 +125,17 @@ pub(super) fn convert_runtime(
     Ok(result.value)
 }
 
-pub(super) fn truth(value: FloatBits, world: &mut WorldState, strict: bool) -> bool {
+pub(super) fn truth(
+    value: FloatBits,
+    world: &mut WorldState,
+    strict: bool,
+    span: SourceSpan,
+) -> Result<bool, InterpreterError> {
+    admit(world, strict, span)?;
     if strict && value.is_signaling() {
         *world = world.with_fp_environment(world.fp_environment().raised(FpStatus::INVALID));
     }
-    !value.is_zero()
+    Ok(!value.is_zero())
 }
 
 impl Interpreter<'_, '_> {
@@ -129,13 +150,19 @@ impl Interpreter<'_, '_> {
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         let strict = self.strict_floating();
+        if matches!(
+            (value, target),
+            (CValue::Floating(_), ValueType::Integer(_))
+        ) {
+            admit(&self.world, strict, span)?;
+        }
         match (value, target) {
             (value, ValueType::Floating(kind)) => {
                 convert_runtime(value, kind, span, &mut self.world, strict).map(CValue::Floating)
             }
             (CValue::Floating(value), ValueType::Integer(target)) if strict => {
                 let raw = if target == CIntegerType::BOOL {
-                    u128::from(truth(value, &mut self.world, strict))
+                    u128::from(truth(value, &mut self.world, strict, span)?)
                 } else {
                     let result = value
                         .to_integer_status(u16::from(target.bits()), target.is_signed())
@@ -163,6 +190,7 @@ pub(super) fn binary(
     world: &mut WorldState,
     strict: bool,
 ) -> Result<CValue, InterpreterError> {
+    admit(world, strict, span)?;
     let kind = if [left, right]
         .iter()
         .any(|v| matches!(v, CValue::Floating(v) if v.kind() == FloatKind::F64))

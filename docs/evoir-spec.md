@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.107** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.108** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1469,6 +1469,37 @@ Literal parsing and static object initialization remain translation-time RNE.
 Exact representation operations remain pure. Both C-HIR and EvoIR execution
 use the same explicit FP environment contract. This bounded option does not
 enable `STDC FENV_ACCESS ON`, unsupported formats, traps or fast math.
+
+#### 3.13.2 Target floating-environment library boundary (revision 1.9.108)
+
+The AArch64 Linux GNU interpreter runtime models `fegetround`, `fesetround`,
+`feclearexcept`, `feraiseexcept`, `fetestexcept`, `fegetexceptflag`,
+`fesetexceptflag`, `fegetenv`, `fesetenv`, `feholdexcept`, and `feupdateenv`
+through the shared library resolver. Each call transfers both memory and world;
+the ordinary external top summary includes `fenv=true`. No process-global host
+floating state participates. `fesetround` accepts exactly the four supported
+target encodings and otherwise returns nonzero without changing state.
+
+The concrete runtime binding owns the 8-byte/alignment-4 `fenv_t` (FPCR then
+FPSR, two little-endian 32-bit words), 4-byte `fexcept_t`, rounding encodings
+0/0x400000/0x800000/0xc00000 and five low exception bits. FE_DFL_ENV's -1 address
+is a runtime sentinel, not a memory access. Ordinary pointers still undergo
+initializedness, alignment, bounds and lifetime checks. Restoring unsupported
+controls or status fails closed with E3064, not C UB or a silent control reset.
+
+The selected GNU/glibc resolver reproduces its measured `feraiseexcept` and
+`feupdateenv` behavior: raising overflow/underflow also raises inexact. Exact
+`fesetexceptflag` and `fesetenv` do not add flags. A separate explicit musl
+runtime adapter uses its direct requested-bit raise policy; sharing the object
+encoding does not make these library behaviors identical. The source/EvoIR
+GNU interpreter entry uses the GNU/glibc binding, not a runtime-name guess.
+Native calls use the actual linked runtime. This is not a pthread/loader
+interpreter or an Annex F claim; FENV_ACCESS pragma scope remains a separate gate.
+
+After a modeled library changes rounding, executing baseline pure numeric FP
+under a non-RNE world fails E3064 in the interpreters as it does natively.
+Exact representation transports and the pure conversion-domain predicate do
+not depend on rounding. Strict operations continue from the returned world.
 
 ## 4. Effect Model
 
@@ -6560,6 +6591,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.108 | 2026-09-27 | Model the target fenv library through explicit memory/world snapshots, distinguish glibc/musl raise policies, and preserve fixed-profile admission after environment-changing calls. |
 | 1.9.107 | 2026-09-27 | Define bounded source dynamic rounding and quiet relational predicates; distinguish executed automatic initialization and conditional conversion from RNE translation-time constants. |
 | 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |
 | 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |

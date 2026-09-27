@@ -5120,11 +5120,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let (memory, result) = self
+        let (memory, world, result) = self
             .memory
-            .call_library(spelling, &arguments)
+            .call_library_with_world(
+                &self.world,
+                evocc_memory::FenvRuntime::Aarch64Glibc,
+                spelling,
+                &arguments,
+            )
             .map_err(|error| self.memory_error(error, span))?;
         self.memory = memory;
+        self.world = world;
         match (result, return_type) {
             (LibraryValue::Integer(value), ValueType::Integer(ty)) => {
                 Ok(CValue::Integer(CInteger::from_raw(u128::from(value), ty)))

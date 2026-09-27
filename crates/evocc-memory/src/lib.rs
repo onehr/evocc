@@ -131,6 +131,8 @@ pub enum LibraryValue {
 
 mod atomic;
 pub use atomic::{AtomicEvent, AtomicOrder, AtomicRmwOp, AtomicRmwResult, AtomicValue};
+mod fenv;
+pub use fenv::FenvRuntime;
 
 impl PointerValue {
     #[must_use]
@@ -733,6 +735,7 @@ pub struct VolatileEvent {
 /// Stable semantic category used by interpreter diagnostic mappings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MemoryFaultKind {
+    FloatingEnvironment,
     InvalidThread,
     InvalidAtomicAccess,
     InvalidArgumentList,
@@ -782,6 +785,10 @@ pub enum MemoryFaultKind {
 /// selection, but deliberately owns no source span or IR obligation type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryFault {
+    FloatingEnvironment {
+        control: u32,
+        status: u32,
+    },
     InvalidThread {
         thread: ThreadId,
     },
@@ -922,6 +929,7 @@ impl MemoryFault {
     #[must_use]
     pub const fn kind(&self) -> MemoryFaultKind {
         match self {
+            Self::FloatingEnvironment { .. } => MemoryFaultKind::FloatingEnvironment,
             Self::InvalidThread { .. } => MemoryFaultKind::InvalidThread,
             Self::InvalidAtomicAccess => MemoryFaultKind::InvalidAtomicAccess,
             Self::InvalidArgumentList => MemoryFaultKind::InvalidArgumentList,
@@ -976,6 +984,10 @@ impl MemoryFault {
     #[must_use]
     pub const fn runtime_diagnostic(&self) -> Option<MemoryDiagnostic> {
         let diagnostic = match self {
+            Self::FloatingEnvironment { .. } => MemoryDiagnostic {
+                code: "E3064",
+                message: "incompatible-floating-environment",
+            },
             Self::InvalidAtomicAccess => MemoryDiagnostic {
                 code: "E3062",
                 message: "invalid-atomic-access",

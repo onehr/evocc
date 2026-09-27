@@ -5051,11 +5051,17 @@ fn execute_external_call(
                 }),
             })
             .collect::<Result<Vec<_>, _>>()?;
-    let (next, result) = state
+    let (next, world, result) = state
         .memory
-        .call_library(name, &arguments)
+        .call_library_with_world(
+            &state.world,
+            evocc_memory::FenvRuntime::Aarch64Glibc,
+            name,
+            &arguments,
+        )
         .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
     state.memory = next;
+    state.world = world;
     let result = match result {
         LibraryValue::Integer(value) => match results {
             [result @ Value {
@@ -5309,7 +5315,15 @@ fn execute_instruction(
 ) -> Result<(), InterpreterError> {
     match inst {
         Inst::Vector(operation) => vector::execute(operation, block, values, state)?,
-        Inst::Floating(operation) => floating::execute(operation, block, values)?,
+        Inst::Floating(operation) => {
+            if operation.needs_environment() {
+                state
+                    .world
+                    .check_fixed_fp_environment()
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            }
+            floating::execute(operation, block, values)?;
+        }
         Inst::StrictFloating(operation) => {
             strict_floating::execute(operation, block, values, state)?
         }

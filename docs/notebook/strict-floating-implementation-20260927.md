@@ -110,7 +110,36 @@ EvoCC O0/O2 and GCC14/Clang19 O0/O2 caller combinations, all PASS. The fixture
 and reference caller are `floating-dynamic-rounding{,-driver}.c`; no source
 substitution or host-FP constant evaluation is used.
 
-Complete fenv API models remain open. `FENV_ACCESS ON` is not advertised.
+The source checkpoint's full workspace test run exits 0 with 2,738 PASS,
+0 FAIL, 4 historical ignored and 338 result groups; all-target Clippy passes.
+The independently added quiet-comparison proof-mutation test also passes.
+
+## Target fenv resolver
+
+Revision 1.9.108 adds explicit memory/world library models, not host fenv
+calls. Native glibc measurement establishes that raise/update of overflow or
+underflow also sets inexact. The explicitly selected musl adapter retains
+musl's requested-bit-only raise behavior. Both interpreters use the GNU/glibc
+binding and pass the unchanged `floating-environment-library.c` probe:
+32 requested masks in four modes, selective flag transport, save/hold/update,
+default environment and executed arithmetic. Eight EvoCC O0/O2 × reference
+caller compiler/O0/O2 builds execute the same probe with exit 0. Two reference
+thread-driver builds each execute 128 synchronized opposite-rounding operations
+against EvoCC code, PASS. This does not claim an interpreter pthread model.
+
+Memory negatives retain initializedness, alignment, bounds and unsupported
+control checks. Pure FP after a library switches away from RNE now fails E3064
+in C-HIR, EvoIR and MIR, matching the native admission rule. Targeted regression
+and machine tests: 9 PASS. Current all-target Clippy passes.
+
+The original eight-unit musl replay preserves `-frounding-math`: four units emit,
+while ceil/floor/rint/rintf encounter scalar FP `w` assembly operands. The
+current specification explicitly excludes those operands; their extension is
+a requested decision, not a validator bypass. This replay uses the existing
+command projector and records its omitted flags (including function/data
+sections and excess-precision); it is not faithful full-build acceptance.
+
+`FENV_ACCESS ON` lexical scoping is not yet advertised.
 Binary128, musl, jq and full campaigns remain separately tracked
 in `TODO.md`. No traps, Annex F, floating vectors/complex or half support is
 implied by this checkpoint.

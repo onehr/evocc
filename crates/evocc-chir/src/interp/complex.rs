@@ -52,7 +52,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         } else {
             if let CValue::Floating(value) = value {
                 let strict = self.strict_floating();
-                return Ok(floating::truth(value, &mut self.world, strict));
+                return floating::truth(value, &mut self.world, strict, span);
             }
             machine_truth(value, span)
         }

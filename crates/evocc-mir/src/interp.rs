@@ -1121,6 +1121,12 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     .with_fp_environment(environment.raised(result.status));
                 result.value
             } else {
+                if operation.needs_environment() {
+                    state
+                        .world
+                        .check_fixed_fp_environment()
+                        .map_err(|e| memory_error(&e))?;
+                }
                 operation.evaluate(&values)
             };
             let result = if dst.class.is_simd() {
@@ -1996,7 +2002,10 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         // ordinary last argument, which is what the interpreter passes, so
         // there is nothing here to do.
         MInst::IndirectResult => {}
-        MInst::FpEnvCheck => {} // The software interpreter has the fixed baseline environment.
+        MInst::FpEnvCheck => state
+            .world
+            .check_fixed_fp_environment()
+            .map_err(|e| memory_error(&e))?,
         // Which arguments find no register is what allocation decides, so a
         // stack argument, like a spill, exists only after it.
         MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {
