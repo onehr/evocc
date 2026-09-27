@@ -212,6 +212,22 @@ REVIEWED_CONFIG_PREREQUISITES = {
         'reason': 'proc_filter uses NETLINK_CONNECTOR process events; PROC_EVENTS depends on '
                   'CONNECTOR=y, so loading cn.ko alone cannot supply this test prerequisite.',
     },
+    'fpu': {
+        'sources': {
+            'lib/Kconfig.debug':
+                '701d92042f1b07ae78911459e003cbe720ac812d85f32ec87293d5a1d5756dc8',
+            'tools/testing/selftests/fpu/run_test_fpu.sh':
+                '9f857cd00795182cd80c435f1d88f0d0c678b58a6f532705d3201c3681798d85',
+        },
+        'requirements': {
+            'CONFIG_ARCH_HAS_KERNEL_FPU_SUPPORT': 'y',
+            'CONFIG_KCOV_INSTRUMENT_ALL': 'n', 'CONFIG_TEST_FPU': 'm',
+        },
+        'reason': 'run_test_fpu.sh checks modinfo/modprobe test_fpu; TEST_FPU depends on '
+                  'ARCH_HAS_KERNEL_FPU_SUPPORT and !KCOV_INSTRUMENT_ALL. '
+                  'The frozen collection has no config fragment; a built-in alone does not '
+                  'satisfy this original module-loading script.',
+    },
 }
 
 

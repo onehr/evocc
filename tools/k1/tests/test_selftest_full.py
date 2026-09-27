@@ -424,6 +424,46 @@ class FullSelftest(unittest.TestCase):
                                  ['reviewedPrerequisites'], [])
             self.assertEqual(builds, unchanged, 'prerequisites never rewrite runtime outcomes')
 
+    def test_fpu_fragmentless_review_records_module_and_kcov_requirements(self):
+        review = lane.REVIEWED_CONFIG_PREREQUISITES.get('fpu')
+        self.assertIsNotNone(review, 'run_test_fpu.sh requires a module despite lacking config')
+        self.assertEqual(review['requirements'], {
+            'CONFIG_ARCH_HAS_KERNEL_FPU_SUPPORT': 'y',
+            'CONFIG_KCOV_INSTRUMENT_ALL': 'n', 'CONFIG_TEST_FPU': 'm',
+        })
+        self.assertEqual(set(review['sources']), {
+            'lib/Kconfig.debug', 'tools/testing/selftests/fpu/run_test_fpu.sh',
+        })
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            pinned = copy.deepcopy(review)
+            for name in pinned['sources']:
+                path = source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(name + '\n')
+                pinned['sources'][name] = lane.file_sha256(path)
+            config = source / '.config'
+            with patch.object(lane, 'REVIEWED_CONFIG_PREREQUISITES', {'fpu': pinned}):
+                config.write_text('CONFIG_ARCH_HAS_KERNEL_FPU_SUPPORT=y\n'
+                                  '# CONFIG_KCOV_INSTRUMENT_ALL is not set\n'
+                                  '# CONFIG_TEST_FPU is not set\n')
+                entry = lane.configuration_gaps(source, config, [{'id': 'fpu'}])
+                self.assertEqual(entry['missingFragments'], ['fpu'])
+                self.assertEqual(entry['reviewedPrerequisites'][0]['differences'], [{
+                    'option': 'CONFIG_TEST_FPU', 'requested': 'm', 'actual': 'n', 'kind': 'disabled',
+                }])
+                config.write_text('CONFIG_ARCH_HAS_KERNEL_FPU_SUPPORT=y\n'
+                                  'CONFIG_KCOV_INSTRUMENT_ALL=y\nCONFIG_TEST_FPU=m\n')
+                entry = lane.configuration_gaps(source, config, [{'id': 'fpu'}])
+                self.assertEqual(entry['reviewedPrerequisites'][0]['differences'], [{
+                    'option': 'CONFIG_KCOV_INSTRUMENT_ALL', 'requested': 'n', 'actual': 'y',
+                    'kind': 'different',
+                }])
+                (source / 'lib/Kconfig.debug').write_text('changed\n')
+                entry = lane.configuration_gaps(source, config, [{'id': 'fpu'}])
+                self.assertEqual(entry['reviewedPrerequisites'][0]['status'], 'SOURCE_CHANGED')
+                self.assertNotIn('differences', entry['reviewedPrerequisites'][0])
+
     def test_module_installation_preserves_the_linked_body_and_records_the_payload(self):
         install = getattr(lane, 'install_kernel_modules', None)
         self.assertTrue(callable(install), 'a new Image must not silently reuse reference modules')

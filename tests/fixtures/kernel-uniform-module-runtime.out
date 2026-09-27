@@ -1,0 +1,86 @@
+Uniform signed-module runtime and targeted originals, 2026-09-28
+===============================================================
+
+Scope: the completed 7,002-target-C composition, not a new full 970-program
+campaign and not the separately configured expanded KUnit population.
+
+Both sides install all 847 linked kernel modules through the original
+Makefile.modinst signing/install path. Each installed object is checked against
+its exact linked body plus signature trailer; depmod completes and the protected
+Image/config/vmlinux/target-object hashes remain unchanged. CONFIG_MODULE_SIG_ALL
+is enabled, but CONFIG_MODULE_SIG_FORCE is not: successful loading alone is NOT
+proof that rejection of an untrusted signature was enforced.
+
+The 17 BPF/livepatch support modules are rebuilt against their respective kernel
+build trees from all 22 unchanged original sources. These are reference-built
+test infrastructure, not EvoCC-compiled target-C credit. All 4,393 original
+non-module regular test files retain identical bytes. The original OVPN helper
+inputs and variant aliases are supplied; common prerequisite loads include
+fuse, snd_timer, ntsync and virtual_ncidev. Per-flight disks use QEMU snapshots.
+
+New ext4 disks: reference 4.25 GiB logical / about 3.1 GiB allocated;
+subject 5.25 GiB logical / about 3.9 GiB allocated. e2fsck -fn is clean for both.
+The approximately 4 GiB extraction/staging tree was deleted only after checking
+no open handles; it can be recreated from the retained disk. No workspace,
+kernel source clone, historical receipt or original test is deleted.
+
+Actual common-runner execution, original argv/budgets, six selected programs:
+  program                         GCC                      EvoCC
+  bpf:test_kmod.sh                 TIMEOUT 300s             TIMEOUT 300s
+  fpu:run_test_fpu.sh              SKIP                     SKIP
+  iommu:iommufd                   PASS (224/0/5 inner)     PASS (224/0/5 inner)
+  nci:nci_dev                     PASS (8/8 inner)         PASS (8/8 inner)
+  splice:default_file_splice_read.sh PASS                    PASS
+  splice:short_splice_read.sh       PASS                    PASS
+All twelve nonce-bound boots and orderly shutdowns PASS. The original inventory
+still contains 970 programs; the other 964 are NOT_RUN on each side. The receipt
+is correctly INCOMPLETE. The first two module probes do not promote all 847
+installed modules to runtime-tested status. The earlier September 22 full-run
+totals remain in that historical summary.
+
+FPU's actual script explicitly reports CONFIG_TEST_FPU=m missing; this is NOT
+a PASS. The frozen fpu collection has no config fragment. lib/Kconfig.debug
+requires ARCH_HAS_KERNEL_FPU_SUPPORT and !KCOV_INSTRUMENT_ALL. The current
+configuration already has architecture support and no KCOV, but TEST_FPU=n.
+The common source-pinned prerequisite review now lists this missing module and
+its dependencies. Its new test is RED before repair, GREEN afterwards; all
+271 K1 Python tests, targeted Ruff and diff whitespace checks PASS. Changed
+source invalidates the review; no configuration or original verdict is rewritten.
+Enabled FPU module build/install/runtime is still K12f, not closed by the audit.
+
+Command (existing runner; no reference reuse):
+  python3 tools/k1/selftest_full.py --reuse-build --expanded-kernel \
+    --kernel-receipt tests/contracts/kernel-bpf-full-receipt.json \
+    --reference-boot .build/floating-targeted/module-uniform-20260928/iommu-flights/reference/boot.json \
+    --work-root .build/k7-coverage/case/selftests \
+    --source-root .build/k7-coverage/case/linux-src \
+    --runtime-root .build/k7-coverage/case/selftests/runtime-uniform-20260928 \
+    --jobs 1 --allow-qemu-drift --select nci --select splice \
+    --select iommu:iommufd --select fpu:run_test_fpu.sh --select bpf:test_kmod.sh
+
+SHA256:
+  compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+  GCC Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  EvoCC Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+  config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  GCC disk 0d18b2afbb20c7a19f08c61c684580a191cd88854f12d7b47cb58132edaa196d
+  EvoCC disk d8775e787acbd0d39b63bd69c6dcf491b4f17cd2b181131d4421dc643fbbeaee
+  common initramfs 0baa47ac152b8a9cecf3a8ac9702cc2244f77d465881f78b76d467378bb434db
+  GCC build.json b8fecbfd1d1b39c514657cb0170d0a7b103fc02ec4530e31175e5f578d1422e8
+  EvoCC build.json f60f8030dea2477646f1c61edaea2a4b75002ef0eea7f9116defd74a8a46abe1
+  kernel receipt 608176c01e8fe95bbd668e5f9df23705f9bd86f5e824c346af7d54daca215890
+  selected receipt 13b8eaf6b614c1a05b1a5d38305da67d2a5700b0a8ac560095f65ed7b643f2ce
+  GCC NCI serial 73842e309395d6a908b7476c1ce028df9544923c8b8a63e0f00c7a427a924edc
+  EvoCC NCI serial e093ea38fd2e18a22c9bea3f67367c9e6459946650d9299b641071b2671a16e8
+  GCC short splice serial 44457a0728053bf6357d3f38a0b92c5494f2bc5db842c6378f403b8244109204
+  EvoCC short splice serial 6f080a92ddab058128f3401a059ced06967aaf214c16d6cd9d667e91f7d5314e
+  GCC FPU serial e0b1f77e027dafd0fbb33a3438634389e94321ebfeaaade066ae2191d6839eeb
+  EvoCC FPU serial 6f828b8076aa2d96d43d789fd2247d739af20224e17c76e439df32bb5ca241c8
+
+Raw packaging and helper source records:
+  .build/floating-targeted/module-uniform-20260928/
+  .build/k7-coverage/case/selftests/runtime-uniform-20260928/{reference,subject}/build.json
+Raw execution: .evidence/kselftest-full/20260927T220816Z/summary.json and side logs.
+The frozen compiler predates the current Rust pin and later compiler repairs;
+installed-QEMU drift is explicit. This is neither final-current-code acceptance
+nor K13/K14 completion. The BPF timeout has a separate bounded diagnostic.

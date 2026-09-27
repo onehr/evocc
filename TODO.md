@@ -550,13 +550,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
-  the GCC reference now builds, but the uniform EvoCC composition and matching
-  new module runtime are not yet accepted. The four build gaps are source-bound below.
-  The new reference's signed `test_module` now actually loads/unloads: the
-  [eight-assertion sysfs splice control](tests/fixtures/module-sysfs-splice.out)
-  and unchanged `short_splice_read.sh` PASS within its original five seconds.
-  This closes that reference prerequisite only; the new subject/module pair
-  still needs its own replay, as do the other affected collections.
+  the uniform 7,002-object composition now boots, and both new runtimes install
+  all 847 signed kernel modules plus 17 original test-support modules. The
+  [new original pair](tests/fixtures/kernel-uniform-module-runtime.out) passes
+  NCI's 8/8 cases, both splice programs and IOMMU's 224/0/5 inner results.
+  FPU still SKIPs for a missing configuration; BPF test_kmod still times out on
+  both sides. This selected six-program run leaves 964 NOT_RUN, not K13 PASS.
+  Other affected collections still require replay. The four build gaps are
+  source-bound below.
   Build runnable supported sets with matching payloads; give precise reasons
   for unavailable ones. Keep any changed population separate from the frozen 970. [Evidence][kernel].
 
@@ -592,7 +593,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     loading virtual_ncidev makes the same executable pass **8/8**. Eleven
     load/device/ioctl/unload controls and boot/shutdown pass; 261 K1 Python tests
     and Ruff pass. This closes reference prerequisite diagnosis/packaging,
-    not subject-module acceptance. The new EvoCC pair remains queued after T04.
+    not subject-module acceptance at that checkpoint. The subsequent
+    [new matching pair](tests/fixtures/kernel-uniform-module-runtime.out)
+    actually loads the new modules and passes the unchanged original **8/8**
+    on both kernels, closing the subject prerequisite too.
     [Small C and identity-bound result](tests/fixtures/nci-module-prerequisite.out).
 
   - [x] **K12d — Install OVPN's omitted original peer tables and key**, 2026-09-28.
@@ -614,6 +618,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     batch both built-in options into a separately identified configuration and
     replay the original on its matching pair. No active config or historical
     outcome changes. [Exact evidence](tests/fixtures/connector-configuration.out).
+
+  - [ ] **K12f — Enable and execute the omitted kernel FPU module** — `OPEN`, P2.
+    Both unchanged originals on the new uniform pair explicitly SKIP because
+    CONFIG_TEST_FPU=m is absent. The collection has no upstream config fragment.
+    Source-pinned audit now records TEST_FPU=m, architecture support and the
+    !KCOV_INSTRUMENT_ALL dependency; its RED and all 271 K1 tests pass. The
+    reviewed config has architecture support and no KCOV, so this is an omitted
+    request, not an arm64 limitation. Include it with K12e's next configuration
+    batch, then compile, sign/install and run the original on both Images.
+    [Original logs and precise boundary](tests/fixtures/kernel-uniform-module-runtime.out).
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts

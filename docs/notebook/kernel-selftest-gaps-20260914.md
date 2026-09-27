@@ -46,6 +46,27 @@ and preserved-input checks pass. All former six disabled-IOPF failures are
 gone; the five explicit `no_viommu` variants remain skipped. This closes K06
 for the reviewed configuration; it is not full K13/K14 acceptance.
 
+### New signed-module runtime pair — 2026-09-28
+
+The [matching runtime build and six-program replay](../../tests/fixtures/kernel-uniform-module-runtime.out)
+now complete: each side has all 847 signed kernel modules and 17 rebuilt
+original test-support modules. Installed kernel bodies, Image/config identities
+and all 4,393 original non-module test files are audited unchanged. The new
+reference/subject ext4 disks allocate about 3.1/3.9 GiB, with clean filesystem
+checks. The unused approximately 4 GiB staging copy has been removed; disks
+and reconstruction manifests remain.
+
+Both kernels PASS NCI (8/8), both splice programs and IOMMU (224/0/5 inner).
+Both retain BPF test_kmod's 300-second TIMEOUT and FPU's explicit SKIP. All
+twelve boots/shutdowns pass. This selected receipt is INCOMPLETE with 964
+NOT_RUN; it does not replace the September 22 full-run totals above.
+
+FPU has no upstream config fragment. Its script requires TEST_FPU=m, whose
+Kconfig depends on architecture FPU support and !KCOV_INSTRUMENT_ALL. The new
+config meets those dependencies but omits the module. A source-pinned review
+and RED now cover this omission (271 K1 tests and Ruff PASS); enabling and
+actually testing it remains K12f for the same next batch as connector K12e.
+
 ### Connector prerequisite omitted from fragment-only review — 2026-09-28
 
 The [small original-API probe](../../tests/fixtures/connector-configuration.out)
