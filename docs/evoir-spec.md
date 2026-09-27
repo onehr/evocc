@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.113** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.114** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1202,6 +1202,30 @@ units containing 24,735 `asm` statements:
 | `i` | an integer constant or a link-time symbol plus a signed byte addend (revision 1.9.80) | 113 |
 | `n` | an integer constant only | included above |
 | `p` | an address | 48 |
+| `w`, `=w`, `+w`, `=&w`, `+&w` | the shared SIMD bank: approved 64/128-bit integer/polynomial vectors and, since revision 1.9.114, scalar `f32`/`f64` | original ARM64 musl ceil/floor/rint/rintf |
+
+**Scalar floating assembly (revision 1.9.114).** The `w` family carries the
+exact `f32`/`f64` representation; it does not perform a floating conversion or
+quiet a NaN during operand transport. Matching inputs have the output's exact
+type and physical location. Input/place evaluation, read-write inputs,
+early-clobber exclusion and selected-edge output binding use the existing
+assembly rules. Unmodified SIMD references print `vN`, including scalar
+operands; `%b/%h/%s/%d/%q` select a view of that same register, not another bank
+or an implicit conversion. A template is responsible for using an instruction
+and view appropriate to its data; selecting a wider view does not define the
+unprovided high bits of a scalar input. General-register modifiers on `w`
+operands remain invalid. Existing `vN/dN/sN` clobber aliases and local `@vN`
+bindings keep their prior scope. f128, floating vectors, half formats and SVE
+are not admitted by this extension, nor are floating values under `r`.
+
+Assembly keeps maximal memory/world effects, including `fenv=true`, regardless
+of `volatile`. It can change FP controls/status; native admission knowledge
+must be invalidated across it before subsequent baseline or strict arithmetic.
+The compiler never resets FPCR/FPSR to accommodate it. Both interpreters still
+report E3021 upon reaching opaque assembly. Native execution, allocation
+verification and proof reconstruction are required; type admission alone is
+not implementation acceptance. `-mgeneral-regs-only` still rejects the generated
+SIMD accesses needed to bind these operands.
 
 For a source input whose constraint is exactly one of the admitted immediate
 letters `I`, `J`, `K`, `L`, `i`, `n` together with `r`, in either order
@@ -1267,7 +1291,8 @@ in survey `survey-eval-20260909T073457Z`; both oracles agree on numbered
 and named forms at `-O0` and `-O2` in
 `.evidence/builtin-probes/20260909-asm-numbered-labels/labels.c`),
 `%a0`/`%a[name]` (revision 1.9.88) for an address operand, and
-`%%` for a literal percent; any other reference is `E3021`.
+`%%` for a literal percent; the SIMD views described above are also admitted;
+any other reference is `E3021`.
 
 **Address operands (revision 1.9.88).** The constraint `p` is a general
 register holding an address; lowering treats it exactly as `r` for a
@@ -6676,6 +6701,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.114 | 2026-09-27 | Extend existing SIMD asm bindings to scalar f32/f64 with exact transport, complete operand/edge binding, opaque fenv effects and unchanged unsupported-type/interpreter boundaries. |
 | 1.9.113 | 2026-09-27 | Admit no-strict-aliasing as the existing conservative access contract; preserve all object/provenance/access guards and the deferred effective-type/TBAA boundary. |
 | 1.9.112 | 2026-09-27 | Admit explicit standard excess precision as the existing source-format evaluation contract; preserve rounding/environment and unsupported-mode boundaries. |
 | 1.9.111 | 2026-09-27 | Preserve -pthread preprocessing semantics with _REENTRANT defined before explicit user macro actions; no new linker or thread-execution claim. |
@@ -8010,7 +8036,7 @@ This corrects the existing constant-representation slice without admitting runti
 
 ### Approved integer SIMD assembly bindings
 
-The 2026-09-20 approval extends §3.11 with `w`, `=w`, `+w`, `=&w`, `+&w` and existing matching operands for 64/128-bit integer or polynomial vectors, using the existing typed opaque asm, local SSA, effects and per-edge result binding; scalar, floating, tiny/wide-vector and SVE operands remain E3021, and `r` does not acquire a SIMD alternative.
+The 2026-09-20 approval extends §3.11 with `w`, `=w`, `+w`, `=&w`, `+&w` and existing matching operands for 64/128-bit integer or polynomial vectors, using the existing typed opaque asm, local SSA, effects and per-edge result binding. At that stage scalar/floating operands remained E3021; revision 1.9.114 subsequently admits scalar f32/f64 under the same machinery. Tiny/wide/floating vectors, other floating formats and SVE remain outside this assembly profile, and `r` does not acquire a SIMD alternative.
 Default references print `vN`, `%b/%h/%s/%d/%q` select views of that same physical register, and accepted `vN/dN/sN` clobber names alias that identity; `qN/hN/bN` clobbers remain E3021 because fixed Clang-19 rejects them while GCC-14 accepts them, and modifiers cannot change register bank.
 Tied inputs share their output's location, while early-clobber outputs cannot overlap independent inputs or another output; allocation, spills, selected-edge output writeback, text identity and independent proof/allocation checks must preserve that contract, and reached asm still reports interpreter E3021.
 `tests/fixtures/simd-assembly-bindings.c` and the existing `arm-neon-assembly*.c` are the reduced acceptance inputs for the kernel xor and Mbed TLS consumers, not a full campaign count; the general-register-only restriction remains, and this approval is not a passing execution result.

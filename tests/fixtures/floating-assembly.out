@@ -1,0 +1,83 @@
+2026-09-27 B08a: approved scalar f32/f64 w-constrained AArch64 assembly.
+Authority: EvoIR 1.9.114 section 3.11; EvoMIR 0.50 section 7.
+Base commit 1aa30cb; executable SHA256
+953e9b4ac17522f8baf13315fed70aadaf7480ffdfde30539d146cca0d3f2d86.
+The historical release executable is unchanged.
+
+Fixture SHA256:
+floating-assembly-bindings.c
+2953b4ae89d5f18245ac5328a9df0c7a05b109e6fd92a79d47495c5f3a1888b7
+floating-assembly-caller.c
+1f44a9b6f3d662da65380e45266a98f087530ba278bf8016b59d812bb2fc0f6d
+floating-assembly-environment.c
+6ab094b4496d21c7c3ef761b7d0c212341633c581c7678131da1060f058e3833
+floating-assembly-environment-driver.c
+7b4e13a265c65e39dcd42b13756730c2fc8a8a9b10b1126534355d36aa3046db
+musl-scalar-assembly-driver.c
+1764c9068ca454e1701e968a3f5870c09aa2e9f0d20cbffec6aa2c8ff62565cf
+
+RED: two source tests and the independent IR test reject scalar w operands
+with E3021. Shared admission now includes only F32/F64 alongside the previously
+approved integer/polynomial vector carriers. No new emitter/register allocator,
+numeric conversion, implicit fenv reset or opaque-asm interpretation is added.
+Default operands print vN, with explicit b/h/s/d/q views; fixed reference
+assembly confirms this. Matching inputs require identical scalar type.
+
+GREEN tailored tests:
+- 51 CLI inline-assembly tests, including both scalar fixtures, pass.
+- 11 independent EvoIR assembly tests pass; malformed type/bank/fenv/world
+  mutations fail validation and exact text round trips retain all fields.
+- 13 MIR inline-assembly tests pass, including Simd32 allocation mutations.
+- Proof reconstruction rejects changed constraints and clobbers for vector,
+  f32 and f64, with three accepted controls and six rejected forgeries.
+- Both source interpreters retain E3021 for reached opaque assembly.
+- General-registers-only retains E4002; f128, wrong GPR/view and float/double
+  matching mismatches retain E3021.
+- The 12-output f32/f64 asm.goto cases each force at least 12 actual spills;
+  allocation is checked independently, and values survive both selected edges
+  plus a subsequent caller-saved SIMD clobber. Host native fixture also passes.
+
+Fixed native lane: evo-flight-lab:sealed, linux/arm64, no network, image digest
+2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2;
+GCC 14.2.0-19 / Clang 19.1.7, glibc 2.41.
+GCC14/Clang19 O0/O2 source controls all pass. Actual EvoCC O0/O2 assembly is
+linked by each reference compiler at O0/O2: eight whole-fixture executions,
+eight environment executions (58 checks each), sixteen separate-TU calls in
+both directions all pass. Environment checks cover four modes, prior/sticky
+flags, rint/ceil, invalid division, FPCR modification followed by strict C FP,
+and exact signed-zero/subnormal/infinity/qNaN/sNaN transport without flags.
+Each fixture uses the existing source profile (-std=gnu11; environment worker
+also -frounding-math); reference builds disable contraction. Worker builds use
+-DSCALAR_ASM_WORKER. No tolerance is applied to bit/status comparisons.
+
+Original command replay: ceil, floor, rint, rintf, __math_oflow, __math_uflow,
+frexp and scalbn all emit and assemble (8/8). Original source and semantic
+flags are unchanged; unrelated command omissions remain reported. The four
+original scalar-asm objects are linked to musl-scalar-assembly-driver.c using
+GCC14/Clang19 O0/O2, -frounding-math -fno-builtin and -lm: four subject and four
+reference-object executions each pass 56 value/status checks. The driver uses
+glibc's fenv interface; this is not a full musl libc-test result.
+
+Original source hashes (ceil, floor, rint, rintf respectively):
+1c58140459ec34a841f16add77439146534bf367a2a13f469d151e27c813b5f9
+97835fb159e8f2e1808da1465ea733287ff9b2beeefcfcffe28c961b95d17028
+f8d087de19f855381f13635d042ffe2433b018f02aba2ef11a771376b27dcb26
+28f31f6728c43b210a4cb12a2e0b51313086fa3b0d2b4065518363b710ec1281
+EvoCC object hashes (same order):
+07360cb79e0da41c0956eb17373a766d87a745b20e6b66f5bb18cf715ed38dc8
+e68fc841240f4037dcfa4bdfb8d4d4cb2b27bfea4bcd1b254b737109dd54745b
+79a0619d786b0593efbf3203ab730639b3b01d1c06a36803b667a135fe2a554a
+a4cac6ff2d29fd0b736a9c868e6e01af78a4635d5c94f1a994bb10bf4e4edfaa
+
+Raw logs: .build/floating-targeted/strict-20260927/scalar-asm-*.log.
+Projected source argv: scalar-asm-musl-replay.log; assembler mapping/options:
+musl-scalar-asm-replay/plan.txt under that same directory. Original recorded
+commands are in .build/ladder/musl-work/commands.log.
+The intermediate scalar-asm-cli-full.log has a test-setup error: the new test
+initially called allocation before out_of_ssa. Correcting the test to follow
+the actual native pipeline produces scalar-asm-cli-final.log (51 PASS).
+It is not counted as a separate compiler defect or hidden from the record.
+Changed-crate gate against 1aa30cb: 1,626 PASS / 0 FAIL / 4 historical ignored;
+Clippy --all-targets -D warnings and cargo fmt --check pass. The 54-shape text
+audit reports no renderer/spec disagreement (not a grammar completeness proof).
+No kernel or other application receipt is promoted by these targeted results.

@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.113](docs/evoir-spec.md) and [EvoMIR 0.49](docs/evomir-spec.md).
+[EvoIR 1.9.114](docs/evoir-spec.md) and [EvoMIR 0.50](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -58,7 +58,7 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | PASS | 11/11 TU | Original `make test`; relink/test exits and installed objects audited |
 | toybox | INCOMPLETE (shared test FAIL retained) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
-| musl + libc-test | FAIL | Historical 0/1,339 TU | Strict fenv now has targeted tests; original ARM64 math units expose the still-excluded scalar FP asm constraint |
+| musl + libc-test | FAIL | Historical 0/1,339 TU | Strict fenv and scalar FP asm have targeted tests; eight original math units now assemble, but full libc-test replay is still required |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,039/1,735 programs PASS | Fresh full run: 1 unresolved compiler failure, 30 FP-deferred, 664 not applicable, 1 oracle-unusable; no installed object rebuilt |
 | jq | PASS | 69/69 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |

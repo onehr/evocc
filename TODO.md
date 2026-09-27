@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.113** and EvoMIR **0.49**. This is the Git-tracked execution backlog,
+EvoIR **1.9.114** and EvoMIR **0.50**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -692,21 +692,26 @@ complete K7/KUnit success; these configurations and their Images are distinct.
 - [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2, after L01.
   The historical full receipt is 0/1,339 due to `-frounding-math`; it is not a
   new measurement of the now-implemented strict-FP compiler. The eight-unit
-  targeted replay keeps that option: four emit, four expose B08a below. Its
-  command projection also retains explicit omissions (B08b), so these four
+  targeted replay keeps that option: all eight now assemble after B08a. Its
+  command projection also retains explicit omissions (B08b), so these eight
   emissions are not faithful full-build acceptance. Close the prerequisites,
   replay original commands, then build and run libc-test. Classify newly exposed
   errors separately; L01 alone does not guarantee coverage.
   [Receipt](tests/contracts/ladder-musl-receipt.json).
 
-  - [ ] **B08a — Admit scalar FP inline-assembly bindings** — `NEEDS_RULE`, P2.
-    Original ARM64 ceil/floor/rint/rintf reach `w`-constrained scalar f32/f64
-    operands, currently explicitly excluded by EvoIR §3.11 and Appendix D's
-    integer-SIMD approval. The strict-FP report does not silently repeal that
-    boundary. A bounded extension must preserve the shared SIMD bank, exact
-    scalar views, ties/early clobbers, world/fenv effects, spills and native
-    checks; opaque reached assembly must not become an interpreter PASS.
-    Approval was requested; do not bypass the validator to clear E3021.
+  - [x] **B08a — Admit scalar FP inline-assembly bindings** — `DONE`, P2, 2026-09-27.
+    Explicitly approved and specified in EvoIR 1.9.114 / EvoMIR 0.50. Scalar
+    f32/f64 use the existing alias-aware SIMD bank, exact representation
+    transport, matching/early-clobber bindings, spills, asm.goto edge copies
+    and conservative world/fenv effects. Default operands print vN, matching
+    fixed GCC14/Clang19; s/d views are explicit. Reached opaque asm still
+    reports E3021 in both interpreters; f128, floating vectors, GPR bindings
+    and general-registers-only remain refused. Eight native environment builds
+    pass 58 checks each; sixteen crossed calls and high-pressure selected-edge
+    cases pass. All eight original musl units assemble; the four original
+    ceil/floor/rint/rintf objects pass 56 checks with each of four reference
+    callers, alongside their reference-object controls. Full musl is separate.
+    [Source, exact identities and validation](tests/fixtures/floating-assembly.out).
 
   - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
     The remaining projection names GCC tuning/alignment/frame options and
@@ -809,10 +814,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   switch, loop exits, statement expressions and return conversions. Eight source
   programs, including the unchanged fenv library probe, pass both interpreters
   and eight native crossed builds; Clang19 O0/O2 controls also pass. Full original
-  musl replay remains OPEN. The eight-unit targeted
-  musl replay emits four; four ARM64 ceil/floor/rint/rintf units hit the
-  explicitly excluded scalar-FP `w` asm constraint, for which approval was
-  requested. No full musl receipt has been promoted.
+  musl replay remains OPEN. After explicit B08a approval, the eight-unit
+  targeted replay now assembles all eight, including ARM64 ceil/floor/rint/rintf;
+  the original four scalar-assembly objects also pass native value/status
+  checks with four reference callers. No full musl receipt has been promoted.
   Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
   calls and thread-owned explicit state. Implement it through constant evaluation,
   both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with

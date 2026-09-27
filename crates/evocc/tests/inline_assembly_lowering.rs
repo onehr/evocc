@@ -60,6 +60,74 @@ fn patchable_static_keys_preserve_polarity_and_explicit_successor_bindings() {
 }
 
 #[test]
+fn scalar_floating_assembly_binds_exact_values_and_remains_opaque() {
+    let source = include_str!("../../../tests/fixtures/floating-assembly-bindings.c");
+    let ir = emits(source);
+    assert!(ir.contains("fenv=true"));
+    assert!(ir.contains("asm.goto"));
+    assert!(ir.contains("+w@v19"));
+    let module = evocc_evoir::parse_section9_module(ir.as_bytes()).unwrap();
+    let mir = evocc_mir::lower_module(&module).unwrap();
+    for name in ["scalar_asm_spill", "scalar_asm_spillf"] {
+        let function = mir.functions.iter().find(|f| f.name == name).unwrap();
+        let allocated = evocc_mir::allocate(&evocc_mir::out_of_ssa(function)).unwrap();
+        assert!(
+            allocated.spilled >= 12,
+            "{name}: {} spills",
+            allocated.spilled
+        );
+        evocc_mir::verify_allocation(&allocated).unwrap();
+    }
+    let result = run(source, "--emit=asm");
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let result = run(source, mode);
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("E3021"));
+    }
+    let general = run_with_options(source, "--emit=asm", &["-mgeneral-regs-only"]);
+    assert!(!general.status.success());
+    assert!(String::from_utf8_lossy(&general.stderr).contains("E4002"));
+    #[cfg(target_arch = "aarch64")]
+    execute_native_assembly(source, "scalar-fp-bindings");
+}
+
+#[test]
+fn scalar_floating_assembly_retains_environment_boundaries_and_refusals() {
+    let source = include_str!("../../../tests/fixtures/floating-assembly-environment.c");
+    let ir = emits(source);
+    assert!(ir.contains("fp.strict.add"));
+    assert!(ir.contains("fenv=true"));
+    let result = run(source, "--emit=asm");
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let assembly = String::from_utf8(result.stdout).unwrap();
+    let position = assembly.find("msr fpcr").unwrap();
+    assert!(assembly[position..].contains("mrs"), "{assembly}");
+    for invalid in [
+        "void f(long double x){asm(\"\" : \"+w\"(x));}",
+        "void f(float x){asm(\"\" : \"+r\"(x));}",
+        "void f(double x){asm(\"// %x0\" : : \"w\"(x));}",
+        "void f(float x, double y){asm(\"\" : \"=w\"(x) : \"0\"(y));}",
+    ] {
+        let result = run(invalid, "--emit=evoir");
+        assert!(!result.status.success(), "{invalid}");
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("E3021"),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+}
+
+#[test]
 fn simd_assembly_keeps_vector_bindings_and_opaque_execution() {
     let sources = [
         include_str!("../../../tests/fixtures/arm-neon-assembly-update.c").to_owned(),

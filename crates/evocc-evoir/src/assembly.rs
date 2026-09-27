@@ -400,10 +400,11 @@ pub fn assembly_register_type(ty: &EvoIRType) -> bool {
     )
 }
 
-/// The approved SIMD asm subset carries the complete short-vector bits.
+/// The approved SIMD asm subset carries exact f32/f64 or short-vector bits.
 #[must_use]
 pub fn assembly_simd_type(ty: &EvoIRType) -> bool {
     match ty {
+        EvoIRType::F32 | EvoIRType::F64 => true,
         EvoIRType::Vec(lanes, element) => {
             matches!(element.as_ref(), EvoIRType::Bits(8 | 16 | 32 | 64))
                 && matches!(element.as_ref(), EvoIRType::Bits(width) if matches!(u64::from(*lanes) * u64::from(*width), 64 | 128))

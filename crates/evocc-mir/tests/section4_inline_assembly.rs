@@ -29,7 +29,7 @@ fn g(id: u32) -> VReg {
 
 #[test]
 fn simd_assembly_register_bank_and_clobbers_are_independently_verified() {
-    for class in [RegClass::Simd64, RegClass::Simd128] {
+    for class in [RegClass::Simd32, RegClass::Simd64, RegClass::Simd128] {
         let a = VReg::new(0, class);
         let b = VReg::new(1, class);
         let r = VReg::new(2, class);

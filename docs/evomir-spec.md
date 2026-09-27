@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.49** | **Authoritative reference** | **2026-09-27**
+**Revision 0.50** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -917,20 +917,27 @@ block spelling as static relocations, and `%c` suppresses any immediate prefix.
 Only `i` admits symbolic operands. The interpreter's opaque-assembly refusal
 and the allocator's register constraints are unchanged (revision 0.25).
 
-**Approved integer SIMD assembly (2026-09-20).** The `w`, `=w`, `+w`,
-`=&w` and `+&w` constraints carry `simd64`/`simd128` values in the existing
+**Approved SIMD assembly (integer vectors 2026-09-20; scalar FP 0.50).**
+The `w`, `=w`, `+w`, `=&w` and `+&w` constraints carry `simd64`/`simd128`
+integer/polynomial vectors and scalar f32/f64 as `simd32`/`simd64` in the existing
 shared SIMD register bank; a tied input inherits its output's class and
 location, including an early-clobber output, while independent inputs and
 distinct outputs must not overlap forbidden locations. Input copies precede
 the asm, output stores follow it (on each selected `asm.goto` successor),
-and existing spill/parallel-copy machinery preserves all 64/128 bits and
+and existing spill/parallel-copy machinery preserves all 32/64/128 operand bits and
 live source values. The allocator excludes every aliased clobber and its
 reserved scratch registers; the independent checker validates the constraint
 bank and assigned physical bank as well as overlap and dataflow. Default
 references emit `vN`; `%b/%h/%s/%d/%q` select that register's views, with
 accepted `vN/dN/sN` clobbers normalized to the same physical identity.
 `-mgeneral-regs-only` still rejects generated SIMD use; this extension does
-not admit scalar floating/SVE asm or pretend that interpreters execute asm.
+not admit f128, half, floating-vector or SVE asm or pretend that interpreters
+execute asm. Scalar default references still print `vN`; explicit `%s/%d`
+select the usual scalar instruction views. Transport does not quiet NaNs or
+raise FP status. The opaque instruction retains `fenv=true`; FP admission
+facts are invalidated across ordinary/goto assembly, and subsequent numeric
+operations recheck their own required controls. No new register bank, spill
+format, memory opcode or implicit floating-environment channel is introduced.
 
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
@@ -1239,6 +1246,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.50 | 2026-09-27 | Admit exact scalar f32/f64 SIMD assembly bindings through existing allocation, spills, selected edges and floating-environment invalidation. |
 | 0.49 | 2026-09-27 | Emit independently selected per-function/data ELF sections, preserving explicit placement, TLS/storage kind, aliases, lifecycle/patch roots and written option overrides. |
 | 0.48 | 2026-09-27 | Hosted Linux binary128 via qualified helpers; shared SIMD128 scalar/HFA/varargs ABI, exact strict status and conversion/NaN adapters. |
 | 0.47 | 2026-09-27 | Qualified Linux strict integer128 conversion calls, explicit strict admission and preserved helper semantics. |

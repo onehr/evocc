@@ -1231,7 +1231,7 @@ pub enum AsmConstraint {
     Register(AsmDirection),
     /// `=&r`, `+&r`: a register no input operand of the same `asm` holds.
     EarlyClobber(AsmDirection),
-    /// Short integer/polynomial vector in the shared SIMD physical bank.
+    /// Scalar f32/f64 or short integer/polynomial vector in the shared SIMD bank.
     Simd(AsmDirection),
     /// SIMD output written before any independent input is consumed.
     SimdEarlyClobber(AsmDirection),

@@ -4,6 +4,16 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+September 27's [approved scalar FP assembly extension](../../tests/fixtures/floating-assembly.out)
+closes B08a in EvoIR 1.9.114 / EvoMIR 0.50. It reuses the SIMD operand and
+allocation path for exact f32/f64 transport, without inventing an interpreter
+for opaque asm. Native tied/early-clobber/fixed-register/goto/spill and crossed
+call cases pass. Eight native fenv builds pass 58 checks each; all eight original
+musl math units now assemble. The four original ceil/floor/rint/rintf objects
+pass 56 checks with each of four reference callers, as do reference controls.
+This supersedes the four scalar-asm refusals in the older checkpoints below,
+not the full musl/libc-test receipt or its remaining option accounting.
+
 September 27's [per-symbol section regression](../../tests/fixtures/driver-symbol-sections.out)
 closes a further musl option-projection gap: real function/data sections now
 preserve ELF storage/TLS types, relocations, alias identity, lifecycle roots and

@@ -38,6 +38,34 @@ fn tokens() -> Vec<RuntimeValue> {
 }
 
 #[test]
+fn scalar_fp_assembly_preserves_types_world_and_selected_edges() {
+    for ty in ["f32", "f64"] {
+        let source = EDGES
+            .replace("bits<32>", ty)
+            .replace("\"+r\"", "\"+w\"")
+            .replace("\"r\"", "\"w\"")
+            .replace(
+                "cbnz %w1, %l[taken]\\x0a\\x09add %w0, %w0, #5",
+                "// %0 %1 %s0 %d0 %l[taken]",
+            );
+        let module = parse_section9_module(source.as_bytes()).expect("scalar FP asm edges");
+        assert_eq!(render_module(&module), source);
+        for invalid in [
+            source.replace(ty, "f128"),
+            source.replace("%s0", "%w0"),
+            source.replace("\"+w\"", "\"+r\""),
+            source.replace("fenv=true", "fenv=false"),
+            source.replace("%v4, %v5, %v6", "%v4, %v5, %v3"),
+        ] {
+            assert!(
+                parse_section9_module(invalid.as_bytes()).is_err(),
+                "{invalid}"
+            );
+        }
+    }
+}
+
+#[test]
 fn simd_assembly_types_modifiers_and_ties_are_not_general_registers() {
     let source = EDGES
         .replace("bits<32>", "vec<2, bits<32>>")

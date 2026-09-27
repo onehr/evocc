@@ -313,32 +313,41 @@ fn scalar_proof_cannot_drop_or_change_hfa_transport_alignment() {
 
 #[test]
 fn scalar_proof_cannot_change_simd_assembly_constraints_or_clobbers() {
-    let source = MODULE
+    for (ty, constant) in [
+        (
+            "vec<2, bits<64>>",
+            "%v10 = const.bits<64> 0\n    %v11 = vec.pack %v10, %v10 : vec<2, bits<64>>",
+        ),
+        ("f32", "%v11 = const.f32 0x3f800000"),
+        ("f64", "%v11 = const.f64 0x3ff0000000000000"),
+    ] {
+        let source = MODULE
         .replace("volatile=false", "volatile=true")
         .replace("io=false", "io=true")
         .replace("fenv=false", "fenv=true")
-        .replace("    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]", "    %v10 = const.bits<64> 0\n    %v11 = vec.pack %v10, %v10 : vec<2, bits<64>>\n    (%v12, %v7, %v8) = asm volatile \"\" %v3, %v4 outputs [(\"+w\", \"\", vec<2, bits<64>>, %v11)] inputs [] clobbers []");
-    let before = parse_section9_module(source.as_bytes()).unwrap();
-    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
-    let files = ProofFiles::new();
-    fs::write(&files.before, render_module(&before)).unwrap();
-    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
-    let after = render_module(&outcome.module);
-    let replay = || {
-        Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
-            .args([&files.before, &files.after, &files.proof])
-            .output()
-            .unwrap()
-    };
-    fs::write(&files.after, &after).unwrap();
-    assert!(replay().status.success());
-    for forged in [
-        after.replace("\"+w\"", "\"+&w\""),
-        after.replace("clobbers []", "clobbers [\"v0\"]"),
-    ] {
-        assert_ne!(forged, after);
-        validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
-        files.reject_forged_output(&outcome.certificate, &forged);
+        .replace("    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]", &format!("    {constant}\n    (%v12, %v7, %v8) = asm volatile \"\" %v3, %v4 outputs [(\"+w\", \"\", {ty}, %v11)] inputs [] clobbers []"));
+        let before = parse_section9_module(source.as_bytes()).unwrap();
+        let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+        let files = ProofFiles::new();
+        fs::write(&files.before, render_module(&before)).unwrap();
+        fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+        let after = render_module(&outcome.module);
+        let replay = || {
+            Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+                .args([&files.before, &files.after, &files.proof])
+                .output()
+                .unwrap()
+        };
+        fs::write(&files.after, &after).unwrap();
+        assert!(replay().status.success());
+        for forged in [
+            after.replace("\"+w\"", "\"+&w\""),
+            after.replace("clobbers []", "clobbers [\"v0\"]"),
+        ] {
+            assert_ne!(forged, after);
+            validate_module(&parse_section9_module(forged.as_bytes()).unwrap()).unwrap();
+            files.reject_forged_output(&outcome.certificate, &forged);
+        }
     }
 }
 
