@@ -42,6 +42,13 @@ SUITES = {
         '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
         subjects=('functional/wordexp', 'functional/wordexp-static'),
         fixture='musl-patched-wordexp.c', checks=48),
+    'conf': dict(sources={
+        'src/conf/fpathconf.c': '301cf7c0ecd13a12fd090ee8f6fa6de90af2c1bcea85df2e387a48b7d7baf4f9',
+        'src/conf/pathconf.c': 'ede2994972d93f1951dbddf4194d6764f9e4f1c5ac9bfa56dbdd4f8d64455848',
+        'src/conf/sysconf.c': '803fa64a3da9fac2377d96929d964e9e39c825fbd382c101885ea96693db61ec'},
+        headers={'include/unistd.h':
+            'ab2782955f7f5cd22b4feaa7dd48195a4e6d86c6d022bfd39e14ebb610b165e1'},
+        subjects=('api/main',), fixture='musl-patched-conf.c', checks=27),
 }
 
 
@@ -83,6 +90,10 @@ def passed(data: dict) -> bool:
             return False
         if key[-1] == 'probe' and row['run'].get('stdout') != f"checks={suite['checks']} failures=0\n":
             return False
+        if key[-1] == 'api/main' and (row.get('apiBuild', {}).get('exit') != 0 or
+                len(row.get('testObjects', {})) != 79 or
+                'unistd.o' not in row.get('testObjects', {})):
+            return False
     return seen == expected and data.get('inputsUnchanged') is True
 
 
@@ -99,6 +110,8 @@ def inside(output: Path) -> int:
     rows = []
     sources = output / 'source'
     includes = ['-I/work/musl/' + p for p in PRIVATE]
+    if suite.get('headers'):
+        includes.insert(0, '-I' + str(sources / 'include'))
     libraries = {'reference': Path('/work/reference/libc-reference.a'),
                  'mixed': Path('/work/musl/lib/libc.a')}
     identities = {str(p): digest(p) for p in libraries.values()}
@@ -124,6 +137,21 @@ def inside(output: Path) -> int:
                 (output / 'executions.json').write_text(json.dumps(data, indent=2) + '\n')
                 return 1
             replacements = {p.stem: digest(p) for p in objects[:-1]}
+            api_objects, api_build = [], None
+            if 'api/main' in suite['subjects']:
+                original = Path('/work/tests/src/api/unistd.c')
+                api_obj = directory / 'unistd.o'
+                argv = (['gcc-14', '-c', str(output / f'unistd-{opt}.s'), '-o', str(api_obj)]
+                        if cc == 'evocc' else [cc, *FLAGS, '-O' + opt, *includes,
+                        '-I/work/tests/src/common', '-pedantic-errors', '-Werror', '-Wno-unused',
+                        # The original GCC API gate accepts C99 f(). Clang's
+                        # extra deprecation warning is not part of that gate;
+                        # -pedantic-errors overrides -Wno-error for this warning.
+                        *(['-Wno-strict-prototypes'] if cc == 'clang-19' else []),
+                        '-c', str(original), '-o', str(api_obj)])
+                api_build = execute(argv)
+                api_objects = [p.with_suffix('.o') for p in
+                    sorted(original.parent.glob('*.c')) if p.name != 'unistd.c'] + [api_obj]
             for library, archive in libraries.items():
                 for subject in ('probe', *suite['subjects']):
                     obj = (objects[-1] if subject == 'probe' else
@@ -131,7 +159,9 @@ def inside(output: Path) -> int:
                     exe = directory / (library + '-' + subject.replace('/', '-'))
                     argv = ['gcc-14', '-nostdlib', '-static', '/work/pristine/obj/crt/crt1.o',
                             '/work/musl/lib/crti.o', str(obj)]
-                    if subject != 'probe':
+                    if subject == 'api/main':
+                        argv[-1:] = [str(p) for p in api_objects]
+                    elif subject != 'probe':
                         argv.append('/work/tests/src/common/libtest.a')
                     if plan['patched']:
                         argv.extend(str(p) for p in objects[:-1])
@@ -140,6 +170,9 @@ def inside(output: Path) -> int:
                              '-Wl,-Map=' + str(exe) + '.map']
                     row = dict(compiler=cc, opt=opt, library=library, subject=subject,
                                objectSha256=digest(obj), build={'exit': 0}, link=execute(argv))
+                    if subject == 'api/main':
+                        row['apiBuild'] = api_build
+                        row['testObjects'] = {p.name: digest(p) for p in api_objects if p.is_file()}
                     if row['link']['exit'] == 0:
                         row['replacementObjects'] = replacements if plan['patched'] else {}
                         row['linkMapVerified'] = audit_map(Path(str(exe) + '.map').read_text(), objects[:-1])
@@ -182,14 +215,18 @@ def main() -> int:
              tree / 'lib/libc.a', reference / 'libc-reference.a', tests / 'reference-runtest',
              tests / 'src/common/libtest.a', *(tree / name for name in suite['sources']),
              *(tests / 'src' / (name.removesuffix('-static') + '.o') for name in suite['subjects'])]
+    if 'api/main' in suite['subjects']:
+        paths += [tests / 'src/api/unistd.c', tests / 'src/common/options.h']
+        paths += list((tests / 'src/api').glob('*.o'))
+    paths += [tree / name for name in suite.get('headers', {})]
     identity = {str(p): digest(p) for p in paths}
-    for name, wanted in suite['sources'].items():
+    for name, wanted in (suite['sources'] | suite.get('headers', {})).items():
         if digest(tree / name) != wanted:
             raise ValueError('unexpected dependency source: ' + name)
         target = out / 'source' / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(tree / name, target)
-    # patch(1) operates only on the two copied files, not the installed tree.
+    # patch(1) operates only on copied sources/headers, not the installed tree.
     applied = execute(['patch', '--batch', '-p1', '-d', str(out / 'source'), '-i', str(patch)])
     (out / 'patch.json').write_text(json.dumps(applied, indent=2) + '\n')
     if applied['exit'] != 0:
@@ -197,16 +234,24 @@ def main() -> int:
     plan = dict(configuration='musl-1.2.6-' + args.suite + '-repair-supplement', suite=args.suite,
                 patched=not args.unpatched_control, image=mixed.IMAGE,
                 originalBenchmarkUnchanged=True, identity=identity,
-                patchedSources={name: digest(out / 'source' / name) for name in suite['sources']},
+                patchedSources={name: digest(out / 'source' / name)
+                    for name in suite['sources'] | suite.get('headers', {})},
                 scope=f"{len(suite['sources'])} replacement objects; {len(suite['subjects'])} original entries",
                 objectMode='explicit link inputs before original archive; no installed replacement')
     (out / 'plan.json').write_text(json.dumps(plan, indent=2) + '\n')
     emissions = []
     for opt in ('0', '2'):
-        for source in (*suite['sources'], suite['fixture']):
+        original_api = ('api/unistd.c',) if 'api/main' in suite['subjects'] else ()
+        for source in (*suite['sources'], suite['fixture'], *original_api):
             path = out / 'source' / source if source in suite['sources'] else ROOT / 'tests/fixtures' / source
+            includes = ['-I' + str(tree / p) for p in PRIVATE]
+            if suite.get('headers'):
+                includes.insert(0, '-I' + str(out / 'source/include'))
+            if source in original_api:
+                path = tests / 'src' / source
+                includes.append('-I' + str(tests / 'src/common'))
             argv = [str(compiler), '--target=aarch64-unknown-linux-gnu', '--emit=asm',
-                    *FLAGS, '-O' + opt, *['-I' + str(tree / p) for p in PRIVATE], str(path)]
+                    *FLAGS, '-O' + opt, *includes, str(path)]
             row = execute(argv)
             (out / (Path(source).stem + '-' + opt + '.s')).write_text(row.pop('stdout'))
             emissions.append(row)

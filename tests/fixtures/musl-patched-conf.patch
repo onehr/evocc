@@ -1,0 +1,76 @@
+diff --git a/include/unistd.h b/include/unistd.h
+--- a/include/unistd.h
++++ b/include/unistd.h
+@@ -288,6 +288,7 @@
+ #define _PC_ALLOC_SIZE_MIN	18
+ #define _PC_SYMLINK_MAX	19
+ #define _PC_2_SYMLINKS	20
++#define _PC_TIMESTAMP_RESOLUTION 21
+ 
+ #define _SC_ARG_MAX	0
+ #define _SC_CHILD_MAX	1
+@@ -432,6 +433,7 @@
+ #define _SC_THREAD_ROBUST_PRIO_PROTECT	248
+ #define _SC_MINSIGSTKSZ	249
+ #define _SC_SIGSTKSZ	250
++#define _SC_XOPEN_UUCP 251
+ 
+ #define _CS_PATH	0
+ #define _CS_POSIX_V6_WIDTH_RESTRICTED_ENVS	1
+diff --git a/src/conf/sysconf.c b/src/conf/sysconf.c
+--- a/src/conf/sysconf.c
++++ b/src/conf/sysconf.c
+@@ -159,6 +159,7 @@ long sysconf(int name)
+ 		[_SC_THREAD_ROBUST_PRIO_PROTECT] = -1,
+ 
+ 		[_SC_MINSIGSTKSZ] = JT_MINSIGSTKSZ,
+ 		[_SC_SIGSTKSZ] = JT_SIGSTKSZ,
++		[_SC_XOPEN_UUCP] = -1,
+ 	};
+ 
+diff --git a/src/conf/fpathconf.c b/src/conf/fpathconf.c
+--- a/src/conf/fpathconf.c
++++ b/src/conf/fpathconf.c
+@@ -1,9 +1,19 @@
+ #include <unistd.h>
+ #include <limits.h>
+ #include <errno.h>
++#include <sys/statfs.h>
+ 
+ long fpathconf(int fd, int name)
+ {
++	if (name == _PC_TIMESTAMP_RESOLUTION) {
++		struct statfs fs;
++		if (fstatfs(fd, &fs)) return -1;
++		/* Linux shmem sets s_time_gran=1. Do not invent a resolution
++		   for other filesystems: Linux statfs does not expose it. */
++		if ((unsigned long)fs.f_type == 0x01021994) return 1;
++		errno = EINVAL;
++		return -1;
++	}
+ 	static const short values[] = {
+ 		[_PC_LINK_MAX] = _POSIX_LINK_MAX,
+ 		[_PC_MAX_CANON] = _POSIX_MAX_CANON,
+diff --git a/src/conf/pathconf.c b/src/conf/pathconf.c
+--- a/src/conf/pathconf.c
++++ b/src/conf/pathconf.c
+@@ -1,6 +1,19 @@
+ #include <unistd.h>
++#include <fcntl.h>
++#include <errno.h>
+ 
+ long pathconf(const char *path, int name)
+ {
++	if (name == _PC_TIMESTAMP_RESOLUTION) {
++		/* O_PATH neither reads data nor blocks on FIFOs. Follow symlinks,
++		   then query the same object through its stable descriptor. */
++		int fd = open(path, O_PATH|O_CLOEXEC);
++		if (fd < 0) return -1;
++		long result = fpathconf(fd, name);
++		int saved = errno;
++		close(fd);
++		errno = saved;
++		return result;
++	}
+ 	return fpathconf(-1, name);
+ }

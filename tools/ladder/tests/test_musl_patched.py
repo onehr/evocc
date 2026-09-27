@@ -77,6 +77,30 @@ class SupplementVerdict(unittest.TestCase):
             with self.subTest(change=change):
                 self.assertFalse(module.passed(data))
 
+    def test_conf_requires_original_api_compile_and_full_object_population(self):
+        suite = module.SUITES['conf']
+        data = {'inputsUnchanged': True, 'patched': True, 'suite': 'conf', 'rows': [
+            dict(compiler=cc, opt=opt, library=lib, subject=name,
+                build={'exit': 0}, link={'exit': 0}, run={'exit': 0,
+                    'stdout': 'checks=27 failures=0\n' if name == 'probe' else ''},
+                binarySha256='binary', objectSha256='object', linkMapVerified=True,
+                replacementObjects={Path(p).stem: 'object' for p in suite['sources']},
+                apiBuild={'exit': 0}, testObjects={**{f'{i}.o': 'hash' for i in range(78)},
+                    'unistd.o': 'hash'})
+            for cc in ('gcc-14', 'clang-19', 'evocc') for opt in ('0', '2')
+            for lib in ('reference', 'mixed') for name in ('probe', 'api/main')]}
+        self.assertTrue(module.passed(data))
+        original = copy.deepcopy(data)
+        data['rows'][1]['apiBuild']['exit'] = 1
+        self.assertFalse(module.passed(data))
+        data = copy.deepcopy(original)
+        del data['rows'][1]['testObjects']['0.o']
+        self.assertFalse(module.passed(data))
+        data = copy.deepcopy(original)
+        del data['rows'][1]['testObjects']['unistd.o']
+        data['rows'][1]['testObjects']['unexpected.o'] = 'hash'
+        self.assertFalse(module.passed(data))
+
     def test_link_maps_must_name_both_replacements_without_archive_fallback(self):
         objects = [Path('/work/out/floatscan.o'), Path('/work/out/powf.o')]
         text = ''.join(f'LOAD {p}\n' for p in objects)

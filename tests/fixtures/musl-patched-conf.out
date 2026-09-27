@@ -1,0 +1,73 @@
+B08d11 — isolated configuration API supplement, 2026-09-28
+=========================================================
+
+The original API build fails because unistd.h lacks _SC_XOPEN_UUCP and
+_PC_TIMESTAMP_RESOLUTION. This separately approved dependency configuration
+adds unused names 251 and 21 in the pinned musl namespace and implements their
+runtime dispatch; it does not edit the original headers, archives or receipt.
+These numeric values are not promised to match another libc's private ABI.
+
+_SC_XOPEN_UUCP returns -1 without changing errno: the configuration does not
+provide UUCP. _PC_TIMESTAMP_RESOLUTION supports Linux tmpfs (1 ns), follows
+path symlinks via O_PATH, checks real descriptors, and preserves success errno.
+Other filesystem associations return -1/EINVAL, never a guessed 1 ns/1 s or an
+incorrect "unlimited" result. There is no claim of all-filesystem support.
+Linux statfs does not expose s_time_gran. The frozen Linux source establishes
+shmem's value explicitly at mm/shmem.c:5123 (s_time_gran=1), hash below.
+
+The POSIX interface requires both names. Its timestamp query is not a generic
+indefinite maximum/minimum: returning -1 unchanged-errno merely to make a new
+header compile would misstate this contract. The bounded association refusal
+uses the documented EINVAL boundary. Sources:
+  https://man7.org/linux/man-pages/man3/fpathconf.3p.html
+    Authorized reproduction of IEEE/The Open Group POSIX.1-2017 text.
+  https://pubs.opengroup.org/onlinepubs/9699919799/functions/sysconf.html
+  https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html
+No POSIX.1-2024 feature level is advertised by this patch.
+
+RED runtime control uses the new names with the untouched original archives:
+13/27 focused assertions fail in each of 12 executions. Existing original
+unistd.o.err separately records both missing-name compiler errors. The initial
+red directory also retains a malformed patch-file rejection; that is not a
+runtime/compiler RED. The subsequent -red-...b directory is the runtime RED.
+
+GREEN: GCC14/Clang19/EvoCC, O0/O2, reference/mixed archive bases:
+  324/324 focused checks PASS (12 executions, 27 checks each).
+  12/12 original api/main linked executions PASS.
+  All 79 original API translation-unit objects participate: 78 unchanged
+  reference objects plus the recompiled, unchanged api/unistd.c. This is NOT
+  a claim that EvoCC compiled all 79 API objects. Its unistd.c is typechecked
+  with EvoCC's existing C99 driver contract, not GCC diagnostic emulation.
+  The probe checks errno, nanosecond timestamps, symlink following, unlinked
+  open files, closed FDs, missing/empty paths, unknown names, unsupported
+  procfs associations and old-name regression controls.
+
+GCC retains the original -pedantic-errors/-Werror/-Wno-unused API check.
+Clang19 additionally diagnoses the legal C99 static void f() test wrapper;
+the secondary Clang source-compatibility control explicitly adds
+-Wno-strict-prototypes. Its initial rejection is retained in -green-... and
+the flag is recorded in every final Clang argv; it is not silently called
+identical diagnostic policy. No test source/assertion changed.
+
+The common supplement verdict also requires each original API compilation,
+the 79-object population and hashes, replacement-object link maps, all paired
+executions and unchanged original inputs. Negative tests remove an object,
+replace unistd.o, or fail compilation; none can PASS. All 303 ladder tests,
+Ruff and git diff --check pass. No compiler source/spec was changed.
+
+Recipe:
+  python3 tools/ladder/musl_patched.py --suite conf \
+    --evocc target/frontend/debug/evocc --output .build/floating-targeted/CONF-NEW
+Use --unpatched-control for the old-library runtime control.
+Raw final: .build/floating-targeted/musl-patched-conf-final-20260928/
+Compiler/image identities are those in musl-patched-numerics.out.
+SHA256:
+  fixture 0caf5b9e77cd8b2be7a8724dc05d66a33679e2036669b79d1ec79f9ad2ea6ecc
+  patch e9fd9612b6ee4e0e1c4402c28eedc6071eebed013b5c08a602ceeeddc7ffdd1c
+  plan.json 401adda32d665f6712c4a216a58dc3188bc4e2dde345f23866c0d4570aa5e2f0
+  executions.json 4e47e2dd89c960474d15068d32094ad680a8022902af27ebcdada05de99ff332
+  frozen mm/shmem.c 9370327c3faec0c6235de01f1912905c64b3bceb73870e5c3959e67ac2bcf02a
+
+This closes the missing-header-name defect in the bounded patched configuration.
+Original musl acceptance, wordexp, unrestricted filesystem timestamp queries
+and a fresh full combined campaign are not inferred from this supplement.

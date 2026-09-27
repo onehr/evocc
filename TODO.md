@@ -936,6 +936,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       supplement deliberately reports FAIL. No parser safety is inferred from
       transport tests. [Patch and exact remaining boundary](tests/fixtures/musl-patched-wordexp.out).
 
+    - [x] **B08d11 — Repair the missing API names in the patched dependency lane**, 2026-09-28.
+      Added real UUCP-unavailable and bounded tmpfs timestamp-resolution
+      dispatch, not header-only constants or guessed filesystem values.
+      **324/324** focused checks and **12/12** original API-program links/runs
+      pass across the paired matrix; all 79 API objects are accounted for
+      (78 retained reference objects plus recompiled unistd.c). Other filesystem
+      associations explicitly return EINVAL. Clang's separate C99-wrapper
+      diagnostic adjustment and its original failure remain recorded. The
+      original headers/archives/receipts are untouched; 303 ladder tests pass.
+      [Exact scope, patch and evidence](tests/fixtures/musl-patched-conf.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private
