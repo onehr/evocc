@@ -6,6 +6,30 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Selected original pair completes; final config reference starts — 2026-09-28
+
+The [39-program paired replay](../../tests/fixtures/kernel-uniform-selected-runtime.out)
+finishes INCOMPLETE, exit 1: GCC **28 PASS / 2 FAIL / 9 TIMEOUT**, EvoCC
+**29 PASS / 1 FAIL / 9 TIMEOUT**. All selected programs start; 931/970 remain
+NOT_RUN on each Image. pidfd is 7 PASS / 1 SKIP on both; sched_ext is 23/23
+on GCC but times out in init_enable_count after eight completed subject cases.
+BPF and seven OVPN scripts time out on both. The frozen OVPN key-prefix error
+is still present. GCC ublk stress_04 again reaches the 45-second limit and
+stalls during shutdown; 77/78 boot/shutdown predicates pass. These are retained
+failures, not a full acceptance result or evidence of a compiler repair.
+
+The new ublk generic_01/02 completion-order failures have their own K04b.
+The [small batched AIO control](../../tests/fixtures/ublk-aio-completion-order.out)
+passes on both kernels without reproducing reordering; it does not close K04b.
+
+After owner/worker 7006/7011 exit, reference build PID **87432** starts under
+the common bench lock, four jobs, existing bpf-config output. Log:
+`.build/floating-targeted/module-uniform-20260928/final-build/reference.log`.
+Candidate config `95853321…` adds only connector/process events and FPU test;
+frozen pinned compiler is `ab2eeb7b…`. Old Images/configs/maps are retained by
+copy-on-write. No new source/workspace clone. This checkpoint is a GCC reference
+build, **not** final EvoCC composition, new module execution or K13/K14 PASS.
+
 ### Connector/FPU preflight and bounded cache retirement — 2026-09-28
 
 The [small configuration/original-unit preflight](../../tests/fixtures/kernel-connector-fpu-preflight.out)
@@ -16,11 +40,11 @@ uses its original floating-point command; the glue retains general-register-only
 The source-pinned audit remains valid. No objects are installed and runtime is
 NOT_RUN for this candidate; K12e/K12f require the next uniform composition.
 
-Active selected pair `20260927T223104Z` is bound to the previous `f2a06079…`
-configuration and `65035621…` compiler. At this checkpoint its owner/worker
-7006/7011 still execute, with log
+Selected pair `20260927T223104Z` is bound to the previous `f2a06079…`
+configuration and `65035621…` compiler. The earlier running checkpoint's
+owner/worker 7006/7011 have now exited; its retained log is
 `.build/floating-targeted/module-uniform-20260928/affected-originals.log`.
-Do not mutate its Images/modules/config or promote the preflight to its results.
+Do not promote the preflight or later compiler to those completed results.
 
 Only the unused exact `target/frontend/debug/incremental` cache was deleted
 after process/open-handle checks (approximately 5.2 GiB by du). It is recoverable

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T220816Z",
+  "run": "20260927T223104Z",
   "status": "INCOMPLETE",
   "scope": "Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; expanded audited arm64 configuration",
-  "evidence": ".evidence/kselftest-full/20260927T220816Z",
+  "evidence": ".evidence/kselftest-full/20260927T223104Z",
   "kernelImageSha256": "62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c",
   "kernelReceiptSha256": "608176c01e8fe95bbd668e5f9df23705f9bd86f5e824c346af7d54daca215890",
   "kernelReceiptPath": "tests/contracts/kernel-bpf-full-receipt.json",
@@ -19956,7 +19956,7 @@
           "id": "bpf",
           "cases": [
             {
-              "id": "bpf:test_kmod.sh",
+              "id": "bpf:test_progs",
               "outcome": "TIMEOUT",
               "bootVerdict": "PASS",
               "started": true,
@@ -19966,9 +19966,9 @@
               "nestedSkipSummaries": [],
               "nestedSummaryErrors": [],
               "bpfSummaries": [],
-              "number": 10,
-              "name": "bpf:test_kmod.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/bpf/test_kmod.sh"
+              "number": 5,
+              "name": "bpf:test_progs",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/bpf/test_progs"
             }
           ],
           "valid": false
@@ -20145,23 +20145,7 @@
         },
         {
           "id": "fpu",
-          "cases": [
-            {
-              "id": "fpu:run_test_fpu.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 2,
-              "name": "fpu:run_test_fpu.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/fpu/run_test_fpu.sh"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -20191,29 +20175,7 @@
         },
         {
           "id": "iommu",
-          "cases": [
-            {
-              "id": "iommu:iommufd",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [
-                {
-                  "line": "# # Totals: pass:224 fail:0 xfail:0 xpass:0 skip:5 error:0",
-                  "passed": 224,
-                  "skipped": 5
-                }
-              ],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "iommu:iommufd",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/iommu/iommufd"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -20308,24 +20270,8 @@
         },
         {
           "id": "nci",
-          "cases": [
-            {
-              "id": "nci:nci_dev",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "nci:nci_dev",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/nci/nci_dev"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "net",
@@ -20369,7 +20315,113 @@
         },
         {
           "id": "net/ovpn",
-          "cases": [],
+          "cases": [
+            {
+              "id": "net/ovpn:test-chachapoly.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "net/ovpn:test-chachapoly.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-chachapoly.sh"
+            },
+            {
+              "id": "net/ovpn:test-close-socket-tcp.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 2,
+              "name": "net/ovpn:test-close-socket-tcp.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-close-socket-tcp.sh"
+            },
+            {
+              "id": "net/ovpn:test-close-socket.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 3,
+              "name": "net/ovpn:test-close-socket.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-close-socket.sh"
+            },
+            {
+              "id": "net/ovpn:test-float.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 4,
+              "name": "net/ovpn:test-float.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-float.sh"
+            },
+            {
+              "id": "net/ovpn:test-large-mtu.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 5,
+              "name": "net/ovpn:test-large-mtu.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-large-mtu.sh"
+            },
+            {
+              "id": "net/ovpn:test-tcp.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 6,
+              "name": "net/ovpn:test-tcp.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test-tcp.sh"
+            },
+            {
+              "id": "net/ovpn:test.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 7,
+              "name": "net/ovpn:test.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/net/ovpn/test.sh"
+            }
+          ],
           "valid": false
         },
         {
@@ -20409,7 +20461,29 @@
         },
         {
           "id": "pidfd",
-          "cases": [],
+          "cases": [
+            {
+              "id": "pidfd:pidfd_test",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [
+                {
+                  "line": "# # Totals: pass:7 fail:0 xfail:0 xpass:0 skip:1 error:0",
+                  "passed": 7,
+                  "skipped": 1
+                }
+              ],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "pidfd:pidfd_test",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/pidfd/pidfd_test"
+            }
+          ],
           "valid": false
         },
         {
@@ -20469,8 +20543,24 @@
         },
         {
           "id": "sched_ext",
-          "cases": [],
-          "valid": false
+          "cases": [
+            {
+              "id": "sched_ext:runner",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "sched_ext:runner",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/sched_ext/runner"
+            }
+          ],
+          "valid": true
         },
         {
           "id": "seccomp",
@@ -20489,39 +20579,8 @@
         },
         {
           "id": "splice",
-          "cases": [
-            {
-              "id": "splice:default_file_splice_read.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "splice:default_file_splice_read.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/splice/default_file_splice_read.sh"
-            },
-            {
-              "id": "splice:short_splice_read.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 2,
-              "name": "splice:short_splice_read.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/reference/splice/short_splice_read.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "static_keys",
@@ -20580,7 +20639,455 @@
         },
         {
           "id": "ublk",
-          "cases": [],
+          "cases": [
+            {
+              "id": "ublk:test_generic_01.sh",
+              "outcome": "FAIL",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [
+                {
+                  "line": "# generic_01 : [FAIL]",
+                  "failed": 1,
+                  "errors": 0
+                }
+              ],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "ublk:test_generic_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_01.sh"
+            },
+            {
+              "id": "ublk:test_generic_02.sh",
+              "outcome": "FAIL",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [
+                {
+                  "line": "# generic_02 : [FAIL]",
+                  "failed": 1,
+                  "errors": 0
+                }
+              ],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 2,
+              "name": "ublk:test_generic_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_02.sh"
+            },
+            {
+              "id": "ublk:test_generic_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 3,
+              "name": "ublk:test_generic_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_03.sh"
+            },
+            {
+              "id": "ublk:test_generic_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 4,
+              "name": "ublk:test_generic_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_04.sh"
+            },
+            {
+              "id": "ublk:test_generic_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 5,
+              "name": "ublk:test_generic_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_05.sh"
+            },
+            {
+              "id": "ublk:test_generic_06.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 6,
+              "name": "ublk:test_generic_06.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_06.sh"
+            },
+            {
+              "id": "ublk:test_generic_07.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 7,
+              "name": "ublk:test_generic_07.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_07.sh"
+            },
+            {
+              "id": "ublk:test_generic_08.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 8,
+              "name": "ublk:test_generic_08.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_08.sh"
+            },
+            {
+              "id": "ublk:test_generic_09.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 9,
+              "name": "ublk:test_generic_09.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_09.sh"
+            },
+            {
+              "id": "ublk:test_generic_10.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 10,
+              "name": "ublk:test_generic_10.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_10.sh"
+            },
+            {
+              "id": "ublk:test_generic_11.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 11,
+              "name": "ublk:test_generic_11.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_11.sh"
+            },
+            {
+              "id": "ublk:test_generic_12.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 12,
+              "name": "ublk:test_generic_12.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_12.sh"
+            },
+            {
+              "id": "ublk:test_generic_13.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 13,
+              "name": "ublk:test_generic_13.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_generic_13.sh"
+            },
+            {
+              "id": "ublk:test_null_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 14,
+              "name": "ublk:test_null_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_null_01.sh"
+            },
+            {
+              "id": "ublk:test_null_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 15,
+              "name": "ublk:test_null_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_null_02.sh"
+            },
+            {
+              "id": "ublk:test_loop_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 16,
+              "name": "ublk:test_loop_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_loop_01.sh"
+            },
+            {
+              "id": "ublk:test_loop_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 17,
+              "name": "ublk:test_loop_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_loop_02.sh"
+            },
+            {
+              "id": "ublk:test_loop_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 18,
+              "name": "ublk:test_loop_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_loop_03.sh"
+            },
+            {
+              "id": "ublk:test_loop_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 19,
+              "name": "ublk:test_loop_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_loop_04.sh"
+            },
+            {
+              "id": "ublk:test_loop_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 20,
+              "name": "ublk:test_loop_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_loop_05.sh"
+            },
+            {
+              "id": "ublk:test_stripe_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 21,
+              "name": "ublk:test_stripe_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stripe_01.sh"
+            },
+            {
+              "id": "ublk:test_stripe_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 22,
+              "name": "ublk:test_stripe_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stripe_02.sh"
+            },
+            {
+              "id": "ublk:test_stripe_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 23,
+              "name": "ublk:test_stripe_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stripe_03.sh"
+            },
+            {
+              "id": "ublk:test_stripe_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 24,
+              "name": "ublk:test_stripe_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stripe_04.sh"
+            },
+            {
+              "id": "ublk:test_stress_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 25,
+              "name": "ublk:test_stress_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stress_01.sh"
+            },
+            {
+              "id": "ublk:test_stress_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 26,
+              "name": "ublk:test_stress_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stress_02.sh"
+            },
+            {
+              "id": "ublk:test_stress_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 27,
+              "name": "ublk:test_stress_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stress_03.sh"
+            },
+            {
+              "id": "ublk:test_stress_04.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "TIMEOUT",
+              "started": true,
+              "valid": false,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 28,
+              "name": "ublk:test_stress_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stress_04.sh"
+            },
+            {
+              "id": "ublk:test_stress_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 29,
+              "name": "ublk:test_stress_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/reference/ublk/test_stress_05.sh"
+            }
+          ],
           "valid": false
         },
         {
@@ -20622,12 +21129,12 @@
       "summary": {
         "collections": 128,
         "programs": 970,
-        "completedCollections": 2,
+        "completedCollections": 3,
         "outcomes": {
-          "NOT_RUN": 964,
-          "TIMEOUT": 1,
-          "SKIP": 1,
-          "PASS": 4
+          "NOT_RUN": 931,
+          "TIMEOUT": 9,
+          "PASS": 28,
+          "FAIL": 2
         },
         "buildFailures": [
           "kexec",
@@ -20649,9 +21156,12 @@
           "x86"
         ],
         "dependencyBuildFailures": [],
-        "nestedFailureReview": [],
+        "nestedFailureReview": [
+          "ublk:test_generic_01.sh",
+          "ublk:test_generic_02.sh"
+        ],
         "nestedSkipReview": [
-          "iommu:iommufd"
+          "pidfd:pidfd_test"
         ],
         "incompleteCollections": [
           "acct",
@@ -20718,6 +21228,7 @@
           "mount_setattr",
           "mqueue",
           "mseal_system_mappings",
+          "nci",
           "net",
           "net/af_unix",
           "net/can",
@@ -20746,10 +21257,10 @@
           "rseq",
           "rtc",
           "rust",
-          "sched_ext",
           "seccomp",
           "signal",
           "size",
+          "splice",
           "static_keys",
           "sync",
           "syscall_user_dispatch",
@@ -20800,7 +21311,7 @@
           "id": "bpf",
           "cases": [
             {
-              "id": "bpf:test_kmod.sh",
+              "id": "bpf:test_progs",
               "outcome": "TIMEOUT",
               "bootVerdict": "PASS",
               "started": true,
@@ -20810,9 +21321,9 @@
               "nestedSkipSummaries": [],
               "nestedSummaryErrors": [],
               "bpfSummaries": [],
-              "number": 10,
-              "name": "bpf:test_kmod.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/bpf/test_kmod.sh"
+              "number": 5,
+              "name": "bpf:test_progs",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/bpf/test_progs"
             }
           ],
           "valid": false
@@ -20989,23 +21500,7 @@
         },
         {
           "id": "fpu",
-          "cases": [
-            {
-              "id": "fpu:run_test_fpu.sh",
-              "outcome": "SKIP",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 2,
-              "name": "fpu:run_test_fpu.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/fpu/run_test_fpu.sh"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -21035,29 +21530,7 @@
         },
         {
           "id": "iommu",
-          "cases": [
-            {
-              "id": "iommu:iommufd",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [
-                {
-                  "line": "# # Totals: pass:224 fail:0 xfail:0 xpass:0 skip:5 error:0",
-                  "passed": 224,
-                  "skipped": 5
-                }
-              ],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "iommu:iommufd",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/iommu/iommufd"
-            }
-          ],
+          "cases": [],
           "valid": false
         },
         {
@@ -21152,24 +21625,8 @@
         },
         {
           "id": "nci",
-          "cases": [
-            {
-              "id": "nci:nci_dev",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "nci:nci_dev",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/nci/nci_dev"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "net",
@@ -21213,7 +21670,113 @@
         },
         {
           "id": "net/ovpn",
-          "cases": [],
+          "cases": [
+            {
+              "id": "net/ovpn:test-chachapoly.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "net/ovpn:test-chachapoly.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-chachapoly.sh"
+            },
+            {
+              "id": "net/ovpn:test-close-socket-tcp.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 2,
+              "name": "net/ovpn:test-close-socket-tcp.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-close-socket-tcp.sh"
+            },
+            {
+              "id": "net/ovpn:test-close-socket.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 3,
+              "name": "net/ovpn:test-close-socket.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-close-socket.sh"
+            },
+            {
+              "id": "net/ovpn:test-float.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 4,
+              "name": "net/ovpn:test-float.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-float.sh"
+            },
+            {
+              "id": "net/ovpn:test-large-mtu.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 5,
+              "name": "net/ovpn:test-large-mtu.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-large-mtu.sh"
+            },
+            {
+              "id": "net/ovpn:test-tcp.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 6,
+              "name": "net/ovpn:test-tcp.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test-tcp.sh"
+            },
+            {
+              "id": "net/ovpn:test.sh",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 7,
+              "name": "net/ovpn:test.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/net/ovpn/test.sh"
+            }
+          ],
           "valid": false
         },
         {
@@ -21253,7 +21816,29 @@
         },
         {
           "id": "pidfd",
-          "cases": [],
+          "cases": [
+            {
+              "id": "pidfd:pidfd_test",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [
+                {
+                  "line": "# # Totals: pass:7 fail:0 xfail:0 xpass:0 skip:1 error:0",
+                  "passed": 7,
+                  "skipped": 1
+                }
+              ],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "pidfd:pidfd_test",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/pidfd/pidfd_test"
+            }
+          ],
           "valid": false
         },
         {
@@ -21313,7 +21898,23 @@
         },
         {
           "id": "sched_ext",
-          "cases": [],
+          "cases": [
+            {
+              "id": "sched_ext:runner",
+              "outcome": "TIMEOUT",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": false,
+              "exitCode": 124,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "sched_ext:runner",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/sched_ext/runner"
+            }
+          ],
           "valid": false
         },
         {
@@ -21333,39 +21934,8 @@
         },
         {
           "id": "splice",
-          "cases": [
-            {
-              "id": "splice:default_file_splice_read.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 1,
-              "name": "splice:default_file_splice_read.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/splice/default_file_splice_read.sh"
-            },
-            {
-              "id": "splice:short_splice_read.sh",
-              "outcome": "PASS",
-              "bootVerdict": "PASS",
-              "started": true,
-              "valid": true,
-              "exitCode": 0,
-              "nestedFailureSummaries": [],
-              "nestedSkipSummaries": [],
-              "nestedSummaryErrors": [],
-              "bpfSummaries": [],
-              "number": 2,
-              "name": "splice:short_splice_read.sh",
-              "capture": ".evidence/kselftest-full/20260927T220816Z/subject/splice/short_splice_read.sh"
-            }
-          ],
-          "valid": true
+          "cases": [],
+          "valid": false
         },
         {
           "id": "static_keys",
@@ -21424,8 +21994,450 @@
         },
         {
           "id": "ublk",
-          "cases": [],
-          "valid": false
+          "cases": [
+            {
+              "id": "ublk:test_generic_01.sh",
+              "outcome": "FAIL",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [
+                {
+                  "line": "# generic_01 : [FAIL]",
+                  "failed": 1,
+                  "errors": 0
+                }
+              ],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 1,
+              "name": "ublk:test_generic_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_01.sh"
+            },
+            {
+              "id": "ublk:test_generic_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 2,
+              "name": "ublk:test_generic_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_02.sh"
+            },
+            {
+              "id": "ublk:test_generic_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 3,
+              "name": "ublk:test_generic_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_03.sh"
+            },
+            {
+              "id": "ublk:test_generic_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 4,
+              "name": "ublk:test_generic_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_04.sh"
+            },
+            {
+              "id": "ublk:test_generic_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 5,
+              "name": "ublk:test_generic_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_05.sh"
+            },
+            {
+              "id": "ublk:test_generic_06.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 6,
+              "name": "ublk:test_generic_06.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_06.sh"
+            },
+            {
+              "id": "ublk:test_generic_07.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 7,
+              "name": "ublk:test_generic_07.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_07.sh"
+            },
+            {
+              "id": "ublk:test_generic_08.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 8,
+              "name": "ublk:test_generic_08.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_08.sh"
+            },
+            {
+              "id": "ublk:test_generic_09.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 9,
+              "name": "ublk:test_generic_09.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_09.sh"
+            },
+            {
+              "id": "ublk:test_generic_10.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 10,
+              "name": "ublk:test_generic_10.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_10.sh"
+            },
+            {
+              "id": "ublk:test_generic_11.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 11,
+              "name": "ublk:test_generic_11.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_11.sh"
+            },
+            {
+              "id": "ublk:test_generic_12.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 12,
+              "name": "ublk:test_generic_12.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_12.sh"
+            },
+            {
+              "id": "ublk:test_generic_13.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 13,
+              "name": "ublk:test_generic_13.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_generic_13.sh"
+            },
+            {
+              "id": "ublk:test_null_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 14,
+              "name": "ublk:test_null_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_null_01.sh"
+            },
+            {
+              "id": "ublk:test_null_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 15,
+              "name": "ublk:test_null_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_null_02.sh"
+            },
+            {
+              "id": "ublk:test_loop_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 16,
+              "name": "ublk:test_loop_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_loop_01.sh"
+            },
+            {
+              "id": "ublk:test_loop_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 17,
+              "name": "ublk:test_loop_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_loop_02.sh"
+            },
+            {
+              "id": "ublk:test_loop_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 18,
+              "name": "ublk:test_loop_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_loop_03.sh"
+            },
+            {
+              "id": "ublk:test_loop_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 19,
+              "name": "ublk:test_loop_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_loop_04.sh"
+            },
+            {
+              "id": "ublk:test_loop_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 20,
+              "name": "ublk:test_loop_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_loop_05.sh"
+            },
+            {
+              "id": "ublk:test_stripe_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 21,
+              "name": "ublk:test_stripe_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stripe_01.sh"
+            },
+            {
+              "id": "ublk:test_stripe_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 22,
+              "name": "ublk:test_stripe_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stripe_02.sh"
+            },
+            {
+              "id": "ublk:test_stripe_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 23,
+              "name": "ublk:test_stripe_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stripe_03.sh"
+            },
+            {
+              "id": "ublk:test_stripe_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 24,
+              "name": "ublk:test_stripe_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stripe_04.sh"
+            },
+            {
+              "id": "ublk:test_stress_01.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 25,
+              "name": "ublk:test_stress_01.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stress_01.sh"
+            },
+            {
+              "id": "ublk:test_stress_02.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 26,
+              "name": "ublk:test_stress_02.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stress_02.sh"
+            },
+            {
+              "id": "ublk:test_stress_03.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 27,
+              "name": "ublk:test_stress_03.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stress_03.sh"
+            },
+            {
+              "id": "ublk:test_stress_04.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 28,
+              "name": "ublk:test_stress_04.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stress_04.sh"
+            },
+            {
+              "id": "ublk:test_stress_05.sh",
+              "outcome": "PASS",
+              "bootVerdict": "PASS",
+              "started": true,
+              "valid": true,
+              "exitCode": 0,
+              "nestedFailureSummaries": [],
+              "nestedSkipSummaries": [],
+              "nestedSummaryErrors": [],
+              "bpfSummaries": [],
+              "number": 29,
+              "name": "ublk:test_stress_05.sh",
+              "capture": ".evidence/kselftest-full/20260927T223104Z/subject/ublk/test_stress_05.sh"
+            }
+          ],
+          "valid": true
         },
         {
           "id": "uevent",
@@ -21466,12 +22478,12 @@
       "summary": {
         "collections": 128,
         "programs": 970,
-        "completedCollections": 2,
+        "completedCollections": 3,
         "outcomes": {
-          "NOT_RUN": 964,
-          "TIMEOUT": 1,
-          "SKIP": 1,
-          "PASS": 4
+          "NOT_RUN": 931,
+          "TIMEOUT": 9,
+          "PASS": 29,
+          "FAIL": 1
         },
         "buildFailures": [
           "kexec",
@@ -21493,9 +22505,11 @@
           "x86"
         ],
         "dependencyBuildFailures": [],
-        "nestedFailureReview": [],
+        "nestedFailureReview": [
+          "ublk:test_generic_01.sh"
+        ],
         "nestedSkipReview": [
-          "iommu:iommufd"
+          "pidfd:pidfd_test"
         ],
         "incompleteCollections": [
           "acct",
@@ -21562,6 +22576,7 @@
           "mount_setattr",
           "mqueue",
           "mseal_system_mappings",
+          "nci",
           "net",
           "net/af_unix",
           "net/can",
@@ -21594,6 +22609,7 @@
           "seccomp",
           "signal",
           "size",
+          "splice",
           "static_keys",
           "sync",
           "syscall_user_dispatch",
@@ -21605,7 +22621,6 @@
           "tmpfs",
           "tpm2",
           "tty",
-          "ublk",
           "uevent",
           "user_events",
           "vDSO",
@@ -31643,6 +32658,27 @@
             "kind": "disabled"
           }
         ]
+      },
+      {
+        "id": "fpu",
+        "sourceSha256": {
+          "lib/Kconfig.debug": "701d92042f1b07ae78911459e003cbe720ac812d85f32ec87293d5a1d5756dc8",
+          "tools/testing/selftests/fpu/run_test_fpu.sh": "9f857cd00795182cd80c435f1d88f0d0c678b58a6f532705d3201c3681798d85"
+        },
+        "reviewedSourceSha256": {
+          "lib/Kconfig.debug": "701d92042f1b07ae78911459e003cbe720ac812d85f32ec87293d5a1d5756dc8",
+          "tools/testing/selftests/fpu/run_test_fpu.sh": "9f857cd00795182cd80c435f1d88f0d0c678b58a6f532705d3201c3681798d85"
+        },
+        "reason": "run_test_fpu.sh checks modinfo/modprobe test_fpu; TEST_FPU depends on ARCH_HAS_KERNEL_FPU_SUPPORT and !KCOV_INSTRUMENT_ALL. The frozen collection has no config fragment; a built-in alone does not satisfy this original module-loading script.",
+        "status": "VERIFIED_SOURCE",
+        "differences": [
+          {
+            "option": "CONFIG_TEST_FPU",
+            "requested": "m",
+            "actual": "n",
+            "kind": "disabled"
+          }
+        ]
       }
     ],
     "scope": "Literal per-collection config and arm64 config.aarch64 fragments, reported separately without hiding conflicting requests. Pinned source-reviewed prerequisites are recorded separately; changed sources invalidate that review. Kconfig solving and other prerequisites need review. Differences are evidence, not test outcomes or inapplicability decisions."
@@ -31749,23 +32785,58 @@
   },
   "selection": {
     "selectors": [
-      "nci",
-      "splice",
-      "iommu:iommufd",
-      "fpu:run_test_fpu.sh",
-      "bpf:test_kmod.sh"
+      "bpf:test_progs",
+      "sched_ext",
+      "ublk",
+      "net/ovpn",
+      "pidfd:pidfd_test"
     ],
     "programs": [
-      "bpf:test_kmod.sh",
-      "fpu:run_test_fpu.sh",
-      "iommu:iommufd",
-      "nci:nci_dev",
-      "splice:default_file_splice_read.sh",
-      "splice:short_splice_read.sh"
+      "bpf:test_progs",
+      "net/ovpn:test-chachapoly.sh",
+      "net/ovpn:test-close-socket-tcp.sh",
+      "net/ovpn:test-close-socket.sh",
+      "net/ovpn:test-float.sh",
+      "net/ovpn:test-large-mtu.sh",
+      "net/ovpn:test-tcp.sh",
+      "net/ovpn:test.sh",
+      "pidfd:pidfd_test",
+      "sched_ext:runner",
+      "ublk:test_generic_01.sh",
+      "ublk:test_generic_02.sh",
+      "ublk:test_generic_03.sh",
+      "ublk:test_generic_04.sh",
+      "ublk:test_generic_05.sh",
+      "ublk:test_generic_06.sh",
+      "ublk:test_generic_07.sh",
+      "ublk:test_generic_08.sh",
+      "ublk:test_generic_09.sh",
+      "ublk:test_generic_10.sh",
+      "ublk:test_generic_11.sh",
+      "ublk:test_generic_12.sh",
+      "ublk:test_generic_13.sh",
+      "ublk:test_null_01.sh",
+      "ublk:test_null_02.sh",
+      "ublk:test_loop_01.sh",
+      "ublk:test_loop_02.sh",
+      "ublk:test_loop_03.sh",
+      "ublk:test_loop_04.sh",
+      "ublk:test_loop_05.sh",
+      "ublk:test_stripe_01.sh",
+      "ublk:test_stripe_02.sh",
+      "ublk:test_stripe_03.sh",
+      "ublk:test_stripe_04.sh",
+      "ublk:test_stress_01.sh",
+      "ublk:test_stress_02.sh",
+      "ublk:test_stress_03.sh",
+      "ublk:test_stress_04.sh",
+      "ublk:test_stress_05.sh"
     ],
     "unselected": "NOT_RUN; original inventory retained"
   },
   "referenceImageSha256": "13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388",
   "referenceStatus": "INCOMPLETE",
-  "regressions": []
+  "regressions": [
+    "sched_ext:sched_ext:runner"
+  ]
 }

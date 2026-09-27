@@ -1,0 +1,42 @@
+2026-09-28: small completion-integrity control, NOT ordering-failure closure.
+
+ublk-aio-completion-order.c removes fio and bpftrace. On the unchanged null
+target, it sends ascending 4-KiB direct writes in bounded batches at depths
+1/16, with 1/2 hardware queues. Every returned AIO request identity, object
+pointer, result length and uniqueness is checked. Reordering is observed, not
+required to be absent except in the depth-one control. Null storage does not
+establish persistence or stored-data correctness.
+
+GCC-built diagnostic on GCC and EvoCC kernels: 4/4 checks per Image PASS,
+65,536 successful writes per Image, no missing/duplicate/short completions.
+All eight combinations observe zero displaced/backward completions. Therefore
+this small batched workload has NOT reproduced the original fio/trace failure;
+do not claim a kernel or compiler repair, or original generic_01/02 PASS.
+Next isolate continuously refilled submission and the trace observer itself.
+
+GCC14 and Clang19 -O2 -Wall -Wextra -Werror compilation passes in the sealed
+ARM64 image. Only the GCC diagnostic binary is executed; Clang object compilation
+is not a Clang runtime claim. The diagnostic init reuses selftest-init.c's
+root switch, nonce, timeout and shutdown, and invokes a preopened separate
+executable. It does not rewrite an upstream program or the snapshot backing.
+Both boot/shutdown predicates PASS; both 4/5-GiB backing hashes stay unchanged.
+The payload is under 2 MiB; there is no new runtime disk or workspace clone.
+
+Frozen Documentation/block/blk-mq.rst:124-126 states that block/device
+protocols do not guarantee completion order. That general boundary alone does
+not establish the exact cause of this null-target/selftest discrepancy.
+
+Inputs/build/replay: .build/floating-targeted/ublk-order-20260928/
+  build.py uses gcc-14 static probe + shared init and gen_init_cpio -t 0;
+  replay.py uses selftest.flight, hvf-host, KUnit autorun off, QEMU drift explicit.
+  build-initial.* preserves the wrapper's initial renamed-main return warning;
+  the wrapper now declares the existing nonreturning poweroff routine correctly.
+
+Source edf3bfe30e5389db97e511be512aa915c520578b05ccef3a5e82d2a4289fc9d9
+Init source 7931df784c1e3dde6d552e008e365a521d0453b7b9ad3164a6029aee343c450c
+Probe ebe8e842137912ee16d2875aafe29426a725398d677eb5dd55648a84551a200a
+Payload 64c9bb0c4fc705156ffacc2e692a2fba24d8e02ceee8c388c3e13478b3856274
+Result 109286a58d8e5fa235b150727b7121d343a7a57f18e09e457719398131b0376e
+Reference serial 87d12b9eef735196ba2311ede6cc9dc74fcc4689d035e22bdbca505e8566256b
+Subject serial 815dc5a56854d3a4bde58e612e3fdaee1218e9a1708d92bc31374bb06b16d4f9
+Image/runtime/compiler identities: kernel-uniform-selected-runtime.out.

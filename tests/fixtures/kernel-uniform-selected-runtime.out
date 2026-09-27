@@ -1,0 +1,47 @@
+2026-09-28: completed selected original-program pair, NOT full K13 acceptance.
+
+Common bench exits 1; the paired result is INCOMPLETE. All 39 selected programs
+start on each Image; the other 931/970 remain NOT_RUN. No program source,
+assertion, key, peer count or previously declared timeout is changed.
+
+                            GCC reference       EvoCC subject
+all 39 selected             28 P / 2 F / 9 T     29 P / 1 F / 9 T
+ublk (29 scripts)           26 P / 2 F / 1 T     28 P / 1 F
+pidfd_test                  PASS (7 P / 1 S)    PASS (7 P / 1 S)
+sched_ext:runner            PASS (23 / 23)      TIMEOUT (8 completed)
+bpf:test_progs              TIMEOUT (300 s)     TIMEOUT (300 s)
+net/ovpn (7 scripts)        7 TIMEOUT           7 TIMEOUT
+
+The subject scheduler reaches init_enable_count and times out at the existing
+120-second bound, without reproducing the earlier NULL fault. BPF reaches
+different groups before the same 300-second watchdog; there is no final summary.
+All OVPN scripts encounter the already reduced 256-byte key-prefix decoding
+failure before their 90-second wrapper deadlines. The small direct replays'
+earlier FAILs are distinct executions; do not rewrite these TIMEOUTs as FAIL/PASS.
+
+ublk generic_01 FAILs on both; generic_02 FAILs on GCC and PASSes on EvoCC.
+Their failing assertions report io_out_of_order in the frozen completion-trace
+script. This newly exposed ordering observation is separate from K04's stall.
+GCC stress_04 hits its unchanged 45-second upstream timeout, prints EVO_INIT_DONE,
+then fails the 120-second boot/shutdown watchdog. EvoCC stress_04 PASSes this time.
+All other 77/78 boot/shutdown predicates pass. A successful retry does not close
+the intermittent stall. Stress_05 uses the already recorded 600-second measured
+budget on both sides; it is not a new timeout adjustment in this run.
+
+Result .evidence/kselftest-full/20260927T223104Z/summary.json
+SHA256 cbd770601a6234bb9e749bc1a15029d40a153ec03efc54d27505cb0675711419
+Compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+Config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+Reference Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+Subject Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+Payload 0baa47ac152b8a9cecf3a8ac9702cc2244f77d465881f78b76d467378bb434db
+Reference disk 0d18b2afbb20c7a19f08c61c684580a191cd88854f12d7b47cb58132edaa196d
+Subject disk d8775e787acbd0d39b63bd69c6dcf491b4f17cd2b181131d4421dc643fbbeaee
+Actual QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Explicit QEMU drift; serial fresh VMs, existing matched signed-module runtimes.
+The selected receipt contains the per-program nonce, lane, serial hashes and
+budgets. The historical complete 970-program run is not replaced by this subset.
+
+After this owner/worker exit, a separate 4-job reference config build starts
+under the common bench lock. Its compiler candidate is frozen ab2eeb7b...;
+the current selected-runtime results cannot inherit that later compiler.

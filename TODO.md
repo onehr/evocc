@@ -330,6 +330,19 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   One initial reference capture is INVALID_OUTPUT from interleaved printk, not
   PASS. The 835 KiB initramfs adds no full disk. The old stall remains unexplained;
   retain K04 rather than attributing the successful retries to a compiler fix.
+  September 28's [39-program original pair](tests/fixtures/kernel-uniform-selected-runtime.out)
+  again reproduces GCC stress_04's 45-second timeout and blocked shutdown;
+  EvoCC passes that invocation. The cause and full K13 acceptance remain open.
+
+  - [ ] **K04b — Isolate ublk completion-order assertions** — `OPEN`, P1.
+    Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC
+    and passes on EvoCC. Both use the frozen fio/trace completion-order check.
+    The [small AIO control](tests/fixtures/ublk-aio-completion-order.c) passes
+    four checks and 65,536 exact completions per Image, but its bounded batches
+    do not reproduce reordering. Compare continuous submission and the trace
+    observer before attributing the failure; the general block-layer absence
+    of an ordering guarantee alone is not a diagnosis of this test.
+    [Results and limits](tests/fixtures/ublk-aio-completion-order.out).
 
   - [x] **K04a — Preserve ublk worker failures beneath a successful wrapper**, 2026-09-23.
     The [small shell reduction](tests/fixtures/ublk-background-exit.sh) and
@@ -556,7 +569,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     across GCC/Clang/EvoCC O0/O2 against the actual runtime library, including
     complete-input and aligned-prefix controls. This closes **source-bound
     classification**, not a helper patch or original PASS. All seven unchanged
-    reference originals remain FAIL; subject replay waits for T04.
+    reference direct originals remain FAIL. The later unchanged full-runner
+    [selected pair](tests/fixtures/kernel-uniform-selected-runtime.out) reaches
+    the same decoding error on both kernels and records seven TIMEOUTs per side;
+    neither outcome is rewritten or promoted to PASS.
     [Commands, hashes and exact boundary](tests/fixtures/ovpn-base64-prefix.out).
 
   - [x] **K11l — Attribute the shared BPF module hardening timeout**, 2026-09-28.
@@ -664,6 +680,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   and report all failures/skips separately. Close the execution task with fresh
   receipts; claim all-tests PASS only if the actual acceptance predicate holds.
   [Historical receipt][selftest-receipt].
+  The September 28 [selected replay](tests/fixtures/kernel-uniform-selected-runtime.out)
+  starts 39/39 on each Image: GCC 28 PASS / 2 FAIL / 9 TIMEOUT, EvoCC
+  29 PASS / 1 FAIL / 9 TIMEOUT. The other 931 remain NOT_RUN; this is not a
+  new complete campaign. The owner/worker has exited with INCOMPLETE.
 
 - [ ] **K14 — Fresh complete expanded built-in and module KUnit acceptance** — `OPEN`, P1.
   After K05/K07/K08 and final composition, rerun all 1,504 built-in cases and
