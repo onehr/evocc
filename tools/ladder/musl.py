@@ -84,21 +84,25 @@ echo musl-built
 export EVO_CMDLOG=/dev/null
 cd /work/{TEST_MOUNT}
 cp {CONTAINER_ROOT}/libc-test-config.mak config.mak
-make -j4 > build.log 2>&1 || true
+make -s debug > inventory.log
+make -j4 > build.log 2>&1
 cp src/common/runtest.exe reference-runtest
 echo reference-build-ok
 """
 
 RELINK_SCRIPT = f"""
+set -e
 cd {CONTAINER_ROOT}
 export EVO_CMDLOG=/dev/null
+rm -f lib/libc.a
 make -j4 > relink.log 2>&1
-if [ ! -f lib/libc.a ]; then echo relink-failed; tail -30 relink.log; exit 0; fi
+test -s lib/libc.a
 make install > install.log 2>&1
 cd /work/{TEST_MOUNT}
 test -x /work/{TEST_MOUNT}/reference-runtest || exit 2
 rm -f src/*/*.exe src/*/*.err src/*/*.ld.err src/REPORT src/*/REPORT
-make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w ''" > relink.log 2>&1 || true
+make -s debug > inventory.log
+make -j4 RUN_TEST="/work/{TEST_MOUNT}/reference-runtest -w ''" > relink.log 2>&1
 echo tests-done
 """
 
@@ -118,6 +122,31 @@ def report_failures(report: Path) -> set[str]:
     """
     # An empty report is a result; an absent report means there is no result.
     return set(FAILED_CASE.findall(report.read_text(errors="replace")))
+
+
+def completed_report(tree: Path, tests: Path) -> set[str]:
+    """The original make inventory, every runtime result and installed archive agree.
+
+    libc-test already records ordinary case/build failures inside its recipes
+    without failing make. A nonzero make exit is therefore infrastructure
+    failure, not an expected shared case failure to discard with `|| true`.
+    """
+    inventory = (tests / 'inventory.log').read_text().splitlines()
+    lists = [line.split()[1:] for line in inventory if line.startswith('ERRS ')]
+    if len(lists) != 1 or not lists[0] or len(set(lists[0])) != len(lists[0]):
+        raise ValueError('missing/ambiguous runtime inventory')
+    observed = set()
+    for name in lists[0]:
+        path = tests / name
+        if not name.endswith('.err') or not path.resolve().is_relative_to(tests.resolve()):
+            raise ValueError(f'invalid runtime result path: {name}')
+        observed.update(report_failures(path))
+    recorded = report_failures(tests / 'src/REPORT')
+    if not observed.issubset(recorded):
+        raise ValueError('aggregate report dropped runtime failures')
+    if mixed.sha256(tree / 'lib/libc.a') != mixed.sha256(tree / 'sysroot/lib/libc.a'):
+        raise ValueError('installed libc archive differs from rebuilt archive')
+    return recorded
 
 
 def prepare(build: Path, source: Path, test_source: Path) -> tuple[Path, Path, dict]:
@@ -144,18 +173,36 @@ def prepare(build: Path, source: Path, test_source: Path) -> tuple[Path, Path, d
 
 def reference_build(tree: Path, tests: Path) -> tuple[str, set[str]]:
     done = mixed.container({MOUNT: tree, TEST_MOUNT: tests}, BUILD_SCRIPT, timeout=7200)
-    if "reference-build-ok" not in done.stdout:
-        return (done.stdout + done.stderr)[-600:], set()
-    return "ok", report_failures(tests / "src" / "REPORT")
+    if done.returncode != 0 or done.stdout.splitlines()[-1:] != ['reference-build-ok']:
+        return f'runner-exit-{done.returncode}: {(done.stdout + done.stderr)[-600:]}', set()
+    try:
+        return "ok", completed_report(tree, tests)
+    except (OSError, ValueError) as error:
+        return f'incomplete-evidence: {error}', set()
 
 
-def relink_and_test(tree: Path, tests: Path) -> tuple[str, set[str]]:
+def relink_and_test(tree: Path, tests: Path,
+                    expected_objects: dict[str, str] | None = None) -> tuple[str, set[str]]:
+    expected_objects = expected_objects or {}
+    if mixed.audit_objects(tree, expected_objects):
+        return 'object-mismatch-before-test', set()
+    supervisor = tests / 'reference-runtest'
+    if not supervisor.is_file():
+        return 'missing-reference-supervisor', set()
+    supervisor_hash = mixed.sha256(supervisor)
     done = mixed.container({MOUNT: tree, TEST_MOUNT: tests}, RELINK_SCRIPT, timeout=7200)
-    if "relink-failed" in done.stdout:
-        return "relink-failed", set()
-    if "tests-done" not in done.stdout:
+    if done.returncode != 0:
+        return f'runner-exit-{done.returncode}', set()
+    if done.stdout.splitlines()[-1:] != ['tests-done']:
         return "no-verdict", set()
-    return "tests-done", report_failures(tests / "src" / "REPORT")
+    if mixed.audit_objects(tree, expected_objects):
+        return 'object-mismatch-after-test', set()
+    if not supervisor.is_file() or mixed.sha256(supervisor) != supervisor_hash:
+        return 'reference-supervisor-changed', set()
+    try:
+        return "tests-done", completed_report(tree, tests)
+    except (OSError, ValueError) as error:
+        return f'incomplete-evidence: {error}', set()
 
 
 def main() -> int:
@@ -189,7 +236,10 @@ def main() -> int:
             print(f"musl: reference build failed: {status}", file=sys.stderr)
             return 1
     else:
-        _, baseline = relink_and_test(tree, tests)
+        status, baseline = relink_and_test(tree, tests)
+        if status != 'tests-done':
+            print(f'musl: baseline replay failed: {status}', file=sys.stderr)
+            return 1
     print(f"musl: baseline has {len(baseline)} failing libc-test cases")
     if (tests / "src" / "REPORT").exists():
         shutil.copyfile(tests / "src" / "REPORT", evidence / "baseline-REPORT")
@@ -220,32 +270,64 @@ def main() -> int:
     failing: list[str] = []
     test_result = "not-run"
     bisection: dict = {}
+    trial_audits: list[dict] = []
     if candidates:
         subject = mixed.Tree(tree, build / "musl-pristine")
         journal = evidence / "bisect.jsonl"
 
         def fails(candidate: list[str]) -> tuple[bool, str]:
-            mixed.substitute(subject, candidate, asm_dir)
-            what, failed = relink_and_test(subject.root, tests)
+            installed = mixed.substitute(subject, candidate, asm_dir)
+            expected = {unit: mixed.sha256(asm_dir / 'obj' / (mixed.flat_name(unit) + '.o'))
+                        for unit in installed}
+            if installed != candidate:
+                what, failed = 'incomplete-install', set()
+            else:
+                what, failed = relink_and_test(subject.root, tests, expected)
+            tag = str(len(trial_audits) + 1)
+            logs = {}
+            for name, source in [('REPORT', tests / 'src/REPORT'),
+                                 ('inventory', tests / 'inventory.log'),
+                                 ('libc-relink', tree / 'relink.log'),
+                                 ('tests-relink', tests / 'relink.log')]:
+                if source.is_file():
+                    destination = evidence / f'{name}-{tag}.log'
+                    shutil.copyfile(source, destination)
+                    logs[name] = {'file': destination.name, 'sha256': mixed.sha256(destination)}
+            trial_audits.append({
+                'units': installed, 'expectedObjectHashes': expected,
+                'changedObjects': mixed.audit_objects(tree, expected),
+                'verdict': what, 'failingCases': sorted(failed), 'logs': logs,
+                'archiveSha256': mixed.sha256(tree / 'lib/libc.a')
+                if (tree / 'lib/libc.a').is_file() else None,
+            })
             if what != "tests-done":
                 return True, what
             regressions = sorted(failed - baseline)
             return bool(regressions), ",".join(regressions[:3]) or "no-regression"
 
-        bisection = mixed.narrow(candidates, fails, journal, arguments.budget)
-        substituted = bisection["passingSet"]
-        failing = bisection["failingUnits"]
-        if bisection["budgetExhausted"]:
-            test_result = "bisection-budget-exhausted"
-        elif substituted == candidates:
-            test_result = "libc-test-clean"
-        elif substituted:
-            test_result = "libc-test-clean-after-exclusions"
-        else:
-            test_result = "libc-test-regressed"
-        if (tests / "src" / "REPORT").exists():
-            shutil.copyfile(tests / "src" / "REPORT", evidence / "substituted-REPORT")
-        subject.restore_all()
+        try:
+            bisection = mixed.narrow(candidates, fails, journal, arguments.budget)
+            substituted = bisection["passingSet"]
+            failing = bisection["failingUnits"]
+            # A cached bisection result may not be the last installed/tested set.
+            # Bind the published result to one final actual replay of that set.
+            final_failed, final_note = fails(substituted) if substituted else (True, 'empty-set')
+            bisection['finalReplay'] = {'failed': final_failed, 'note': final_note}
+            if final_failed:
+                substituted = []
+                test_result = 'final-replay-failed'
+            elif bisection["budgetExhausted"]:
+                test_result = "bisection-budget-exhausted"
+            elif substituted == candidates:
+                test_result = "libc-test-clean"
+            elif substituted:
+                test_result = "libc-test-clean-after-exclusions"
+            else:
+                test_result = "libc-test-regressed"
+            if (tests / "src" / "REPORT").exists():
+                shutil.copyfile(tests / "src" / "REPORT", evidence / "substituted-REPORT")
+        finally:
+            subject.restore_all()
 
     refusals = mixed.refusal_table(rows)
     receipt = {
@@ -268,6 +350,7 @@ def main() -> int:
         "unitsInPassingBuild": len(substituted),
         "refusalsByCode": refusals,
         "testResult": test_result,
+        "trialAudits": trial_audits,
         "failingUnits": failing,
         "excludedForSymbolParity": excluded,
         "symbolParity": {

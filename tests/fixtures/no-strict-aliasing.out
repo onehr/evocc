@@ -1,0 +1,37 @@
+2026-09-27: explicit -fno-strict-aliasing admission, EvoIR 1.9.113.
+
+Source SHA256 aa3ad4cd58d60356bbefb2d5e75839ebfb27e9a6a55cd9825badb729e0117902.
+Executable SHA256 5e2d02991a6b0563828eefc0e0e9ae68c5dc33d1323ee0bf672d1c7108c9d6f6.
+No release executable was overwritten.
+
+The isolated program stores through differently typed, aliasing scalar pointers.
+Both interpreters already returned zero without the flag, while the driver
+rejected the actual flag and three application projectors omitted it (RED).
+EvoCC has no C-type-derived disjointness or effective-type optimization. The
+explicit disabling option now selects that existing behavior. It is preserved
+by application and Kbuild command projection. This does not disable any object,
+provenance, lifetime, alignment, initializedness or read-only access check.
+
+GREEN: O0/O2 C-HIR/EvoIR execution, canonical IR and assembly are identical
+with/without the option. A write through a cast to a const object still reports
+E3014 in both interpreters. All 39 driver-option tests pass. Four fixed
+GCC14/Clang19 O0/O2 controls compiled with -fno-strict-aliasing execute zero;
+eight actual EvoCC O0/O2 / reference compiler O0/O2 native builds execute zero.
+The positive -fstrict-aliasing option remains unsupported, not silently ignored.
+
+Eight unchanged musl commands retain no-strict-aliasing, function/data sections
+and standard excess precision. Outcomes/stdout/stderr are byte-identical when
+only no-strict-aliasing is removed. Four units emit and assemble; the four
+scalar-FP asm units retain E3021. Every remaining omission is still reported.
+Read-only inspection of the full 1,339 recorded commands finds no remaining
+omission of these four repaired option families. Remaining omissions are
+assembler-only --noexecstack (forwarded to assembly), diagnostic policy,
+GCC-specific tuning/alignment/frame options, -pipe and the replaced -o action.
+Those remaining controls require their own documented accounting; this is
+not a new full musl compile/libc-test result or permission to ignore unknown flags.
+
+Changed-crate gate against 3343220: 530 PASS / 0 FAIL / 0 ignored, Clippy -D
+warnings and fmt pass. The prior full-workspace checkpoint and section gate
+retain their separate denominators. Logs: .build/floating-targeted/strict-20260927/
+  alias-option-red.log, alias-projection-red.log, alias-option-green.log,
+  no-alias-native.log, no-alias-musl-replay.log, alias-changed-gate.log.

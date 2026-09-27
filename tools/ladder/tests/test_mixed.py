@@ -124,6 +124,7 @@ class TranslateCommand(unittest.TestCase):
 
     def test_supported_language_and_machine_options_keep_written_overrides(self):
         flags = [
+            '-fno-strict-aliasing',
             '-fexcess-precision=standard',
             '-ffunction-sections', '-fno-function-sections',
             '-fdata-sections', '-fno-data-sections',

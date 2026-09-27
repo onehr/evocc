@@ -136,6 +136,35 @@ fn individual_symbol_sections_are_not_silently_ignored_on_darwin() {
 }
 
 #[test]
+fn disabling_strict_aliasing_keeps_the_existing_conservative_access_semantics() {
+    let source = include_str!("../../../tests/fixtures/no-strict-aliasing.c");
+    for optimization in ["-O0", "-O2"] {
+        for mode in [
+            "--interpret-c-hir",
+            "--interpret-evoir",
+            "--emit=evoir",
+            "--emit=asm",
+        ] {
+            let baseline = successful(run(&[mode, optimization], source));
+            assert_eq!(
+                successful(run(&[mode, optimization, "-fno-strict-aliasing"], source)),
+                baseline
+            );
+            if mode.starts_with("--interpret-") {
+                assert_eq!(baseline.trim(), "0");
+            }
+        }
+    }
+    // This option removes no object/provenance/lifetime/permission guard.
+    let invalid = "const int x = 7; int main(void) { *(int *)&x = 9; return x; }";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let result = run(&[mode, "-fno-strict-aliasing"], invalid);
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("E3014"));
+    }
+}
+
+#[test]
 fn standard_excess_precision_is_the_existing_source_format_profile() {
     let source = include_str!("../../../tests/fixtures/floating-standard-evaluation.c");
     for optimization in ["-O0", "-O2"] {

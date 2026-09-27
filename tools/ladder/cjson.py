@@ -49,7 +49,10 @@ done
 """ % " ".join(UPSTREAM_TESTS)
 RELINK = """(
 set -e
-rm -f cJSON_test
+# Rebuild archives even when restored objects have equal/coarse timestamps.
+# The independently audited object bytes, not a previous trial's archive, must
+# reach every public/private test executable.
+rm -f cJSON_test libcjson.a libcjson_utils.a
 make 'CJSON_TEST_SRC=test.c cJSON.o' static tests
 for test in %s; do
   "${CC:-gcc-14}" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test

@@ -81,9 +81,17 @@ class ObjectConsumptionTest(unittest.TestCase):
                 with self.subTest(object=object_name):
                     for name, contents in originals.items():
                         (root / name).write_bytes(contents)
+                    # A restored good object and the preceding bad archive can
+                    # have equal timestamps on a coarse filesystem. A relink
+                    # must consume bytes, not trust timestamp freshness alone.
+                    for source in root.rglob('*.c'):
+                        os.utime(source, (100, 100))
+                    for name in (*originals, 'libcjson.a', 'libcjson_utils.a'):
+                        os.utime(root / name, (200, 200))
                     linked = run(lane.CJSON.relink)
                     self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
-                    self.assertEqual(run(lane.CJSON.test).returncode, 0)
+                    tested = run(lane.CJSON.test)
+                    self.assertEqual(tested.returncode, 0, tested.stdout + tested.stderr)
                     changed = subprocess.run(
                         ["cc", "-x", "c", "-c", "-o", object_name, "-"], cwd=root,
                         input=f"int {symbol}(void) {{ return -1; }}\n", text=True,

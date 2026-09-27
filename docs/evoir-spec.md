@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.112** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.113** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2234,6 +2234,15 @@ source-independent `1:1` location until a source map is specified.
 | Read from uninitialized memory storage | any requested initializedness bit is false | `load` reports `E3001` at the load, never allocation or token transport |
 | Invalid pointer representation/provenance | pointer bytes or provenance are not valid | pointer load/guard/access reports `E3013` |
 | Strict aliasing/effective type | access through incompatible effective type | deferred with alias analysis beyond Day 7 |
+
+`-fno-strict-aliasing` explicitly selects the existing conservative access
+contract (revision 1.9.113): no analysis or optimization derives disjointness
+solely from differing C access types. This option neither removes object
+identity/provenance, lifetime, initializedness, bounds, alignment or read-only
+checks nor licenses incompatible pointer representations. Current source/IR
+execution and emission already have this behavior; admitting the option does
+not change them. The effective-type/TBAA extension remains deferred, and
+`-fstrict-aliasing` is not silently accepted as a new implementation.
 
 `uninitialized.bits<N>` defines an ordinary poison value with a real SSA
 identity. Branch operands and block arguments may copy that poison without
@@ -6667,6 +6676,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.113 | 2026-09-27 | Admit no-strict-aliasing as the existing conservative access contract; preserve all object/provenance/access guards and the deferred effective-type/TBAA boundary. |
 | 1.9.112 | 2026-09-27 | Admit explicit standard excess precision as the existing source-format evaluation contract; preserve rounding/environment and unsupported-mode boundaries. |
 | 1.9.111 | 2026-09-27 | Preserve -pthread preprocessing semantics with _REENTRANT defined before explicit user macro actions; no new linker or thread-execution claim. |
 | 1.9.110 | 2026-09-27 | Extend the shared scalar source/IR contract to binary128, exact 128-bit constants and transport, qualified hosted NaN/status policy and quad HFA metadata. Native and application acceptance remain separate gates. |

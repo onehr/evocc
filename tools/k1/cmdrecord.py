@@ -40,6 +40,7 @@ PASSED_THROUGH = (
     "-fno-asynchronous-unwind-tables", "-fno-unwind-tables",
     "-nostdinc", "-undef", "-fwrapv", "-fno-wrapv", "-fno-strict-overflow", "-fstrict-overflow",
     "-fbuiltin", "-fno-builtin",
+    "-fno-strict-aliasing",
     "-ffreestanding", "-fhosted",
     "-ftrivial-auto-var-init=zero", "-ftrivial-auto-var-init=uninitialized",
     "-fstack-protector-strong", "-fno-stack-protector",
@@ -67,7 +68,8 @@ def omitted_option_class(option: str) -> str:
         return "diagnostic-policy-not-code-generation"
     if option in ("-g", "-g0", "-gdwarf-4"):
         return "source-type-debug-option-must-be-forwarded"
-    if option in ("-fgnu89-inline", "-fno-gnu89-inline", "-fsigned-char", "-funsigned-char"):
+    if option in ("-fgnu89-inline", "-fno-gnu89-inline", "-fsigned-char", "-funsigned-char",
+                  "-fno-strict-aliasing"):
         return "source-semantics-option-must-be-forwarded"
     if option.startswith(("-fmin-function-alignment=", "-fpatchable-function-entry=")):
         return "function-entry-option-must-be-forwarded"
@@ -82,7 +84,7 @@ def omitted_option_class(option: str) -> str:
         "-mlittle-endian", "-mabi=lp64", "-ffixed-x18",
         "-fno-common",
         "-fno-omit-frame-pointer",
-        "-fno-optimize-sibling-calls", "-fno-strict-aliasing",
+        "-fno-optimize-sibling-calls",
         "-fno-delete-null-pointer-checks", "-fno-allow-store-data-races",
         "-fno-stack-check", "-fno-stack-clash-protection",
         "-fstrict-flex-arrays=3", "-fno-builtin-wcslen",

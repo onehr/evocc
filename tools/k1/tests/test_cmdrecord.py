@@ -67,7 +67,7 @@ class DecodeTest(unittest.TestCase):
     def test_inline_dialect_and_character_options_keep_last_option_order(self):
         options = ['-std=gnu89', '-fno-gnu89-inline', '-std=gnu11',
                    '-fgnu89-inline', '-fsigned-char', '-funsigned-char',
-                   '-fsigned-char']
+                   '-fsigned-char', '-fno-strict-aliasing']
         self.record_file.write_text(RECORD.replace(' -O2 ', ' -O2 ' + ' '.join(options) + ' '))
         argv, omitted = cmdrecord.evocc_argv(self.record(), Path('/evocc'), self.src, self.out)
         self.assertEqual([x for x in argv if x in options], ['-std=gnu11', *options])

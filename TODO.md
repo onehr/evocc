@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.112** and EvoMIR **0.49**. This is the Git-tracked execution backlog,
+EvoIR **1.9.113** and EvoMIR **0.49**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -709,8 +709,9 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     Approval was requested; do not bypass the validator to clear E3021.
 
   - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
-    The targeted replay lists no-strict-aliasing and other omitted code-generation
-    options. Determine implemented equivalence versus a real missing contract,
+    The remaining projection names GCC tuning/alignment/frame options and
+    diagnostic/output/assembler actions. Determine implemented equivalence versus
+    a real missing contract,
     add driver/projector REDs and preserve effective option order. Diagnostic
     and optimizer-tuning omissions remain separately disclosed. No full musl
     fidelity claim may be inferred from accepting `-frounding-math` alone.
@@ -728,6 +729,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     ordinary/GC linking (48 native executions). All four command projectors
     retain the flags; 38 focused CLI, 264 ladder and 252 K1 tests pass. The same
     eight musl commands retain sections: four assemble, four remain B08a.
+    [No-strict-aliasing admission](tests/fixtures/no-strict-aliasing.out) now
+    preserves the existing conservative access semantics rather than dropping
+    the flag. Both interpreters, four reference and eight EvoCC native builds
+    pass; the 530-test affected driver gate is green. The eight original musl
+    outcomes remain identical, with this flag retained. Remaining tuning and
+    diagnostic omissions are not silently reclassified as implemented options.
 
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
@@ -741,6 +748,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   Run `20260923T073554Z`; [receipt](tests/contracts/ladder-cjson-receipt.json),
   [acceptance and limits][apps]. Optional sanitizer/Valgrind configurations were
   not exercised; B10 still reruns this lane with the final compiler.
+  September 27 replay `20260927T092953Z` again passes **23/23**, **161 + 54**
+  executed Unity checks, one upstream IGNORE and zero make-replaced objects.
+  It also closes T05f's stale-archive relink regression; compiler identity remains
+  in that receipt rather than being inherited from a later driver build.
 
 - [ ] **B10 — One final serial 15-lane application campaign** — `OPEN`, P1, after tailored closure.
   Freeze the compiler/profile and run the existing `tools/bench.py` lanes without
@@ -761,7 +772,8 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   LLVM run `20260927T085137Z` adds **25** original-program PASS over the old full
   run, leaving only L10 as an unclosed compiler-failure classification. All
   1,735 identities remain and none of the 1,048 installed objects is rebuilt.
-  These six fresh lanes still do not rerun the nine other application lanes.
+  The subsequent complete cJSON replay adds a seventh fresh lane. The eight
+  remaining lanes still retain their earlier measurements; this is not B10 closure.
 
 ## Remaining numerical and language contracts
 
@@ -1122,6 +1134,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     three states) and all 250 ladder tests pass; Ruff and render/check pass.
     An unrelated application run does not relabel an older kernel attempt.
     [Regression](tools/ladder/tests/test_bench.py).
+
+  - [x] **T05f — Reject stale archives and incomplete musl runtime evidence**, 2026-09-27.
+    Failure-injected shell/adapter tests reproduce swallowed make errors, stale
+    markers, incomplete runtime inventories, object replacement and cached
+    bisection acceptance. musl now requires a fresh final trial, complete
+    upstream runtime results, unchanged selected objects/watchdog and identical
+    rebuilt/installed archives. Reference objects are restored on every exit.
+    A separate controlled-timestamp cJSON RED requires its generated archives
+    to be rebuilt; the unchanged full cJSON replay passes with **23/23** subject
+    objects and no make replacements. These harness checks do not promote the
+    old musl receipt: its original full campaign remains NOT RUN after repair.
+    [Regressions and scope](tests/fixtures/benchmark-relink-boundaries.out).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

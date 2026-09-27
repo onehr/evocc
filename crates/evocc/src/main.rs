@@ -332,6 +332,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-fwrapv" | "-fno-strict-overflow" => signed_wrapping = true,
             "-fno-wrapv" | "-fstrict-overflow" => signed_wrapping = false,
+            // No pass derives non-aliasing from the C access type. Existing
+            // object/provenance, initializedness and permission checks remain.
+            "-fno-strict-aliasing" => {}
             "-ffp-contract=off" | "-fno-fast-math" => {}
             // FLT_EVAL_METHOD=0 already rounds every arithmetic operation,
             // assignment and cast to its semantic source format. Preserve

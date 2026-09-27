@@ -2452,3 +2452,37 @@ EvoCC PASS credit**. Compiler accounting credits only the 1,039 validated subjec
 programs. Of the eight subject runtime failures, seven retain evidence-backed
 source-definedness exclusions and `pr23135` remains unwaived. This is INCOMPLETE,
 not all-program PASS, and does not close the final B10 campaign.
+
+## 2026-09-27: retained no-alias option and fail-closed library replays
+
+The driver and application/Kbuild command projections now retain
+`-fno-strict-aliasing`. It selects EvoCC's existing conservative access semantics,
+not a new type-based alias analysis. The positive `-fstrict-aliasing` option
+remains unsupported; provenance, lifetime, initializedness, bounds/alignment and
+read-only-object checks are unchanged. EvoIR 1.9.113 records this bounded rule.
+The [small aliased integer/FP accesses](../../tests/fixtures/no-strict-aliasing.out)
+pass both interpreters and **4 reference / 8 subject native combinations**;
+const-write negatives still produce E3014. All **530 affected Rust tests** pass,
+with no failures or ignores, plus Clippy/fmt. Eight original musl commands retain
+the flag: four assemble and four still refuse scalar FP inline asm (B08a).
+This is not a full musl build or a waiver of its other omitted options.
+
+Separate minimal shell and Python tests expose musl adapter false successes:
+nonzero make exits with stale artifacts, incomplete case inventories, object
+replacement and a cached final passing set. The adapter now verifies a fresh
+final relink/test, original runtime inventory, unchanged installed objects and
+watchdog, and matching rebuilt/installed libc archives. Ordinary shared test
+failures remain failures. The original full musl campaign has not been rerun.
+
+A controlled-timestamp cJSON reduction also catches reuse of a previous bad
+archive after good objects were restored. Removing generated archives at relink
+fixes the dependency problem without changing sources/assertions. Fresh full
+run **20260927T092953Z**, subject
+`f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68`,
+compiles/installs **23/23 objects**, with zero exclusions or make replacements.
+Reference and subject pass the original Makefile/public tests. The five public
+Unity programs have **54 PASS**; all 21 upstream Unity programs have **161 PASS,
+zero FAIL, one upstream IGNORE**. Four disabled JSON-patch fixtures retain their
+skip notices, and Unity remains reference-built. This receipt predates the
+no-alias driver change above; identities are not conflated.
+[Regression and replay record](../../tests/fixtures/benchmark-relink-boundaries.out).

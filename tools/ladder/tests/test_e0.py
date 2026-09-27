@@ -27,7 +27,7 @@ class SourceIdentityTest(unittest.TestCase):
         self.assertEqual(options['unhandled'], [])
 
     def test_fp_semantic_options_reach_the_driver_in_written_order(self):
-        flags = ['-fexcess-precision=standard', '-ffp-contract=fast', '-ffp-contract=off',
+        flags = ['-fno-strict-aliasing', '-fexcess-precision=standard', '-ffp-contract=fast', '-ffp-contract=off',
                  '-frounding-math', '-fno-rounding-math', '-ffast-math']
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'probe.c'

@@ -1,0 +1,50 @@
+2026-09-27: benchmark result integrity; not a new musl runtime PASS.
+
+musl minimal failures (tools/ladder/tests/test_musl.py): a fake make exits 7
+while an old libc.a exists. The original real shell adapter exits zero and
+prints tests-done. The original Python adapter also accepts a nonzero runner
+with an old marker, a substring marker, missing runtime cases, omitted failures
+in the aggregate report and a mismatched installed libc archive.
+
+Repair: fail on infrastructure exit; require an exact terminal marker; rebuild
+the generated archive; inventory original libc-test ERRS through make debug;
+require every runtime result and keep all observed failures in REPORT. Verify
+rebuilt/installed archive identity, preserved reference watchdog identity and
+all selected EvoCC object hashes before/after execution. Record each trial's
+hashes/logs. Reject incomplete substitution; replay the final passing set even
+if bisection's answer came from a cache; restore reference objects in finally.
+Original libc-test recipes already record ordinary test/build failures without
+failing make. Removing the adapter's extra '|| true' therefore rejects broken
+infrastructure without discarding expected shared FAIL cases.
+
+Positive/negative fixture trials cover successful/failed final replay, missing
+objects, invalid inventories, changed watchdog, object replacement and exact
+runner exits. The small complete report retains its shared FAIL as FAIL.
+These tests execute the failure-injected shell and public Python adapter,
+including receipt construction, but do not run the real musl/library campaign.
+
+cJSON regression: the full Python gate exposed an intermittent stale-library
+failure. Equal restored-object/archive timestamps make this deterministic:
+the previous bad utils archive can survive a good-object restore. The RED is
+inside tools/ladder/tests/test_cjson.py, with controlled timestamps. Relinking
+now removes only generated archives and executables, forcing consumption of
+the independently audited objects. No input source/assertion changed.
+
+Real unchanged cJSON replay 20260927T092953Z:
+  subject f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68;
+  23/23 objects compiled and installed, zero excluded or rebuilt by make;
+  both reference and subject original Makefile/public API tests pass;
+  five public Unity programs: 54 PASS / zero FAIL / zero IGNORE;
+  all 21 upstream Unity programs: 161 PASS / zero FAIL / one upstream IGNORE.
+  Four disabled JSON-patch fixtures retain their printed skip notices; no PASS
+  is invented for them. Unity remains a reference-built test harness.
+  Receipt: tests/contracts/ladder-cjson-receipt.json.
+
+Logs: .build/floating-targeted/strict-20260927/
+  musl-runner-red.log, musl-runner-green.log, musl-runner-receipt-boundary.log,
+  cjson-coarse-timestamps-red.log, cjson-complete-final.log.
+The earlier complete musl receipt is not promoted by these harness checks.
+
+Final combined Python gate: 271 ladder tests and 252 K1 tests PASS, Ruff PASS.
+Canonical instruction-shape audit: 54/54, zero disagreements; cargo fmt PASS.
+Logs: python-final-271.log and k1-python-final.log in the directory above.

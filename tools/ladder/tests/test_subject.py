@@ -241,7 +241,7 @@ class EvoccArgvTest(unittest.TestCase):
             self.assertEqual(omitted, [])
 
     def test_standard_excess_precision_survives_projection(self) -> None:
-        flags = ['-frounding-math', '-fexcess-precision=standard', '-fno-rounding-math']
+        flags = ['-fno-strict-aliasing', '-frounding-math', '-fexcess-precision=standard', '-fno-rounding-math']
         argv, omitted = self.command(f"gcc {' '.join(flags)} -c -o a.o a.c\n")
         self.assertEqual([flag for flag in argv if flag in flags], flags)
         self.assertEqual(omitted, [])
