@@ -108,14 +108,64 @@ fn conservative_codegen_controls_match_the_existing_native_contract() {
         "-ftree-ch",
         "-ftree-loop-distribute-patterns",
         "-foptimize-sibling-calls",
-        "-fira-region=one",
-        "-fira-hoist-pressure",
-        "-freorder-blocks-algorithm=simple",
+        "-fira-region=all",
+        "-fira-region=mixed",
+        "-freorder-blocks-algorithm=stc",
     ] {
         assert!(
             !run(&["--emit=asm", flag], source).status.success(),
             "{flag}"
         );
+    }
+}
+
+#[test]
+fn bounded_gcc_tuning_selects_existing_function_allocation_and_layout() {
+    let source = include_str!("../../../tests/fixtures/driver-gcc-tuning.c");
+    let flags = [
+        "-fira-region=one",
+        "-fira-hoist-pressure",
+        "-freorder-blocks-algorithm=simple",
+    ];
+    for optimization in ["-O0", "-O2", "-Os"] {
+        for mode in [
+            "--interpret-c-hir",
+            "--interpret-evoir",
+            "--emit=evoir",
+            "--emit=asm",
+        ] {
+            let baseline = successful(run(&[mode, optimization], source));
+            for flag in flags {
+                assert_eq!(
+                    successful(run(&[mode, optimization, flag], source)),
+                    baseline
+                );
+            }
+            let mut arguments = vec![mode, optimization];
+            arguments.extend(flags);
+            arguments.extend(flags.iter().rev());
+            assert_eq!(successful(run(&arguments, source)), baseline);
+            if mode.starts_with("--interpret-") {
+                assert_eq!(baseline.trim(), "0");
+            }
+        }
+    }
+    for flag in [
+        "-fira-region=all",
+        "-fira-region=mixed",
+        "-fira-region=ONE",
+        "-fira-algorithm=CB",
+        "-fira-loop-pressure",
+        "-fcode-hoisting",
+        "-freorder-blocks-algorithm=stc",
+        "-freorder-blocks-and-partition",
+        "-fpack-struct=1",
+        "-mabi=ilp32",
+        "-Ofast",
+    ] {
+        let output = run(&["--emit=asm", flag], source);
+        assert!(!output.status.success(), "{flag}");
+        assert!(output.stdout.is_empty(), "{flag}");
     }
 }
 

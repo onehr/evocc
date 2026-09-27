@@ -351,6 +351,12 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             | "-fno-prefetch-loop-arrays"
             | "-fno-tree-ch"
             | "-fno-tree-loop-distribute-patterns" => {}
+            // Bounded GCC tuning compatibility (EvoMIR Section 6): allocation
+            // already spans each whole function; no code-hoisting pass exists;
+            // block placement never duplicates blocks for a trace cache. These
+            // select existing behavior, not GCC's coloring/layout heuristics.
+            // Do not generalize to loop regions, hoisting or STC transforms.
+            "-fira-region=one" | "-fira-hoist-pressure" | "-freorder-blocks-algorithm=simple" => {}
             "-ffp-contract=off" | "-fno-fast-math" => {}
             // FLT_EVAL_METHOD=0 already rounds every arithmetic operation,
             // assignment and cast to its semantic source format. Preserve

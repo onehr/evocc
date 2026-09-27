@@ -22,9 +22,10 @@ record under an exclusive append.
 
 **Translation.** A recorded argv is written in container coordinates and in
 GCC's dialect. It is turned into an EvoCC command by rewriting the mounted
-prefix to its host path and keeping only the options the front end consumes;
-every dropped option is named in the receipt rather than guessed at, because
-a silently dropped ``-D`` would change the program.
+prefix to its host path. Language, layout, machine and optimization requests
+reach the driver even when unsupported; refusal is not replaced with a default.
+Remaining diagnostic/output/assembler omissions are named in the receipt and
+do not establish complete command equivalence.
 
 **Bisection.** When the substituted build fails its tests, the responsible
 units are found by delta debugging over the set of substituted units, reusing
@@ -53,7 +54,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LADDER = ROOT / "tools" / "ladder"
 sys.path.insert(0, str(LADDER))
 
-from e0 import IMAGE, TARGET, SUPPORTED_OPTIONS, SUPPORTED_OPTION_PREFIXES, include_flags, sha256, sysroot  # noqa: E402,F401
+from e0 import IMAGE, TARGET, SUPPORTED_OPTIONS, include_flags, requires_driver_option, sha256, sysroot  # noqa: E402,F401
 from subject import exported_sysroot  # noqa: E402
 
 #: ``.build`` and ``.evidence`` are resolved through any symlink, because the
@@ -253,7 +254,7 @@ def parse_commands(log: Path, root: str = "") -> list[Unit]:
 # --------------------------------------------------------------------------
 
 #: Options whose value is the following argument.
-SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote")
+SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote", "-x")
 
 #: Of those, the ones whose value is a path that must be rewritten.
 PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
@@ -264,7 +265,7 @@ PASSED_THROUGH = SUPPORTED_OPTIONS | {"-nostdinc", "-undef"}
 #: Options whose value is the following argument and which the front end has
 #: no use for; both words are dropped together so the value is never mistaken
 #: for the input file.
-DROP_WITH_VALUE = ("-o", "-MF", "-MT", "-MQ", "-x", "-Xassembler", "-aux-info")
+DROP_WITH_VALUE = ("-o", "-MF", "-MT", "-MQ", "-Xassembler", "-aux-info")
 
 
 def to_host(value: str, mount: str, host: Path, cwd: str) -> str:
@@ -323,9 +324,7 @@ def evocc_command(
             command.append(value)
         elif value.startswith("-include") and len(value) > 8:
             command.extend(("-include", to_host(value[8:], mount, host, unit.cwd)))
-        elif value in PASSED_THROUGH:
-            command.append(value)
-        elif value.startswith(("-std=", *SUPPORTED_OPTION_PREFIXES)):
+        elif requires_driver_option(value):
             command.append(value)
         elif value != "-c":
             omitted.append(value)

@@ -2689,3 +2689,31 @@ the dollar-quote limitation. Special parameters and comments have distinct
 so these results are not one blanket conformance or compiler-failure category.
 The unchanged originals still FAIL; nested grammar assertions are not all
 adjudicated by this small matrix. No dependency, shell or acceptance rule changed.
+
+### Semantic command projection and assembler verdicts — September 28
+
+[Two small reductions](../../tests/fixtures/command-projection-packed.out)
+show that both application projectors discard `-fpack-struct=1` and thereby
+emit ordinary-layout code. Four projected native executions fail the packed
+size assertion; eight GCC/Clang controls establish the actual option boundary.
+The projectors now preserve semantic requests in written order even when the
+driver rejects them. This is fail-closed evaluation, not packed-flag support.
+Forced language, rejected-option inventories and joined include operands are
+covered independently. Historical receipts are not silently regraded.
+
+The `subject.py` assembler path also misclassifies a real exit-17 runner after
+successful assembly. It now requires process success, a complete unique exact
+verdict set and nonempty objects. Four real sealed controls and eight injected
+unit scenarios distinguish refusal from normal success; all 310 ladder tests
+pass. The live K1 driver remains untouched and retains its separately queued
+T05i repair.
+
+Three musl tuning requests now select explicit existing EvoMIR 0.51 choices:
+whole-function allocation, no code-hoisting pass, and nonduplicating block
+placement. They do not promise GCC's coloring algorithm or locality heuristics.
+The shared driver refuses other regions, hoisting/trace-cache algorithms and
+unknown semantic requests. Both interpreters and eight sealed native controls
+pass; ten unchanged original musl commands emit and assemble, and all 1,339
+records retain every `-f`/`-m`/`-O` request. No installed object is replaced.
+Remaining diagnostic/output/assembler accounting is still B08b, and this does
+not close B08d's original wordexp failures or B10's final serial campaign.

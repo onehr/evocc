@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.50** | **Authoritative reference** | **2026-09-27**
+**Revision 0.51** | **Authoritative reference** | **2026-09-28**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -675,11 +675,33 @@ loop-header-copying and loop-pattern distribution/library-call transformations.
 Explicit source calls/builtins and object-copy lowering are not those transforms.
 These options leave existing IR/native semantics unchanged; any future pass
 implementing such a transform must honor them. Positive transform options and
-unrelated GCC allocator/reordering algorithms remain unsupported. The application
+GCC allocator/reordering algorithms outside the bounded compatibility below
+remain unsupported. The application
 projectors preserve these admitted options and their written order. This is not
 a promise to reproduce GCC's optimization quality or assembly.
 See [GCC 14.2 optimization options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html)
 for the source option meanings; the exact EvoCC behavior is specified above.
+
+**Bounded GCC tuning compatibility (revision 0.51).** The driver also admits
+exactly `-fira-region=one`, `-fira-hoist-pressure`, and
+`-freorder-blocks-algorithm=simple` as the following existing backend choices:
+allocation is one whole-function problem (Section 7), there is no code-hoisting
+pass to make pressure-guided hoisting decisions, and block placement preserves
+the allocated block sequence without trace-cache duplication. The hoisting
+pressure option does not enable a hoisting pass. The simple placement choice
+does not request GCC's particular locality heuristic, and the region choice
+does not request GCC's graph-coloring allocator. None changes source semantics,
+predefined macros, ABI, IR/proof identity, call preservation or native results.
+Their operation is deliberately no different from the current default; a future
+loop allocator, hoisting pass or block-placement optimization must honor these
+choices instead of inheriting these admissions as unconditional no-ops.
+Other region/algorithm values, positive hoisting, trace-cache replication and
+partition requests still fail closed. This bounded optimization compatibility
+must not be generalized to ABI/layout/language flags such as `-fpack-struct` or
+`-mabi`, or to `-Ofast`. Application projection preserves these requests even
+when the driver rejects them; listing a discarded semantic option is not an
+implementation of it. Diagnostic/output/assembler projection has separate
+acceptance obligations and is not declared complete here.
 
 **Dynamic frames (revision 0.41, synchronization with EvoIR Appendix D).**
 Each `stack.alloc` evaluates its existing size operand once, subtracts that
@@ -1270,6 +1292,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.51 | 2026-09-28 | Bound three GCC tuning option admissions to existing whole-function allocation, absent hoisting and nonduplicating block placement; preserve unsupported semantic requests through application projection. |
 | 0.50 | 2026-09-27 | Admit exact scalar f32/f64 SIMD assembly bindings through existing allocation, spills, selected edges and floating-environment invalidation. |
 | 0.49 | 2026-09-27 | Emit independently selected per-function/data ELF sections, preserving explicit placement, TLS/storage kind, aliases, lifecycle/patch roots and written option overrides. |
 | 0.48 | 2026-09-27 | Hosted Linux binary128 via qualified helpers; shared SIMD128 scalar/HFA/varargs ABI, exact strict status and conversion/NaN adapters. |

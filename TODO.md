@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.114** and EvoMIR **0.50**. This is the Git-tracked execution backlog,
+EvoIR **1.9.114** and EvoMIR **0.51**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -780,11 +780,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     [Source, exact identities and validation](tests/fixtures/floating-assembly.out).
 
   - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
-    The remaining projection names GCC tuning/alignment/frame options and
-    diagnostic/output/assembler actions. Determine implemented equivalence versus
-    a real missing contract,
-    add driver/projector REDs and preserve effective option order. Diagnostic
-    and optimizer-tuning omissions remain separately disclosed. No full musl
+    The current original-command inventory has no omitted `-f`/`-m`/`-O`
+    request; bounded tuning admission and fail-closed projection are below.
+    Remaining diagnostic/output/assembler actions need their own equivalence
+    and refusal tests, including `-Werror` behavior. No full musl
     fidelity claim may be inferred from accepting `-frounding-math` alone.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
@@ -795,6 +794,19 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       green (1,062 passed, four existing ignores), as are 298 ladder tests.
       [Reproducer, boundaries and identities](tests/fixtures/conservative-codegen-options.out).
       This is one B08b subcase, not complete option fidelity.
+
+    - [x] **B08b2 — Preserve unsupported semantic requests and bound GCC tuning**, 2026-09-28.
+      Two command projectors silently dropped `-fpack-struct=1`; four native
+      reductions then used the wrong layout while eight reference controls
+      established the flag-sensitive boundary. Semantic families now reach the
+      driver in written order, even when rejected; forced language and joined
+      include operands survive too. Three exact tuning requests select existing
+      whole-function allocation, absent hoisting and nonduplicating placement
+      under EvoMIR 0.51, not arbitrary GCC algorithms. Both interpreters,
+      eight tuning native controls, ten unchanged musl object commands and the
+      1,339-command read-only inventory pass. Unknown layout/ABI/fast-math requests
+      remain explicit refusals. Diagnostic policy remains B08b, not waived.
+      [Reproduction and measured boundaries](tests/fixtures/command-projection-packed.out).
 
     The [standard-excess-precision subcase](tests/fixtures/floating-standard-evaluation.out)
     is now repaired: the existing FLT_EVAL_METHOD=0 semantics satisfy the explicit
@@ -1502,6 +1514,16 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     Apply at the next safe run boundary, then run the full K1 gate. Existing
     receipts and the live build do not inherit candidate hardening.
     [Exact reproducer, hashes and integration boundary](tests/fixtures/kernel-assembly-verdict.out).
+
+  - [x] **T05j — Harden the other whole-application assembly verdict path**, 2026-09-28.
+    The `subject.py` adapter also accepts actual successful assembly followed
+    by runner exit 17. It now requires a successful process, exact complete
+    unique verdicts and nonempty object files; stale/duplicate/foreign/missing
+    observations cannot publish `assembled`. Eight unit scenarios and four
+    real sealed runner controls cover RED, GREEN and normal execution; all
+    310 ladder tests pass. This fixes that adapter, not the separately queued
+    live K1 path T05i or a historical full-campaign result.
+    [Small reproduction and exact identities](tests/fixtures/command-projection-packed.out).
 
 ## Later roadmap gates — not substitutes for runtime closure
 

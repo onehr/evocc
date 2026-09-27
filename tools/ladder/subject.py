@@ -34,8 +34,9 @@ object newer than its source is not rebuilt by make, and the binaries that
 depend on it are relinked. Nothing wraps ``CC``; the reference build stays
 the reference build.
 
-The exported headers reach the front end unchanged. Build-system options
-that the compiler does not consume are dropped by name and counted; source
+The exported headers reach the front end unchanged. Semantic option requests
+reach the driver even when unsupported. Remaining diagnostic/output/assembler
+omissions are disclosed separately, not claimed as command equivalence; source
 syntax is never rewritten to bypass a compiler refusal.
 """
 
@@ -100,7 +101,7 @@ LEAVING = re.compile(r"^g?make(?:\[\d+\])?: Leaving directory '(?P<dir>[^']*)'")
 COMPILERS = frozenset({"gcc", "gcc-14", "cc", "g++", "clang", "clang-19"})
 
 #: Options whose value is a separate argument.
-SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote")
+SEPARATE_VALUE = ("-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote", "-x")
 
 #: Of those, the ones whose value is a path that must be translated.
 PATH_VALUED = ("-I", "-include", "-imacros", "-isystem", "-iquote")
@@ -373,7 +374,8 @@ def _unit_from_argv(argv: list[str], directory: str, relative) -> Unit | None:
     sources = [
         token
         for position, token in enumerate(argv[1:], start=1)
-        if token.endswith(".c") and argv[position - 1] not in SEPARATE_VALUE + ("-o",)
+        if token.endswith(".c") and not token.startswith('-')
+        and argv[position - 1] not in SEPARATE_VALUE + ("-o",)
     ]
     if len(sources) != 1:
         return None
@@ -507,8 +509,10 @@ def evocc_argv(
 
     Nothing is invented: the unit's own ``-I``/``-D``/``-include`` flags are
     carried across with container paths rewritten to host paths, the headers
-    of the target's own libc are appended, and every other flag is dropped by
-    name so the receipt can say what was not honoured.
+    of the target's own libc are appended, and semantic options reach the
+    driver even when unsupported. ``unsupported`` is historical diagnostic
+    inventory, never permission to erase an option. Other omissions are named
+    so the receipt can say what was not honoured.
     """
     prefix = f"/work/{subject.name}/{subject.tree}/"
     work = tree / unit.directory
@@ -532,7 +536,7 @@ def evocc_argv(
         if value == "-o":
             index += 2
             continue
-        if value == "-c" or value.endswith(".c"):
+        if value == "-c" or (value.endswith(".c") and not value.startswith('-')):
             index += 1
             continue
         if value in SEPARATE_VALUE:
@@ -548,7 +552,7 @@ def evocc_argv(
             projected.append(value)
         elif value.startswith("-include") and len(value) > len("-include"):
             projected.append("-include" + path(value[len("-include") :]))
-        elif value.startswith("-std=") or ((value in PASSED_THROUGH or value.startswith(PASSED_PREFIXES)) and value not in unsupported):
+        elif e0.requires_driver_option(value):
             projected.append(value)
         else:
             omitted.append(value)
@@ -675,19 +679,28 @@ def assemble(rows: list[dict], asm_root: Path) -> None:
     (asm_root / "assemble.sh").write_text("\n".join(lines) + "\n", encoding="utf-8")
     completed = container(asm_root, "asm", "bash /work/asm/assemble.sh", timeout=1800)
     verdicts = {}
+    protocol_valid = completed.returncode == 0
+    expected = {row['unit'] for row in emitted}
     for line in completed.stdout.splitlines():
         parts = line.split(None, 1)
-        if len(parts) == 2 and parts[0] in ("OK", "FAIL"):
+        if (len(parts) == 2 and parts[0] in ("OK", "FAIL") and
+                parts[1] in expected and parts[1] not in verdicts):
             verdicts[parts[1]] = parts[0]
+        else:
+            protocol_valid = False
+    protocol_valid = protocol_valid and set(verdicts) == expected
     for row in emitted:
         unit = row["unit"]
-        if verdicts.get(unit) != "OK":
+        obj = asm_root / unit
+        if not (protocol_valid and verdicts.get(unit) == "OK" and
+                obj.is_file() and obj.stat().st_size > 0):
             error = asm_root / (unit + ".err")
             row["outcome"] = "assembler-refused"
             row["assemblerError"] = (
                 error.read_text(errors="replace").strip()[:600]
                 if error.is_file()
-                else completed.stderr.strip()[-300:]
+                else (completed.stderr.strip()[-300:] or
+                      'assembly runner, verdict protocol or nonempty object check failed')
             )
             continue
         row["outcome"] = "assembled"

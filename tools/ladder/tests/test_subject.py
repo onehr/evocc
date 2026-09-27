@@ -187,6 +187,31 @@ class ParseBuildLogTest(unittest.TestCase):
         self.assertEqual([unit.obj for unit in ladder.parse_build_log(log, TREE)], ["b.o"])
 
 
+class AssemblyVerdictTest(unittest.TestCase):
+    def test_runner_and_exact_object_verdict_are_both_required(self):
+        cases = [
+            ('valid', 0, 'OK a.o\n', b'object', 'assembled'),
+            ('runner_failed', 17, 'OK a.o\n', b'stale', 'assembler-refused'),
+            ('duplicate_ok', 0, 'OK a.o\nOK a.o\n', b'object', 'assembler-refused'),
+            ('conflicting', 0, 'FAIL a.o\nOK a.o\n', b'object', 'assembler-refused'),
+            ('unknown', 0, 'OK a.o\nOK foreign.o\n', b'object', 'assembler-refused'),
+            ('missing_verdict', 0, '', b'stale', 'assembler-refused'),
+            ('missing_object', 0, 'OK a.o\n', None, 'assembler-refused'),
+            ('empty_object', 0, 'OK a.o\n', b'', 'assembler-refused'),
+        ]
+        for name, status, stdout, obj, expected in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                if obj is not None:
+                    (root / 'a.o').write_bytes(obj)
+                rows = [{'unit': 'a.o', 'assembly': str(root / 'a.s'), 'outcome': 'emitted'}]
+                done = subprocess.CompletedProcess([], status, stdout, 'runner stderr')
+                with mock.patch.object(ladder, 'container', return_value=done):
+                    ladder.assemble(rows, root)
+                self.assertEqual(rows[0]['outcome'], expected)
+                self.assertEqual('objectSha256' in rows[0], expected == 'assembled')
+
+
 class EvoccArgvTest(unittest.TestCase):
     def setUp(self) -> None:
         self.subject = ladder.Subject(
@@ -264,12 +289,32 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertEqual([flag for flag in argv if flag in flags], flags)
         self.assertEqual(omitted, [])
 
-    def test_unknown_options_remain_named_not_reinterpreted_as_supported(self) -> None:
+    def test_unknown_semantic_options_reach_the_driver_in_written_order(self) -> None:
+        flags = ['-fpack-struct=1', '-fno-pack-struct', '-Ofast', '-mabi=ilp32',
+                 '-fpermissive', '-Wp,-DVALUE=3', '-fira-region=one']
+        for written in (flags, flags[::-1]):
+            argv, omitted = self.command(f"gcc {' '.join(written)} -c -o a.o a.c\n")
+            self.assertEqual(argv[3:-2], written)
+            self.assertEqual(omitted, [])
+
+    def test_forced_language_is_not_discarded(self) -> None:
         argv, omitted = self.command(
-            "gcc -Ofast -fno-inline -fpermissive -std=gnu11 -c -o a.o a.c\n"
+            "gcc -x c++ -c -o a.o a.c\n"
         )
-        self.assertIn("-std=gnu11", argv)
-        self.assertEqual(omitted, ["-Ofast", "-fno-inline", "-fpermissive"])
+        self.assertEqual(argv[3:-2], ['-x', 'c++'])
+        self.assertEqual(omitted, [])
+
+    def test_rejected_semantic_option_is_not_replaced_with_a_default(self) -> None:
+        (unit,) = ladder.parse_build_log('gcc -fwrapv -c -o a.o a.c\n', TREE)
+        argv, omitted = ladder.evocc_argv(
+            unit, Path('/bin/evocc'), self.subject, self.tree, [], frozenset({'-fwrapv'}))
+        self.assertIn('-fwrapv', argv)
+        self.assertEqual(omitted, [])
+
+    def test_joined_forced_include_with_c_suffix_is_not_an_input_operand(self) -> None:
+        argv, omitted = self.command('gcc -includeprefix.c -c -o a.o a.c\n')
+        self.assertIn('-include' + str(self.tree / 'prefix.c'), argv)
+        self.assertEqual(omitted, [])
 
     def test_rejected_standard_is_not_silently_replaced_with_the_default(self) -> None:
         (unit,) = ladder.parse_build_log('gcc -std=c99 -c -o a.o a.c\n', TREE)

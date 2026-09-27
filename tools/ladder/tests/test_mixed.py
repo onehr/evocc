@@ -153,6 +153,21 @@ class TranslateCommand(unittest.TestCase):
         self.assertIn('-std=c99', command)
         self.assertEqual(omitted, [])
 
+    def test_unknown_semantic_options_reach_the_driver_in_written_order(self):
+        flags = ['-fpack-struct=1', '-fno-pack-struct', '-Ofast', '-mabi=ilp32',
+                 '-fpermissive', '-Wp,-DVALUE=3', '-fira-region=one']
+        for written in (flags, flags[::-1]):
+            command, omitted = mixed.evocc_command(
+                self.unit('-c', 'a.c', *written), Path('/evocc'), 't', Path('/host'))
+            self.assertEqual(command[4:-1], written)
+            self.assertEqual(omitted, [])
+
+    def test_forced_language_is_not_discarded(self):
+        command, omitted = mixed.evocc_command(
+            self.unit('-x', 'c++', '-c', 'a.c'), Path('/evocc'), 't', Path('/host'))
+        self.assertEqual(command[4:-1], ['-x', 'c++'])
+        self.assertEqual(omitted, [])
+
     def test_the_output_operand_never_reaches_the_front_end(self):
         unit = self.unit("-c", "a.c", "-o", "obj/a.o", "-MF", "dep.d")
         command, omitted = mixed.evocc_command(unit, Path("/evocc"), "t", Path("/host"))

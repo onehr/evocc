@@ -61,6 +61,7 @@ SUPPORTED_OPTIONS = frozenset({
     "-fomit-frame-pointer", "-fno-omit-frame-pointer", "-fno-optimize-sibling-calls",
     "-fno-align-functions", "-fno-align-jumps", "-fno-align-labels", "-fno-align-loops",
     "-fno-prefetch-loop-arrays", "-fno-tree-ch", "-fno-tree-loop-distribute-patterns",
+    "-fira-region=one", "-fira-hoist-pressure", "-freorder-blocks-algorithm=simple",
     "-fbuiltin", "-fno-builtin", "-ffreestanding", "-fhosted", "-pthread",
     "-fshort-wchar", "-fno-short-wchar", "-std=gnu89", "-std=gnu99", "-std=gnu11",
     "-std=c89", "-std=c90", "-ansi", "-std=c99", "-std=c11", "-std=gnu17",
@@ -89,6 +90,21 @@ SUPPORTED_OPTION_PREFIXES = (
     '-mstack-protector-guard-reg=', '-mstack-protector-guard-offset=',
     '-fmacro-prefix-map=', '-ffp-contract=',
 )
+
+
+def requires_driver_option(value: str) -> bool:
+    """Preserve semantic requests, including ones this driver may reject.
+
+    An unsupported layout/ABI/language/optimization option must not turn into
+    a successful compilation with different defaults. GCC tuning options in
+    these families are not exceptions: the driver must implement or reject
+    them explicitly. Diagnostic/output/assembler omissions remain separately
+    disclosed by the application adapters; this is not full argv equivalence.
+    """
+    return (value in SUPPORTED_OPTIONS or value in ('-nostdinc', '-undef') or
+            value.startswith(('-std=', '-f', '-m', '-O', '-Wp,')))
+
+
 # gcc/testsuite/lib/target-supports.exp from the pinned torture source:
 # these predicates describe the target, not the subject's implementation.
 # In particular, missing computed-goto lowering cannot make indirect_jumps

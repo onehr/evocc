@@ -1,0 +1,71 @@
+2026-09-28 — semantic command projection and exact assembly verdicts
+
+RED: both application command projectors omit -fpack-struct=1. The minimal
+command-projection-packed.c exits 1 in four actual EvoCC projected executions
+(two adapters x O0/O2). GCC14/Clang19 each pass the packed command and produce
+exit 1 without the flag (eight independent controls). This is a real layout
+change, not merely an omitted warning. The old driver itself rejects the option;
+the adapter must not circumvent that refusal.
+
+GREEN: -f/-m/-O/-std/-Wp requests reach the driver in written order. A refused
+option is not removed by the older optionsTheDriverRejects inventory. Forced
+-x language selection is retained, and a joined -includeprefix.c is not confused
+with another input source or dropped from the denominator. All four exact
+projected packed commands now explicitly refuse, with no assembly output.
+This closes false acceptance, NOT implementation of packed-layout flags, C++,
+ILP32, Ofast, or complete preprocessor/diagnostic option compatibility.
+
+The subject adapter independently accepted an actual sealed assembler output
+followed by runner exit 17. Its new contract requires runner success, exactly
+one verdict for every requested object, no duplicates/unknown verdicts, and a
+real nonempty object. Four real runner controls show old false acceptance,
+new refusal, and successful normal old/new assembly. Eight unit scenarios also
+exercise missing/empty objects, duplicates, conflicts and unknown records.
+No claim is made that a historical full campaign actually hit that runner fault.
+
+Tuning subcase: driver-gcc-tuning.c initially refuses -fira-region=one. EvoMIR
+0.51 now admits exactly three options as existing choices: whole-function
+allocation; pressure-guided decisions in an absent hoisting pass (does not enable
+hoisting); and block placement without trace-cache duplication. This does NOT
+implement GCC graph coloring or its exact locality heuristic. Source meaning,
+macros, ABI, IR and emitted code remain unchanged. Other region/algorithm values,
+positive hoisting/partition requests, pack-struct, ILP32 and Ofast still refuse.
+
+The 41-test CLI suite passes. The tuning case covers both interpreters, exact
+IR/assembly equality, O0/O2/Os, individual/combined/reversed flags, calls,
+register pressure, loops and negative admissions. Eight sealed native tuning
+controls pass (GCC baseline+flags, Clang baseline, EvoCC flags, each O0/O2).
+Ten unchanged original musl commands emit and assemble with all requests intact;
+their assembly matches controls removing only the three hints. No installed
+object is changed. A read-only inventory checks all 1,339 original records;
+the remaining omissions are diagnostics, -pipe, output and separately forwarded
+assembler actions. They are NOT declared equivalent or complete here.
+
+All 310 ladder regressions and targeted Ruff/diff checks pass. The affected
+Rust/Clippy/fmt gate against 079ab60 passes for evocc, evocc-mir, evocc-policy,
+evocc-proofcheck and evocc-randgate, retaining four historical ignored tests.
+This is not a fresh
+musl suite, a final 15-lane campaign or kernel acceptance. No active kernel
+compiler/driver, historical receipt, large runtime image or source pin changed.
+
+Primary meaning references:
+https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Code-Gen-Options.html
+https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html
+
+SHA256:
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  packed RED/GREEN compiler: 07f2a45e280f42dcb34633e8fcbf0db44731e501aa8fc0e66c612c2a140becf2
+  tuning compiler: 542adc57f337895f047a9edd25fa96d9fabf34b3ffea34ae661f063379a58a26
+  EvoMIR 0.51: 75f3d257810b3830111856c95c244757586950fb6ed9fd2722700cfe1b520c26
+  packed fixture: 03a6dc105e28ce1c4f1850654a7f02e54985e5abffa947bf5752431c6122931a
+  tuning fixture: b86de91d0d9c75801b2bb580a13ea92efca5c3d8d62026444042057de0929116
+  red.json: 8c9bf2e1b2d2e6eac0f63a189a6a18606b2222855fe3c19feedcf5e96f8d5a69
+  green.json: 83bd214cb90fe9e094487cd70465772f21145faae2bcb742796a2fb4012bec5c
+  native.json: 3c25494d450a49c2e356523139d0bd0e6cfce98f1e4b9ed16db116c60699bd67
+  assembly.json: fd40745f792221404fec123bc1a3374e6eb20139ac9863dc1d7742e87deae107
+  tuning.json: 9d77c2294237acd5aef4c411d1700f1894566fa88f49a49381f1d53a276f87ff
+  tuning-native.json: ea9074cadbb62f809ce15442aeb00bcf8568ebfd6ba1eb32faec7edeb2e18707
+
+Raw exact commands, stdout/stderr, scripts and binaries:
+.build/floating-targeted/command-projection-20260928/
+No original source/flags/assertions or installed library are rewritten.
